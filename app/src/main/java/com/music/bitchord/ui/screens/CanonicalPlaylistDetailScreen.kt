@@ -188,7 +188,7 @@ internal fun canonicalPlaylistDetailMeta(
     smart: Boolean, rows: List<V2DisplayRow>?,
 ): String {
     val type = if (smart) "Playlist inteligente" else "Playlist"
-    if (rows == null) return "${type} · Carregando músicas…"
+    if (rows == null) return type
     val count = "${rows.size} " + if (rows.size == 1) "faixa" else "faixas"
     val durations = rows.map { it.durationMs }
     val total = if (durations.isNotEmpty() && durations.all { it != null }) {
@@ -263,18 +263,13 @@ internal fun CanonicalPlaylistTrackRow(
                 )
             },
         )
-        // Reuse the native rating strip above duration, as in other music lists.
-        // Both values resolve from a precomputed recording-ID snapshot.
+        // Same rating strip as other native song lists. Keep duration in
+        // metadata for sorting/planning, never as a trailing row label.
         Spacer(Modifier.width(8.dp))
-        Column(horizontalAlignment = Alignment.End) {
-            CanonicalRatingStars(
-                rating = track.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
-                color = titleColor,
-            )
-            canonicalTrackDuration(track.durationMs)?.let {
-                Text(it, style = MaterialTheme.typography.labelMedium, color = subtitleColor)
-            }
-        }
+        CanonicalRatingStars(
+            rating = track.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
+            color = titleColor,
+        )
         if (available) {
             Box {
                 RowMoreButton(
@@ -555,6 +550,9 @@ internal fun CanonicalPlaylistDetailScreen(
                     palette = palette,
                 )
             }
+        }
+        if (rows == null) item(key = "playlist-detail-loading") {
+            NativeLoadingSpinner()
         }
         if (rows?.isEmpty() == true) {
             if (trackLoadFailed) {

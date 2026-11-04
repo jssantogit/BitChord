@@ -2370,11 +2370,39 @@ private fun BitChordApp(
     var unifiedLibraryCategory by remember {
         mutableStateOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext?>(null)
     }
+    // A pinned card opens its canonical release/artist detail directly; Back
+    // returns to the landing shelf instead of an unrelated category list.
+    var pinnedLibraryRequest by remember {
+        mutableStateOf<com.music.bitchord.ui.screens.CanonicalLibraryPin?>(null)
+    }
     val unifiedControls = remember { UnifiedLibraryUiControls() }
+    // "Ver todos" is local-only today; share the actual native Library filter
+    // controls without pretending Navidrome additions were locally indexed.
+    val recentControls = remember {
+        UnifiedLibraryUiControls().apply {
+            sort = LocalMusicSort.DATE_ADDED
+            viewType = LibraryViewType.GRID
+        }
+    }
+    var recentSearching by remember { mutableStateOf(false) }
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
+    var unifiedLibraryNestedAlbumOpen by remember { mutableStateOf(false) }
     var unifiedLibraryBackToken by remember { mutableIntStateOf(0) }
+    // Put album action/sort state outside BitChordApp: it is already close
+    // to the JVM Compose method-size limit, and its chrome is reused below.
+    val unifiedAlbumUi = remember { UnifiedAlbumDetailUiState() }
+    LaunchedEffect(
+        unifiedLibraryCategory, unifiedLibraryDetailOpen, unifiedLibraryNestedAlbumOpen,
+    ) {
+        if (!shouldUseUnifiedAlbumDetailToolbar(
+                unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                unifiedLibraryNestedAlbumOpen,
+            )
+        ) unifiedAlbumUi.resetDetail()
+    }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
+    var pinnedPlaylistRequest by remember { mutableStateOf<String?>(null) }
     var openedCanonicalPlaylist by remember {
         mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
     }
@@ -3094,6 +3122,8 @@ private fun BitChordApp(
                             },
                             selectedCard = openedCanonicalPlaylist,
                             onSelectedCardChange = { openedCanonicalPlaylist = it },
+                            pinnedPlaylistRequest = pinnedPlaylistRequest,
+                            onPinnedPlaylistRequestConsumed = { pinnedPlaylistRequest = null },
                             listState = playlistLibraryListState,
                             detailListState = playlistDetailListState,
                             detailSearching = playlistDetailSearching,
@@ -3116,16 +3146,26 @@ private fun BitChordApp(
                             },
                             unified = true,
                             selectedSourceKey = unifiedControls.sourceKey,
+                            selectionBarBottomPadding = listPadding.calculateBottomPadding(),
                             selectedStarsFilter = unifiedControls.stars,
                             unifiedSort = unifiedControls.sort,
                             unifiedViewType = unifiedControls.viewType,
+                            albumSort = unifiedAlbumUi.songSort,
+                            albumMenuToken = unifiedAlbumUi.optionsToken,
+                            albumPlaylistToken = unifiedAlbumUi.playlistToken,
+                            artistMenuToken = unifiedAlbumUi.artistOptionsToken,
+                            initialPinnedSelection = pinnedLibraryRequest,
                             onSourceKeysChanged = unifiedControls::updateAvailableSources,
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
                             onDetailChanged = { unifiedLibraryDetailOpen = it },
+                            onNestedAlbumChanged = { unifiedLibraryNestedAlbumOpen = it },
                             initialContext = unifiedLibraryCategory
                                 ?: com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS,
-                            onClose = { unifiedLibraryCategory = null },
+                            onClose = {
+                                pinnedLibraryRequest = null
+                                unifiedLibraryCategory = null
+                            },
                         )
                     } else if (key == "my_ratings") {
                         CanonicalMyRatingsScreen(onBack = { showCanonicalMyRatings = false })
@@ -3188,6 +3228,11 @@ private fun BitChordApp(
                         com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
                             showAll = true,
                             contentPadding = listPadding,
+                            searchVisible = recentSearching,
+                            sort = recentControls.sort,
+                            viewType = recentControls.viewType,
+                            sourceKey = recentControls.sourceKey,
+                            stars = recentControls.stars,
                             onPlayTrack = { recordingId ->
                                 executeSmartCollection(
                                     SmartCollectionActionSource.RecentLocalTrack(recordingId),
@@ -3937,6 +3982,43 @@ private fun BitChordApp(
                             pullState = libraryPull,
                             contentPadding = listPadding,
                             navigationHome = true,
+                            pinnedSection = {
+                                com.music.bitchord.ui.screens.CanonicalPinnedLibraryHomeSection(
+                                    refreshRequested = MainViewModel.Feed.LIBRARY in refreshing,
+                                    onPlayRecording = { recordingId ->
+                                        executeSmartCollection(
+                                            SmartCollectionActionSource.LibraryTracks(
+                                                listOf(recordingId), null, shuffle = false,
+                                            ),
+                                            CanonicalCollectionIntent.PLAY_NOW,
+                                        )
+                                    },
+                                    localPlaylists = localPlaylistItems,
+                                    onOpenPlaylist = { playlistId ->
+                                        // Open the existing playlist destination, never
+                                        // attempt to encode it as a RecordingId.
+                                        openedCanonicalPlaylist = null
+                                        pinnedPlaylistRequest = playlistId
+                                        playlistLibraryQuery = ""
+                                        playlistLibraryFilter =
+                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
+                                        showPlaylistLibrary = true
+                                    },
+                                    onOpenEntity = { pin, category ->
+                                        // Pins belong to the unified catalog, not
+                                        // whichever category source/star filter was
+                                        // last used. Never hide a pinned release
+                                        // behind stale browsing preferences.
+                                        unifiedControls.sourceKey = null
+                                        unifiedControls.stars = null
+                                        pinnedLibraryRequest = pin
+                                        unifiedLibrarySearching = false
+                                        unifiedLibraryDetailOpen = false
+                                        unifiedLibraryBackToken = 0
+                                        unifiedLibraryCategory = category
+                                    },
+                                )
+                            },
                             localAdditions = {
                                 com.music.bitchord.ui.screens.CanonicalLocalRecentAdditions(
                                     refreshRequested = MainViewModel.Feed.LIBRARY in refreshing,
@@ -3956,6 +4038,7 @@ private fun BitChordApp(
                                     com.music.bitchord.ui.screens.openUnifiedLibraryCategory(
                                         hasMediaPermission = LocalMediaRepository.hasStoragePermission(context),
                                         onOpenCategory = {
+                                            pinnedLibraryRequest = null
                                             unifiedLibrarySearching = false
                                             unifiedLibraryDetailOpen = false
                                             unifiedLibraryBackToken = 0
@@ -4345,16 +4428,23 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
-                        if (unifiedLibraryCategory != null && !showSettings && detail == null) {
-                            UnifiedLibraryToolbarActions(
-                                searching = unifiedLibrarySearching,
-                                onSearch = { unifiedLibrarySearching = !unifiedLibrarySearching },
-                                controls = unifiedControls,
-                                showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(
-                                    detailOpen = unifiedLibraryDetailOpen,
-                                ),
-                            )
-                        }
+                        UnifiedLibraryRouteToolbar(
+                            recentPage = showAllLocalRecentAdditions,
+                            settingsOpen = showSettings,
+                            otherDetailOpen = detail != null,
+                            recentSearching = recentSearching,
+                            onRecentSearch = { recentSearching = !recentSearching },
+                            recentControls = recentControls,
+                            category = unifiedLibraryCategory,
+                            detailOpen = unifiedLibraryDetailOpen,
+                            nestedAlbumOpen = unifiedLibraryNestedAlbumOpen,
+                            unifiedSearching = unifiedLibrarySearching,
+                            onUnifiedSearch = {
+                                unifiedLibrarySearching = !unifiedLibrarySearching
+                            },
+                            unifiedControls = unifiedControls,
+                            albumUi = unifiedAlbumUi,
+                        )
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
                             !showSettings && !showAccountScrobbling) {
                             CanonicalPlaylistToolbarActions(
@@ -4564,7 +4654,15 @@ private fun BitChordApp(
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail) TopBarAccountButton(
+                            if (!isReleaseDetail &&
+                                !shouldUseUnifiedAlbumDetailToolbar(
+                                    unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                                    unifiedLibraryNestedAlbumOpen,
+                                ) && !shouldUseUnifiedArtistDetailToolbar(
+                                    unifiedLibraryCategory, unifiedLibraryDetailOpen,
+                                    unifiedLibraryNestedAlbumOpen,
+                                )
+                            ) TopBarAccountButton(
                                 account = account,
                                 // The account glyph is the single entrance to Settings.
                                 // Home has no redundant overflow menu.
@@ -5036,18 +5134,9 @@ private fun BitChordApp(
             // it is what marks the batch seen, and marking it on the way *out*
             // rather than on the way in is deliberate: it is the outcome the user is
             // signing off on, and while the sheet is up there may not be one yet.
-            if (showDownloadManager) {
-                val closeDownloadManager = {
-                    showDownloadManager = false
-                    DownloadSession.markSeen()
-                }
-                BackHandler(onBack = closeDownloadManager)
-                ModalBottomSheet(
-                    onDismissRequest = closeDownloadManager,
-                    containerColor = MaterialTheme.colorScheme.background,
-                ) {
-                    DownloadManagerSheet(onDismiss = closeDownloadManager)
-                }
+            DownloadManagerOverlay(show = showDownloadManager) {
+                showDownloadManager = false
+                DownloadSession.markSeen()
             }
 
             // ---- Add to playlist / new playlist ----
@@ -5216,39 +5305,25 @@ private fun BitChordApp(
             // and one that pulled the sheet down instead would throw the new order
             // away. (Material3 1.3 has no sheetGesturesEnabled; the row drags
             // consume their own events, so the list's overscroll is the only path.)
-            reorderTarget?.let { target ->
-                val close = { reorderTarget = null }
-                val keepSheetStill = remember {
-                    object : NestedScrollConnection {
-                        override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource) = available
-                        override suspend fun onPostFling(consumed: Velocity, available: Velocity) = available
+            ReorderPlaylistOverlay(
+                target = reorderTarget,
+                entries = reorderEntries,
+                saving = reorderSaving,
+                onClose = { reorderTarget = null },
+                onSave = { target, reordered ->
+                    val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
+                    reorderSaving = true
+                    viewModel.reorderPlaylist(target, original, reordered) { saved ->
+                        reorderSaving = false
+                        showQueueNotice(
+                            context.getString(
+                                if (saved) R.string.playlist_reordered else R.string.reorder_failed,
+                            ),
+                        )
+                        if (saved && reorderTarget == target) reorderTarget = null
                     }
-                }
-                ModalBottomSheet(
-                    onDismissRequest = close,
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = MaterialTheme.colorScheme.background,
-                ) {
-                    ReorderPlaylistSheet(
-                        modifier = Modifier.nestedScroll(keepSheetStill),
-                        playlist = target,
-                        entries = reorderEntries,
-                        saving = reorderSaving,
-                        onClose = close,
-                        onSave = { reordered ->
-                            val original = (reorderEntries as? UiState.Success)?.data.orEmpty()
-                            reorderSaving = true
-                            viewModel.reorderPlaylist(target, original, reordered) { saved ->
-                                reorderSaving = false
-                                showQueueNotice(
-                                    context.getString(if (saved) R.string.playlist_reordered else R.string.reorder_failed),
-                                )
-                                if (saved && reorderTarget == target) reorderTarget = null
-                            }
-                        },
-                    )
-                }
-            }
+                },
+            )
 
         }
         contextualActionOverlays()
@@ -5256,23 +5331,12 @@ private fun BitChordApp(
         // ---- Welcome (once; under the sign-in WebView it can open) ----
         // There from the first frame, so no way in; on the way out it drops
         // like a dismissed sheet onto the app it was standing in front of.
-        AnimatedVisibility(
+        WelcomeOnboardingOverlay(
             visibleState = onboardingShown,
-            enter = EnterTransition.None,
-            exit = slideOutVertically(
-                tween<IntOffset>(durationMillis = 560, easing = OnboardingDismissEasing),
-            ) { it },
-        ) {
-            OnboardingScreen(
-                signedIn = signedIn,
-                initialName = remember {
-                    ListenTogether.nickname().ifBlank { account?.name.orEmpty() }
-                },
-                onNameChosen = ListenTogether::setNickname,
-                onSignIn = { webSession = WebSessionMode.SIGN_IN },
-                onFinish = AppSettings::setOnboardingComplete,
-            )
-        }
+            signedIn = signedIn,
+            accountName = account?.name.orEmpty(),
+            onSignIn = { webSession = WebSessionMode.SIGN_IN },
+        )
 
         // ---- Google sign-in (full screen WebView) ----
         webSession?.let { mode ->
@@ -5413,11 +5477,24 @@ private fun BitChordApp(
             )
         }
 
+        UnifiedAlbumDetailSortMenu(
+            visible = shouldUseUnifiedAlbumDetailToolbar(
+                unifiedLibraryCategory, unifiedLibraryDetailOpen, unifiedLibraryNestedAlbumOpen,
+            ),
+            state = unifiedAlbumUi,
+            hazeState = hazeState,
+        )
+
         UnifiedLibraryMenus(
-            visible = unifiedLibraryCategory != null &&
+            visible = unifiedLibraryCategory != null && !showAllLocalRecentAdditions &&
                 shouldShowUnifiedLibraryBrowseFilters(unifiedLibraryDetailOpen),
             hazeState = hazeState,
             controls = unifiedControls,
+        )
+        UnifiedLibraryMenus(
+            visible = showAllLocalRecentAdditions,
+            hazeState = hazeState,
+            controls = recentControls,
         )
 
         val menuFolder = detail?.browseId?.takeIf { it.isDeviceFolder() }
@@ -5469,21 +5546,13 @@ private fun BitChordApp(
             )
         }
 
-        if (showAppLanguage) {
-            BackHandler { showAppLanguage = false }
-            AppLanguageDialog(
-                hazeState = hazeState,
-                onDismiss = { showAppLanguage = false },
-            )
-        }
-
-        if (showTranslationLanguage) {
-            BackHandler { showTranslationLanguage = false }
-            TranslationLanguageDialog(
-                hazeState = hazeState,
-                onDismiss = { showTranslationLanguage = false },
-            )
-        }
+        LanguageSettingsOverlays(
+            hazeState = hazeState,
+            showAppLanguage = showAppLanguage,
+            showTranslationLanguage = showTranslationLanguage,
+            onDismissApp = { showAppLanguage = false },
+            onDismissTranslation = { showTranslationLanguage = false },
+        )
 
         ConnectionEditors(
             hazeState = hazeState,
@@ -5504,27 +5573,7 @@ private fun BitChordApp(
         // and mini player like every other alert. Backing out is a skip —
         // leaving the batch suspended on a dismissed dialog would hang the
         // upload with no way to reach the question again.
-        val uploadConflict by com.music.bitchord.data.webdav.WebDavUploads.conflict.collectAsStateWithLifecycle()
-        uploadConflict?.let { req ->
-            var applyToAll by remember(req) { mutableStateOf(false) }
-            val answer: (com.music.bitchord.data.webdav.WebDavUploads.Choice) -> Unit = { choice ->
-                req.answer.complete(
-                    com.music.bitchord.data.webdav.WebDavUploads.Resolution(choice, applyToAll),
-                )
-            }
-            BackHandler { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) }
-            WebDavConflictAlert(
-                hazeState = hazeState,
-                fileName = req.fileName,
-                showApplyToAll = req.remaining > 0,
-                applyToAll = applyToAll,
-                onApplyToAllChange = { applyToAll = it },
-                onOverwrite = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.OVERWRITE) },
-                onKeepBoth = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.KEEP_BOTH) },
-                onSkip = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
-                onDismiss = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
-            )
-        }
+        WebDavUploadConflictOverlay(hazeState)
 
         ExternalAccountLoginOverlays(
             showDiscordLogin = showDiscordLogin,
@@ -5590,6 +5639,144 @@ private fun BitChordApp(
             )
         }
 
+    }
+}
+
+
+/**
+ * Keep these independent overlays out of BitChordApp so the JVM's 64KB
+ * per-method bytecode ceiling cannot be tripped by their Compose expansions.
+ * Their state owners and callbacks remain in the original app composition.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DownloadManagerOverlay(
+    show: Boolean,
+    onClose: () -> Unit,
+) {
+    if (show) {
+        BackHandler(onBack = onClose)
+        ModalBottomSheet(
+            onDismissRequest = onClose,
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            DownloadManagerSheet(onDismiss = onClose)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReorderPlaylistOverlay(
+    target: UserPlaylist?,
+    entries: UiState<List<Song>>,
+    saving: Boolean,
+    onClose: () -> Unit,
+    onSave: (UserPlaylist, List<Song>) -> Unit,
+) {
+    if (target == null) return
+    val keepSheetStill = remember {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ) = available
+
+            override suspend fun onPostFling(
+                consumed: Velocity,
+                available: Velocity,
+            ) = available
+        }
+    }
+    ModalBottomSheet(
+        onDismissRequest = onClose,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.background,
+    ) {
+        ReorderPlaylistSheet(
+            modifier = Modifier.nestedScroll(keepSheetStill),
+            playlist = target,
+            entries = entries,
+            saving = saving,
+            onClose = onClose,
+            onSave = { reordered -> onSave(target, reordered) },
+        )
+    }
+}
+
+@Composable
+private fun WelcomeOnboardingOverlay(
+    visibleState: MutableTransitionState<Boolean>,
+    signedIn: Boolean,
+    accountName: String,
+    onSignIn: () -> Unit,
+) {
+    AnimatedVisibility(
+        visibleState = visibleState,
+        enter = EnterTransition.None,
+        exit = slideOutVertically(
+            tween<IntOffset>(durationMillis = 560, easing = OnboardingDismissEasing),
+        ) { it },
+    ) {
+        OnboardingScreen(
+            signedIn = signedIn,
+            initialName = remember {
+                ListenTogether.nickname().ifBlank { accountName }
+            },
+            onNameChosen = ListenTogether::setNickname,
+            onSignIn = onSignIn,
+            onFinish = AppSettings::setOnboardingComplete,
+        )
+    }
+}
+
+@Composable
+private fun LanguageSettingsOverlays(
+    hazeState: HazeState,
+    showAppLanguage: Boolean,
+    showTranslationLanguage: Boolean,
+    onDismissApp: () -> Unit,
+    onDismissTranslation: () -> Unit,
+) {
+    if (showAppLanguage) {
+        BackHandler(onBack = onDismissApp)
+        AppLanguageDialog(
+            hazeState = hazeState,
+            onDismiss = onDismissApp,
+        )
+    }
+    if (showTranslationLanguage) {
+        BackHandler(onBack = onDismissTranslation)
+        TranslationLanguageDialog(
+            hazeState = hazeState,
+            onDismiss = onDismissTranslation,
+        )
+    }
+}
+
+@Composable
+private fun WebDavUploadConflictOverlay(hazeState: HazeState) {
+    val uploadConflict by com.music.bitchord.data.webdav.WebDavUploads.conflict.collectAsStateWithLifecycle()
+    uploadConflict?.let { req ->
+        var applyToAll by remember(req) { mutableStateOf(false) }
+        val answer: (com.music.bitchord.data.webdav.WebDavUploads.Choice) -> Unit = { choice ->
+            req.answer.complete(
+                com.music.bitchord.data.webdav.WebDavUploads.Resolution(choice, applyToAll),
+            )
+        }
+        BackHandler { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) }
+        WebDavConflictAlert(
+            hazeState = hazeState,
+            fileName = req.fileName,
+            showApplyToAll = req.remaining > 0,
+            applyToAll = applyToAll,
+            onApplyToAllChange = { applyToAll = it },
+            onOverwrite = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.OVERWRITE) },
+            onKeepBoth = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.KEEP_BOTH) },
+            onSkip = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
+            onDismiss = { answer(com.music.bitchord.data.webdav.WebDavUploads.Choice.SKIP) },
+        )
     }
 }
 
@@ -6226,6 +6413,21 @@ private fun NativeCollectionSortAction(contentDescription: String, onClick: () -
     }
 }
 
+/**
+ * The album action is a native icon inside the existing frosted toolbar pill,
+ * distinct from the disabled + reserved for future Library pinning.
+ */
+@Composable
+internal fun NativeAlbumPlaylistToolbarAction(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            Icons.Rounded.PlaylistAdd,
+            contentDescription = "Adicionar álbum à playlist",
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 @Composable
 private fun NativeCollectionOverflowAction(contentDescription: String, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
@@ -6487,9 +6689,136 @@ private class UnifiedLibraryUiControls {
     }
 }
 
-/** Category-only source and sort controls are meaningless atop artist details. */
+/**
+ * Album-specific chrome is held outside the massive BitChordApp method.
+ * The release detail reuses the existing frosted SongSort panel, while
+ * the playlist action is delivered to the canonical picker as a one-shot token.
+ */
+private class UnifiedAlbumDetailUiState {
+    var songSort by mutableStateOf(SongSort.DEFAULT)
+    var sortMenuOpen by mutableStateOf(false)
+    var optionsToken by mutableIntStateOf(0)
+    var playlistToken by mutableIntStateOf(0)
+    var artistOptionsToken by mutableIntStateOf(0)
+
+    fun resetDetail() {
+        songSort = SongSort.DEFAULT
+        sortMenuOpen = false
+        // These are one-shot action tokens, not persistent screen preferences.
+        // Reopening a pinned album/artist must never replay an old ⋮ or
+        // PlaylistAdd tap from the previous detail destination.
+        optionsToken = 0
+        playlistToken = 0
+        artistOptionsToken = 0
+    }
+
+    fun openSort() { sortMenuOpen = true }
+    fun requestOptions() { optionsToken++ }
+    fun requestArtistOptions() { artistOptionsToken++ }
+    fun requestAddToPlaylist() { playlistToken++ }
+    fun dismissSort() { sortMenuOpen = false }
+    fun selectSort(option: SongSort) {
+        songSort = option
+        sortMenuOpen = false
+    }
+    fun flipDateDirection() {
+        songSort = when (songSort) {
+            SongSort.DATE_ADDED_DESC -> SongSort.DATE_ADDED_ASC
+            SongSort.DATE_ADDED_ASC -> SongSort.DATE_ADDED_DESC
+            else -> SongSort.DATE_ADDED_DESC
+        }
+    }
+}
+
+@Composable
+private fun UnifiedAlbumDetailSortMenu(
+    visible: Boolean,
+    state: UnifiedAlbumDetailUiState,
+    hazeState: HazeState,
+) {
+    if (!visible || !state.sortMenuOpen) return
+    BackHandler(onBack = state::dismissSort)
+    FrostedSortMenu(
+        hazeState = hazeState,
+        selected = state.songSort,
+        onSelect = state::selectSort,
+        onFlipDateDirection = state::flipDateDirection,
+        onDismiss = state::dismissSort,
+    )
+}
+
+/** Category-only source and sort controls are meaningless atop entity details. */
 internal fun shouldShowUnifiedLibraryBrowseFilters(detailOpen: Boolean): Boolean =
     !detailOpen
+
+/** The artist detail uses its three original hero controls; pin lives in ⋮. */
+internal fun shouldUseUnifiedArtistDetailToolbar(
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext?,
+    detailOpen: Boolean,
+    nestedAlbumOpen: Boolean,
+): Boolean = detailOpen && !nestedAlbumOpen &&
+    category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS
+
+/** Album details are native release pages, not Library categories or artist pages. */
+internal fun shouldUseUnifiedAlbumDetailToolbar(
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext?,
+    detailOpen: Boolean,
+    nestedAlbumOpen: Boolean = false,
+): Boolean = detailOpen && (
+    category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS ||
+        (category == com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS &&
+            nestedAlbumOpen)
+)
+
+/**
+ * The route-aware right pill is shared by Recent Additions and the unified
+ * Library. Extracted from BitChordApp to leave JVM bytecode headroom: the
+ * large host composable previously exceeded the 64KB method ceiling.
+ */
+@Composable
+private fun UnifiedLibraryRouteToolbar(
+    recentPage: Boolean,
+    settingsOpen: Boolean,
+    otherDetailOpen: Boolean,
+    recentSearching: Boolean,
+    onRecentSearch: () -> Unit,
+    recentControls: UnifiedLibraryUiControls,
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext?,
+    detailOpen: Boolean,
+    nestedAlbumOpen: Boolean,
+    unifiedSearching: Boolean,
+    onUnifiedSearch: () -> Unit,
+    unifiedControls: UnifiedLibraryUiControls,
+    albumUi: UnifiedAlbumDetailUiState,
+) {
+    if (settingsOpen || otherDetailOpen) return
+    if (recentPage) {
+        UnifiedLibraryToolbarActions(
+            searching = recentSearching,
+            onSearch = onRecentSearch,
+            controls = recentControls,
+            showBrowseFilters = true,
+        )
+    } else if (category != null) {
+        UnifiedLibraryToolbarActions(
+            searching = unifiedSearching,
+            onSearch = onUnifiedSearch,
+            controls = unifiedControls,
+            showBrowseFilters = shouldShowUnifiedLibraryBrowseFilters(detailOpen),
+            searchInContent = !detailOpen,
+            albumDetail = shouldUseUnifiedAlbumDetailToolbar(
+                category, detailOpen, nestedAlbumOpen,
+            ),
+            onAlbumSort = albumUi::openSort,
+            onAlbumOptions = albumUi::requestOptions,
+            onAlbumAddToPlaylist = albumUi::requestAddToPlaylist,
+            artistDetail = shouldUseUnifiedArtistDetailToolbar(
+                category, detailOpen, nestedAlbumOpen,
+            ),
+            onArtistOptions = albumUi::requestArtistOptions,
+        )
+    }
+}
 
 @Composable
 private fun UnifiedLibraryToolbarActions(
@@ -6497,15 +6826,42 @@ private fun UnifiedLibraryToolbarActions(
     onSearch: () -> Unit,
     controls: UnifiedLibraryUiControls,
     showBrowseFilters: Boolean,
+    searchInContent: Boolean = false,
+    albumDetail: Boolean = false,
+    onAlbumSort: () -> Unit = {},
+    onAlbumOptions: () -> Unit = {},
+    onAlbumAddToPlaylist: () -> Unit = {},
+    artistDetail: Boolean = false,
+    onArtistOptions: () -> Unit = {},
 ) {
-    // Keep the native contextual search entry even inside an artist detail.
-    NativeCollectionSearchAction(
-        searching = searching,
-        contentDescription = if (searching)
-            "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
-        onClick = onSearch,
-    )
-    if (showBrowseFilters) {
+    // Root Músicas/Álbuns/Artistas already expose the live search field
+    // inline. Keep the native toolbar search only in detail/recent pages.
+    if (!searchInContent) {
+        NativeCollectionSearchAction(
+            searching = searching,
+            contentDescription = if (searching)
+                "Fechar pesquisa da biblioteca" else "Pesquisar na biblioteca",
+            onClick = onSearch,
+        )
+    }
+    if (albumDetail) {
+        // Separate from + in the hero: that control is reserved for
+        // future pin-to-Library, not repurposed as "add to playlist".
+        NativeAlbumPlaylistToolbarAction(onClick = onAlbumAddToPlaylist)
+        NativeCollectionSortAction(
+            contentDescription = "Ordenar faixas do álbum",
+            onClick = onAlbumSort,
+        )
+        NativeCollectionOverflowAction(
+            contentDescription = "Opções do álbum",
+            onClick = onAlbumOptions,
+        )
+    } else if (artistDetail) {
+        NativeCollectionOverflowAction(
+            contentDescription = "Opções do artista",
+            onClick = onArtistOptions,
+        )
+    } else if (showBrowseFilters) {
         IconButton(onClick = { controls.sourceMenuOpen = true }) {
             Icon(
                 Icons.Rounded.Layers, contentDescription = "Fonte das músicas",

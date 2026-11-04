@@ -13,13 +13,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ListeningEventEntity::class,
         RecordingRatingCurrentEntity::class,
         RecordingRatingHistoryEntity::class,
+        CanonicalEntityRatingEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 internal abstract class ListeningEventDatabase : RoomDatabase() {
     abstract fun listeningEventDao(): ListeningEventDao
     abstract fun recordingRatingDao(): RecordingRatingDao
+    abstract fun canonicalEntityRatingDao(): CanonicalEntityRatingDao
 
     internal companion object {
         const val DATABASE_NAME = "listening-events.db"
@@ -73,6 +75,23 @@ internal abstract class ListeningEventDatabase : RoomDatabase() {
             }
         }
 
+        /** Artist and Release ratings retain their own exact catalog identity. */
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS canonical_entity_rating (
+                        entityType TEXT NOT NULL,
+                        entityId TEXT NOT NULL,
+                        ratingValue REAL NOT NULL,
+                        ratedAtEpochMs INTEGER NOT NULL,
+                        PRIMARY KEY(entityType, entityId)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
         @Volatile
         private var instance: ListeningEventDatabase? = null
 
@@ -82,7 +101,7 @@ internal abstract class ListeningEventDatabase : RoomDatabase() {
                     context.applicationContext,
                     ListeningEventDatabase::class.java,
                     DATABASE_NAME,
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

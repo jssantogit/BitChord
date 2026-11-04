@@ -126,6 +126,10 @@ import com.music.bitchord.data.matchesSearch
 import com.music.bitchord.data.sortedForLibrary
 import com.music.bitchord.data.useTrackTags
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.SourceQuality
+import com.music.bitchord.ui.components.SourceQualityBadge
+import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
 import com.music.bitchord.data.canvas.AppleArtistArt
 import com.music.bitchord.data.DebugLog as Log
@@ -761,17 +765,8 @@ fun DetailScreen(
                                     )
                                 }
                             }
-                            row.durationMs?.takeIf { it > 0L }?.let { duration ->
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = String.format(
-                                        Locale.ROOT, "%d:%02d",
-                                        duration / 60_000L, (duration / 1_000L) % 60L,
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = palette.onBackgroundVariant,
-                                )
-                            }
+                            // Individual track durations stay in metadata,
+                            // but no longer consume space in release list rows.
                         }
                         if (index < canonicalTracks.lastIndex) {
                             HorizontalDivider(
@@ -869,6 +864,34 @@ fun DetailScreen(
                             )
                         }
                     }
+                }
+            }
+
+            if (page.type == BrowseType.ALBUM) {
+                item(key = "album-metadata-footer") {
+                    val year = page.subtitle.split("•", "·")
+                        .map(String::trim).firstOrNull {
+                            it.length == 4 && it.all(Char::isDigit)
+                        }
+                    val total = if (songs.isNotEmpty() && songs.all {
+                        it.durationMillis() > 0L
+                    }) songs.sumOf { it.durationMillis() }
+                    else if (canonicalTracks.isNotEmpty() && canonicalTracks.all {
+                        (it.durationMs ?: 0L) > 0L
+                    }) canonicalTracks.sumOf { it.durationMs ?: 0L }
+                    else null
+                    val minutes = total?.let { ((it + 30_000L) / 60_000L).coerceAtLeast(1L) }
+                    val count = if (songs.isNotEmpty()) songs.size else canonicalTracks.size
+                    val summary = count.takeIf { it > 0 }?.let {
+                        "$it ${if (it == 1) "música" else "músicas"}" +
+                            (minutes?.let { min ->
+                                ", $min ${if (min == 1L) "minuto" else "minutos"}"
+                            } ?: "")
+                    }
+                    NativeAlbumMetadataFooter(
+                        metadata = CanonicalAlbumFooterMetadata(year, summary),
+                        palette = palette,
+                    )
                 }
             }
 
@@ -1003,7 +1026,7 @@ private fun ReleaseHeader(
         if (songs.isNotEmpty()) songs.size else canonicalTracks.size,
         if (songs.isNotEmpty()) songs.playtime() else canonicalTime,
     )
-    val meta = metaOverride ?: originalMeta
+    val meta = if (page.type == BrowseType.ALBUM) "" else metaOverride ?: originalMeta
     // Every row on a release carries the same credit — see [pageCredit] — so
     // the first one speaks for the whole page, the same source the rows'
     // own long-press "Open artist" already reads from.
@@ -1109,79 +1132,103 @@ private fun ReleaseHeader(
             // is willing to take the write — see [onToggleLibrary].
             val library = page.library?.takeIf { onToggleLibrary != null }
             Spacer(Modifier.height(18.dp))
-            Row(
-                modifier = Modifier
-                    .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
-                    .fillMaxWidth()
-                    .padding(horizontal = HEADER_GUTTER),
-                horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (page.browseId.startsWith("local:")) {
-                    // Already on this device — a folder, a download, a local
-                    // playlist — so there is no library to add it to, and a
-                    // greyed-out plus would only promise one. Apple Music's
-                    // own pair for that case: Play and Shuffle, side by side.
-                    ActionPill(
-                        icon = BitChordIcons.Play,
-                        label = stringResource(R.string.play),
-                        onClick = onPlay,
-                        filled = true,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                    ActionPill(
-                        icon = BitChordIcons.Shuffle,
-                        label = stringResource(R.string.shuffle),
-                        onClick = onShuffle,
-                        filled = false,
-                        size = RELEASE_SIDE_BUTTON,
-                        modifier = Modifier.weight(1f),
-                    )
-                    return@Row
-                }
-                CircleIconButton(
-                    icon = BitChordIcons.Shuffle,
-                    contentDescription = stringResource(R.string.shuffle),
-                    onClick = onShuffle,
-                    haptic = Haptic.Resume,
-                    size = RELEASE_SIDE_BUTTON,
-                    enabled = songs.isNotEmpty(),
-                )
-                ActionPill(
-                    icon = BitChordIcons.Play,
-                    label = stringResource(R.string.play),
-                    onClick = onPlay,
-                    filled = true,
-                    size = RELEASE_SIDE_BUTTON,
-                    modifier = Modifier.weight(1f),
-                )
-                if (library != null) {
-                    CircleIconButton(
-                        // A tick, not a filled-in plus: the pair reads as
-                        // "not yet / done", which is what the state is.
-                        icon = if (library.saved) BitChordIcons.Check else BitChordIcons.Plus,
-                        contentDescription = if (library.saved) {
-                            stringResource(R.string.remove_from_library)
-                        } else {
-                            stringResource(R.string.add_to_library)
-                        },
-                        onClick = { onToggleLibrary?.invoke() },
-                        haptic = if (library.saved) Haptic.ToggleOff else Haptic.ToggleOn,
-                        size = RELEASE_SIDE_BUTTON,
-                    )
-                } else {
-                    // Shown but greyed out for a guest, rather than leaving a
-                    // hole beside Play.
-                    CircleIconButton(
-                        icon = BitChordIcons.Plus,
-                        contentDescription = stringResource(R.string.add_to_library),
-                        onClick = {},
-                        size = RELEASE_SIDE_BUTTON,
-                        enabled = false,
-                    )
-                }
-            }
+            NativeReleaseActionRow(
+                onPlay = onPlay,
+                onShuffle = onShuffle,
+                isLocal = page.browseId.startsWith("local:"),
+                canShuffle = songs.isNotEmpty(),
+                isSaved = library?.saved,
+                onToggleLibrary = if (library == null) null else onToggleLibrary,
+            )
+        }
+    }
+}
+
+/**
+ * Shared release-page controls: a small Shuffle circle, dominant white Play
+ * pill, and the contextual library circle. Kept here beside DetailScreen so
+ * the canonical unified Album detail cannot drift into two Library action
+ * pills or silently change the reference release visual hierarchy.
+ */
+@Composable
+internal fun NativeReleaseActionRow(
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+    isLocal: Boolean,
+    canShuffle: Boolean = true,
+    isSaved: Boolean? = null,
+    onToggleLibrary: (() -> Unit)? = null,
+    // Reserved for a future pin on the unified Library landing page.
+    // Never attach playlist membership to the hero +.
+    reservePinAction: Boolean = false,
+    isPinnedInLibrary: Boolean = false,
+    onTogglePin: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
+            .fillMaxWidth()
+            .padding(horizontal = HEADER_GUTTER),
+        horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isLocal) {
+            ActionPill(
+                icon = BitChordIcons.Play,
+                label = stringResource(R.string.play),
+                onClick = onPlay,
+                filled = true,
+                size = RELEASE_SIDE_BUTTON,
+                modifier = Modifier.weight(1f),
+            )
+            ActionPill(
+                icon = BitChordIcons.Shuffle,
+                label = stringResource(R.string.shuffle),
+                onClick = onShuffle,
+                filled = false,
+                size = RELEASE_SIDE_BUTTON,
+                modifier = Modifier.weight(1f),
+            )
+        } else {
+            CircleIconButton(
+                icon = BitChordIcons.Shuffle,
+                contentDescription = stringResource(R.string.shuffle),
+                onClick = onShuffle,
+                haptic = Haptic.Resume,
+                size = RELEASE_SIDE_BUTTON,
+                enabled = canShuffle,
+            )
+            ActionPill(
+                icon = BitChordIcons.Play,
+                label = stringResource(R.string.play),
+                onClick = onPlay,
+                filled = true,
+                size = RELEASE_SIDE_BUTTON,
+                modifier = Modifier.weight(1f),
+            )
+            CircleIconButton(
+                icon = if (reservePinAction && isPinnedInLibrary ||
+                    !reservePinAction && isSaved == true
+                ) BitChordIcons.Check else BitChordIcons.Plus,
+                contentDescription = if (reservePinAction) {
+                    if (isPinnedInLibrary) "Desafixar álbum da Biblioteca"
+                    else if (onTogglePin == null) "Fixar álbum na Biblioteca (em breve)"
+                    else "Fixar álbum na Biblioteca"
+                } else stringResource(
+                    if (isSaved == true) R.string.remove_from_library
+                    else R.string.add_to_library,
+                ),
+                onClick = {
+                    if (reservePinAction) onTogglePin?.invoke()
+                    else onToggleLibrary?.invoke()
+                },
+                haptic = if (reservePinAction && isPinnedInLibrary ||
+                    !reservePinAction && isSaved == true
+                ) Haptic.ToggleOff else Haptic.ToggleOn,
+                size = RELEASE_SIDE_BUTTON,
+                enabled = if (reservePinAction) onTogglePin != null
+                    else onToggleLibrary != null,
+            )
         }
     }
 }
@@ -1192,6 +1239,9 @@ internal fun NativeReleaseHeaderLayout(
     credit: String,
     meta: String,
     palette: ArtworkPalette,
+    rating: Double? = null,
+    quality: SourceQuality? = null,
+    onRate: (() -> Unit)? = null,
     sleeveSize: Dp,
     artwork: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
     topInset: Dp? = null,
@@ -1234,6 +1284,31 @@ internal fun NativeReleaseHeaderLayout(
                 modifier = Modifier.padding(horizontal = HEADER_GUTTER)
                     .let { m -> if (onCreditClick == null) m
                         else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
+            )
+        }
+        // The original rating slot shows first-party stars when saved. With
+        // no rating it uses the exact Now Playing source badge; never invent
+        // "Hi-Res" from bitrate or claim provider evidence was played.
+        if (rating != null && onRate != null) {
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onRate)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("native-album-rating"),
+            ) {
+                CanonicalRatingStars(
+                    rating = RatingDisplay(localValue = rating),
+                    color = palette.onBackground,
+                )
+            }
+        } else if (rating == null && quality != null) {
+            Spacer(Modifier.height(8.dp))
+            SourceQualityBadge(
+                quality = quality,
+                color = palette.onBackgroundVariant,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.testTag("native-album-source-quality"),
             )
         }
         if (meta.isNotBlank()) {
@@ -1671,6 +1746,9 @@ internal fun ActionRow(
     /** The artist header's subscribe state, or null where it isn't offered. */
     subscription: SubscriptionState? = null,
     onToggleSubscription: (() -> Unit)? = null,
+    /** Only the canonical Library artist route can supply first-party rating. */
+    onRateArtist: (() -> Unit)? = null,
+    artistRated: Boolean = false,
     /** Apple's fill for the Play circle; null leaves it white. */
     playColor: Color? = null,
 ) {
@@ -1704,6 +1782,14 @@ internal fun ActionRow(
                 ),
                 onClick = { onToggleSubscription?.invoke() },
                 haptic = if (subscription.subscribed) Haptic.ToggleOff else Haptic.ToggleOn,
+                size = ARTIST_SIDE_BUTTON,
+            )
+        } else if (onRateArtist != null) {
+            CircleIconButton(
+                icon = if (artistRated) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                contentDescription = "Avaliar artista",
+                onClick = onRateArtist,
+                haptic = Haptic.ToggleOn,
                 size = ARTIST_SIDE_BUTTON,
             )
         } else {

@@ -235,6 +235,7 @@ object LocalMediaRepository {
             addAll(mandatoryProjection.toList())
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) add(MediaStore.Audio.Media.GENRE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(MediaStore.MediaColumns.BITRATE)
+            add(MediaStore.MediaColumns.MIME_TYPE)
         }.toTypedArray()
 
         val filterNonMusic = AppSettings.filterNonMusicAudio.value
@@ -295,6 +296,7 @@ object LocalMediaRepository {
                 val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     cursor.getColumnIndex(MediaStore.Audio.Media.GENRE)
                 } else -1
+                val mimeCol = cursor.getColumnIndex(MediaStore.MediaColumns.MIME_TYPE)
                 val bitrateCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     cursor.getColumnIndex(MediaStore.MediaColumns.BITRATE)
                 } else -1
@@ -312,6 +314,10 @@ object LocalMediaRepository {
                     val path = cursor.getString(dataCol)
                     val localGenre = if (genreCol >= 0 && !cursor.isNull(genreCol)) {
                         cursor.getString(genreCol)?.trim()?.takeIf(String::isNotBlank)
+                    } else null
+                    val localMimeType = if (mimeCol >= 0 && !cursor.isNull(mimeCol)) {
+                        cursor.getString(mimeCol)?.trim()?.lowercase(java.util.Locale.ROOT)
+                            ?.takeIf(String::isNotBlank)
                     } else null
                     val localBitrateBps = if (bitrateCol >= 0 && !cursor.isNull(bitrateCol)) {
                         cursor.getLong(bitrateCol).takeIf { it > 0L }
@@ -353,6 +359,7 @@ object LocalMediaRepository {
                             localPath = path,
                             localGenre = localGenre,
                             localBitrateBps = localBitrateBps,
+                            localMimeType = localMimeType,
                             localDateAddedSeconds = cursor.getLong(dateAddedCol),
                             localDateModifiedSeconds = cursor.getLong(dateModifiedCol),
                             trackNumber = trackNumber,

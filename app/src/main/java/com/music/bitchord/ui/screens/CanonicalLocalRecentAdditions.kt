@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +26,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -33,6 +40,12 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalLocalLibrary
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
+import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
+import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.data.settings.LibraryViewType
+import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
+import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ShelfRow
 import kotlinx.coroutines.CancellationException
@@ -104,14 +117,57 @@ internal fun shouldRequeryRecentLocalAdditions(
     explicitRefresh: Boolean,
 ): Boolean = explicitRefresh || cachedIds.isNullOrEmpty()
 
+/** Native list filters never trigger a new filesystem or Room read. */
+internal fun filteredCanonicalRecentLocalAdditions(
+    tracks: List<V2DisplayRow>,
+    query: String,
+    sort: LocalMusicSort,
+    sourceKey: String?,
+    stars: Int?,
+    ratings: CanonicalRatingDisplaySnapshot,
+    dates: Map<String, CanonicalEntitySortDateRow>,
+): List<V2DisplayRow> {
+    require(stars == null || stars in 1..5)
+    if (sourceKey != null && sourceKey != CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
+        return emptyList()
+    val term = query.trim()
+    val visible = tracks.filter { track ->
+        (term.isEmpty() || track.title.contains(term, ignoreCase = true) ||
+            track.artist.contains(term, ignoreCase = true)) &&
+            (stars == null || ratings.byRecordingId[track.id]?.localValue == stars.toDouble())
+    }
+    // Use EXACTLY the same native Library sort planner as Músicas, Álbuns and
+    // Artistas. No parallel comparator or second date interpretation here.
+    // A snapshot from older app sessions may have rows but not dates yet:
+    // keep its true MediaStore newest-first insertion order until refreshed.
+    if (dates.isEmpty() && sort in setOf(
+        LocalMusicSort.DATE_ADDED, LocalMusicSort.DATE_MODIFIED,
+    )) return visible
+    return sortCanonicalUnifiedEntities(
+        entries = visible,
+        sort = sort,
+        dates = dates,
+        id = V2DisplayRow::id,
+        title = V2DisplayRow::title,
+    )
+}
+
 internal object RecentLocalAdditionsSnapshot {
     private var all: List<V2DisplayRow>? = null
     private var shelf: List<V2DisplayRow>? = null
+    private var timestamps = emptyMap<String, CanonicalEntitySortDateRow>()
+
+    @Synchronized fun dates(): Map<String, CanonicalEntitySortDateRow> = timestamps
 
     @Synchronized fun get(showAll: Boolean): List<V2DisplayRow>? =
         if (showAll) all else shelf ?: all?.take(6)
 
-    @Synchronized fun put(showAll: Boolean, rows: List<V2DisplayRow>) {
+    @Synchronized fun put(
+        showAll: Boolean,
+        rows: List<V2DisplayRow>,
+        realDates: Map<String, CanonicalEntitySortDateRow> = emptyMap(),
+    ) {
+        if (realDates.isNotEmpty()) timestamps = timestamps + realDates
         if (showAll) {
             all = rows
             shelf = rows.take(6)
@@ -121,6 +177,7 @@ internal object RecentLocalAdditionsSnapshot {
     @Synchronized fun clear() {
         all = null
         shelf = null
+        timestamps = emptyMap()
     }
 }
 
@@ -136,6 +193,11 @@ internal fun CanonicalLocalRecentAdditions(
     showAll: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(),
     refreshRequested: Boolean = false,
+    searchVisible: Boolean = false,
+    sort: LocalMusicSort = LocalMusicSort.DATE_ADDED,
+    viewType: LibraryViewType = LibraryViewType.GRID,
+    sourceKey: String? = null,
+    stars: Int? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val database = remember(context) { CanonicalCatalogDatabase.get(context) }
@@ -143,6 +205,9 @@ internal fun CanonicalLocalRecentAdditions(
     var refreshSerial by remember { mutableIntStateOf(0) }
     var refreshing by remember { mutableStateOf(false) }
     var loadFailed by remember { mutableStateOf(false) }
+    var searchQuery by remember(showAll) { mutableStateOf("") }
+    LaunchedEffect(searchVisible) { if (!searchVisible) searchQuery = "" }
+    val ratingSnapshot = LocalCanonicalRatingDisplay.current
     val recent by produceState<List<V2DisplayRow>?>(
         initialValue = RecentLocalAdditionsSnapshot.get(showAll)?.takeIf { it.isNotEmpty() },
         key1 = dao, key2 = showAll, key3 = refreshSerial to refreshRequested,
@@ -157,7 +222,7 @@ internal fun CanonicalLocalRecentAdditions(
         }
         refreshing = refreshSerial > 0
         try {
-            val fresh = withContext(Dispatchers.IO) {
+            val (fresh, factDates) = withContext(Dispatchers.IO) {
                     // Home used to read an empty Room table before the first
                     // unified-category visit indexed MediaStore. Index once
                     // before reading; an empty pre-index cache is not final.
@@ -175,7 +240,7 @@ internal fun CanonicalLocalRecentAdditions(
                     val assets = recentRows.chunked(300).flatMap { batch ->
                         dao.mediaAssetsByIds(batch.map { it.mediaAssetId })
                     }.associateBy { it.id }
-                    recentRows.map { row ->
+                    val viewRows = recentRows.map { row ->
                         val (mediaTitle, mediaAlbum, fileName) = localRecentMediaStoreLabels(
                             context, assets[row.mediaAssetId]?.uri,
                         )
@@ -193,8 +258,15 @@ internal fun CanonicalLocalRecentAdditions(
                             localArtworkUri = row.artworkUri,
                         )
                     }
+                    viewRows to recentRows.associate { row ->
+                        row.recordingId to CanonicalEntitySortDateRow(
+                            entityId = row.recordingId,
+                            dateAddedSeconds = row.dateAddedSeconds,
+                            dateModifiedSeconds = row.dateModifiedSeconds,
+                        )
+                    }
             }
-            RecentLocalAdditionsSnapshot.put(showAll, fresh)
+            RecentLocalAdditionsSnapshot.put(showAll, fresh, factDates)
             value = fresh
             loadFailed = false
         } catch (cancelled: CancellationException) {
@@ -215,20 +287,42 @@ internal fun CanonicalLocalRecentAdditions(
             modifier = Modifier.fillMaxSize(),
         ) {
             CanonicalRecentAdditionsGrid(
-                recent.orEmpty(), onPlayTrack, contentPadding,
+                recent = filteredCanonicalRecentLocalAdditions(
+                    tracks = recent.orEmpty(),
+                    query = searchQuery,
+                    sort = sort,
+                    sourceKey = sourceKey,
+                    stars = stars,
+                    ratings = ratingSnapshot,
+                    dates = RecentLocalAdditionsSnapshot.dates(),
+                ),
+                onPlayTrack = onPlayTrack,
+                contentPadding = contentPadding,
                 loading = recent == null && !loadFailed,
                 error = loadFailed,
+                showSearch = searchVisible,
+                query = searchQuery,
+                onQueryChange = { searchQuery = it },
+                viewType = viewType,
+                filterActive = searchQuery.isNotBlank() || stars != null ||
+                    sourceKey != null,
             )
         }
     } else if (recent != null) {
         CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll)
-    } else {
+    } else if (loadFailed) {
         Text(
-            if (loadFailed) "Não foi possível consultar as adições locais."
-            else "Carregando adições recentes…",
+            "Não foi possível consultar as adições locais.",
             modifier = Modifier.padding(PAGE_GUTTER),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    } else {
+        Box(
+            Modifier.fillMaxWidth().height(96.dp).testTag("native-recent-shelf-loading"),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+        }
     }
 }
 
@@ -315,27 +409,72 @@ internal fun CanonicalRecentAdditionsGrid(
     contentPadding: PaddingValues = PaddingValues(),
     loading: Boolean = false,
     error: Boolean = false,
+    showSearch: Boolean = false,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    viewType: LibraryViewType = LibraryViewType.GRID,
+    filterActive: Boolean = false,
 ) {
+    if (loading && recent.isEmpty()) {
+        // Initial MediaStore projection can be expensive. The same native
+        // spinner already used in playlists belongs in the center of the
+        // content, not a text-only row at the upper-left corner.
+        Box(
+            modifier = Modifier.fillMaxSize().testTag("native-recent-loading"),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+        }
+        return
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
     ) {
+        if (showSearch) item(key = "recent-search") {
+            DetailSearchField(
+                query = query,
+                onQueryChange = onQueryChange,
+                onClose = { onQueryChange("") },
+                autoFocus = true,
+                onFocused = {},
+                palette = themeArtworkPalette(),
+                placeholder = "Pesquisar em adições recentes",
+                horizontalInset = PAGE_GUTTER,
+            )
+        }
         if (recent.isEmpty()) item {
             Text(
                 when {
-                    loading -> "Carregando adições locais…"
                     error -> "Não foi possível consultar as adições locais. Arraste para atualizar."
+                    filterActive -> "Nenhuma adição corresponde aos filtros."
                     else -> "Nenhuma adição local recente."
                 },
                 modifier = Modifier.padding(PAGE_GUTTER),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        gridRows(recent, columns = 2, key = { it.id }) { track ->
-            CanonicalRecentAdditionCard(
-                track = track, modifier = Modifier.fillMaxWidth(),
-                onClick = { onPlayTrack(track.id) },
-            )
+        if (viewType == LibraryViewType.LIST) {
+            items(recent, key = { it.id }) { track ->
+                LibraryRow(
+                    title = track.title,
+                    subtitle = track.artist,
+                    imageUrl = null,
+                    artwork = {
+                        SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
+                    },
+                    onClick = { onPlayTrack(track.id) },
+                    horizontalPadding = PAGE_GUTTER,
+                    artworkSize = 52.dp,
+                )
+            }
+        } else {
+            gridRows(recent, columns = 2, key = { it.id }) { track ->
+                CanonicalRecentAdditionCard(
+                    track = track, modifier = Modifier.fillMaxWidth(),
+                    onClick = { onPlayTrack(track.id) },
+                )
+            }
         }
     }
 }

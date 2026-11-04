@@ -25,17 +25,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
@@ -43,6 +48,11 @@ import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.ui.components.BrowseActionsSheet
+import com.music.bitchord.ui.components.BrowseTarget
+import com.music.bitchord.ui.components.RowMoreButton
+import kotlinx.coroutines.launch
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.themeArtworkPalette
@@ -111,6 +121,14 @@ internal fun visibleLibraryPlaylistCards(
     }
 }
 
+/** The canonical queue planner can execute these two verified RecordingId collections. */
+internal fun canQueueLibraryPlaylist(card: LibraryPlaylistCard): Boolean =
+    card is LibraryPlaylistCard.Smart || card is LibraryPlaylistCard.CanonicalNormal
+
+/** Delete is supported only by first-party saved playlist repositories here. */
+internal fun canDeleteLibraryPlaylist(card: LibraryPlaylistCard): Boolean =
+    card is LibraryPlaylistCard.Smart || card is LibraryPlaylistCard.CanonicalNormal
+
 /** Stable card IDs, fresh saved definitions; never keep a stale UI snapshot after editing. */
 internal fun latestLibraryPlaylistCard(
     selected: LibraryPlaylistCard,
@@ -135,6 +153,7 @@ internal fun PlaylistLibrarySearchField(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun UnifiedPlaylistLibraryShelf(
     normalPlaylists: List<ShelfItem>,
@@ -159,6 +178,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     filter: PlaylistLibraryTypeFilter = PlaylistLibraryTypeFilter.ALL,
     selectedCard: LibraryPlaylistCard? = null,
     onSelectedCardChange: (LibraryPlaylistCard?) -> Unit = {},
+    pinnedPlaylistRequest: String? = null,
+    onPinnedPlaylistRequestConsumed: () -> Unit = {},
     listState: LazyListState? = null,
     detailListState: LazyListState? = null,
     detailSearching: Boolean = false,
@@ -170,6 +191,11 @@ internal fun UnifiedPlaylistLibraryShelf(
     onPlaylistCountChange: (Int) -> Unit = {},
 ) {
     val context = LocalContext.current.applicationContext
+    val playlistPinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
+    val pinnedPlaylists by playlistPinRepo.pins.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var optionsFor by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    var deleteFailure by remember { mutableStateOf(false) }
     val repo = remember(context) {
         SmartPlaylistV2DefinitionRepository(
             SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
@@ -220,6 +246,26 @@ internal fun UnifiedPlaylistLibraryShelf(
         if (smartLoaded && normalLoaded) onPlaylistCountChange(cards.size)
     }
     val openedCard = selectedCard?.let { latestLibraryPlaylistCard(it, cards) }
+    LaunchedEffect(pinnedPlaylistRequest, cards, smartLoaded, normalLoaded) {
+        val requested = pinnedPlaylistRequest ?: return@LaunchedEffect
+        if (smartLoaded && normalLoaded) {
+            val resolved = cards.firstOrNull { it.id == requested }
+            if (resolved != null) {
+                when (resolved) {
+                    is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(resolved.shelfItem)
+                    else -> onSelectedCardChange(resolved)
+                }
+            }
+            onPinnedPlaylistRequestConsumed()
+        }
+    }
+    val menuCard = optionsFor?.let { latestLibraryPlaylistCard(it, cards) }
+    // Close options when a playlist disappears from the underlying Room store.
+    LaunchedEffect(optionsFor?.id, cards) {
+        if (optionsFor != null && smartLoaded && normalLoaded && menuCard == null) {
+            optionsFor = null
+        }
+    }
     LaunchedEffect(selectedCard?.id, smartLoaded, normalLoaded, cards) {
         if (selectedCard != null && smartLoaded && normalLoaded && openedCard == null) {
             // Saved definition was deleted while this detail was open.
@@ -323,7 +369,90 @@ internal fun UnifiedPlaylistLibraryShelf(
             UnifiedPlaylistCompactRow(
                 card = card,
                 onClick = openCard,
+                onMore = { optionsFor = card },
                 modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            )
+        }
+    }
+    menuCard?.let { selected ->
+        ModalBottomSheet(
+            onDismissRequest = { optionsFor = null },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            BrowseActionsSheet(
+                target = BrowseTarget(
+                    browseId = null,
+                    title = selected.title,
+                    subtitle = when (selected) {
+                        is LibraryPlaylistCard.Smart -> "Playlist inteligente"
+                        else -> "Playlist normal"
+                    },
+                    thumbnailUrl = (selected as? LibraryPlaylistCard.Normal)?.shelfItem?.thumbnailUrl,
+                    type = BrowseType.PLAYLIST,
+                ),
+                isPinned = pinnedPlaylists.any { it.id == selected.id },
+                onTogglePin = {
+                    playlistPinRepo.toggle(LibraryPlaylistPin(selected.id, selected.title))
+                    optionsFor = null
+                },
+                onPlayNext = if (canQueueLibraryPlaylist(selected)) ({
+                    when (selected) {
+                        is LibraryPlaylistCard.Smart ->
+                            onSmartAction(selected.definition.id, CanonicalCollectionIntent.ADD_NEXT)
+                        is LibraryPlaylistCard.CanonicalNormal ->
+                            onCanonicalNormalAction(selected.definition.id, CanonicalCollectionIntent.ADD_NEXT)
+                        is LibraryPlaylistCard.Normal -> Unit
+                    }
+                    optionsFor = null
+                }) else null,
+                onAddToQueue = if (canQueueLibraryPlaylist(selected)) ({
+                    when (selected) {
+                        is LibraryPlaylistCard.Smart ->
+                            onSmartAction(selected.definition.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                        is LibraryPlaylistCard.CanonicalNormal ->
+                            onCanonicalNormalAction(selected.definition.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                        is LibraryPlaylistCard.Normal -> Unit
+                    }
+                    optionsFor = null
+                }) else null,
+                onEdit = when (selected) {
+                    is LibraryPlaylistCard.Smart -> ({
+                        optionsFor = null
+                        onOpenSmartPlaylist(selected.definition.id)
+                    })
+                    is LibraryPlaylistCard.CanonicalNormal -> ({
+                        optionsFor = null
+                        onOpenCanonicalNormalPlaylist(selected.definition.id)
+                    })
+                    is LibraryPlaylistCard.Normal -> null
+                },
+                onDelete = if (canDeleteLibraryPlaylist(selected)) ({
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                when (selected) {
+                                    is LibraryPlaylistCard.Smart -> repo.remove(selected.definition.id)
+                                    is LibraryPlaylistCard.CanonicalNormal ->
+                                        normalRepo.remove(selected.definition.id)
+                                    is LibraryPlaylistCard.Normal -> Unit
+                                }
+                            }
+                            playlistPinRepo.remove(selected.id)
+                            if (selectedCard?.id == selected.id) onSelectedCardChange(null)
+                            optionsFor = null
+                            deleteFailure = false
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            deleteFailure = true
+                            Toast.makeText(context, "Não foi possível excluir a playlist", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }) else null,
+                onOpen = if (selected is LibraryPlaylistCard.Normal) ({
+                    onOpenNormalPlaylist(selected.shelfItem)
+                    optionsFor = null
+                }) else null,
             )
         }
     }
@@ -396,11 +525,47 @@ internal fun UnifiedPlaylistLibraryShelf(
     }
 }
 
+/**
+ * Cover identity and artwork loader are shared by the normal playlist Library
+ * row AND the add-to-playlist destination picker. Never reimplement a second
+ * thumbnail, collage, artwork URL or provider-specific title lookup.
+ */
+internal fun canonicalStaticPlaylistCoverCandidateIds(ids: List<String>): List<String> =
+    ids.filter(String::isNotBlank).distinct().take(4)
+
+@Composable
+internal fun CanonicalStaticPlaylistCoverArt(
+    playlist: SavedCanonicalStaticPlaylist,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current.applicationContext
+    val rows by produceState<List<V2DisplayRow>>(
+        initialValue = emptyList(), key1 = playlist,
+    ) {
+        val coverIds = canonicalStaticPlaylistCoverCandidateIds(playlist.recordingIds)
+        value = if (coverIds.isEmpty()) emptyList() else try {
+            canonicalNormalPlaylistSelectedRows(
+                context, coverIds, playlist.sourceProviderKey,
+            ).filter { it.isAvailablePlaylistMember() }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+    CanonicalPlaylistCoverArt(
+        rows = rows,
+        modifier = modifier,
+        customCoverUri = playlist.coverUri,
+    )
+}
+
 /** Compact vertical Library presentation; the same actions work in the grid. */
 @Composable
 private fun UnifiedPlaylistCompactRow(
     card: LibraryPlaylistCard,
     onClick: () -> Unit,
+    onMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current.applicationContext
@@ -408,18 +573,9 @@ private fun UnifiedPlaylistCompactRow(
         initialValue = emptyList(), key1 = card.id, key2 = card,
     ) {
         value = when (card) {
-            is LibraryPlaylistCard.CanonicalNormal -> {
-                try {
-                    canonicalNormalPlaylistSelectedRows(
-                        context, card.definition.recordingIds.take(4),
-                        card.definition.sourceProviderKey,
-                    ).filterNot { it.title == "Gravação indisponível" }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    emptyList()
-                }
-            }
+            // The canonical normal cover is rendered by
+            // CanonicalStaticPlaylistCoverArt, shared with the destination picker.
+            is LibraryPlaylistCard.CanonicalNormal -> emptyList()
             is LibraryPlaylistCard.Smart -> {
                 try {
                     val ids = withContext(Dispatchers.IO) {
@@ -452,12 +608,21 @@ private fun UnifiedPlaylistCompactRow(
         },
         imageUrl = (card as? LibraryPlaylistCard.Normal)?.shelfItem?.thumbnailUrl,
         onClick = onClick,
+        onLongPress = onMore,
+        trailing = {
+            RowMoreButton(onClick = onMore, contentDescription = "Opções de ${card.title}")
+        },
         modifier = modifier,
         horizontalPadding = 4.dp,
         // Keep Library rows compact. The large hero belongs to the
         // create/edit screen and the dedicated playlist detail only.
         artworkSize = 64.dp,
         artwork = when {
+            card is LibraryPlaylistCard.CanonicalNormal -> ({
+                CanonicalStaticPlaylistCoverArt(
+                    card.definition, modifier = Modifier.fillMaxSize(),
+                )
+            })
             card.explicitCoverUri() != null -> ({
                 CanonicalPlaylistCoverArt(
                     canonicalCover, Modifier.fillMaxSize(),

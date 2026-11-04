@@ -8,6 +8,7 @@ import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.visibleStarValues
 import com.music.bitchord.data.settings.LocalMusicSort
+import com.music.bitchord.data.settings.SongSort
 import java.util.Locale
 
 /**
@@ -126,6 +127,84 @@ internal fun nativeUnifiedTrackCountLabel(
         durationsMs.any { it == null || it <= 0L }) return prefix
     val totalMinutes = durationsMs.filterNotNull().sumOf { it } / 60_000L
     return "$prefix · ${totalMinutes / 60}h ${(totalMinutes % 60).toString().padStart(2, '0')}m"
+}
+
+/** Album detail uses the ordered, source-validated ReleaseTrack edges from Room.
+ * Root Library sorting must never reorder the release's own running order. */
+internal fun canonicalAlbumDetailTrackOrder(
+    tracks: List<CanonicalBrowseTrack>,
+    releaseRecordingIds: List<String>,
+): List<CanonicalBrowseTrack> {
+    if (releaseRecordingIds.isEmpty()) return tracks
+    val byId = tracks.associateBy(CanonicalBrowseTrack::recordingId)
+    val ordered = releaseRecordingIds.distinct().mapNotNull(byId::get)
+    val includedIds = ordered.mapTo(HashSet()) { it.recordingId }
+    return ordered + tracks.filter { it.recordingId !in includedIds }
+}
+
+/** Album track numbers belong to the verified running order, not the current
+ * display sort or a temporary search result. Unknown tags retain a stable
+ * fallback sequence rather than following title order. */
+internal fun canonicalAlbumDetailTrackNumbers(
+    orderedReleaseTracks: List<CanonicalBrowseTrack>,
+): Map<String, Int> = orderedReleaseTracks.mapIndexed { index, track ->
+    track.recordingId to index + 1
+}.toMap()
+
+/** A canonical album opens in the release's own order. Only a deliberate
+ * action in DetailScreen's native song-sort menu changes that order. */
+internal fun canonicalAlbumDetailSort(
+    tracks: List<CanonicalBrowseTrack>,
+    sort: SongSort,
+): List<CanonicalBrowseTrack> = when (sort) {
+    SongSort.DEFAULT -> tracks
+    SongSort.TITLE_ASC -> tracks.sortedWith(
+        compareBy<CanonicalBrowseTrack> { it.title.lowercase(Locale.ROOT) }
+            .thenBy { it.recordingId },
+    )
+    SongSort.TITLE_DESC -> tracks.sortedWith(
+        compareByDescending<CanonicalBrowseTrack> { it.title.lowercase(Locale.ROOT) }
+            .thenBy { it.recordingId },
+    )
+    SongSort.DATE_ADDED_ASC -> tracks.sortedWith(
+        compareBy<CanonicalBrowseTrack> { it.dateAddedSeconds == null }
+            .thenBy { it.dateAddedSeconds }
+            .thenBy { it.recordingId },
+    )
+    SongSort.DATE_ADDED_DESC -> tracks.sortedWith(
+        compareBy<CanonicalBrowseTrack> { it.dateAddedSeconds == null }
+            .thenByDescending { it.dateAddedSeconds }
+            .thenBy { it.recordingId },
+    )
+}
+
+/** Title decoration is dropped only when the official release type agrees.
+ * This never mutates the canonical title in the database or identity index. */
+internal fun canonicalAlbumDisplayTitle(title: String, primaryType: String?): String {
+    val suffix = if (primaryType?.equals("EP", ignoreCase = true) == true) " - EP" else null
+    return if (suffix != null && title.endsWith(suffix, ignoreCase = true))
+        title.dropLast(suffix.length).trimEnd() else title
+}
+
+/** The native release header shows verified type/year, never guessed metadata. */
+internal fun canonicalAlbumDetailMeta(
+    primaryType: String?,
+    releaseDate: String?,
+    tracks: List<CanonicalBrowseTrack>,
+): String {
+    val kind = when (primaryType?.trim()?.lowercase(Locale.ROOT)) {
+        "ep" -> "EP"
+        "album" -> "Álbum"
+        "single" -> "Single"
+        else -> null
+    }
+    val year = releaseDate?.trim()?.takeIf {
+        it.matches(Regex("""^\d{4}(-\d{2}(-\d{2})?)?$"""))
+    }?.take(4)
+    return listOfNotNull(
+        kind, year,
+        nativeUnifiedTrackCountLabel(tracks.size, tracks.map(CanonicalBrowseTrack::durationMs)),
+    ).joinToString(" · ")
 }
 
 /** Keep the native LocalFolder sort semantics on the unified canonical list.

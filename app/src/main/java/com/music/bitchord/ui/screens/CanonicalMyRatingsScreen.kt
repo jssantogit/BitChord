@@ -247,7 +247,7 @@ internal fun CanonicalMyRatingsContent(
             LazyColumn(Modifier.fillMaxSize()) {
                 when (state) {
                     MyRatingsUiState.Loading -> item(key = "loading") {
-                        Text(stringResource(Res.string.my_ratings_feed_loading), Modifier.padding(16.dp))
+                        NativeLoadingSpinner()
                     }
                     MyRatingsUiState.Empty -> if (remoteOnlyRows.isEmpty()) item(key = "empty") {
                         Text(stringResource(Res.string.my_ratings_empty), Modifier.padding(16.dp))
@@ -344,7 +344,7 @@ internal fun CanonicalMyRatingsContent(
                 when (remoteState) {
                     RemoteRatingsUiState.Disabled -> Unit
                     RemoteRatingsUiState.Loading -> item(key = "remote-loading") {
-                        Text(stringResource(Res.string.my_ratings_remote_loading), Modifier.padding(16.dp))
+                        NativeLoadingSpinner()
                     }
                     RemoteRatingsUiState.Unavailable -> item(key = "remote-unavailable") {
                         Text(stringResource(Res.string.my_ratings_remote_unavailable), Modifier.padding(16.dp))

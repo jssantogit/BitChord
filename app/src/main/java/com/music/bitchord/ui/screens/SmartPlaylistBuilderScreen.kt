@@ -174,8 +174,7 @@ internal suspend fun collectSmartPlaylistSavedState(
 @Composable
 internal fun SmartPlaylistSavedStatus(state: SmartPlaylistSavedUiState) {
     when (state) {
-        SmartPlaylistSavedUiState.Loading ->
-            Text(stringResource(Res.string.smart_playlist_saved_loading))
+        SmartPlaylistSavedUiState.Loading -> NativeLoadingSpinner()
         SmartPlaylistSavedUiState.Empty ->
             Text(stringResource(Res.string.smart_playlist_saved_empty))
         SmartPlaylistSavedUiState.Error ->
@@ -207,6 +206,12 @@ internal fun SmartPlaylistBuilderScreen(
     initialV2Id: String? = null,
     initialNormalId: String? = null,
     startOnNormalSongs: Boolean = false,
+    // Reuse THIS wizard in a bounded modal over a Library selection, rather
+    // than embedding a second, simplified playlist creation screen.
+    embeddedInLibrary: Boolean = false,
+    initialLibraryRecordingIds: List<String> = emptyList(),
+    initialLibrarySource: String? = null,
+    onLibraryNormalSaved: ((String) -> Unit)? = null,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((RuleBasedSmartPlaylistQuery, CanonicalCollectionIntent) -> Unit)? = null,
     onSavedV2Action: ((String, CanonicalCollectionIntent) -> Unit)? = null,
@@ -219,6 +224,10 @@ internal fun SmartPlaylistBuilderScreen(
             initialPlaylistId = initialV2Id,
             initialNormalPlaylistId = initialNormalId,
             startOnNormalSongs = startOnNormalSongs,
+            embeddedInLibrary = embeddedInLibrary,
+            initialLibraryRecordingIds = initialLibraryRecordingIds,
+            initialLibrarySource = initialLibrarySource,
+            onLibraryNormalSaved = onLibraryNormalSaved,
             onClassic = { showAdvanced = false },
             onSavedAction = onSavedV2Action,
             onPreviewAction = onPreviewV2Action,
@@ -421,7 +430,7 @@ internal fun SmartPlaylistBuilderScreen(
                         Text(stringResource(Res.string.smart_playlist_reset))
                     }
                 }
-                if (busy) Text(stringResource(Res.string.smart_playlist_loading))
+                if (busy) NativeLoadingSpinner()
                 if (error != null) Text(error.orEmpty())
             }
         }

@@ -134,6 +134,12 @@ data class MediaAssetEntity(
     /** Origin-tagged MediaStore values; null for unproven or remote data. */
     val localGenre: String? = null,
     val localBitrateBps: Long? = null,
+    /** Provider/MediaStore advertised file format, not a claim about actual playback. */
+    val audioContentType: String? = null,
+    val audioSuffix: String? = null,
+    val audioBitrateBps: Long? = null,
+    val audioBitDepth: Int? = null,
+    val audioSamplingRateHz: Int? = null,
 )
 
 /**

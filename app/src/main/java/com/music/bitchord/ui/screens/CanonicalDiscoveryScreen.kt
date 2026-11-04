@@ -135,13 +135,7 @@ internal fun CanonicalDiscoveryScreen(
             }
             when (catalog) {
                 UiState.Loading -> item(key = "canonical-catalog-loading") {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
-                        CircularProgressIndicator()
-                        Text(
-                            text = stringResource(R.string.canonical_discovery_cache_loading),
-                            modifier = Modifier.padding(start = 12.dp, top = 8.dp),
-                        )
-                    }
+                    NativeLoadingSpinner()
                 }
                 is UiState.Error -> item(key = "canonical-catalog-error") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp)) {

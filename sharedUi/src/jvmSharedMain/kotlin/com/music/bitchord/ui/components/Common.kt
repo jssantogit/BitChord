@@ -518,24 +518,11 @@ private fun SongRowContent(
         background = activeBackground,
     ) {
         if (trackNumber != null) {
-            // Centred between the screen edge and the title (see
-            // [TRACK_NUMBER_WIDTH]). Same height as the artwork, so rows stay
-            // level.
-            Box(
-                Modifier.width(TRACK_NUMBER_WIDTH).height(52.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (searchPlayingStyle && isCurrent && isPlaying) {
-                    SearchPlayingBars()
-                } else {
-                    Text(
-                        text = "$trackNumber",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = subtitleColor,
-                        maxLines = 1,
-                    )
-                }
-            }
+            NativeDetailTrackNumber(
+                number = trackNumber,
+                color = subtitleColor,
+                showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
+            )
         } else {
             Box(Modifier.size(52.dp)) {
                 AsyncImage(
@@ -599,8 +586,7 @@ private fun SongRowContent(
             )
         }
         // Rating occupies the trailing strip; title/artist ellipsize to leave
-        // space for it. Duration sits *under* the stars, not beside them.
-        // Unrated tracks keep their existing trailing duration slot.
+        // space for it. Song lists no longer show per-track duration.
         Column(
             modifier = Modifier.padding(start = 8.dp),
             horizontalAlignment = Alignment.End,
@@ -612,19 +598,37 @@ private fun SongRowContent(
                     strokeWidth = 2.dp,
                     color = subtitleColor,
                 )
-            } else {
-                song.durationText?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = subtitleColor,
-                    )
-                }
             }
         }
         // Same sheet the long-press opens, for anyone who doesn't think to hold.
         if (onMore != null && !matching && !unavailable) {
             RowMoreButton(onClick = onMore, tint = subtitleColor)
+        }
+    }
+}
+
+/** Number glyph and its 52dp frame used by both SongRow and the
+ * canonical album's numbered release rows. The identical inner placement is
+ * important: the number and title must not shift between sources. */
+@Composable
+fun NativeDetailTrackNumber(
+    number: Int,
+    color: Color,
+    showPlayingBars: Boolean = false,
+) {
+    Box(
+        Modifier.width(TRACK_NUMBER_WIDTH).height(52.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (showPlayingBars) {
+            SearchPlayingBars()
+        } else {
+            Text(
+                text = number.toString(),
+                style = MaterialTheme.typography.bodyLarge,
+                color = color,
+                maxLines = 1,
+            )
         }
     }
 }

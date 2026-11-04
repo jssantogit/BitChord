@@ -13,6 +13,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onParent
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
@@ -90,6 +92,24 @@ class PlaylistLibraryVisualReuseTest {
         }
     }
 
+    @Test fun recentLocalLoadingUsesCenteredNativeProgressIndicator() {
+        compose.setContent {
+            CanonicalRecentAdditionsGrid(
+                recent = emptyList(),
+                onPlayTrack = {},
+                loading = true,
+            )
+        }
+        compose.onNodeWithTag("native-recent-loading").assertExists()
+        compose.onNodeWithText("Carregando adições locais…").assertDoesNotExist()
+    }
+
+    @Test fun nativeLibraryLoadingUsesAnIndicatorWithoutText() {
+        compose.setContent { NativeLoadingSpinner() }
+        compose.onNodeWithTag("native-library-loading").assertExists()
+        compose.onNodeWithText("Carregando músicas…").assertDoesNotExist()
+    }
+
     @Test fun localRecentSnapshotRestoresBothModesWithoutRepeatedQueries() {
         RecentLocalAdditionsSnapshot.clear()
         assertEquals(null, RecentLocalAdditionsSnapshot.get(false))
@@ -139,6 +159,87 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("Buscar em Playlists").assertExists()
         compose.onNodeWithContentDescription("Buscar em Playlists").performTextInput("newjeans")
         compose.runOnIdle { assertEquals("newjeans", query) }
+    }
+
+    @Test fun unifiedSongGridCanReuseAlbumAndArtistCardActionsWithoutAnotherCard() {
+        var plays = 0
+        var overflow = 0
+        var chosen by mutableStateOf(false)
+        var toggles = 0
+        compose.setContent {
+            NativeLibraryEntityCard(
+                title = "Hurt",
+                subtitle = "NewJeans",
+                imageUrl = null,
+                isArtist = false,
+                onClick = { plays++ },
+                onMore = { overflow++ },
+                selectionMode = chosen,
+                selected = chosen,
+                onToggleSelection = { chosen = !chosen; toggles++ },
+            )
+        }
+        compose.onNodeWithContentDescription("Opções de Hurt").performClick()
+        compose.runOnIdle { assertEquals(1, overflow) }
+        compose.onNodeWithText("Hurt").performClick()
+        compose.runOnIdle { assertEquals(1, plays) }
+        compose.runOnIdle { chosen = true }
+        compose.onNodeWithContentDescription("Selecionar Hurt").performClick()
+        compose.runOnIdle {
+            assertEquals(1, toggles)
+            assertEquals(1, overflow) // selection mode has no overflow.
+        }
+    }
+
+    @Test fun longPressSelectsNativeGridCardWithoutPlayingAndClickStillPlays() {
+        var plays = 0
+        var selections = 0
+        compose.setContent {
+            NativeLibraryEntityCard(
+                title = "Hurt",
+                subtitle = "NewJeans",
+                imageUrl = null,
+                isArtist = false,
+                onClick = { plays++ },
+                onLongPress = { selections++ },
+            )
+        }
+        compose.onNodeWithText("Hurt").performTouchInput { longClick() }
+        compose.runOnIdle {
+            assertEquals(1, selections)
+            assertEquals(0, plays)
+        }
+        compose.onNodeWithText("Hurt").performClick()
+        compose.runOnIdle { assertEquals(1, plays) }
+    }
+
+    @Test fun longPressWorksOnTheExistingNativeLibraryRow() {
+        var opened = 0
+        var selected = 0
+        compose.setContent {
+            LibraryRow(
+                title = "Magnetic",
+                subtitle = "ILLIT",
+                imageUrl = null,
+                onClick = { opened++ },
+                onLongPress = { selected++ },
+            )
+        }
+        compose.onNodeWithText("Magnetic").performTouchInput { longClick() }
+        compose.runOnIdle {
+            assertEquals(1, selected)
+            assertEquals(0, opened)
+        }
+    }
+
+    @Test fun normalPlaylistPickerAndLibraryCoverUseSameOrderedDeduplicatedMembers() {
+        assertEquals(
+            listOf("rec-1", "rec-2", "rec-3", "rec-4"),
+            canonicalStaticPlaylistCoverCandidateIds(
+                listOf("rec-1", "rec-1", "rec-2", "rec-3", "rec-4", "rec-5"),
+            ),
+        )
+        assertTrue(canonicalStaticPlaylistCoverCandidateIds(emptyList()).isEmpty())
     }
 
     @Test fun playlistCoverDoesNotRepeatTheSameAlbumArtInFourQuadrants() {

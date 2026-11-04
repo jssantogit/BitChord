@@ -223,11 +223,7 @@ internal fun LibraryRediscoveryShelf(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
         )
         when (state) {
-            RediscoveryShelfUiState.Loading -> Text(
-                text = texts.loading,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 20.dp),
-            )
+            RediscoveryShelfUiState.Loading -> NativeLoadingSpinner()
             RediscoveryShelfUiState.Empty -> Unit
             is RediscoveryShelfUiState.Ready -> LazyRow(
                 contentPadding = PaddingValues(horizontal = 20.dp),

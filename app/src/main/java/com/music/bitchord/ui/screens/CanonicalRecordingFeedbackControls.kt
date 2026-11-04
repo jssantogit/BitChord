@@ -203,6 +203,7 @@ internal fun CanonicalRecordingFeedbackPanel(
     onDismiss: () -> Unit,
     saving: Boolean = false,
     denied: Boolean = false,
+    title: String? = null,
 ) {
     var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
     var touched by remember { mutableStateOf(false) }
@@ -226,7 +227,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    stringResource(Res.string.recording_feedback_dialog_title),
+                    title ?: stringResource(Res.string.recording_feedback_dialog_title),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxWidth(),

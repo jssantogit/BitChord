@@ -120,24 +120,24 @@ fun AccountChannelDialog(
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                 )
-                Text(
-                    text = when {
-                        loading && channels.isEmpty() -> "Looking up your channels…"
-                        channels.isEmpty() ->
+                if (!loading || channels.isNotEmpty()) {
+                    Text(
+                        text = if (channels.isEmpty()) {
                             "Couldn't list this account's channels. You can still pick " +
                                 "one in YouTube Music itself."
-                        else ->
+                        } else {
                             "Your library, likes and history come from the channel " +
                                 "you pick here."
-                    },
-                    modifier = Modifier.padding(top = 4.dp),
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 13.sp,
-                        lineHeight = 17.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                )
+                        },
+                        modifier = Modifier.padding(top = 4.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.sp,
+                            lineHeight = 17.sp,
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 if (loading && channels.isEmpty()) {
                     Spacer(Modifier.padding(top = 12.dp))
                     CircularProgressIndicator(

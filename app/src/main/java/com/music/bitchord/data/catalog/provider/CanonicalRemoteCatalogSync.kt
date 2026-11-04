@@ -453,6 +453,13 @@ internal object CanonicalRemoteCatalogSync {
                     dateAddedSeconds = track.dateAddedSeconds,
                     dateModifiedSeconds = null,
                     artworkUri = track.artworkUri ?: track.album?.artworkUri,
+                    // Provider-advertised file attributes, not negotiated playback truth.
+                    audioContentType = track.contentType?.trim()?.take(96),
+                    audioSuffix = track.suffix?.trim()?.take(20),
+                    audioBitrateBps = track.bitRateKbps?.takeIf { it > 0 }
+                        ?.toLong()?.times(1_000),
+                    audioBitDepth = track.bitDepth?.takeIf { it in 1..64 },
+                    audioSamplingRateHz = track.samplingRateHz?.takeIf { it in 8_000..768_000 },
                 ),
             )
             store.upsertMediaAssetTags(

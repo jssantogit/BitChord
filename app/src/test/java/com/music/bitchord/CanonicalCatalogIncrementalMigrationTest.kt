@@ -127,6 +127,26 @@ class CanonicalCatalogIncrementalMigrationTest {
                 assertNull(it.getString(2))
             }
 
+            CanonicalCatalogDatabase.MIGRATION_15_16.migrate(migrationDb)
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                org.junit.Assert.assertTrue("MIME must be migrated", "audioContentType" in names)
+                org.junit.Assert.assertTrue("suffix must be migrated", "audioSuffix" in names)
+                org.junit.Assert.assertTrue("audio bitrate must be migrated", "audioBitrateBps" in names)
+                org.junit.Assert.assertTrue("bit depth must be migrated", "audioBitDepth" in names)
+                org.junit.Assert.assertTrue("sample rate must be migrated", "audioSamplingRateHz" in names)
+            }
+            raw.rawQuery(
+                "SELECT path,audioContentType,audioSuffix,audioBitrateBps,audioBitDepth," +
+                    "audioSamplingRateHz FROM catalog_media_asset WHERE id='legacy-asset'",
+                null,
+            ).use {
+                org.junit.Assert.assertTrue("old media asset survives v16", it.moveToFirst())
+                assertEquals("Music/Legacy/01.flac", it.getString(0))
+                for (index in 1..5) assertNull(it.getString(index))
+            }
+
             raw.rawQuery(
                 "SELECT title,hasOfficialAudioRelease,isVideo FROM musicbrainz_recording_enrichment WHERE recordingId='old-recording'",
                 null,

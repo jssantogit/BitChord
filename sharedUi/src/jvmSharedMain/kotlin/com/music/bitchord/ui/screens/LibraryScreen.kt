@@ -128,6 +128,9 @@ fun LibraryScreen(
     navigationHome: Boolean = false,
     /** Android-only factual local additions under the landing links. */
     localAdditions: (@Composable () -> Unit)? = null,
+    /** Android-only pinned canonical tracks, albums and artists above the
+     * category links; a null slot preserves every desktop layout. */
+    pinnedSection: (@Composable () -> Unit)? = null,
 ) {
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val onDevice = stringResource(Res.string.on_device)
@@ -158,6 +161,9 @@ fun LibraryScreen(
                 }
             }
             if (navigationHome) {
+                pinnedSection?.let { section ->
+                    item(key = "canonical-library-pins") { section() }
+                }
                 if (links.isNotEmpty()) {
                     item(key = "library-navigation") {
                         LibraryLinkList(links = links, onClick = onShelfItemClick, compact = true)

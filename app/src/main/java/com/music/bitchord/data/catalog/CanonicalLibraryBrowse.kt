@@ -19,6 +19,11 @@ internal data class CanonicalBrowseAssetRow(
     val artworkUri: String?,
     val dateAddedSeconds: Long? = null,
     val dateModifiedSeconds: Long? = null,
+    val audioContentType: String? = null,
+    val audioSuffix: String? = null,
+    val audioBitrateBps: Long? = null,
+    val audioBitDepth: Int? = null,
+    val audioSamplingRateHz: Int? = null,
 )
 
 /** Small provider-neutral seam so browse behavior is JVM-testable without Room. */
@@ -32,6 +37,11 @@ internal data class CanonicalBrowseMediaAsset(
     val dateAddedSeconds: Long? = null,
     val dateModifiedSeconds: Long? = null,
     val artworkUri: String? = null,
+    val audioContentType: String? = null,
+    val audioSuffix: String? = null,
+    val audioBitrateBps: Long? = null,
+    val audioBitDepth: Int? = null,
+    val audioSamplingRateHz: Int? = null,
 )
 
 /**
@@ -94,6 +104,11 @@ internal class CanonicalLibraryBrowseRepository(
                             dateAddedSeconds = row.dateAddedSeconds,
                             dateModifiedSeconds = row.dateModifiedSeconds,
                             artworkUri = row.artworkUri,
+                            audioContentType = row.audioContentType,
+                            audioSuffix = row.audioSuffix,
+                            audioBitrateBps = row.audioBitrateBps,
+                            audioBitDepth = row.audioBitDepth,
+                            audioSamplingRateHz = row.audioSamplingRateHz,
                         )
                     }
                     .sortedBy(CanonicalBrowseMediaAsset::mediaAssetId),

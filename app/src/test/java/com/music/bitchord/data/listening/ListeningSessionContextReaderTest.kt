@@ -82,10 +82,13 @@ class ListeningSessionContextReaderTest {
     }
 
     @Test
-    fun `session context read introduces no Room migration`() {
+    fun `session context remains compatible with canonical entity rating migration`() {
         database = openDatabase()
 
-        assertEquals(3, requireNotNull(database).openHelper.readableDatabase.version)
+        // V4 introduces a separate canonical Artist/Release rating table.
+        // Listening-session reads still operate on the same Room database.
+        assertEquals(4, requireNotNull(database).openHelper.readableDatabase.version)
+        assertNotNull(requireNotNull(database).canonicalEntityRatingDao())
     }
 
     private fun store(now: Long, ids: Array<String> = emptyArray()): RoomListeningEventStore {
