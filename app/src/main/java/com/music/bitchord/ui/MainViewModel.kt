@@ -4275,197 +4275,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * The search pipeline, started once and left running for the lifetime of
-     * the view model.
-     *
-     * The point of it being one long-lived collector is that a new search no
-     * longer cancels the request before it out of a fresh coroutine.
-     * Cancelling a call mid-flight tears down its socket, and on a pooled HTTP
-     * client that is felt by whatever picks that connection up next — which is
-     * how one search could end in "Software caused connection abort" for a
-     * request that was never itself in any trouble.
-     *
-     * There is no debounce here any more, and nothing to absorb: a search is
-     * only ever asked for by a deliberate act — the search button, a
-     * suggestion or history row, a filter tab — so the request that arrives is
-     * already the one the user meant, and making them wait out a timer for it
-     * would be a delay with nothing behind it. Typing asks
-     * [startSuggestPipeline] for completions instead and leaves the results
-     * alone.
+     * Legacy YouTube search events are accepted for restored navigation, but
+     * never routed to a retired catalog. Canonical search has its own typed
+     * MusicBrainz/MediaStore/OpenSubsonic presentation pipeline.
      */
     private fun startSearchPipeline() = viewModelScope.launch {
-        searchRequests
-            .collectLatest { request ->
-                if (request.query.isBlank()) {
-                    searchSession = null
-                    _searchLoadingMore.value = false
-                    _results.value = null
-                    return@collectLatest
-                }
-                val key = cacheKey(request.query, request.filter)
-                // Something to look at immediately: the exact answer if this
-                // query has been run before, otherwise the closest earlier
-                // one. Only fall back to a spinner with neither.
-                val exact = searchCache.get(key)
-                val cached = exact?.rows ?: prefixMatch(request.query, request.filter)
-                _results.value = cached?.let { UiState.Success(it) } ?: UiState.Loading
-                // An explicit submit still has to reach the server even when
-                // an anonymous lookup cached the same query: that call is what
-                // records it in the account's history.
-                if (exact != null && request.anonymous) {
-                    searchSession = SearchSession(key, request.requestId, request.filter, exact.continuation)
-                    return@collectLatest
-                }
-
-                // Search is YouTube's alone. A module is a *substitution*
-                // layer, not a catalogue to browse: it never has cover art,
-                // radio, related tracks or an album page, so its rows arrived
-                // in the results list looking like YouTube's and then behaved
-                // nothing like them. Every track found here takes the ordinary
-                // YouTube path and is handed to the module at playback time —
-                // see [SourceResolver.substituteForYouTube] — which upgrades
-                // the ones it holds without any of them having to be a
-                // separate row to pick between.
-                if (_searchSource.value != SearchSource.YOUTUBE ||
-                    request.requestId != newestRequestId.get()
-                ) return@collectLatest
-                val result = YtMusicRepository.searchPage(request.query, request.filter, request.anonymous)
-                // A search that has been superseded shouldn't land on screen,
-                // whether it succeeded or failed.
-                if (request.requestId != newestRequestId.get()) return@collectLatest
-                _results.value = result.fold(
-                    onSuccess = { page -> published(page, key, request.requestId) },
-                    onFailure = { failure -> UiState.Error(failure.friendly()) },
-                )
-            }
-    }
-
-    /**
-     * Continues the visible search only when the list reaches its end. This is
-     * deliberately separate from the first-page request: waiting for every
-     * continuation was the reason a search sat on a spinner for seconds.
-     */
-    fun loadMoreSearchResults() {
-        if (_searchSource.value != SearchSource.YOUTUBE) return
-        val session = searchSession ?: return
-        val token = session.continuation ?: return
-        if (_searchLoadingMore.value) return
-        _searchLoadingMore.value = true
-        searchPagingJob?.cancel()
-        searchPagingJob = viewModelScope.launch {
-            val next = YtMusicRepository.searchContinuation(token, session.filter)
-            val stillCurrent = searchSession == session && session.requestId == newestRequestId.get()
-            if (stillCurrent) {
-                next.onSuccess { page ->
-                    val current = (_results.value as? UiState.Success)?.data.orEmpty()
-                    val merged = (current + page.rows).distinctBy(::searchResultKey)
-                    searchCache.put(session.key, SearchCacheEntry(merged, page.continuation))
-                    searchSession = session.copy(continuation = page.continuation)
-                    _results.value = UiState.Success(merged)
-                }
-                _searchLoadingMore.value = false
-            }
+        searchRequests.collectLatest { request ->
+            searchSession = null
+            _searchLoadingMore.value = false
+            _results.value = if (request.query.isBlank()) null
+                else UiState.Error(text(R.string.legacy_library_youtube_disabled))
         }
     }
 
-    /**
-     * The typeahead pipeline, alongside [startSearchPipeline] and for the same
-     * structural reason — one long-lived collector rather than a coroutine per
-     * keystroke, so a lookup the user has typed past doesn't take a pooled
-     * socket down with it.
-     *
-     * This one *does* debounce, and that isn't the timer that was taken off the
-     * search. It's two orders of magnitude shorter, and it's paid for by the
-     * request behind it being a few hundred bytes rather than a full page of
-     * results — a burst of keystrokes shouldn't each cost a round trip, but the
-     * gap has to be short enough that the list is up before the next letter is
-     * typed. Nothing is waiting on it either way: the row the user typed is
-     * already on screen from the keystroke itself.
-     *
-     * A failure is left on the floor. There is no worthwhile way to report
-     * "couldn't suggest anything" in a list of suggestions, and the typed text
-     * is standing there as a working first row regardless.
-     */
-    @OptIn(FlowPreview::class)
+    fun loadMoreSearchResults() {
+        searchSession = null
+        _searchLoadingMore.value = false
+    }
+
     private fun startSuggestPipeline() = viewModelScope.launch {
-        // Whether a list for [input] is still wanted. False once the field has
-        // moved on: typed further, or searched — which empties [_suggestions],
-        // and a late answer writing to it would reopen the suggestions over
-        // the results the user is by then reading.
-        fun stillWanted(input: String) = _query.value == input && !searchSubmitted
-
-        suggestRequests
-            .debounce(SUGGEST_DEBOUNCE_MS)
-            .collectLatest { input ->
-                if (_searchSource.value != SearchSource.YOUTUBE || input.isBlank() ||
-                    !stillWanted(input)
-                ) return@collectLatest
-                val fetched = YtMusicRepository.searchSuggestions(input).getOrNull()
-                    ?: return@collectLatest
-                // Asked again on the way back; the field is live throughout.
-                if (_searchSource.value != SearchSource.YOUTUBE || !stillWanted(input)) {
-                    return@collectLatest
-                }
-                _suggestions.value = listOf(input) +
-                    fetched.filterNot { it.equals(input, ignoreCase = true) }
-            }
+        suggestRequests.collectLatest { input ->
+            _suggestions.value = if (input.isNotBlank() &&
+                _searchSource.value == SearchSource.YOUTUBE && !searchSubmitted
+            ) listOf(input) else emptyList()
+        }
     }
 
-    /**
-     * Parallel pipeline that fetches live media results (tracks, artists,
-     * albums) for the current query text. Runs alongside [startSuggestPipeline]
-     * with its own debounce so a fast typist doesn't saturate the network.
-     */
-    @OptIn(FlowPreview::class)
     private fun startTypeaheadMediaPipeline() = viewModelScope.launch {
-        suggestRequests
-            .debounce(TYPEAHEAD_MEDIA_DEBOUNCE_MS)
-            .collectLatest { input ->
-                if (input.isBlank()) {
-                    _typeaheadResults.value = emptyList()
-                    return@collectLatest
-                }
-                if (_searchSource.value != SearchSource.YOUTUBE) {
-                    _typeaheadResults.value = emptyList()
-                    return@collectLatest
-                }
-                // Only show media results while the user is still typing — not
-                // reading committed search results. The query-text check on its
-                // own isn't enough: a late suggestion callback can repopulate
-                // _suggestions after submission, and we must not re-open the
-                // typeahead dropdown under an already-committed search.
-                if (searchSubmitted) {
-                    _typeaheadResults.value = emptyList()
-                    return@collectLatest
-                }
-                val result = YtMusicRepository.searchTypeahead(input).getOrNull()
-                // If the field moved on, drop the result silently.
-                if (_query.value != input || _searchSource.value != SearchSource.YOUTUBE) {
-                    _typeaheadResults.value = emptyList()
-                    return@collectLatest
-                }
-                // Cap results so the dropdown doesn't grow unbounded.
-                _typeaheadResults.value = result?.rows.orEmpty().take(TYPEAHEAD_MAX_RESULTS)
-            }
-    }
-
-    /** Caches and publishes the initial result page without waiting for later pages. */
-    private fun published(
-        page: YtMusicRepository.SearchPage,
-        key: String,
-        requestId: Long,
-    ): UiState<List<SearchResult>> {
-        val rows = page.rows
-        if (rows.isEmpty()) return UiState.Error(text(R.string.no_results))
-        searchCache.put(key, SearchCacheEntry(rows, page.continuation))
-        searchSession = SearchSession(key, requestId, _filter.value, page.continuation)
-        return UiState.Success(rows)
-    }
-
-    private fun searchResultKey(row: SearchResult): String = when (row) {
-        is SearchResult.TopTrack -> "v:${row.song.videoId}"
-        is SearchResult.Track -> "v:${row.song.videoId}"
-        is SearchResult.Browse -> "b:${row.item.browseId}"
+        suggestRequests.collectLatest {
+            _typeaheadResults.value = emptyList()
+        }
     }
 
     /**
