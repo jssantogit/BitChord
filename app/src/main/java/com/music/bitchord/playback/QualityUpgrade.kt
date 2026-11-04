@@ -455,6 +455,7 @@ object QualityUpgrade {
             // by that backend; a surviving in-flight result is handled above.
             // End the archival request rather than contacting any provider.
             answered = true
+            found
         } finally {
             if (answered) {
                 // The question has now been asked, whatever the answer. Leaving
