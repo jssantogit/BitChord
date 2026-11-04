@@ -44,4 +44,12 @@ class CanonicalArtistDetailStateTest {
         assertTrue(canonicalArtistNestedRecordingOrder(emptyList()).isEmpty())
     }
 
+    @Test fun artistRatingStateRequiresATypedExistingLibraryIdentity() {
+        assertEquals(null, canonicalArtistRatingTarget(null))
+        assertEquals(null, canonicalArtistRatingTarget("  "))
+        val target = canonicalArtistRatingTarget("artist-id")
+        assertEquals("ARTIST", target?.entityType)
+        assertEquals("artist-id", target?.entityId)
+    }
+
 }
