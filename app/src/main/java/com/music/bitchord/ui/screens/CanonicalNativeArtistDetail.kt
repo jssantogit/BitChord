@@ -45,7 +45,6 @@ import com.music.bitchord.R
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import com.music.bitchord.data.canvas.keyColors
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
-import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.data.listening.ListeningEventDatabase
@@ -56,10 +55,7 @@ import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.rememberArtworkPalette
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.withContext
 
 /**
  * The artist route reuses the approved DetailScreen artist header, photo,
@@ -101,9 +97,6 @@ internal fun CanonicalNativeArtistDetail(
     val context = LocalContext.current.applicationContext
     val pinRepository = remember(context) { CanonicalLibraryPinRepository.get(context) }
     val libraryPins by pinRepository.pins.collectAsStateWithLifecycle()
-    val catalogDb = remember(context) { CanonicalCatalogDatabase.get(context) }
-    val dao = remember(catalogDb) { catalogDb.catalogDao() }
-    val keys = sourceKeys.filter { selectedSourceKey == null || it == selectedSourceKey }
     // Reactive release evidence is now owned by the shared artist detail state;
     // this renderer only handles UI/navigation until its native replacement.
     val nativeReleases by rememberCanonicalArtistReleases(
@@ -149,22 +142,9 @@ internal fun CanonicalNativeArtistDetail(
     LaunchedEffect(albumPlaylistToken) {
         if (albumPlaylistToken > 0) openedRelease?.let(onNestedAlbumAddToPlaylist)
     }
-    val releaseRecordingIds by produceState(
-        initialValue = emptyList<String>(),
-        key1 = openedRelease?.id,
-        key2 = keys,
-    ) {
-        val id = openedRelease?.id ?: return@produceState
-        value = try {
-            withContext(Dispatchers.IO) {
-                keys.flatMap { dao.providerScopedReleaseRecordingIds(it, id) }.distinct()
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            emptyList()
-        }
-    }
+    val releaseRecordingIds by rememberCanonicalArtistNestedRecordings(
+        openedRelease?.id, sourceKeys, selectedSourceKey,
+    )
     BackHandler(enabled = openedRelease != null) { openedRelease = null }
 
     val selectedAlbum = openedRelease
