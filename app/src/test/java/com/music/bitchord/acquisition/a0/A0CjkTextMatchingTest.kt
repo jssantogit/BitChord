@@ -41,6 +41,9 @@ class A0CjkTextMatchingTest {
             assertNotNull(title,A0CjkTitleAliases.latinAlias(title))
         }
         assertEquals("Boy In Luv",A0CjkTitleAliases.latinAlias("상남자 (Boy In Luv)"))
+        assertEquals("Boy In Luv",A0CjkTitleAliases.latinAlias("상남자（Boy In Luv）"))
+        assertEquals("Racing Into The Night",
+            A0CjkTitleAliases.latinAlias("夜に駆ける（Racing Into The Night）"))
         assertEquals("Racing Into The Night",
             A0SearchRecoveryPlan(
                 "YOASOBI - 夜に駆ける (Racing Into The Night)").next(
@@ -53,7 +56,10 @@ class A0CjkTextMatchingTest {
             "晴天 (2021 Remaster)","晴天 (Demo Version)",
             "晴天 (Live at Seoul)","晴天 (Other Artist Remix)",
             "晴天 (Love)","晴天 (BTS feat Halsey)",
-            "晴天 (Boy In Luv) - Remastered")) {
+            "晴天 (Boy In Luv) - Remastered",
+            "晴天 feat Halsey (Sunny Summer Day)",
+            "晴天 - Live (Sunny Summer Day)",
+            "晴天 Remix (Sunny Summer Day)")) {
             assertNull(title,A0CjkTitleAliases.latinAlias(title))
         }
     }
