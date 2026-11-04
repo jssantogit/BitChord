@@ -632,18 +632,6 @@ object SourceResolver {
     }
 
     /**
-     * Whether anything outranks YouTube right now — i.e. whether a YouTube
-     * track is worth offering around before it is resolved.
-     *
-     * Answerable from the source list alone, without a search, which is what
-     * lets the cache and the read-ahead in
-     * [AudioCache][com.music.bitchord.playback.AudioCache] decide how to treat
-     * a YouTube id before anyone has asked a source for it.
-     */
-    fun canSubstituteForYouTube(): Boolean =
-        SourceRegistry.activeForPlayback().indexOfFirst { it.kind == SourceKind.YOUTUBE } > 0
-
-    /**
      * The sources ranked above [configId], in order.
      *
      * A config that isn't in [active] ranks last: it is disabled or incomplete,
