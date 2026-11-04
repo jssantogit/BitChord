@@ -7,34 +7,10 @@ package com.music.bitchord.acquisition.a0
  */
 internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWide:Boolean=false) {
     private val originalQuery=original
-    // A bilingual title may carry a native-script name and a widely used
-    // Latin title in trailing parentheses. Search the Latin alternative
-    // as discovery only; the canonical selection gate is unchanged.
-    // Parenthetical edition labels are not alternate SONG titles.
-    // E.g. "(Live Version)" must not become a bare "Live Version"
-    // search while "(Boy In Luv)" can be a genuine bilingual alias.
-    // Match only recognizable metadata phrases, not every occurrence
-    // of the word "live" (a song may be named "Live It Up").
-    private val versionDescriptor=Regex(
-        "^(?:live(?: (?:version|recording|performance|edit|mix|at .+|in .+))?" +
-            "|remaster(?:ed)?(?: [0-9]{2,4})?|[0-9]{2,4} remaster(?:ed)?" +
-            "|radio edit|extended mix|original mix|acoustic version" +
-            "|instrumental version|demo version|clean version|explicit version" +
-            "|(?:.+ )?remix)$",
-        RegexOption.IGNORE_CASE
-    )
-    private val latinTitleAlias=runCatching {
-        val title=original.split(Regex("\\s+[-–—]\\s+"),limit=2)
-            .getOrNull(1) ?: return@runCatching null
-        if(title.none { it.code>127 })return@runCatching null
-        val ending=Regex("\\(([^()]+)\\)\\s*$").find(title)
-            ?:return@runCatching null
-        val normalized=A0SearchQuery.normalize(ending.groupValues[1])
-        if(normalized.length<8 || normalized.split(' ').size<2 ||
-            !normalized.all { it.code in 32..126 } ||
-            versionDescriptor.matches(normalized))return@runCatching null
-        normalized
-    }.getOrNull()
+    // Share the strict native-CJK + explicit Latin-title rule with rank and
+    // release prefilter. An edition descriptor is not an alternate title.
+    private val latinTitleAlias=A0CjkTitleAliases.latinAlias(
+        original.split(Regex("\\s+[-–—]\\s+"),limit=2).getOrNull(1).orEmpty())
 
     // A generic title (e.g. "Normal") can match many unrelated releases.
     // Search the artist + canonical album + title before broad title-only.
