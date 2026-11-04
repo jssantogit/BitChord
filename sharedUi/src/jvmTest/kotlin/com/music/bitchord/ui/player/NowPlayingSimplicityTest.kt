@@ -22,12 +22,6 @@ class NowPlayingSimplicityTest {
         assertEquals(listOf("suggested"), tracks.autoplay.map { it.song.videoId })
     }
 
-    @Test fun hidingDeviceCaptionPreservesPlayerGeometryWithoutShowingText() {
-        assertFalse(NowPlayingChrome.showOutputCaption)
-        // Former 18dp gap + single-line label footprint, reserved but invisible.
-        assertEquals(32, NowPlayingChrome.hiddenOutputCaptionFootprintDp)
-    }
-
     @Test fun minimalPlayerChromeOmitsStaticOriginsDeviceNamesAndTechnicalStats() {
         assertFalse(NowPlayingChrome.showPlaybackOrigin)
         assertFalse(NowPlayingChrome.showOutputCaption)

@@ -2,8 +2,6 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import com.music.bitchord.ui.components.FrostedTopBar
 import androidx.compose.ui.test.assertIsDisplayed
@@ -38,28 +36,6 @@ class HomeHeaderTest {
         compose.onNodeWithTag("home-title").assertIsDisplayed()
         compose.onNodeWithText("Início").assertIsDisplayed()
         compose.onNodeWithText("Ouvir agora").assertDoesNotExist()
-        compose.onNodeWithTag("home-overflow").assertIsDisplayed()
-    }
-
-    @Test fun profileActionRemainsVisibleBesideTheNativeHomeTitle() {
-        var profileOpens = 0
-        compose.setContent {
-            MaterialTheme {
-                HomeTitle(
-                    title = "Início",
-                    actions = listOf(HomeHeaderAction("Configurações") {}),
-                    trailing = {
-                        TextButton(onClick = { profileOpens++ }) {
-                            Text("Perfil")
-                        }
-                    },
-                )
-            }
-        }
-        compose.onNodeWithTag("home-title").assertIsDisplayed()
-        compose.onNodeWithText("Perfil").assertIsDisplayed()
-        compose.onNodeWithText("Perfil").performClick()
-        compose.runOnIdle { assertEquals(1, profileOpens) }
         compose.onNodeWithTag("home-overflow").assertIsDisplayed()
     }
 

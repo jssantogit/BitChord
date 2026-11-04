@@ -100,7 +100,7 @@ class SmartPlaylistDefinitionStoreTest {
         }.isFailure)
     }
 
-    @Test fun rulePreviewEnforcesFiltersAndSupportsMoreThanFiveThousand() {
+    @Test fun rulePreviewEnforcesAndFiltersAndFailsClosedAboveFiveThousand() {
         val rule = RuleBasedSmartPlaylistQuery(
             minimumExplicitRating = 4.0, minimumCompletions = 2, limit = 10,
         )
@@ -115,8 +115,8 @@ class SmartPlaylistDefinitionStoreTest {
         assertEquals(listOf("a", "b"), subset.map { it.recordingId })
         assertTrue(subset.all { it.reasons.contains(RuleBasedInclusionReason.EXPLICIT_RATING) &&
             it.reasons.contains(RuleBasedInclusionReason.CONFIRMED_COMPLETION) })
-        assertEquals(10, planner.preview((1..5_001).map {
+        assertFalse(planner.preview((1..5_001).map {
             candidate("rec:$it", 5.0, 3)
-        }, rule).size)
+        }, rule).isNotEmpty())
     }
 }

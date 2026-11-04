@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,7 +37,6 @@ import com.music.bitchord.data.listening.RoomListeningEventStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.listening.RuleBasedInclusionReason
 import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
-import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import com.music.bitchord.data.listening.SavedSmartPlaylistDefinition
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionRepository
@@ -61,6 +61,7 @@ import com.music.bitchord.sharedui.resources.smart_playlist_saved_empty
 import com.music.bitchord.sharedui.resources.smart_playlist_saved_error
 import com.music.bitchord.sharedui.resources.smart_playlist_empty
 import com.music.bitchord.sharedui.resources.smart_playlist_error
+import com.music.bitchord.sharedui.resources.smart_playlist_overflow
 import com.music.bitchord.sharedui.resources.smart_playlist_loading
 import com.music.bitchord.sharedui.resources.smart_playlist_close
 import com.music.bitchord.sharedui.resources.smart_playlist_reason_rating
@@ -204,27 +205,9 @@ internal fun SmartPlaylistBuilderHeader(onBack: () -> Unit) {
 @Composable
 internal fun SmartPlaylistBuilderScreen(
     onBack: () -> Unit,
-    initialV2Id: String? = null,
-    initialNormalId: String? = null,
-    startOnNormalSongs: Boolean = false,
     onSavedAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     onPreviewAction: ((RuleBasedSmartPlaylistQuery, CanonicalCollectionIntent) -> Unit)? = null,
-    onSavedV2Action: ((String, CanonicalCollectionIntent) -> Unit)? = null,
-    onPreviewV2Action: ((SmartPlaylistV2Query, String?, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
-    var showAdvanced by remember { mutableStateOf(true) }
-    if (showAdvanced) {
-        SmartPlaylistV2BuilderScreen(
-            onBack = onBack,
-            initialPlaylistId = initialV2Id,
-            initialNormalPlaylistId = initialNormalId,
-            startOnNormalSongs = startOnNormalSongs,
-            onClassic = { showAdvanced = false },
-            onSavedAction = onSavedV2Action,
-            onPreviewAction = onPreviewV2Action,
-        )
-        return
-    }
     val context = LocalContext.current.applicationContext
     val repository = remember(context) {
         SmartPlaylistDefinitionRepository(
@@ -275,6 +258,7 @@ internal fun SmartPlaylistBuilderScreen(
     }
 
     val errorText = stringResource(Res.string.smart_playlist_error)
+    val overflowText = stringResource(Res.string.smart_playlist_overflow)
     val reasonLabels = mapOf(
         RuleBasedInclusionReason.EXPLICIT_RATING to stringResource(Res.string.smart_playlist_reason_rating),
         RuleBasedInclusionReason.CONFIRMED_COMPLETION to stringResource(Res.string.smart_playlist_reason_completion),
@@ -328,17 +312,17 @@ internal fun SmartPlaylistBuilderScreen(
     ) {
         item(key = "header") {
             SmartPlaylistBuilderHeader(onBack)
-            TextButton(onClick = { showAdvanced = true }) { Text("Editor avançado V2") }
         }
         item(key = "editor") {
             Column {
                 @Composable
                 fun field(value: String, onValue: (String) -> Unit, label: String) {
-                    PlaylistWizardTextEntry(
+                    OutlinedTextField(
                         value = value,
                         onValueChange = { onValue(it); preview = null; previewQuery = null; error = null },
-                        label = label,
+                        label = { Text(label) },
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
                     )
                 }
                 field(draft.name, { draft = draft.copy(name = it) },
@@ -384,26 +368,30 @@ internal fun SmartPlaylistBuilderScreen(
                         scope.launch {
                             try {
                                 val query = draft.toQuery()
-                                val rows = withContext(Dispatchers.IO) {
-                                    val matches = readOnlyPreview.preview(query)
-                                    val metadataById = matches.map { it.recordingId }
-                                        .chunked(400)
-                                        .flatMap { catalog.catalogDao().recordingsByIds(it) }
-                                        .associateBy { it.id }
-                                    matches.mapNotNull { item ->
-                                        val metadata = metadataById[item.recordingId]
-                                            ?: return@mapNotNull null
-                                        SmartPlaylistPreviewRow(
-                                            recordingId = item.recordingId,
-                                            title = metadata.title,
-                                            artistDisplay = metadata.artistDisplay,
-                                            reasons = item.reasons,
-                                        )
-                                    }
+                                val count = withContext(Dispatchers.IO) {
+                                    availability.availableRecordingIds().distinct().size
                                 }
-                                preview = rows
-                                previewQuery = query
-                                error = null
+                                if (count > 5_000) {
+                                    error = overflowText
+                                    preview = null
+                                    previewQuery = null
+                                } else {
+                                    val rows = withContext(Dispatchers.IO) {
+                                        readOnlyPreview.preview(query).mapNotNull { item ->
+                                            val metadata = catalog.catalogDao().recordingById(item.recordingId)
+                                                ?: return@mapNotNull null
+                                            SmartPlaylistPreviewRow(
+                                                recordingId = item.recordingId,
+                                                title = metadata.title,
+                                                artistDisplay = metadata.artistDisplay,
+                                                reasons = item.reasons,
+                                            )
+                                        }
+                                    }
+                                    preview = rows
+                                    previewQuery = query
+                                    error = null
+                                }
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (_: Exception) {

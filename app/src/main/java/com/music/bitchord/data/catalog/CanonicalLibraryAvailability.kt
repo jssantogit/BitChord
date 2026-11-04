@@ -5,7 +5,6 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidKeystoreOpen
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey
-import kotlinx.serialization.json.Json
 
 /**
  * Provider-neutral Catalog -> Recommendation seam for Library Mode.
@@ -14,62 +13,13 @@ import kotlinx.serialization.json.Json
  * details remain Catalog implementation details used solely to decide current
  * availability.
  */
-internal enum class CanonicalLibrarySourceKind { LOCAL, OPENSUBSONIC }
-
-/**
- * Provider-scoped, canonical-only source projection. Never exposes provider ID,
- * secret, URI, native sourceKey or media asset ID to Listening or the UI.
- */
-internal data class CanonicalAvailableRecordingSources(
-    val recordingId: String,
-    val kinds: Set<CanonicalLibrarySourceKind>,
-    /** False when any currently eligible copy uses an unclassified provider. */
-    val kindsComplete: Boolean = true,
-)
-
-/** Safe provider-aggregated metadata: canonical ID and tag values only. */
-internal data class CanonicalAvailableRecordingTags(
-    val recordingId: String,
-    val genres: List<String> = emptyList(),
-    val genreEvidenceUnknown: Boolean = true,
-    val moods: List<String> = emptyList(),
-    val moodEvidenceUnknown: Boolean = true,
-    val styles: List<String> = emptyList(),
-    val styleEvidenceUnknown: Boolean = true,
-    val bpms: List<Double> = emptyList(),
-    val bpmEvidenceUnknown: Boolean = true,
-    val composers: List<String> = emptyList(),
-    val composerEvidenceUnknown: Boolean = true,
-    val filePaths: List<String> = emptyList(),
-    val filePathEvidenceUnknown: Boolean = true,
-    val folderPaths: List<String> = emptyList(),
-    val folderPathEvidenceUnknown: Boolean = true,
-)
-
 internal fun interface CanonicalLibraryAvailabilityReader {
     suspend fun availableRecordingIds(): List<String>
-
-    /** Old readers cannot prove remote tags, so their default stays unknown. */
-    suspend fun availableRecordingTags(
-        recordingIds: List<String>,
-    ): List<CanonicalAvailableRecordingTags> = emptyList()
-
-    /**
-     * Old injected readers do not have reliable source provenance. The default
-     * is UNKNOWN rather than fabricating a local/remote claim.
-     */
-    suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> =
-        emptyList()
 }
 
 /** Catalog-internal read projection used by the availability repository. */
 internal fun interface CanonicalLibraryAvailabilityStore {
     suspend fun recordingIdsForProviders(providerKeys: List<String>): List<String>
-
-    /** Current provider assets only; tag presence never leaves Catalog as an ID. */
-    suspend fun tagsForProvider(
-        providerKey: String, recordingIds: List<String>,
-    ): List<CanonicalScopedTagRow> = emptyList()
 }
 
 /** Catalog-internal configuration view. This is not exposed to Recommendation. */
@@ -106,143 +56,17 @@ internal class RoomCanonicalLibraryAvailabilityStore(
 ) : CanonicalLibraryAvailabilityStore {
     override suspend fun recordingIdsForProviders(providerKeys: List<String>): List<String> =
         providerKeys.flatMap { providerKey ->
-            dao.availableRecordingIdsForProvider(providerKey)
+            dao.providerRows(providerKey).map { row -> row.recordingId }
         }
-
-    override suspend fun tagsForProvider(
-        providerKey: String, recordingIds: List<String>,
-    ): List<CanonicalScopedTagRow> =
-        dao.providerScopedTagRows(providerKey, recordingIds)
 }
 
 /**
  * Catalog owns eligibility; Recommendation receives only deterministic canonical IDs.
  */
-private fun parseAvailableTagList(raw: String?): List<String>? =
-    raw?.let {
-        runCatching { Json.decodeFromString<List<String>>(it) }.getOrNull()
-            ?.map(String::trim)
-            ?.takeIf { tags -> tags.all(String::isNotBlank) }
-            ?.distinct()
-    }
-
-private fun parseAvailableBpms(raw: String?): List<Double>? =
-    raw?.let {
-        runCatching { Json.decodeFromString<List<Double>>(it) }.getOrNull()
-            ?.takeIf { values -> values.all { v -> v.isFinite() && v > 0.0 && v <= 999.0 } }
-            ?.distinct()
-    }
-
 internal class CanonicalLibraryAvailabilityRepository(
     private val store: CanonicalLibraryAvailabilityStore,
     private val providerConfiguration: CanonicalLibraryProviderConfigurationReader,
 ) : CanonicalLibraryAvailabilityReader {
-    /**
-     * Return only tags associated with the currently configured accounts.
-     * An unclassified/local asset remains UNKNOWN for genre/mood, but an
-     * OpenSubsonic positive tag is usable even alongside unknown copies.
-     */
-    override suspend fun availableRecordingTags(
-        recordingIds: List<String>,
-    ): List<CanonicalAvailableRecordingTags> {
-        val ids = recordingIds.distinct()
-        require(ids.all(String::isNotBlank))
-        if (ids.isEmpty()) return emptyList()
-        val configured = providerConfiguration.configuredProviderKeys().toList().sorted()
-        require(configured.all(String::isNotBlank))
-        data class MutableTagEvidence(
-            val genres: MutableSet<String> = linkedSetOf(),
-            val moods: MutableSet<String> = linkedSetOf(),
-            val styles: MutableSet<String> = linkedSetOf(),
-            val bpms: MutableSet<Double> = linkedSetOf(),
-            val composers: MutableSet<String> = linkedSetOf(),
-            val filePaths: MutableSet<String> = linkedSetOf(),
-            val folderPaths: MutableSet<String> = linkedSetOf(),
-            var genreUnknown: Boolean = false,
-            var moodUnknown: Boolean = false,
-            var styleUnknown: Boolean = false,
-            var bpmUnknown: Boolean = false,
-            var composerUnknown: Boolean = false,
-            var pathUnknown: Boolean = false,
-            var folderUnknown: Boolean = false,
-            var hasAsset: Boolean = false,
-        )
-        val byRecording = ids.associateWith { MutableTagEvidence() }
-        for (provider in configured) {
-            for (batch in ids.chunked(400)) {
-                for (row in store.tagsForProvider(provider, batch)) {
-                    val target = byRecording[row.recordingId] ?: continue
-                    target.hasAsset = true
-                    val genres = parseAvailableTagList(row.genresJson)
-                    val moods = parseAvailableTagList(row.moodsJson)
-                    val styles = parseAvailableTagList(row.stylesJson)
-                    val bpms = parseAvailableBpms(row.bpmsJson)
-                    val composers = parseAvailableTagList(row.composersJson)
-                    val path = canonicalAssetFilePath(row.assetPath)
-                    val folder = canonicalAssetFolderPath(row.assetPath)
-                    if (genres == null) target.genreUnknown = true else target.genres.addAll(genres)
-                    if (moods == null) target.moodUnknown = true else target.moods.addAll(moods)
-                    if (styles == null) target.styleUnknown = true else target.styles.addAll(styles)
-                    if (bpms == null) target.bpmUnknown = true else target.bpms.addAll(bpms)
-                    if (composers == null) target.composerUnknown = true else target.composers.addAll(composers)
-                    if (path == null) target.pathUnknown = true else target.filePaths.add(path)
-                    if (folder == null) target.folderUnknown = true else target.folderPaths.add(folder)
-                }
-            }
-        }
-        return ids.map { id ->
-            val value = byRecording.getValue(id)
-            CanonicalAvailableRecordingTags(
-                recordingId = id,
-                genres = value.genres.toList(),
-                moods = value.moods.toList(),
-                genreEvidenceUnknown = !value.hasAsset || value.genreUnknown,
-                moodEvidenceUnknown = !value.hasAsset || value.moodUnknown,
-                styles = value.styles.toList(),
-                styleEvidenceUnknown = !value.hasAsset || value.styleUnknown,
-                bpms = value.bpms.toList(),
-                bpmEvidenceUnknown = !value.hasAsset || value.bpmUnknown,
-                composers = value.composers.toList(),
-                composerEvidenceUnknown = !value.hasAsset || value.composerUnknown,
-                filePaths = value.filePaths.toList(),
-                filePathEvidenceUnknown = !value.hasAsset || value.pathUnknown,
-                folderPaths = value.folderPaths.toList(),
-                folderPathEvidenceUnknown = !value.hasAsset || value.folderUnknown,
-            )
-        }
-    }
-
-    override suspend fun availableRecordingSources(): List<CanonicalAvailableRecordingSources> {
-        // Read configured provider identity at the request boundary. Only the
-        // current account's verified provider key is eligible for remote claims.
-        val configured = providerConfiguration.configuredProviderKeys().toList().sorted()
-        require(configured.all { it.isNotBlank() })
-        val evidence = sortedMapOf<String, MutableSet<CanonicalLibrarySourceKind>>()
-        val unclassifiedRecordings = hashSetOf<String>()
-        for (provider in configured) {
-            val kind = when {
-                provider == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER ->
-                    CanonicalLibrarySourceKind.LOCAL
-                provider.startsWith("opensubsonic:") &&
-                    provider.substringAfter(':').isNotBlank() ->
-                    CanonicalLibrarySourceKind.OPENSUBSONIC
-                else -> null
-            }
-            store.recordingIdsForProviders(listOf(provider)).forEach { id ->
-                require(id.isNotBlank()) { "Canonical recordingId must not be blank" }
-                val kinds = evidence.getOrPut(id) { linkedSetOf() }
-                if (kind == null) unclassifiedRecordings += id else kinds.add(kind)
-            }
-        }
-        return evidence.map { (id, kinds) ->
-            // Preserve verified positive copies even if a future provider is
-            // unclassified; incomplete coverage cannot prove a negative.
-            CanonicalAvailableRecordingSources(
-                id, kinds.toSet(), kindsComplete = id !in unclassifiedRecordings,
-            )
-        }
-    }
-
     override suspend fun availableRecordingIds(): List<String> {
         val providerKeys = providerConfiguration.configuredProviderKeys()
             .asSequence()

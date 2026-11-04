@@ -362,7 +362,7 @@ fun FrostedTopBar(
 /** Circular floating back affordance, material-matched to the navbar. */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
-internal fun ArtworkPageBackButton(
+private fun ArtworkPageBackButton(
     onClick: () -> Unit,
     hazeState: HazeState?,
     modifier: Modifier = Modifier,

@@ -4,12 +4,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Radio
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Lan
@@ -154,41 +148,6 @@ fun libraryLinks(): List<LibraryLink> {
             SPOTIFY_BROWSE_ID,
         ).takeIf { spotifyConnected.isNotBlank() }?.copy(logo = Res.drawable.spotify_logo),
     )
-}
-
-/**
- * Main Library uses the existing folder navigation contract and the existing
- * LocalFolder tab state. Categories are routes, not one-off playlist shelves.
- * The standalone playlist page owns its own saved collection list.
- */
-fun libraryNavigationLinks(
-    deviceLinks: List<LibraryLink>,
-    onOpenPlaylists: () -> Unit,
-    onOpenLocalCategory: (LocalFolderTab) -> Unit,
-): List<LibraryLink> {
-    fun destination(title: String, icon: ImageVector, onClick: () -> Unit) =
-        LibraryLink(
-            item = ShelfItem(
-                title = title, subtitle = "", thumbnailUrl = null,
-                browseId = null, videoId = null,
-            ),
-            icon = icon,
-            onClick = onClick,
-        )
-    val radios = destination("Rádios", Icons.Rounded.Radio) { }.copy(enabled = false)
-    return listOf(
-        destination("Playlists", Icons.Rounded.QueueMusic, onOpenPlaylists),
-        destination("Artistas", Icons.Rounded.Person) {
-            onOpenLocalCategory(LocalFolderTab.ARTISTS)
-        },
-        destination("Álbuns", Icons.Rounded.Album) {
-            onOpenLocalCategory(LocalFolderTab.ALBUMS)
-        },
-        destination("Músicas", Icons.Rounded.MusicNote) {
-            onOpenLocalCategory(LocalFolderTab.SONGS)
-        },
-        radios,
-    ) + deviceLinks.filter { it.item.browseId == "local:downloads" }
 }
 
 /**

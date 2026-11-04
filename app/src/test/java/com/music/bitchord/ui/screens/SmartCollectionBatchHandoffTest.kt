@@ -5,11 +5,6 @@ import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.listening.AdaptiveCollectionKind
 import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
-import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
-import com.music.bitchord.data.listening.SmartPlaylistV2Query
-import com.music.bitchord.data.listening.SmartPlaylistRule
-import com.music.bitchord.data.listening.SmartPlaylistRuleField
-import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.playback.CanonicalCollectionIntentPlan
@@ -26,30 +21,6 @@ import org.junit.Test
 
 /** A read-only fake of B9's resolver, never legacy-title identity inference. */
 class SmartCollectionBatchHandoffTest {
-    @Test fun shuffledSavedPlaylistRetainsOnlyFreshUniqueRecordingMembership() {
-        val ids = listOf("rec-a", "rec-b", "rec-b", "rec-c", "rec-d")
-        val normal = canonicalSavedPlaylistOrder(ids, shuffle = false, random = kotlin.random.Random(2))
-        val shuffled = canonicalSavedPlaylistOrder(ids, shuffle = true, random = kotlin.random.Random(2))
-        assertEquals(listOf("rec-a", "rec-b", "rec-c", "rec-d"), normal)
-        assertEquals(normal.toSet(), shuffled.toSet())
-        assertEquals(normal.size, shuffled.size)
-    }
-
-    @Test fun clickingPlaylistTrackUsesFreshMembershipAndRemainingOrder() {
-        val members = listOf("rec-first", "rec-second", "rec-third")
-        assertEquals(
-            listOf("rec-second", "rec-third"),
-            playlistPlaybackSuffix(members, "rec-second"),
-        )
-        assertEquals(null, playlistPlaybackSuffix(members, "rec-not-in-playlist"))
-        assertEquals(null, playlistPlaybackSuffix(emptyList(), "rec-second"))
-        assertEquals(
-            listOf("rec-second"),
-            playlistPlaybackSelection(members, "rec-second", includeFollowing = false),
-        )
-        assertNull(playlistPlaybackSelection(members, "rec-not-in-playlist", includeFollowing = false))
-    }
-
     private class Resolver : CanonicalQueueResolver {
         var calls = 0
         override suspend fun identifyAll(songs: List<Song>): List<CanonicalQueueIdentity?> =
@@ -58,16 +29,8 @@ class SmartCollectionBatchHandoffTest {
             calls++
             return identities.map { identity ->
                 identity?.let {
-                    CanonicalPlayableAsset(
-                        it,
-                        if (it.providerKey == "local-mediastore")
-                            "content://media/external/audio/media/42"
-                        else CanonicalRemotePlaybackUri.encode(
-                            CanonicalRemotePlaybackRequest(
-                                it.recordingId, it.mediaAssetId!!, it.providerKey!!,
-                            ),
-                        ),
-                    )
+                    CanonicalPlayableAsset(it, CanonicalRemotePlaybackUri.encode(
+                        CanonicalRemotePlaybackRequest(it.recordingId, it.mediaAssetId!!, it.providerKey!!)))
                 }
             }
         }
@@ -115,85 +78,6 @@ class SmartCollectionBatchHandoffTest {
         assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
     }
 
-    @Test fun recentLocalCardPlaysOnlyItsVerifiedLocalAsset() = runBlocking {
-        val library = CanonicalBrowseLibrary(listOf(
-            CanonicalBrowseTrack("rec-recent", "Recent", "Artist", 120_000L, null,
-                listOf(
-                    CanonicalBrowseMediaAsset("local-id", "local-mediastore"),
-                    CanonicalBrowseMediaAsset("remote-id", "opensubsonic:other"),
-                )),
-        ))
-        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
-        val handoff = SmartCollectionBatchHandoff(
-            refreshIds = { listOf("rec-recent") },
-            browse = { library },
-            browseSelected = { library },
-            sourceLimit = { _, browse -> canonicalBrowseOnlyProvider(browse, "local-mediastore") },
-            planner = CanonicalCollectionIntentPlanner(Resolver()),
-            submit = { submitted += it; true },
-        )
-        assertEquals(SmartCollectionBatchResult.Submitted,
-            handoff.execute(SmartCollectionActionSource.RecentLocalTrack("rec-recent"),
-                CanonicalCollectionIntent.PLAY_NOW))
-        assertEquals(listOf("local-id"),
-            submitted.single().selections.map { it.identity.mediaAssetId })
-        assertEquals(CanonicalCollectionIntent.PLAY_NOW, submitted.single().intent)
-
-        val remoteOnly = canonicalBrowseOnlyProvider(
-            CanonicalBrowseLibrary(listOf(library.tracks.single().copy(
-                availableAssets = listOf(CanonicalBrowseMediaAsset("remote-id", "opensubsonic:other")),
-            ))),
-            "local-mediastore",
-        )
-        assertTrue(remoteOnly.tracks.isEmpty())
-    }
-
-    @Test fun selectedNormalSourceDoesNotFallBackToAnotherProvider() = runBlocking {
-        val both = CanonicalBrowseLibrary(listOf(
-            CanonicalBrowseTrack(
-                "rec-a", "Title", "Artist", 150_000L, null,
-                listOf(
-                    CanonicalBrowseMediaAsset("local-a", "local-mediastore"),
-                    CanonicalBrowseMediaAsset("remote-a", "opensubsonic:account"),
-                ),
-            ),
-            track("rec-b").copy(availableAssets = listOf(
-                CanonicalBrowseMediaAsset("remote-b", "opensubsonic:account"),
-            )),
-        ))
-        assertEquals(listOf("local-a"),
-            canonicalBrowseOnlyProvider(both, "local-mediastore")
-                .tracks.single().availableAssets.map { it.mediaAssetId })
-        assertEquals(listOf("rec-a"),
-            canonicalBrowseOnlyProvider(both, "local-mediastore").tracks.map { it.recordingId })
-        assertEquals(listOf("rec-a", "rec-b"),
-            canonicalBrowseOnlyProvider(both, "opensubsonic:account")
-                .tracks.map { it.recordingId })
-        // An unavailable provider cannot be silently substituted.
-        assertEquals(emptyList<CanonicalBrowseTrack>(),
-            canonicalBrowseOnlyProvider(both, "opensubsonic:revoked").tracks)
-    }
-
-    @Test fun smartGlobalSourceRemovesDisallowedAssetRenditions() {
-        val lib = CanonicalBrowseLibrary(listOf(
-            CanonicalBrowseTrack("rec-a", "Song", "Artist", null, null,
-                listOf(
-                    CanonicalBrowseMediaAsset("local", "local-mediastore"),
-                    CanonicalBrowseMediaAsset("server", "opensubsonic:current"),
-                )),
-            CanonicalBrowseTrack("rec-b", "Remote only", "Artist", null, null,
-                listOf(CanonicalBrowseMediaAsset("server-2", "opensubsonic:current"))),
-        ))
-        val local = canonicalBrowseOnlySourceKind(lib, "local")
-        assertEquals(listOf("rec-a"), local.tracks.map { it.recordingId })
-        assertEquals(listOf("local"), local.tracks.single().availableAssets.map { it.mediaAssetId })
-        val remote = canonicalBrowseOnlySourceKind(lib, "opensubsonic")
-        assertEquals(listOf("rec-a", "rec-b"), remote.tracks.map { it.recordingId })
-        assertEquals(listOf("server"),
-            remote.tracks.first().availableAssets.map { it.mediaAssetId })
-        assertTrue(canonicalBrowseOnlySourceKind(lib, "unsupported").tracks.isEmpty())
-    }
-
     @Test fun staleOrAmbiguousAssetFailsClosedBeforeSubmittingAnyQueueCommand() = runBlocking {
         var dispatches = 0
         val handoff = SmartCollectionBatchHandoff(
@@ -222,7 +106,7 @@ class SmartCollectionBatchHandoffTest {
         available = emptyList()
         assertEquals(SmartCollectionBatchResult.Empty,
             handoff.execute(source, CanonicalCollectionIntent.ADD_TO_QUEUE))
-        available = (0..500).map { "rec-$it" }
+        available = (0..100).map { "rec-$it" }
         assertEquals(SmartCollectionBatchResult.LimitExceeded,
             handoff.execute(source, CanonicalCollectionIntent.PLAY_NOW))
         assertEquals(0, dispatches)
@@ -411,146 +295,4 @@ class SmartCollectionBatchHandoffTest {
         )
         assertEquals(1, calls)
     }
-    @Test fun v2PreviewAndSavedSourceKeepQueueIntentAfterFreshRevalidation() = runBlocking {
-        val previewQuery = SmartPlaylistV2Query(
-            SmartPlaylistRule.Comparison(
-                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
-                SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
-                1.0,
-            ),
-        )
-        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
-        var currentIds = listOf("rec:old")
-        val handoff = SmartCollectionBatchHandoff(
-            refreshIds = { currentIds },
-            browse = { CanonicalBrowseLibrary(listOf(track("rec:old"), track("rec:new"))) },
-            planner = CanonicalCollectionIntentPlanner(Resolver()),
-            submit = { submitted += it; true },
-        )
-        currentIds = listOf("rec:new")
-        assertEquals(SmartCollectionBatchResult.Submitted,
-            handoff.execute(SmartCollectionActionSource.PreviewV2Query(previewQuery),
-                CanonicalCollectionIntent.ADD_TO_QUEUE))
-        assertEquals("rec:new", submitted.single().selections.single().recordingId)
-        assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
-        assertEquals(SmartCollectionBatchResult.Submitted,
-            handoff.execute(SmartCollectionActionSource.SavedV2Definition("v2"),
-                CanonicalCollectionIntent.PLAY_NOW))
-        assertEquals(CanonicalCollectionIntent.PLAY_NOW, submitted.last().intent)
-    }
-
-    @Test fun v2VerifiedRatingHintRequiresAProvableGlobalMinimum() {
-        fun rated(min: Double) = SmartPlaylistRule.Comparison(
-            SmartPlaylistRuleField.EXPLICIT_RATING,
-            SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
-            value = min,
-        )
-        fun duration() = SmartPlaylistRule.Comparison(
-            SmartPlaylistRuleField.DURATION_MS,
-            SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
-            value = 180_000.0,
-        )
-        val direct = SmartPlaylistV2Query(rated(4.0))
-        assertEquals(4.0, direct.guaranteedMinimumRatingForAssetHints())
-        val and = SmartPlaylistV2Query(SmartPlaylistRule.Group(
-            SmartPlaylistRuleJoin.ALL, listOf(duration(), rated(3.0), rated(5.0)),
-        ))
-        assertEquals(5.0, and.guaranteedMinimumRatingForAssetHints())
-        val validOr = SmartPlaylistV2Query(SmartPlaylistRule.Group(
-            SmartPlaylistRuleJoin.ANY, listOf(rated(4.0), rated(5.0)),
-        ))
-        assertEquals(4.0, validOr.guaranteedMinimumRatingForAssetHints())
-        val unsafeOr = SmartPlaylistV2Query(SmartPlaylistRule.Group(
-            SmartPlaylistRuleJoin.ANY, listOf(duration(), rated(5.0)),
-        ))
-        assertNull(unsafeOr.guaranteedMinimumRatingForAssetHints())
-        val negation = SmartPlaylistV2Query(SmartPlaylistRule.Not(rated(4.0)))
-        assertNull(negation.guaranteedMinimumRatingForAssetHints())
-        assertNull(SmartPlaylistV2Query(duration()).guaranteedMinimumRatingForAssetHints())
-    }
-
-    @Test fun largeSavedV2QueueSubmitsOneAtomic500ItemPlanAndNeverAutoplays() = runBlocking {
-        val ids = (1..500).map { "rec-$it" }
-        val submitted = mutableListOf<CanonicalCollectionIntentPlan>()
-        val handoff = SmartCollectionBatchHandoff(
-            refreshIds = { ids },
-            browse = { CanonicalBrowseLibrary(ids.map { track(it) }) },
-            planner = CanonicalCollectionIntentPlanner(Resolver()),
-            submit = { plan -> submitted += plan; true },
-        )
-        assertEquals(SmartCollectionBatchResult.Submitted,
-            handoff.execute(SmartCollectionActionSource.SavedV2Definition("large"),
-                CanonicalCollectionIntent.ADD_TO_QUEUE))
-        assertEquals(1, submitted.size)
-        assertEquals(500, submitted.single().selections.size)
-        assertEquals(ids, submitted.single().selections.map { it.recordingId })
-        assertEquals(CanonicalCollectionIntent.ADD_TO_QUEUE, submitted.single().intent)
-    }
-
-    @Test fun largeV2PreviewWithOneAmbiguousItemRejectsWholeOperationBeforeSubmit() = runBlocking {
-        val ids = (1..251).map { "rec-$it" }
-        var submissions = 0
-        val handoff = SmartCollectionBatchHandoff(
-            refreshIds = { ids },
-            browse = { CanonicalBrowseLibrary(ids.map {
-                if (it == "rec-251") track(it, 2) else track(it)
-            }) },
-            planner = CanonicalCollectionIntentPlanner(Resolver()),
-            submit = { submissions++; true },
-        )
-        assertTrue(handoff.execute(
-            SmartCollectionActionSource.SavedV2Definition("ambiguous"),
-            CanonicalCollectionIntent.ADD_TO_QUEUE,
-        ) is SmartCollectionBatchResult.Rejected)
-        assertEquals(0, submissions)
-    }
-
-    @Test fun plannedBrowseReceivesOnlyRevalidatedRecordingIdsAndNeverScansWholeCatalog() = runBlocking {
-        val ids = listOf("rec:two", "rec:one")
-        val seen = mutableListOf<List<String>>()
-        val sent = mutableListOf<CanonicalCollectionIntentPlan>()
-        val handoff = SmartCollectionBatchHandoff(
-            refreshIds = { ids },
-            browse = { error("Full-catalog browse is prohibited for canonical smart actions") },
-            browseSelected = { selected ->
-                seen += selected
-                CanonicalBrowseLibrary(selected.map { track(it) })
-            },
-            planner = CanonicalCollectionIntentPlanner(Resolver()),
-            submit = { sent += it; true },
-        )
-        assertEquals(SmartCollectionBatchResult.Submitted,
-            handoff.execute(
-                SmartCollectionActionSource.SavedV2Definition("revalidate"),
-                CanonicalCollectionIntent.ADD_TO_QUEUE,
-            ))
-        assertEquals(listOf(ids), seen)
-        assertEquals(ids, sent.single().selections.map { it.recordingId })
-    }
-
-    @Test fun unknownRecordingInBoundedBrowseRejectsWholeSelection() = runBlocking {
-        val ids = listOf("rec:found", "rec:missing")
-        var dispatches = 0
-        val handoff = SmartCollectionBatchHandoff(
-            refreshIds = { ids },
-            browse = { error("No full browse fallback") },
-            browseSelected = { only ->
-                assertEquals(ids, only)
-                CanonicalBrowseLibrary(listOf(track("rec:found")))
-            },
-            planner = CanonicalCollectionIntentPlanner(Resolver()),
-            submit = { dispatches++; true },
-        )
-        assertTrue(handoff.execute(
-            SmartCollectionActionSource.PreviewV2Query(
-                SmartPlaylistV2Query(SmartPlaylistRule.Comparison(
-                    SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
-                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL, 1.0,
-                )),
-            ),
-            CanonicalCollectionIntent.PLAY_NOW,
-        ) is SmartCollectionBatchResult.Rejected)
-        assertEquals(0, dispatches)
-    }
-
 }
