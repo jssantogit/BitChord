@@ -18,7 +18,7 @@ internal fun canonicalAssetSourceQuality(asset: CanonicalBrowseMediaAsset): Sour
     val suffix = asset.audioSuffix?.trim()?.lowercase(Locale.ROOT)
         ?.removePrefix(".")?.takeIf(String::isNotEmpty)
     // A declared but unsupported MIME overrides ambiguous suffix guesses.
-    val format = if (mime != null) when (mime) {
+    val format = (if (mime != null) when (mime) {
         "audio/flac", "audio/x-flac" -> "flac"
         "audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave" -> "wav"
         "audio/alac" -> "alac"
@@ -32,7 +32,7 @@ internal fun canonicalAssetSourceQuality(asset: CanonicalBrowseMediaAsset): Sour
         "flac", "wav", "alac", "aiff", "aif" -> suffix
         "mp3", "aac", "opus" -> suffix
         else -> null
-    } ?: return null
+    }) ?: return null
 
     if (format == "dolby-atmos") return SourceQuality.DOLBY_ATMOS
     if (format in setOf("flac", "wav", "alac", "aiff", "aif")) {
