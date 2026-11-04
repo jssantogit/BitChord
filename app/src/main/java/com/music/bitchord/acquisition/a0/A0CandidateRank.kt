@@ -147,8 +147,30 @@ internal object A0CandidateRank {
                     (compactAlbumFolderTokens.isNotEmpty() &&
                         words==compactAlbumFolderTokens)
             }
+        // A parenthesized canonical native-script alias may be credited by
+        // the FULL Latin name, but only when it is an explicit filename
+        // artist prefix or an exact directory, never a title substring.
+        val bilingualLatinArtist=parts.getOrNull(0)?.let(
+            A0ArtistCreditAliases::latinAlias)
+        val latinAliasWords=bilingualLatinArtist?.let(::tokens).orEmpty()
+        val aliasInFilename=latinAliasWords.isNotEmpty() &&
+            stemParts.size==2 && tokens(stemParts[0]).dropWhile {
+                it.all(Char::isDigit)
+            }==latinAliasWords
+        val aliasAlbumFolderWords=if(latinAliasWords.isNotEmpty() &&
+            !expectedAlbum.isNullOrBlank())
+            latinAliasWords+tokens(expectedAlbum)
+        else emptyList()
+        val aliasInFolder=latinAliasWords.isNotEmpty() &&
+            parentSegments.any { parent ->
+                val words=tokens(parent)
+                words==latinAliasWords ||
+                    (aliasAlbumFolderWords.isNotEmpty() &&
+                        words==aliasAlbumFolderWords)
+            }
         val artistInFilename=artistWords.isNotEmpty() &&
-            (artistWords.all { it in fileWords } || compactInFilename)
+            (artistWords.all { it in fileWords } ||
+                compactInFilename || aliasInFilename)
         // Folder context is supporting evidence only when the *same* folder
         // segment identifies the artist. "New/Jeans" cannot imply "New Jeans".
         // A title can itself contain the artist's name ("Queen Of Hearts").
@@ -167,7 +189,7 @@ internal object A0CandidateRank {
             artistSequence+tokens(expectedAlbum)
         else emptyList()
         val artistInSingleFolder=artistWords.isNotEmpty() &&
-            (compactInFolder || parentSegments.any { parent ->
+            (compactInFolder || aliasInFolder || parentSegments.any { parent ->
                 val words=tokens(parent)
                 if(artistTitleOverlap)
                     words==artistSequence ||
@@ -263,11 +285,14 @@ internal object A0CandidateRank {
             val titleOnly=titleSequence.groupingBy { it }.eachCount()
             // Count the exact artist spelling actually credited by this
             // source, not both whitespace variants at once.
-            val creditedArtistTokens=if(compactArtistToken!=null &&
-                (compactInFilename || (compactInFolder &&
-                    !artistWords.all { it in fileWords })))
-                listOf(compactArtistToken)
-            else artistSequence
+            val creditedArtistTokens=when {
+                compactArtistToken!=null &&
+                    (compactInFilename || (compactInFolder &&
+                        !artistWords.all { it in fileWords })) ->
+                    listOf(compactArtistToken)
+                (aliasInFilename || aliasInFolder) -> latinAliasWords
+                else -> artistSequence
+            }
             val artistAndTitle=(creditedArtistTokens+titleSequence)
                 .groupingBy { it }.eachCount()
             val relevant=(creditedArtistTokens+titleSequence).toSet()
@@ -296,7 +321,7 @@ internal object A0CandidateRank {
             val isTitlePrefix=titleWords.isNotEmpty() &&
                 titleWords.all { it in leading }
             val isExpectedCredit=artistWords.all { it in leading } ||
-                compactInFilename
+                compactInFilename || aliasInFilename
             if(leading.isNotEmpty() && !isTrackNumber &&
                 !isTitlePrefix && !isExpectedCredit) {
                 score-=36
@@ -342,7 +367,8 @@ internal object A0CandidateRank {
         val artistOrdered=artistSequence.isEmpty() ||
             containsPhrase(fileTokens,artistSequence) ||
             parentSegments.any { containsPhrase(tokens(it),artistSequence) } ||
-            compactInFilename || compactInFolder
+            compactInFilename || compactInFolder ||
+            aliasInFilename || aliasInFolder
         if(match==Match.ALL_TERMS && (!titleOrdered || !artistOrdered)) {
             score-=9
             if(Warning.IDENTITY_AMBIGUOUS !in warnings)
