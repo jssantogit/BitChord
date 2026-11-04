@@ -31,4 +31,17 @@ class CanonicalArtistDetailStateTest {
             listOf(first, second), emptySet(),
         ).isEmpty())
     }
+    @Test fun nestedAlbumUsesAvailableSourceUnionWithoutDuplicateRecordings() {
+        assertEquals(
+            listOf("recording-b", "recording-a", "recording-c"),
+            canonicalArtistNestedRecordingOrder(
+                listOf(
+                    listOf("recording-b", "recording-a"),
+                    listOf("recording-a", "recording-c"),
+                ),
+            ),
+        )
+        assertTrue(canonicalArtistNestedRecordingOrder(emptyList()).isEmpty())
+    }
+
 }
