@@ -235,6 +235,26 @@ class PlaylistLibraryVisualReuseTest {
         RecentLocalAdditionsSnapshot.clear()
     }
 
+    @Test fun providerNeutralTrackRowRendersArtworkTextRatingAndActions() {
+        var selected = 0
+        compose.setContent {
+            com.music.bitchord.ui.components.NativeDetailTrackRowLayout(
+                onClick = { selected++ },
+                leading = { androidx.compose.material3.Text("01") },
+                title = { androidx.compose.material3.Text("Canonical title") },
+                subtitle = { androidx.compose.material3.Text("Verified artist") },
+                rating = { androidx.compose.material3.Text("Verified rating") },
+                actions = { androidx.compose.material3.Text("Native menu") },
+            )
+        }
+        compose.onNodeWithText("Canonical title").performClick()
+        compose.onNodeWithText("Verified artist").assertExists()
+        compose.onNodeWithText("Verified rating").assertExists()
+        compose.onNodeWithTag("native-detail-rating-slot").assertExists()
+        compose.onNodeWithText("Native menu").assertExists()
+        compose.runOnIdle { assertEquals(1, selected) }
+    }
+
     @Test fun nativeSearchFieldReusesPlaylistDetailGeometryWithoutLegacyPage() {
         var query by mutableStateOf("")
         compose.setContent {
