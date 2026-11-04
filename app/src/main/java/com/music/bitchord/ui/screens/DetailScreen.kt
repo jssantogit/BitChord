@@ -1207,6 +1207,8 @@ internal fun NativeReleaseHeaderLayout(
     credit: String,
     meta: String,
     palette: ArtworkPalette,
+    rating: Double? = null,
+    onRate: (() -> Unit)? = null,
     sleeveSize: Dp,
     artwork: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
     topInset: Dp? = null,
@@ -1250,6 +1252,28 @@ internal fun NativeReleaseHeaderLayout(
                     .let { m -> if (onCreditClick == null) m
                         else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
             )
+        }
+        if (onRate != null) {
+            Spacer(Modifier.height(8.dp))
+            Box(
+                modifier = Modifier.clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onRate)
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .testTag("native-album-rating"),
+            ) {
+                if (rating != null) {
+                    CanonicalRatingStars(
+                        rating = RatingDisplay(localValue = rating),
+                        color = palette.onBackground,
+                    )
+                } else {
+                    Text(
+                        text = "Avaliar álbum",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = palette.onBackgroundVariant,
+                    )
+                }
+            }
         }
         if (meta.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
