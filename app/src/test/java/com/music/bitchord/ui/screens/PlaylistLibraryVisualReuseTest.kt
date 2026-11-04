@@ -54,7 +54,10 @@ class PlaylistLibraryVisualReuseTest {
             )
         }
         compose.onNodeWithContentDescription("Adicionar à fila").performClick()
-        compose.onNodeWithContentDescription("Shuffle").assertExists()
+        compose.onNodeWithContentDescription(
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getString(com.music.bitchord.R.string.shuffle),
+        ).assertExists()
         compose.runOnIdle {
             assertEquals(1, queued)
             assertEquals(0, played)
