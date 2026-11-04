@@ -38,7 +38,8 @@ Status em 04/11/2026: **migração iniciada**, não concluída. Primeira PR [#20
 
 - **Entrada tipada:** `DetailTarget` representa `Artist`, `ReleaseGroup`, `Release` ou `Recording`, com ID canônico *ou* referência externa tipada ainda não resolvida. Não aceitar uma string genérica que misture `catalog:...`, IDs de playlist e `videoId`.
 - **Resolução:** adapter devolve estado de identidade verificada, evidência por fonte, lista de `MediaAsset` reproduzíveis, loading/cache/erro e ações disponíveis. Falhas remotas não apagam disponibilidade local.
-- **Apresentação única:** `ArtistDetailContent` e `AlbumDetailContent` serão extraídos dos componentes existentes (incluindo `ArtistHeader`, `PageBackground`, `NativeReleaseHeaderLayout`, `ActionRow`, `CanonicalTrackRow`, `NativeLibraryEntityCard`, `SectionHeading`). O mesmo componente renderiza biblioteca, pesquisa online, detalhes aninhados e itens fixados.
+- **Apresentação única — referência visual obrigatória:** `DetailScreen.kt` é a fonte visual nativa para artistas e álbuns, mas **precisa perder seu acoplamento a `DetailPage`/`Song.videoId` no compositor**. Extrair dele os compositores compartilhados (`ArtistDetailContent`, `AlbumDetailContent`) com contratos de estado tipados, reutilizando `ArtistHeader`, `PageBackground`, `NativeReleaseHeaderLayout`, `ActionRow`, `CanonicalTrackRow`, `NativeLibraryEntityCard` e `SectionHeading`. Biblioteca, pesquisa online, detalhes aninhados e itens fixados passam adaptadores de dados para esses MESMOS compositores; não criar um novo visual paralelo.
+- **Eliminação explícita de duplicação:** `CanonicalNativeArtistDetail.kt` é uma tela duplicada e deve ser **apagada depois da migração efetiva** de `CanonicalRemoteLibraryScreen` para o compositor nativo compartilhado. Qualquer consulta Room, vínculo de Recording→Release, avaliação, pin, artwork, filtros, playlist, navegação de álbum aninhado e back stack que atualmente viva nesse arquivo passa a adaptadores/controladores ou a componentes compartilhados. Nunca produzir `Song.videoId` fictício para encaixar dados canônicos na tela antiga. O mesmo critério vale para layouts duplicados de álbum, sem apagar recursos aprovados na #205.
 - **Seções tipadas:** discografia, álbuns recentes, singles/EPs, faixas disponíveis, destaques/ranking com proveniência, metadados editoriais, notas e botões. Uma seção ausente não vira lista vazia com título enganoso.
 - **Ações:** Play/Shuffle/Queue somente com `MediaAsset` resolvido; Pin/Playlist/Rating sobre IDs canônicos ou identidade externa validada; inscrições específicas de provedores nunca se confundem com favoritos ou avaliações do app.
 
@@ -46,7 +47,7 @@ Status em 04/11/2026: **migração iniciada**, não concluída. Primeira PR [#20
 
 1. **D0: discovery cutover (#209)** — prova de ausência de chamadas ocultas YT em Home/Explorar/Pesquisa, sem regredir biblioteca/servidor; Android CI e smoke.
 2. **D1: rotas e identidade** — mapa de todos os chamadores de artista/álbum, conversão segura de referências externas, casos de homônimos e ambiguidade; compatibilidade de back stack/links.
-3. **D2: compositor de artista único** — Biblioteca + MusicBrainz + eventual provedor de enriquecimento; mesmas dimensões, paleta, seções e ações nativas; sem ranking fictício.
+3. **D2: compositor de artista único** — extrair da tela nativa `DetailScreen` (não da alternativa da Biblioteca), adaptar Biblioteca + MusicBrainz ao mesmo `ArtistDetailUiState` e às mesmas ações; migrar `CanonicalRemoteLibraryScreen` e **remover `CanonicalNativeArtistDetail.kt`** após equivalência funcional e visual verificada. Preservar todas as seções, classificação/relacionamentos verificados, busca, avaliações, pin, álbum aninhado e retorno; sem ranking fictício.
 4. **D3: compositor de álbum único** — Biblioteca, artista aninhado, pesquisa e pins; assegurar `ReleaseGroup` vs edição, número de faixas, rodapé, ratings, pin e PlaylistAdd.
 5. **D4: demais entradas** — Home/Explorar, player, recomendações, músicas, playlists, histórico e links. Reduzir rotas legadas à borda de compatibilidade.
 6. **D5: retirada do backend** — inventário completo de código, contas, playback e dados, com plano não destrutivo e rollback; só remover depois que nenhum recurso depende dele e após verificação física.
@@ -59,6 +60,13 @@ Status em 04/11/2026: **migração iniciada**, não concluída. Primeira PR [#20
 - MediaStore + Navidrome aparecem como fontes disponíveis, independentemente de internet pública; MusicBrainz inacessível mantém cache/offline.
 - Reinício conserva pins, ratings, histórico, playlists e fila; links YT explícitos são tratados por caminho de compatibilidade, sem recuperar descoberta YT.
 - Android CI no SHA final e smoke Galaxy A54 com screenshots comparando layout e gestos; diagnóstico sem URLs/segredos de provedores.
+
+
+### Gate anti-duplicação — aceite obrigatório
+
+- Não se considera unificado apenas por compartilhar `ArtistHeader`, `ActionRow` ou paleta: precisa existir **uma árvore de composição de detalhe de artista**, com seções condicionais por dados reais e sem renderer alternativo na Biblioteca.
+- `CanonicalNativeArtistDetail` não é o novo padrão: o seu estado/casos funcionais são fonte para migração, e seu compositor será retirado. **Deletar o arquivo somente após** testes da Biblioteca local/Navidrome, MusicBrainz online/cache/offline e álbuns aninhados passarem sem regressão.
+- Mesmo princípio para álbum e demais entidades, evitando um "CompositorUniversal" que vire uma tela genérica com casos especiais para cada provedor.
 
 ## Evidências
 
