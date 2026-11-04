@@ -63,10 +63,12 @@ class CanonicalLibraryListRefinementsTest {
                 )
             }
         }
-        compose.onNodeWithTag("native-library-card-title").assertExists()
-        compose.onNodeWithTag("native-library-card-subtitle").assertExists()
-        compose.onNodeWithText("Álbum fixado").assertExists()
-        compose.onNodeWithText("Artista").assertExists()
+        // longPressMenuClickable merges descendant semantics into the card.
+        // Verify the actual child labels on the unmerged tree.
+        compose.onNodeWithTag("native-library-card-title", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("native-library-card-subtitle", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Álbum fixado", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("Artista", useUnmergedTree = true).assertExists()
     }
 
     @Test fun albumCategoryStartsWithAnExpandedNativeSearchAndRealPlayActions() {
