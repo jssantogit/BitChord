@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,7 @@ private const val TOP_RELEASE_COVER_EDGE_ALPHA = 0.215f
  * artwork clipping and gestures. Provider IDs, selection, pin and save
  * actions never cross into this visual component.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun NativeArtistTopReleaseCard(
     title: String,
