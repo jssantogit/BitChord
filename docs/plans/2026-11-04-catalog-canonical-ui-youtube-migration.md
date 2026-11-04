@@ -106,6 +106,25 @@ A composição visual é única, porém **seções, ações e nomes exibidos dep
 
 **Próxima evolução:** converter essa disponibilidade em um contrato de detalhe tipado com proveniência por seção (popularidade: fonte e escopo; data: prova; asset: disponibilidade); registrar ações independentes, inclusive offline. Contrato deve abranger também álbum, faixa e playlist, sem reaproveitar indiscriminadamente seções próprias de artistas.
 
+### Segundo corte transversal — composição independente de modelos legados (04/11/2026)
+
+O escopo não se encerra na tela de artista. O compositor deixa de receber DTOs do legado; **adaptadores de borda** continuam interpretando `DetailPage`, `Song` ou `ShelfItem` até a navegação se tornar tipada. Remover os adaptadores antes dessa substituição causaria regressões em reprodução, menus, ratings, filtros e playlists.
+
+**Extrações realizadas:**
+- `NativeArtistBackdrop.kt`: `PageBackground`, gradiente, scroll e Canvas nativos; `NativeArtistDetailFrame` recebe apenas URL de arte e `ArtworkPalette`, não `DetailPage`.
+- `NativeReleaseComponents.kt`: `NativeReleaseHeaderLayout`, `NativeReleaseActionRow` e medidas nativas agora independentes do enorme `DetailScreen.kt`. O adaptador `ReleaseHeader` mantém créditos, arte/placeholder, Canvas e conta, mas a composição é a mesma de álbuns locais, Navidrome e playlists.
+- `NativeDetailControls.kt`: botões `ActionPill` e `CircleIconButton`, mantendo haptics e Liquid Glass. `NativeDetailSections.kt`: títulos de prateleiras e botão Ver todos, sem `browseId`.
+- `NativeCanonicalAlbumRows.kt`: faixas numeradas compartilhadas entre álbum raiz e álbum dentro de artista; `RecordingId` como chave, número original de álbum preservado após busca/ordenação, mesmo menu/rating e separador. Teste `CanonicalAlbumDetailParityTest` reforçado.
+- `LegacyArtistDetailAdapter.kt`: heurística de ranking da antiga rota UC removida do compositor nativo. A visibilidade usa evidência/contexto, não `browseId` específico.
+- `sharedUi/NativeSearchRow.kt`: **mesma linha nativa de Pesquisa** (52 dp, arte, título, subtítulo, duração, badge) sem `BrowseItem`, `Song` ou provider ID. Busca MusicBrainz e Servidor passam dados tipados diretamente à linha; `BrowseRow` antigo permanece como adaptador para fontes ainda legadas. Os callbacks preservam bloqueio de play de `Recording` sem asset verificado e os badges apenas de arquivo comprovado. Testes em `sharedUi/src/jvmTest/NativeSearchRowTest.kt`.
+- CI `.github/workflows/check.yml` recebeu execução de `:sharedUi:jvmTest`, pois `:app:testDevDebugUnitTest` compila as composições, mas não executa os testes puros do módulo sharedUi.
+
+**Auditoria estática indicativa — não equivale à remoção total:** `NativeArtistBackdrop`, `NativeDetailControls`, `NativeDetailSections`, `NativeReleaseComponents`, `NativeCanonicalAlbumRows` e `NativeSearchRow` não exigem import de `DetailPage`/YtMusicRepository nem `videoId` como identidade. Os adaptadores de `DetailScreen` e `SearchScreen`, assim como `MainActivity`/`MainViewModel`, ainda contêm compatibilidade por origem.
+
+**Pendências explícitas e ordem de migração:** (1) consolidar toda a árvore de seções de artista e filtro/ações da Biblioteca, eliminar `CanonicalNativeArtistDetail` após paridade; (2) separar a camada de detalhe de álbum da navegação raiz da Biblioteca, preservando qualidade/pin/playlist/sort/números; (3) finalizar rows de faixa/playlists e contextualizar menus; (4) adaptar `HomeScreen`, `ExploreScreen` e rotas da Pesquisa para modelos de entidade tipados sem `ShelfItem`/`BrowseItem` na composição; (5) fazer `MainActivity` e `MainViewModel` usarem apenas roteamento de origem tipado, retirando legacy YT depois que links explicitamente YT tiverem substituto seguro; (6) suíte Android + sharedUi, smoke A54 e comparação com main #205 antes de merge.
+
+**Gate:** [CI anterior #41827977284](https://github.com/jssantogit/BitChord/actions/runs/41827977284) compilou o app, mas encontrou 3 testes Compose incorretamente dependentes de `PlayerPlatform`. Os testes agora usam o `themeArtworkPalette()` existente. Novo HEAD exige CI verde, sem antecipar status; workflow de emulador A0 pode ser `skipped` e **não substitui smoke físico**.
+
 ## Evidências
 
 - [#205 — Biblioteca/Playlists integrada](https://github.com/jssantogit/BitChord/pull/205)
