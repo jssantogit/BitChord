@@ -133,6 +133,16 @@ O escopo não se encerra na tela de artista. O compositor deixa de receber DTOs 
 - **Paridade obrigatória:** preservar capas gradientes, blur, mini player, capa local/remote, indicadores de execução, pinos, títulos e comportamento de acesso offline. Nenhum `browseId` canônico pode ser interpretado como ID de vídeo.
 - A CI atual deve validar produção e `:sharedUi:jvmTest`; smoke físico somente depois do corte coerente completo.
 
+### Exclusões verificáveis de legado — passo seguinte (04/11/2026)
+
+**Regra operacional:** apagar funções, classes e IDs legados somente depois de todos os consumidores migrarem e de haver testes equivalentes; **não** eliminar IDs persistidos, links explícitos ou um renderer ainda acessível para conseguir reduzir a contagem de arquivos.
+
+- **Deletados** `canonicalRowAsBrowseItem` e `canonicalServerRowAsBrowseItem` de `sharedUi/SearchScreen.kt`: criavam `BrowseItem` e navegação sintética `catalog:...`/`server:asset:...` sem função depois que a Pesquisa MusicBrainz e Servidor começou a renderizar diretamente `NativeSearchRowUi`. Seus testes antigos foram substituídos por contratos de roteamento canônico tipado/`MediaAssetId` e testes `NativeSearchRowTest` (incluindo a proibição de `browseId`, `videoId`, providerKey e URI privada no modelo visual). A **compatibilidade legítima** de `catalog:...` em `canonicalNativeBrowseId` e em links previamente salvos continua preservada, pois ainda tem consumidores ativos.
+- Sem crédito, uma Recording pública passa a usar o tipo localizado `Gravação`, e não o antigo fallback `BrowseType.ALBUM`. Nenhum áudio ou identidade inventado.
+- `NativeArtistActions.kt` recebeu `ActionRow` e `PlayCircle` extraídos de `DetailScreen.kt`; não recebe mais `SubscriptionState` do legado. Adaptadores enviam apenas `isSubscribed` quando existe follow real; caso contrário rating nativo ou estado desabilitado. `nativeArtistStarKind` e novos testes impedem exibir follow e avaliação simultaneamente na mesma estrela.
+- `NativeDetailSections.kt` passou a conter `AboutSection` (textos expansíveis e slots de estatísticas/rodapé), e a função duplicada foi **deletada** de `DetailScreen.kt`. Artistas e playlists continuam usando a composição original, sem alteração de gestos ou aparência.
+- **Próxima deleção estrutural:** somente depois de extrair todo o conteúdo condicional, filtros e menus do detalhe do artista da Biblioteca para uma composição única poderá ser removido `CanonicalNativeArtistDetail.kt`; idem no fluxo raiz de álbuns/Playlists. Eliminar o componente antes disso seria regressão, não avanço.
+
 ## Evidências
 
 - [#205 — Biblioteca/Playlists integrada](https://github.com/jssantogit/BitChord/pull/205)
