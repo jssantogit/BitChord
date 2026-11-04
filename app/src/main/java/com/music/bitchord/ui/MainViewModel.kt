@@ -53,7 +53,6 @@ import com.music.bitchord.data.lyrics.LyricsRepository
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.innertube.Innertube
-import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.auth.CapturedSession
 import com.music.bitchord.auth.WebSessionMode
 import com.music.bitchord.data.model.Account
@@ -6023,8 +6022,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
             // Every resolver verdict and personalised page belongs to the
             // identity that was active before validation succeeded.
-            StreamResolver.onSessionChanged()
-            if (wasSignedIn) clearListenerState()
+                if (wasSignedIn) clearListenerState()
             reloadForAccount()
             loadChannels(force = true)
             onComplete(true)
@@ -6065,7 +6063,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         Innertube.selectChannel(profile.pageId, profile.dataSyncId, profile.authUser)
         _selectedChannelKey.value = profile.profileId
         _selectedChannelName.value = profile.name
-        StreamResolver.onSessionChanged()
         clearListenerState(restoreCached = true)
         reloadForAccount()
     }
@@ -6202,7 +6199,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // The mirror image: verdicts reached with a session in hand say nothing
         // about what an anonymous walk will be told, and the clients stood down
         // for refusing the session deserve a fresh hearing without it.
-        StreamResolver.onSessionChanged()
         _signedIn.value = false
         _account.value = null
         Innertube.selectChannel(null, null)
