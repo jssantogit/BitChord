@@ -1,15 +1,11 @@
 package com.music.bitchord.data.innertube
 
-import android.content.Context
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.data.MonotonicClock
 import com.music.bitchord.data.TrackLog
-import android.webkit.CookieManager
-import com.music.bitchord.data.innertube.potoken.PoTokenGenerator
-import com.music.bitchord.data.innertube.potoken.PoTokenWebView
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.SourceResolver
 
@@ -47,25 +43,4 @@ object AndroidStreamHooks {
         InnerTubeXResolver.debugLogging = BuildConfig.DEBUG
     }
 
-    /** What `InnerTubeXResolver.init(context)` did when it lived in the app. */
-    fun initInnerTubeX(context: Context) {
-        val app = context.applicationContext
-        val prefs = app.getSharedPreferences("innertubex_player_config", Context.MODE_PRIVATE)
-        // BotGuard PoTokens minted in a hidden WebView; what WEB_REMIX needs for age-restricted tracks.
-        val webViewSupported by lazy { runCatching { CookieManager.getInstance() }.isSuccess }
-        val poTokens = PoTokenGenerator(
-            createMinter = { PoTokenWebView.getNewPoTokenGenerator(app) },
-            available = { webViewSupported },
-        )
-        InnerTubeXResolver.init(
-            filesDir = app.filesDir,
-            store = object : InnerTubeXResolver.ConfigStore {
-                override fun getString(key: String): String? = prefs.getString(key, null)
-                override fun getLong(key: String): Long? = if (prefs.contains(key)) prefs.getLong(key, 0L) else null
-                override fun putString(key: String, value: String) = prefs.edit().putString(key, value).apply()
-                override fun putLong(key: String, value: Long) = prefs.edit().putLong(key, value).apply()
-            },
-            poTokenProvider = poTokens.asTokenProvider(),
-        )
-    }
 }
