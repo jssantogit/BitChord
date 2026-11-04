@@ -127,6 +127,8 @@ import com.music.bitchord.data.sortedForLibrary
 import com.music.bitchord.data.useTrackTags
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.SourceQuality
+import com.music.bitchord.ui.components.SourceQualityBadge
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
 import com.music.bitchord.data.canvas.AppleArtistArt
@@ -1238,6 +1240,7 @@ internal fun NativeReleaseHeaderLayout(
     meta: String,
     palette: ArtworkPalette,
     rating: Double? = null,
+    quality: SourceQuality? = null,
     onRate: (() -> Unit)? = null,
     sleeveSize: Dp,
     artwork: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
@@ -1283,7 +1286,10 @@ internal fun NativeReleaseHeaderLayout(
                         else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
             )
         }
-        if (onRate != null) {
+        // The original rating slot shows first-party stars when saved. With
+        // no rating it uses the exact Now Playing source badge; never invent
+        // "Hi-Res" from bitrate or claim provider evidence was played.
+        if (rating != null && onRate != null) {
             Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
@@ -1291,19 +1297,19 @@ internal fun NativeReleaseHeaderLayout(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .testTag("native-album-rating"),
             ) {
-                if (rating != null) {
-                    CanonicalRatingStars(
-                        rating = RatingDisplay(localValue = rating),
-                        color = palette.onBackground,
-                    )
-                } else {
-                    Text(
-                        text = "Avaliar álbum",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = palette.onBackgroundVariant,
-                    )
-                }
+                CanonicalRatingStars(
+                    rating = RatingDisplay(localValue = rating),
+                    color = palette.onBackground,
+                )
             }
+        } else if (rating == null && quality != null) {
+            Spacer(Modifier.height(8.dp))
+            SourceQualityBadge(
+                quality = quality,
+                color = palette.onBackgroundVariant,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.testTag("native-album-source-quality"),
+            )
         }
         if (meta.isNotBlank()) {
             Spacer(Modifier.height(4.dp))
