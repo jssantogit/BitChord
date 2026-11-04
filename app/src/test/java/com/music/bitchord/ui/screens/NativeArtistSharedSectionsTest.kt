@@ -103,4 +103,34 @@ class NativeArtistSharedSectionsTest {
         assertTrue(!nativeArtistLegacyRankedFeed("opensubsonic:artist:abc"))
     }
 
+    @Test fun artistStarCapabilityNeverMixesFollowAndNativeRating() {
+        assertEquals(
+            NativeArtistStarKind.FOLLOW,
+            nativeArtistStarKind(isSubscribed = false, canRate = true),
+        )
+        assertEquals(
+            NativeArtistStarKind.FOLLOW,
+            nativeArtistStarKind(isSubscribed = true, canRate = true),
+        )
+        assertEquals(
+            NativeArtistStarKind.RATE,
+            nativeArtistStarKind(isSubscribed = null, canRate = true),
+        )
+        assertEquals(
+            NativeArtistStarKind.UNAVAILABLE,
+            nativeArtistStarKind(isSubscribed = null, canRate = false),
+        )
+    }
+
+    @Test fun artistFollowAndRatingAreCapabilitiesNotBrowseIdPrefixRules() {
+        assertEquals(
+            NativeArtistStarKind.RATE,
+            nativeArtistStarKind(isSubscribed = null, canRate = true),
+        )
+        assertEquals(
+            NativeArtistStarKind.UNAVAILABLE,
+            nativeArtistStarKind(isSubscribed = null, canRate = false),
+        )
+    }
+
 }
