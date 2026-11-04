@@ -1,0 +1,146 @@
+name: Android KSP Incremental Dirty-Set Pilot
+
+# Standalone opt-in experiment, not a required check or protected main writer.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-ci-ksp-dirty-reasons-pilot.yml'
+      - 'tools/android_ci_ksp_dirty_probe.py'
+      - 'tests/test_ci_ksp_dirty_reasons_pilot.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-ksp-dirty-probe-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'infra/android-ci-ksp-dirty-reasons-pilot-v0'
+    name: KSP dirty-set · ${{ matrix.mode }} (non-required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        mode: [sharedUi, control]
+    steps:
+      - name: Checkout exact pilot HEAD
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle (read-only cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Configure test-only non-secret properties
+        run: |
+          printf '%s\n' 'LASTFM_API_KEY=ci-placeholder' 'LASTFM_SECRET=ci-placeholder' > local.properties
+          chmod +x gradlew
+
+      - name: Test strict redaction and full-test contracts
+        run: python3 -m unittest discover -s tests -p test_ci_ksp_dirty_reasons_pilot.py -v
+
+      - name: Full Android suite with locally summarized KSP incremental logs
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            sharedUi|control) ;;
+            *) echo 'Unexpected probe case'; exit 2 ;;
+          esac
+          source='sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui/player/LyricFocus.kt'
+          test -f "$source"
+          git diff --quiet HEAD -- "$source"
+          trap 'git restore -- "$source"' EXIT
+
+          run_full() {
+            local log="$1"
+            # KSP2 can place private source names and symbol IDs in both
+            # Gradle output and kspCaches. Keep all raw output on this runner.
+            shift
+            if ! ./gradlew --build-cache --console=plain -Pksp.incremental.log=true -Pbitchord.bundleWear=false :app:testDevDebugUnitTest "$@" > "$log" 2>&1; then
+              echo 'Android full suite failed. Raw Gradle logs are private to this ephemeral runner.' >&2
+              return 1
+            fi
+          }
+
+          run_full "$RUNNER_TEMP/ksp-before.log"
+          python3 tools/android_ci_ksp_dirty_probe.py \
+            --log "$RUNNER_TEMP/ksp-before.log" \
+            --ksp-root app/build/kspCaches --case "$MODE" --phase before \
+            > "$RUNNER_TEMP/summary-before.json"
+
+          if [[ "$MODE" == sharedUi ]]; then
+            printf '\n// Temporary ABI-neutral KSP logging probe; not shipped.\n' >> "$source"
+            if git diff --quiet HEAD -- "$source"; then
+              echo 'Expected source perturbation not detected'; exit 2
+            fi
+          else
+            git diff --quiet HEAD -- "$source"
+          fi
+
+          # --info is enabled only for the second build, with all raw
+          # diagnostics redirected to runner-local temporary storage.
+          run_full "$RUNNER_TEMP/ksp-after.log" --info
+          # The structure diagnostic runs BEFORE strict parsing and does not
+          # expose any raw Gradle content, including on an error path.
+          echo 'KSP_P10_LOG_SHAPE'
+          python3 tools/android_ci_ksp_dirty_probe.py \
+            --log "$RUNNER_TEMP/ksp-after.log" \
+            --ksp-root app/build/kspCaches --case "$MODE" --phase after \
+            --shape-log
+          echo 'KSP_P10_STAGE_AFTER_COUNTS'
+          python3 tools/android_ci_ksp_dirty_probe.py \
+            --log "$RUNNER_TEMP/ksp-after.log" \
+            --ksp-root app/build/kspCaches --case "$MODE" --phase after \
+            > "$RUNNER_TEMP/summary-after.json"
+
+          # Gradle task up-to-date messages can contain private file paths,
+          # so parse only predefined input-kind categories before export.
+          echo 'KSP_P10_STAGE_INPUT_CLASSIFICATION'
+          python3 tools/android_ci_ksp_dirty_probe.py \
+            --log "$RUNNER_TEMP/ksp-after.log" \
+            --ksp-root app/build/kspCaches --case "$MODE" --phase after \
+            --reason-log > "$RUNNER_TEMP/summary-reasons.json"
+          echo 'KSP_P10_STAGE_ALL_SUMMARIES_READY'
+
+          {
+            echo '### KSP2 incremental dirty-set presence (sanitized)'
+            echo "Case: $MODE"
+            echo 'Only bounded numeric counts and predefined Gradle task states follow.'
+            echo 'Neither raw Gradle logs nor KSP source/symbol/dependency names are uploaded.'
+            echo '#### Before source change'
+            echo '```json'
+            cat "$RUNNER_TEMP/summary-before.json"
+            echo '```'
+            echo '#### After source change'
+            echo '```json'
+            cat "$RUNNER_TEMP/summary-after.json"
+            echo '```'
+            echo '#### Gradle task input-kind observations (not causal proof)'
+            echo '```json'
+            cat "$RUNNER_TEMP/summary-reasons.json"
+            echo '```'
+            echo 'Line totals are records, not independently verified dirty-source counts.'
+            echo 'An executed KSP task does not by itself prove its invalidation cause.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # Only the strictly allowlisted, redacted JSON reaches Actions
+          # job logs, so first-party GH REST can audit the counts directly.
+          echo 'KSP_SANITIZED_SUMMARY_BEFORE'
+          cat "$RUNNER_TEMP/summary-before.json"
+          echo 'KSP_SANITIZED_SUMMARY_AFTER'
+          cat "$RUNNER_TEMP/summary-after.json"
+          echo 'KSP_SANITIZED_INPUT_REASONS'
+          cat "$RUNNER_TEMP/summary-reasons.json"
