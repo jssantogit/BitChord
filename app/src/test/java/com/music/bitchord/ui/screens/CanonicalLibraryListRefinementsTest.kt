@@ -130,7 +130,7 @@ class CanonicalLibraryListRefinementsTest {
     @Test fun albumFooterKeepsOnlyVerifiedMetadataAndExactDuration() {
         val tracks = listOf(
             CanonicalBrowseTrack("r1", "A", "Artist", 70_000L, null, emptyList()),
-            CanonicalBrowseTrack("r2", "B", "Artist", 80_000L, null, emptyList()),
+            CanonicalBrowseTrack("r2", "B", "Artist", 60_000L, null, emptyList()),
         )
         val metadata = canonicalAlbumFooterMetadata("2017-12-07", tracks)
         assertEquals("7 de dezembro de 2017", metadata.date)
