@@ -2131,13 +2131,8 @@ private fun NativeUnifiedLibraryBody(
         )
         return
     }
-    // A genuine release detail inherits the exact native DetailScreen
-    // artwork palette. Browse categories keep the neutral Library surface.
-    val palette = rememberArtworkPalette(
-        imageUrl = if (isAlbumDetail) canonicalNativeReleasePaletteUri(
-            heroArtworkUri, heroArtworkTrack?.artworkUri,
-        ) else null,
-    )
+    // Album detail exits into its native release compositor above.
+    val palette = rememberArtworkPalette(imageUrl = null)
     val albumItems = (entityState as? CanonicalEntityBrowseState.Albums)?.releases.orEmpty()
     val artistItems = (entityState as? CanonicalEntityBrowseState.Artists)?.artists.orEmpty()
     // Browse-only artist fallback IDs are intentionally not real ArtistIds.
@@ -2207,11 +2202,8 @@ private fun NativeUnifiedLibraryBody(
     val currentToggleSelection by rememberUpdatedState(onToggleSelection)
 
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(
-            if (isAlbumDetail) palette.background else MaterialTheme.colorScheme.background,
-        ),
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     ) {
-        val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
         val dragModifier = if (canLongPressSelect) {
             Modifier.pointerInput(dragRows, dragIndices, gridMode) {
                 val visited = mutableSetOf<CanonicalLibrarySelection>()
@@ -2267,74 +2259,16 @@ private fun NativeUnifiedLibraryBody(
             contentPadding = PaddingValues(bottom = 112.dp),
         ) {
             item(key = "native-library-header") {
-                if (isAlbumDetail) {
-                    // Release detail keeps its genuine artwork and action row.
-                    NativeReleaseHeaderLayout(
-                        title = title,
-                        credit = albumCredit,
-                        meta = "",
-                        rating = albumRating,
-                        quality = albumQuality,
-                        onRate = onRateAlbum,
-                        palette = palette,
-                        sleeveSize = sleeve,
-                        artwork = {
-                            when {
-                                !heroArtworkUri.isNullOrBlank() &&
-                                    (heroArtworkUri.startsWith("content://") ||
-                                        heroArtworkUri.startsWith("file://")) -> AsyncImage(
-                                    model = heroArtworkUri,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(),
-                                )
-                                heroArtworkTrack != null -> CanonicalUnifiedArtwork(
-                                    heroArtworkTrack, artworkLoader, Modifier.fillMaxSize(),
-                                )
-                                else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
-                            }
-                        },
-                        actions = {
-                            if (tracks.isNotEmpty()) {
-                                Spacer(Modifier.height(18.dp))
-                                NativeReleaseActionRow(
-                                    onPlay = { onPlayAll(tracks, false) },
-                                    onShuffle = { onPlayAll(tracks, true) },
-                                    isLocal = false,
-                                    canShuffle = tracks.isNotEmpty(),
-                                    reservePinAction = true,
-                                    isPinnedInLibrary = albumPinned,
-                                    onTogglePin = onToggleAlbumPin,
-                                )
-                            }
-                        },
-                    )
-                } else {
-                    NativeUnifiedLibraryCategoryHeader(
-                        title = title,
-                        context = selectedContext,
-                        query = query,
-                        onQueryChange = onQueryChange,
-                        searching = searching,
-                        palette = palette,
-                        hasPlayableTracks = count > 0 && tracks.isNotEmpty(),
-                        onPlayAll = { shuffle -> onPlayAll(tracks, shuffle) },
-                    )
-                }
-            }
-            // Only the release detail has a collapsible search field; root
-            // categories display the same native field permanently in header.
-            if (isAlbumDetail && (searching || query.isNotBlank())) {
-                item(key = "native-library-search") {
-                    DetailSearchField(
-                        query = query,
-                        onQueryChange = onQueryChange,
-                        onClose = { onQueryChange("") },
-                        autoFocus = searching,
-                        onFocused = {},
-                        palette = palette,
-                    )
-                }
+                NativeUnifiedLibraryCategoryHeader(
+                    title = title,
+                    context = selectedContext,
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    searching = searching,
+                    palette = palette,
+                    hasPlayableTracks = count > 0 && tracks.isNotEmpty(),
+                    onPlayAll = { shuffle -> onPlayAll(tracks, shuffle) },
+                )
             }
             when (selectedContext) {
                 CanonicalSmartFilterContext.SONGS -> when (filteredState) {
@@ -2346,19 +2280,6 @@ private fun NativeUnifiedLibraryBody(
                     }
                     is CanonicalSongFilterState.Ready -> if (tracks.isEmpty()) item {
                         RemoteBrowseMessage("Nenhuma música nesta seleção.")
-                    } else if (isAlbumDetail) {
-                        // An album is always a numbered release running order,
-                        // even if the root Músicas view was switched to grid.
-                        // Reuse CanonicalTrackRow's native frame, text and menu.
-                        nativeCanonicalAlbumTrackRows(
-                            tracks = tracks,
-                            artworkLoader = artworkLoader,
-                            palette = palette,
-                            trackNumbers = albumTrackNumbers,
-                            onTrackPlay = onTrackPlay,
-                            onTrackEditRating = onTrackEditRating,
-                            onTrackOptions = onTrackOptions,
-                        )
                     } else if (viewType == LibraryViewType.GRID) {
                         gridRows(
                             tracks, 2, key = { it.recordingId },
@@ -2600,14 +2521,6 @@ private fun NativeUnifiedLibraryBody(
                         }
                     }
                     is CanonicalEntityBrowseState.Albums -> Unit
-                }
-            }
-            if (isAlbumDetail && albumFooter != null) {
-                item(key = "native-album-footer") {
-                    NativeAlbumMetadataFooter(
-                        metadata = albumFooter,
-                        palette = palette,
-                    )
                 }
             }
         }
