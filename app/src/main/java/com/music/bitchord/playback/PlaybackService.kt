@@ -8448,29 +8448,20 @@ class PlaybackService : MediaLibraryService() {
                         }
                     }
                     id.startsWith("playlist:") -> {
-                        val playlistId = id.removePrefix("playlist:")
-                        val songs = try {
-                            withTimeoutOrNull(3000L) {
-                                YtMusicRepository.browseSongs("VL$playlistId").getOrNull()?.songs
-                                    ?: YtMusicRepository.browseSongs(playlistId).getOrNull()?.songs
-                            } ?: emptyList()
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
-                        songs.forEach { songCache[it.videoId] = it }
-                        resolved.addAll(songs.map { it.toMediaItem() })
+                        // Historical YouTube playlist IDs are not authorized
+                        // sources, even when MediaBrowser restores them.
                     }
                     id.startsWith("browse:") -> {
                         val browseId = id.removePrefix("browse:")
-                        val songs = try {
-                            withTimeoutOrNull(3000L) {
-                                YtMusicRepository.browseSongs(browseId).getOrNull()?.songs
-                            } ?: emptyList()
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
+                        val stored = com.music.bitchord.data.spotify.LocalPlaylistStore
+                            .getPlaylist(browseId)
+                        val songs = stored?.songs?.let { entries ->
+                            canonicalAutoPlaylistSongs(entries) { legacyId ->
+                                Downloads.verifiedSavedUri(legacyId)
+                            }
+                        }.orEmpty()
                         songs.forEach { songCache[it.videoId] = it }
-                        resolved.addAll(songs.map { it.toMediaItem() })
+                        resolved.addAll(songs.map(Song::toMediaItem))
                     }
                     id == MEDIA_ROOT_ID || id == MEDIA_RECENTS_ID -> {
                         val songs = cachedRecentsSongs()
@@ -8492,20 +8483,15 @@ class PlaybackService : MediaLibraryService() {
                         resolved.addAll(downloaded.map { it.toMediaItem() })
                     }
                     id == MEDIA_PLAYLISTS_ID -> {
-                        val songs = try {
-                            withTimeoutOrNull(2500L) {
-                                val playlists = YtMusicRepository.userPlaylists().getOrNull() ?: emptyList()
-                                val first = playlists.firstOrNull()
-                                if (first != null) {
-                                    YtMusicRepository.browseSongs("VL${first.playlistId}").getOrNull()?.songs
-                                        ?: YtMusicRepository.browseSongs(first.playlistId).getOrNull()?.songs
-                                } else null
-                            } ?: emptyList()
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
+                        val first = com.music.bitchord.data.spotify.LocalPlaylistStore
+                            .playlists.value.firstOrNull()
+                        val songs = first?.songs?.let { entries ->
+                            canonicalAutoPlaylistSongs(entries) { legacyId ->
+                                Downloads.verifiedSavedUri(legacyId)
+                            }
+                        }.orEmpty()
                         songs.forEach { songCache[it.videoId] = it }
-                        resolved.addAll(songs.map { it.toMediaItem() })
+                        resolved.addAll(songs.map(Song::toMediaItem))
                     }
                     id == MEDIA_LOCAL_MUSIC_ID -> {
                         val local = LocalMediaRepository.getLocalMusic(this@PlaybackService)
@@ -8519,31 +8505,31 @@ class PlaybackService : MediaLibraryService() {
                         resolved.add(item)
                     }
                     item.requestMetadata.mediaUri != null -> {
-                        val uri = item.requestMetadata.mediaUri!!
-                        val videoId = uri.getQueryParameter("v") ?: uri.lastPathSegment.orEmpty()
-                        if (videoId.isNotEmpty() && !videoId.startsWith("http")) {
-                            val cached = songCache[videoId]
-                            if (cached != null) {
-                                resolved.add(cached.toMediaItem())
-                            } else {
-                                resolved.add(Song(videoId = videoId, title = item.mediaMetadata.title?.toString() ?: "Track", artist = item.mediaMetadata.artist?.toString() ?: "Artist", thumbnailUrl = null).toMediaItem())
-                            }
-                        } else {
-                            resolved.add(item.buildUpon().setUri(uri).build())
+                        val rawUri = item.requestMetadata.mediaUri!!.toString()
+                        val approved = canonicalAutoExternalUri(rawUri)
+                        if (approved != null) {
+                            val song = Song(
+                                videoId = approved,
+                                title = item.mediaMetadata.title?.toString() ?: "Track",
+                                artist = item.mediaMetadata.artist?.toString() ?: "Artist",
+                                thumbnailUrl = null,
+                                localUri = approved,
+                            )
+                            resolved.add(song.toMediaItem())
                         }
                     }
                     else -> {
                         val cached = songCache[id]
-                        if (cached != null) {
-                            resolved.add(cached.toMediaItem())
-                        } else {
-                            val song = item.toSong()
-                            resolved.add(song.toMediaItem())
-                        }
+                        val song = cached ?: item.toSong()
+                        canonicalAutoPlaylistSongs(listOf(song)) { legacyId ->
+                            Downloads.verifiedSavedUri(legacyId)
+                        }.firstOrNull()?.let { resolved.add(it.toMediaItem()) }
                     }
                 }
             }
-            return if (resolved.isEmpty()) mediaItems else resolved
+            // Never return unvalidated original MediaItems: that previously
+            // reintroduced the very videoId we rejected above.
+            return resolved
         }
     }
 
