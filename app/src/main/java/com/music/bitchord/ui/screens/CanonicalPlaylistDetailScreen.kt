@@ -67,7 +67,7 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeDetailTrackSwipeContainer
-import com.music.bitchord.ui.components.SearchPlayingBars
+import com.music.bitchord.ui.components.NativeDetailTrackArtwork
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
@@ -268,15 +268,10 @@ internal fun CanonicalPlaylistTrackRow(
         onMore = if (available) ({ menuExpanded = true }) else null,
         opacity = if (available) 1f else 0.45f,
     ) {
-        Box(
-            Modifier.size(52.dp).clip(RoundedCornerShape(8.dp)),
-        ) {
+        NativeDetailTrackArtwork(showPlayingBars = isCurrent && isPlaying) {
             SmartPlaylistPreviewArtwork(
                 row = track, modifier = Modifier.fillMaxSize(),
             )
-            if (isCurrent && isPlaying) {
-                SearchPlayingBars(Modifier.align(Alignment.Center))
-            }
         }
         Spacer(Modifier.width(14.dp))
         NativeTrackRowText(

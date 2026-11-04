@@ -58,6 +58,7 @@ import com.music.bitchord.ui.haptics.rememberHaptics
 import kotlin.math.abs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -85,6 +86,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.style.TextAlign
@@ -524,7 +526,9 @@ private fun SongRowContent(
                 showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
             )
         } else {
-            Box(Modifier.size(52.dp)) {
+            NativeDetailTrackArtwork(
+                showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
+            ) {
                 AsyncImage(
                     model = com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                     contentDescription = null,
@@ -534,9 +538,6 @@ private fun SongRowContent(
                         .thumbnailBorder(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 )
-                if (searchPlayingStyle && isCurrent && isPlaying) {
-                    SearchPlayingBars(Modifier.align(Alignment.Center))
-                }
             }
         }
         // A number is followed by the page gutter again, so the gap from the
@@ -603,6 +604,24 @@ private fun SongRowContent(
         // Same sheet the long-press opens, for anyone who doesn't think to hold.
         if (onMore != null && !matching && !unavailable) {
             RowMoreButton(onClick = onMore, tint = subtitleColor)
+        }
+    }
+}
+
+/**
+ * Native artwork frame for playable playlist/song rows across all providers.
+ * Source-specific artwork is an injected slot; dimensions and playback bars
+ * are identical, without manufacturing a legacy Song from a RecordingId.
+ */
+@Composable
+fun NativeDetailTrackArtwork(
+    showPlayingBars: Boolean = false,
+    artwork: @Composable BoxScope.() -> Unit,
+) {
+    Box(Modifier.size(52.dp).testTag("native-detail-track-artwork")) {
+        artwork()
+        if (showPlayingBars) {
+            SearchPlayingBars(Modifier.align(Alignment.Center))
         }
     }
 }
