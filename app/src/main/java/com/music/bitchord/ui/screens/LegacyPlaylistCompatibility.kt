@@ -1,0 +1,20 @@
+package com.music.bitchord.ui.screens
+
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.playback.CanonicalRemotePlaybackUri
+
+/**
+ * Historical LocalPlaylistStore rows retain their original videoId as a
+ * compatibility alias. Only a verified on-device URI or a fully typed
+ * canonical remote playback request can enable play/queue actions.
+ */
+internal fun legacyPlaylistPlayableSong(song: Song, verifiedDownloadedUri: String? = null): Song? {
+    fun safe(uri: String?): Boolean = uri != null && (
+        uri.startsWith("content://", ignoreCase = true) ||
+            uri.startsWith("file://", ignoreCase = true) ||
+            CanonicalRemotePlaybackUri.decode(uri) != null
+        )
+    val uri = sequenceOf(song.localUri, verifiedDownloadedUri, song.videoId)
+        .firstOrNull(::safe) ?: return null
+    return song.copy(localUri = uri)
+}
