@@ -406,35 +406,37 @@ internal fun CanonicalNativeArtistDetail(
                         itemSpacing = 12.dp,
                         itemKey = { it.id },
                     ) { release ->
-                        Box(Modifier.width(152.dp)) {
-                            NativeLibraryEntityCard(
-                                title = release.title,
-                                subtitle = release.artistDisplay.orEmpty(),
-                                imageUrl = null,
-                                isArtist = false,
-                                artwork = nativeReleases.artwork[release.id]?.let { track ->
-                                    { CanonicalUnifiedArtwork(track, artworkLoader,
-                                        Modifier.fillMaxSize()) }
-                                },
-                                onClick = {
-                                    if (selectedItems.isNotEmpty()) onToggleSelection(
-                                        CanonicalLibrarySelection(
-                                            CanonicalLibraryEntityType.ALBUM, release.id,
-                                        )
-                                    ) else openedRelease = release
-                                },
-                                onMore = { onReleaseOptions(release) },
-                                selectionMode = selectedItems.isNotEmpty(),
-                                selected = CanonicalLibrarySelection(
-                                    CanonicalLibraryEntityType.ALBUM, release.id,
-                                ) in selectedItems,
-                                onToggleSelection = {
-                                    onToggleSelection(CanonicalLibrarySelection(
+                        NativeArtistReleaseCard(
+                            title = release.title,
+                            subtitle = release.artistDisplay.orEmpty(),
+                            palette = palette,
+                            modifier = Modifier.width(152.dp),
+                            onClick = {
+                                if (selectedItems.isNotEmpty()) onToggleSelection(
+                                    CanonicalLibrarySelection(
                                         CanonicalLibraryEntityType.ALBUM, release.id,
-                                    ))
-                                },
-                            )
-                        }
+                                    )
+                                ) else openedRelease = release
+                            },
+                            onMore = { onReleaseOptions(release) },
+                            selectionMode = selectedItems.isNotEmpty(),
+                            selected = CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.ALBUM, release.id,
+                            ) in selectedItems,
+                            onToggleSelection = {
+                                onToggleSelection(CanonicalLibrarySelection(
+                                    CanonicalLibraryEntityType.ALBUM, release.id,
+                                ))
+                            },
+                            artwork = {
+                                val track = nativeReleases.artwork[release.id]
+                                if (track != null) CanonicalUnifiedArtwork(
+                                    track, artworkLoader, Modifier.fillMaxSize(),
+                                ) else CoverPlaceholder(
+                                    Icons.Rounded.Album, Modifier.fillMaxSize(),
+                                )
+                            },
+                        )
                     }
                 }
             }
