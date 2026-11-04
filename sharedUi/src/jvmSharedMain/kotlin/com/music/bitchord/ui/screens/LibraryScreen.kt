@@ -118,16 +118,6 @@ fun LibraryScreen(
     showTitle: Boolean = true,
     /** Optional Android-owned canonical read-only shelf; desktop remains unchanged. */
     rediscovery: (@Composable () -> Unit)? = null,
-    /**
-     * Android-owned first-party playlist section. When supplied it replaces
-     * the legacy YouTube-backed shelf and its sign-in prompt; desktop keeps
-     * the old optional behavior until its own migration is ready.
-     */
-    playlistsSection: (@Composable () -> Unit)? = null,
-    /** Android library landing page: category navigation replaces the old shelves. */
-    navigationHome: Boolean = false,
-    /** Android-only factual local additions under the landing links. */
-    localAdditions: (@Composable () -> Unit)? = null,
 ) {
     val pinnedPlaylists by AppUi.host.pinnedPlaylists.collectAsStateWithLifecycle()
     val onDevice = stringResource(Res.string.on_device)
@@ -148,27 +138,9 @@ fun LibraryScreen(
                         text = stringResource(Res.string.library),
                         style = MaterialTheme.typography.displayLarge,
                         color = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(
-                            start = PAGE_GUTTER,
-                            end = PAGE_GUTTER,
-                            top = if (navigationHome) 4.dp else 8.dp,
-                            bottom = if (navigationHome) 0.dp else 8.dp,
-                        ),
+                        modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
                     )
                 }
-            }
-            if (navigationHome) {
-                if (links.isNotEmpty()) {
-                    item(key = "library-navigation") {
-                        LibraryLinkList(links = links, onClick = onShelfItemClick, compact = true)
-                    }
-                }
-                localAdditions?.let { section ->
-                    item(key = "recent-local-additions") { section() }
-                }
-                // The category pages own their shelves; do not render the old
-                // Replay/rediscovery/playlists blocks underneath the home links.
-                return@LazyColumn
             }
             item(key = "replay") { replay() }
             rediscovery?.let { shelf -> item(key = "rediscovery") { shelf() } }
@@ -186,11 +158,8 @@ fun LibraryScreen(
                     )
                 }
             }
-            playlistsSection?.let { section ->
-                item(key = "shelf:canonical-playlists") { section() }
-            }
             if (!signedIn) {
-                if (playlistsSection == null) item(key = "shelf:$PLAYLISTS") {
+                item(key = "shelf:$PLAYLISTS") {
                     val emptyPlaylists = HomeShelf(PLAYLISTS, emptyList())
                     PlaylistShelf(
                         shelf = emptyPlaylists,
@@ -201,7 +170,7 @@ fun LibraryScreen(
                         onShowAll = { onShowAll(emptyPlaylists) },
                     )
                 }
-                if (playlistsSection == null) item {
+                item {
                     MessageState(
                         message = stringResource(Res.string.library_sign_in_description),
                         actionLabel = stringResource(Res.string.sign_in),
@@ -221,8 +190,7 @@ fun LibraryScreen(
                     // makes one — so the row is drawn either way, empty but
                     // for the tile that creates the first playlist.
                     val shelves = state.data.shelves
-                    if (playlistsSection == null &&
-                        shelves.none { it.title == PLAYLISTS }) {
+                    if (shelves.none { it.title == PLAYLISTS }) {
                         item(key = "shelf:$PLAYLISTS") {
                             val emptyPlaylists = HomeShelf(PLAYLISTS, emptyList())
                             PlaylistShelf(
@@ -235,8 +203,7 @@ fun LibraryScreen(
                             )
                         }
                     }
-                    shelves.filter { playlistsSection == null ||
-                        it.title != PLAYLISTS }.forEach { shelf ->
+                    shelves.forEach { shelf ->
                         item(key = "shelf:${shelf.title}") {
                             if (shelf.title == PLAYLISTS) {
                                 val pinnedFirst = shelf.pinnedFirst(pinnedPlaylists)
@@ -276,7 +243,6 @@ data class LibraryLink(
     val icon: ImageVector,
     val logo: DrawableResource? = null,
     val onClick: (() -> Unit)? = null,
-    val enabled: Boolean = true,
 )
 
 /**
@@ -285,24 +251,15 @@ data class LibraryLink(
  * look alike because none of them has artwork.
  */
 @Composable
-private fun LibraryLinkList(
-    links: List<LibraryLink>,
-    onClick: (ShelfItem) -> Unit,
-    compact: Boolean = false,
-) {
-    Column(Modifier.padding(
-        top = if (compact) 0.dp else 4.dp,
-        bottom = if (compact) 12.dp else 22.dp,
-    )) {
+private fun LibraryLinkList(links: List<LibraryLink>, onClick: (ShelfItem) -> Unit) {
+    Column(Modifier.padding(top = 4.dp, bottom = 22.dp)) {
         links.forEachIndexed { index, link ->
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 54.dp)
-                    .clickable(enabled = link.enabled) {
-                        link.onClick?.invoke() ?: onClick(link.item)
-                    }
+                    .clickable { link.onClick?.invoke() ?: onClick(link.item) }
                     .padding(horizontal = PAGE_GUTTER),
             ) {
                 if (link.logo != null) {
@@ -311,16 +268,14 @@ private fun LibraryLinkList(
                     Icon(
                         painter = painterResource(link.logo),
                         contentDescription = null,
-                        tint = if (link.enabled) MaterialTheme.colorScheme.onBackground
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(LINK_ICON_SIZE),
                     )
                 } else {
                     Icon(
                         imageVector = link.icon,
                         contentDescription = null,
-                        tint = if (link.enabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(LINK_ICON_SIZE),
                     )
                 }
@@ -328,8 +283,7 @@ private fun LibraryLinkList(
                 Text(
                     text = link.item.title,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = if (link.enabled) MaterialTheme.colorScheme.onBackground
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),

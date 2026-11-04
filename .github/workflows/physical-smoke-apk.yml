@@ -3,12 +3,6 @@ name: Android Physical Smoke APK
 # An APK is prepared only when someone explicitly schedules a physical smoke.
 # The main Android CI remains test-only and keeps its required status context.
 on:
-  # One explicitly authorized APK request for smart playlists #192.
-  # This scoped push fallback is needed while PR #193 has a conflicted merge
-  # ref and the connected GitHub integration cannot dispatch workflows.
-  push:
-    branches: [listening/smart-playlists-v2-192]
-    paths: [docs/listening/issue-192-physical-smoke-request.md]
   workflow_dispatch:
     inputs:
       smoke_plan:
@@ -32,25 +26,11 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') }}
+          SMOKE_PLAN: ${{ inputs.smoke_plan }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # Regression guard: the Nov 2 smoke APK lacked approved #202 UI because
-      # its branch included #193 metadata features but not the UI merge.
-      # Fail visibly before creating another visually outdated APK.
-      - name: Require reconciled native playlist UI (#202)
-        shell: bash
-        run: |
-          set -euo pipefail
-          git merge-base --is-ancestor 7fdc5346dfc2c7b30ec84570129def1027545253 HEAD ||
-            { echo "::error::Native playlist UI PR #202 is absent from APK HEAD"; exit 1; }
-          test -f app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistVisualLanguage.kt
-          grep -Fq 'Descrição (opcional)' app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistV2WizardUi.kt
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

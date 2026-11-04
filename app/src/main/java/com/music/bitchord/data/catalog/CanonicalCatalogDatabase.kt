@@ -16,7 +16,6 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecordingArtistCreditEntity::class,
         ReleaseArtistCreditEntity::class,
         MediaAssetEntity::class,
-        MediaAssetTagsEntity::class,
         ExternalIdentityEntity::class,
         RemoteRatingEvidenceEntity::class,
         RemoteRatingCoverageEntity::class,
@@ -32,7 +31,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MusicBrainzCoverArtCacheEntity::class,
         CatalogReleaseTrackSourceEntity::class,
     ],
-    version = 15,
+    version = 11,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -387,56 +386,6 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
-        /** Optional OpenSubsonic tags never modify established Recording identities. */
-        internal val MIGRATION_11_12 = object : Migration(11, 12) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS `catalog_media_asset_tags` (
-                        `mediaAssetId` TEXT NOT NULL,
-                        `genresJson` TEXT,
-                        `moodsJson` TEXT,
-                        PRIMARY KEY(`mediaAssetId`),
-                        FOREIGN KEY(`mediaAssetId`) REFERENCES `catalog_media_asset`(`id`)
-                            ON UPDATE NO ACTION ON DELETE CASCADE
-                    )
-                    """.trimIndent(),
-                )
-            }
-        }
-
-        /** New numeric metadata is additive and remains owned by one MediaAsset. */
-        internal val MIGRATION_12_13 = object : Migration(12, 13) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
-                    "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `bpmsJson` TEXT",
-                )
-                db.execSQL(
-                    "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `stylesJson` TEXT",
-                )
-                db.execSQL(
-                    "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `localSourceFingerprint` TEXT",
-                )
-                db.execSQL(
-                    "ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `localParsedFingerprint` TEXT",
-                )
-            }
-        }
-
-        internal val MIGRATION_13_14 = object : Migration(13, 14) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `catalog_media_asset_tags` ADD COLUMN `composersJson` TEXT")
-            }
-        }
-
-        /** Integrates indexed MediaStore technical fields from UI branch without rewriting old tags. */
-        internal val MIGRATION_14_15 = object : Migration(14, 15) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `catalog_media_asset` ADD COLUMN `localGenre` TEXT")
-                db.execSQL("ALTER TABLE `catalog_media_asset` ADD COLUMN `localBitrateBps` INTEGER")
-            }
-        }
-
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -449,7 +398,7 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15,
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11,
                     )
                     .build()
                     .also { instance = it }

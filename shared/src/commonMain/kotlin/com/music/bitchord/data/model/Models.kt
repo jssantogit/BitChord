@@ -135,23 +135,6 @@ data class Song(
     val playbackSourceType: PlaybackSourceType? = null,
     /** Browse id for an album, playlist, or other source page. */
     val playbackSourceId: String? = null,
-    /**
-     * Optional source-authored local file tags, not Recording-wide labels.
-     * Null = unobserved/unsupported; empty = observed and explicitly empty.
-     * Remote rows never inherit these from a local copy of the Recording.
-     */
-    val localGenres: List<String>? = null,
-    val localMoods: List<String>? = null,
-    /** Optional tempo tag(s) from the local file, never inferred from playback. */
-    val localBpms: List<Double>? = null,
-    /** Optional local embedded author credits, never Recording-wide truth. */
-    val localComposers: List<String>? = null,
-    /** MediaStore size is part of the incremental local tag-header cache key. */
-    val localSizeBytes: Long? = null,
-    /** Legacy MediaStore genre, kept scoped to the local file. */
-    val localGenre: String? = null,
-    /** Positive MediaStore bitrate in bits/s, independent of BPM. */
-    val localBitrateBps: Long? = null,
 ) {
     /** Legacy derived property: true if and only if [queueTier] is [QueueTier.AUTOPLAY]. */
     val fromAutoplay: Boolean get() = queueTier == QueueTier.AUTOPLAY
@@ -183,8 +166,6 @@ data class Song(
         playbackSource: String? = null,
         playbackSourceType: PlaybackSourceType? = null,
         playbackSourceId: String? = null,
-        localGenre: String? = null,
-        localBitrateBps: Long? = null,
     ) : this(
         videoId = videoId,
         title = title,
@@ -212,8 +193,6 @@ data class Song(
         playbackSource = playbackSource,
         playbackSourceType = playbackSourceType,
         playbackSourceId = playbackSourceId,
-        localGenre = localGenre,
-        localBitrateBps = localBitrateBps,
     )
 }
 

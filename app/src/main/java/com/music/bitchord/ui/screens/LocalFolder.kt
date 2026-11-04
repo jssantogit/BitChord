@@ -137,16 +137,6 @@ enum class LocalFolderTab { SONGS, ARTISTS, ALBUMS }
 class LocalFolderState {
     var tab by mutableStateOf(LocalFolderTab.SONGS)
 
-    // Per-category view choice: changing Artists must never alter Albums or Songs.
-    // The folder's original preference is still the initial choice for each tab.
-    private var viewChoices by mutableStateOf<Map<LocalFolderTab, LibraryViewType>>(emptyMap())
-    fun viewTypeFor(tab: LocalFolderTab, default: LibraryViewType): LibraryViewType =
-        viewChoices[tab] ?: default
-
-    fun setViewTypeFor(tab: LocalFolderTab, viewType: LibraryViewType) {
-        viewChoices = viewChoices + (tab to viewType)
-    }
-
     var selectedIds by mutableStateOf<Set<String>>(emptySet())
         private set
     var selectedGroups by mutableStateOf<Set<String>>(emptySet())
@@ -240,7 +230,6 @@ internal fun LazyListScope.localFolderItems(
     groups: List<LocalGroup>,
     query: String,
     columns: Int,
-    hideTabPicker: Boolean = false,
     palette: ArtworkPalette,
     currentSong: Song?,
     isPlaying: Boolean,
@@ -248,7 +237,7 @@ internal fun LazyListScope.localFolderItems(
     onSongLongPress: (Song) -> Unit,
     onSongSwipe: (Song) -> Unit,
 ) {
-    if (!hideTabPicker) item(key = "folder-tabs") {
+    item(key = "folder-tabs") {
         SegmentedControl(
             options = listOf(
                 stringResource(R.string.songs),
@@ -290,10 +279,10 @@ internal fun LazyListScope.localFolderItems(
         if (folder.selectable) state.select(song) else onSongLongPress(song)
     }
     val groupClick: (LocalGroup) -> Unit = { group ->
-        if (state.selecting && group.type != BrowseType.ARTIST) state.toggle(group) else folder.onOpenGroup(group)
+        if (state.selecting && group.type != BrowseType.OTHER) state.toggle(group) else folder.onOpenGroup(group)
     }
     val groupHold: (LocalGroup) -> Unit = { group ->
-        if (folder.selectable && group.type != BrowseType.ARTIST) state.select(group) else folder.onGroupLongPress(group)
+        if (folder.selectable && group.type != BrowseType.OTHER) state.select(group) else folder.onGroupLongPress(group)
     }
 
     val isCurrentRow = playingRowMatcher(songs, currentSong)
@@ -374,7 +363,7 @@ internal fun LazyListScope.localFolderItems(
  * A short last row keeps its cards the width of the rest rather than
  * stretching them across the gap.
  */
-internal fun <T> LazyListScope.gridRows(
+private fun <T> LazyListScope.gridRows(
     items: List<T>,
     columns: Int,
     key: (T) -> Any,
@@ -513,7 +502,7 @@ private fun ArtistRow(
             palette = palette,
             modifier = Modifier.weight(1f),
         )
-        // The whole row is a navigation target; no decorative chevron.
+        TrailingGlyph(selected = false, palette = palette)
     }
 }
 
@@ -671,10 +660,7 @@ private fun AlbumRow(
             palette = palette,
             modifier = Modifier.weight(1f),
         )
-        if (selected) {
-            Icon(Icons.Rounded.Check, contentDescription = "Selecionado",
-                tint = palette.accent, modifier = Modifier.size(20.dp))
-        }
+        TrailingGlyph(selected = selected, palette = palette)
     }
 }
 

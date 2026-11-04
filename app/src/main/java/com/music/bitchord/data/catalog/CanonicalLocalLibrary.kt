@@ -10,8 +10,6 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import java.util.Locale
 import java.util.UUID
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 internal object CanonicalLocalLibrary {
     internal const val LOCAL_MEDIASTORE_PROVIDER = "local-mediastore"
@@ -27,19 +25,7 @@ internal object CanonicalLocalLibrary {
      */
     suspend fun sync(context: Context, scannedSongs: List<Song>): List<Song> {
         val database = CanonicalCatalogDatabase.get(context)
-        val result = syncWithDatabase(context, database, scannedSongs)
-        // Header probes are incremental and asynchronous: no file decoding or
-        // tag I/O while Room holds the local-library transaction.
-        LocalEmbeddedTagEnricher.schedule(context.applicationContext, database)
-        return result
-    }
-
-    /** Real Room test seam; retains the exact production transaction and prune guard. */
-    internal suspend fun syncWithDatabase(
-        context: Context,
-        database: CanonicalCatalogDatabase,
-        scannedSongs: List<Song>,
-    ): List<Song> = database.withTransaction {
+        return database.withTransaction {
             val dao = database.catalogDao()
             val candidates = scannedSongs.mapNotNull(::candidateFromLegacySong)
             val seenSourceKeys = ArrayList<String>(candidates.size)
@@ -85,35 +71,6 @@ internal object CanonicalLocalLibrary {
                         dateAddedSeconds = candidate.dateAddedSeconds,
                         dateModifiedSeconds = candidate.dateModifiedSeconds,
                         artworkUri = candidate.artworkUri,
-                        localGenre = candidate.localGenre,
-                        localBitrateBps = candidate.localBitrateBps,
-                    ),
-                )
-                // Preserve completed embedded-tag evidence only if the source
-                // timestamp+size and extractor schema revision still match.
-                // A changed file immediately invalidates old positive tags.
-                val previousTags = dao.mediaAssetTagsById(mediaAssetId)
-                val fingerprint = candidate.sourceFingerprint
-                val reuse = fingerprint != null &&
-                    previousTags?.localParsedFingerprint == fingerprint
-                dao.upsertMediaAssetTags(
-                    MediaAssetTagsEntity(
-                        mediaAssetId = mediaAssetId,
-                        genresJson = mergedLocalTagJson(
-                            candidate.genres, previousTags?.genresJson.takeIf { reuse },
-                        ),
-                        moodsJson = mergedLocalTagJson(
-                            candidate.moods, previousTags?.moodsJson.takeIf { reuse },
-                        ),
-                        bpmsJson = mergedLocalBpmJson(
-                            candidate.bpms, previousTags?.bpmsJson.takeIf { reuse },
-                        ),
-                        stylesJson = if (reuse) previousTags?.stylesJson else null,
-                        composersJson = mergedLocalTagJson(
-                            candidate.composers, previousTags?.composersJson.takeIf { reuse },
-                        ),
-                        localSourceFingerprint = fingerprint,
-                        localParsedFingerprint = if (reuse) fingerprint else null,
                     ),
                 )
 
@@ -202,6 +159,7 @@ internal object CanonicalLocalLibrary {
                 ),
             ).map(CanonicalLocalRow::toLegacySong)
         }
+    }
 
     internal fun candidateFromLegacySong(song: Song): LocalMediaCandidate? {
         val uri = song.localUri?.takeIf(String::isNotBlank) ?: return null
@@ -214,17 +172,9 @@ internal object CanonicalLocalLibrary {
             artworkUri = song.thumbnailUrl,
             uri = uri,
             path = song.localPath,
-            localGenre = song.localGenre,
-            localBitrateBps = song.localBitrateBps,
             dateAddedSeconds = song.localDateAddedSeconds,
             dateModifiedSeconds = song.localDateModifiedSeconds,
             trackNumber = song.trackNumber,
-            genres = normalizedLocalTagList(song.localGenres),
-            moods = normalizedLocalTagList(song.localMoods),
-            bpms = normalizedLocalBpmList(song.localBpms),
-            composers = normalizedLocalTagList(song.localComposers),
-            sourceFingerprint = song.localDateModifiedSeconds?.takeIf { it > 0L }
-                ?.let { modified -> "v3:$modified:${song.localSizeBytes ?: -1L}" },
             youtubeVideoId = song.videoId.takeIf { id ->
                 id != uri &&
                     !id.startsWith("content://", ignoreCase = true) &&
@@ -375,47 +325,6 @@ internal object CanonicalLocalLibrary {
 
     private fun String?.cleanOptionalTag(): String? =
         this?.trim()?.takeIf { it.isNotEmpty() && !it.equals("<unknown>", ignoreCase = true) }
-
-    /** Never turn a failed/blank tag read into a verified empty field. */
-    /** Preserve trusted embedded values during an unchanged MediaStore rescan. */
-    private fun mergedLocalTagJson(
-        fresh: List<String>?, previousJson: String?,
-    ): String? {
-        val old = previousJson?.let {
-            runCatching { Json.decodeFromString<List<String>>(it) }.getOrNull()
-        }
-        val values = when {
-            fresh != null && old != null -> (fresh + old).distinct()
-            fresh != null -> fresh
-            else -> old
-        }
-        return values?.let { Json.encodeToString(it) }
-    }
-
-    private fun mergedLocalBpmJson(
-        fresh: List<Double>?, previousJson: String?,
-    ): String? {
-        val old = previousJson?.let {
-            runCatching { Json.decodeFromString<List<Double>>(it) }.getOrNull()
-        }
-        val values = when {
-            fresh != null && old != null -> (fresh + old).distinct()
-            fresh != null -> fresh
-            else -> old
-        }
-        return values?.let { Json.encodeToString(it) }
-    }
-
-    private fun normalizedLocalBpmList(values: List<Double>?): List<Double>? =
-        values?.takeIf { it.size <= 16 && it.all { v -> v.isFinite() && v > 0.0 && v <= 999.0 } }
-            ?.distinct()
-
-    private fun normalizedLocalTagList(values: List<String>?): List<String>? =
-        values?.takeIf { it.size <= 64 }?.map { it.trim() }
-            ?.takeIf { tags ->
-                tags.all { it.isNotEmpty() && it.length <= 256 &&
-                    !it.equals("<unknown>", ignoreCase = true) }
-            }?.distinct()
 }
 
 internal data class LocalMediaCandidate(
@@ -431,13 +340,6 @@ internal data class LocalMediaCandidate(
     val dateModifiedSeconds: Long?,
     val trackNumber: Int?,
     val youtubeVideoId: String?,
-    val genres: List<String>? = null,
-    val moods: List<String>? = null,
-    val bpms: List<Double>? = null,
-    val composers: List<String>? = null,
-    val sourceFingerprint: String? = null,
-    val localGenre: String? = null,
-    val localBitrateBps: Long? = null,
 )
 
 internal data class MediaStoreSourceLookup(

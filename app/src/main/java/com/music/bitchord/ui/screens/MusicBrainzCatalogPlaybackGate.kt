@@ -17,8 +17,6 @@ internal class MusicBrainzCatalogPlaybackGate(
     private val planner: CanonicalCollectionIntentPlanner,
     /** Privacy-safe reason only; no MBIDs, provider URLs or user-entered titles. */
     private val traceOutcome: (String) -> Unit = {},
-    /** Production fetches just the trusted RecordingId; legacy callers retain browse(). */
-    private val browseSelected: suspend (List<String>) -> CanonicalBrowseLibrary = { browse() },
 ) {
     suspend fun plan(mbid: String, intent: CanonicalCollectionIntent): CanonicalCollectionIntentPlan? {
         val id = mbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches) ?: run {
@@ -32,7 +30,7 @@ internal class MusicBrainzCatalogPlaybackGate(
         val plan = planner.preview(
             recordingIds = listOf(recordingId),
             intent = intent,
-            library = browseSelected(listOf(recordingId)),
+            library = browse(),
             preferSingleLocalCopy = true,
         )
         val allowed = plan.rejected.isEmpty() && plan.selections.size == 1

@@ -429,32 +429,6 @@ internal class OpenSubsonicProvider(
             bitDepth = song.bitDepth,
             samplingRateHz = song.samplingRate,
             artists = trackArtists,
-            // OpenSubsonic optional fields: null = unsupported/omitted,
-            // [] = supported with no tags. Never synthesize values.
-            genres = song.genres?.let { values ->
-                values.map { it.name.clean() }.takeIf { names -> names.none { it == null } }
-                    ?.filterNotNull()?.distinct()
-            } ?: song.genre?.let { legacy ->
-                legacy.clean()?.let(::listOf) ?: emptyList()
-            },
-            moods = song.moods?.let { values ->
-                values.map(String::trim).takeIf { names -> names.none(String::isEmpty) }?.distinct()
-            },
-            bpm = song.bpm,
-            path = song.path?.trim()?.takeIf(String::isNotBlank),
-            composers = if (song.contributors != null) {
-                val names = song.contributors
-                    .filter { it.role.equals("composer", ignoreCase = true) }
-                    .map { it.artist?.name.clean() }
-                // A malformed composer credit is UNKNOWN, even when a display
-                // fallback also exists. Never certify negative predicates.
-                if (names.any { it == null }) null
-                else (names.filterNotNull() +
-                    listOfNotNull(song.displayComposer?.clean())).distinct()
-            } else song.displayComposer?.let { display ->
-                display.clean()?.let(::listOf) ?: emptyList()
-            },
-
             isrcs = IsrcNormalizer.normalizeDistinct(song.isrc.orEmpty()),
             remoteRating = ProviderRemoteRating(
                 numeric = parseNumericRating(song.userRating),
@@ -634,15 +608,6 @@ private data class SubsonicAlbum(
 )
 
 @Serializable
-private data class SubsonicGenre(val name: String? = null)
-
-@Serializable
-private data class SubsonicContributor(
-    val role: String? = null,
-    val artist: SubsonicArtist? = null,
-)
-
-@Serializable
 private data class SubsonicSong(
     val id: String,
     val isDir: Boolean = false,
@@ -664,13 +629,6 @@ private data class SubsonicSong(
     val created: String? = null,
     val musicBrainzId: String? = null,
     val isrc: List<String>? = null,
-    val genre: String? = null,
-    val genres: List<SubsonicGenre>? = null,
-    val moods: List<String>? = null,
-    val bpm: Int? = null,
-    val path: String? = null,
-    val displayComposer: String? = null,
-    val contributors: List<SubsonicContributor>? = null,
     val userRating: JsonElement? = null,
     val starred: JsonElement? = null,
 )
