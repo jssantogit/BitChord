@@ -242,49 +242,10 @@ object SourceResolver {
     }
 
     /**
-     * The copy of [target] held by a source quick enough to ask about *before*
-     * the track is played — or null when no such source is enabled, or none of
-     * them has it.
-     *
-     * This is the same substitution [substituteForYouTube] makes, moved earlier.
-     * The difference is only which sources are asked: [SourceKind.worthPrefetching]
-     * narrows it to the ones that answer in a round trip rather than in ten
-     * seconds, because this runs speculatively for a track nobody has reached
-     * yet and a slow lookup would still be going when they did.
-     *
-     * ### What the caller must do with the answer
-     *
-     * Pin it. A returned stream is only useful if the *same* stream is what
-     * playback goes on to open, and the caller is expected to record it with
-     * [StreamChoice][com.music.bitchord.playback.StreamChoice] before caching a
-     * byte of it. Without that, playback re-runs the race, may land on a
-     * different source, and writes a second file into the cache entry the warm
-     * one already half-filled — which is the exact corruption
-     * [StreamChoice] exists to prevent, arrived at from a new direction.
-     *
-     * Returning null is not a failure and needs no handling beyond falling back
-     * to YouTube, which is what the caller would have done anyway: nothing has
-     * been pinned, so the ordinary resolve at playback time is untouched.
-     */
-    suspend fun prefetchSubstitute(target: TrackMatcher.Target): SourceStream? {
-        if (target.title.isBlank() || target.isVideo) return null
-        val active = SourceRegistry.activeForPlayback()
-        val youtube = active.firstOrNull { it.kind == SourceKind.YOUTUBE } ?: return null
-        val quick = rankedAbove(youtube.configId, active).filter { it.kind.worthPrefetching }
-        if (quick.isEmpty()) return null
-        val (source, stream) = bestAcross(quick, target, requestForNow()) ?: return null
-        TrackLog.d(
-            TAG,
-            "warmed: '${target.title}' from ${source.displayName} at ${stream.format.summary}",
-        )
-        return stream
-    }
-
-    /**
      * A stream that genuinely satisfies the current request, for a track that
      * is already playing on one that doesn't — or null if there isn't one.
      *
-     * The same search as [substituteForYouTube] with two differences, both of
+     * This upgrade lookup differs from the ordinary source resolver because
      * which are only affordable because sound is already coming out:
      *
      *  - Every module *within* a source is waited for, including the one the
@@ -300,7 +261,7 @@ object SourceResolver {
      *    follows from the bullet above: once a lossy stream can win, a lossy
      *    *source* has to be allowed to offer one.
      *
-     * Where it matches [substituteForYouTube] exactly is in taking the first
+     * It takes the first
      * answer that clears the bar rather than the best of all of them — see
      * [bestAcross]. The bar here is [worthSwapping] rather than "satisfies the
      * request", and it is a high one: anything clearing it is lossless, or a
