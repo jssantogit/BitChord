@@ -701,18 +701,6 @@ private fun LazyListScope.canonicalMusicBrainzResults(
 fun canonicalRecentSearchEntries(history: List<SearchHistoryEntity>): List<SearchHistoryEntity> =
     history.filter { it.id.startsWith("q:") }
 
-/** Identity-preserving, client-side category view over four MusicBrainz types. */
-/** A display-only adapter: never turn a public MBID into a videoId or stream URI. */
-fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = BrowseItem(
-    browseId = "catalog:${row.kind}:${row.musicBrainzId}",
-    title = row.title,
-    subtitle = row.subtitle.orEmpty(),
-    thumbnailUrl = row.artworkUri.takeUnless {
-        row.kind == CanonicalSearchKind.RELEASE_GROUP && !canonicalVerifiedGroupType(row)
-    },
-    type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
-)
-
 /**
  * Canonical metadata is adapted straight into the existing native search row.
  * This is presentation, not a claim of a playable asset or a YT browse route.
@@ -722,11 +710,10 @@ internal fun canonicalNativeSearchRowUi(
     kindLabel: String,
 ): NativeSearchRowUi {
     val subtitle = canonicalDisplaySubtitle(row, kindLabel).ifBlank {
-        // Preserve the original BrowseRow's neutral legacy fallback until
-        // fully localized canonical text is available for this kind.
-        (if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST
-            else BrowseType.ALBUM).name.lowercase(Locale.ROOT)
-            .replaceFirstChar { it.uppercase(Locale.ROOT) }
+        // A recording without credits is still a recording. Use the supplied
+        // localized kind, not the old BrowseType.ALBUM fallback used by the
+        // legacy search adapter.
+        kindLabel.substringBefore('·').trim()
     }
     return NativeSearchRowUi(
         title = row.title,
@@ -879,15 +866,6 @@ fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String):
             } ?: row.subtitle?.substringBefore('·')?.trim()
                 ?.takeUnless { it.equals("Other", ignoreCase = true) }.orEmpty()
     }
-
-/** A Server asset uses the same native search row as other browseable content. */
-fun canonicalServerRowAsBrowseItem(row: CanonicalServerSearchRow): BrowseItem = BrowseItem(
-    browseId = "server:asset:${row.mediaAssetId}",
-    title = row.title,
-    subtitle = row.artistDisplay,
-    thumbnailUrl = row.artworkUri,
-    type = BrowseType.OTHER,
-)
 
 /** Searchable files provided by configured servers, with live access checked at play. */
 private fun LazyListScope.canonicalServerSearchRows(
