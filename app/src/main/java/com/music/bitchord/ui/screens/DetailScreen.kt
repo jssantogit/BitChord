@@ -126,6 +126,8 @@ import com.music.bitchord.data.matchesSearch
 import com.music.bitchord.data.sortedForLibrary
 import com.music.bitchord.data.useTrackTags
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
 import com.music.bitchord.data.canvas.AppleArtistArt
 import com.music.bitchord.data.DebugLog as Log
