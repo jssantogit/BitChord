@@ -43,4 +43,14 @@ class DesktopRetiredSourceGateTest {
         assertFalse(DesktopSourceRegistry.supportsTrackSearchFilter(com.music.bitchord.data.model.SearchFilter.ARTISTS))
         assertFalse(DesktopSourceRegistry.supportsTrackSearchFilter(com.music.bitchord.data.model.SearchFilter.ALBUMS))
     }
+
+    @Test fun retiredDesktopBrowseAndAccountOperationsCannotStartYoutubeNetwork() = runBlocking {
+        assertTrue(DesktopSearchClient.home().isFailure)
+        assertTrue(DesktopSearchClient.library().isFailure)
+        assertTrue(DesktopSearchClient.accountMenu().isFailure)
+        assertTrue(DesktopSearchClient.accountsList().isFailure)
+        assertTrue(DesktopSearchClient.radio("historical-id").isFailure)
+        assertTrue(DesktopSearchClient.searchTypeahead("song").getOrThrow().isEmpty())
+        assertTrue(DesktopSearchClient.searchSuggestions("song").getOrThrow().isEmpty())
+    }
 }
