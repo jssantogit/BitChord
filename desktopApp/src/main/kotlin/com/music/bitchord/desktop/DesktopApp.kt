@@ -906,34 +906,17 @@ fun BitChordDesktopApp() {
         }
     }
 
-    /** Takes a captured cookie all the way to a saved account. */
-    suspend fun signIn(cookie: String, label: String, sourceProfile: String? = null) {
-        signInError = null
-        signInBusy = label
-        try {
-            val scope = withContext(Dispatchers.IO) { DesktopYouTubeSession.adoptSessionScope(cookie) }
-            if (scope == null) {
-                signInError = "$label is not signed in to YouTube Music."
-                return
-            }
-            DesktopYouTubeAuth.adopt(scope)
-            // Asked with the session in force, so they describe the account that was just captured
-            // rather than nobody in particular.
-            val details = DesktopSearchClient.accountMenu().getOrNull()?.let(DesktopAccountParser::account)
-            val channels = DesktopSearchClient.accountsList().getOrNull()
-                ?.let(DesktopAccountParser::channels)
-                .orEmpty()
-            // Off the UI thread: saving reaches the platform keyring over D-Bus, and a blocking
-            // call to another process is not something to do on the thread that is drawing.
-            withContext(Dispatchers.IO) { DesktopAccounts.save(cookie, scope, details, channels, sourceProfile) }
-            accounts = withContext(Dispatchers.IO) { DesktopAccounts.accounts() }
-            activeAccountId = DesktopAccounts.activeAccountId()
-            activeProfileId = DesktopAccounts.activeProfileId()
-            overlays.signIn = false
-            overlays.accounts = false
-        } finally {
-            signInBusy = null
-        }
+    /**
+     * Historical Google-cookie sign-in is retired. Never collect or validate
+     * new YouTube credentials; stored accounts are preserved for migration.
+     */
+    suspend fun signIn(
+        @Suppress("UNUSED_PARAMETER") cookie: String,
+        @Suppress("UNUSED_PARAMETER") label: String,
+        @Suppress("UNUSED_PARAMETER") sourceProfile: String? = null,
+    ) {
+        signInError = "YouTube Music sign-in is no longer supported."
+        signInBusy = null
     }
 
     fun playSongs(songs: List<Song>, startIndex: Int = 0, source: DesktopQueueSource? = null) {
