@@ -1229,6 +1229,7 @@
     <string name="spotify_import_none">Nessuno di quei brani è stato trovato su YouTube Music.</string>
     <string name="spotify_import_title">Importa playlist Spotify</string>
     <string name="spotify_import_unmatched">%1$d brani non sono stati trovati su YouTube Music</string>
+    <string name="spotify_import_metadata_only">Playlist salvata con %1$d brani solo come metadati. Nessun audio associato senza una corrispondenza verificata.</string>
     <string name="spotify_library_subtitle">Le tue playlist Spotify</string>
     <string name="spotify_sign_in">Accedi con Spotify</string>
     <string name="spotify_use_spdc_token">Usa token sp_dc</string>
