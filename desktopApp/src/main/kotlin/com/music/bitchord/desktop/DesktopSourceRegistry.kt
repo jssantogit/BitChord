@@ -173,100 +173,52 @@ internal object DesktopSourceRegistry {
     suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> =
         DesktopSearchClient.search(query, filter)
 
+    /**
+     * Resolve only a source-owned track. Opaque video IDs and historical
+     * metadata cannot become a MediaAsset by matching a title to another file.
+     * Explicit source identities may still fall through to a verified match
+     * when their own server is down or forbids downloads.
+     */
     suspend fun resolve(
         song: Song,
         quality: String?,
         excludedSourceId: String? = null,
-        /** A download: addons that said `allowDownloads: 0` are left out, see [adapters]. */
         forDownload: Boolean = false,
     ): Result<DesktopStream> = runCatching {
         val available = playbackAdapters(quality, forDownload)
+            .filterNot { it.config.id == excludedSourceId }
         val moduleReference = DesktopModuleSource.parseTrack(song.videoId)
         val addonReference = DesktopAddonSource.parseTrack(song.videoId)
+        val isJio = song.videoId.startsWith("jiosaavn:")
+        if (addonReference == null && moduleReference == null && !isJio) {
+            error("This historical track has no verified audio source")
+        }
         val owned = when {
             addonReference != null -> available.firstOrNull { it.config.id == addonReference.sourceId }
             moduleReference?.sourceId != null -> available.firstOrNull { it.config.id == moduleReference.sourceId }
             moduleReference != null -> available.firstOrNull {
-                it.config.kind == DesktopSourceKind.CUSTOM_MODULE || it.config.kind == DesktopSourceKind.MODULE
+                it.config.kind in setOf(DesktopSourceKind.CUSTOM_MODULE, DesktopSourceKind.MODULE)
             }
-            song.videoId.startsWith("jiosaavn:") -> available.firstOrNull { it.config.kind == DesktopSourceKind.JIOSAAVN }
+            isJio -> available.firstOrNull { it.config.kind == DesktopSourceKind.JIOSAAVN }
             else -> null
         }
-
-        // A row from an addon that is out of the walk only for policy — a download from one whose
-        // manifest says `allowDownloads: 0` — is looked up elsewhere, like any other track, rather
-        // than refused the way a disabled source's row is.
-        val heldBack = addonReference != null && owned == null &&
-            configs().any { it.id == addonReference.sourceId && it.enabled && it.isComplete }
-        if (!heldBack && (addonReference != null || moduleReference != null || song.videoId.startsWith("jiosaavn:"))) {
-            if (owned == null) error("The source for this track is disabled or no longer configured")
-            // This path has nothing to race.
-            DesktopTrackLog.log(
-                "resolving '${song.title}' — this row belongs to ${owned.descriptor.name}" +
-                    ", asking at the ${(quality ?: DesktopPersistence().audioQuality().name).lowercase()} rung",
-            )
-            if (owned.config.id != excludedSourceId) {
-                owned.resolveOwned(song, quality).getOrNull()
-                    ?.takeIf { playableHere(owned, it) }
-                    ?.let {
-                        DesktopTrackLog.log(
-                            "  ${owned.descriptor.name} served it at " +
-                                it.format.summary.ifBlank { "an unstated format" },
-                        )
-                        return@runCatching it
-                    }
-                DesktopTrackLog.log("  ${owned.descriptor.name} had no usable stream for it")
+        val canFallback = addonReference != null && forDownload &&
+            configs().any {
+                it.id == addonReference.sourceId && it.enabled && it.isComplete &&
+                    !DesktopAddonSource.allowsDownloads(it)
             }
-            // Android walks on to other active sources when the pinned source cannot produce a
-            // stream.
-            // Never YouTube under an addon's own row: its Opus is not the copy that was picked.
-            for (fallback in available.filter {
-                it !== owned && it.config.id != excludedSourceId &&
-                    !(addonReference != null && it.config.kind == DesktopSourceKind.YOUTUBE)
-            }) {
-                val matched = fallback.match(song) ?: continue
-                fallback.resolve(matched, quality).getOrNull()
-                    ?.takeIf { playableHere(fallback, it) }
-                    ?.let {
-                        DesktopTrackLog.log(
-                            "  fell through to ${fallback.descriptor.name} at " +
-                                it.format.summary.ifBlank { "an unstated format" },
-                        )
-                        return@runCatching it
-                    }
-            }
-            error("${owned.descriptor.name} did not return an audio stream")
+        if (owned == null && !canFallback) {
+            error("The original source is unavailable or no longer configured")
         }
-
-        // A normal YouTube row is offered to every higher-priority source first so a configured
-        // FLAC/module or JioSaavn copy is used when available.
-        for (source in available.filter {
-            it.config.kind != DesktopSourceKind.YOUTUBE &&
-                it.config.id != excludedSourceId &&
-                !DesktopOriginalVersion.isPinned(song.videoId)
-        }) {
-            val matched = source.match(song) ?: continue
-            source.resolve(matched, quality).getOrNull()
-                ?.takeIf { playableHere(source, it) }
+        if (owned != null) {
+            owned.resolveOwned(song, quality).getOrNull()
+                ?.takeIf { playableHere(owned, it) }
                 ?.let { return@runCatching it }
         }
-        val youtube = available.firstOrNull {
-            it.config.kind == DesktopSourceKind.YOUTUBE && it.config.id != excludedSourceId
+        for (fallback in available.filterNot { it === owned }) {
+            openBest(fallback, song, quality)?.let { return@runCatching it }
         }
-            // YouTube is the non-removable fallback and is force-enabled on read.
-            ?: error(
-                if (excludedSourceId != null) {
-                    "No other source has a copy of this track"
-                } else {
-                    "No enabled music source is configured"
-                },
-            )
-        // A held-back addon row carries that addon's id, which means nothing to YouTube.
-        val target = if (heldBack) youtube.match(song) ?: error("No other source has a copy of this track") else song
-        youtube.resolve(target, quality).fold(
-            onSuccess = { it ?: error("${youtube.descriptor.name} did not return an audio stream") },
-            onFailure = { throw it },
-        )
+        error("No configured provider can serve this recording")
     }
 
     /**
