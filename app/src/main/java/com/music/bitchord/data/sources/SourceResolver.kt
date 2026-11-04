@@ -1043,22 +1043,6 @@ object SourceResolver {
     private const val SAME_RECORDING_SEC = 3
 
     /**
-     * The top of YouTube's own AAC ladder, and so the bar a lossy source has to
-     * clear to be worth keeping as a file — see [forDownload].
-     *
-     * Not a measurement of any one track. Most of the catalogue offers itag 140
-     * at 128kbps and a signed-in account reaches itag 141 at 256, and which of
-     * those a given track has cannot be known without resolving it — a full
-     * player walk, spent to answer a question about a stream we may then not
-     * use. So the bar is the *best* YouTube could turn out to have: clearing it
-     * means the source's copy wins whichever rung was waiting, and failing it
-     * means YouTube might well be better and is certainly the more reliable
-     * fetch. JioSaavn's 320 clears it; its 160 does not, and neither does a
-     * module's 128kbps MP3 settle-for.
-     */
-    private const val YOUTUBE_BEST_AAC_KBPS = 256
-
-    /**
      * How many kbps a lossy stream has to gain before it earns a seam in the
      * audio — see [worthSwapping].
      *
