@@ -16,9 +16,9 @@ class DisabledYoutubeCanonicalSearchGateTest {
         assertEquals(SearchSource.ADDONS, effectiveSearchSource(SearchSource.ADDONS, disabled))
     }
 
-    @Test fun enabledOrNotYetInitializedYoutubeKeepsBackwardCompatibleDefault() {
-        assertEquals(SearchSource.YOUTUBE, effectiveSearchSource(SearchSource.YOUTUBE, emptyList()))
-        assertEquals(SearchSource.YOUTUBE, effectiveSearchSource(
+    @Test fun enabledOrUninitializedYoutubeStillRoutesToCanonicalCatalog() {
+        assertEquals(SearchSource.CANONICAL, effectiveSearchSource(SearchSource.YOUTUBE, emptyList()))
+        assertEquals(SearchSource.CANONICAL, effectiveSearchSource(
             SearchSource.YOUTUBE, listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)),
         ))
     }
