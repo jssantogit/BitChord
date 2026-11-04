@@ -35,8 +35,10 @@ internal fun selectSpotifyCanonicalAsset(
                 row.providerKey == "local-mediastore" ->
                     row.uri.startsWith("content://", ignoreCase = true) ||
                         row.uri.startsWith("file://", ignoreCase = true)
-                row.providerKey.startsWith("opensubsonic:") ||
-                    row.providerKey.startsWith("jellyfin:") ->
+                // Only OpenSubsonic has an implemented authenticated
+                // CanonicalRemoteDataSource. Jellyfin metadata can exist
+                // in the catalog, but cannot yet prove a playable stream.
+                row.providerKey.startsWith("opensubsonic:") ->
                     row.uri.isNotBlank()
                 else -> false
             }
