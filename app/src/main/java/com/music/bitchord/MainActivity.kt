@@ -2402,6 +2402,7 @@ private fun BitChordApp(
         ) unifiedAlbumUi.resetDetail()
     }
     var showPlaylistLibrary by rememberSaveable { mutableStateOf(false) }
+    var pinnedPlaylistRequest by remember { mutableStateOf<String?>(null) }
     var openedCanonicalPlaylist by remember {
         mutableStateOf<com.music.bitchord.ui.screens.LibraryPlaylistCard?>(null)
     }
@@ -3121,6 +3122,8 @@ private fun BitChordApp(
                             },
                             selectedCard = openedCanonicalPlaylist,
                             onSelectedCardChange = { openedCanonicalPlaylist = it },
+                            pinnedPlaylistRequest = pinnedPlaylistRequest,
+                            onPinnedPlaylistRequestConsumed = { pinnedPlaylistRequest = null },
                             listState = playlistLibraryListState,
                             detailListState = playlistDetailListState,
                             detailSearching = playlistDetailSearching,
@@ -3989,6 +3992,17 @@ private fun BitChordApp(
                                             ),
                                             CanonicalCollectionIntent.PLAY_NOW,
                                         )
+                                    },
+                                    localPlaylists = localPlaylistItems,
+                                    onOpenPlaylist = { playlistId ->
+                                        // Open the existing playlist destination, never
+                                        // attempt to encode it as a RecordingId.
+                                        openedCanonicalPlaylist = null
+                                        pinnedPlaylistRequest = playlistId
+                                        playlistLibraryQuery = ""
+                                        playlistLibraryFilter =
+                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
+                                        showPlaylistLibrary = true
                                     },
                                     onOpenEntity = { pin, category ->
                                         // Pins belong to the unified catalog, not
