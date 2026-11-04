@@ -104,8 +104,7 @@ internal object A0SearchQuery {
         // (e.g. "o" + combining diaeresis). Compose BEFORE punctuation
         // cleanup so accents never turn into accidental word boundaries.
         // NFC preserves Hangul syllables and all canonical identifiers.
-        val composed=java.text.Normalizer.normalize(
-            userEntered,java.text.Normalizer.Form.NFC)
+        val composed=A0CjkOrthography.widthOnlyNfc(userEntered)
         val normalized = composed.replace(punctuation, " ")
             .trim()
             .replace(whitespace, " ")
