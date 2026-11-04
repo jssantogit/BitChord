@@ -79,4 +79,15 @@ class NativeSearchRowTest {
         assertEquals("Álbum", canonicalNativeSearchRowUi(row, "Álbum").subtitle)
     }
 
+    @Test fun nativeSearchPresentationExposesNoLegacyNavigationOrPlaybackIdFields() {
+        val fields = NativeSearchRowUi::class.java.declaredFields.map { it.name }.toSet()
+        assertFalse("browseId" in fields)
+        assertFalse("videoId" in fields)
+        assertFalse("mediaAssetId" in fields)
+        assertFalse("providerKey" in fields)
+        assertFalse("streamUrl" in fields)
+        assertTrue("title" in fields)
+        assertTrue("artworkUri" in fields)
+    }
+
 }
