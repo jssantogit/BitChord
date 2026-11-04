@@ -242,51 +242,6 @@ object SourceResolver {
     }
 
     /**
-     * The stream for a YouTube track from a source the user ranked above
-     * YouTube, or null when none of them has the recording.
-     *
-     * A YouTube track keeps its bare video id rather than a
-     * [SourceRegistry.trackKey] — see [YouTubeSource] for why — so it reaches
-     * playback as `bitchord://watch?v=…` and never passes through [resolve].
-     * Without this, ordering a source above YouTube did nothing for anything
-     * *queued* from YouTube: the library, a playlist, radio, the home feed —
-     * which is very nearly everything. The list said "prefer my server" and
-     * only search results honoured it.
-     *
-     * The match is the same strict one [resolve] uses, for the same reason:
-     * this substitutes something else for the track the user picked, and a
-     * loose match plays the wrong song under the right title.
-     *
-     * Every ranked source is asked at once and the first playable answer is
-     * taken — see [bestAcross]. This is the latency-critical half of the pair:
-     * it is racing YouTube's own walk, and a stream that arrives after that race
-     * is lost cannot start a track. The unhurried half is [upgradeFor], which
-     * runs with sound already playing and is where a slow source's better answer
-     * gets its hearing.
-     */
-    suspend fun substituteForYouTube(target: TrackMatcher.Target): SourceStream? {
-        // Video rows always use YouTube's own stream unless the listener
-        // explicitly converts the current item in the player. A module match
-        // is another recording and can be a wrong song altogether.
-        if (target.title.isBlank() || target.isVideo) return null
-        val active = SourceRegistry.activeForPlayback()
-        val youtube = active.firstOrNull { it.kind == SourceKind.YOUTUBE } ?: return null
-        val request = requestForNow()
-        val (source, stream) = bestAcross(rankedAbove(youtube.configId, active), target, request)
-            ?: return null
-        // Says what was found, not what the caller will do with it. This
-        // line used to read "substituted" unconditionally, including for
-        // streams the caller went on to refuse — which made a log of a
-        // track that played on YouTube look like a track that hadn't.
-        TrackLog.d(
-            TAG,
-            "substituted: '${target.title}' served by ${source.displayName} over YouTube" +
-                " at ${stream.format.summary}" + if (stream.belowRequest) " (below request)" else "",
-        )
-        return stream
-    }
-
-    /**
      * The copy of [target] held by a source quick enough to ask about *before*
      * the track is played — or null when no such source is enabled, or none of
      * them has it.
