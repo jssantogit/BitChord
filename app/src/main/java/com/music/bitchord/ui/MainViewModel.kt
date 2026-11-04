@@ -3300,9 +3300,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         configs = SourceRegistry.configs.value,
     )
 
-    private fun canResolveLegacySpotifyViaYoutube(): Boolean =
-        canRunLegacyYoutubeCatalogLookup()
-
     /** Canonical opt-in is a metadata boundary even while playback YT remains enabled. */
     private fun canRunLegacyYoutubeCatalogLookup(): Boolean =
         shouldRunLegacyYoutubeVersionLookup(
