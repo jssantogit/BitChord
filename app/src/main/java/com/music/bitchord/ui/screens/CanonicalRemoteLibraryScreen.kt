@@ -2712,11 +2712,26 @@ internal fun NativeLibraryEntityCard(
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.titleMedium)
+        // This grid is hosted on the Library's black surface, outside a
+        // Material Surface content-color provider. Explicit contrast prevents
+        // invisible black-on-black pin titles and subtitles.
+        Text(
+            text = title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.testTag("native-library-card-title"),
+        )
         if (subtitle.isNotBlank()) {
-            Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = subtitle,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.testTag("native-library-card-subtitle"),
+            )
         }
     }
 }
