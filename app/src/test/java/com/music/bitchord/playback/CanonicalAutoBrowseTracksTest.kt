@@ -40,6 +40,22 @@ class CanonicalAutoBrowseTracksTest {
         assertNull(canonicalAutoSong(row(mediaAssetId = "")))
     }
 
+    @Test fun historicalPlaylistsKeepDuplicateEntriesInOrderButNeverReplayYoutube() {
+        val legacy = Song(
+            videoId = "youtube-archive", title = "Legacy", artist = "Artist",
+            thumbnailUrl = null,
+        )
+        val local = Song(
+            videoId = "content://media/external/audio/media/9",
+            title = "Local", artist = "Artist", thumbnailUrl = null,
+            localUri = "content://media/external/audio/media/9",
+        )
+        val playable = canonicalAutoPlaylistSongs(
+            listOf(legacy, local, local), verifiedDownloadUri = { null },
+        )
+        assertEquals(listOf(local.videoId, local.videoId), playable.map { it.videoId })
+    }
+
     @Test fun autoSearchUsesTrackAndArtistMetadataWithoutProviderLookup() {
         val songs = listOf(
             Song(
