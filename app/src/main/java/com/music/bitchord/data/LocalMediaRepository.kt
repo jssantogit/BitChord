@@ -215,7 +215,7 @@ object LocalMediaRepository {
         // for — a content URI fails its id check on purpose, since most rows
         // here really are just local files with nothing to sync.
         val videoIdByUri = Downloads.saved.value.entries.associate { (id, uri) -> uri to id }
-        val projection = arrayOf(
+        val mandatoryProjection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.TITLE,
@@ -227,7 +227,15 @@ object LocalMediaRepository {
             MediaStore.Audio.Media.DATE_ADDED,
             MediaStore.Audio.Media.DATE_MODIFIED,
             MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.SIZE,
         )
+        // Optional columns vary among Android/OEM MediaStore implementations.
+        // Query in bulk first; fallback MUST preserve the playable library.
+        val projection = buildList {
+            addAll(mandatoryProjection.toList())
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) add(MediaStore.Audio.Media.GENRE)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(MediaStore.MediaColumns.BITRATE)
+        }.toTypedArray()
 
         val filterNonMusic = AppSettings.filterNonMusicAudio.value
         val selection = if (filterNonMusic) {
@@ -259,15 +267,19 @@ object LocalMediaRepository {
             null
         }
         val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
-
         runCatching {
-            context.contentResolver.query(
+            // An optional genre or bitrate lookup can fail on some OEM ROMs.
+            // Even a null cursor must retry mandatory columns, not show an empty library.
+            val cursor = runCatching {
+                context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    projection, selection, selectionArgs, sortOrder,
+                )
+            }.getOrNull() ?: context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                sortOrder,
-            )?.use { cursor ->
+                mandatoryProjection, selection, selectionArgs, sortOrder,
+            )
+            cursor?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val displayNameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
@@ -279,6 +291,13 @@ object LocalMediaRepository {
                 val dateAddedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
                 val dateModifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
                 val trackCol = cursor.getColumnIndex(MediaStore.Audio.Media.TRACK)
+                val sizeCol = cursor.getColumnIndex(MediaStore.Audio.Media.SIZE)
+                val genreCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    cursor.getColumnIndex(MediaStore.Audio.Media.GENRE)
+                } else -1
+                val bitrateCol = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    cursor.getColumnIndex(MediaStore.MediaColumns.BITRATE)
+                } else -1
 
                 val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
 
@@ -291,6 +310,12 @@ object LocalMediaRepository {
                     val albumId = cursor.getLong(albumIdCol)
                     val durationMs = cursor.getLong(durationCol)
                     val path = cursor.getString(dataCol)
+                    val localGenre = if (genreCol >= 0 && !cursor.isNull(genreCol)) {
+                        cursor.getString(genreCol)?.trim()?.takeIf(String::isNotBlank)
+                    } else null
+                    val localBitrateBps = if (bitrateCol >= 0 && !cursor.isNull(bitrateCol)) {
+                        cursor.getLong(bitrateCol).takeIf { it > 0L }
+                    } else null
 
                     if (filterNonMusic && !isEligibleLocalMusic(durationMs, displayName, path)) continue
                     if (!isInSelectedFolder(path, AppSettings.localMusicFolderUri.value)) continue
@@ -308,6 +333,13 @@ object LocalMediaRepository {
                     } else {
                         null
                     }
+                    // Absence from the Android index is not proof that the
+                    // embedded tag is absent (unsupported formats/OEM parsing).
+                    val genres = if (genreCol >= 0 && !cursor.isNull(genreCol)) {
+                        cursor.getString(genreCol)?.trim()?.takeIf {
+                            it.isNotEmpty() && !it.equals("<unknown>", ignoreCase = true)
+                        }?.let(::listOf)
+                    } else null
 
                     songs.add(
                         Song(
@@ -319,9 +351,14 @@ object LocalMediaRepository {
                             albumName = albumName,
                             localUri = contentUri,
                             localPath = path,
+                            localGenre = localGenre,
+                            localBitrateBps = localBitrateBps,
                             localDateAddedSeconds = cursor.getLong(dateAddedCol),
                             localDateModifiedSeconds = cursor.getLong(dateModifiedCol),
                             trackNumber = trackNumber,
+                            localGenres = genres,
+                            localSizeBytes = if (sizeCol >= 0 && !cursor.isNull(sizeCol))
+                                cursor.getLong(sizeCol).takeIf { it >= 0L } else null,
                         )
                     )
                 }

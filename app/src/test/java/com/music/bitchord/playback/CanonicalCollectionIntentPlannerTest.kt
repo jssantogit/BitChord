@@ -75,12 +75,12 @@ class CanonicalCollectionIntentPlannerTest {
 
     @Test fun `limit applies before any lookup or resolver work`() = runBlocking {
         val resolver = Resolver()
-        val ids = (1..102).map { "rec-$it" }
+        val ids = (1..502).map { "rec-$it" }
         val plan = CanonicalCollectionIntentPlanner(resolver).preview(
             ids, CanonicalCollectionIntent.ADD_TO_QUEUE, CanonicalBrowseLibrary.EMPTY,
         )
-        assertEquals(CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE, 100)
-        assertEquals(CollectionIntentRejection.LIMIT_EXCEEDED, plan.rejected[100].reason)
+        assertEquals(500, CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE)
+        assertEquals(CollectionIntentRejection.LIMIT_EXCEEDED, plan.rejected[500].reason)
         assertEquals(0, resolver.resolveCalls)
     }
 
@@ -118,4 +118,25 @@ class CanonicalCollectionIntentPlannerTest {
             listOf("rec-a"), CanonicalCollectionIntent.PLAY_NOW,
             CanonicalBrowseLibrary(listOf(track("rec-a", "asset-a" to "local-mediastore"))))
     }
+    @Test fun boundedLargeQueuePreviewPreservesAll500IdsAndRejects501st() = runBlocking {
+        val resolver = Resolver()
+        val ids = (1..500).map { "rec-$it" }
+        val library = CanonicalBrowseLibrary(ids.map { id ->
+            track(id, "asset-$id" to "opensubsonic:home")
+        })
+        val accepted = CanonicalCollectionIntentPlanner(resolver).preview(
+            ids, CanonicalCollectionIntent.ADD_TO_QUEUE, library,
+        )
+        assertEquals(500, CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE)
+        assertEquals(ids, accepted.selections.map { it.recordingId })
+        assertTrue(accepted.rejected.isEmpty())
+        assertEquals(1, resolver.resolveCalls)
+        val tooMany = CanonicalCollectionIntentPlanner(resolver).preview(
+            ids + "rec-501", CanonicalCollectionIntent.ADD_TO_QUEUE, library,
+        )
+        assertEquals(1, tooMany.rejected.size)
+        assertEquals(500, tooMany.rejected.single().inputIndex)
+        assertEquals(CollectionIntentRejection.LIMIT_EXCEEDED, tooMany.rejected.single().reason)
+    }
+
 }

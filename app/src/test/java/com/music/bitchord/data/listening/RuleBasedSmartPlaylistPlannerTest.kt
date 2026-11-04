@@ -44,7 +44,7 @@ class RuleBasedSmartPlaylistPlannerTest {
         assertEquals(listOf("rec:real"), results.map { it.recordingId })
     }
 
-    @Test fun negativeRatingsAndUnknownDurationDoNotPassConservativeFilters() {
+    @Test fun negativeRatingsWithoutRatingRuleStillParticipateAndUnknownDurationIsExcluded() {
         val q = RuleBasedSmartPlaylistQuery(
             minimumCompletions = 1,
             minimumDurationMs = 100_000L,
@@ -56,8 +56,41 @@ class RuleBasedSmartPlaylistPlannerTest {
                 row("rec:ok", 4.0, completed = 1, duration = 150_000L),
             ), q,
         )
-        assertEquals(listOf("rec:ok"), result.map { it.recordingId })
-        assertTrue(RuleBasedInclusionReason.CONFIRMED_COMPLETION in result.single().reasons)
-        assertTrue(RuleBasedInclusionReason.TRUSTED_DURATION in result.single().reasons)
+        assertEquals(listOf("rec:ok", "rec:negative"), result.map { it.recordingId })
+        assertTrue(result.all { RuleBasedInclusionReason.CONFIRMED_COMPLETION in it.reasons })
+        assertTrue(result.all { RuleBasedInclusionReason.TRUSTED_DURATION in it.reasons })
     }
+    @Test fun onlyExplicitRulesMayExcludeLowRatings() {
+        val durationOnly = RuleBasedSmartPlaylistQuery(minimumDurationMs = 100_000L)
+        val tracks = listOf(row("one-star", 1.0), row("two-stars", 2.0), row("no-rating"))
+        assertEquals(3, planner.preview(tracks, durationOnly).size)
+
+        val highRated = RuleBasedSmartPlaylistQuery(minimumExplicitRating = 4.0)
+        assertTrue(planner.preview(tracks, highRated).isEmpty())
+    }
+
+    @Test fun legacyPlannerHandlesFiftyThousandRecordsAndInterleavedConflicts() {
+        val query = RuleBasedSmartPlaylistQuery(minimumCompletions = 1, limit = 100)
+        val many = (1..50_123).map { row("rec:%05d".format(it), completed = 1) }
+        val conflicting = many[2].copy(explicitRating = 5.0)
+        val results = planner.preview(
+            listOf(many[2], many[0], many[1], conflicting, many[2]) +
+                many + listOf(many.last(), many.last()),
+            query,
+        )
+        assertEquals(100, results.size)
+        assertEquals(100, results.map { it.recordingId }.toSet().size)
+        assertTrue(results.none { it.recordingId == "rec:00003" })
+        assertEquals("rec:00001", results.first().recordingId)
+        assertEquals("rec:00101", results.last().recordingId)
+    }
+
+    @Test fun moreThanFiveThousandCanonicalCandidatesNeverMeansEmptyByDefault() {
+        val tracks = (1..5_001).map { row("rec:%05d".format(it), completed = 1) }
+        val query = RuleBasedSmartPlaylistQuery(minimumCompletions = 1, limit = 50)
+        val results = planner.preview(tracks, query)
+        assertEquals(50, results.size)
+        assertEquals("rec:00001", results.first().recordingId)
+    }
+
 }

@@ -171,45 +171,18 @@ private fun SettingsCategoryRow(
     onClick: () -> Unit,
     testTag: String,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .testTag(testTag)
-            .heightIn(min = 64.dp)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(42.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
-        }
-        Spacer(Modifier.width(14.dp))
-        androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Icon(
-            Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(20.dp),
-        )
-    }
+    // Reuse the native row from the Settings detail pages. The previous
+    // 42dp icon-tile/chevron implementation duplicated an entire row
+    // language and diverged from the rest of BitChord.
+    SettingsRow(
+        icon = icon,
+        title = title,
+        subtitle = subtitle,
+        onClick = onClick,
+        reserveIconSpace = false,
+        minHeight = 64.dp,
+        modifier = Modifier.testTag(testTag),
+    )
 }
 
 @Composable

@@ -38,6 +38,19 @@ class CanonicalCatalogIncrementalMigrationTest {
             null
         } as SupportSQLiteDatabase
         try {
+            // A v14 database already contains canonical media assets; migration
+            // 14→15 must alter their REAL pre-migration table, not a partial
+            // v7 MusicBrainz-only fixture that never created media assets.
+            raw.execSQL("""CREATE TABLE catalog_media_asset(
+                id TEXT NOT NULL PRIMARY KEY, recordingId TEXT NOT NULL,
+                provider TEXT NOT NULL, sourceKey TEXT NOT NULL,
+                uri TEXT NOT NULL, path TEXT, dateAddedSeconds INTEGER,
+                dateModifiedSeconds INTEGER, artworkUri TEXT
+            )""")
+            raw.execSQL("""INSERT INTO catalog_media_asset
+                (id,recordingId,provider,sourceKey,uri,path,dateAddedSeconds,dateModifiedSeconds,artworkUri)
+                VALUES ('legacy-asset','old-recording','local-mediastore','legacy:1',
+                'content://media/external/audio/media/1','Music/Legacy/01.flac',100,101,NULL)""")
             raw.execSQL("""CREATE TABLE catalog_release_group(
                 id TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL,
                 artistDisplay TEXT, primaryType TEXT, firstReleaseDate TEXT
@@ -71,6 +84,49 @@ class CanonicalCatalogIncrementalMigrationTest {
             CanonicalCatalogDatabase.MIGRATION_8_9.migrate(migrationDb)
             CanonicalCatalogDatabase.MIGRATION_9_10.migrate(migrationDb)
             CanonicalCatalogDatabase.MIGRATION_10_11.migrate(migrationDb)
+            CanonicalCatalogDatabase.MIGRATION_11_12.migrate(migrationDb)
+            // New server tags are additive, asset-scoped and nullable; legacy
+            // canonical recordings and MusicBrainz evidence remain unchanged.
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset_tags)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                assertEquals(listOf("mediaAssetId", "genresJson", "moodsJson"), names)
+            }
+            CanonicalCatalogDatabase.MIGRATION_12_13.migrate(migrationDb)
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset_tags)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                assertEquals(listOf(
+                    "mediaAssetId", "genresJson", "moodsJson", "bpmsJson",
+                    "stylesJson", "localSourceFingerprint", "localParsedFingerprint",
+                ), names)
+            }
+            CanonicalCatalogDatabase.MIGRATION_13_14.migrate(migrationDb)
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset_tags)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                org.junit.Assert.assertTrue("composer column must be migrated",
+                    "composersJson" in names)
+            }
+            // Reconcile the indexed MediaStore fields from the UI PR without
+            // destroying v14 composer or style evidence on existing assets.
+            CanonicalCatalogDatabase.MIGRATION_14_15.migrate(migrationDb)
+            raw.rawQuery("PRAGMA table_info(catalog_media_asset)", null).use { columns ->
+                val names = mutableListOf<String>()
+                while (columns.moveToNext()) names += columns.getString(1)
+                org.junit.Assert.assertTrue("local genre must be migrated", "localGenre" in names)
+                org.junit.Assert.assertTrue("bitrate must be migrated", "localBitrateBps" in names)
+            }
+            raw.rawQuery(
+                "SELECT path,localGenre,localBitrateBps FROM catalog_media_asset WHERE id='legacy-asset'",
+                null,
+            ).use {
+                org.junit.Assert.assertTrue("v14 asset survives migration v15", it.moveToFirst())
+                assertEquals("Music/Legacy/01.flac", it.getString(0))
+                assertNull(it.getString(1))
+                assertNull(it.getString(2))
+            }
+
             raw.rawQuery(
                 "SELECT title,hasOfficialAudioRelease,isVideo FROM musicbrainz_recording_enrichment WHERE recordingId='old-recording'",
                 null,

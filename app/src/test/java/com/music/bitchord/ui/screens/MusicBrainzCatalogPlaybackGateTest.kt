@@ -76,6 +76,22 @@ class MusicBrainzCatalogPlaybackGateTest {
     }
 
     @Test
+    fun productionReaderFetchesOnlyTheTrustedRecordingId() = runBlocking {
+        val requestedIds = mutableListOf<List<String>>()
+        val gate = MusicBrainzCatalogPlaybackGate(
+            trustedRecordingId = { "recording" },
+            browse = { error("Legacy unrestricted browse must not run") },
+            browseSelected = { ids ->
+                requestedIds += ids
+                library("local-1")
+            },
+            planner = CanonicalCollectionIntentPlanner(fakeResolver),
+        )
+        assertTrue(gate.plan(mbid, CanonicalCollectionIntent.PLAY_NOW) != null)
+        assertEquals(listOf(listOf("recording")), requestedIds)
+    }
+
+    @Test
     fun ambiguousLocalRenditionsFailClosedWithoutGuessing() = runBlocking {
         val gate = MusicBrainzCatalogPlaybackGate(
             trustedRecordingId = { "recording" },

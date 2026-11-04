@@ -212,17 +212,25 @@ internal fun CanonicalRecordingFeedbackPanel(
         if (!touched) selected = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
     }
     val selectedDescription = stringResource(Res.string.recording_feedback_stars_selected, selected.toString())
-    AlertDialog(
+    // Native Settings-group design, keeping the same explicit half-star editor.
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = { if (!saving) onDismiss() },
-        title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
-        text = {
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        SettingsGroupSurface(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
+        ) {
             Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth().padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // The icons ARE the score: no duplicate "3.5 / 5" underneath.
-                // Keep the selected numeric value for screen readers only.
+                Text(
+                    stringResource(Res.string.recording_feedback_dialog_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -284,21 +292,34 @@ internal fun CanonicalRecordingFeedbackPanel(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = onDismiss, enabled = !saving,
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                    ) { Text(stringResource(Res.string.cancel)) }
+                    androidx.compose.material3.Button(
+                        onClick = { onSave(selected) },
+                        enabled = selected in 1.0..5.0 && !saving,
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = com.music.bitchord.ui.theme.AccentRed,
+                            contentColor = androidx.compose.ui.graphics.Color.White,
+                        ),
+                    ) {
+                        if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                        else Text(stringResource(Res.string.recording_feedback_dialog_save))
+                    }
+                }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onSave(selected) },
-                enabled = selected in 1.0..5.0 && !saving,
-            ) {
-                if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                else Text(stringResource(Res.string.recording_feedback_dialog_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !saving) {
-                Text(stringResource(Res.string.cancel))
-            }
-        },
-    )
+        }
+    }
+
 }

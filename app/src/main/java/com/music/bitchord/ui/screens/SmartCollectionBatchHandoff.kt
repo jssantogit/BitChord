@@ -32,6 +32,13 @@ import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.listening.RoomListeningEventStore
 import com.music.bitchord.data.listening.RoomRecordingRatingStore
 import com.music.bitchord.data.listening.RuleBasedSmartPlaylistQuery
+import com.music.bitchord.data.listening.SmartPlaylistV2Query
+import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
+import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
+import com.music.bitchord.data.listening.SmartPlaylistRule
+import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
+import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.Diagnostics
 import java.util.UUID
@@ -66,7 +73,45 @@ internal sealed interface SmartCollectionActionSource {
     data class Adaptive(val kind: AdaptiveCollectionKind) : SmartCollectionActionSource
     data class SavedDefinition(val id: String) : SmartCollectionActionSource
     data class PreviewQuery(val query: RuleBasedSmartPlaylistQuery) : SmartCollectionActionSource
+    data class SavedV2Definition(val id: String, val shuffle: Boolean = false) : SmartCollectionActionSource
+    /** A recent-addition card refers to one canonical recording, never a URL or title. */
+    data class RecentLocalTrack(val recordingId: String) : SmartCollectionActionSource
+    /** Library row: optionally restrict playback to a selected source/account. */
+    data class LibraryTrack(val recordingId: String, val sourceKey: String?) : SmartCollectionActionSource
+    data class SavedStaticPlaylist(val id: String, val shuffle: Boolean = false) : SmartCollectionActionSource
+    /** Click a real row: verify current saved membership before playing its ordered suffix. */
+    data class SavedStaticPlaylistFromTrack(
+        val id: String, val recordingId: String, val includeFollowing: Boolean = true,
+    ) : SmartCollectionActionSource
+    data class SavedV2PlaylistFromTrack(
+        val id: String, val recordingId: String, val includeFollowing: Boolean = true,
+    ) : SmartCollectionActionSource
+    data class PreviewV2Query(val query: SmartPlaylistV2Query, val ownerId: String? = null) : SmartCollectionActionSource
 }
+
+/** Null means the clicked track is no longer a member of the saved playlist. */
+internal fun playlistPlaybackSuffix(
+    currentRecordingIds: List<String>, clickedRecordingId: String,
+): List<String>? {
+    val index = currentRecordingIds.indexOf(clickedRecordingId)
+    return if (index < 0) null else currentRecordingIds.drop(index)
+}
+
+/** A queue menu action adds exactly one verified song, never the following songs. */
+internal fun playlistPlaybackSelection(
+    ids: List<String>, clickedRecordingId: String, includeFollowing: Boolean,
+): List<String>? = if (includeFollowing) {
+    playlistPlaybackSuffix(ids, clickedRecordingId)
+} else if (clickedRecordingId in ids) {
+    listOf(clickedRecordingId)
+} else null
+
+/** Shuffle only verified canonical IDs; never provider IDs or stale UI rows. */
+internal fun canonicalSavedPlaylistOrder(
+    selected: List<String>,
+    shuffle: Boolean,
+    random: kotlin.random.Random = kotlin.random.Random.Default,
+): List<String> = selected.distinct().let { if (shuffle) it.shuffled(random) else it }
 
 internal sealed interface SmartCollectionBatchResult {
     data object Submitted : SmartCollectionBatchResult
@@ -89,6 +134,10 @@ internal class SmartCollectionBatchHandoff(
     private val submit: suspend (CanonicalCollectionIntentPlan) -> Boolean,
     private val trace: (Map<String, String>) -> Unit = {},
     private val verifiedRemoteAssets: suspend (SmartCollectionActionSource) -> Map<String, CanonicalBrowseMediaAsset> = { emptyMap() },
+    /** Production uses the selected-only Catalog path; legacy tests retain browse(). */
+    private val browseSelected: suspend (List<String>) -> CanonicalBrowseLibrary = { browse() },
+    private val sourceLimit: suspend (SmartCollectionActionSource, CanonicalBrowseLibrary) -> CanonicalBrowseLibrary =
+        { _, library -> library },
 ) {
     suspend fun execute(
         source: SmartCollectionActionSource,
@@ -101,8 +150,15 @@ internal class SmartCollectionBatchHandoff(
             "intent" to intent.name,
             "source" to when (source) {
                 is SmartCollectionActionSource.Adaptive -> "adaptive"
+                is SmartCollectionActionSource.RecentLocalTrack -> "recent_local"
+                is SmartCollectionActionSource.LibraryTrack -> "library_track"
                 is SmartCollectionActionSource.SavedDefinition -> "saved"
                 is SmartCollectionActionSource.PreviewQuery -> "preview"
+                is SmartCollectionActionSource.SavedV2Definition -> "saved_v2"
+                is SmartCollectionActionSource.SavedStaticPlaylist -> "normal_static"
+                is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> "normal_track"
+                is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> "smart_v2_track"
+                is SmartCollectionActionSource.PreviewV2Query -> "preview_v2"
             },
         )
         fun mark(stage: String, extra: Map<String, String> = emptyMap()) {
@@ -125,10 +181,23 @@ internal class SmartCollectionBatchHandoff(
                 mark("rejected", mapOf("reason" to "limit_exceeded"))
                 return SmartCollectionBatchResult.LimitExceeded
             }
-            val ids = selected.distinct()
-            val library = browse()
+            // Shuffle only freshly revalidated membership, not stale UI rows.
+            val shuffleRequested = intent == CanonicalCollectionIntent.PLAY_NOW &&
+                when (source) {
+                    is SmartCollectionActionSource.SavedStaticPlaylist -> source.shuffle
+                    is SmartCollectionActionSource.SavedV2Definition -> source.shuffle
+                    else -> false
+                }
+            val ids = canonicalSavedPlaylistOrder(selected, shuffleRequested)
+            val library = sourceLimit(source, browseSelected(ids))
             mark("catalog", mapOf("trackCount" to library.tracks.size.toString()))
-            val scopedRemote = verifiedRemoteAssets(source)
+            // A rated remote preference is never an exception to a chosen source.
+            val currentAssets = library.tracks.associate { track ->
+                track.recordingId to track.availableAssets.toSet()
+            }
+            val scopedRemote = verifiedRemoteAssets(source).filter { (id, hint) ->
+                currentAssets[id]?.contains(hint) == true
+            }
             mark("asset_evidence", mapOf("uniqueRatedAssets" to scopedRemote.size.toString()))
             val plan = planner.preview(
                 ids, intent, library,
@@ -171,6 +240,8 @@ private suspend fun currentSmartCollectionIds(
     source: SmartCollectionActionSource,
 ): List<String>? {
     return when (source) {
+    is SmartCollectionActionSource.RecentLocalTrack -> listOf(source.recordingId)
+    is SmartCollectionActionSource.LibraryTrack -> listOf(source.recordingId)
     is SmartCollectionActionSource.Adaptive -> {
         val fresh = persistentAdaptiveCollectionsReader(context).load()
             as? AdaptiveCollectionsUiState.Ready ?: return null
@@ -187,6 +258,39 @@ private suspend fun currentSmartCollectionIds(
     is SmartCollectionActionSource.PreviewQuery -> {
         currentSmartPlaylistQueryIds(context, source.query)
     }
+    is SmartCollectionActionSource.SavedV2Definition -> {
+        val repo = SmartPlaylistV2DefinitionRepository(
+            SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
+        )
+        val definition = repo.list().firstOrNull { it.id == source.id } ?: return null
+        currentSmartPlaylistV2QueryIds(context, definition.query, definition.id)
+    }
+    is SmartCollectionActionSource.PreviewV2Query -> {
+        currentSmartPlaylistV2QueryIds(context, source.query, source.ownerId)
+    }
+    is SmartCollectionActionSource.SavedStaticPlaylist -> {
+        val repo = CanonicalStaticPlaylistRepository(
+            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+        )
+        repo.list().firstOrNull { it.id == source.id }?.recordingIds
+    }
+    is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> {
+        val repo = CanonicalStaticPlaylistRepository(
+            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+        )
+        val saved = repo.list().firstOrNull { it.id == source.id } ?: return null
+        playlistPlaybackSelection(saved.recordingIds, source.recordingId, source.includeFollowing)
+    }
+    is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> {
+        val repo = SmartPlaylistV2DefinitionRepository(
+            SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
+        )
+        val saved = repo.list().firstOrNull { it.id == source.id } ?: return null
+        playlistPlaybackSelection(
+            currentSmartPlaylistV2QueryIds(context, saved.query, saved.id),
+            source.recordingId, source.includeFollowing,
+        )
+    }
     }
 }
 
@@ -195,10 +299,16 @@ private suspend fun currentSmartPlaylistQueryIds(
     query: RuleBasedSmartPlaylistQuery,
 ): List<String>? {
     val availability = CanonicalLibraryAvailabilityReaders.persistent(context)
-    if (availability.availableRecordingIds().size > 5_000) return null
     return persistentSmartPlaylistPreview(context, availability)
         .preview(query).map { it.recordingId }
 }
+
+private suspend fun currentSmartPlaylistV2QueryIds(
+    context: Context,
+    query: SmartPlaylistV2Query,
+    ownerId: String? = null,
+): List<String> = persistentSmartPlaylistPreview(context)
+    .preview(query, ownerId).map { it.recordingId }
 
 /**
  * Catalog-owned source evidence only: a uniquely rated MediaAsset can break
@@ -206,21 +316,70 @@ private suspend fun currentSmartPlaylistQueryIds(
  * use a complete current-account snapshot. No rating data is persisted locally.
  * A stale or ambiguous remote preference never picks an asset.
  */
+/**
+ * Prove that every possible match must have a numeric rating >= a threshold.
+ * A disjunction with an unrated branch or a negation cannot authorize a
+ * remote MediaAsset choice. Missing evidence still fails closed downstream.
+ */
+internal fun SmartPlaylistV2Query.guaranteedMinimumRatingForAssetHints(): Double? {
+    fun proof(node: SmartPlaylistRule): Double? = when (node) {
+        is SmartPlaylistRule.Not -> null
+        is SmartPlaylistRule.Reference -> null // A nested playlist does not prove a numeric rating threshold.
+        is SmartPlaylistRule.Comparison -> {
+            if (node.field == SmartPlaylistRuleField.EXPLICIT_RATING &&
+                node.operator in setOf(
+                    SmartPlaylistRuleOperator.GREATER_OR_EQUAL,
+                    SmartPlaylistRuleOperator.EQUAL,
+                ) &&
+                node.value != null && node.value in 1.0..5.0
+            ) node.value else null
+        }
+        is SmartPlaylistRule.Group -> {
+            val childProofs = node.children.map(::proof)
+            when (node.join) {
+                SmartPlaylistRuleJoin.ALL -> childProofs.filterNotNull().maxOrNull()
+                SmartPlaylistRuleJoin.ANY ->
+                    if (childProofs.all { it != null }) childProofs.filterNotNull().minOrNull()
+                    else null
+            }
+        }
+    }
+    return proof(rules)
+}
+
+/**
+ * V1 and V2 use the same account-scoped read. Only a rule that guarantees
+ * numeric rating evidence on all satisfying paths may break an asset tie.
+ */
 private suspend fun currentScopedRatedAssetHints(
     context: Context,
     source: SmartCollectionActionSource,
 ): Map<String, CanonicalBrowseMediaAsset> {
-    val query = when (source) {
+    val db = SmartPlaylistDefinitionDatabase.get(context)
+    val minimum = when (source) {
         is SmartCollectionActionSource.Adaptive -> null
-        is SmartCollectionActionSource.PreviewQuery -> source.query
+        is SmartCollectionActionSource.RecentLocalTrack -> null
+        is SmartCollectionActionSource.LibraryTrack -> null
+        is SmartCollectionActionSource.SavedStaticPlaylist -> null
+        is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> null
+        is SmartCollectionActionSource.PreviewQuery -> source.query.minimumExplicitRating
+        is SmartCollectionActionSource.PreviewV2Query ->
+            source.query.guaranteedMinimumRatingForAssetHints()
         is SmartCollectionActionSource.SavedDefinition -> {
-            val repo = SmartPlaylistDefinitionRepository(
-                SmartPlaylistDefinitionDatabase.get(context).definitionDao(),
-            )
-            repo.list().firstOrNull { it.id == source.id }?.query
+            SmartPlaylistDefinitionRepository(db.definitionDao())
+                .list().firstOrNull { it.id == source.id }?.query?.minimumExplicitRating
+        }
+        is SmartCollectionActionSource.SavedV2Definition -> {
+            SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+                .list().firstOrNull { it.id == source.id }?.query
+                ?.guaranteedMinimumRatingForAssetHints()
+        }
+        is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> {
+            SmartPlaylistV2DefinitionRepository(db.v2DefinitionDao())
+                .list().firstOrNull { it.id == source.id }?.query
+                ?.guaranteedMinimumRatingForAssetHints()
         }
     } ?: return emptyMap()
-    val minimum = query.minimumExplicitRating ?: return emptyMap()
     val account = SharedPrefsOpenSubsonicAccountPersistence(context)
     val reader = OpenSubsonicRemoteRatingReader(CanonicalCatalogDatabase.get(context)) {
         account.read()
@@ -252,6 +411,32 @@ internal fun uniqueVerifiedRatedRemoteAssets(
         }.toMap()
 }
 
+/** Fail closed: never silently resolve a saved single-source playlist from another provider. */
+internal fun canonicalBrowseOnlyProvider(
+    library: CanonicalBrowseLibrary, providerKey: String,
+): CanonicalBrowseLibrary = CanonicalBrowseLibrary(
+    library.tracks.mapNotNull { track ->
+        val eligible = track.availableAssets.filter { it.providerKey == providerKey }
+        if (eligible.isEmpty()) null else track.copy(availableAssets = eligible)
+    },
+)
+
+/** Global smart source rules must also constrain physical assets at playback. */
+internal fun canonicalBrowseOnlySourceKind(
+    library: CanonicalBrowseLibrary, kind: String,
+): CanonicalBrowseLibrary = CanonicalBrowseLibrary(
+    library.tracks.mapNotNull { track ->
+        val scoped = track.availableAssets.filter { asset ->
+            when (kind) {
+                "local" -> asset.providerKey == RoomCanonicalQueueResolver.LOCAL_PROVIDER
+                "opensubsonic" -> asset.providerKey.startsWith("opensubsonic:")
+                else -> false
+            }
+        }
+        if (scoped.isEmpty()) null else track.copy(availableAssets = scoped)
+    },
+)
+
 /**
  * Catalog-only read projection. Provider configuration remains Catalog-owned,
  * using its existing local/credential-backed eligibility; no auth URLs, native
@@ -264,16 +449,24 @@ internal fun uniqueVerifiedRatedRemoteAssets(
 internal fun canonicalBrowseProviderKeys(remoteProviders: Collection<String>): List<String> =
     (remoteProviders + RoomCanonicalQueueResolver.LOCAL_PROVIDER).distinct().sorted()
 
-private suspend fun currentCanonicalBrowse(context: Context): CanonicalBrowseLibrary {
+private suspend fun currentCanonicalBrowse(
+    context: Context,
+    selectedIds: List<String>,
+): CanonicalBrowseLibrary {
+    if (selectedIds.isEmpty()) return CanonicalBrowseLibrary.EMPTY
+    require(selectedIds.size <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE)
     val dao = CanonicalCatalogDatabase.get(context).catalogDao()
     val accounts = OpenSubsonicAccountRepository(
         persistence = SharedPrefsOpenSubsonicAccountPersistence(context),
         credentials = AndroidKeystoreOpenSubsonicCredentialStore(context),
     )
     val providers = canonicalBrowseProviderKeys(
-        OpenSubsonicLibraryProviderConfigurationReader(accounts).configuredProviderKeys()
+        OpenSubsonicLibraryProviderConfigurationReader(accounts).configuredProviderKeys(),
     )
-    val rows = dao.observeMultiSourceBrowseAssets(providers).first()
+    // Provider list is current-account scoped. No row from any other account
+    // or outside the click-time RecordingId selection can enter this projection.
+    val rows = selectedIds.distinct().chunked(400)
+        .flatMap { dao.browseAssetsForRecordingIds(providers, it) }
     val tracks = rows.groupBy { it.recordingId }.values.mapNotNull { group ->
         val first = group.firstOrNull() ?: return@mapNotNull null
         CanonicalBrowseTrack(
@@ -373,7 +566,50 @@ internal fun rememberSmartCollectionBatchAction(
     val handoff = remember(context, controller) {
         SmartCollectionBatchHandoff(
             refreshIds = { source -> currentSmartCollectionIds(context, source) },
-            browse = { currentCanonicalBrowse(context) },
+            browse = { CanonicalBrowseLibrary.EMPTY },
+            browseSelected = { selectedIds -> currentCanonicalBrowse(context, selectedIds) },
+            sourceLimit = { source, library ->
+                when (source) {
+                    is SmartCollectionActionSource.RecentLocalTrack ->
+                        canonicalBrowseOnlyProvider(library, RoomCanonicalQueueResolver.LOCAL_PROVIDER)
+                    is SmartCollectionActionSource.LibraryTrack ->
+                        if (source.sourceKey == null) library
+                        else canonicalBrowseOnlyProvider(library, source.sourceKey)
+                    is SmartCollectionActionSource.SavedStaticPlaylist,
+                    is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> {
+                        val id = when (source) {
+                            is SmartCollectionActionSource.SavedStaticPlaylist -> source.id
+                            is SmartCollectionActionSource.SavedStaticPlaylistFromTrack -> source.id
+                            else -> error("Not a static playlist source")
+                        }
+                        val chosen = CanonicalStaticPlaylistRepository(
+                            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+                        ).list().firstOrNull { it.id == id }?.sourceProviderKey
+                        if (chosen == null) library
+                            else canonicalBrowseOnlyProvider(library, chosen)
+                    }
+                    is SmartCollectionActionSource.SavedV2Definition,
+                    is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> {
+                        val id = when (source) {
+                            is SmartCollectionActionSource.SavedV2Definition -> source.id
+                            is SmartCollectionActionSource.SavedV2PlaylistFromTrack -> source.id
+                            else -> error("Not a smart playlist source")
+                        }
+                        val query = SmartPlaylistV2DefinitionRepository(
+                            SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
+                        ).list().firstOrNull { it.id == id }?.query
+                        val kind = query?.let { smartRuleGlobalSource(it.rules) }
+                        if (kind == null) library
+                            else canonicalBrowseOnlySourceKind(library, kind)
+                    }
+                    is SmartCollectionActionSource.PreviewV2Query -> {
+                        val kind = smartRuleGlobalSource(source.query.rules)
+                        if (kind == null) library
+                            else canonicalBrowseOnlySourceKind(library, kind)
+                    }
+                    else -> library
+                }
+            },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
             submit = { plan -> submitCanonicalBatch(controller, plan) },
             verifiedRemoteAssets = { source -> currentScopedRatedAssetHints(context, source) },
@@ -437,7 +673,9 @@ internal fun rememberMusicBrainzCatalogAction(
                 CanonicalCatalogDatabase.get(context).catalogDao()
                     .entityIdForExternalIdentity("musicbrainz", "recording", mbid)
             },
-            browse = { currentCanonicalBrowse(context) },
+            // Never materialize an unrestricted catalog for one MBID tap.
+            browse = { CanonicalBrowseLibrary.EMPTY },
+            browseSelected = { ids -> currentCanonicalBrowse(context, ids) },
             planner = CanonicalCollectionIntentPlanner(androidCanonicalQueueResolver(context)),
         )
     }

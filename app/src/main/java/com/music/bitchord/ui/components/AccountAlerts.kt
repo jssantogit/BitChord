@@ -35,6 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -59,7 +62,7 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ListenBrainzTokenAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     tokenInput: String,
     onTokenInputChange: (String) -> Unit,
     onSave: () -> Unit,
@@ -103,7 +106,7 @@ fun ListenBrainzTokenAlert(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun LastfmLoginAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     usernameInput: String,
     onUsernameInputChange: (String) -> Unit,
     passwordInput: String,
@@ -245,7 +248,7 @@ fun DiscordTokenAlert(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun TextValueAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     title: String,
     message: String,
     placeholder: String,
@@ -257,6 +260,8 @@ fun TextValueAlert(
     saveEnabled: Boolean = true,
     /** A third action between Save and Cancel, for a value that can be cleared. */
     onRemove: (() -> Unit)? = null,
+    /** Sensitive values use the same masked native PillTextField as Last.fm. */
+    isPassword: Boolean = false,
 ) {
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
         Column(
@@ -271,18 +276,26 @@ fun TextValueAlert(
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
             )
-            Text(
-                text = message,
-                modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-            )
+            if (message.isNotBlank()) {
+                Text(
+                    text = message,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                Spacer(Modifier.height(14.dp))
+            }
             PillTextField(
                 value = value,
                 onValueChange = onValueChange,
                 placeholder = placeholder,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                isPassword = isPassword,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Text,
+                    imeAction = ImeAction.Done,
+                ),
                 keyboardActions = KeyboardActions(onDone = { onSave() }),
             )
         }
@@ -325,7 +338,7 @@ data class EditorField(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ServerEditorAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     title: String,
     description: String,
     fields: List<EditorField>,
@@ -341,6 +354,10 @@ fun ServerEditorAlert(
     /** Offered only when there is something stored to remove. */
     onRemove: (() -> Unit)? = null,
     onDismiss: () -> Unit,
+    /** Optional existing controls between URL and credentials (e.g. authentication mode). */
+    afterFirstField: (@Composable () -> Unit)? = null,
+    /** Keep account-specific explanatory notes in the native editor shell. */
+    afterFields: (@Composable () -> Unit)? = null,
 ) {
     AlertScaffold(hazeState = hazeState, onDismiss = { if (!testing) onDismiss() }) {
         Column(
@@ -382,6 +399,14 @@ fun ServerEditorAlert(
                         onDone = { if (canSubmit && !testing) onSave() },
                     ),
                 )
+                if (index == 0 && afterFirstField != null) {
+                    Spacer(Modifier.height(8.dp))
+                    afterFirstField()
+                }
+            }
+            if (afterFields != null) {
+                Spacer(Modifier.height(8.dp))
+                afterFields()
             }
         }
         AlertRule()
@@ -660,12 +685,14 @@ fun WebDavConflictAlert(
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ConfirmationAlert(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     title: String,
     description: String,
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
+    dismissLabel: String? = null,
+    destructive: Boolean = false,
 ) {
     AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
         Column(
@@ -689,9 +716,18 @@ fun ConfirmationAlert(
             )
         }
         AlertRule()
-        AlertAction(label = confirmLabel, emphasised = true, onClick = onConfirm)
+        AlertAction(
+            label = confirmLabel,
+            emphasised = true,
+            destructive = destructive,
+            onClick = onConfirm,
+        )
         AlertRule()
-        AlertAction(label = stringResource(R.string.cancel), emphasised = false, onClick = onDismiss)
+        AlertAction(
+            label = dismissLabel ?: stringResource(R.string.cancel),
+            emphasised = false,
+            onClick = onDismiss,
+        )
     }
 }
 
@@ -804,11 +840,31 @@ private fun ChoiceRow(
     }
 }
 
+/**
+ * Settings and other screens below a floating top bar need a window-level host.
+ * The content remains the real BitChord alert, not a new Material3 surface.
+ */
+@Composable
+fun NativeAlertHost(
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false,
+        ),
+    ) {
+        content()
+    }
+}
+
 /** The scrim + frosted card frame shared by every UIAlertController-style dialog. */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun AlertScaffold(
-    hazeState: HazeState,
+    hazeState: HazeState?,
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -830,8 +886,12 @@ internal fun AlertScaffold(
             modifier = Modifier
                 .width(ALERT_WIDTH)
                 .clip(shape)
+                .testTag("native-alert-scaffold")
                 .then(
-                    if (reduceDynamicBlur) {
+                    // A nested full-screen editor is its own dialog window and
+                    // cannot sample the Activity's haze source. Keep the exact
+                    // first-party alert metrics with a solid surface instead.
+                    if (reduceDynamicBlur || hazeState == null) {
                         Modifier.background(MaterialTheme.colorScheme.surface)
                     } else {
                         Modifier.optimizedHazeEffect(
