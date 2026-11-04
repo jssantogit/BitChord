@@ -132,3 +132,42 @@ internal fun rememberCanonicalArtistReleases(
     }
 
 }
+
+/**
+ * Union available album membership across currently selected asset sources.
+ * The provider-specific remote IDs never enter this list; only RecordingIds.
+ */
+internal fun canonicalArtistNestedRecordingOrder(
+    sourceRecordingIds: List<List<String>>,
+): List<String> = sourceRecordingIds.flatten().distinct()
+
+/**
+ * The nested album controller queries the catalog independently of the
+ * artist screen's visual tree. Later, the same result feeds NativeAlbumDetail
+ * when the Library renderer is retired.
+ */
+@Composable
+internal fun rememberCanonicalArtistNestedRecordings(
+    releaseId: String?,
+    sourceKeys: List<String>,
+    selectedSourceKey: String?,
+): State<List<String>> {
+    val context = LocalContext.current.applicationContext
+    val catalogDb = remember(context) { CanonicalCatalogDatabase.get(context) }
+    val dao = remember(catalogDb) { catalogDb.catalogDao() }
+    val keys = sourceKeys.filter { selectedSourceKey == null || it == selectedSourceKey }
+    return produceState(initialValue = emptyList(), key1 = releaseId, key2 = keys) {
+        val id = releaseId ?: return@produceState
+        value = try {
+            withContext(Dispatchers.IO) {
+                canonicalArtistNestedRecordingOrder(
+                    keys.map { dao.providerScopedReleaseRecordingIds(it, id) },
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+}
