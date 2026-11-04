@@ -2655,8 +2655,19 @@ class PlaybackService : MediaLibraryService() {
     private fun startBoundedContinuationLoading(contextToken: String) {
         boundedContinuationJob?.cancel()
         boundedContinuationJob = scope.launch {
+            // A continuation token from a historical YouTube page cannot be
+            // revalidated through a surviving provider-owned MediaAsset.
+            // Release its handoff instead of retrying the retired endpoint.
+            if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
+                return@launch
+            }
             var failures = 0
             while (isActive && boundedContextToken == contextToken) {
+                if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                    boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
+                    return@launch
+                }
                 val request = boundedContextRegistry.claimContinuation(contextToken) ?: return@launch
                 val page = withContext(Dispatchers.IO) {
                     YtMusicRepository.moreSongs(request.continuationToken).getOrNull()
@@ -6266,6 +6277,9 @@ class PlaybackService : MediaLibraryService() {
         // unchanged result is the fallback and is warmed on the same path.
         AudioCache.cancel()
         preferredPrefetchJob = scope.launch {
+            if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                return@launch
+            }
             val preferred = runCatching { YtMusicRepository.resolveAudio(next) }
                 .onFailure {
                     TrackLog.d(
