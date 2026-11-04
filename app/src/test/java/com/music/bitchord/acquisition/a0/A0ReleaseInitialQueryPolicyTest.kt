@@ -37,8 +37,14 @@ class A0ReleaseInitialQueryPolicyTest {
             "BTS - Epiphany (Jin Demo Ver.)","Proof",
             releaseWide=A0ReleaseInitialQueryPolicy.permitsAlbumWide(count))
         assertNull(recovery.releaseWideQuery)
+        // The title-first recovery keeps the *requested version words*.
+        // A second bounded variant may still use equivalent version spelling.
+        val already=mutableSetOf("BTS Epiphany Jin Demo Ver")
+        assertEquals("Epiphany Jin Demo Ver",recovery.next(
+            6000,false,already))
+        already.add("Epiphany Jin Demo Ver")
         assertEquals("BTS Epiphany Jin Demo Version",recovery.next(
-            6000,false,setOf("BTS Epiphany Jin Demo Ver")))
+            12000,false,already))
         assertFalse(recovery.authorizesTransfer)
     }
 
