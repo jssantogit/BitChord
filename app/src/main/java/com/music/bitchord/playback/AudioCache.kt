@@ -880,30 +880,11 @@ object AudioCache {
     private var pendingQueue: List<String> = emptyList()
 
     /**
-     * Gets the queue ahead of the one playing warmed up, in play order.
+     * Compatibility entry point for the retired video-ID read-ahead.
      *
-     * The first id gets the full treatment: its opening onto disk first, so
-     * it can start the moment it's reached, then the rest of it, so that
-     * seeking around it is a disk read from the first second it plays. Only
-     * that one track — never the one playing, and never bytes for anything
-     * further out. Media3 locks a cache entry to a single writer and the
-     * player holds that lock for as long as it is streaming the track — a
-     * fetch aimed at the same entry is quietly served from the network and
-     * written nowhere, spending the listener's data to cache precisely
-     * nothing. Caching a track before it is reached gets the same result
-     * without the contention. And full-track bytes for tracks that may never
-     * be reached would spend real mobile data on nothing.
-     *
-     * The next [QUEUE_LOOKAHEAD] ids past that one get a lighter treatment:
-     * just their stream URL resolved and held in [StreamResolver]'s own
-     * cache, not their bytes. That's the gap a fast run of skips actually
-     * falls into — the queue moving faster than a single-track read-ahead can
-     * follow it — and a resolve is cheap enough that warming several at once
-     * costs nothing worth guarding.
-     *
-     * Called freely; a call naming the same queue as the one already running
-     * is left alone, and a different one replaces it outright, since on a run
-     * of skips only wherever the listener actually lands is worth chasing.
+     * It must not start remote requests: historical video IDs are not audio
+     * assets. A future canonical prefetch must use verified MediaAsset identity
+     * and the provider-owned datasource instead of reviving this path.
      */
     fun prefetchQueue(@Suppress("UNUSED_PARAMETER") upcoming: List<Upcoming>) {
         // This read-ahead path only resolved bare YouTube video IDs. The
@@ -912,16 +893,7 @@ object AudioCache {
         cancel()
     }
 
-    /**
-     * A queued track as read-ahead needs it.
-     *
-     * [target] is what a cross-source match is made on, and read-ahead cannot
-     * reach it any other way: it runs for tracks that are not the current item,
-     * so the session's metadata is the wrong track's, and the plain
-     * `bitchord://watch?v=…` URI it builds for itself carries an id and nothing
-     * else. It rides along from the queue instead — see
-     * [PlaybackService.prefetchAround][com.music.bitchord.playback.PlaybackService].
-     */
+    /** Legacy argument shape retained until queue callers are migrated. */
     data class Upcoming(val mediaId: String, val target: TrackMatcher.Target)
 
     /**
