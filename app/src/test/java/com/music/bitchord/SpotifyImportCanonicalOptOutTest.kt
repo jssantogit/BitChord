@@ -2,6 +2,7 @@ package com.music.bitchord
 
 import com.music.bitchord.data.spotify.SpotifyImportTrack
 import com.music.bitchord.data.spotify.SpotifyImporter
+import com.music.bitchord.data.model.Song
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -26,6 +27,42 @@ class SpotifyImportCanonicalOptOutTest {
         assertTrue(songs.isEmpty())
         assertEquals(tracks, unmatched)
         assertEquals(2, callbacks.get())
+    }
+
+    @Test fun injectedResolverMatchesWithoutConsultingYoutube() = runBlocking {
+        val tracks = listOf(
+            SpotifyImportTrack("Supernova", "aespa"),
+            SpotifyImportTrack("Unknown", "Unknown"),
+        )
+        val queries = mutableListOf<String>()
+        val (songs, unmatched) = SpotifyImporter.resolveToSongs(
+            tracks = tracks,
+            onProgress = { _, _ -> },
+            allowYoutubeMatching = { true },
+            resolveTrack = { track ->
+                synchronized(queries) { queries.add(track.title) }
+                if (track.title == "Supernova") Song(
+                    videoId = "local:sample",
+                    title = track.title,
+                    artist = track.artist,
+                ) else null
+            },
+        )
+        assertEquals(listOf("Supernova"), songs.map { it.title })
+        assertEquals(listOf("Unknown"), unmatched.map { it.title })
+        assertEquals(setOf("Supernova", "Unknown"), queries.toSet())
+    }
+
+    @Test fun blockedGateNeverCallsInjectedResolver() = runBlocking {
+        val tracks = listOf(SpotifyImportTrack("Magnetic", "ILLIT"))
+        val (songs, unmatched) = SpotifyImporter.resolveToSongs(
+            tracks = tracks,
+            onProgress = { _, _ -> },
+            allowYoutubeMatching = { false },
+            resolveTrack = { error("source policy must block resolution") },
+        )
+        assertTrue(songs.isEmpty())
+        assertEquals(tracks, unmatched)
     }
 
     @Test fun emptyPlaylistHasNoNetworkOrSyntheticRows() = runBlocking {
