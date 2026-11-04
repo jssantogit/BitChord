@@ -714,7 +714,6 @@ class PlaybackService : MediaLibraryService() {
     private val swapVersionCommand = SessionCommand(ACTION_SWAP_VERSION, Bundle.EMPTY)
     private val queueDragCommand = SessionCommand(ACTION_QUEUE_DRAG, Bundle.EMPTY)
 
-    private var favoriteActionJob: Job? = null
     private var stationActionJob: Job? = null
     private var autoplayLoadJob: Job? = null
     /** Rate limit for listener-requested retries; automatic upgrades do not touch it. */
@@ -1856,28 +1855,15 @@ class PlaybackService : MediaLibraryService() {
         )
 
     /**
-     * Whether Like is offered for [item] — the player's own rule, so no surface
-     * shows a heart the player doesn't: there has to be an account to record it
-     * against, and a local file or a download has no YouTube identity to rate.
+     * The old notification heart wrote YouTube thumbs-up, which is NOT the
+     * first-party 0–5 star rating. Until a verified RecordingId-to-editor
+     * action replaces it, hide the control rather than silently rewriting
+     * user ratings or contacting the retired YouTube account endpoint.
      */
-    private fun canLike(item: MediaItem?): Boolean =
-        item != null &&
-            !item.isCanonicalRemotePlayback() &&
-            SignedIn.state(this).value &&
-            item.toSong().localUri == null
+    private fun canLike(@Suppress("UNUSED_PARAMETER") item: MediaItem?): Boolean = false
 
-    /** Favorite and Shuffle: the only actions shown on the phone notification. */
+    /** Notification uses playback-native shuffle. Legacy YouTube Like is gone. */
     private fun notificationButtons(): List<CommandButton> {
-        val favorite = if (!canLike(player?.currentMediaItem)) null else CommandButton.Builder(
-            if (LikeState.overrides.value[player?.currentMediaItem?.mediaId] == LikeStatus.LIKE) {
-                CommandButton.ICON_HEART_FILLED
-            } else {
-                CommandButton.ICON_HEART_UNFILLED
-            },
-        )
-            .setSessionCommand(favoriteCommand)
-            .setDisplayName("Favorite")
-            .build()
         val shuffleEnabled = QueueShuffle.enabled.value
         val shuffle = CommandButton.Builder(
             if (shuffleEnabled) {
@@ -1889,7 +1875,7 @@ class PlaybackService : MediaLibraryService() {
             .setSessionCommand(shuffleCommand)
             .setDisplayName(if (shuffleEnabled) "Shuffle off" else "Shuffle on")
             .build()
-        return listOfNotNull(favorite, shuffle)
+        return listOf(shuffle)
     }
 
     /** Adds Radio/Revert for controllers with room for them, e.g. Android Auto. */
@@ -3130,29 +3116,6 @@ class PlaybackService : MediaLibraryService() {
         val restored = stashed.filter { it.mediaId !in present }
         if (restored.isEmpty()) return
         exoPlayer.addMediaItems(restored)
-    }
-
-    private fun toggleFavoriteFromNotification(videoId: String) {
-        favoriteActionJob?.cancel()
-        val previous = LikeState.overrides.value[videoId] ?: LikeStatus.INDIFFERENT
-        val target = if (previous == LikeStatus.LIKE) {
-            LikeStatus.INDIFFERENT
-        } else {
-            LikeStatus.LIKE
-        }
-
-        // Match the player UI: update both surfaces immediately, then reconcile
-        // the optimistic state with YouTube in the background.
-        LikeState.set(videoId, target)
-        refreshCustomLayouts()
-        favoriteActionJob = scope.launch {
-            YtMusicRepository.rate(videoId, target)
-                .onFailure {
-                    LikeState.set(videoId, previous)
-                    refreshCustomLayouts()
-                    TrackLog.w("BitChord", "notification favorite failed: ${it.message}", about = videoId)
-                }
-        }
     }
 
     /**
@@ -7972,7 +7935,6 @@ class PlaybackService : MediaLibraryService() {
         ): MediaSession.ConnectionResult {
             val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
-                .add(favoriteCommand)
                 .add(boundedContextCommand)
                 .add(clearBoundedContextCommand)
                 .add(canonicalRemotePlaybackCommand)
@@ -8058,18 +8020,15 @@ class PlaybackService : MediaLibraryService() {
                         partySync?.endQueueDrag()
                     }
                 }
-                // A widget or watch drawn before the track changed can still
-                // send this for one the player offers no Like on.
-                ACTION_TOGGLE_FAVORITE -> session.player.currentMediaItem
-                    ?.takeIf(::canLike)
-                    ?.mediaId
-                    ?.let { toggleFavoriteFromNotification(it) }
+                // A stale widget/watch may still send the retired command.
+                // Reject it explicitly; it is not a native Recording rating.
+                ACTION_TOGGLE_FAVORITE -> return Futures.immediateFuture(
+                    SessionResult(SessionError.ERROR_NOT_SUPPORTED),
+                )
                 else -> return Futures.immediateFuture(
                     SessionResult(SessionError.ERROR_NOT_SUPPORTED),
                 )
             }
-            // The actual YouTube rating is asynchronous. The command itself has been accepted;
-            // the notification is refreshed when the network write completes.
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
