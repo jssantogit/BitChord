@@ -1881,6 +1881,15 @@ class SourcesTest {
     }
 
     @Test
+    fun `source settings hide retired Youtube while retaining disabled user addons`() {
+        val yt = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val addon = SourceConfig(kind = SourceKind.ADDON, enabled = false)
+        val jio = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = false)
+        val visible = SourceRegistry.displayConfigs(listOf(yt, addon, jio))
+        assertEquals(listOf(addon.id, jio.id), visible.map { it.id })
+    }
+
+    @Test
     fun `historical Youtube source settings never become active audio candidates`() {
         val yt = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
         val addon = SourceConfig(kind = SourceKind.ADDON, enabled = true)
