@@ -98,4 +98,23 @@ class CanonicalAlbumDetailParityTest {
         assertEquals(4, nativeCanonicalAlbumRowNumber("unknown", 3, original))
     }
 
+    @Test fun nestedNativeAlbumSearchDoesNotChangeReleaseTrackOrderOrNumbers() {
+        val ordered = listOf(
+            track("recording-c", "Third"),
+            track("recording-a", "First"),
+            track("recording-b", "Second"),
+        )
+        val filtered = nativeCanonicalAlbumVisibleTracks(ordered, "first")
+        assertEquals(listOf("recording-a"), filtered.map { it.recordingId })
+        assertEquals(
+            2,
+            nativeCanonicalAlbumRowNumber(
+                filtered.single().recordingId,
+                0,
+                canonicalAlbumDetailTrackNumbers(ordered),
+            ),
+        )
+        assertEquals(ordered, nativeCanonicalAlbumVisibleTracks(ordered, ""))
+    }
+
 }
