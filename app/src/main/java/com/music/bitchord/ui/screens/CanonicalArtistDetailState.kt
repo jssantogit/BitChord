@@ -66,7 +66,7 @@ internal fun rememberCanonicalArtistNestedNavigation(
     onNestedAlbumAddToPlaylist: (ReleaseEntity) -> Unit,
 ): CanonicalArtistNestedNavigation {
     val navigation = remember(canonicalArtistDetailNavigationKey(artistId, artistName)) {
-        CanonicalArtistNestedNavigation(androidx.compose.runtime.mutableStateOf(null))
+        CanonicalArtistNestedNavigation(androidx.compose.runtime.mutableStateOf<ReleaseEntity?>(null))
     }
     val selected = navigation.openedRelease
     androidx.compose.runtime.LaunchedEffect(selected?.id) {
