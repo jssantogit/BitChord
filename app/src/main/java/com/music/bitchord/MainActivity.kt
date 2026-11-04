@@ -5212,10 +5212,8 @@ private fun BitChordApp(
                 BackHandler { showSpotifyImportDialog = false }
                 SpotifyImportAlert(
                     hazeState = hazeState,
-                    // Imported public playlists are device-owned. No YouTube
-                    // privacy settings or account-side playlist creation.
-                    signedIn = false,
-                    onImported = { title, _, songs ->
+                    // Imported public playlists are device-owned.
+                    onImported = { title, songs ->
                         val saved = com.music.bitchord.data.spotify.LocalPlaylistStore
                             .savePlaylist(title, songs)
                         showQueueNotice(
