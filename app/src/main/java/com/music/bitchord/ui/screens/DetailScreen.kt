@@ -954,9 +954,11 @@ fun DetailScreen(
                         contentPadding = PaddingValues(
                             bottom = contentPadding.calculateBottomPadding(),
                         ),
-                        page = page,
                         canvas = canvas,
-                        heroUrl = appleArt?.heroUrl,
+                        // Preserve the legacy cover fallback at this adapter
+                        // boundary; the shared native frame only sees artwork.
+                        heroUrl = appleArt?.heroUrl
+                            ?: page.thumbnailUrl?.artworkAt(HEADER_ART_PX),
                         content = detailListItems,
                     )
                 } else {
