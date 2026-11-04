@@ -342,35 +342,17 @@ fun SongRow(
      */
     showSourceQuality: Boolean = false,
 ) {
-    val haptics = rememberHaptics()
-    val swipeStateHolder = remember { mutableStateOf<SwipeToDismissBoxState?>(null) }
-    var boxWidth by remember { mutableFloatStateOf(0f) }
-
-    val currentOnSwipeToQueue by rememberUpdatedState(onSwipeToQueue)
-
-    val swipeState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value != SwipeToDismissBoxValue.Settled && currentOnSwipeToQueue != null) {
-                val offset = try { swipeStateHolder.value?.requireOffset() ?: 0f } catch (e: Exception) { 0f }
-                // Only queue if the physical drag reached half the box width, ignoring short accidental flings.
-                if (abs(offset) >= boxWidth * 0.45f) {
-                    haptics.play(Haptic.Select)
-                    currentOnSwipeToQueue?.invoke()
-                }
-            }
-            false // never actually dismiss; snap back
-        },
-        positionalThreshold = { distance -> distance * 0.5f },
-    )
-    swipeStateHolder.value = swipeState
-
-    if (onSwipeToQueue == null) {
+    NativeDetailTrackSwipeContainer(
+        onSwipeToQueue = onSwipeToQueue,
+        rowBackground = rowBackground,
+        modifier = modifier,
+    ) { rowModifier ->
         SongRowContent(
             song = song,
             onClick = onClick,
             onLongPress = onLongPress,
             onMore = onMore ?: onLongPress,
-            modifier = modifier,
+            modifier = rowModifier,
             trackNumber = trackNumber,
             subtitleColor = subtitleColor,
             downloadedTint = downloadedTint,
@@ -381,13 +363,48 @@ fun SongRow(
             selected = selected,
             showSourceQuality = showSourceQuality,
         )
+    }
+}
+
+/**
+ * Exactly the same swipe-to-queue gesture for Song and typed Recording rows.
+ * Only the row's presentation and queue callback are supplied by each source.
+ * The 45% threshold, haptics, reveal and snap-back remain source-independent.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NativeDetailTrackSwipeContainer(
+    onSwipeToQueue: (() -> Unit)?,
+    rowBackground: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable (Modifier) -> Unit,
+) {
+    val haptics = rememberHaptics()
+    val swipeStateHolder = remember { mutableStateOf<SwipeToDismissBoxState?>(null) }
+    var boxWidth by remember { mutableFloatStateOf(0f) }
+
+    val currentOnSwipeToQueue by rememberUpdatedState(onSwipeToQueue)
+
+    val swipeState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value != SwipeToDismissBoxValue.Settled && currentOnSwipeToQueue != null) {
+                val offset = try { swipeStateHolder.value?.requireOffset() ?: 0f } catch (e: Exception) { 0f }
+                if (abs(offset) >= boxWidth * 0.45f) {
+                    haptics.play(Haptic.Select)
+                    currentOnSwipeToQueue?.invoke()
+                }
+            }
+            false // snap back without ever dismissing the recording
+        },
+        positionalThreshold = { distance -> distance * 0.5f },
+    )
+    swipeStateHolder.value = swipeState
+
+    if (onSwipeToQueue == null) {
+        content(modifier)
         return
     }
 
-    // The row reveals "Queue" from the first pixel of the drag, but it only
-    // *commits* past 45% of the width — so without this the label is a promise
-    // the finger can't check. One light tick at the crossing is the whole point:
-    // let go now and it queues.
     LaunchedEffect(swipeState, boxWidth) {
         if (boxWidth <= 0f) return@LaunchedEffect
         val armAt = boxWidth * 0.45f
@@ -400,9 +417,6 @@ fun SongRow(
                         armed = true
                         haptics.play(Haptic.Tick)
                     }
-                    // Silent, and with hysteresis: dragging back under the line
-                    // re-arms, but so does the spring-back after a successful
-                    // queue, and that must not buzz the same gesture twice.
                     armed && travelled < armAt * 0.8f -> armed = false
                 }
             }
@@ -413,22 +427,7 @@ fun SongRow(
         modifier = modifier.onSizeChanged { boxWidth = it.width.toFloat() },
         backgroundContent = { QueueSwipeBackground(swipeState) },
     ) {
-        SongRowContent(
-            song = song,
-            onClick = onClick,
-            onLongPress = onLongPress,
-            onMore = onMore ?: onLongPress,
-            modifier = Modifier.background(rowBackground),
-            trackNumber = trackNumber,
-            subtitleColor = subtitleColor,
-            downloadedTint = downloadedTint,
-            isCurrent = isCurrent,
-            isPlaying = isPlaying,
-            activeTint = activeTint,
-            searchPlayingStyle = searchPlayingStyle,
-            selected = selected,
-            showSourceQuality = showSourceQuality,
-        )
+        content(Modifier.background(rowBackground))
     }
 }
 

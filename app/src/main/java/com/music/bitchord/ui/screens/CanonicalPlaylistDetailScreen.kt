@@ -41,6 +41,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -65,6 +66,7 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeDetailTrackSwipeContainer
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
@@ -234,7 +236,22 @@ internal fun CanonicalPlaylistTrackRow(
 ) {
     var menuExpanded by remember(track.id) { mutableStateOf(false) }
     val available = track.isAvailablePlaylistMember()
+    val playNext by com.music.bitchord.ui.AppUi.host.swipeToPlayNext
+        .collectAsStateWithLifecycle()
+    val onSwipeToQueue = if (available && onQueue != null) {
+        {
+            onQueue(
+                track.id,
+                canonicalPlaylistSwipeIntent(playNext),
+            )
+        }
+    } else null
+    NativeDetailTrackSwipeContainer(
+        onSwipeToQueue = onSwipeToQueue,
+        rowBackground = titleColor.copy(alpha = 0f),
+    ) { rowModifier ->
     NativeDetailTrackRowFrame(
+        modifier = rowModifier,
         onClick = if (available) ({ onPlay(track.id) }) else null,
         onMore = if (available) ({ menuExpanded = true }) else null,
         opacity = if (available) 1f else 0.45f,
@@ -291,7 +308,13 @@ internal fun CanonicalPlaylistTrackRow(
             }
         }
     }
+    }
 }
+
+/** The exact same queue intent selected by the shared SongRow swipe setting. */
+internal fun canonicalPlaylistSwipeIntent(playNext: Boolean): CanonicalCollectionIntent =
+    if (playNext) CanonicalCollectionIntent.ADD_NEXT
+    else CanonicalCollectionIntent.ADD_TO_QUEUE
 
 /**
  * Native action-row presentation reused from SongActionsSheet / BrowseActionsSheet.

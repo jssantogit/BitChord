@@ -41,6 +41,17 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun playlistSwipeIntentHonorsPlayerSettingWithoutConvertingRecordingIds() {
+        assertEquals(
+            com.music.bitchord.playback.CanonicalCollectionIntent.ADD_NEXT,
+            canonicalPlaylistSwipeIntent(true),
+        )
+        assertEquals(
+            com.music.bitchord.playback.CanonicalCollectionIntent.ADD_TO_QUEUE,
+            canonicalPlaylistSwipeIntent(false),
+        )
+    }
+
     @Test fun playlistDetailFrameRetainsNativeListGeometryAcrossSources() {
         compose.setContent {
             val resolved = com.music.bitchord.ui.theme.rememberArtworkPalette(
