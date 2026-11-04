@@ -440,16 +440,8 @@ object SourceResolver {
         request: StreamRequest = requestForDownload(),
     ): SourceStream? = coroutineScope {
         if (target.title.isBlank()) return@coroutineScope null
-        val wantsLossless = when (request) {
-            is StreamRequest.Lossless -> true
-            is StreamRequest.Best -> false
-            // Standard, and the one rung the sources are no use for: it is a
-            // ceiling of 128kbps chosen to fit more on the device, and a source
-            // has no way to be asked for *that* rung rather than for the best it
-            // has. JioSaavn's 320 is not a better answer to it, it is the wrong
-            // answer to it. YouTube's ladder is the only one that can be capped.
-            is StreamRequest.Capped -> return@coroutineScope null
-        }
+        val wantsLossless = request is StreamRequest.Lossless
+        val maxKbps = (request as? StreamRequest.Capped)?.maxKbps
         // [SourceRegistry.active] rather than the playback list: a download is
         // not budgeted by the connection's streaming ceiling. What it keeps is
         // [DownloadQuality]'s answer and what it may spend is
@@ -462,8 +454,7 @@ object SourceResolver {
         // nothing here answers — the download path never consults this list. So
         // an absent YouTube means everything enabled outranks it, which is
         // already what [rankedAbove] says about a config that isn't in the list.
-        val youtubeId = active.firstOrNull { it.kind == SourceKind.YOUTUBE }?.configId
-        val ranked = rankedAbove(youtubeId.orEmpty(), active)
+        val ranked = active
         val strictLength = target.durationSec != null
 
         // Who is in the bit-exact walk, and who is left to the race below it.
@@ -490,7 +481,7 @@ object SourceResolver {
                 // Putting the lossless request to a source that cannot meet it
                 // would only come back marked [SourceStream.belowRequest] to
                 // say so.
-                StreamRequest.Best,
+                if (maxKbps != null) request else StreamRequest.Best,
                 waitForAll = true,
                 strictLength = strictLength,
             ) { source, stream ->
@@ -500,7 +491,11 @@ object SourceResolver {
                 // missed by the already-on-disk check in `Downloads.prepare`,
                 // which only looks for lossless extensions when the setting
                 // keeps lossless — so it would be re-downloaded every time.
-                val ok = wantsLossless || stream.format.isLossless != true
+                val ok = (wantsLossless || stream.format.isLossless != true) &&
+                    (maxKbps == null || (
+                        stream.format.isLossless != true &&
+                        stream.format.kbps?.let { it in 1..maxKbps } == true
+                    ))
                 if (!ok) {
                     TrackLog.d(
                         TAG,
@@ -554,38 +549,21 @@ object SourceResolver {
             if (isBetter(stream.format, best?.second?.format)) best = source to stream
         }
         val (winner, chosen) = best ?: return@coroutineScope null
-        if (!beatsYouTubeAac(chosen.format)) {
-            TrackLog.d(
-                TAG,
-                "best offered for '${target.title}' is ${winner.displayName}'s " +
-                    "${chosen.format.summary}; taking YouTube's AAC over that",
-            )
+        if (!isDownloadableRendition(chosen.format)) {
+            TrackLog.d(TAG, "download: rejecting unverified rendition for '${target.title}'")
             return@coroutineScope null
         }
         TrackLog.d(
             TAG,
-            "download: '${target.title}' from ${winner.displayName} at ${chosen.format.summary}, " +
-                "over YouTube's AAC",
+            "download: '${target.title}' from ${winner.displayName} at ${chosen.format.summary}",
         )
         chosen
     }
 
-    /**
-     * Whether a lossy [candidate] is worth keeping as a file over whatever
-     * YouTube's own AAC ladder would have given for the same track.
-     *
-     * The floor under [forDownload]'s step 2, and deliberately a floor rather
-     * than a comparison: see [YOUTUBE_BEST_AAC_KBPS] for why the rung YouTube
-     * actually holds is not worth the walk it would take to find out.
-     *
-     * An unstated bitrate is a no. A download has to name the file before the
-     * first byte lands, and a rendition that described itself as nothing is
-     * nothing to weigh against the alternative — which is stricter than
-     * [streamBest]'s [statesNothingLossy] allowance, deliberately: playback can
-     * hand an undescribed URL to the decoder and let it work the codec out.
-     */
-    internal fun beatsYouTubeAac(candidate: StreamFormat): Boolean =
-        (candidate.kbps ?: 0) > YOUTUBE_BEST_AAC_KBPS
+    /** A file must describe its fidelity; no retired-provider bitrate floor. */
+    internal fun isDownloadableRendition(candidate: StreamFormat): Boolean =
+        candidate.isLossless == true || candidate.isDolbyAtmos ||
+            (candidate.kbps ?: 0) > 0
 
     /**
      * Whether [candidate] is enough better than [playing] to be worth the
