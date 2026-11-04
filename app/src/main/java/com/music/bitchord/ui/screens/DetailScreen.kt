@@ -213,7 +213,6 @@ private val PILL_SHAPE = RoundedCornerShape(12.dp)
 private const val SEARCH_ITEM_INDEX = 1
 
 /** The inset the header text and the action pills share. */
-internal val HEADER_GUTTER = PAGE_GUTTER + 8.dp
 
 /** Extra breathing room for the editorial copy on album and artist pages. */
 private val ABOUT_GUTTER = PAGE_GUTTER + 6.dp
