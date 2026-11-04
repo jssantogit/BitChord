@@ -1719,43 +1719,6 @@ internal fun AboutSection(
     }
 }
 
-@Composable
-internal fun SectionHeading(
-    title: String,
-    palette: ArtworkPalette,
-    onShowAll: (() -> Unit)? = null,
-    horizontalPadding: Dp = PAGE_GUTTER,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                start = horizontalPadding,
-                end = horizontalPadding,
-                top = 10.dp,
-                bottom = 8.dp,
-            ),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = palette.onBackground,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        if (onShowAll != null) {
-            Text(
-                text = stringResource(R.string.show_all),
-                style = MaterialTheme.typography.titleSmall,
-                color = palette.accent,
-                modifier = Modifier
-                    .clickable(onClick = onShowAll)
-                    .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
-            )
-        }
-    }
-}
 
 /** Compact row used inside the artist song grid; no swipe, to keep the
  *  horizontal pager's gestures unambiguous. */
