@@ -1,6 +1,7 @@
 package com.music.bitchord.playback
 
 import com.music.bitchord.data.catalog.CanonicalBrowseAssetRow
+import com.music.bitchord.data.model.Song
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -37,6 +38,42 @@ class CanonicalAutoBrowseTracksTest {
         assertNull(canonicalAutoSong(row(provider = "jellyfin:one")))
         assertNull(canonicalAutoSong(row(recordingId = "")))
         assertNull(canonicalAutoSong(row(mediaAssetId = "")))
+    }
+
+    @Test fun autoRecentsContainOnlyAlreadyVisitedVerifiedAudio() {
+        val historical = Song(videoId = "yt-legacy", title = "Old", artist = "Artist", thumbnailUrl = null)
+        val local = Song(
+            videoId = "local-1", title = "Local", artist = "Artist", thumbnailUrl = null,
+            localUri = "content://media/external/audio/media/9",
+        )
+        val remote = canonicalAutoSong(row())!!
+        val future = Song(
+            videoId = "local-future", title = "Future", artist = "Artist", thumbnailUrl = null,
+            localUri = "content://media/external/audio/media/10",
+        )
+        val results = canonicalAutoRecentSongs(
+            songs = listOf(historical, local, remote, future),
+            currentIndex = 2,
+            verifiedDownloadUri = { null },
+        )
+        assertEquals(listOf(remote.videoId, local.videoId), results.map { it.videoId })
+    }
+
+    @Test fun autoRecentsCanKeepDownloadedHistoricalIdentityButNotUnverifiedRemoteUrl() {
+        val historical = Song(videoId = "yt-legacy", title = "Saved", artist = "Artist", thumbnailUrl = null)
+        val unsafe = Song(
+            videoId = "https://example.invalid/stream",
+            title = "Unsafe", artist = "Artist", thumbnailUrl = null,
+        )
+        val results = canonicalAutoRecentSongs(
+            songs = listOf(historical, unsafe),
+            currentIndex = 1,
+            verifiedDownloadUri = { id ->
+                if (id == historical.videoId) "file:///music/saved.flac" else null
+            },
+        )
+        assertEquals(listOf("yt-legacy"), results.map { it.videoId })
+        assertEquals("file:///music/saved.flac", results.first().localUri)
     }
 
     @Test fun duplicatesFromOneRecordingCreateOneBrowsableSong() {
