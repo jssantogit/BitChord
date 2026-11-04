@@ -1346,6 +1346,10 @@ object AudioCache {
     }
 
     fun requestAnalysisHead(uri: Uri) {
+        // Legacy AutoMix alignment may otherwise call StreamResolver directly,
+        // outside the Media3 policy gate. Existing cached bytes remain intact,
+        // but no new YouTube request may start during backend retirement.
+        if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) return
         // Each of these gates used to stop a head dead with nothing in the
         // log to show for it: an unwired cache or upstream looked from the
         // outside exactly like a network that refuses everything.
@@ -1368,6 +1372,11 @@ object AudioCache {
         if (!analysisHeadsInFlight.add(videoId)) return
         scope.launch {
             try {
+                // An already scheduled analysis job must not race a provider
+                // policy change into a direct youtubei request.
+                if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+                    return@launch
+                }
                 val total = runCatching { StreamResolver.contentLength(videoId) }
                     .onFailure {
                         TrackLog.w(TAG, "contentLength failed for $videoId: ${it.message}", videoId)
