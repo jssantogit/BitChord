@@ -1273,6 +1273,7 @@
     <string name="spotify_import_none">ไม่พบเพลงเหล่านั้นบน YouTube Music</string>
     <string name="spotify_import_title">นำเข้าเพลย์ลิสต์จาก Spotify</string>
     <string name="spotify_import_unmatched">ไม่พบเพลง %1$d เพลงบน YouTube Music</string>
+    <string name="spotify_import_metadata_only">บันทึกเพลย์ลิสต์แล้ว โดยมี %1$d เพลงเป็นข้อมูลเมตาเท่านั้น ไม่มีการเชื่อมโยงเสียงที่ยังไม่ได้ตรวจสอบการจับคู่</string>
     <string name="spotify_library_subtitle">เพลย์ลิสต์ Spotify ของคุณ</string>
     <string name="spotify_sign_in">ลงชื่อเข้าใช้ด้วย Spotify</string>
     <string name="spotify_use_spdc_token">ใช้โทเค็น sp_dc</string>
