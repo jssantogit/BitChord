@@ -235,6 +235,22 @@ class PlaylistLibraryVisualReuseTest {
         RecentLocalAdditionsSnapshot.clear()
     }
 
+    @Test fun metadataOnlyNativeAlbumTrackNeverInventsPlaybackClick() {
+        compose.setContent {
+            com.music.bitchord.ui.components.NativeDetailTrackRowLayout(
+                onClick = null,
+                leading = { androidx.compose.material3.Text("1") },
+                textGap = com.music.bitchord.ui.components.PAGE_GUTTER,
+                title = { androidx.compose.material3.Text("Metadata-only song") },
+                subtitle = { androidx.compose.material3.Text("Verified artist") },
+                rating = {},
+                showRatingSlot = false,
+            )
+        }
+        compose.onNodeWithText("Metadata-only song").assertHasNoClickAction()
+        compose.onNodeWithTag("native-detail-rating-slot").assertDoesNotExist()
+    }
+
     @Test fun numberedNativeAlbumRowsDoNotReserveAnInvisibleRatingStrip() {
         compose.setContent {
             com.music.bitchord.ui.components.NativeDetailTrackRowLayout(
