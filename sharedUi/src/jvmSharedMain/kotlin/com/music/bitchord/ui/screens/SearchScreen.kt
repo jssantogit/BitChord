@@ -646,24 +646,16 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                     CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
                     CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
                 }
-                val nativeItem = canonicalRowAsBrowseItem(row).copy(
-                    subtitle = canonicalDisplaySubtitle(row, kind),
-                )
-                // Reuse the same native 52dp artwork, typography and artist/album
-                // rows as the established Search interface. MusicBrainz remains
-                // metadata; a Recording without an owned asset has no click.
-                BrowseRow(
-                    item = nativeItem,
+                // No BrowseItem or synthetic browseId is created merely to
+                // display a canonical MusicBrainz row. The native layout takes
+                // presentation data, and playback stays evidence-gated.
+                NativeSearchResultRow(
+                    row = canonicalNativeSearchRowUi(row, kind),
                     onClick = when {
                         row.kind != CanonicalSearchKind.RECORDING -> ({ onOpen(row) })
                         row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
                         else -> null
                     },
-                    localDownloaded = row.kind == CanonicalSearchKind.RECORDING &&
-                        row.hasVerifiedLocalAsset,
-                    durationLabel = if (row.kind == CanonicalSearchKind.RECORDING) {
-                        canonicalDurationLabel(row.durationMs)
-                    } else null,
                 )
                 if (index < section.second.lastIndex) {
                     HorizontalDivider(
@@ -719,6 +711,51 @@ fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = Brows
         row.kind == CanonicalSearchKind.RELEASE_GROUP && !canonicalVerifiedGroupType(row)
     },
     type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
+)
+
+/**
+ * Canonical metadata is adapted straight into the existing native search row.
+ * This is presentation, not a claim of a playable asset or a YT browse route.
+ */
+internal fun canonicalNativeSearchRowUi(
+    row: CanonicalCatalogSearchRow,
+    kindLabel: String,
+): NativeSearchRowUi {
+    val subtitle = canonicalDisplaySubtitle(row, kindLabel).ifBlank {
+        // Preserve the original BrowseRow's neutral legacy fallback until
+        // fully localized canonical text is available for this kind.
+        (if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST
+            else BrowseType.ALBUM).name.lowercase(Locale.ROOT)
+            .replaceFirstChar { it.uppercase(Locale.ROOT) }
+    }
+    return NativeSearchRowUi(
+        title = row.title,
+        subtitle = subtitle,
+        artworkUri = row.artworkUri.takeUnless {
+            row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                !canonicalVerifiedGroupType(row)
+        },
+        artistPortrait = row.kind == CanonicalSearchKind.ARTIST,
+        downloadBadge = row.kind == CanonicalSearchKind.RECORDING &&
+            row.hasVerifiedLocalAsset,
+        durationLabel = if (row.kind == CanonicalSearchKind.RECORDING) {
+            canonicalDurationLabel(row.durationMs)
+        } else null,
+    )
+}
+
+/**
+ * Server result is already a source-scoped asset; its private URI stays in
+ * the provider executor. No synthetic BrowseItem is needed for presentation.
+ */
+internal fun canonicalServerNativeSearchRowUi(
+    row: CanonicalServerSearchRow,
+): NativeSearchRowUi = NativeSearchRowUi(
+    title = row.title,
+    subtitle = row.artistDisplay.ifBlank { BrowseType.OTHER.name.lowercase(Locale.ROOT)
+        .replaceFirstChar { it.uppercase(Locale.ROOT) } },
+    artworkUri = row.artworkUri,
+    artistPortrait = false,
 )
 
 /** Only positive, independently supplied release classification may create an album tile. */
@@ -870,8 +907,8 @@ private fun LazyListScope.canonicalServerSearchRows(
         items = results,
         key = { _, row -> "server:${row.mediaAssetId}" },
     ) { _, row ->
-        BrowseRow(
-            item = canonicalServerRowAsBrowseItem(row),
+        NativeSearchResultRow(
+            row = canonicalServerNativeSearchRowUi(row),
             onClick = { onPlay(row) },
         )
         HorizontalDivider(
@@ -1444,7 +1481,10 @@ private fun RecentSearchEntityRow(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Legacy BrowseItem is an adapter at the edge of old search sources.
+ * Shared native result layout never receives browse IDs or source models.
+ */
 @Composable
 private fun BrowseRow(
     item: BrowseItem,
@@ -1453,76 +1493,21 @@ private fun BrowseRow(
     localDownloaded: Boolean = false,
     durationLabel: String? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) {
-                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-                    .contextClick(onLongPress)
-            } else Modifier)
-            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(52.dp)) {
-            AsyncImage(
-                model = item.thumbnailUrl.artworkAt(ROW_ART_PX),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(
-                        if (item.type == BrowseType.ARTIST) CircleShape
-                        else RoundedCornerShape(8.dp),
-                    )
-                    .thumbnailBorder(
-                        if (item.type == BrowseType.ARTIST) CircleShape
-                        else RoundedCornerShape(8.dp),
-                    )
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            )
-            if (localDownloaded && item.type != BrowseType.ARTIST) {
-                Box(
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                        .padding(2.dp)
-                        .size(17.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.82f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Rounded.DownloadDone,
-                        contentDescription = stringResource(Res.string.downloaded),
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp),
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = item.subtitle.ifBlank { item.type.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) } },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        durationLabel?.let { duration ->
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    NativeSearchResultRow(
+        row = NativeSearchRowUi(
+            title = item.title,
+            subtitle = item.subtitle.ifBlank {
+                item.type.name.lowercase(Locale.ROOT)
+                    .replaceFirstChar { it.uppercase(Locale.ROOT) }
+            },
+            artworkUri = item.thumbnailUrl,
+            artistPortrait = item.type == BrowseType.ARTIST,
+            downloadBadge = localDownloaded,
+            durationLabel = durationLabel,
+        ),
+        onClick = onClick,
+        onLongPress = onLongPress,
+    )
 }
 
 /** Display-only duration from actual MusicBrainz recording evidence. */
