@@ -79,33 +79,14 @@ internal object DesktopAccounts {
         )
     }
 
-    /** Puts the chosen account into force, renewing it first if it has gone flat. */
+    /**
+     * Legacy Google account records remain readable for archival migration,
+     * but the retired YouTube provider must not renew browser cookies,
+     * inspect the music.youtube.com shell, or activate a network session.
+     */
     suspend fun activate(): DesktopYouTubeAuth.Session? {
-        val account = active() ?: run {
-            DesktopYouTubeAuth.adopt(null)
-            return null
-        }
-        val profile = activeProfile()
-        val stored = sessionFor(account, profile)
-        if (stored == null) {
-            DesktopTrackLog.log("account '${account.email.ifBlank { account.name }}' has no stored credential any more")
-            DesktopYouTubeAuth.adopt(null)
-            return null
-        }
-        DesktopYouTubeSession.adoptSessionScope(stored.cookie)?.let { live ->
-            val session = healedIdentity(account, profile, stored, live)
-            DesktopYouTubeAuth.adopt(session)
-            return session
-        }
-
-        DesktopTrackLog.log("the stored session has expired; looking for a fresh one in the browser it came from")
-        val renewed = renewFromBrowser(account)
-        if (renewed == null) {
-            // Anonymous rather than broken.
-            DesktopTrackLog.log("could not renew the session; browsing as a guest until it is signed in again")
-            DesktopYouTubeAuth.adopt(null)
-        }
-        return renewed
+        DesktopYouTubeAuth.adopt(null)
+        return null
     }
 
     /**
@@ -211,19 +192,10 @@ internal object DesktopAccounts {
         write(accounts().map { if (it.accountId == account.accountId) it.copy(sourceProfile = source) else it })
     }
 
-    /** Puts the chosen account and channel into force for this process. */
+    /** Archived account selection cannot re-enable the retired provider. */
     fun applyActive(): DesktopYouTubeAuth.Session? {
-        val account = active()
-        if (account == null) {
-            DesktopYouTubeAuth.adopt(null)
-            return null
-        }
-        val session = sessionFor(account, activeProfile())
-        DesktopYouTubeAuth.adopt(session)
-        if (session == null) {
-            DesktopTrackLog.log("account '${account.email.ifBlank { account.name }}' has no stored credential any more")
-        }
-        return session
+        DesktopYouTubeAuth.adopt(null)
+        return null
     }
 
     /** Saves a captured login and makes it the active one. */
