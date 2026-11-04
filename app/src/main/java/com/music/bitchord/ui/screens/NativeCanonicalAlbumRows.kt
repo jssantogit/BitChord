@@ -22,6 +22,18 @@ internal fun nativeCanonicalAlbumRowNumber(
 ): Int = originalTrackNumbers[recordingId] ?: (visibleIndex + 1)
 
 /**
+ * Search only the already-verified album membership and preserve its sorted
+ * visible order. Stable source numbering lives in the original release list.
+ */
+internal fun nativeCanonicalAlbumVisibleTracks(
+    tracks: List<CanonicalBrowseTrack>,
+    query: String,
+): List<CanonicalBrowseTrack> = if (query.isBlank()) tracks else tracks.filter {
+    it.title.contains(query, ignoreCase = true) ||
+        it.artistDisplay.contains(query, ignoreCase = true)
+}
+
+/**
  * Shared native album track rows between root Library albums and albums opened
  * inside an artist. The visual and actions stay in CanonicalTrackRow; this
  * compositor owns only the numbering, divider, stable RecordingId key and
