@@ -2323,25 +2323,15 @@ private fun NativeUnifiedLibraryBody(
                         // An album is always a numbered release running order,
                         // even if the root Músicas view was switched to grid.
                         // Reuse CanonicalTrackRow's native frame, text and menu.
-                        itemsIndexed(
-                            items = tracks,
-                            key = { _, track -> track.recordingId },
-                        ) { index, track ->
-                            CanonicalTrackRow(
-                                track = track,
-                                artworkLoader = artworkLoader,
-                                onClick = { onTrackPlay(track) },
-                                onEditRating = { onTrackEditRating(track) },
-                                onOptions = { onTrackOptions(track) },
-                                albumTrackNumber = albumTrackNumbers[track.recordingId] ?: index + 1,
-                                palette = palette,
-                            )
-                            if (index < tracks.lastIndex) HorizontalDivider(
-                                modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
-                                thickness = 0.5.dp,
-                                color = palette.divider,
-                            )
-                        }
+                        nativeCanonicalAlbumTrackRows(
+                            tracks = tracks,
+                            artworkLoader = artworkLoader,
+                            palette = palette,
+                            trackNumbers = albumTrackNumbers,
+                            onTrackPlay = onTrackPlay,
+                            onTrackEditRating = onTrackEditRating,
+                            onTrackOptions = onTrackOptions,
+                        )
                     } else if (viewType == LibraryViewType.GRID) {
                         gridRows(
                             tracks, 2, key = { it.recordingId },
