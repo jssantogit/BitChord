@@ -52,6 +52,21 @@ class CanonicalArtistDetailStateTest {
         assertEquals("artist-id", target?.entityId)
     }
 
+    @Test fun nestedNavigationKeepsVerifiedReleaseIdentityAndCanClose() {
+        val selected = androidx.compose.runtime.mutableStateOf<ReleaseEntity?>(null)
+        val navigation = CanonicalArtistNestedNavigation(selected)
+        val release = ReleaseEntity("release-id-1", "同名", "artist", null)
+        val homonym = ReleaseEntity("release-id-2", "同名", "artist", null)
+
+        assertEquals(null, navigation.openedRelease)
+        navigation.open(release)
+        assertEquals("release-id-1", navigation.openedRelease?.id)
+        navigation.open(homonym)
+        assertEquals("release-id-2", navigation.openedRelease?.id)
+        navigation.close()
+        assertEquals(null, navigation.openedRelease)
+    }
+
     @Test fun nestedAlbumNavigationKeysFollowIdentityNotOnlyArtistName() {
         val homonymOne = canonicalArtistDetailNavigationKey("artist-a", "同名")
         val homonymTwo = canonicalArtistDetailNavigationKey("artist-b", "同名")

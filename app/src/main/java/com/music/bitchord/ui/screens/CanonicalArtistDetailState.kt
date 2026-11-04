@@ -39,6 +39,55 @@ internal fun canonicalArtistDetailNavigationKey(
 ): String = artistId?.takeIf { it.isNotBlank() }
     ?.let { "artist-id:$it" } ?: "display-artist:$artistName"
 
+
+/**
+ * Source-independent nested release navigation. The selected ReleaseEntity
+ * stays scoped to verified artist identity; toolbar events never use a
+ * display name or synthesize a provider browseId to find the release.
+ */
+internal class CanonicalArtistNestedNavigation internal constructor(
+    private val current: androidx.compose.runtime.MutableState<ReleaseEntity?>,
+) {
+    val openedRelease: ReleaseEntity? get() = current.value
+    fun open(release: ReleaseEntity) { current.value = release }
+    fun close() { current.value = null }
+}
+
+@Composable
+internal fun rememberCanonicalArtistNestedNavigation(
+    artistId: String?,
+    artistName: String,
+    nestedBackToken: Int,
+    albumMenuToken: Int,
+    albumPlaylistToken: Int,
+    onNestedDetailChanged: (Boolean) -> Unit,
+    onQueryChange: (String) -> Unit,
+    onReleaseOptions: (ReleaseEntity) -> Unit,
+    onNestedAlbumAddToPlaylist: (ReleaseEntity) -> Unit,
+): CanonicalArtistNestedNavigation {
+    val navigation = remember(canonicalArtistDetailNavigationKey(artistId, artistName)) {
+        CanonicalArtistNestedNavigation(androidx.compose.runtime.mutableStateOf(null))
+    }
+    val selected = navigation.openedRelease
+    androidx.compose.runtime.LaunchedEffect(selected?.id) {
+        onNestedDetailChanged(selected != null)
+        if (selected != null) onQueryChange("")
+    }
+    androidx.compose.runtime.LaunchedEffect(nestedBackToken) {
+        if (nestedBackToken > 0) navigation.close()
+    }
+    androidx.compose.runtime.LaunchedEffect(albumMenuToken) {
+        if (albumMenuToken > 0) navigation.openedRelease?.let(onReleaseOptions)
+    }
+    androidx.compose.runtime.LaunchedEffect(albumPlaylistToken) {
+        if (albumPlaylistToken > 0) navigation.openedRelease?.let(onNestedAlbumAddToPlaylist)
+    }
+    androidx.activity.compose.BackHandler(enabled = selected != null) {
+        navigation.close()
+    }
+    return navigation
+}
+
 /**
  * Only a real Recording -> Release edge permits an album in an artist page.
  * Equal title/credit across two releases is never relationship evidence.

@@ -1,6 +1,5 @@
 package com.music.bitchord.ui.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -100,28 +99,22 @@ internal fun CanonicalNativeArtistDetail(
     // It keeps DISPLAY_ARTIST separate from a verified canonical ArtistId.
     val artistRatingState by rememberCanonicalArtistRating(artistId)
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    var openedRelease by remember(canonicalArtistDetailNavigationKey(artistId, artistName)) {
-        mutableStateOf<ReleaseEntity?>(null)
-    }
-    LaunchedEffect(openedRelease?.id) {
-        onNestedDetailChanged(openedRelease != null)
-        if (openedRelease != null) onQueryChange("")
-    }
-    LaunchedEffect(nestedBackToken) {
-        if (nestedBackToken > 0) openedRelease = null
-    }
-    LaunchedEffect(albumMenuToken) {
-        if (albumMenuToken > 0) openedRelease?.let(onReleaseOptions)
-    }
-    LaunchedEffect(albumPlaylistToken) {
-        if (albumPlaylistToken > 0) openedRelease?.let(onNestedAlbumAddToPlaylist)
-    }
-    val releaseRecordingIds by rememberCanonicalArtistNestedRecordings(
-        openedRelease?.id, sourceKeys, selectedSourceKey,
+    val nestedNavigation = rememberCanonicalArtistNestedNavigation(
+        artistId = artistId,
+        artistName = artistName,
+        nestedBackToken = nestedBackToken,
+        albumMenuToken = albumMenuToken,
+        albumPlaylistToken = albumPlaylistToken,
+        onNestedDetailChanged = onNestedDetailChanged,
+        onQueryChange = onQueryChange,
+        onReleaseOptions = onReleaseOptions,
+        onNestedAlbumAddToPlaylist = onNestedAlbumAddToPlaylist,
     )
-    BackHandler(enabled = openedRelease != null) { openedRelease = null }
+    val releaseRecordingIds by rememberCanonicalArtistNestedRecordings(
+        nestedNavigation.openedRelease?.id, sourceKeys, selectedSourceKey,
+    )
 
-    val selectedAlbum = openedRelease
+    val selectedAlbum = nestedNavigation.openedRelease
     if (selectedAlbum != null) {
         val albumSelection = CanonicalLibrarySelection(
             CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
@@ -269,7 +262,7 @@ internal fun CanonicalNativeArtistDetail(
                         onClick = {
                             if (selectedItems.isNotEmpty()) {
                                 onToggleSelection(target)
-                            } else openedRelease = release
+                            } else nestedNavigation.open(release)
                         },
                         artwork = {
                             val track = nativeReleases.artwork[release.id]
@@ -314,7 +307,7 @@ internal fun CanonicalNativeArtistDetail(
                                     CanonicalLibrarySelection(
                                         CanonicalLibraryEntityType.ALBUM, release.id,
                                     )
-                                ) else openedRelease = release
+                                ) else nestedNavigation.open(release)
                             },
                             onMore = { onReleaseOptions(release) },
                             selectionMode = selectedItems.isNotEmpty(),
