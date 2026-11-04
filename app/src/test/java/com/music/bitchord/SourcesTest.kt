@@ -1086,39 +1086,26 @@ class SourcesTest {
         assertNull(TrackMatcher.best(emptyList(), target))
     }
 
-    // ---- What a lossy source has to beat to become a file -------------------
+    // ---- Provider-neutral download fidelity --------------------------------
 
-    /**
-     * The case the floor exists for: JioSaavn's top rendition is better than
-     * anything YouTube's AAC ladder holds, so a download takes it rather than
-     * filing a copy worse than the one that would have been streamed.
-     */
     @Test
-    fun `a 320 from a source is worth keeping over youtube's aac`() {
-        assertTrue(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp4", kbps = 320)))
+    fun `known 128 kbps provider rendition remains a valid download without YouTube`() {
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "mp3", kbps = 128)))
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "aac", kbps = 256)))
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "mp4", kbps = 320)))
     }
 
-    /**
-     * Below the top of YouTube's own ladder, a source's copy is trading one
-     * lossy file for another and giving up the more reliable fetch to do it —
-     * including at 256, where the two are a wash and the tie goes to YouTube.
-     */
     @Test
-    fun `a thinner rendition loses to youtube's aac`() {
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp3", kbps = 128)))
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp4", kbps = 160)))
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "aac", kbps = 256)))
+    fun `lossless and immersive renditions do not require a bitrate tag`() {
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "flac")))
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "eac3-joc")))
     }
 
-    /**
-     * A download has to name the file before the first byte lands, so a source
-     * that described its rendition as nothing has said nothing worth keeping —
-     * unlike playback, which can hand the URL to the decoder and find out.
-     */
     @Test
-    fun `an unstated rendition is not worth keeping`() {
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat()))
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp4")))
+    fun `undescribed source rendition cannot be silently saved`() {
+        assertFalse(SourceResolver.isDownloadableRendition(StreamFormat()))
+        assertFalse(SourceResolver.isDownloadableRendition(StreamFormat(codec = "mp4")))
+        assertFalse(SourceResolver.isDownloadableRendition(StreamFormat(codec = "aac", kbps = 0)))
     }
 
     // ---- Which sources are worth asking before a track is played ------------
