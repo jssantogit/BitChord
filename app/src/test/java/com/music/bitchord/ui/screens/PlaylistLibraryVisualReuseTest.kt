@@ -235,6 +235,21 @@ class PlaylistLibraryVisualReuseTest {
         RecentLocalAdditionsSnapshot.clear()
     }
 
+    @Test fun numberedNativeAlbumRowsDoNotReserveAnInvisibleRatingStrip() {
+        compose.setContent {
+            com.music.bitchord.ui.components.NativeDetailTrackRowLayout(
+                onClick = {},
+                leading = { androidx.compose.material3.Text("2") },
+                title = { androidx.compose.material3.Text("Second track") },
+                subtitle = { androidx.compose.material3.Text("Album artist") },
+                rating = { androidx.compose.material3.Text("Hidden rating") },
+                showRatingSlot = false,
+            )
+        }
+        compose.onNodeWithText("Second track").assertExists()
+        compose.onNodeWithTag("native-detail-rating-slot").assertDoesNotExist()
+    }
+
     @Test fun providerNeutralTrackRowRendersArtworkTextRatingAndActions() {
         var selected = 0
         compose.setContent {
