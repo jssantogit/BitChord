@@ -1,0 +1,98 @@
+name: Android Kotlin KSP Incremental Pilot
+
+# Diagnostic-only A/B for real Kotlin source changes. Does not replace the
+# exact-SHA protected main CI, write shared caches or change app sources in Git.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-ci-kotlin-ksp-incremental-pilot.yml'
+      - 'tests/test_ci_kotlin_ksp_incremental_pilot.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-kotlin-ksp-pilot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'infra/android-ci-kotlin-ksp-incremental-pilot-v0'
+    name: Android CI pilot · ${{ matrix.mode }} (non-required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [default_incremental, incremental_disabled]
+
+    steps:
+      - name: Checkout exact PR revision
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle (read-only shared cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Set non-secret local properties
+        run: |
+          printf '%s\n' 'LASTFM_API_KEY=ci-placeholder' 'LASTFM_SECRET=ci-placeholder' > local.properties
+          chmod +x gradlew
+
+      - name: Verify immutable full-suite experiment contract
+        run: python3 -m unittest discover -s tests -p test_ci_kotlin_ksp_incremental_pilot.py -v
+
+      - name: Full Android suite before and after non-functional Kotlin source edit
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            default_incremental) flags=() ;;
+            incremental_disabled) flags=(-Pkotlin.incremental=false -Pksp.incremental=false) ;;
+            *) echo 'Unsupported CI experiment variant'; exit 2 ;;
+          esac
+
+          # Full unchanged required unit test target on both invocations.
+          run_full() {
+            ./gradlew --build-cache --console=plain "${flags[@]}" -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+          }
+
+          source='app/src/main/java/com/music/bitchord/data/scrobbling/PrimaryArtist.kt'
+          test -f "$source"
+          git diff --quiet HEAD -- "$source"
+          trap 'git restore -- "$source"' EXIT
+
+          cold_start=$SECONDS
+          run_full
+          cold_seconds=$((SECONDS - cold_start))
+
+          # Change Kotlin compilation input but never its runtime logic/ABI.
+          # Change exists only in the temporary Actions runner checkout.
+          printf '\n// BitChord ephemeral incremental compilation probe; no runtime behavior change.\n' >> "$source"
+          if git diff --quiet HEAD -- "$source"; then
+            echo 'Kotlin source mutation was not detected'; exit 2
+          fi
+
+          changed_start=$SECONDS
+          run_full
+          changed_seconds=$((SECONDS - changed_start))
+          echo "GRADLE_KOTLIN_KSP_INCREMENTAL_PILOT mode=$MODE initial_seconds=$cold_seconds source_change_seconds=$changed_seconds"
+
+          {
+            echo '### Kotlin/KSP incremental-source experiment'
+            echo "Mode: $MODE"
+            echo "Initial full-suite wall time: ${cold_seconds}s"
+            echo "After temporary non-functional Kotlin source edit: ${changed_seconds}s"
+            echo 'Both invocations ran the existing full :app:testDevDebugUnitTest suite.'
+            echo 'Temporary source change is restored automatically; never committed.'
+            echo 'These independent jobs are not a matched production-speed forecast.'
+          } >> "$GITHUB_STEP_SUMMARY"
