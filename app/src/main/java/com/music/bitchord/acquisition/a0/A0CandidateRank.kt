@@ -47,7 +47,7 @@ internal object A0CandidateRank {
         "instrumental","studio","radio")
     private val cappellaSpellings=setOf("cappella","capella")
     internal fun tokens(value:String):List<String> {
-        val composed=Normalizer.normalize(value,Normalizer.Form.NFC)
+        val composed=A0CjkOrthography.widthOnlyNfc(value)
         val folded=buildString(composed.length) {
             for(ch in composed) {
                 if(Character.UnicodeScript.of(ch.code)==Character.UnicodeScript.LATIN)
