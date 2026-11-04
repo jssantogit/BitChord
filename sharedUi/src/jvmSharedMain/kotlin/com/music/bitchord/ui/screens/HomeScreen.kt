@@ -150,6 +150,8 @@ fun HomeScreen(
     leadHero: Boolean = true,
     currentSong: Song? = null,
     isPlaying: Boolean = false,
+    /** Native account access while the floating Home actions are hidden. */
+    headerTrailing: (@Composable () -> Unit)? = null,
 ) {
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
 
@@ -194,7 +196,7 @@ fun HomeScreen(
             },
         ) {
             if (title != null) {
-                item(key = "home-title") { HomeTitle(title, actions = headerActions) }
+                item(key = "home-title") { HomeTitle(title, actions = headerActions, trailing = headerTrailing) }
             }
             if (!signedIn && onSignIn != null) {
                 item {
@@ -529,6 +531,7 @@ fun HomeTitle(
     title: String,
     actions: List<HomeHeaderAction> = emptyList(),
     modifier: Modifier = Modifier,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
@@ -545,6 +548,7 @@ fun HomeTitle(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        trailing?.invoke()
         if (actions.isNotEmpty()) {
             Box {
                 IconButton(

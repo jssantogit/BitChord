@@ -9,6 +9,8 @@ import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -55,12 +57,92 @@ internal interface SmartPlaylistDefinitionDao {
  * Independent local database. We deliberately do NOT change ListeningEventDatabase,
  * its migrations, playback state, or provider-owned playlist storage.
  */
-@Database(entities = [SmartPlaylistDefinitionEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        SmartPlaylistDefinitionEntity::class,
+        SmartPlaylistV2DefinitionEntity::class,
+        SmartPlaylistV2FilterEntity::class,
+        CanonicalStaticPlaylistEntity::class,
+    ],
+    version = 7,
+    exportSchema = false,
+)
 internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
     abstract fun definitionDao(): SmartPlaylistDefinitionDao
+    abstract fun v2DefinitionDao(): SmartPlaylistV2DefinitionDao
+    abstract fun v2FilterDao(): SmartPlaylistV2FilterDao
+    abstract fun staticPlaylistDao(): CanonicalStaticPlaylistDao
 
     internal companion object {
         private const val DATABASE_NAME = "smart-playlist-definitions.db"
+
+        // V1 rows are intentionally untouched: V1 users lose neither rules nor
+        // names while V2 is introduced in a separate, versioned table.
+        internal val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `smart_playlist_v2_definition` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `queryJson` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
+        /** Filters are separate from playlist definitions and never rewrite V1/V2 rows. */
+        internal val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `smart_playlist_v2_filter` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `rulesJson` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
+        /** Canonical normal playlists are independent of smart rules and provider songs. */
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `canonical_static_playlist` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `schemaVersion` INTEGER NOT NULL,
+                        `recordingIdsJson` TEXT NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+            }
+        }
+        /** V4 normal playlists default to all providers; no member is lost. */
+        internal val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE canonical_static_playlist ADD COLUMN sourceProviderKey TEXT"
+                )
+            }
+        }
+        /** Optional user descriptions for V2 and canonical static playlists.
+         * Existing rows keep their rule/member identity and default to blank.
+         */
+        internal val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE canonical_static_playlist ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE smart_playlist_v2_definition ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+            }
+        }
+        /** V7 adds user-selected cover documents without rewriting saved IDs, rules or members. */
+        internal val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE canonical_static_playlist ADD COLUMN coverUri TEXT")
+                db.execSQL("ALTER TABLE smart_playlist_v2_definition ADD COLUMN coverUri TEXT")
+            }
+        }
         @Volatile private var instance: SmartPlaylistDefinitionDatabase? = null
 
         fun get(context: Context): SmartPlaylistDefinitionDatabase =
@@ -69,7 +151,8 @@ internal abstract class SmartPlaylistDefinitionDatabase : RoomDatabase() {
                     context.applicationContext,
                     SmartPlaylistDefinitionDatabase::class.java,
                     DATABASE_NAME,
-                ).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .build().also { instance = it }
             }
     }
 }

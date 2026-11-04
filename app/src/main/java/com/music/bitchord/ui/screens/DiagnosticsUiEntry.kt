@@ -17,4 +17,13 @@ internal object DiagnosticsUiEntry {
             Intent().setClassName(context.packageName, DIAGNOSTICS_ACTIVITY),
         )
     }
+    /** Export remains dev-only; navigation/display stay inside the host app. */
+    fun openShare(context: Context) {
+        if (!isAvailable(context)) return
+        context.startActivity(
+            Intent().setClassName(context.packageName, DIAGNOSTICS_ACTIVITY)
+                .putExtra("share_only", true),
+        )
+    }
+
 }

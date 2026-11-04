@@ -13,6 +13,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import com.music.bitchord.ui.player.MESH_CYCLE_MILLIS
@@ -58,9 +60,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -505,35 +509,20 @@ private fun SongRowContent(
     // has no match: shown, but not something a tap or a menu can act on.
     val matching = song.isMatchPending
     val unavailable = song.isMatchMissing
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .alpha(if (unavailable) 0.45f else 1f)
-            .background(activeBackground)
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-            .contextClick(onMore ?: onLongPress)
-            .padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    NativeDetailTrackRowFrame(
+        onClick = onClick,
+        onLongPress = onLongPress,
+        onMore = onMore,
+        modifier = modifier,
+        opacity = if (unavailable) 0.45f else 1f,
+        background = activeBackground,
     ) {
         if (trackNumber != null) {
-            // Centred between the screen edge and the title (see
-            // [TRACK_NUMBER_WIDTH]). Same height as the artwork, so rows stay
-            // level.
-            Box(
-                Modifier.width(TRACK_NUMBER_WIDTH).height(52.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (searchPlayingStyle && isCurrent && isPlaying) {
-                    SearchPlayingBars()
-                } else {
-                    Text(
-                        text = "$trackNumber",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = subtitleColor,
-                        maxLines = 1,
-                    )
-                }
-            }
+            NativeDetailTrackNumber(
+                number = trackNumber,
+                color = subtitleColor,
+                showPlayingBars = searchPlayingStyle && isCurrent && isPlaying,
+            )
         } else {
             Box(Modifier.size(52.dp)) {
                 AsyncImage(
@@ -554,35 +543,36 @@ private fun SongRowContent(
         // screen edge to the number and from the number to the title match,
         // whatever its digit count.
         Spacer(Modifier.width(if (trackNumber == null) 14.dp else PAGE_GUTTER))
-        Column(Modifier.weight(1f)) {
-            ExplicitSongTitle(
-                song = song,
-                style = MaterialTheme.typography.titleMedium,
-                color = titleColor,
-            )
-            Spacer(Modifier.height(2.dp))
-            val subtitle = listOfNotNull(
-                song.artist.takeIf { it.isNotBlank() },
-                song.downloadFormat,
-            ).joinToString(" · ")
-            val quality = if (showSourceQuality) song.sourceQualityBadge() else null
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (quality != null) {
-                    SourceQualityBadge(
-                        quality = quality,
-                        color = subtitleColor,
+        NativeTrackRowText(
+            title = {
+                ExplicitSongTitle(
+                    song = song,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = titleColor,
+                )
+            },
+            subtitle = {
+                val subtitle = listOfNotNull(
+                    song.artist.takeIf { it.isNotBlank() },
+                    song.downloadFormat,
+                ).joinToString(" · ")
+                val quality = if (showSourceQuality) song.sourceQualityBadge() else null
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (quality != null) {
+                        SourceQualityBadge(
+                            quality = quality, color = subtitleColor,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    Text(
+                        text = if (quality != null && subtitle.isNotEmpty()) " · $subtitle" else subtitle,
                         style = MaterialTheme.typography.bodyMedium,
+                        color = subtitleColor, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Text(
-                    text = if (quality != null && subtitle.isNotEmpty()) " · $subtitle" else subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = subtitleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+            },
+        )
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }
@@ -596,8 +586,7 @@ private fun SongRowContent(
             )
         }
         // Rating occupies the trailing strip; title/artist ellipsize to leave
-        // space for it. Duration sits *under* the stars, not beside them.
-        // Unrated tracks keep their existing trailing duration slot.
+        // space for it. Song lists no longer show per-track duration.
         Column(
             modifier = Modifier.padding(start = 8.dp),
             horizontalAlignment = Alignment.End,
@@ -609,20 +598,83 @@ private fun SongRowContent(
                     strokeWidth = 2.dp,
                     color = subtitleColor,
                 )
-            } else {
-                song.durationText?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = subtitleColor,
-                    )
-                }
             }
         }
         // Same sheet the long-press opens, for anyone who doesn't think to hold.
         if (onMore != null && !matching && !unavailable) {
             RowMoreButton(onClick = onMore, tint = subtitleColor)
         }
+    }
+}
+
+/** Number glyph and its 52dp frame used by both SongRow and the
+ * canonical album's numbered release rows. The identical inner placement is
+ * important: the number and title must not shift between sources. */
+@Composable
+fun NativeDetailTrackNumber(
+    number: Int,
+    color: Color,
+    showPlayingBars: Boolean = false,
+) {
+    Box(
+        Modifier.width(TRACK_NUMBER_WIDTH).height(52.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (showPlayingBars) {
+            SearchPlayingBars()
+        } else {
+            Text(
+                text = number.toString(),
+                style = MaterialTheme.typography.bodyLarge,
+                color = color,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/**
+ * The same physical row surface used by native SongRow and canonical RecordingId rows.
+ * Media identity belongs to the caller; this shared component owns touch, gutters,
+ * spacing and alignment, not playback resolution or queue conversion.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun NativeDetailTrackRowFrame(
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
+    onMore: (() -> Unit)? = null,
+    background: Color = Color.Transparent,
+    opacity: Float = 1f,
+    horizontalInset: Dp = PAGE_GUTTER,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(opacity)
+            .background(background)
+            .then(if (onClick != null) {
+                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+                    .contextClick(onMore ?: onLongPress)
+            } else Modifier)
+            .padding(horizontal = horizontalInset, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/** SongRow and canonical rows share title/subtitle weight and baseline spacing. */
+@Composable
+fun RowScope.NativeTrackRowText(
+    title: @Composable () -> Unit,
+    subtitle: @Composable () -> Unit,
+) {
+    Column(Modifier.weight(1f)) {
+        title()
+        Spacer(Modifier.height(2.dp))
+        subtitle()
     }
 }
 
@@ -638,6 +690,7 @@ fun RowMoreButton(
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     iconSize: Dp = 20.dp,
+    contentDescription: String? = null,
 ) {
     Box(
         modifier = modifier
@@ -649,7 +702,7 @@ fun RowMoreButton(
     ) {
         Icon(
             Icons.Rounded.MoreVert,
-            contentDescription = stringResource(Res.string.more),
+            contentDescription = contentDescription ?: stringResource(Res.string.more),
             tint = tint,
             modifier = Modifier.size(iconSize),
         )
@@ -901,21 +954,25 @@ fun PillTextField(
     container: Color = MaterialTheme.colorScheme.surfaceVariant,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /** Optional accessible label supplied by a form, without duplicating this field. */
+    accessibilityLabel: String? = null,
+    /** The same native field can grow for notes and playlist descriptions. */
+    multiline: Boolean = false,
 ) {
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(40.dp)
+            .heightIn(min = if (multiline) 96.dp else 40.dp)
             .background(container, RoundedCornerShape(11.dp))
-            .padding(horizontal = 12.dp),
-        contentAlignment = Alignment.CenterStart,
+            .padding(horizontal = 12.dp, vertical = if (multiline) 12.dp else 0.dp),
+        contentAlignment = if (multiline) Alignment.TopStart else Alignment.CenterStart,
     ) {
         if (value.isEmpty()) {
             Text(
                 text = placeholder,
                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = if (multiline) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
@@ -923,7 +980,9 @@ fun PillTextField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
-            singleLine = true,
+            singleLine = !multiline,
+            minLines = if (multiline) 3 else 1,
+            maxLines = if (multiline) 8 else 1,
             textStyle = MaterialTheme.typography.bodyMedium.copy(
                 fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -932,7 +991,11 @@ fun PillTextField(
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().then(
+                if (accessibilityLabel != null)
+                    Modifier.semantics { contentDescription = accessibilityLabel }
+                else Modifier
+            ),
         )
     }
 }

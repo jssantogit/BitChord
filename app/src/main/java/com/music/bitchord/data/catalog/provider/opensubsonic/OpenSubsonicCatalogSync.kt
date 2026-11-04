@@ -9,6 +9,7 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalProviderRow
 import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.MediaAssetTagsEntity
 import com.music.bitchord.data.catalog.RecordingArtistCreditEntity
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.ReleaseArtistCreditEntity
@@ -214,6 +215,9 @@ private class RoomCanonicalCatalogSyncStore(
     }
 
     override suspend fun upsertMediaAsset(mediaAsset: MediaAssetEntity) = dao.upsertMediaAsset(mediaAsset)
+
+    override suspend fun upsertMediaAssetTags(tags: MediaAssetTagsEntity) =
+        dao.upsertMediaAssetTags(tags)
 
     override suspend fun upsertExternalIdentity(identity: ExternalIdentityEntity) =
         dao.upsertExternalIdentity(identity)

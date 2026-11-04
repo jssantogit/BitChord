@@ -131,6 +131,44 @@ data class MediaAssetEntity(
     val dateAddedSeconds: Long?,
     val dateModifiedSeconds: Long?,
     val artworkUri: String?,
+    /** Origin-tagged MediaStore values; null for unproven or remote data. */
+    val localGenre: String? = null,
+    val localBitrateBps: Long? = null,
+    /** Provider/MediaStore advertised file format, not a claim about actual playback. */
+    val audioContentType: String? = null,
+    val audioSuffix: String? = null,
+    val audioBitrateBps: Long? = null,
+    val audioBitDepth: Int? = null,
+    val audioSamplingRateHz: Int? = null,
+)
+
+/**
+ * Provider-owned OpenSubsonic tags, never Recording-wide truth. NULL means the
+ * server did not advertise this field; "[]" means explicitly supported but empty.
+ * Cascade removal prevents deleted account assets leaving stale tag evidence.
+ */
+@Entity(
+    tableName = "catalog_media_asset_tags",
+    foreignKeys = [ForeignKey(
+        entity = MediaAssetEntity::class,
+        parentColumns = ["id"],
+        childColumns = ["mediaAssetId"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+)
+data class MediaAssetTagsEntity(
+    @androidx.room.PrimaryKey val mediaAssetId: String,
+    val genresJson: String?,
+    val moodsJson: String?,
+    /** JSON array of validated BPMs; NULL = unsupported, [] = known absent. */
+    val bpmsJson: String? = null,
+    val stylesJson: String? = null,
+    /** Composer names are source-scoped, never Recording-level truth. */
+    val composersJson: String? = null,
+    /** Fingerprint from last MediaStore scan; no raw path or source ID embedded. */
+    val localSourceFingerprint: String? = null,
+    /** Versioned fingerprint of the completed bounded local header probe. */
+    val localParsedFingerprint: String? = null,
 )
 
 /**

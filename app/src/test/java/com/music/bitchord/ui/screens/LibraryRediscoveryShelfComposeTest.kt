@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.listening.RediscoveryPresentationAvailability
 import com.music.bitchord.data.listening.RediscoveryPresentationItem
@@ -41,7 +42,8 @@ class LibraryRediscoveryShelfComposeTest {
         val state = mutableStateOf<RediscoveryShelfUiState>(RediscoveryShelfUiState.Loading)
         compose.setContent { LibraryRediscoveryShelf(state.value, onRecordingClick = {}) }
         compose.onNodeWithText("Rediscover").assertExists()
-        compose.onNodeWithText("Finding songs…").assertExists()
+        compose.onNodeWithTag("native-library-loading").assertExists()
+        compose.onNodeWithText("Finding songs…").assertDoesNotExist()
         compose.runOnIdle { state.value = RediscoveryShelfUiState.Empty }
         compose.onNodeWithText("Rediscover").assertDoesNotExist()
         compose.onNodeWithText("Finding songs…").assertDoesNotExist()

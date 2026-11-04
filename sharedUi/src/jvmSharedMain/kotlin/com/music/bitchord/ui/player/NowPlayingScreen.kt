@@ -1526,6 +1526,11 @@ fun NowPlayingScreen(
                 onOpenOutput = openAudioOutput,
                 onOpenMembers = openListenTogetherMembers,
             )
+        } else {
+            // Do not let removing the device label grow the weighted artwork
+            // region and push the top credits/lyrics controls down. The old
+            // caption footprint remains empty, retaining the prior geometry.
+            Spacer(Modifier.height(NowPlayingChrome.hiddenOutputCaptionFootprintDp.dp))
         }
     }
 
@@ -2359,30 +2364,8 @@ fun NowPlayingScreen(
                             },
                         contentAlignment = Alignment.Center,
                     ) {
-                        // While the origin caption is present the handle belongs at
-                        // the top of the strip. As lyrics or the queue replace the
-                        // album-cover player, it glides into the now-empty strip's
-                        // vertical centre alongside the caption's fade.
-                        Box(
-                            Modifier
-                                .align(Alignment.TopCenter)
-                                .offset {
-                                    IntOffset(
-                                        x = 0,
-                                        y = lerp(
-                                            6.dp,
-                                            (topStrip - 5.dp).coerceAtLeast(0.dp) / 2,
-                                            p(),
-                                        ).roundToPx(),
-                                    )
-                                }
-                                .width(38.dp)
-                                .height(5.dp)
-                                .graphicsLayer { alpha = spotifyChromeAlpha }
-                                .shadow(2.dp, RoundedCornerShape(3.dp), clip = false)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(LocalPlayerTint.current.copy(alpha = 0.70f)),
-                        )
+                        // Keep the existing drag strip, scrim and exact layout height;
+                        // the visible grabber is deliberately absent in the native player.
                         // [p] is the shared album-to-panel transition. Keeping this in
                         // composition until its final frame gives the caption a real
                         // fade on both entry and exit, but removes its click target

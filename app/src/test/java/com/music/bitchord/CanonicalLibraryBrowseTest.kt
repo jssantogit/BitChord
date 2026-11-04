@@ -155,6 +155,13 @@ class CanonicalLibraryBrowseTest {
         assertEquals(before.availableAssets.single().mediaAssetId, after.availableAssets.single().mediaAssetId)
         assertEquals(120_000L, after.durationMs)
         assertEquals("opensubsonic://artwork/new", after.artworkUri)
+        // Navidrome's codec evidence remains attached to the exact MediaAsset.
+        val edition = after.availableAssets.single()
+        assertEquals("audio/flac", edition.audioContentType)
+        assertEquals("flac", edition.audioSuffix)
+        assertEquals(900_000L, edition.audioBitrateBps)
+        assertEquals(24, edition.audioBitDepth)
+        assertEquals(96_000, edition.audioSamplingRateHz)
     }
 
     @Test
@@ -339,6 +346,11 @@ class CanonicalLibraryBrowseTest {
                     artistDisplay = recording.artistDisplay,
                     durationMs = recording.durationMs,
                     artworkUri = asset.artworkUri,
+                    audioContentType = asset.audioContentType,
+                    audioSuffix = asset.audioSuffix,
+                    audioBitrateBps = asset.audioBitrateBps,
+                    audioBitDepth = asset.audioBitDepth,
+                    audioSamplingRateHz = asset.audioSamplingRateHz,
                 )
             }
             .toList()

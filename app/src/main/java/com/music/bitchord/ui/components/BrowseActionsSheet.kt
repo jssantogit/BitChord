@@ -3,7 +3,9 @@ package com.music.bitchord.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,8 +21,10 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -120,10 +124,9 @@ data class BrowseTarget(
  * and Shuffle; the page's own header already carries both, so there they are
  * null and the sheet is the queue rows and the download.
  *
- * The queue rows are always offered. They are the reason this menu exists: a
- * release is exactly the kind of thing someone wants *after* what is playing
- * rather than instead of it, and until now the only way to queue one was to
- * open it and long-press its tracks one at a time.
+ * Queue rows are shown only when the caller provides working handlers. In
+ * particular, canonical pinned items must not expose legacy queue operations
+ * without a real RecordingId-based implementation.
  *
  * Deleting asks a second time, in place. A playlist is the only thing in this
  * app whose loss can't be undone by tapping the same row again, and a
@@ -132,8 +135,8 @@ data class BrowseTarget(
 @Composable
 fun BrowseActionsSheet(
     target: BrowseTarget,
-    onPlayNext: () -> Unit,
-    onAddToQueue: () -> Unit,
+    onPlayNext: (() -> Unit)? = null,
+    onAddToQueue: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onPlay: (() -> Unit)? = null,
     onShuffle: (() -> Unit)? = null,
@@ -156,6 +159,14 @@ fun BrowseActionsSheet(
     isPinned: Boolean = false,
     onTogglePin: (() -> Unit)? = null,
     onRename: ((String) -> Unit)? = null,
+    /** First-party playlist editing that does not require a YouTube UserPlaylist. */
+    onEdit: (() -> Unit)? = null,
+    /** Optional native actions for canonical tracks/releases/artists; no fake Song IDs. */
+    onAddToPlaylist: (() -> Unit)? = null,
+    onEditRating: (() -> Unit)? = null,
+    onSelect: (() -> Unit)? = null,
+    /** Typed artwork slot for canonical RecordingId collections without a legacy thumbnail URL. */
+    headerArtwork: (@Composable () -> Unit)? = null,
     /**
      * Opens the reorder sheet for one of the account's own playlists — set
      * under the same rule as [onRename], since YouTube refuses to rearrange a
@@ -208,22 +219,36 @@ fun BrowseActionsSheet(
                 .then(if (menu) Modifier.verticalScroll(rememberScrollState()) else Modifier),
         ) {
             if (!menu) {
-                BrowseSheetHeader(target)
+                BrowseSheetHeader(target, headerArtwork)
                 HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
             }
 
             onPlay?.let { ActionRow(Icons.Rounded.PlayArrow, stringResource(R.string.play), onClick = it) }
             onShuffle?.let { ActionRow(BitChordIcons.Shuffle, stringResource(R.string.shuffle), onClick = it) }
-            ActionRow(
-                Icons.AutoMirrored.Rounded.PlaylistPlay,
-                stringResource(R.string.play_next),
-                onClick = onPlayNext,
-            )
-            ActionRow(
-                Icons.AutoMirrored.Rounded.QueueMusic,
-                stringResource(R.string.add_to_queue),
-                onClick = onAddToQueue,
-            )
+            onPlayNext?.let { playNext ->
+                ActionRow(
+                    Icons.AutoMirrored.Rounded.PlaylistPlay,
+                    stringResource(R.string.play_next),
+                    onClick = playNext,
+                )
+            }
+            onAddToQueue?.let { addToQueue ->
+                ActionRow(
+                    Icons.AutoMirrored.Rounded.QueueMusic,
+                    stringResource(R.string.add_to_queue),
+                    onClick = addToQueue,
+                )
+            }
+            onAddToPlaylist?.let { add ->
+                ActionRow(Icons.AutoMirrored.Rounded.PlaylistPlay,
+                    "Adicionar à playlist", onClick = add)
+            }
+            onEditRating?.let { edit ->
+                ActionRow(Icons.Rounded.Star, "Editar avaliação", onClick = edit)
+            }
+            onSelect?.let { select ->
+                ActionRow(Icons.Rounded.CheckCircle, "Selecionar", onClick = select)
+            }
             onDownloadAll?.let { download ->
                 // Saying which of the three it is, rather than offering the same row
                 // whatever the state — this is where a release is asked for now that
@@ -291,6 +316,9 @@ fun BrowseActionsSheet(
                     }
                 }
             }
+            onEdit?.let { edit ->
+                ActionRow(Icons.Rounded.Edit, "Editar playlist", onClick = edit)
+            }
             onReorder?.let {
                 ActionRow(Icons.Rounded.SwapVert, stringResource(R.string.reorder_songs), onClick = it)
             }
@@ -327,7 +355,10 @@ fun BrowseActionsSheet(
 
 /** Which release the sheet is about: the same row the shelf card was. */
 @Composable
-private fun BrowseSheetHeader(target: BrowseTarget) {
+private fun BrowseSheetHeader(
+    target: BrowseTarget,
+    artwork: (@Composable () -> Unit)? = null,
+) {
     val shape = if (target.type == BrowseType.ARTIST) CircleShape else RoundedCornerShape(8.dp)
     Row(
         modifier = Modifier
@@ -335,15 +366,20 @@ private fun BrowseSheetHeader(target: BrowseTarget) {
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AsyncImage(
-            model = target.thumbnailUrl.artworkAt(ROW_ART_PX),
-            contentDescription = null,
+        Box(
             modifier = Modifier
                 .size(52.dp)
                 .clip(shape)
                 .thumbnailBorder(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
-        )
+        ) {
+            if (artwork != null) artwork()
+            else AsyncImage(
+                model = target.thumbnailUrl.artworkAt(ROW_ART_PX),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Text(

@@ -2,7 +2,17 @@ name: Android Physical Smoke APK
 
 # An APK is prepared only when someone explicitly schedules a physical smoke.
 # The main Android CI remains test-only and keeps its required status context.
+# Issue 206 has its own document-only push authorization, scoped to its draft branch.
 on:
+  # Connected GitHub integration does not expose workflow_dispatch; use a
+  # branch-and-document-scoped push for each explicitly authorized smoke.
+  push:
+    branches:
+      - listening/smart-playlists-v2-192
+      - feat/205-library-native-actions-20261102
+    paths:
+      - docs/listening/issue-192-physical-smoke-request.md
+      - docs/listening/issue-206-physical-smoke-request.md
   workflow_dispatch:
     inputs:
       smoke_plan:
@@ -26,11 +36,43 @@ jobs:
     steps:
       - name: Validate physical smoke request
         env:
-          SMOKE_PLAN: ${{ inputs.smoke_plan }}
+          SMOKE_PLAN: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke_plan || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'Explicit user-approved physical smoke for issue 192') || (github.event_name == 'push' && github.ref == 'refs/heads/feat/205-library-native-actions-20261102' && 'Explicit user-approved physical smoke for issue 206') }}
         run: test -n "$SMOKE_PLAN"
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Regression guard: the Nov 2 smoke APK lacked approved #202 UI because
+      # its branch included #193 metadata features but not the UI merge.
+      # Fail visibly before creating another visually outdated APK.
+      - name: Require reconciled native playlist UI (#202)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 7fdc5346dfc2c7b30ec84570129def1027545253 HEAD ||
+            { echo "::error::Native playlist UI PR #202 is absent from APK HEAD"; exit 1; }
+          test -f app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistVisualLanguage.kt
+          grep -Fq 'Descrição (opcional)' app/src/main/java/com/music/bitchord/ui/screens/SmartPlaylistV2WizardUi.kt
+
+      - name: Verify the document-only branch-scoped smoke request
+        if: github.event_name == 'push'
+        env:
+          REQUEST_FILE: ${{ github.ref == 'refs/heads/listening/smart-playlists-v2-192' && 'docs/listening/issue-192-physical-smoke-request.md' || 'docs/listening/issue-206-physical-smoke-request.md' }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          git diff --name-only "$PUSH_BEFORE" "$GITHUB_SHA" | grep -Fxq "$REQUEST_FILE" ||
+            { echo "::error::Missing explicit authorization document for this branch"; exit 1; }
+
+      - name: Verify exact CI-approved code for pinning smoke (#206)
+        if: github.ref == 'refs/heads/feat/205-library-native-actions-20261102'
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 297181769ed2afdc481bcbe160ba45ecdbd0eeaf HEAD
+          git diff --quiet 297181769ed2afdc481bcbe160ba45ecdbd0eeaf HEAD -- app/src ||
+            { echo "::error::App sources differ from successful Android CI #41728477968"; exit 1; }
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4

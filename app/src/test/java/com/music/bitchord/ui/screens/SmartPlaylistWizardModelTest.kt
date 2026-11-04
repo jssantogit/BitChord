@@ -1,0 +1,214 @@
+package com.music.bitchord.ui.screens
+
+import com.music.bitchord.data.listening.SmartPlaylistRule
+import com.music.bitchord.data.listening.SmartPlaylistRuleField
+import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
+import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class SmartPlaylistWizardModelTest {
+    @Test fun selectingSmartSourceAddsMandatoryAndConstraintWithoutDestroyingOrRules() {
+        val original = SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ANY,
+            listOf(
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.CONTAINS,
+                    textValue = "New",
+                ),
+                SmartPlaylistRule.Comparison(
+                    SmartPlaylistRuleField.ARTIST_DISPLAY, SmartPlaylistRuleOperator.CONTAINS,
+                    textValue = "Jeans",
+                ),
+            ),
+        )
+        val scoped = smartRuleWithGlobalSource(original, "local", true)
+            as SmartPlaylistRule.Group
+        assertEquals(SmartPlaylistRuleJoin.ALL, scoped.join)
+        assertEquals(original, scoped.children.first())
+        assertEquals("local", smartRuleGlobalSource(scoped))
+        val changed = smartRuleWithGlobalSource(scoped, "opensubsonic", true)
+            as SmartPlaylistRule.Group
+        assertEquals(original, changed.children.first())
+        assertEquals("opensubsonic", smartRuleGlobalSource(changed))
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(original)),
+            smartRuleWithGlobalSource(changed, null, true),
+        )
+        val sourceOnly = smartRuleWithGlobalSource(original, "local", false)
+        assertEquals("local", smartRuleGlobalSource(sourceOnly!!))
+        assertEquals(null, smartRuleWithGlobalSource(sourceOnly, null, true))
+    }
+
+    @Test fun catalogHasEveryAndOnlyAnImplementedV2FieldExactlyOnce() {
+        val fields = smartConditionCategories.flatMap { it.fields }
+        assertEquals(SmartPlaylistRuleField.entries.toSet() - setOf(
+            SmartPlaylistRuleField.LOCAL_GENRE,
+            SmartPlaylistRuleField.LOCAL_FOLDER,
+            SmartPlaylistRuleField.LOCAL_FILE_PATH,
+        ), fields.toSet())
+        assertEquals(fields.size, fields.distinct().size)
+        assertEquals(listOf(SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE),
+            smartConditionCategories.last().fields)
+        assertEquals("Capas de álbuns", smartConditionCategories.last().title)
+        assertEquals(listOf(SmartPlaylistRuleField.SOURCE_KIND), smartConditionSearch("fonte"))
+        assertEquals(listOf(SmartPlaylistRuleField.DURATION_MS), smartConditionSearch("duracao"))
+        assertEquals(listOf(SmartPlaylistRuleField.FOLDER_PATH),
+            smartConditionSearch("pasta de origem"))
+        assertEquals(listOf(SmartPlaylistRuleField.COMPOSER),
+            smartConditionSearch("compositor"))
+        assertEquals(listOf(SmartPlaylistRuleField.EXPLICIT_RATING),
+            smartConditionSearch("estrelas"))
+    }
+
+    @Test fun immutablePathEditingPreservesNotGroupReferenceAndSiblingIdentity() {
+        val one = smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+        val two = SmartPlaylistRule.Not(smartRuleNewComparison(SmartPlaylistRuleField.TITLE))
+        val reference = SmartPlaylistRule.Reference("saved-definition")
+        val sub = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(two, reference))
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(one, sub))
+        assertEquals(reference, smartRuleAtPath(root, listOf(1, 1)))
+        val replacement = smartRuleNewComparison(SmartPlaylistRuleField.TRACK_NUMBER)
+        val revised = smartRuleReplaceAt(root, listOf(1, 0), replacement)
+        assertEquals(replacement, smartRuleAtPath(revised, listOf(1, 0)))
+        assertEquals(one, smartRuleAtPath(revised, listOf(0)))
+        assertEquals(two, smartRuleAtPath(root, listOf(1, 0)))
+        assertEquals(3, smartRuleLeafCount(revised))
+        val added = smartRuleAppendAt(revised, listOf(1), one)
+        assertEquals(3, (smartRuleAtPath(added, listOf(1)) as SmartPlaylistRule.Group).children.size)
+        val removed = smartRuleRemoveAt(added, listOf(1, 2))
+        assertEquals(revised, removed)
+    }
+
+    @Test fun addSecondConditionToFlatLegacyNodePreservesOriginalSemanticsAndNot() {
+        val negative = SmartPlaylistRule.Not(smartRuleNewComparison(SmartPlaylistRuleField.TITLE))
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(negative))
+        val added = smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+        val revised = smartRuleAddConditionAt(root, listOf(0), added)
+        val group = smartRuleAtPath(revised, listOf(0)) as SmartPlaylistRule.Group
+        assertEquals(SmartPlaylistRuleJoin.ALL, group.join)
+        assertEquals(listOf(negative, added), group.children)
+        assertEquals(negative, smartRuleAtPath(root, listOf(0)))
+    }
+
+    @Test fun nestedNotGroupKeepsItsBooleanMeaningThroughEditMoveAndDelete() {
+        val ref = SmartPlaylistRule.Reference("linked-playlist")
+        val first = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        val extra = smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+        val wrapped = SmartPlaylistRule.Not(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(ref, first)),
+        )
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(wrapped, extra))
+        assertEquals(ref, smartRuleAtPath(root, listOf(0, 0)))
+        val appended = smartRuleAddConditionAt(root, listOf(0), extra)
+        assertEquals(listOf(ref, first, extra),
+            ((smartRuleAtPath(appended, listOf(0)) as SmartPlaylistRule.Not)
+                .child as SmartPlaylistRule.Group).children)
+        val changed = smartRuleUpdateGroup(appended, listOf(0)) {
+            it.copy(join = SmartPlaylistRuleJoin.ALL,
+                children = it.children.reversed())
+        }
+        val deleted = smartRuleRemoveAt(changed, listOf(0, 0))
+        val current = smartRuleAtPath(deleted, listOf(0)) as SmartPlaylistRule.Not
+        assertEquals(SmartPlaylistRuleJoin.ALL,
+            (current.child as SmartPlaylistRule.Group).join)
+        assertEquals(listOf(first, ref),
+            (current.child as SmartPlaylistRule.Group).children)
+        assertEquals(wrapped, smartRuleAtPath(root, listOf(0)))
+    }
+
+    @Test fun newCatalogUsesUniversalGenreAndSensibleTextDefaults() {
+        assertTrue(SmartPlaylistRuleField.LOCAL_GENRE !in smartConditionCategories.first().fields)
+        assertEquals("Humor", smartConditionLabel(SmartPlaylistRuleField.MOOD))
+        assertEquals("Nome do álbum ou lançamento",
+            smartConditionLabel(SmartPlaylistRuleField.RELEASE_TITLE))
+        assertEquals(SmartPlaylistRuleOperator.CONTAINS,
+            smartRuleNewComparison(SmartPlaylistRuleField.GENRE).operator)
+    }
+
+    @Test fun namedGroupsSurviveSourceScoping() {
+        val named = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+            smartRuleNewComparison(SmartPlaylistRuleField.GENRE),
+        ), name = "Favoritas")
+        val scoped = smartRuleWithGlobalSource(named, "local", true)
+            as SmartPlaylistRule.Group
+        assertEquals("Favoritas", (scoped.children.first() as SmartPlaylistRule.Group).name)
+    }
+
+    @Test fun sourceCardDescribesRequestedRulesWithoutClaimingProviderSelection() {
+        val unrelated = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        assertTrue(smartRuleSourceSummary(unrelated).contains("Nenhuma condição"))
+        val disjunction = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND,
+                SmartPlaylistRuleOperator.EQUAL,
+                textValue = "local",
+            ),
+            SmartPlaylistRule.Not(SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.SOURCE_KIND,
+                SmartPlaylistRuleOperator.EQUAL,
+                textValue = "opensubsonic",
+            )),
+        ))
+        val summary = smartRuleSourceSummary(disjunction)
+        assertTrue(summary.contains("músicas locais"))
+        assertTrue(summary.contains("OpenSubsonic (conta ativa)"))
+        assertTrue(summary.contains("E/OU/NÃO"))
+        assertTrue(summary.contains("não seleciona fontes"))
+    }
+
+    @Test fun invalidPathsAndLastChildDeletionFailClosed() {
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
+            listOf(smartRuleNewComparison(SmartPlaylistRuleField.EXPLICIT_RATING)))
+        assertThrows(IllegalArgumentException::class.java) {
+            smartRuleAtPath(root, listOf(8))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            smartRuleRemoveAt(root, listOf(0))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            smartRuleAppendAt(root, listOf(0), root)
+        }
+    }
+
+    @Test fun deleteLastConditionClearsRulesWithoutSavingAnEmptyGroup() {
+        val only = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(only))
+        assertEquals(null, smartRuleRemovePruningEmptyGroups(root, listOf(0)))
+        assertEquals(null, smartRuleRemovePruningEmptyGroups(root, emptyList()))
+    }
+
+    @Test fun deleteNamedNestedGroupPrunesOnlyItsBranchAndKeepsSiblings() {
+        val sibling = smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND)
+        val child = SmartPlaylistRule.Not(smartRuleNewComparison(SmartPlaylistRuleField.GENRE))
+        val nested = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ANY, listOf(child), name = "Humor")
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(sibling, nested), name = "Fonte")
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(sibling), name = "Fonte"),
+            smartRuleRemovePruningEmptyGroups(root, listOf(1, 0)),
+        )
+        assertEquals(
+            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(sibling), name = "Fonte"),
+            smartRuleRemovePruningEmptyGroups(root, listOf(1)),
+        )
+        assertEquals(root, root) // immutable original is not changed
+    }
+
+    @Test fun deleteWithinNegatedGroupPreservesNegationUntilItsLastChildIsRemoved() {
+        val a = smartRuleNewComparison(SmartPlaylistRuleField.TITLE)
+        val b = smartRuleNewComparison(SmartPlaylistRuleField.GENRE)
+        val wrapped = SmartPlaylistRule.Not(SmartPlaylistRule.Group(
+            SmartPlaylistRuleJoin.ANY, listOf(a, b), name = "Excluir",
+        ))
+        val root = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
+            listOf(smartRuleNewComparison(SmartPlaylistRuleField.SOURCE_KIND), wrapped))
+        val kept = smartRuleRemovePruningEmptyGroups(root, listOf(1, 0))!!
+        val keptWrapped = (kept as SmartPlaylistRule.Group).children[1] as SmartPlaylistRule.Not
+        assertEquals("Excluir", (keptWrapped.child as SmartPlaylistRule.Group).name)
+        assertEquals(listOf(b), (keptWrapped.child as SmartPlaylistRule.Group).children)
+        assertEquals(root.children.first(), (smartRuleRemovePruningEmptyGroups(root, listOf(1)) as SmartPlaylistRule.Group).children.single())
+    }
+
+}

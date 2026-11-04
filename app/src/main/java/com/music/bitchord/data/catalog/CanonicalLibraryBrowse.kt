@@ -17,6 +17,13 @@ internal data class CanonicalBrowseAssetRow(
     val artistDisplay: String,
     val durationMs: Long?,
     val artworkUri: String?,
+    val dateAddedSeconds: Long? = null,
+    val dateModifiedSeconds: Long? = null,
+    val audioContentType: String? = null,
+    val audioSuffix: String? = null,
+    val audioBitrateBps: Long? = null,
+    val audioBitDepth: Int? = null,
+    val audioSamplingRateHz: Int? = null,
 )
 
 /** Small provider-neutral seam so browse behavior is JVM-testable without Room. */
@@ -27,6 +34,14 @@ internal interface CanonicalLibraryBrowseStore {
 internal data class CanonicalBrowseMediaAsset(
     val mediaAssetId: String,
     val providerKey: String,
+    val dateAddedSeconds: Long? = null,
+    val dateModifiedSeconds: Long? = null,
+    val artworkUri: String? = null,
+    val audioContentType: String? = null,
+    val audioSuffix: String? = null,
+    val audioBitrateBps: Long? = null,
+    val audioBitDepth: Int? = null,
+    val audioSamplingRateHz: Int? = null,
 )
 
 /**
@@ -40,6 +55,8 @@ internal data class CanonicalBrowseTrack(
     val durationMs: Long?,
     val artworkUri: String?,
     val availableAssets: List<CanonicalBrowseMediaAsset>,
+    val dateAddedSeconds: Long? = null,
+    val dateModifiedSeconds: Long? = null,
 )
 
 internal data class CanonicalBrowseLibrary(
@@ -76,12 +93,22 @@ internal class CanonicalLibraryBrowseRepository(
                 artworkUri = recordingRows.firstNotNullOfOrNull { row ->
                     row.artworkUri?.takeIf(String::isNotBlank)
                 },
+                dateAddedSeconds = recordingRows.mapNotNull { it.dateAddedSeconds }.maxOrNull(),
+                dateModifiedSeconds = recordingRows.mapNotNull { it.dateModifiedSeconds }.maxOrNull(),
                 availableAssets = recordingRows
                     .distinctBy(CanonicalBrowseAssetRow::mediaAssetId)
                     .map { row ->
                         CanonicalBrowseMediaAsset(
                             mediaAssetId = row.mediaAssetId,
                             providerKey = row.providerKey,
+                            dateAddedSeconds = row.dateAddedSeconds,
+                            dateModifiedSeconds = row.dateModifiedSeconds,
+                            artworkUri = row.artworkUri,
+                            audioContentType = row.audioContentType,
+                            audioSuffix = row.audioSuffix,
+                            audioBitrateBps = row.audioBitrateBps,
+                            audioBitDepth = row.audioBitDepth,
+                            audioSamplingRateHz = row.audioSamplingRateHz,
                         )
                     }
                     .sortedBy(CanonicalBrowseMediaAsset::mediaAssetId),

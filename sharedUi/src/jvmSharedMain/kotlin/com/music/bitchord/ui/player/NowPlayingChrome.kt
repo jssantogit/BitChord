@@ -10,6 +10,8 @@ import com.music.bitchord.data.model.Song
 internal object NowPlayingChrome {
     const val showPlaybackOrigin = false
     const val showOutputCaption = false
+    // Preserve the old 18dp caption gap + its single-line footprint without text.
+    const val hiddenOutputCaptionFootprintDp = 32
     const val showTechnicalOverlay = false
     const val showQueueHistory = false
     const val showPlaybackTransport = true
