@@ -43,3 +43,30 @@ internal fun canonicalAutoSongs(rows: List<CanonicalBrowseAssetRow>): List<Song>
                 .thenBy { it.mediaAssetId },
         ).firstNotNullOfOrNull(::canonicalAutoSong)
     }
+
+/**
+ * A bounded playback snapshot is not a complete listening history. Only
+ * entries up to the current cursor could have actually been heard; future
+ * queue members and unresolved historical video IDs are not recent audio.
+ */
+internal fun canonicalAutoRecentSongs(
+    songs: List<Song>,
+    currentIndex: Int,
+    verifiedDownloadUri: (String) -> String?,
+): List<Song> {
+    if (songs.isEmpty() || currentIndex < 0) return emptyList()
+    fun verified(uri: String?): Boolean = uri != null && (
+        uri.startsWith("content://", ignoreCase = true) ||
+            uri.startsWith("file://", ignoreCase = true) ||
+            CanonicalRemotePlaybackUri.decode(uri)
+                ?.providerKey?.startsWith("opensubsonic:") == true
+        )
+    return songs.take(currentIndex.coerceAtMost(songs.lastIndex) + 1)
+        .asReversed()
+        .mapNotNull { song ->
+            val uri = sequenceOf(song.localUri, verifiedDownloadUri(song.videoId), song.videoId)
+                .firstOrNull(::verified) ?: return@mapNotNull null
+            song.copy(localUri = uri)
+        }
+        .distinctBy(Song::videoId)
+}
