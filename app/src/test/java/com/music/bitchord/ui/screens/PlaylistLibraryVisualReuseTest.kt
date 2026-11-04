@@ -41,6 +41,26 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun chosenPlaylistCoverOverridesFirstSongForPagePalette() {
+        val row = V2DisplayRow(
+            id = "recording:one",
+            title = "Track",
+            artist = "Artist",
+            localArtworkUri = "content://media/track-art",
+        )
+        assertEquals(
+            "content://media/custom-cover",
+            canonicalPlaylistPaletteArtworkUri(
+                "content://media/custom-cover", listOf(row),
+            ),
+        )
+        assertEquals(
+            "content://media/track-art",
+            canonicalPlaylistPaletteArtworkUri(null, listOf(row)),
+        )
+        assertEquals(null, canonicalPlaylistPaletteArtworkUri(null, emptyList()))
+    }
+
     @Test fun playlistHighlightRequiresExactVerifiedRecordingId() {
         assertEquals(
             true, isVerifiedCanonicalPlaylistCurrentTrack(
