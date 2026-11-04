@@ -37,6 +37,11 @@ internal data class CanonicalBrowseMediaAsset(
     val dateAddedSeconds: Long? = null,
     val dateModifiedSeconds: Long? = null,
     val artworkUri: String? = null,
+    val audioContentType: String? = null,
+    val audioSuffix: String? = null,
+    val audioBitrateBps: Long? = null,
+    val audioBitDepth: Int? = null,
+    val audioSamplingRateHz: Int? = null,
 )
 
 /**
@@ -52,11 +57,6 @@ internal data class CanonicalBrowseTrack(
     val availableAssets: List<CanonicalBrowseMediaAsset>,
     val dateAddedSeconds: Long? = null,
     val dateModifiedSeconds: Long? = null,
-    val audioContentType: String? = null,
-    val audioSuffix: String? = null,
-    val audioBitrateBps: Long? = null,
-    val audioBitDepth: Int? = null,
-    val audioSamplingRateHz: Int? = null,
 )
 
 internal data class CanonicalBrowseLibrary(
