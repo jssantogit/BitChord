@@ -92,6 +92,8 @@ internal object CanonicalLocalLibrary {
                         artworkUri = candidate.artworkUri,
                         localGenre = candidate.localGenre,
                         localBitrateBps = candidate.localBitrateBps,
+                        audioContentType = candidate.localMimeType,
+                        audioBitrateBps = candidate.localBitrateBps,
                     ),
                 )
                 // Preserve completed embedded-tag evidence only if the source
@@ -221,6 +223,7 @@ internal object CanonicalLocalLibrary {
             path = song.localPath,
             localGenre = song.localGenre,
             localBitrateBps = song.localBitrateBps,
+            localMimeType = song.localMimeType,
             dateAddedSeconds = song.localDateAddedSeconds,
             dateModifiedSeconds = song.localDateModifiedSeconds,
             trackNumber = song.trackNumber,
@@ -443,6 +446,7 @@ internal data class LocalMediaCandidate(
     val sourceFingerprint: String? = null,
     val localGenre: String? = null,
     val localBitrateBps: Long? = null,
+    val localMimeType: String? = null,
 )
 
 internal data class MediaStoreSourceLookup(
