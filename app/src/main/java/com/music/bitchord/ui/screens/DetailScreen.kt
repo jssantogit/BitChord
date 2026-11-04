@@ -934,9 +934,15 @@ fun DetailScreen(
                             ?: page.thumbnailUrl?.artworkAt(HEADER_ART_PX),
                         content = detailListItems,
                     )
+                } else if (page.type == BrowseType.PLAYLIST) {
+                    NativePlaylistDetailFrame(
+                        palette = palette,
+                        listState = listState,
+                        bottomPadding = contentPadding.calculateBottomPadding(),
+                        content = detailListItems,
+                    )
                 } else {
-                    // Keep album and playlist geometry unchanged. Only the
-                    // artist photo/list structure is consolidated here.
+                    // Albums continue with their existing native release list.
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize(),

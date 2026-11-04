@@ -471,10 +471,10 @@ internal fun CanonicalPlaylistDetailScreen(
         (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
         rows.orEmpty().all { it.isAvailablePlaylistMember() }
 
-    LazyColumn(
-        state = listState ?: rememberLazyListState(),
-        modifier = Modifier.fillMaxSize().background(palette.background),
-        contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
+    NativePlaylistDetailFrame(
+        palette = palette,
+        listState = listState ?: rememberLazyListState(),
+        bottomPadding = contentPadding.calculateBottomPadding(),
     ) {
         item(key = "playlist-detail-cover") {
             // The same hero frame used by DetailScreen.ReleaseHeader; the

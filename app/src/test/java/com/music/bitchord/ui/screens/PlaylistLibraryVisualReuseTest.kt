@@ -41,6 +41,23 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun playlistDetailFrameRetainsNativeListGeometryAcrossSources() {
+        compose.setContent {
+            val resolved = com.music.bitchord.ui.theme.rememberArtworkPalette(
+                imageUrl = null,
+            )
+            NativePlaylistDetailFrame(
+                palette = resolved,
+                listState = androidx.compose.foundation.lazy.rememberLazyListState(),
+                bottomPadding = 112.dp,
+            ) {
+                item { androidx.compose.material3.Text("Faixa da playlist") }
+            }
+        }
+        compose.onNodeWithTag("native-playlist-detail-frame").assertExists()
+        compose.onNodeWithText("Faixa da playlist").assertExists()
+    }
+
     @Test fun canonicalPlaylistQueueKeepsNativeReleaseActionGeometry() {
         var queued = 0
         var played = 0
