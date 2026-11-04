@@ -15,14 +15,14 @@ class A0SearchRecoveryPlanTest {
         already.add("Jóga")
         assertNull(recovery.next(15000,false,already))
     }
-    @Test fun longerDescriptiveTitleUsesExactAlbumQualifiedRecoveryBeforeBroadTitle() {
+    @Test fun longerDescriptiveTitlePrioritizesProvenTitleOnlyQueryBeforeAlbumQualified() {
         val original="BTS (방탄소년단) - Boy In Luv"
         val recovery=A0SearchRecoveryPlan(original,album="Proof")
         val already=mutableSetOf(A0SearchQuery.normalize(original))
         val qualified=A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv")
-        assertEquals(qualified,recovery.next(6000,false,already))
-        already.add(qualified)
-        assertEquals("Boy In Luv",recovery.next(12000,false,already))
+        assertEquals("Boy In Luv",recovery.next(6000,false,already))
+        already.add("Boy In Luv")
+        assertEquals(qualified,recovery.next(12000,false,already))
     }
     @Test fun releaseWideFallbackSearchesAlbumToRecoverOtherTracksWithoutTransfer() {
         val recovery=A0SearchRecoveryPlan(
@@ -31,9 +31,7 @@ class A0SearchRecoveryPlanTest {
             "BTS (방탄소년단) - Boy In Luv"))
         assertEquals("BTS Proof",recovery.next(6000,false,sent))
         sent.add("BTS Proof")
-        assertEquals(A0SearchQuery.normalize(
-            "BTS (방탄소년단) Proof Boy In Luv"),
-            recovery.next(12000,false,sent))
+        assertEquals("Boy In Luv",recovery.next(12000,false,sent))
         assertFalse(recovery.authorizesTransfer)
         val generic=A0SearchRecoveryPlan("BTS - Normal","ARIRANG",releaseWide=true)
         assertEquals("BTS ARIRANG",generic.next(6000,false,setOf("BTS Normal")))
@@ -60,9 +58,9 @@ class A0SearchRecoveryPlanTest {
         val sent=mutableSetOf(A0SearchQuery.normalize(title))
         val global=setOf("BTS Proof")
         val qualified=A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv")
-        assertEquals(qualified,plan.next(6000,false,sent,excludedQueries=global))
-        sent.add(qualified)
-        assertEquals("Boy In Luv",plan.next(12000,false,sent,excludedQueries=global))
+        assertEquals("Boy In Luv",plan.next(6000,false,sent,excludedQueries=global))
+        sent.add("Boy In Luv")
+        assertEquals(qualified,plan.next(12000,false,sent,excludedQueries=global))
         assertNull(plan.next(14000,true,setOf(A0SearchQuery.normalize(title)),
             missingSiblings=true,excludedQueries=global))
     }
@@ -104,8 +102,7 @@ class A0SearchRecoveryPlanTest {
         val sent=mutableSetOf(A0SearchQuery.normalize(original))
         assertEquals("BTS Proof",recovery.releaseWideQuery)
         sent.add(checkNotNull(recovery.releaseWideQuery)) // already sought by earlier slot
-        assertEquals(A0SearchQuery.normalize("BTS (방탄소년단) Proof Boy In Luv"),
-            recovery.next(6000,false,sent))
+        assertEquals("Boy In Luv",recovery.next(6000,false,sent))
         assertEquals(2,sent.size)
     }
     @Test fun bilingualKoreanTitleCanSearchItsLatinAliasWithoutChangingIdentity() {
@@ -174,11 +171,11 @@ class A0SearchRecoveryPlanTest {
         val plan=A0SearchRecoveryPlan(original,"Proof",releaseWide=true)
         val album=checkNotNull(plan.releaseWideQuery)
         assertEquals("BTS Proof",album)
-        assertEquals("BTS Epiphany Jin Demo Version",
+        assertEquals("Epiphany Jin Demo Ver",
             plan.next(6000,false,setOf(album)))
         // A successful album-wide result still avoids redundant variants.
         assertNull(plan.next(6000,true,setOf(album),missingSiblings=false))
-        assertEquals("BTS Epiphany Jin Demo Version",
+        assertEquals("Epiphany Jin Demo Ver",
             A0SearchRecoveryPlan(original).next(6000,false,
                 setOf("BTS Epiphany Jin Demo Ver")))
     }
@@ -220,6 +217,23 @@ class A0SearchRecoveryPlanTest {
         assertNull(plan.next(6000,true,setOf("ILLIT Magnetic"),
             missingSiblings=false))
         assertFalse(plan.authorizesTransfer)
+    }
+
+    @Test fun preciseTitleNeverLosesOriginalIdentityOrExtraQueryBudget() {
+        val original="Artist - Long Distinctive Song"
+        val plan=A0SearchRecoveryPlan(original,"Verified Album")
+        val already=mutableSetOf("Artist Long Distinctive Song")
+        assertEquals("Long Distinctive Song",plan.next(6000,false,already))
+        already.add("Long Distinctive Song")
+        assertEquals("Artist Verified Album Long Distinctive Song",
+            plan.next(12000,false,already))
+        already.add("Artist Verified Album Long Distinctive Song")
+        assertNull(plan.next(14000,false,already))
+        assertFalse(plan.authorizesTransfer)
+        // A generic, single-token title must NOT gain broad search priority.
+        val generic=A0SearchRecoveryPlan("Artist - Normal","Verified Album")
+        assertEquals("Artist Verified Album Normal",
+            generic.next(6000,false,setOf("Artist Normal")))
     }
 
     @Test fun genericTrackReceivesAlbumSpecificRecoveryBeforeBroadTitleOnly() {
