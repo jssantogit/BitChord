@@ -3033,164 +3033,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_home.value is UiState.Success) refresh(Feed.HOME)
     }
 
+    /** Historical Google account data stays on disk; it is no longer fetched. */
     fun loadAccount() {
-        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
-        val identity = listenerKey()
-        accountLoadJob = viewModelScope.launch {
-            val account = YtMusicRepository.account().getOrNull()
-            if (identity != listenerKey() || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
-                return@launch
-            }
-            _account.value = account
-            // A channel picked in the in-app browser arrives as ids and nothing
-            // else — the page's `ytcfg` never says what the channel is called.
-            // The account menu, asked *as* that channel, answers with its name,
-            // which is what the settings row needs to show.
-            if (account != null && _selectedChannelKey.value != null) {
-                _selectedChannelName.value = account.name
-                val accountId = _activeAccountId.value
-                val profileId = _activeProfileId.value
-                val session = accountId?.let { id -> authStore.sessions.firstOrNull { it.accountId == id } }
-                val updated = session?.let { saved -> saved.copy(
-                    name = account.name, email = account.email,
-                    profiles = saved.profiles.map { profile ->
-                        if (profile.profileId == profileId) profile.copy(
-                            name = account.name, handle = account.email, avatar = account.thumbnailUrl,
-                        ) else profile
-                    },
-                ) }
-                if (updated != null) {
-                    authStore.upsertSession(updated, activate = false)
-                    _googleAccounts.value = authStore.sessions
-                }
-            }
-        }
+        accountLoadJob?.cancel()
+        _account.value = null
     }
 
-    /**
-     * Re-fetches [feed] in place. Unlike the `load*` entry points this leaves
-     * the current content on screen rather than dropping back to the loading
-     * state — a refresh that swapped the page for a spinner would be a worse
-     * experience than the stale content it replaces.
-     */
+    /** Only canonical discovery is a live refresh source in this build. */
     fun refresh(feed: Feed) {
         if (feed in _refreshing.value) return
-        if (feed == Feed.LIBRARY && !_signedIn.value) return
-        if (feed == Feed.LIBRARY && !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
-        val identity = listenerKey()
         _refreshing.value = _refreshing.value + feed
-        val job = viewModelScope.launch {
+        viewModelScope.launch {
             try {
                 when (feed) {
-                    Feed.HOME -> if (isCanonicalDiscoverySelected()) {
-                        loadCanonicalDiscoveryCatalog()
-                    } else refreshHome(identity)
-                    Feed.EXPLORE -> if (isCanonicalDiscoverySelected()) {
-                        loadCanonicalDiscoveryCatalog()
-                    } else fetchExplore(exploreLoadGeneration.next())
-                    Feed.LIBRARY -> fetchLibrary(identity)
+                    Feed.HOME, Feed.EXPLORE -> loadCanonicalDiscoveryCatalog()
+                    Feed.LIBRARY -> loadLibrary()
                 }
             } finally {
                 _refreshing.value = _refreshing.value - feed
             }
         }
-        when (feed) {
-            Feed.HOME -> homeRefreshJob = job
-            Feed.EXPLORE -> exploreRefreshJob = job
-            Feed.LIBRARY -> libraryRefreshJob = job
-        }
     }
 
     fun loadExplore() {
-        _explore.value = UiState.Loading
-        if (isCanonicalDiscoverySelected()) {
-            loadCanonicalDiscoveryCatalog()
-            return
-        }
-        val generation = exploreLoadGeneration.next()
-        exploreLoadJob?.cancel()
-        exploreLoadJob = viewModelScope.launch { fetchExplore(generation) }
+        _explore.value = UiState.Success(emptyList())
+        loadCanonicalDiscoveryCatalog()
     }
 
-    private suspend fun fetchExplore(generation: Long) {
-        if (isCanonicalDiscoverySelected()) return
-        val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.MOODS_AND_GENRES) {
-            YtMusicRepository.moodAndGenres()
-        } ?: return
-        val state = result.fold(
-            onSuccess = { sections ->
-                if (sections.isEmpty()) {
-                    UiState.Error(text(R.string.nothing_to_explore))
-                } else {
-                    UiState.Success(sections)
-                }
-            },
-            onFailure = { UiState.Error(it.friendly()) },
-        )
-        if (!exploreLoadGeneration.isCurrent(generation) || isCanonicalDiscoverySelected()) return
-        _explore.value = state
-        (state as? UiState.Success)?.data?.let { loadMoodGenreArtwork(it, generation) }
-    }
-
-    /**
-     * Category buttons do not carry thumbnails themselves. Resolve a small
-     * number at a time from the shelves they open, so the grid gains real art
-     * without saturating the browse client or delaying the category list.
-     */
-    private fun loadMoodGenreArtwork(sections: List<MoodGenreSection>, generation: Long) {
-        if (isCanonicalDiscoverySelected() || !exploreLoadGeneration.isCurrent(generation)) return
-        moodGenreArtworkJob?.cancel()
-        moodGenreArtworkJob = viewModelScope.launch {
-            val limiter = Semaphore(4)
-            coroutineScope {
-                sections.flatMap(MoodGenreSection::items).forEach { item ->
-                    launch {
-                        val artwork = limiter.withPermit {
-                            val result = legacyDiscoveryGate().run(
-                                LegacyDiscoveryRequest.MOOD_GENRE_ARTWORK,
-                            ) { YtMusicRepository.moodGenreArtwork(item.browseId, item.params) }
-                            result?.getOrNull()
-                        } ?: return@launch
-                        if (!exploreLoadGeneration.isCurrent(generation) || isCanonicalDiscoverySelected()) {
-                            return@launch
-                        }
-                        val current = (_explore.value as? UiState.Success)?.data ?: return@launch
-                        _explore.value = UiState.Success(current.map { section ->
-                            section.copy(items = section.items.map { currentItem ->
-                                if (currentItem.browseId == item.browseId && currentItem.params == item.params) {
-                                    currentItem.copy(thumbnailUrl = artwork)
-                                } else {
-                                    currentItem
-                                }
-                            })
-                        })
-                    }
-                }
-            }
-        }
-    }
-
-    fun openMoodGenre(item: MoodGenre) {
-        if (isCanonicalDiscoverySelected()) return
-        _selectedMoodGenre.value = item
-        _moodGenreShelves.value = UiState.Loading
-        val generation = exploreLoadGeneration.next()
+    /** An old YouTube category link has no valid provider-backed destination. */
+    fun openMoodGenre(@Suppress("UNUSED_PARAMETER") item: MoodGenre) {
         moodGenreRequestJob?.cancel()
-        moodGenreRequestJob = viewModelScope.launch {
-            val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.MOOD_GENRE_SHELVES) {
-                YtMusicRepository.moodGenreShelves(item.browseId, item.params)
-            } ?: return@launch
-            val state = result.fold(
-                onSuccess = { shelves ->
-                    if (shelves.isEmpty()) UiState.Error(text(R.string.nothing_to_explore))
-                    else UiState.Success(shelves)
-                },
-                onFailure = { UiState.Error(it.friendly()) },
-            )
-            if (exploreLoadGeneration.isCurrent(generation) && !isCanonicalDiscoverySelected()) {
-                _moodGenreShelves.value = state
-            }
-        }
+        _selectedMoodGenre.value = null
+        _moodGenreShelves.value = UiState.Error(text(R.string.nothing_to_explore))
     }
 
     fun closeMoodGenre(): Boolean {
@@ -3201,285 +3075,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return true
     }
 
-    /** Tapping a tab should leave any pushed page behind. */
     fun clearDetail() {
         if (_detailStack.value.isNotEmpty()) _detailStack.value = emptyList()
     }
 
     fun loadHome() {
-        val identity = listenerKey()
-        val generation = homeLoadGeneration.next()
         homeLoadJob?.cancel()
         homePagingJob?.cancel()
-        _home.value = UiState.Loading
+        homeLoadGeneration.invalidateAndNext()
+        _home.value = UiState.Success(emptyList())
         homeContinuation = null
         homeSeenTitles.clear()
         _homeLoadingMore.value = false
-        _homeRecentlyPlayedLoading.value = _signedIn.value && !isCanonicalDiscoverySelected()
-        if (isCanonicalDiscoverySelected()) {
-            _home.value = UiState.Success(emptyList())
-            _homePendingShelves.value = 0
-            loadCanonicalDiscoveryCatalog()
-            return
-        }
-        // The core feed plus one browse per supplement. Recently played is left
-        // out: it has its own skeleton at the head of the page rather than the
-        // one at the tail.
-        _homePendingShelves.value = 1 + YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.size
-        homeLoadJob = viewModelScope.launch {
-            launch {
-                try {
-                    val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME) {
-                        YtMusicRepository.home()
-                    } ?: return@launch
-                    result
-                        .onSuccess { feed ->
-                            if (!isCurrentHomeLoad(identity, generation)) return@onSuccess
-                            homeContinuation = feed.continuation
-                            publishHomeShelves(feed.shelves)
-                        }
-                        .onFailure { failure ->
-                            if (isCurrentHomeLoad(identity, generation) && _home.value !is UiState.Success) {
-                                _home.value = UiState.Error(failure.friendly())
-                            }
-                        }
-                } finally {
-                    homeShelfRequestSettled(identity, generation)
-                }
-            }
-            if (_signedIn.value) {
-                launch {
-                    val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.RECENTLY_PLAYED) {
-                        YtMusicRepository.homeRecentlyPlayed()
-                    } ?: return@launch
-                    result
-                        .onSuccess { shelf ->
-                            if (isCurrentHomeLoad(identity, generation)) {
-                                _homeRecentlyPlayedLoading.value = false
-                                shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
-                            }
-                        }
-                        .onFailure {
-                            if (isCurrentHomeLoad(identity, generation)) _homeRecentlyPlayedLoading.value = false
-                        }
-                }
-            }
-            YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS.forEach { browseId ->
-                launch {
-                    try {
-                        val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME_SUPPLEMENT) {
-                            YtMusicRepository.homeSupplement(browseId)
-                        } ?: return@launch
-                        result.onSuccess { shelves ->
-                            if (isCurrentHomeLoad(identity, generation)) publishHomeShelves(shelves)
-                        }
-                    } finally {
-                        homeShelfRequestSettled(identity, generation)
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * One of the parallel first-page requests has finished. Ignored once a newer
-     * load has taken over, which has already reset the count for its own fan-out.
-     */
-    private fun homeShelfRequestSettled(identity: String?, generation: Long) {
-        if (!isCurrentHomeLoad(identity, generation)) return
-        _homePendingShelves.value = (_homePendingShelves.value - 1).coerceAtLeast(0)
-    }
-
-    private fun isCurrentHomeLoad(identity: String?, generation: Long) =
-        identity == listenerKey() && homeLoadGeneration.isCurrent(generation) &&
-            !isCanonicalDiscoverySelected()
-
-    private fun publishHomeShelves(shelves: List<HomeShelf>, prepend: Boolean = false) {
-        val existing = (_home.value as? UiState.Success)?.data.orEmpty()
-        if (prepend) {
-            // YouTube's core home can also contain a stale "Recently played"
-            // shelf. The dedicated history endpoint wins and replaces it.
-            val replacing = shelves.map { it.title.lowercase(Locale.ROOT) }.toSet()
-            homeSeenTitles.addAll(replacing)
-            _home.value = UiState.Success(shelves + existing.filterNot {
-                it.title.lowercase(Locale.ROOT) in replacing
-            })
-            return
-        }
-        val added = shelves.withoutRepeatsOf(existing)
-            .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-        if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
-    }
-
-    /** Refreshes the core feed without blanking the current Play page first. */
-    private suspend fun refreshHome(identity: String?) = coroutineScope {
-        if (isCanonicalDiscoverySelected()) {
-            loadCanonicalDiscoveryCatalog()
-            return@coroutineScope
-        }
-        homeLoadJob?.cancel()
-        homePagingJob?.cancel()
+        _homeRecentlyPlayedLoading.value = false
         _homePendingShelves.value = 0
-        _homeLoadingMore.value = false
-        val generation = homeLoadGeneration.next()
-        val recent = if (_signedIn.value) async {
-            legacyDiscoveryGate().run(LegacyDiscoveryRequest.RECENTLY_PLAYED) {
-                YtMusicRepository.homeRecentlyPlayed()
-            }
-        } else null
-        val home = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME) {
-            YtMusicRepository.home()
-        } ?: return@coroutineScope
-        home.onSuccess { feed ->
-            if (identity != listenerKey() || !homeLoadGeneration.isCurrent(generation) ||
-                isCanonicalDiscoverySelected()
-            ) return@onSuccess
-            homeContinuation = feed.continuation
-            homeSeenTitles.clear()
-            val shelves = feed.shelves.withoutRepeatsOf(emptyList())
-                .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-            if (shelves.isNotEmpty()) _home.value = UiState.Success(shelves)
-        }
-        recent?.await()?.onSuccess { shelf ->
-            if (identity == listenerKey() && homeLoadGeneration.isCurrent(generation) &&
-                !isCanonicalDiscoverySelected()
-            ) shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
-        }
+        loadCanonicalDiscoveryCatalog()
     }
 
-    /**
-     * Called as the Home list nears its end. A no-op while a page is already
-     * in flight, once the feed is exhausted, or before the first page has
-     * loaded — [homeContinuation] covers all three by construction.
-     */
     fun loadMoreHome() {
-        if (isCanonicalDiscoverySelected()) return
-        val token = homeContinuation ?: return
-        if (_homeLoadingMore.value) return
-        val identity = listenerKey()
-        val generation = homeLoadGeneration.current()
-        _homeLoadingMore.value = true
-        homePagingJob?.cancel()
-        homePagingJob = viewModelScope.launch {
-            try {
-                val result = legacyDiscoveryGate().run(LegacyDiscoveryRequest.HOME) {
-                    YtMusicRepository.moreHome(token)
-                } ?: return@launch
-                result.onSuccess { feed ->
-                    if (identity == listenerKey() && homeLoadGeneration.isCurrent(generation) &&
-                        !isCanonicalDiscoverySelected()
-                    ) {
-                        val existing = (_home.value as? UiState.Success)?.data ?: emptyList()
-                        val added = feed.shelves.withoutRepeatsOf(existing)
-                            .filter { homeSeenTitles.add(it.title.lowercase(Locale.ROOT)) }
-                        // A page with nothing new signals the feed has looped back on
-                        // itself rather than run dry with a token still attached —
-                        // treat it the same as exhausted so scrolling can't spin here.
-                        homeContinuation = feed.continuation.takeIf { added.isNotEmpty() }
-                        if (added.isNotEmpty()) _home.value = UiState.Success(existing + added)
-                    }
-                }
-            } finally {
-                if (identity == listenerKey() && homeLoadGeneration.isCurrent(generation)) {
-                    _homeLoadingMore.value = false
-                }
-            }
-        }
+        homeContinuation = null
+        _homeLoadingMore.value = false
     }
 
+    /** Legacy account library is historical; the unified library is native. */
     fun loadLibrary() {
-        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
-        if (libraryLoadJob?.isActive == true) return
-        val identity = listenerKey()
         libraryLoadJob?.cancel()
-        libraryStateBeforeLoad = libraryStateBeforeLoad ?: _library.value
-        _library.value = UiState.Loading
-        libraryLoadJob = viewModelScope.launch {
-            fetchLibrary(identity)
-            if (identity == listenerKey() && isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
-                libraryStateBeforeLoad = null
-            }
-        }
+        _library.value = UiState.Error(text(R.string.legacy_library_youtube_disabled))
     }
 
-    private suspend fun fetchLibrary(identity: String?) {
-        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
-        val next = YtMusicRepository.library().fold(
-            onSuccess = { page ->
-                // Liked Music is published with just its first page on the tab;
-                // the rest of the collection is synced into LikeState here, in
-                // this ViewModel's scope, so it is cancelled with the screen and
-                // a liked track past the first page still reads as liked.
-                page.likedContinuation?.let { token -> syncLikedMusic(identity, token) }
-                if (page.isEmpty) UiState.Error(text(R.string.library_empty))
-                else UiState.Success(page.copy(likedContinuation = null))
-            },
-            onFailure = { UiState.Error(it.friendly()) },
-        )
-        if (identity == listenerKey() && isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
-            _library.value = next
-        }
-    }
-
-    /**
-     * Follows Liked Music's continuation chain to exhaustion, seeding each
-     * page's ids into [LikeState] so every liked track reads as liked.
-     *
-     * Scoped to [viewModelScope] — a re-fetch of the library cancels and
-     * replaces it, and it dies with the screen. It only ever seeds ids, never
-     * retaining the full songs for pages already behind the tab.
-     *
-     * [identity] is the listener this token belongs to, checked before every
-     * page: [LikeState] is a single shared map, not scoped per account, so a
-     * sync still in flight when the listener switches must stop rather than
-     * go on seeding the old account's likes into the new one's session.
-     */
-    private fun syncLikedMusic(identity: String?, token: String) {
-        if (identity != listenerKey() || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
-        likedSyncJob?.cancel()
-        likedSyncJob = viewModelScope.launch {
-            YtMusicRepository.syncLikedMusic(token) { next ->
-                if (identity != listenerKey() || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
-                    null
-                } else {
-                    YtMusicRepository.moreSongs(next).getOrNull()
-                }
-            }
-        }
-    }
-
-    /**
-     * The account's listening history.
-     *
-     * Loaded on each visit rather than cached: it is a page whose whole subject
-     * is what happened most recently, and one that opened showing the state it
-     * was in last time would be answering a different question. Guests get the
-     * signed-out message straight away, since there is no account to have a
-     * history on.
-     */
+    /** The dedicated listening store owns recent playback, not YouTube. */
     fun loadHistory() {
-        if (!_signedIn.value) {
-            _history.value = UiState.Error(text(R.string.history_sign_in_required))
-            return
-        }
-        if (!isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
-        val identity = listenerKey()
         historyLoadJob?.cancel()
-        historyStateBeforeLoad = historyStateBeforeLoad ?: _history.value
-        _history.value = UiState.Loading
-        historyLoadJob = viewModelScope.launch {
-            val next = YtMusicRepository.history().fold(
-                onSuccess = { songs ->
-                    if (songs.isEmpty()) UiState.Error(text(R.string.history_empty))
-                    else UiState.Success(songs)
-                },
-                onFailure = { UiState.Error(it.friendly()) },
-            )
-            if (identity == listenerKey() && isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
-                _history.value = next
-                historyStateBeforeLoad = null
-            }
-        }
+        _history.value = UiState.Error(text(R.string.history_empty))
     }
 
     /** Recent searches, kept on device as rich entity records. */
