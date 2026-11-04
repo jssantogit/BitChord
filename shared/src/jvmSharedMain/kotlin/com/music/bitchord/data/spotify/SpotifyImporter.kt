@@ -1,11 +1,7 @@
 package com.music.bitchord.data.spotify
 
 import com.music.bitchord.data.Http
-import com.music.bitchord.data.YtMusicRepository
-import com.music.bitchord.data.model.SearchFilter
-import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
-import com.music.bitchord.data.sources.TrackMatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -156,26 +152,11 @@ object SpotifyImporter {
         }
 
     /**
-     * The YouTube Music song that is [track], or null if there is none: the
-     * best candidate by title, artist, length and album, and failing that the
-     * search's first hit.
+     * Compatibility entry point for older callers. New Spotify resolution
+     * should inject a canonical asset resolver into resolveToSongs instead.
      */
-    suspend fun matchTrack(track: SpotifyTrack): Song? {
-        val query = listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")
-        val candidates = YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull()
-            ?.filterIsInstance<SearchResult.Track>()
-            ?.map { it.song }
-            .orEmpty()
-        return TrackMatcher.best(
-            candidates,
-            TrackMatcher.Target(
-                title = track.title,
-                artist = track.artist,
-                durationSec = track.durationMs.takeIf { it > 0 }?.div(1000),
-                album = track.album,
-            ),
-        ) ?: candidates.firstOrNull()
-    }
+    suspend fun matchTrack(track: SpotifyTrack): Song? =
+        LegacySpotifyYoutubeMatcher.matchTrack(track)
 
     /** Tracks the embed page lists before it cuts off. */
     private const val EMBED_TRACK_LIMIT = 100
@@ -232,7 +213,7 @@ object SpotifyImporter {
     }
 
     /**
-     * Resolves a list of Spotify tracks to full Song objects using Innertube search.
+     * Resolves Spotify tracks using an injected resolver. The default legacy matcher\n     * is isolated until the canonical MediaStore/Navidrome resolver replaces it.
      * Reports real-time progress via [onProgress].
      */
     suspend fun resolveToSongs(
@@ -240,6 +221,7 @@ object SpotifyImporter {
         onProgress: (completed: Int, total: Int) -> Unit,
         /** Live source policy, checked before and after each network lookup. */
         allowYoutubeMatching: () -> Boolean = { true },
+        resolveTrack: suspend (SpotifyImportTrack) -> Song? = LegacySpotifyYoutubeMatcher::matchImportTrack,
     ): Pair<List<Song>, List<SpotifyImportTrack>> = coroutineScope {
         val total = tracks.size
         val completedCount = AtomicInteger(0)
@@ -253,12 +235,9 @@ object SpotifyImporter {
                         onProgress(done, total)
                         return@withPermit Pair<Song?, SpotifyImportTrack?>(null, track)
                     }
-                    val query = "${track.title} ${track.artist}".trim()
-                    val searchResult = YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull()
+                    val resolved = resolveTrack(track)
                     // Discard responses that completed after source opt-out.
-                    val matchedSong = if (allowYoutubeMatching()) {
-                        searchResult?.filterIsInstance<SearchResult.Track>()?.firstOrNull()?.song
-                    } else null
+                    val matchedSong = if (allowYoutubeMatching()) resolved else null
 
                     val done = completedCount.incrementAndGet()
                     onProgress(done, total)
