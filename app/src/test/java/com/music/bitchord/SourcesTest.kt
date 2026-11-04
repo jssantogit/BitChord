@@ -1900,4 +1900,14 @@ class SourcesTest {
         assertFalse(eligible.any { it.id == incompleteAddon.id })
         assertEquals(listOf(addon.id, jio.id), eligible.map { it.id })
     }
+    @Test
+    fun `retired Youtube source cannot be probed through the source registry`() = runBlocking {
+        val legacy = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val health = SourceRegistry.probeCandidate(legacy)
+        assertEquals(
+            SourceHealth.Rejected("YouTube Music is retired as an audio source"),
+            health,
+        )
+    }
+
 }
