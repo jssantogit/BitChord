@@ -50,31 +50,16 @@ import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
-import com.music.bitchord.diagnostics.Diagnostics
-import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.RowMoreButton
-import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
-
-private data class CanonicalArtistNativeReleases(
-    val sections: CanonicalArtistReleaseSections,
-    val artwork: Map<String, CanonicalBrowseTrack>,
-    val evidence: Map<String, CanonicalArtistReleaseEvidence> = emptyMap(),
-) {
-    companion object {
-        val EMPTY = CanonicalArtistNativeReleases(
-            canonicalArtistReleaseSections(emptyList(), emptyMap()), emptyMap(),
-        )
-    }
-}
 
 /**
  * The artist route reuses the approved DetailScreen artist header, photo,
@@ -119,79 +104,11 @@ internal fun CanonicalNativeArtistDetail(
     val catalogDb = remember(context) { CanonicalCatalogDatabase.get(context) }
     val dao = remember(catalogDb) { catalogDb.catalogDao() }
     val keys = sourceKeys.filter { selectedSourceKey == null || it == selectedSourceKey }
-    val nativeReleases by produceState(
-        initialValue = CanonicalArtistNativeReleases.EMPTY,
-        key1 = tracks.map { it.recordingId },
-        key2 = keys,
-    ) {
-        // A delayed MusicBrainz classification or provider rescan must refresh
-        // an artist already on screen, without requiring navigation away/back.
-        catalogDb.invalidationTracker.createFlow(
-            "catalog_release", "catalog_release_track", "catalog_media_asset",
-            "catalog_release_group", "catalog_release_group_edition",
-        ).collectLatest {
-            value = try {
-                withContext(Dispatchers.IO) {
-                    val recordingIds = tracks.map { it.recordingId }
-                val releaseIds = recordingIds.chunked(300).flatMap {
-                    dao.releaseIdsForVisibleRecordings(it)
-                }.toSet()
-                val releases = keys.flatMap { dao.providerScopedReleases(it) }
-                    .distinctBy { it.id }
-                    .filter { it.id in releaseIds }
-                val proofs = releases.map { it.id }.chunked(300).flatMap {
-                    dao.canonicalArtistReleaseEvidence(it)
-                }.associate { proof ->
-                    proof.releaseId to CanonicalArtistReleaseEvidence(
-                        proof.releaseId, proof.primaryType, proof.firstReleaseDate,
-                    )
-                }
-                val coverLinks = releases.map { it.id }.chunked(300).flatMap { ids ->
-                    dao.playlistAlbumCoverRecordingIds(keys, ids)
-                }
-                val counts = releases.map { it.id }.chunked(300).flatMap { ids ->
-                    dao.scopedReleaseRecordingCounts(ids, keys)
-                }.associate { it.releaseId to it.recordingCount }
-                val sections = canonicalArtistReleaseSections(releases, proofs, counts)
-                // Count-only diagnostics distinguish missing ReleaseGroup types
-                // from missing memberships without leaking account IDs/titles.
-                runCatching {
-                    Diagnostics.event(
-                        category = DiagnosticCategory.CATALOG,
-                        name = "unified_artist_shelves_v1",
-                        metadata = mapOf(
-                            "sources" to keys.size.toString(),
-                            "releases" to releases.size.toString(),
-                            "typed" to proofs.values.count { !it.primaryType.isNullOrBlank() }.toString(),
-                            "counted" to counts.size.toString(),
-                            "albums" to sections.albums.size.toString(),
-                            "singlesEps" to sections.singlesAndEps.size.toString(),
-                            "unknown" to sections.unclassified.size.toString(),
-                        ),
-                    )
-                }
-                CanonicalArtistNativeReleases(
-                    sections, canonicalLibraryEntityArtworkById(coverLinks, tracks), proofs,
-                )
-            }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                runCatching {
-                    Diagnostics.event(
-                        category = DiagnosticCategory.CATALOG,
-                        name = "unified_artist_shelves_failed_v1",
-                        metadata = mapOf(
-                            "errorType" to error.javaClass.simpleName,
-                            "sources" to keys.size.toString(),
-                            "visibleTracks" to tracks.size.toString(),
-                        ),
-                    )
-                }
-                CanonicalArtistNativeReleases.EMPTY
-            }
-        }
-    }
+    // Reactive release evidence is now owned by the shared artist detail state;
+    // this renderer only handles UI/navigation until its native replacement.
+    val nativeReleases by rememberCanonicalArtistReleases(
+        tracks, sourceKeys, selectedSourceKey,
+    )
 
     var appleArt by remember(artistName) {
         mutableStateOf(AppleArtistArtRepository.cached(artistName))
