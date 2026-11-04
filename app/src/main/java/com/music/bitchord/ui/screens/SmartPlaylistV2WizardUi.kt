@@ -92,6 +92,7 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ArtworkPageBackButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.playback.CanonicalCollectionIntent
@@ -1716,55 +1717,57 @@ private fun CanonicalPlaylistPickerGroupRow(
     onToggleGroup: () -> Unit,
 ) {
     val album = group.type == CanonicalPlaylistBrowseType.ALBUMS
-    NativeDetailTrackRowFrame(
+    NativeDetailTrackRowLayout(
         onClick = onOpen,
         modifier = Modifier.testTag("canonical-${if (album) "album" else "artist"}-picker-${group.id}"),
         horizontalInset = 0.dp,
+        showRatingSlot = false,
+        rating = {},
         background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
             else Color.Transparent,
-    ) {
-        val artworkShape = if (album) RoundedCornerShape(8.dp) else CircleShape
-        Box(Modifier.size(52.dp).clip(artworkShape)) {
-            if (!album) PlaylistWizardArtistArtwork(group)
-            else if (group.artworkRow != null) {
-                SmartPlaylistPreviewArtwork(group.artworkRow, Modifier.fillMaxSize())
-            } else PlaylistWizardArtworkPlaceholder(52.dp)
-        }
-        Spacer(Modifier.width(14.dp))
-        NativeTrackRowText(
-            title = {
-                Text(
-                    group.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            subtitle = {
-                Text(
-                    if (album) group.artworkRow?.artist.orEmpty() else "Artista",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-        )
-        IconButton(onClick = onToggleGroup, enabled = !loading) {
-            Icon(
-                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
-                contentDescription = when {
-                    album && selected -> "Remover álbum selecionado"
-                    album -> "Adicionar álbum inteiro"
-                    selected -> "Remover artista selecionado"
-                    else -> "Adicionar artista inteiro"
-                },
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+        leading = {
+            val artworkShape = if (album) RoundedCornerShape(8.dp) else CircleShape
+            Box(Modifier.size(52.dp).clip(artworkShape)) {
+                if (!album) PlaylistWizardArtistArtwork(group)
+                else if (group.artworkRow != null) {
+                    SmartPlaylistPreviewArtwork(group.artworkRow, Modifier.fillMaxSize())
+                } else PlaylistWizardArtworkPlaceholder(52.dp)
+            }
+        },
+        title = {
+            Text(
+                group.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
+        },
+        subtitle = {
+            Text(
+                if (album) group.artworkRow?.artist.orEmpty() else "Artista",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        actions = {
+            IconButton(onClick = onToggleGroup, enabled = !loading) {
+                Icon(
+                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                    contentDescription = when {
+                        album && selected -> "Remover álbum selecionado"
+                        album -> "Adicionar álbum inteiro"
+                        selected -> "Remover artista selecionado"
+                        else -> "Adicionar artista inteiro"
+                    },
+                    tint = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
 }
 
 @Composable
@@ -1773,44 +1776,46 @@ private fun NormalPlaylistTrackPickerRow(
     selected: Boolean,
     onToggle: (String) -> Unit,
 ) {
-    NativeDetailTrackRowFrame(
+    NativeDetailTrackRowLayout(
         onClick = { onToggle(row.id) },
         modifier = Modifier.testTag("canonical-track-picker-${row.id}"),
         horizontalInset = 0.dp,
+        showRatingSlot = false,
+        rating = {},
         background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
             else Color.Transparent,
-    ) {
-        Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp))) {
-            SmartPlaylistPreviewArtwork(row, Modifier.fillMaxSize())
-        }
-        Spacer(Modifier.width(14.dp))
-        NativeTrackRowText(
-            title = {
-                Text(
-                    row.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            subtitle = {
-                Text(
-                    row.artist,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-        )
-        IconButton(onClick = { onToggle(row.id) }) {
-            Icon(
-                if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
-                contentDescription = if (selected) "Remover música" else "Adicionar música",
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+        leading = {
+            Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp))) {
+                SmartPlaylistPreviewArtwork(row, Modifier.fillMaxSize())
+            }
+        },
+        title = {
+            Text(
+                row.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-        }
-    }
+        },
+        subtitle = {
+            Text(
+                row.artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        actions = {
+            IconButton(onClick = { onToggle(row.id) }) {
+                Icon(
+                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                    contentDescription = if (selected) "Remover música" else "Adicionar música",
+                    tint = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+    )
 }
