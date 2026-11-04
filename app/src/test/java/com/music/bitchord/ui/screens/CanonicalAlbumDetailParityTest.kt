@@ -9,6 +9,22 @@ import org.junit.Test
 
 /** A real album detail follows DetailScreen release grammar, not Library rows. */
 class CanonicalAlbumDetailParityTest {
+    @Test fun emptyNativeAlbumSearchUsesSameFeedbackInRootAndNestedRoutes() {
+        assertEquals(
+            "Nenhuma música corresponde à pesquisa.",
+            nativeAlbumEmptyMessage("missing", hasPlayableTracks = true),
+        )
+        assertEquals(
+            "Nenhuma música nesta seleção.",
+            nativeAlbumEmptyMessage("", hasPlayableTracks = false),
+        )
+        assertEquals(
+            "Nenhuma música nesta seleção.",
+            nativeAlbumEmptyMessage("missing", hasPlayableTracks = false),
+        )
+    }
+
+
     private fun track(id: String, title: String) = CanonicalBrowseTrack(
         recordingId = id,
         title = title,

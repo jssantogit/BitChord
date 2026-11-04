@@ -1,18 +1,11 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
@@ -55,87 +48,47 @@ internal fun NativeCanonicalLibraryAlbumDetail(
             heroArtworkUri, heroArtworkTrack?.artworkUri,
         ),
     )
-    BoxWithConstraints(Modifier.fillMaxSize().background(palette.background)) {
-        val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
-        LazyColumn(contentPadding = PaddingValues(bottom = 112.dp)) {
-            item(key = "native-library-header") {
-                NativeReleaseHeaderLayout(
-                    title = title,
-                    credit = albumCredit,
-                    meta = "",
-                    rating = albumRating,
-                    quality = albumQuality,
-                    onRate = onRateAlbum,
-                    palette = palette,
-                    sleeveSize = sleeve,
-                    artwork = {
-                        when {
-                            !heroArtworkUri.isNullOrBlank() &&
-                                (heroArtworkUri.startsWith("content://") ||
-                                    heroArtworkUri.startsWith("file://")) -> AsyncImage(
-                                model = heroArtworkUri,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                            heroArtworkTrack != null -> CanonicalUnifiedArtwork(
-                                heroArtworkTrack, artworkLoader, Modifier.fillMaxSize(),
-                            )
-                            else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
-                        }
-                    },
-                    actions = {
-                        if (tracks.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
-                            NativeReleaseActionRow(
-                                onPlay = { onPlayAll(tracks, false) },
-                                onShuffle = { onPlayAll(tracks, true) },
-                                isLocal = false,
-                                canShuffle = tracks.isNotEmpty(),
-                                reservePinAction = true,
-                                isPinnedInLibrary = albumPinned,
-                                onTogglePin = onToggleAlbumPin,
-                            )
-                        }
-                    },
-                )
-            }
-            if (searching || query.isNotBlank()) {
-                item(key = "native-library-search") {
-                    DetailSearchField(
-                        query = query,
-                        onQueryChange = onQueryChange,
-                        onClose = { onQueryChange("") },
-                        autoFocus = searching,
-                        onFocused = {},
-                        palette = palette,
-                    )
-                }
-            }
+    NativeCanonicalAlbumContent(
+        title = title,
+        credit = albumCredit,
+        visibleTracks = tracks,
+        playbackTracks = tracks,
+        artworkLoader = artworkLoader,
+        palette = palette,
+        rating = albumRating,
+        quality = albumQuality,
+        onRate = onRateAlbum,
+        footer = albumFooter,
+        trackNumbers = albumTrackNumbers,
+        pinned = albumPinned,
+        onTogglePin = onToggleAlbumPin,
+        query = query,
+        onQueryChange = onQueryChange,
+        searching = searching,
+        loading = loading,
+        failed = failed,
+        headerKey = "native-library-header",
+        searchKey = "native-library-search",
+        footerKey = "native-album-footer",
+        onTrackPlay = onTrackPlay,
+        onTrackEditRating = onTrackEditRating,
+        onTrackOptions = onTrackOptions,
+        onPlayAll = onPlayAll,
+        artwork = {
             when {
-                loading -> item { NativeLoadingSpinner() }
-                failed -> item { RemoteBrowseMessage("Não foi possível aplicar o filtro.") }
-                tracks.isEmpty() -> item {
-                    RemoteBrowseMessage("Nenhuma música nesta seleção.")
-                }
-                else -> nativeCanonicalAlbumTrackRows(
-                    tracks = tracks,
-                    artworkLoader = artworkLoader,
-                    palette = palette,
-                    trackNumbers = albumTrackNumbers,
-                    onTrackPlay = onTrackPlay,
-                    onTrackEditRating = onTrackEditRating,
-                    onTrackOptions = onTrackOptions,
+                !heroArtworkUri.isNullOrBlank() &&
+                    (heroArtworkUri.startsWith("content://") ||
+                        heroArtworkUri.startsWith("file://")) -> AsyncImage(
+                    model = heroArtworkUri,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
+                heroArtworkTrack != null -> CanonicalUnifiedArtwork(
+                    heroArtworkTrack, artworkLoader, Modifier.fillMaxSize(),
+                )
+                else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
             }
-            if (albumFooter != null) {
-                item(key = "native-album-footer") {
-                    NativeAlbumMetadataFooter(
-                        metadata = albumFooter,
-                        palette = palette,
-                    )
-                }
-            }
-        }
-    }
+        },
+    )
 }

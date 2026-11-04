@@ -1,26 +1,16 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.ui.components.CoverPlaceholder
-import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 
 /**
@@ -75,79 +65,40 @@ internal fun NativeCanonicalNestedAlbumDetail(
         ),
     )
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(releasePalette.background)) {
-        val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
-        LazyColumn(contentPadding = PaddingValues(bottom = 112.dp)) {
-            item(key = "nested-release-header") {
-                NativeReleaseHeaderLayout(
-                    title = canonicalAlbumDisplayTitle(
-                        release.title, evidence?.primaryType,
-                    ),
-                    credit = release.artistDisplay.orEmpty(),
-                    meta = "",
-                    rating = albumRating,
-                    quality = albumQuality,
-                    onRate = onRateRelease,
-                    palette = releasePalette,
-                    sleeveSize = sleeve,
-                    artwork = {
-                        if (artworkTrack != null) {
-                            CanonicalUnifiedArtwork(
-                                artworkTrack, artworkLoader, Modifier.fillMaxSize(),
-                            )
-                        } else {
-                            CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())
-                        }
-                    },
-                    actions = {
-                        if (albumTracks.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
-                            NativeReleaseActionRow(
-                                onPlay = { onPlayAll(albumTracks, false) },
-                                onShuffle = { onPlayAll(albumTracks, true) },
-                                isLocal = false,
-                                reservePinAction = true,
-                                isPinnedInLibrary = isPinned,
-                                onTogglePin = onTogglePin,
-                            )
-                        }
-                    },
+    NativeCanonicalAlbumContent(
+        title = canonicalAlbumDisplayTitle(release.title, evidence?.primaryType),
+        credit = release.artistDisplay.orEmpty(),
+        visibleTracks = visibleAlbumTracks,
+        playbackTracks = albumTracks,
+        artworkLoader = artworkLoader,
+        palette = releasePalette,
+        rating = albumRating,
+        quality = albumQuality,
+        onRate = onRateRelease,
+        footer = albumFooter,
+        trackNumbers = albumTrackNumbers,
+        pinned = isPinned,
+        onTogglePin = onTogglePin,
+        query = query,
+        onQueryChange = onQueryChange,
+        searching = searching,
+        loading = false,
+        failed = false,
+        headerKey = "nested-release-header",
+        searchKey = "nested-release-search",
+        footerKey = "artist-nested-album-footer",
+        onTrackPlay = onTrackPlay,
+        onTrackEditRating = onTrackEditRating,
+        onTrackOptions = onTrackOptions,
+        onPlayAll = onPlayAll,
+        artwork = {
+            if (artworkTrack != null) {
+                CanonicalUnifiedArtwork(
+                    artworkTrack, artworkLoader, Modifier.fillMaxSize(),
                 )
+            } else {
+                CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())
             }
-            if (shouldShowNativeArtistSearch(searching, query)) {
-                item(key = "nested-release-search") {
-                    DetailSearchField(
-                        query = query,
-                        onQueryChange = onQueryChange,
-                        onClose = { onQueryChange("") },
-                        autoFocus = searching,
-                        onFocused = {},
-                        palette = releasePalette,
-                    )
-                }
-            }
-            if (visibleAlbumTracks.isEmpty() && albumTracks.isNotEmpty()) {
-                item(key = "nested-release-no-results") {
-                    Text(
-                        "Nenhuma música corresponde à pesquisa.",
-                        modifier = Modifier.padding(PAGE_GUTTER),
-                    )
-                }
-            }
-            nativeCanonicalAlbumTrackRows(
-                tracks = visibleAlbumTracks,
-                artworkLoader = artworkLoader,
-                palette = releasePalette,
-                trackNumbers = albumTrackNumbers,
-                onTrackPlay = onTrackPlay,
-                onTrackEditRating = onTrackEditRating,
-                onTrackOptions = onTrackOptions,
-            )
-            item(key = "artist-nested-album-footer") {
-                NativeAlbumMetadataFooter(
-                    metadata = albumFooter, palette = releasePalette,
-                )
-            }
-        }
-    }
+        },
+    )
 }
