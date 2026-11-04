@@ -290,7 +290,6 @@ import com.music.bitchord.ui.components.WebDavConflictAlert
 import com.music.bitchord.ui.components.FieldConfig
 import com.music.bitchord.ui.icons.BitChordIcons
 import androidx.media3.common.Player
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.ui.player.NowPlayingScreen
 import com.music.bitchord.ui.player.PlayerSheetMotion
 import androidx.compose.ui.geometry.Offset
@@ -328,6 +327,7 @@ import com.music.bitchord.data.settings.LocalMusicSort
 import com.music.bitchord.ui.screens.HomeHeaderAction
 import com.music.bitchord.ui.screens.HomeScreen
 import com.music.bitchord.ui.screens.LibraryGridPage
+import com.music.bitchord.ui.screens.LEGACY_PLAYLISTS_SHELF_TITLE
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.canonicalExistingHomeShelves
@@ -1548,7 +1548,7 @@ private fun BitChordApp(
      *
      * Searching for the name is what the user would do next anyway, and it is
      * what the app already does to find a video's catalogue release (see
-     * [YtMusicRepository.resolveAudio]). A search that finds nothing says so,
+     * the old provider-specific audio conversion). A search that finds nothing says so,
      * which is at least an answer.
      */
     fun openByName(
@@ -2945,7 +2945,7 @@ private fun BitChordApp(
                                 onItemLongPress = onBrowseLongPress,
                                 // Only the Playlists shelf can grow one — see
                                 // [PlaylistShelf].
-                                onNewPlaylist = if (shelf.title == YtMusicRepository.PLAYLISTS_SHELF) {
+                                onNewPlaylist = if (shelf.title == LEGACY_PLAYLISTS_SHELF_TITLE) {
                                     { creatingPlaylist = true }
                                 } else {
                                     null
