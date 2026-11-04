@@ -39,6 +39,12 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.provider.opensubsonic.androidOpenSubsonicArtworkLoader
 import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
+import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
+import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
+import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.BrowseActionsSheet
@@ -180,9 +186,13 @@ internal fun CanonicalPinnedLibraryHomeSection(
         CanonicalLibraryPin,
         com.music.bitchord.data.listening.CanonicalSmartFilterContext,
     ) -> Unit,
+    onOpenPlaylist: (String) -> Unit = {},
+    localPlaylists: List<ShelfItem> = emptyList(),
 ) {
     CanonicalPinnedLibraryShelf(
         refreshRequested = refreshRequested,
+        onOpenPlaylist = onOpenPlaylist,
+        localPlaylists = localPlaylists,
         onOpen = { pin ->
             when (val target = canonicalLibraryPinOpenTarget(pin)) {
                 is CanonicalLibraryPinOpenTarget.PlayRecording ->
@@ -202,11 +212,41 @@ internal fun CanonicalPinnedLibraryHomeSection(
 internal fun CanonicalPinnedLibraryShelf(
     onOpen: (CanonicalLibraryPin) -> Unit,
     refreshRequested: Boolean = false,
+    onOpenPlaylist: (String) -> Unit = {},
+    localPlaylists: List<ShelfItem> = emptyList(),
 ) {
     val context = LocalContext.current.applicationContext
     val repo = remember(context) { CanonicalLibraryPinRepository.get(context) }
     val pins by repo.pins.collectAsStateWithLifecycle()
-    if (pins.isEmpty()) return
+    val playlistPinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
+    val playlistPins by playlistPinRepo.pins.collectAsStateWithLifecycle()
+    if (pins.isEmpty() && playlistPins.isEmpty()) return
+
+    val smartRepo = remember(context) {
+        SmartPlaylistV2DefinitionRepository(
+            SmartPlaylistDefinitionDatabase.get(context).v2DefinitionDao(),
+        )
+    }
+    val staticRepo = remember(context) {
+        CanonicalStaticPlaylistRepository(
+            SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
+        )
+    }
+    val smart by produceState(
+        initialValue = emptyList<SavedSmartPlaylistV2Definition>(), key1 = smartRepo,
+    ) {
+        smartRepo.observe().collectLatest { value = it }
+    }
+    val normal by produceState(
+        initialValue = emptyList<SavedCanonicalStaticPlaylist>(), key1 = staticRepo,
+    ) {
+        staticRepo.observe().collectLatest { value = it }
+    }
+    val smartById = remember(smart) { smart.associateBy { "v2:" + it.id } }
+    val staticById = remember(normal) { normal.associateBy { "normal:" + it.id } }
+    val localById = remember(localPlaylists) {
+        localPlaylists.associateBy { "local:" + it.browseId.orEmpty() }
+    }
 
     val db = remember(context) { CanonicalCatalogDatabase.get(context) }
     val dao = remember(db) { db.catalogDao() }
@@ -260,16 +300,21 @@ internal fun CanonicalPinnedLibraryShelf(
     }
     var expanded by remember { mutableStateOf(false) }
     var optionsFor by remember { mutableStateOf<CanonicalLibraryPin?>(null) }
+    var playlistOptionsFor by remember { mutableStateOf<LibraryPlaylistPin?>(null) }
     var playlistSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
-    val visible = if (expanded) cards else cards.take(6)
+    // Both identity families share one 3-column Library shelf. A playlist ID
+    // is never passed through the canonical Recording/Release/Artist pin store.
+    val items: List<Pair<PinnedLibraryCard?, LibraryPlaylistPin?>> =
+        cards.map { it to null } + playlistPins.map { null to it }
+    val visible = if (expanded) items else items.take(6)
     Column(
         modifier = Modifier.fillMaxWidth()
             .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, top = 20.dp, bottom = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (cards.isEmpty()) {
+        if (items.isEmpty()) {
             Box(
                 Modifier.fillMaxWidth().padding(vertical = 30.dp),
                 contentAlignment = Alignment.Center,
@@ -279,49 +324,91 @@ internal fun CanonicalPinnedLibraryShelf(
         }
         visible.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { card ->
+                row.forEach { (card, playlist) ->
                     Box(Modifier.weight(1f)) {
-                        NativeLibraryEntityCard(
-                            title = card.title,
-                            subtitle = if (card.accessible) card.subtitle
-                                else "Indisponível",
-                            imageUrl = null,
-                            isArtist = card.pin.selection.type == CanonicalLibraryEntityType.ARTIST,
-                            onClick = {
-                                if (card.accessible) onOpen(card.pin)
-                                else Toast.makeText(
-                                    context, "Item indisponível nas fontes atuais",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                            },
-                            onMore = { optionsFor = card.pin },
-                            onLongPress = { optionsFor = card.pin },
-                            artwork = {
-                                when {
-                                    card.artistPhotoUrl != null -> AsyncImage(
-                                        model = card.artistPhotoUrl,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize(),
-                                    )
-                                    card.artwork != null -> CanonicalUnifiedArtwork(
-                                        card.artwork, loader, Modifier.fillMaxSize(),
-                                    )
-                                    else -> com.music.bitchord.ui.components.CoverPlaceholder(
-                                        if (card.pin.selection.type == CanonicalLibraryEntityType.ARTIST)
-                                            Icons.Rounded.Person
-                                        else Icons.Rounded.Album,
-                                        Modifier.fillMaxSize(),
-                                    )
-                                }
-                            },
-                        )
+                        if (card != null) {
+                            NativeLibraryEntityCard(
+                                title = card.title,
+                                subtitle = if (card.accessible) card.subtitle
+                                    else "Indisponível",
+                                imageUrl = null,
+                                isArtist = card.pin.selection.type == CanonicalLibraryEntityType.ARTIST,
+                                onClick = {
+                                    if (card.accessible) onOpen(card.pin)
+                                    else Toast.makeText(
+                                        context, "Item indisponível nas fontes atuais",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                },
+                                onMore = { optionsFor = card.pin },
+                                onLongPress = { optionsFor = card.pin },
+                                artwork = {
+                                    when {
+                                        card.artistPhotoUrl != null -> AsyncImage(
+                                            model = card.artistPhotoUrl,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                        card.artwork != null -> CanonicalUnifiedArtwork(
+                                            card.artwork, loader, Modifier.fillMaxSize(),
+                                        )
+                                        else -> com.music.bitchord.ui.components.CoverPlaceholder(
+                                            if (card.pin.selection.type == CanonicalLibraryEntityType.ARTIST)
+                                                Icons.Rounded.Person
+                                            else Icons.Rounded.Album,
+                                            Modifier.fillMaxSize(),
+                                        )
+                                    }
+                                },
+                            )
+                        } else if (playlist != null) {
+                            val static = staticById[playlist.id]
+                            val smartDefinition = smartById[playlist.id]
+                            val legacy = localById[playlist.id]
+                            val accessible = static != null || smartDefinition != null || legacy != null
+                            NativeLibraryEntityCard(
+                                title = static?.name ?: smartDefinition?.name
+                                    ?: legacy?.title ?: playlist.title,
+                                subtitle = if (accessible) "Playlist" else "Indisponível",
+                                imageUrl = legacy?.thumbnailUrl,
+                                isArtist = false,
+                                onClick = {
+                                    if (accessible) onOpenPlaylist(playlist.id)
+                                    else Toast.makeText(
+                                        context, "Playlist indisponível",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                },
+                                onMore = { playlistOptionsFor = playlist },
+                                onLongPress = { playlistOptionsFor = playlist },
+                                artwork = when {
+                                    static != null -> ({
+                                        CanonicalStaticPlaylistCoverArt(
+                                            static, modifier = Modifier.fillMaxSize(),
+                                        )
+                                    })
+                                    smartDefinition?.coverUri != null -> ({
+                                        CanonicalPlaylistCoverArt(
+                                            emptyList(), Modifier.fillMaxSize(),
+                                            customCoverUri = smartDefinition.coverUri,
+                                        )
+                                    })
+                                    legacy?.thumbnailUrl != null -> null
+                                    else -> ({
+                                        com.music.bitchord.ui.components.CoverPlaceholder(
+                                            Icons.Rounded.Album, Modifier.fillMaxSize(),
+                                        )
+                                    })
+                                },
+                            )
+                        }
                     }
                 }
                 repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
-        if (cards.size > 6) {
+        if (items.size > 6) {
             TextButton(onClick = { expanded = !expanded }) {
                 Text(if (expanded) "Mostrar menos" else "Ver todos os fixados")
             }
@@ -353,6 +440,31 @@ internal fun CanonicalPinnedLibraryShelf(
                 onAddToPlaylist = {
                     playlistSelection = listOf(pin.selection)
                     optionsFor = null
+                },
+            )
+        }
+    }
+    playlistOptionsFor?.let { pin ->
+        ModalBottomSheet(
+            onDismissRequest = { playlistOptionsFor = null },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            BrowseActionsSheet(
+                target = BrowseTarget(
+                    browseId = null,
+                    title = staticById[pin.id]?.name ?: smartById[pin.id]?.name
+                        ?: localById[pin.id]?.title ?: pin.title,
+                    subtitle = "Playlist",
+                    type = BrowseType.PLAYLIST,
+                ),
+                isPinned = true,
+                onTogglePin = {
+                    playlistPinRepo.remove(pin.id)
+                    playlistOptionsFor = null
+                },
+                onOpen = {
+                    onOpenPlaylist(pin.id)
+                    playlistOptionsFor = null
                 },
             )
         }
