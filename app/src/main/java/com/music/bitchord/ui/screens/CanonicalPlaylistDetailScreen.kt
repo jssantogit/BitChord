@@ -52,6 +52,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
@@ -59,6 +60,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.spotify.LocalPlaylistStore
+import com.music.bitchord.download.Downloads
 import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
@@ -66,6 +70,7 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
+import com.music.bitchord.ui.components.SongRow
 import com.music.bitchord.ui.components.NativeDetailTrackSwipeContainer
 import com.music.bitchord.ui.components.NativeDetailTrackArtwork
 import com.music.bitchord.ui.components.NativeDetailTrackRatingSlot
@@ -401,6 +406,11 @@ internal fun CanonicalPlaylistDetailScreen(
     onShuffle: () -> Unit,
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
+    onLegacyPlay: (String, List<Song>, Int) -> Unit = { _, _, _ -> },
+    onLegacyShuffle: (String, List<Song>) -> Unit = { _, _ -> },
+    onLegacyQueue: (List<Song>) -> Unit = {},
+    onLegacySongMenu: (Song) -> Unit = {},
+    onLegacySongSwipe: (Song) -> Unit = {},
     onAddSongs: () -> Unit = {},
     onEditRules: () -> Unit = {},
     contentPadding: PaddingValues,
@@ -416,6 +426,15 @@ internal fun CanonicalPlaylistDetailScreen(
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
+    val historicalPlaylists by LocalPlaylistStore.playlists.collectAsStateWithLifecycle()
+    val historicalSongs = (card as? LibraryPlaylistCard.Normal)?.let { normal ->
+        historicalPlaylists.firstOrNull { it.browseId == normal.shelfItem.browseId }?.songs
+    }.orEmpty()
+    val historicalPlayable = historicalSongs.mapIndexedNotNull { index, song ->
+        legacyPlaylistPlayableSong(song, Downloads.verifiedSavedUri(song.videoId))
+            ?.let { index to it }
+    }
+    val playableHistoricalSongs = historicalPlayable.map { it.second }
     val normalRepository = remember(context) {
         CanonicalStaticPlaylistRepository(
             SmartPlaylistDefinitionDatabase.get(context).staticPlaylistDao(),
@@ -513,15 +532,29 @@ internal fun CanonicalPlaylistDetailScreen(
             PlaylistLibrarySort.DEFAULT -> filtered
         }
     }
+    val visibleHistoricalSongs = historicalSongs.withIndex().filter { (_, song) ->
+        song.title.contains(query, ignoreCase = true) ||
+            song.artist.contains(query, ignoreCase = true)
+    }.let { indexed ->
+        when (sort) {
+            PlaylistLibrarySort.TITLE_ASC -> indexed.sortedBy { it.value.title.lowercase() }
+            PlaylistLibrarySort.TITLE_DESC -> indexed.sortedByDescending { it.value.title.lowercase() }
+            PlaylistLibrarySort.DEFAULT -> indexed
+        }
+    }
     val palette = rememberArtworkPalette(
-        imageUrl = canonicalPlaylistPaletteArtworkUri(card.explicitCoverUri(), rows),
+        imageUrl = if (card is LibraryPlaylistCard.Normal) {
+            card.shelfItem.thumbnailUrl ?: historicalSongs.firstOrNull()?.thumbnailUrl
+        } else canonicalPlaylistPaletteArtworkUri(card.explicitCoverUri(), rows),
     )
     val playlistDescription = when (card) {
         is LibraryPlaylistCard.CanonicalNormal -> card.definition.description
         is LibraryPlaylistCard.Smart -> card.definition.description
         is LibraryPlaylistCard.Normal -> ""
     }.takeIf { it.isNotBlank() }
-    val canPlay = rows?.isNotEmpty() == true &&
+    val canPlay = if (card is LibraryPlaylistCard.Normal) {
+        playableHistoricalSongs.isNotEmpty()
+    } else rows?.isNotEmpty() == true &&
         (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
         rows.orEmpty().all { it.isAvailablePlaylistMember() }
 
@@ -537,27 +570,51 @@ internal fun CanonicalPlaylistDetailScreen(
             NativeReleaseHeaderLayout(
                 title = card.title,
                 credit = "",
-                meta = canonicalPlaylistDetailMeta(
+                meta = if (card is LibraryPlaylistCard.Normal) {
+                    "Playlist · ${historicalSongs.size} " +
+                        if (historicalSongs.size == 1) "faixa" else "faixas"
+                } else canonicalPlaylistDetailMeta(
                     smart = card is LibraryPlaylistCard.Smart, rows = rows,
                 ),
                 palette = palette,
                 // Exactly the same 76% frame as DetailScreen's native release hero.
                 sleeveSize = maxWidth * 0.76f,
                 artwork = {
-                    CanonicalPlaylistCoverArt(
-                        rows = rows.orEmpty(), modifier = Modifier.fillMaxSize(),
-                        customCoverUri = card.explicitCoverUri(),
-                    )
+                    if (card is LibraryPlaylistCard.Normal &&
+                        !card.shelfItem.thumbnailUrl.isNullOrBlank()
+                    ) {
+                        AsyncImage(
+                            model = card.shelfItem.thumbnailUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        CanonicalPlaylistCoverArt(
+                            rows = rows.orEmpty(), modifier = Modifier.fillMaxSize(),
+                            customCoverUri = card.explicitCoverUri(),
+                        )
+                    }
                 },
                 actions = {
                     if (canPlay) {
                         Spacer(Modifier.height(18.dp))
                         NativeReleaseActionRow(
-                            onPlay = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
-                            onShuffle = onShuffle,
-                            isLocal = false,
+                            onPlay = {
+                                if (card is LibraryPlaylistCard.Normal) {
+                                    onLegacyPlay(card.id, playableHistoricalSongs, 0)
+                                } else onAction(CanonicalCollectionIntent.PLAY_NOW)
+                            },
+                            onShuffle = {
+                                if (card is LibraryPlaylistCard.Normal) {
+                                    onLegacyShuffle(card.id, playableHistoricalSongs)
+                                } else onShuffle()
+                            },
+                            isLocal = card is LibraryPlaylistCard.Normal,
                             onAddToQueue = {
-                                onAction(CanonicalCollectionIntent.ADD_TO_QUEUE)
+                                if (card is LibraryPlaylistCard.Normal) {
+                                    onLegacyQueue(playableHistoricalSongs)
+                                } else onAction(CanonicalCollectionIntent.ADD_TO_QUEUE)
                             },
                         )
                     }
@@ -590,10 +647,10 @@ internal fun CanonicalPlaylistDetailScreen(
                 )
             }
         }
-        if (rows == null) item(key = "playlist-detail-loading") {
+        if (rows == null && card !is LibraryPlaylistCard.Normal) item(key = "playlist-detail-loading") {
             NativeLoadingSpinner()
         }
-        if (rows?.isEmpty() == true) {
+        if (rows?.isEmpty() == true && card !is LibraryPlaylistCard.Normal) {
             if (trackLoadFailed) {
                 item(key = "playlist-detail-load-error") {
                     Text(
@@ -693,6 +750,32 @@ internal fun CanonicalPlaylistDetailScreen(
                         )
                     }
                 }
+            }
+        }
+        if (card is LibraryPlaylistCard.Normal) {
+            items(visibleHistoricalSongs, key = { "historical:${it.index}" }) { indexed ->
+                val playableIndex = historicalPlayable.indexOfFirst { it.first == indexed.index }
+                val playable = historicalPlayable.getOrNull(playableIndex)?.second
+                SongRow(
+                    song = indexed.value,
+                    onClick = {
+                        if (playable != null && playableIndex >= 0) {
+                            onLegacyPlay(card.id, playableHistoricalSongs, playableIndex)
+                        }
+                    },
+                    modifier = if (playable == null) Modifier.alpha(0.45f) else Modifier,
+                    onLongPress = playable?.let { { onLegacySongMenu(it) } },
+                    onMore = playable?.let { { onLegacySongMenu(it) } },
+                    onSwipeToQueue = playable?.let { { onLegacySongSwipe(it) } },
+                    rowBackground = palette.background,
+                    subtitleColor = palette.onBackgroundVariant,
+                    activeTint = palette.accent,
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 80.dp),
+                    thickness = 0.5.dp,
+                    color = palette.divider,
+                )
             }
         }
         items(visibleRows, key = { it.id }) { track ->
