@@ -118,7 +118,9 @@ internal fun CanonicalNativeArtistDetail(
     // It keeps DISPLAY_ARTIST separate from a verified canonical ArtistId.
     val artistRatingState by rememberCanonicalArtistRating(artistId)
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    var openedRelease by remember(artistName) { mutableStateOf<ReleaseEntity?>(null) }
+    var openedRelease by remember(canonicalArtistDetailNavigationKey(artistId, artistName)) {
+        mutableStateOf<ReleaseEntity?>(null)
+    }
     LaunchedEffect(openedRelease?.id) {
         onNestedDetailChanged(openedRelease != null)
         if (openedRelease != null) onQueryChange("")
