@@ -5,6 +5,8 @@ import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
@@ -166,9 +168,45 @@ internal object DesktopSourceRegistry {
         .firstOrNull { it.id == sourceId && it.kind != DesktopSourceKind.YOUTUBE }
         ?.enabled == true
 
-    /** Searching is YouTube Music's job, and only YouTube Music's. */
-    suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> =
-        DesktopSearchClient.search(query, filter)
+    /** Source identity and opt-in control which servers a search may contact. */
+    internal fun searchableConfigsFor(configured: List<DesktopSourceConfig>): List<DesktopSourceConfig> =
+        configured.inSourceOrder().filter {
+            it.enabled && it.isComplete && it.kind != DesktopSourceKind.YOUTUBE
+        }
+
+    /** These audio adapters only prove tracks, never artist or album identities. */
+    internal fun supportsTrackSearchFilter(filter: SearchFilter): Boolean =
+        filter == SearchFilter.ALL || filter == SearchFilter.SONGS
+
+    /**
+     * Search configured, enabled providers directly. Every result carries its
+     * adapter-owned track key; no YouTube browse ID or inferred RecordingId.
+     * Parallel lookups keep slow user modules from delaying fast JioSaavn.
+     */
+    suspend fun search(query: String, filter: SearchFilter): Result<List<SearchResult>> {
+        val text = query.trim()
+        if (text.isEmpty()) return Result.failure(IllegalArgumentException("Search query cannot be empty"))
+        if (!supportsTrackSearchFilter(filter)) return Result.success(emptyList())
+        val sources = searchableConfigsFor(configs())
+        return Result.success(coroutineScope {
+            sources.map { config ->
+                async {
+                    val answer: Result<List<SearchResult>> = when (config.kind) {
+                        DesktopSourceKind.ADDON -> DesktopAddonSource.search(config, text, 25)
+                        DesktopSourceKind.CUSTOM_MODULE, DesktopSourceKind.MODULE ->
+                            DesktopModuleSource.search(config, text, 25)
+                        DesktopSourceKind.JIOSAAVN -> DesktopJioSaavn.search(text, 25)
+                        DesktopSourceKind.YOUTUBE -> Result.success(emptyList())
+                    }
+                    answer.getOrElse { failure ->
+                        if (failure is CancellationException) throw failure
+                        DesktopTrackLog.log("search source ${config.displayName} unavailable: ${failure.message}")
+                        emptyList()
+                    }
+                }
+            }.awaitAll().flatten().take(75)
+        })
+    }
 
     /**
      * Resolve only a source-owned track. Opaque video IDs and historical
