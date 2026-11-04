@@ -1892,10 +1892,12 @@ class SourcesTest {
     @Test
     fun `historical Youtube source settings never become active audio candidates`() {
         val yt = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
-        val addon = SourceConfig(kind = SourceKind.ADDON, enabled = true)
+        val addon = SourceConfig(kind = SourceKind.ADDON, baseUrl = "https://example.invalid/addon", enabled = true)
+        val incompleteAddon = SourceConfig(kind = SourceKind.ADDON, enabled = true)
         val jio = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = true)
-        val eligible = SourceRegistry.audioCandidateConfigs(listOf(yt, addon, jio))
+        val eligible = SourceRegistry.audioCandidateConfigs(listOf(yt, addon, incompleteAddon, jio))
         assertFalse(eligible.any { it.kind == SourceKind.YOUTUBE })
+        assertFalse(eligible.any { it.id == incompleteAddon.id })
         assertEquals(listOf(addon.id, jio.id), eligible.map { it.id })
     }
 }
