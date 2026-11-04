@@ -43,7 +43,8 @@ import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
-import com.music.bitchord.data.spotify.SpotifyImporter
+import com.music.bitchord.data.spotify.selectSpotifyCanonicalAsset
+import com.music.bitchord.data.spotify.spotifyCanonicalAssetAsSong
 import com.music.bitchord.data.spotify.SpotifyLibrary
 import com.music.bitchord.data.spotify.SpotifyTrack
 import com.music.bitchord.data.lyrics.EmbeddedLyrics
@@ -5516,9 +5517,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * A Spotify playlist opened as an ordinary playlist page.
      *
      * Spotify's rows go up as soon as they are read, each marked as still
-     * waiting on its YouTube Music version (see [isMatchPending]); the matches
-     * then arrive in order and swap the rows in place, so the page is usable
-     * before the last song has been found.
+     * waiting on a verified MediaStore/Navidrome asset (see [isMatchPending]).
+     * Resolved assets replace rows in place; unmatched entries retain Spotify
+     * metadata, never a guessed YouTube video or canonical Recording identity.
      */
     private fun openSpotifyPage(browseId: String, title: String, subtitle: String, thumbnailUrl: String?) {
         _detailStack.value += DetailPage(
@@ -5557,32 +5558,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 setSongs(UiState.Error(text(R.string.spotify_empty_tracks)))
                 return@launch
             }
-            // Spotify track metadata may be shown read-only. Resolving it via
-            // YouTube would violate canonical opt-in / provider opt-out.
-            // Keep every track in original order without inventing local assets
-            // or promoting a text match into a MusicBrainz Recording identity.
-            if (!canResolveLegacySpotifyViaYoutube()) {
-                setSongs(UiState.Success(tracks.map { track ->
-                    track.asPendingSong().copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
-                }))
-                _detailStack.value = _detailStack.value.map { page ->
-                    if (page.browseId == browseId) page.copy(
-                        subtitle = text(R.string.canonical_discovery_metadata_only),
-                    ) else page
-                }
-                return@launch
-            }
+            // Resolve only from the user's canonical MediaStore/server assets.
+            // A Spotify track ID is never a RecordingId and never falls back
+            // to the first YouTube result. Ambiguity remains metadata-only.
             val gate = Semaphore(SPOTIFY_MATCH_PARALLELISM)
             coroutineScope {
                 tracks.forEachIndexed { index, track ->
                     launch {
                         gate.withPermit {
                             if (!open()) return@withPermit
-                            val match = runCatching {
-                                runLegacySpotifyMatchIfAllowed(
-                                    allowed = ::canResolveLegacySpotifyViaYoutube,
-                                ) { SpotifyImporter.matchTrack(track) }
-                            }.getOrNull()
+                            val match = try {
+                                withContext(Dispatchers.IO) {
+                                    val candidates = CanonicalCatalogDatabase
+                                        .get(getApplication<Application>())
+                                        .catalogDao()
+                                        .spotifyCanonicalAssetCandidates(track.title)
+                                    selectSpotifyCanonicalAsset(track, candidates)?.let { asset ->
+                                        spotifyCanonicalAssetAsSong(track, asset)
+                                    }
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                // A stale/disconnected provider never makes a
+                                // Spotify playlist fail or creates fake audio.
+                                null
+                            }
                             val found = match?.copy(thumbnailUrl = match.thumbnailUrl ?: track.imageUrl)
                                 ?: track.asPendingSong().let {
                                     it.copy(videoId = SPOTIFY_MISSING_PREFIX + track.id)
