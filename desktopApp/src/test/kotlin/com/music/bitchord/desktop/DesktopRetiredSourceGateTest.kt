@@ -26,4 +26,21 @@ class DesktopRetiredSourceGateTest {
         assertTrue(DesktopSourceRegistry.resolve(archived, "HIGH").isFailure)
         assertFalse(DesktopSourceRegistry.hasYouTubeOriginal(archived))
     }
+
+    @Test fun searchUsesOnlyEnabledConfiguredNonYoutubeProviders() {
+        val archived = DesktopSourceConfig(id = "youtube", kind = DesktopSourceKind.YOUTUBE, enabled = true)
+        val addon = DesktopSourceConfig(id = "addon", kind = DesktopSourceKind.ADDON, baseUrl = "https://example.invalid/addon")
+        val incomplete = DesktopSourceConfig(id = "incomplete", kind = DesktopSourceKind.ADDON, enabled = true)
+        val disabled = DesktopSourceConfig(id = "disabled", kind = DesktopSourceKind.JIOSAAVN, enabled = false)
+        val jio = DesktopSourceConfig(id = "jio", kind = DesktopSourceKind.JIOSAAVN, enabled = true)
+        val eligible = DesktopSourceRegistry.searchableConfigsFor(listOf(archived, addon, incomplete, disabled, jio))
+        kotlin.test.assertEquals(listOf("addon", "jio"), eligible.map { it.id })
+    }
+
+    @Test fun sourceSearchDoesNotMislabelSongsAsArtistOrAlbumResults() {
+        assertTrue(DesktopSourceRegistry.supportsTrackSearchFilter(com.music.bitchord.data.model.SearchFilter.ALL))
+        assertTrue(DesktopSourceRegistry.supportsTrackSearchFilter(com.music.bitchord.data.model.SearchFilter.SONGS))
+        assertFalse(DesktopSourceRegistry.supportsTrackSearchFilter(com.music.bitchord.data.model.SearchFilter.ARTISTS))
+        assertFalse(DesktopSourceRegistry.supportsTrackSearchFilter(com.music.bitchord.data.model.SearchFilter.ALBUMS))
+    }
 }
