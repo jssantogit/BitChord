@@ -8,6 +8,23 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * Ephemeral asset candidates for conservative Spotify metadata matching.
+ * The query is read-only and intentionally never records an identity claim.
+ * URI is held on the repository side, not exposed as a provider-native UI ID.
+ */
+internal data class SpotifyCanonicalAssetCandidate(
+    val recordingId: String,
+    val mediaAssetId: String,
+    val providerKey: String,
+    val title: String,
+    val artistDisplay: String,
+    val durationMs: Long?,
+    val uri: String,
+    val path: String?,
+    val artworkUri: String?,
+)
+
 /** Artwork is selected only from a recording with a provider-scoped MediaAsset. */
 internal data class CanonicalPlaylistAlbumCoverRow(
     val groupId: String,
@@ -1442,6 +1459,37 @@ internal interface CanonicalCatalogDao {
         """,
     )
     suspend fun availableRecordingIdsForProvider(provider: String): List<String>
+
+    /**
+     * Bounded exact-title lookup for Spotify import. Only persisted file and
+     * personal-server assets can be candidates; never public metadata or YT.
+     * Final artist/duration/ambiguity checks run in the pure matcher.
+     */
+    @Query(
+        """
+        SELECT recording.id AS recordingId,
+               asset.id AS mediaAssetId,
+               asset.provider AS providerKey,
+               recording.title AS title,
+               recording.artistDisplay AS artistDisplay,
+               recording.durationMs AS durationMs,
+               asset.uri AS uri,
+               asset.path AS path,
+               asset.artworkUri AS artworkUri
+        FROM catalog_recording recording
+        INNER JOIN catalog_media_asset asset
+            ON asset.recordingId = recording.id
+        WHERE lower(trim(recording.title)) = lower(trim(:title))
+          AND (asset.provider = 'local-mediastore'
+            OR asset.provider LIKE 'opensubsonic:%'
+            OR asset.provider LIKE 'jellyfin:%')
+        ORDER BY recording.id, asset.provider, asset.id
+        LIMIT 50
+        """,
+    )
+    suspend fun spotifyCanonicalAssetCandidates(
+        title: String,
+    ): List<SpotifyCanonicalAssetCandidate>
 
     /**
      * Bounded normal-playlist picker. Identity comes from the Recording table,
