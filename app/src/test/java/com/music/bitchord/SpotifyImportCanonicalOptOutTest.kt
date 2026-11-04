@@ -16,13 +16,14 @@ class SpotifyImportCanonicalOptOutTest {
             SpotifyImportTrack("Supernova", "aespa"),
         )
         val callbacks = AtomicInteger()
-        val (songs, unmatched) = SpotifyImporter.resolveToSongs(
+        val (songs, unmatched) = SpotifyImporter.resolveToSongsWithResolver(
             tracks = tracks,
             onProgress = { _, total ->
                 assertEquals(2, total)
                 callbacks.incrementAndGet()
             },
-            allowYoutubeMatching = { false },
+            allowMatching = { false },
+            resolveTrack = { error("resolver should not run") },
         )
         assertTrue(songs.isEmpty())
         assertEquals(tracks, unmatched)
@@ -45,6 +46,7 @@ class SpotifyImportCanonicalOptOutTest {
                     videoId = "local:sample",
                     title = track.title,
                     artist = track.artist,
+                    thumbnailUrl = null,
                 ) else null
             },
         )
@@ -76,7 +78,7 @@ class SpotifyImportCanonicalOptOutTest {
             allowMatching = { true },
             resolveTrack = { track ->
                 if (track.title == "Unavailable") error("temporary provider failure")
-                Song(videoId = "local:verified", title = track.title, artist = track.artist)
+                Song(videoId = "local:verified", title = track.title, artist = track.artist, thumbnailUrl = null)
             },
         )
         assertEquals(listOf("Available"), songs.map { it.title })
@@ -84,10 +86,11 @@ class SpotifyImportCanonicalOptOutTest {
     }
 
     @Test fun emptyPlaylistHasNoNetworkOrSyntheticRows() = runBlocking {
-        val (songs, unmatched) = SpotifyImporter.resolveToSongs(
+        val (songs, unmatched) = SpotifyImporter.resolveToSongsWithResolver(
             tracks = emptyList(),
             onProgress = { _, _ -> error("unexpected progress") },
-            allowYoutubeMatching = { false },
+            allowMatching = { false },
+            resolveTrack = { error("resolver should not run") },
         )
         assertTrue(songs.isEmpty())
         assertTrue(unmatched.isEmpty())
