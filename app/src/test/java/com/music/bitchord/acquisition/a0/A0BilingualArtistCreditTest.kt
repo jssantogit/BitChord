@@ -39,12 +39,13 @@ class A0BilingualArtistCreditTest {
     }
 
     @Test fun exactArtistFolderCanCreditTitleOnlyFileButUnrelatedFoldersCannot() {
-        for(folder in listOf("BTS","BTS - Proof")) {
+        for(folder in listOf("BTS","BTS - Proof","BTS/Proof")) {
             val ranked=rank(name="Boy In Luv.flac",folder=folder)
             assertEquals(folder,A0CandidateRank.Match.ALL_TERMS,ranked.match)
             assertFalse(A0CandidateRank.Warning.IDENTITY_AMBIGUOUS in ranked.warnings)
         }
-        for(folder in listOf("Proof","BTS Archive","Other BTS","BTS - Other Album")) {
+        for(folder in listOf("Proof","BTS Archive","Other BTS",
+            "BTS - Other Album","BTS/Covers/Proof","BTS/Other/Proof")) {
             val ranked=rank(name="Boy In Luv.flac",folder=folder)
             assertNotEquals(folder,A0CandidateRank.Match.ALL_TERMS,ranked.match)
         }
