@@ -4,9 +4,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import com.music.bitchord.ui.player.PlayerPlatform
 import com.music.bitchord.data.DebugLog
 import com.music.bitchord.data.TrackLog
-import com.music.bitchord.data.innertube.InnerTubeXResolver
-import com.music.bitchord.data.innertube.StreamResolver
-import com.music.bitchord.data.innertube.potoken.PoTokenGenerator
 import com.music.bitchord.data.lyrics.LyricsTranslation
 import com.music.bitchord.data.spotify.SpotifyLibrary
 import androidx.compose.runtime.LaunchedEffect
@@ -43,24 +40,11 @@ fun main() {
     SpotifyLibrary.auth = SpotifyLibrary.Auth {
         DesktopSpotifyToken.accessToken()?.let { SpotifyLibrary.Tokens(it, DesktopSpotifyToken.clientToken()) }
     }
-    // Desktop follows its own language picker (zh-Hant / zh-Hans preserved).
-    com.music.bitchord.data.innertube.Innertube.appLanguage = { DesktopStrings.resolvedTag() }
-    // YouTube playback is the phone's StreamResolver over InnerTubeX, with BotGuard PoTokens
-    // minted in JavaFX's WebView where the phone uses Android's.
+    // Desktop's locale and diagnostic logging remain independent of retired
+    // stream extraction, BotGuard initialization and Google sessions.
     TrackLog.echo = { level, tag, message, error ->
         DesktopTrackLog.log("$tag/$level: $message" + (error?.let { " (${it.message})" } ?: ""))
     }
-    StreamResolver.maxKbps = {
-        DesktopStreamClient.ceiling.get() ?: DesktopSourceRegistry.ceiling(null).maxKbps
-    }
-    InnerTubeXResolver.init(
-        filesDir = DesktopMediaCache.directory.toFile(),
-        store = DesktopInnerTubeXStore,
-        poTokenProvider = PoTokenGenerator(
-            createMinter = { DesktopPoTokenWebView.getNewPoTokenGenerator() },
-            available = { DesktopPoTokenWebView.available },
-        ).asTokenProvider(),
-    )
     // The public "apps open right now" count; see Presence.
     DesktopPresence.install()
     desktopMain()
