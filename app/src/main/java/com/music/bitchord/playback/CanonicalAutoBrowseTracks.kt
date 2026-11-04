@@ -93,3 +93,22 @@ internal fun canonicalAutoSearch(songs: List<Song>, rawQuery: String): List<Song
             it.artist.contains(term, ignoreCase = true)
     }.take(150)
 }
+
+/** A locally saved playlist is ordered data, not a search result: duplicate
+ * entries must survive even if they reference the same playable file. */
+internal fun canonicalAutoPlaylistSongs(
+    songs: List<Song>,
+    verifiedDownloadUri: (String) -> String?,
+): List<Song> = songs.mapNotNull { song ->
+    val candidate = sequenceOf(
+        song.localUri, verifiedDownloadUri(song.videoId), song.videoId,
+    ).firstOrNull { uri ->
+        uri != null && (
+            uri.startsWith("content://", ignoreCase = true) ||
+                uri.startsWith("file://", ignoreCase = true) ||
+                CanonicalRemotePlaybackUri.decode(uri)
+                    ?.providerKey?.startsWith("opensubsonic:") == true
+            )
+    } ?: return@mapNotNull null
+    song.copy(localUri = candidate)
+}
