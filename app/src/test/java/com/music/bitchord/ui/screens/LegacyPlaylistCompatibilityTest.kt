@@ -25,6 +25,17 @@ class LegacyPlaylistCompatibilityTest {
         assertEquals(downloaded, available?.localUri)
     }
 
+    @Test fun historicalCollectionKeepsDuplicateOrderAndSkipsUnavailableAssets() {
+        val rows = listOf(
+            song("youtube-legacy"),
+            song("local-id", "content://media/external/audio/media/42"),
+            song("local-id", "content://media/external/audio/media/42"),
+        )
+        val selected = eligibleHistoricalPlaylistSongs(rows) { null }
+        assertEquals(2, selected.size)
+        assertEquals(listOf("local-id", "local-id"), selected.map { it.videoId })
+    }
+
     @Test fun untrustedHttpUrlNeverBecomesOfflinePlayback() {
         assertNull(legacyPlaylistPlayableSong(song("historical-id", "https://remote.invalid/audio")))
         assertNull(legacyPlaylistPlayableSong(song("historical-id"), "https://remote.invalid/audio"))
