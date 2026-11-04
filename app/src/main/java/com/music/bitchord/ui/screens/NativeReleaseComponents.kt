@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
 import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.components.SourceQualityBadge
@@ -46,6 +47,7 @@ import com.music.bitchord.ui.theme.ArtworkPalette
  * legacy adapter; albums from Library, online catalog and playlists share
  * these original controls, artwork slots, quality/rating and contextual plus.
  */
+internal val HEADER_GUTTER = PAGE_GUTTER + 8.dp
 internal val SLEEVE_SHAPE = RoundedCornerShape(12.dp)
 private val SLEEVE_SHADOW = 18.dp
 private val RELEASE_SIDE_BUTTON = 50.dp
