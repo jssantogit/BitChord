@@ -93,23 +93,23 @@ internal class A0SearchRecoveryPlan(original:String,album:String?=null,releaseWi
         // prefer the equivalent fully qualified song query over an overly
         // broad title-only fallback. The two-search cap is unchanged.
         val editionVariant=A0SearchQuery.editionSpellingVariant(original)
+        // The physical 48-track smoke on 2026-11-04 found zero valid
+        // responses to 18 album-qualified and 7 edition-equivalent fallback
+        // searches, whereas 13 title-only/alias searches returned 164 new
+        // offers. For DESCRIPTIVE multiword titles, search that useful
+        // discovery text first. Short/generic titles still use the specific
+        // album qualifier first, avoiding uncontrolled broad peer searches.
+        // All ranking/artist/edition/quality gates keep the original target.
+        // Album-wide queries retain their dedicated sibling-discovery role.
         val ordered=when {
             albumWide!=null && generic ->
                 listOfNotNull(albumWide,albumQualified,editionVariant,title)+normal
-            albumWide!=null -> {
-                // The user's exact artist + album + title is usually more
-                // useful than an unconstrained title-only search. Preserve
-                // true bilingual Latin title aliases as the first recovery:
-                // their translated title may be the peer's only known name.
-                if(latinTitleAlias!=null)
-                    listOfNotNull(albumWide,editionVariant,title,albumQualified)+normal
-                else
-                    listOfNotNull(albumWide,editionVariant,albumQualified,title)+normal
-            }
-            generic -> listOfNotNull(albumQualified,editionVariant)+normal
-            latinTitleAlias!=null ->
-                listOfNotNull(editionVariant,title,albumQualified)+normal
-            else -> listOfNotNull(editionVariant,albumQualified,title)+normal
+            albumWide!=null ->
+                listOfNotNull(albumWide,title,editionVariant,albumQualified)+normal
+            generic ->
+                listOfNotNull(albumQualified,editionVariant)+normal
+            else ->
+                listOfNotNull(title,editionVariant,albumQualified)+normal
         }
         // Keep the ranked candidates, not merely the first two raw choices.
         // An album-wide query sent by a sibling must not consume a fallback.
