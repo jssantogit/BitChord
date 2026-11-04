@@ -35,8 +35,8 @@ internal object A0ArtistCreditAliases {
                     ch.isLetter() ->
                         Character.UnicodeScript.of(ch.code)!=
                             Character.UnicodeScript.LATIN
-                    else -> Character.getType(ch)==Character.NON_SPACING_MARK ||
-                        Character.getType(ch)==Character.COMBINING_SPACING_MARK
+                    else -> Character.getType(ch)==Character.NON_SPACING_MARK.toInt() ||
+                        Character.getType(ch)==Character.COMBINING_SPACING_MARK.toInt()
                 }
             }
         }
