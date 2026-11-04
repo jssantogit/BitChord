@@ -3,6 +3,7 @@ package com.music.bitchord.data.spotify
 import com.music.bitchord.data.Http
 import com.music.bitchord.data.model.Song
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -251,7 +252,15 @@ object SpotifyImporter {
                         onProgress(done, total)
                         return@withPermit Pair<Song?, SpotifyImportTrack?>(null, track)
                     }
-                    val resolved = resolveTrack(track)
+                    val resolved = try {
+                        resolveTrack(track)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // One provider failure is one unmatched Spotify track,
+                        // not a reason to discard the entire imported playlist.
+                        null
+                    }
                     // Discard responses that completed after source opt-out.
                     val matchedSong = if (allowMatching()) resolved else null
 
