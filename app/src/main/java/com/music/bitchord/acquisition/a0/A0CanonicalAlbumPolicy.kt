@@ -54,11 +54,17 @@ internal object A0CanonicalAlbumPolicy {
             return Assessment(Status.INCONCLUSIVE_MANUAL, Reason.UNTRUSTED_FORMAT_CONTROL)
         }
         val observed = normalize(claim.advertisedAlbum)
+        // Canonical bilingual artist credit can use its complete Latin
+        // name as a narrowly bounded spelling, never a generic substring.
+        val latinAlias = target.expectedArtist?.let(
+            A0ArtistCreditAliases::latinAlias)?.let(::normalize).orEmpty()
         if (observed.isEmpty()) {
             return Assessment(Status.INCONCLUSIVE_MANUAL, Reason.ALBUM_NOT_ADVERTISED)
         }
         if (claim.source == ClaimSource.DIRECTORY_HINT &&
-            (observed == normalize(target.expectedArtist) || observed in genericFolders ||
+            (observed == normalize(target.expectedArtist) ||
+                (latinAlias.isNotEmpty() && observed==latinAlias) ||
+                observed in genericFolders ||
                 observed.matches(Regex("(?:cd|disc|disk) ?[0-9]{1,2}")) ||
                 observed.matches(Regex("(?:vinyl|side) ?[a-d]")) ||
                 observed.matches(Regex("[0-9]{1,2}")))
@@ -79,6 +85,9 @@ internal object A0CanonicalAlbumPolicy {
         val artist=normalize(target.expectedArtist)
         val exactArtistAlbum=claim.source == ClaimSource.DIRECTORY_HINT &&
             artist.isNotEmpty() && observed == "$artist $expected"
+        val exactBilingualAliasArtistAlbum=
+            claim.source==ClaimSource.DIRECTORY_HINT &&
+                latinAlias.isNotEmpty() && observed=="$latinAlias $expected"
         // A canonical multiword credit may be printed without word spaces:
         // BLACK PINK -> BLACKPINK. Require a COMPLETE artist+album directory
         // with no arbitrary suffixes. Explicit album fields never gain this
@@ -115,7 +124,8 @@ internal object A0CanonicalAlbumPolicy {
                     (compactArtist!=null && cleaned=="$compactArtist $expected")
             }
         if (observed != expected && !singleDescriptor &&
-            !exactArtistAlbum && !exactCompactArtistAlbum &&
+            !exactArtistAlbum && !exactBilingualAliasArtistAlbum &&
+            !exactCompactArtistAlbum &&
             !neutralYearEpFolder) {
             // A peer's folder often combines artist, release, year and codec,
             // e.g. "ILLIT - BREAK EVEN [FLAC]". Exact album matching must
