@@ -52,6 +52,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.spotify.LocalPlaylistStore
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
@@ -204,6 +205,11 @@ internal fun UnifiedPlaylistLibraryShelf(
     val pinnedPlaylists by playlistPinRepo.pins.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var optionsFor by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    var historicalEditor by remember { mutableStateOf<LibraryPlaylistCard.Normal?>(null) }
+    var historicalEditTitle by remember { mutableStateOf("") }
+    var historicalEditError by remember { mutableStateOf(false) }
+    var historicalEditSaving by remember { mutableStateOf(false) }
+
     var deleteFailure by remember { mutableStateOf(false) }
     val repo = remember(context) {
         SmartPlaylistV2DefinitionRepository(
@@ -433,7 +439,12 @@ internal fun UnifiedPlaylistLibraryShelf(
                         optionsFor = null
                         onOpenCanonicalNormalPlaylist(selected.definition.id)
                     })
-                    is LibraryPlaylistCard.Normal -> null
+                    is LibraryPlaylistCard.Normal -> ({
+                        historicalEditTitle = selected.title
+                        historicalEditError = false
+                        historicalEditor = selected
+                        optionsFor = null
+                    })
                 },
                 onDelete = if (canDeleteLibraryPlaylist(selected)) ({
                     scope.launch {
@@ -464,6 +475,79 @@ internal fun UnifiedPlaylistLibraryShelf(
                     optionsFor = null
                 },
             )
+        }
+    }
+    historicalEditor?.let { editing ->
+        ModalBottomSheet(
+            onDismissRequest = {
+                if (!historicalEditSaving) historicalEditor = null
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = PAGE_GUTTER, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    "Editar playlist",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                PillTextField(
+                    value = historicalEditTitle,
+                    onValueChange = {
+                        historicalEditTitle = it
+                        historicalEditError = false
+                    },
+                    placeholder = "Nome da playlist",
+                    enabled = !historicalEditSaving,
+                )
+                if (historicalEditError) {
+                    Text(
+                        "Informe um nome válido de até 240 caracteres.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        onClick = { historicalEditor = null },
+                        enabled = !historicalEditSaving,
+                    ) { Text("Cancelar") }
+                    TextButton(
+                        onClick = {
+                            val title = historicalEditTitle.trim()
+                            if (title.isEmpty() || title.length > 240) {
+                                historicalEditError = true
+                            } else {
+                                historicalEditSaving = true
+                                scope.launch {
+                                    try {
+                                        val browseId = editing.shelfItem.browseId
+                                            ?: error("Playlist sem identidade")
+                                        withContext(Dispatchers.IO) {
+                                            LocalPlaylistStore.renamePlaylist(browseId, title)
+                                        }
+                                        playlistPinRepo.rename(editing.id, title)
+                                        historicalEditor = null
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) {
+                                        historicalEditError = true
+                                    } finally {
+                                        historicalEditSaving = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !historicalEditSaving,
+                    ) { Text("Salvar") }
+                }
+            }
         }
     }
     openedCard?.let { selected ->
