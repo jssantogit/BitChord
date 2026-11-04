@@ -41,6 +41,27 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun canonicalPlaylistQueueKeepsNativeReleaseActionGeometry() {
+        var queued = 0
+        var played = 0
+        var shuffled = 0
+        compose.setContent {
+            NativeReleaseActionRow(
+                onPlay = { played++ },
+                onShuffle = { shuffled++ },
+                isLocal = false,
+                onAddToQueue = { queued++ },
+            )
+        }
+        compose.onNodeWithContentDescription("Adicionar à fila").performClick()
+        compose.onNodeWithContentDescription("Shuffle").assertExists()
+        compose.runOnIdle {
+            assertEquals(1, queued)
+            assertEquals(0, played)
+            assertEquals(0, shuffled)
+        }
+    }
+
     @Test fun discardPromptUsesNativeAlertAndPreservesBothActions() {
         var discarded = 0
         var continued = 0

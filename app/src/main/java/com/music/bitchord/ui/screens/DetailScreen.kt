@@ -1070,7 +1070,9 @@ private fun ReleaseHeader(
                 NativeReleaseActionRow(
                     onPlay = onPlay,
                     onShuffle = onShuffle,
-                    isLocal = page.browseId.startsWith("local:"),
+                    // Playlists keep identical header controls across sources.
+                    isLocal = page.type != BrowseType.PLAYLIST &&
+                        page.browseId.startsWith("local:"),
                     canShuffle = songs.isNotEmpty(),
                     isSaved = library?.saved,
                     onToggleLibrary = if (library == null) null else onToggleLibrary,

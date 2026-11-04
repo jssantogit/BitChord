@@ -497,30 +497,15 @@ internal fun CanonicalPlaylistDetailScreen(
                 },
                 actions = {
                     if (canPlay) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                                .padding(horizontal = PAGE_GUTTER, vertical = 18.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            CircleIconButton(
-                                icon = BitChordIcons.Shuffle,
-                                contentDescription = "Aleatório",
-                                onClick = onShuffle,
-                                tint = palette.onBackground,
-                            )
-                            ActionPill(
-                                icon = BitChordIcons.Play, label = "Tocar",
-                                onClick = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
-                                filled = true, modifier = Modifier.weight(1f),
-                            )
-                            CircleIconButton(
-                                icon = BitChordIcons.Plus,
-                                contentDescription = "Adicionar à fila",
-                                onClick = { onAction(CanonicalCollectionIntent.ADD_TO_QUEUE) },
-                                tint = palette.onBackground,
-                            )
-                        }
+                        Spacer(Modifier.height(18.dp))
+                        NativeReleaseActionRow(
+                            onPlay = { onAction(CanonicalCollectionIntent.PLAY_NOW) },
+                            onShuffle = onShuffle,
+                            isLocal = false,
+                            onAddToQueue = {
+                                onAction(CanonicalCollectionIntent.ADD_TO_QUEUE)
+                            },
+                        )
                     }
                 }
             )
