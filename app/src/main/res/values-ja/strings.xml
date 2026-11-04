@@ -1268,6 +1268,7 @@
     <string name="spotify_import_none">それらの曲は YouTube Music で見つかりませんでした。</string>
     <string name="spotify_import_title">Spotify プレイリストをインポート</string>
     <string name="spotify_import_unmatched">%1$d 曲が YouTube Music で見つかりませんでした</string>
+    <string name="spotify_import_metadata_only">%1$d曲をメタデータのみでプレイリストに保存しました。確認済みの一致がない音声は関連付けていません。</string>
     <string name="spotify_library_subtitle">あなたの Spotify プレイリスト</string>
     <string name="spotify_sign_in">Spotify でサインイン</string>
     <string name="spotify_use_spdc_token">sp_dc トークンを使用</string>
