@@ -51,6 +51,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import com.music.bitchord.data.model.LibraryState
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -2492,7 +2494,80 @@ private fun rememberCaaCoverLoadObserver(
     }
 }
 
+/**
+ * The existing native release card is the single artist-shelf card.
+ * Canonical Library releases provide artwork and real selection/More actions
+ * through slots, without manufacturing a ShelfItem or provider browseId.
+ * No layout fork: native catalog and Library both paint these same elements.
+ */
 @OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun NativeArtistReleaseCard(
+    title: String,
+    subtitle: String,
+    palette: ArtworkPalette,
+    onClick: () -> Unit,
+    artwork: @Composable () -> Unit,
+    modifier: Modifier = Modifier.width(SHELF_CARD_WIDTH),
+    onLongPress: (() -> Unit)? = null,
+    onMore: (() -> Unit)? = null,
+    selectionMode: Boolean = false,
+    selected: Boolean = false,
+    onToggleSelection: (() -> Unit)? = null,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        modifier = modifier.longPressMenuClickable(
+            onClick = onClick, onLongClick = onLongPress,
+        ),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(shape)
+                .thumbnailBorder(shape)
+                .background(palette.elevated),
+        ) {
+            artwork()
+            if (selectionMode && onToggleSelection != null) {
+                IconButton(
+                    onClick = onToggleSelection,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                ) {
+                    Icon(
+                        if (selected) Icons.Rounded.CheckCircle
+                        else Icons.Rounded.RadioButtonUnchecked,
+                        contentDescription = "Selecionar $title",
+                    )
+                }
+            } else if (onMore != null) {
+                RowMoreButton(
+                    onClick = onMore,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    contentDescription = "Opções de $title",
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = palette.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = palette.onBackgroundVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Legacy shelf metadata adapts to the native card; no provider IDs in UI. */
 @Composable
 private fun SectionCard(
     item: ShelfItem,
@@ -2502,37 +2577,22 @@ private fun SectionCard(
     onLongPress: (() -> Unit)? = null,
 ) {
     val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
-    Column(
-        modifier = modifier
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress),
-    ) {
-        AsyncImage(
-            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
-            contentDescription = null,
-            onState = observeCaaCover,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(10.dp))
-                .thumbnailBorder(RoundedCornerShape(10.dp))
-                .background(palette.elevated),
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = item.title,
-            style = MaterialTheme.typography.titleMedium,
-            color = palette.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = item.subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = palette.onBackgroundVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    NativeArtistReleaseCard(
+        title = item.title,
+        subtitle = item.subtitle,
+        palette = palette,
+        onClick = onClick,
+        modifier = modifier,
+        onLongPress = onLongPress,
+        artwork = {
+            AsyncImage(
+                model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
+                contentDescription = null,
+                onState = observeCaaCover,
+                modifier = Modifier.fillMaxSize(),
+            )
+        },
+    )
 }
 
 @Composable
