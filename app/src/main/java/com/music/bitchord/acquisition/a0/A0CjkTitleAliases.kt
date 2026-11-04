@@ -21,6 +21,12 @@ internal object A0CjkTitleAliases {
     private val collaboration=Regex(
         "(?:^|\\s)(?:feat|ft|featuring|with|vs)(?:\\s|$)",
         RegexOption.IGNORE_CASE)
+    // A canonical title carrying a distinct artist/edition description may
+    // not be reduced to the Latin parenthetical: that would erase intent.
+    private val unsafeBaseDescriptor=Regex(
+        "(?:^|\\s)(?:feat\\.?|ft\\.?|featuring|with|vs\\.?|" +
+            "live|remix|remastered?|acoustic|instrumental|demo|cover|" +
+            "karaoke)(?:\\s|$)",RegexOption.IGNORE_CASE)
 
     private fun containsCjk(value:String):Boolean {
         var i=0
@@ -40,8 +46,11 @@ internal object A0CjkTitleAliases {
 
     /** Only an explicit, multiword ASCII alternative after native CJK text. */
     fun latinAlias(canonicalTitle:String):String?=runCatching {
-        val match=parenthetical.matchEntire(canonicalTitle) ?: return@runCatching null
-        if(!containsCjk(match.groupValues[1]))return@runCatching null
+        val canonical=A0CjkOrthography.widthOnlyNfc(canonicalTitle)
+        val match=parenthetical.matchEntire(canonical) ?: return@runCatching null
+        if(!containsCjk(match.groupValues[1]) ||
+            unsafeBaseDescriptor.containsMatchIn(match.groupValues[1]))
+            return@runCatching null
         val alias=A0SearchQuery.normalize(match.groupValues[2])
         if(alias.length !in 8..80 || alias.split(' ').size<2 ||
             !alias.all { it.code in 32..126 } ||
