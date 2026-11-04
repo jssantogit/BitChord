@@ -274,12 +274,14 @@ fun NativeDetailTrackRowLayout(
     onMore: (() -> Unit)? = null,
     background: Color = Color.Transparent,
     opacity: Float = 1f,
+    horizontalInset: Dp = PAGE_GUTTER,
     textGap: Dp = 14.dp,
     leading: @Composable RowScope.() -> Unit,
     title: @Composable () -> Unit,
     subtitle: @Composable () -> Unit,
     afterText: @Composable RowScope.() -> Unit = {},
     rating: @Composable ColumnScope.() -> Unit,
+    showRatingSlot: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     NativeDetailTrackRowFrame(
@@ -289,12 +291,13 @@ fun NativeDetailTrackRowLayout(
         onMore = onMore,
         background = background,
         opacity = opacity,
+        horizontalInset = horizontalInset,
     ) {
         leading()
         Spacer(Modifier.width(textGap))
         NativeTrackRowText(title = title, subtitle = subtitle)
         afterText()
-        NativeDetailTrackRatingSlot(content = rating)
+        if (showRatingSlot) NativeDetailTrackRatingSlot(content = rating)
         actions()
     }
 }

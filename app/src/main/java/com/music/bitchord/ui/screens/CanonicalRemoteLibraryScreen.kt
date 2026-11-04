@@ -97,7 +97,7 @@ import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
-import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
+import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.NativeDetailTrackNumber
 import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.NativeTrackRowText
@@ -1738,16 +1738,14 @@ internal fun CanonicalTrackRow(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelection: (() -> Unit)? = null,
-    // Only the category's row should enter selection via a long press.
-    // Detail pages never pass this callback.
+    // Only a category's row enters selection on long press; detail pages don't.
     onLongPress: (() -> Unit)? = null,
     compactForArtist: Boolean = false,
     palette: ArtworkPalette? = null,
     albumTrackNumber: Int? = null,
 ) {
-    // Exactly the native SongRow frame (same horizontal inset and trailing
-    // gutter), without converting RecordingId into a fake Song.videoId.
-    NativeDetailTrackRowFrame(
+    // The same source-neutral row compositor used by playlist tracks.
+    NativeDetailTrackRowLayout(
         onClick = {
             if (selectionMode && onToggleSelection != null) onToggleSelection()
             else onClick()
@@ -1756,70 +1754,65 @@ internal fun CanonicalTrackRow(
         onMore = onOptions,
         horizontalInset = if (compactForArtist) 0.dp else PAGE_GUTTER,
         modifier = if (compactForArtist) Modifier else Modifier.heightIn(min = 68.dp),
-    ) {
-        if (albumTrackNumber != null) {
-            NativeDetailTrackNumber(
-                number = albumTrackNumber,
-                color = palette?.onBackgroundVariant
-                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(PAGE_GUTTER))
-        } else {
-            CanonicalUnifiedArtwork(
-                track, artworkLoader, Modifier.size(if (compactForArtist) 48.dp else 52.dp),
-            )
-            Spacer(Modifier.width(if (compactForArtist) 12.dp else 14.dp))
-        }
-        NativeTrackRowText(
-            title = {
-                Text(
-                    text = track.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = palette?.onBackground ?: MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            },
-            subtitle = {
-                Text(
-                    text = track.artistDisplay,
-                    style = MaterialTheme.typography.bodyMedium,
+        textGap = if (albumTrackNumber != null) PAGE_GUTTER
+            else if (compactForArtist) 12.dp else 14.dp,
+        leading = {
+            if (albumTrackNumber != null) {
+                NativeDetailTrackNumber(
+                    number = albumTrackNumber,
                     color = palette?.onBackgroundVariant
                         ?: MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
-            },
-        )
-        // Song lists never show a per-track duration. Keep existing local/
-        // remote rating badges without reserving an empty timing column.
-        if (albumTrackNumber == null) {
-            Column(
-                modifier = Modifier.padding(start = 8.dp),
-                horizontalAlignment = Alignment.End,
-            ) {
-                canonicalLibraryVisibleRatings(
-                    track, LocalCanonicalRatingDisplay.current,
-                ).forEach { rating ->
-                    CanonicalRatingStars(
-                        rating, color = MaterialTheme.colorScheme.onSurface,
+            } else {
+                CanonicalUnifiedArtwork(
+                    track, artworkLoader, Modifier.size(if (compactForArtist) 48.dp else 52.dp),
+                )
+            }
+        },
+        title = {
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = palette?.onBackground ?: MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        subtitle = {
+            Text(
+                text = track.artistDisplay,
+                style = MaterialTheme.typography.bodyMedium,
+                color = palette?.onBackgroundVariant
+                    ?: MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        showRatingSlot = albumTrackNumber == null,
+        rating = {
+            canonicalLibraryVisibleRatings(
+                track, LocalCanonicalRatingDisplay.current,
+            ).forEach { rating ->
+                CanonicalRatingStars(
+                    rating, color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
+        actions = {
+            if (selectionMode && onToggleSelection != null) {
+                IconButton(onClick = onToggleSelection, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        if (selected) Icons.Rounded.CheckCircle
+                        else Icons.Rounded.RadioButtonUnchecked,
+                        contentDescription = if (selected) "Desmarcar faixa" else "Selecionar faixa",
+                        tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
+            } else {
+                CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
             }
-        }
-        if (selectionMode && onToggleSelection != null) {
-            IconButton(onClick = onToggleSelection, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    if (selected) Icons.Rounded.CheckCircle
-                    else Icons.Rounded.RadioButtonUnchecked,
-                    contentDescription = if (selected) "Desmarcar faixa" else "Selecionar faixa",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        } else {
-            CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
-        }
-    }
+        },
+    )
 }
 
 /**
