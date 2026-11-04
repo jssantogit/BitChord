@@ -484,7 +484,8 @@ object SourceRegistry {
         SourceKind.CUSTOM_MODULE -> ModuleSource(config)
         SourceKind.MODULE -> ModuleSource(config)
         SourceKind.JIOSAAVN -> JioSaavnSource(config)
-        SourceKind.YOUTUBE -> YouTubeSource(config)
+        // Stored legacy rows are deserialized but never turned into clients.
+        SourceKind.YOUTUBE -> error("Retired YouTube source cannot be constructed")
     }
 
     /**
