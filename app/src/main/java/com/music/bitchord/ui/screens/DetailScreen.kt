@@ -1589,56 +1589,6 @@ internal fun ActionRow(
  * whatever width the row leaves it. Otherwise it wears the light veil and glass
  * rim of the circles beside it — Shuffle, on a page with no Add to sit opposite.
  */
-@Composable
-internal fun ActionPill(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    filled: Boolean,
-    modifier: Modifier = Modifier,
-    size: Dp = 50.dp,
-) {
-    // Resume rather than a flat tap: both start a queue, and the rising pair
-    // says so.
-    val haptics = rememberHaptics()
-    val content = if (filled) Color.Black else MaterialTheme.colorScheme.onSurface
-    Row(
-        modifier = modifier
-            .height(size)
-            .clip(CircleShape)
-            .then(
-                if (filled) {
-                    Modifier.background(Color.White)
-                } else {
-                    Modifier
-                        .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
-                        .liquidGlassRim(CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
-                },
-            )
-            .clickable {
-                haptics.play(Haptic.Resume)
-                onClick()
-            }
-            .padding(horizontal = 24.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = content,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            color = content,
-            maxLines = 1,
-        )
-    }
-}
 
 /**
  * The artist page's Play: a filled circle with the triangle punched out of it,
@@ -1697,46 +1647,6 @@ private fun PlayCircle(
  * Play, on both the release and the artist page. A light veil with a hairline
  * edge, Apple's look for these, rather than the dark glass.
  */
-@Composable
-internal fun CircleIconButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-    haptic: Haptic = Haptic.Tap,
-    size: Dp = 50.dp,
-    /**
-     * False greys the button out and stops it taking taps, for an action the
-     * page offers but this user can't take — a guest's Add or Subscribe.
-     * Dimmed rather than dropped, so the row keeps its shape.
-     */
-    enabled: Boolean = true,
-    tint: Color = MaterialTheme.colorScheme.onSurface,
-) {
-    val haptics = rememberHaptics()
-    Box(
-        modifier = Modifier
-            .size(size)
-            .alpha(if (enabled) 1f else DISABLED_ACTION_ALPHA)
-            .clip(CircleShape)
-            .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
-            // The glass rim the floating bars wear, with Liquid Glass on. Rim
-            // only: over the page's flat tint a blurred fill would look the same.
-            .liquidGlassRim(CircleShape)
-            .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
-            .clickable(enabled = enabled) {
-                haptics.play(haptic)
-                onClick()
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(size * 0.44f),
-        )
-    }
-}
 
 /** "1.2M subscribers" and "3.4M monthly listeners", off the artist header. */
 @Composable
@@ -2249,12 +2159,9 @@ private fun TopReleaseCard(
 }
 
 /** The white veil under Apple-style containers and their buttons. */
-private const val LIGHT_FILL_ALPHA = 0.07f
 /** A side button this user can't use — a guest's Add or Subscribe. */
-private const val DISABLED_ACTION_ALPHA = 0.38f
 
 /** Brighter than the default 0.15 hairlines, as on Apple Music's own card. */
-private const val TOP_RELEASE_EDGE_ALPHA = 0.10f
 private const val TOP_RELEASE_COVER_EDGE_ALPHA = 0.215f
 
 /**
