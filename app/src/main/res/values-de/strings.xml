@@ -1290,6 +1290,7 @@
     <string name="spotify_import_none">Keiner dieser Titel wurde auf YouTube Music gefunden.</string>
     <string name="spotify_import_title">Spotify-Playlist importieren</string>
     <string name="spotify_import_unmatched">%1$d Titel wurden auf YouTube Music nicht gefunden</string>
+    <string name="spotify_import_metadata_only">Playlist mit %1$d Titeln als Metadaten gespeichert. Ohne bestätigte Übereinstimmung wurde kein Audio zugeordnet.</string>
     <string name="spotify_library_subtitle">Deine Spotify-Playlists</string>
     <string name="spotify_sign_in">Bei Spotify anmelden</string>
     <string name="spotify_use_spdc_token">sp_dc-Token verwenden</string>
