@@ -187,6 +187,16 @@ internal fun CanonicalPlaylistCoverArt(
     }
 }
 
+/**
+ * A user-picked playlist cover owns the page colors, not whichever track
+ * happens to be first. Uncovered playlists retain their existing fallback.
+ */
+internal fun canonicalPlaylistPaletteArtworkUri(
+    explicitCoverUri: String?,
+    rows: List<V2DisplayRow>?,
+): String? = explicitCoverUri?.takeIf { it.isNotBlank() }
+    ?: rows?.firstOrNull()?.localArtworkUri
+
 /** Same music-page metadata format as the native playlist header. */
 internal fun canonicalPlaylistDetailMeta(
     smart: Boolean, rows: List<V2DisplayRow>?,
@@ -505,7 +515,9 @@ internal fun CanonicalPlaylistDetailScreen(
             PlaylistLibrarySort.DEFAULT -> filtered
         }
     }
-    val palette = rememberArtworkPalette(imageUrl = rows?.firstOrNull()?.localArtworkUri)
+    val palette = rememberArtworkPalette(
+        imageUrl = canonicalPlaylistPaletteArtworkUri(card.explicitCoverUri(), rows),
+    )
     val playlistDescription = when (card) {
         is LibraryPlaylistCard.CanonicalNormal -> card.definition.description
         is LibraryPlaylistCard.Smart -> card.definition.description
