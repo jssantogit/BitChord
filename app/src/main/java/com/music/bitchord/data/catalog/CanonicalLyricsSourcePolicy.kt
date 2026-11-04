@@ -2,7 +2,6 @@ package com.music.bitchord.data.catalog
 
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.sources.SourceConfig
-import com.music.bitchord.data.sources.SourceKind
 
 /**
  * YouTube lyrics and captions make InnerTube requests even when the audio
@@ -15,13 +14,11 @@ import com.music.bitchord.data.sources.SourceKind
  */
 internal fun allowedCanonicalLyricsSources(
     requested: Set<LyricsSource>,
-    canonicalDiscovery: Boolean,
-    configs: List<SourceConfig>,
+    @Suppress("UNUSED_PARAMETER") canonicalDiscovery: Boolean,
+    @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
 ): Set<LyricsSource> {
-    val youtubeDisabled = configs.any {
-        it.kind == SourceKind.YOUTUBE && !it.enabled
-    }
-    if (!canonicalDiscovery && !youtubeDisabled) return requested
+    // Retired choices remain decodable in existing preferences, but can never
+    // start an Innertube lyrics request, even for old library rows.
     return requested - setOf(
         LyricsSource.YOUTUBE_MUSIC,
         LyricsSource.YOUTUBE_TRANSCRIPT,
