@@ -1919,46 +1919,16 @@ private fun BitChordApp(
         // branches that only push a page are a beat away from a tap on one of
         // its rows, and half-serving a request would spend it.
         val session = controller ?: return@LaunchedEffect
-        // An incoming, explicitly selected YouTube URL is a compatibility
-        // action, not permission to restore YouTube as the discovery catalog.
-        val explicitLegacyLinkAllowed = shouldHandleExplicitLegacyYoutubeLink(
-            discoverySourceConfigs,
-        )
+        // Keep recognizing old external links as archived references, but
+        // never resolve their opaque video/browse IDs through the retiring
+        // YouTube API. They are not MusicBrainz identities or local assets.
         when (request) {
-            is LinkRequest.Track -> {
-                // A legacy videoId cannot be promoted into a MusicBrainz MBID.
-                // Explicit links keep their existing provider handler during migration.
-                val song = if (explicitLegacyLinkAllowed) {
-                    YtMusicRepository.trackLinks(request.videoId).getOrNull()
-                } else null
-                if (song == null) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.couldnt_open_link),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                } else {
-                    // A link is one song named on purpose, which is exactly the
-                    // case [playRadio] exists for: play it and let AutoPlay
-                    // carry on, rather than queueing something around it.
-                    playRadio(
-                        song,
-                        QueueSource(sharedLinkLabel, PlaybackSourceType.SHARED_LINK, song.videoId),
-                    )
-                }
-            }
-            is LinkRequest.Page -> {
-                if (!explicitLegacyLinkAllowed) {
-                    Toast.makeText(
-                        context,
-                        context.getString(R.string.couldnt_open_link),
-                        Toast.LENGTH_SHORT,
-                    ).show()
-                } else {
-                    dismissPlayer()
-                    // Legacy browse ids are opaque and are not canonical MBIDs.
-                    viewModel.openDetail(request.browseId, title = "")
-                }
+            is LinkRequest.Track, is LinkRequest.Page -> {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.couldnt_open_link),
+                    Toast.LENGTH_SHORT,
+                ).show()
             }
             is LinkRequest.Search -> {
                 // Generic text requests always use canonical discovery.
