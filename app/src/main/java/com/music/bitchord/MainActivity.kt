@@ -3848,16 +3848,37 @@ private fun BitChordApp(
                                     viewModel.searchFor(entity.title)
                                 } else when (entity.entityType) {
                                     EntityType.TRACK -> {
-                                        // Play the track by its video id
-                                        playRadio(
-                                            com.music.bitchord.data.model.Song(
-                                                videoId = entity.id,
-                                                title = entity.title,
-                                                artist = entity.subtitle,
-                                                thumbnailUrl = entity.artworkUrl,
-                                            ),
-                                            QueueSource(entity.title, PlaybackSourceType.SEARCH),
-                                        )
+                                        // A historical video ID is an archival lookup, never
+                                        // proof of audio. Only a real local URI or validated
+                                        // canonical remote request can reach the player.
+                                        when (val action =
+                                            com.music.bitchord.ui.historicalTrackHistoryAction(entity.id)
+                                        ) {
+                                            is com.music.bitchord.ui.HistoricalTrackHistoryAction.Local -> {
+                                                val song = Song(
+                                                    videoId = action.uri,
+                                                    title = entity.title,
+                                                    artist = entity.subtitle,
+                                                    thumbnailUrl = entity.artworkUrl,
+                                                    localUri = action.uri,
+                                                )
+                                                playFrom(
+                                                    listOf(song), 0,
+                                                    QueueSource(entity.title, PlaybackSourceType.SEARCH),
+                                                )
+                                            }
+                                            is com.music.bitchord.ui.HistoricalTrackHistoryAction.Remote -> {
+                                                controller?.playCanonicalRemote(
+                                                    request = action.request,
+                                                    metadata = CanonicalRemotePlaybackMetadata(
+                                                        title = entity.title,
+                                                        artistDisplay = entity.subtitle,
+                                                    ),
+                                                )
+                                            }
+                                            com.music.bitchord.ui.HistoricalTrackHistoryAction.Search ->
+                                                viewModel.searchFor(entity.title)
+                                        }
                                     }
                                     EntityType.ALBUM, EntityType.ARTIST, EntityType.PLAYLIST -> {
                                         viewModel.openDetail(
