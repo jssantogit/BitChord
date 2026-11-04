@@ -70,3 +70,15 @@ internal fun canonicalAutoRecentSongs(
         }
         .distinctBy(Song::videoId)
 }
+
+/** Music already in the device's local/downloading folders and authenticated
+ * canonical servers, never a public catalog result without playable audio. */
+internal fun canonicalAutoQuickPicks(
+    local: List<Song>,
+    downloads: List<Song>,
+    remote: List<Song>,
+    excludedIds: Set<String>,
+): List<Song> = (local + downloads + remote)
+    .filter { it.videoId !in excludedIds }
+    .distinctBy(Song::videoId)
+    .take(150)
