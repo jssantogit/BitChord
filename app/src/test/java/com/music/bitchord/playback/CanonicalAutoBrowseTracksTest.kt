@@ -40,6 +40,21 @@ class CanonicalAutoBrowseTracksTest {
         assertNull(canonicalAutoSong(row(mediaAssetId = "")))
     }
 
+    @Test fun media3ExternalUrisNeverPromoteOpaqueVideoIdsIntoPlayableMusic() {
+        assertNull(canonicalAutoExternalUri("bitchord://watch?v=old"))
+        assertNull(canonicalAutoExternalUri("https://youtu.be/old"))
+        assertNull(canonicalAutoExternalUri("https://example.invalid/audio"))
+        assertNull(canonicalAutoExternalUri(
+            "bitchord://canonical?recordingId=r&mediaAssetId=a&providerKey=youtube",
+        ))
+        assertEquals(
+            "content://media/external/audio/media/9",
+            canonicalAutoExternalUri("content://media/external/audio/media/9"),
+        )
+        val remote = canonicalAutoSong(row())!!
+        assertEquals(remote.localUri, canonicalAutoExternalUri(remote.localUri.orEmpty()))
+    }
+
     @Test fun historicalPlaylistsKeepDuplicateEntriesInOrderButNeverReplayYoutube() {
         val legacy = Song(
             videoId = "youtube-archive", title = "Legacy", artist = "Artist",
