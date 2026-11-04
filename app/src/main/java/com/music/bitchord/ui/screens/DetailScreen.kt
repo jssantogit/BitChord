@@ -227,30 +227,21 @@ private val ARTIST_CONTENT_GUTTER = PAGE_GUTTER
  * as part of it rather than as a caption to it. Dropped clear, it sits on the
  * blurred colour instead, which has nothing in it to compete.
  */
-private val HEADER_DROP = 44.dp
 
 /** How far the artist name/logo and everything under it sit above the usual [HEADER_DROP]. */
-private val ARTIST_HEADER_LIFT = 64.dp
 
 /** The artist action row: a large Play flanked by two smaller glass circles. */
 
 /** A larger share of a smaller circle than the release headers' 0.44. */
 
 /** The title logo's widest share of the page, and tallest share of the photo. */
-private const val ARTIST_LOGO_WIDTH = 0.82f
 
 /** The signature closing the About section. */
-private val ABOUT_LOGO_HEIGHT = 56.dp
 
 /** A signature is drawn at this share of a title logo's size. */
-private const val SIGNATURE_SCALE = 0.7f
-private const val ARTIST_LOGO_MAX_HEIGHT = 0.30f
 
-private const val LOGO_RETRIES = 2
-private const val LOGO_RETRY_DELAY_MS = 800L
 
 /** Vector signatures decode at this width so small files stay crisp laid out large. */
-private const val SVG_DECODE_WIDTH = 1600
 
 private val CREDIT_SEPARATOR = Regex(""",\s|\s&\s|\s(?:x|and|feat\.?|ft\.?|with)\s""", RegexOption.IGNORE_CASE)
 
@@ -1245,135 +1236,6 @@ internal fun List<Song>.matching(query: String): List<IndexedValue<Song>> {
  * the picture's height, which is what keeps the two in step: the list
  * reserves the room, the background fills it.
  */
-@Composable
-internal fun ArtistHeader(
-    artistName: String,
-    palette: ArtworkPalette,
-    artHeight: Dp,
-    appleArt: AppleArtistArt?,
-    signature: ArtistSignature?,
-) {
-    Box(Modifier.fillMaxWidth()) {
-        Spacer(Modifier.fillMaxWidth().height(artHeight + HEADER_DROP - ARTIST_HEADER_LIFT))
-        val logoUrl = appleArt?.logoUrl
-        // Secondary provider: drawn only when Apple has no title logo.
-        val signatureUrl = signature?.imageUrl.takeIf { logoUrl == null }
-        val imageUrl = logoUrl ?: signatureUrl
-        // Signature vectors are dark ink on transparency — over a dark artist
-        // photo they vanish, so they are tinted white like the web UI's
-        // inverted plate. Scanned photos (jpeg/png) keep their own pixels:
-        // tinting an opaque light scan would flatten it into a white blob.
-        val tint = if (logoUrl == null && signature?.format == "svg") {
-            ColorFilter.tint(Color.White)
-        } else {
-            null
-        }
-        // Whether the logo has actually been drawn. Until it has — a first fetch
-        // of an Apple logo is a few hundred KB the CDN may still be resizing — the
-        // name stands in for it, so the header is never left with nothing in it.
-        var logoShown by remember(imageUrl) { mutableStateOf(false) }
-        if (imageUrl != null) {
-            val context = LocalPlatformContext.current
-            var attempt by remember(imageUrl) { mutableIntStateOf(0) }
-            var failed by remember(imageUrl) { mutableStateOf(false) }
-            val isSignatureSvg = logoUrl == null && signature?.format == "svg"
-            // Scanned paper (jpeg/png) goes through the ink transformation
-            // (white paper to transparency, strokes to white); vectors are
-            // tinted at draw time instead.
-            val isSignatureScan = logoUrl == null && signature != null && !isSignatureSvg
-            val aspect = (if (logoUrl != null) appleArt?.logoAspect else signature?.aspect)
-                ?.coerceIn(0.4f, 6f) ?: 1f
-            // Remembered, and at the size the URL already names: nothing about the
-            // load waits on layout to decide how big to decode, and a recomposition
-            // can't hand Coil a new request that cancels the one in flight.
-            // Vectors decode small (Charlie Puth's is 213px) and would upscale
-            // ~3x into a blur, so SVGs render large; rasters keep ORIGINAL
-            // since decoding past their pixels only spends memory.
-            val request = remember(imageUrl, attempt) {
-                ImageRequest.Builder(context).data(imageUrl).apply {
-                    if (isSignatureSvg) {
-                        size(SVG_DECODE_WIDTH, (SVG_DECODE_WIDTH / aspect).roundToInt())
-                    } else {
-                        size(coil3.size.Size.ORIGINAL)
-                    }
-                    if (isSignatureScan) transformations(SignatureInkTransformation)
-                }.build()
-            }
-            // A dropped fetch gets two more tries before the name is left in place.
-            LaunchedEffect(failed) {
-                if (failed && attempt < LOGO_RETRIES) {
-                    delay(LOGO_RETRY_DELAY_MS)
-                    failed = false
-                    attempt++
-                }
-            }
-            // Apple's own title logo stands in for the name, laid over its photo.
-            // Capped in height as well as width: a logo set on two or three
-            // lines is nearly square, and by width alone it would swallow the
-            // photograph it is meant to sit on. A signature is a panoramic ink
-            // strip and reads best smaller than a title logo.
-            val isSignature = logoUrl == null && signature != null
-            val sizeFactor = if (isSignature) SIGNATURE_SCALE else 1f
-            val maxLogoHeight = artHeight * ARTIST_LOGO_MAX_HEIGHT * sizeFactor
-            Column(
-                modifier = Modifier.align(Alignment.BottomCenter),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-            AsyncImage(
-                model = request,
-                contentDescription = artistName,
-                contentScale = ContentScale.Fit,
-                colorFilter = tint,
-                onState = { state ->
-                    when (state) {
-                        is AsyncImagePainter.State.Success -> logoShown = true
-                        is AsyncImagePainter.State.Error -> {
-                            val cause = (state as? AsyncImagePainter.State.Error)
-                                ?.result?.throwable?.let { "${it.javaClass.simpleName}: ${it.message}" }
-                            Log.d("ArtistHeader", "image load failed: $imageUrl attempt $attempt cause=$cause")
-                            failed = true
-                        }
-                        else -> Unit
-                    }
-                },
-                modifier = Modifier
-                    .padding(top = 14.dp, bottom = if (isSignature) 6.dp else 20.dp)
-                    // Sized from the incoming width in layout rather than through a
-                    // BoxWithConstraints, which would subcompose the image.
-                    .layout { measurable, constraints ->
-                        val widest = constraints.maxWidth * ARTIST_LOGO_WIDTH * sizeFactor
-                        val height = minOf(widest / aspect, maxLogoHeight.toPx()).roundToInt()
-                        val width = (height * aspect).roundToInt()
-                        val placeable = measurable.measure(Constraints.fixed(width, height))
-                        layout(width, height) { placeable.place(0, 0) }
-                    },
-            )
-            if (isSignature && logoShown) {
-                SignedByCaption(
-                    name = artistName,
-                    palette = palette,
-                    modifier = Modifier.padding(horizontal = HEADER_GUTTER).padding(bottom = 20.dp),
-                )
-            }
-            }
-        }
-        if (!logoShown) Text(
-            text = artistName,
-            style = MaterialTheme.typography.displayLarge,
-            color = palette.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                // Bottom is half the top inset — the stats pills (or, absent
-                // those, the action row) sit closer under the name than the
-                // name sits under the artwork.
-                .padding(start = HEADER_GUTTER, end = HEADER_GUTTER, top = 14.dp, bottom = 7.dp),
-        )
-    }
-}
-
 /**
  * Shuffle • Play • Star — the artist page's action row, as Apple Music lays
  * it out: a large Play circle with a small glass circle either side.
@@ -1462,75 +1324,6 @@ private fun StatChip(icon: ImageVector, text: String, palette: ArtworkPalette) {
  * behind it to reveal.
  */
 /** "Signed by **Name**" — the artist's name in bold, whatever order the language puts it in. */
-@Composable
-private fun SignedByCaption(
-    name: String,
-    palette: ArtworkPalette,
-    modifier: Modifier = Modifier,
-    textAlign: TextAlign = TextAlign.Center,
-) {
-    val signed = stringResource(R.string.signed_by, name)
-    val nameAt = signed.indexOf(name)
-    Text(
-        text = buildAnnotatedString {
-            append(signed)
-            if (nameAt >= 0) {
-                addStyle(SpanStyle(fontWeight = FontWeight.Bold), nameAt, nameAt + name.length)
-            }
-        },
-        style = MaterialTheme.typography.bodyMedium,
-        color = palette.onBackground.copy(alpha = 0.8f),
-        textAlign = textAlign,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-    )
-}
-
-/**
- * The handwritten signature with its signed-by line, closing the About section of an artist whose
- * header already carries Apple's title logo.
- */
-@Composable
-private fun AboutSignature(
-    signature: ArtistSignature,
-    name: String,
-    palette: ArtworkPalette,
-    horizontalPadding: Dp,
-) {
-    val context = LocalPlatformContext.current
-    val isSvg = signature.format == "svg"
-    val aspect = signature.aspect.coerceIn(0.4f, 6f)
-    val request = remember(signature.imageUrl) {
-        ImageRequest.Builder(context).data(signature.imageUrl).apply {
-            if (isSvg) {
-                size(SVG_DECODE_WIDTH, (SVG_DECODE_WIDTH / aspect).roundToInt())
-            } else {
-                size(coil3.size.Size.ORIGINAL)
-                transformations(SignatureInkTransformation)
-            }
-        }.build()
-    }
-    var loaded by remember(signature.imageUrl) { mutableStateOf(false) }
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = horizontalPadding),
-        horizontalAlignment = Alignment.Start,
-    ) {
-        AsyncImage(
-            model = request,
-            contentDescription = name,
-            contentScale = ContentScale.Fit,
-            colorFilter = if (isSvg) ColorFilter.tint(Color.White) else null,
-            onState = { if (it is AsyncImagePainter.State.Success) loaded = true },
-            modifier = Modifier
-                .padding(top = 20.dp, bottom = 6.dp)
-                .height(ABOUT_LOGO_HEIGHT)
-                .aspectRatio(aspect),
-        )
-        if (loaded) SignedByCaption(name = name, palette = palette, textAlign = TextAlign.Start)
-    }
-}
-
 /** Compact row used inside the artist song grid; no swipe, to keep the
  *  horizontal pager's gestures unambiguous. */
 @OptIn(ExperimentalFoundationApi::class)
