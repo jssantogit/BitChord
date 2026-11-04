@@ -141,120 +141,35 @@ internal fun CanonicalNativeArtistDetail(
 
     val selectedAlbum = openedRelease
     if (selectedAlbum != null) {
-        val albumIds = canonicalArtistReleaseTrackIds(
-            availableLibraryTracks.map { it.recordingId }, releaseRecordingIds.toSet(),
-        ).toSet()
-        val albumRunningOrder = canonicalAlbumDetailTrackOrder(
-            availableLibraryTracks.filter { it.recordingId in albumIds },
-            releaseRecordingIds,
+        val albumSelection = CanonicalLibrarySelection(
+            CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
         )
-        val albumTracks = canonicalAlbumDetailSort(albumRunningOrder, albumSort)
-        val albumTrackNumbers = canonicalAlbumDetailTrackNumbers(albumRunningOrder)
-        val visibleAlbumTracks = albumTracks.filter {
-            query.isBlank() ||
-                it.title.contains(query, ignoreCase = true) ||
-                it.artistDisplay.contains(query, ignoreCase = true)
-        }
-        val trustedEvidence = nativeReleases.evidence[selectedAlbum.id]
-        val albumRating by produceState<Double?>(initialValue = null, key1 = selectedAlbum.id) {
-            ListeningEventDatabase.get(context).canonicalEntityRatingDao()
-                .observe("ALBUM", selectedAlbum.id).collectLatest { saved ->
-                    value = saved?.ratingValue?.takeIf(::isValidCanonicalEntityRating)
-                }
-        }
-        val albumQuality = canonicalAlbumSourceQuality(albumRunningOrder, selectedSourceKey)
-        val albumFooter = canonicalAlbumFooterMetadata(
-            trustedEvidence?.firstReleaseDate, albumRunningOrder,
+        NativeCanonicalNestedAlbumDetail(
+            release = selectedAlbum,
+            releaseRecordingIds = releaseRecordingIds,
+            availableLibraryTracks = availableLibraryTracks,
+            selectedSourceKey = selectedSourceKey,
+            artworkTrack = nativeReleases.artwork[selectedAlbum.id],
+            evidence = nativeReleases.evidence[selectedAlbum.id],
+            artworkLoader = artworkLoader,
+            albumSort = albumSort,
+            query = query,
+            searching = searching,
+            onQueryChange = onQueryChange,
+            isPinned = albumSelection in libraryPins.map { it.selection },
+            onTogglePin = {
+                pinRepository.toggle(CanonicalLibraryPin(
+                    selection = albumSelection,
+                    title = selectedAlbum.title,
+                    subtitle = selectedAlbum.artistDisplay.orEmpty(),
+                ))
+            },
+            onRateRelease = onRateRelease?.let { edit -> { edit(selectedAlbum) } },
+            onPlayAll = onPlayAll,
+            onTrackPlay = onTrackPlay,
+            onTrackEditRating = onTrackEditRating,
+            onTrackOptions = onTrackOptions,
         )
-        val releasePalette = rememberArtworkPalette(
-            imageUrl = canonicalNativeReleasePaletteUri(
-                nativeReleases.artwork[selectedAlbum.id]?.artworkUri,
-                selectedAlbum.artworkUri,
-            ),
-        )
-        BoxWithConstraints(Modifier.fillMaxSize().background(releasePalette.background)) {
-            val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
-            LazyColumn(contentPadding = PaddingValues(bottom = 112.dp)) {
-                item {
-                    NativeReleaseHeaderLayout(
-                        title = canonicalAlbumDisplayTitle(
-                            selectedAlbum.title, trustedEvidence?.primaryType,
-                        ),
-                        credit = selectedAlbum.artistDisplay.orEmpty(),
-                        meta = "",
-                        rating = albumRating,
-                        quality = albumQuality,
-                        onRate = onRateRelease?.let { editor -> { editor(selectedAlbum) } },
-                        palette = releasePalette,
-                        sleeveSize = sleeve,
-                        artwork = {
-                            val art = nativeReleases.artwork[selectedAlbum.id]
-                            if (art != null) CanonicalUnifiedArtwork(
-                                art, artworkLoader, Modifier.fillMaxSize(),
-                            ) else CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())
-                        },
-                        actions = {
-                            if (albumTracks.isNotEmpty()) {
-                                Spacer(Modifier.height(18.dp))
-                                NativeReleaseActionRow(
-                                    onPlay = { onPlayAll(albumTracks, false) },
-                                    onShuffle = { onPlayAll(albumTracks, true) },
-                                    isLocal = false,
-                                    reservePinAction = true,
-                                    isPinnedInLibrary = CanonicalLibrarySelection(
-                                        CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
-                                    ) in libraryPins.map { it.selection },
-                                    onTogglePin = {
-                                        pinRepository.toggle(CanonicalLibraryPin(
-                                            CanonicalLibrarySelection(
-                                                CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
-                                            ),
-                                            selectedAlbum.title,
-                                            selectedAlbum.artistDisplay.orEmpty(),
-                                        ))
-                                    },
-                                )
-                            }
-                        },
-                    )
-                }
-                if (shouldShowNativeArtistSearch(searching, query)) {
-                    item(key = "nested-release-search") {
-                        DetailSearchField(
-                            query = query,
-                            onQueryChange = onQueryChange,
-                            onClose = { onQueryChange("") },
-                            autoFocus = searching,
-                            onFocused = {},
-                            palette = releasePalette,
-                        )
-                    }
-                }
-                if (visibleAlbumTracks.isEmpty() && albumTracks.isNotEmpty()) {
-                    item(key = "nested-release-no-results") {
-                        Text(
-                            "Nenhuma música corresponde à pesquisa.",
-                            modifier = Modifier.padding(PAGE_GUTTER),
-                        )
-                    }
-                }
-                nativeCanonicalAlbumTrackRows(
-                    tracks = visibleAlbumTracks,
-                    artworkLoader = artworkLoader,
-                    palette = releasePalette,
-                    trackNumbers = albumTrackNumbers,
-                    onTrackPlay = onTrackPlay,
-                    onTrackEditRating = onTrackEditRating,
-                    onTrackOptions = onTrackOptions,
-                )
-                item(key = "artist-nested-album-footer") {
-                    NativeAlbumMetadataFooter(
-                        metadata = albumFooter,
-                        palette = releasePalette,
-                    )
-                }
-            }
-        }
         return
     }
 
