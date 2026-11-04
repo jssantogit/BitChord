@@ -1227,28 +1227,6 @@ internal fun List<Song>.matching(query: String): List<IndexedValue<Song>> {
     return all.filter { (_, song) -> song.matchesSearch(query) }
 }
 
-/**
- * An artist: their name across the foot of the photo [PageBackground] is
- * drawing behind this.
- *
- * The photograph itself is not here — it is pinned behind the list while this
- * scrolls over it. What this item holds in its place is a spacer of exactly
- * the picture's height, which is what keeps the two in step: the list
- * reserves the room, the background fills it.
- */
-/**
- * Shuffle • Play • Star — the artist page's action row, as Apple Music lays
- * it out: a large Play circle with a small glass circle either side.
- *
- * The star is the page's existing subscribe toggle. Where the page offers none
- * (a guest) it stays, greyed out and untappable, so Play keeps the middle.
- */
-/**
- * Small circular icon-only button — Shuffle and its partner either side of
- * Play, on both the release and the artist page. A light veil with a hairline
- * edge, Apple's look for these, rather than the dark glass.
- */
-
 /** "1.2M subscribers" and "3.4M monthly listeners", off the artist header. */
 @Composable
 private fun ArtistStatsRow(
