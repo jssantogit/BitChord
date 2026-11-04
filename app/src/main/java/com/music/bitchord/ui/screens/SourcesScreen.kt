@@ -121,7 +121,8 @@ fun SourcesScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val configs by SourceRegistry.configs.collectAsStateWithLifecycle()
+    val storedConfigs by SourceRegistry.configs.collectAsStateWithLifecycle()
+    val configs = SourceRegistry.displayConfigs(storedConfigs)
     val wifiQuality by AppSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
