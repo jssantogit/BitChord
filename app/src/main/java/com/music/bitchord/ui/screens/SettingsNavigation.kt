@@ -117,16 +117,6 @@ internal object SettingsNavigation {
     )
 }
 
-/**
- * #208: the old on/off discovery toggle must not be offered after the
- * canonical catalog becomes the only Home, Explore and General Search path.
- * Keep this compatibility hook until the obsolete settings block is removed.
- */
-internal fun canonicalDiscoverySettingsVisible(
-    @Suppress("UNUSED_PARAMETER") section: SettingsSection?,
-    @Suppress("UNUSED_PARAMETER") searchQuery: String,
-): Boolean = false
-
 @Composable
 internal fun SettingsHome(
     onSelect: (SettingsSection) -> Unit,
