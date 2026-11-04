@@ -12,7 +12,8 @@ internal fun legacyPlaylistPlayableSong(song: Song, verifiedDownloadedUri: Strin
     fun safe(uri: String?): Boolean = uri != null && (
         uri.startsWith("content://", ignoreCase = true) ||
             uri.startsWith("file://", ignoreCase = true) ||
-            CanonicalRemotePlaybackUri.decode(uri) != null
+            CanonicalRemotePlaybackUri.decode(uri)
+                ?.providerKey?.startsWith("opensubsonic:") == true
         )
     val uri = sequenceOf(song.localUri, verifiedDownloadedUri, song.videoId)
         .firstOrNull(::safe) ?: return null
