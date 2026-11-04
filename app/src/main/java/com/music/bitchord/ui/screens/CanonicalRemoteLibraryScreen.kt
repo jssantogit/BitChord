@@ -1120,6 +1120,9 @@ internal fun CanonicalRemoteLibraryScreen(
                         Unit
                     }
                 },
+                albumQuality = if (detail != null &&
+                    selectedContext == CanonicalSmartFilterContext.ALBUMS
+                ) canonicalAlbumSourceQuality(scopedDetailTracks, selectedSource) else null,
                 albumRating = detail?.takeIf {
                     selectedContext == CanonicalSmartFilterContext.ALBUMS
                 }?.let { selected ->
@@ -2079,6 +2082,7 @@ private fun NativeUnifiedLibraryBody(
     albumCredit: String = "",
     albumMeta: String? = null,
     albumRating: Double? = null,
+    albumQuality: com.music.bitchord.ui.components.SourceQuality? = null,
     onRateAlbum: (() -> Unit)? = null,
     albumFooter: CanonicalAlbumFooterMetadata? = null,
     albumTrackNumbers: Map<String, Int> = emptyMap(),
@@ -2238,6 +2242,7 @@ private fun NativeUnifiedLibraryBody(
                         credit = albumCredit,
                         meta = "",
                         rating = albumRating,
+                        quality = albumQuality,
                         onRate = onRateAlbum,
                         palette = palette,
                         sleeveSize = sleeve,
