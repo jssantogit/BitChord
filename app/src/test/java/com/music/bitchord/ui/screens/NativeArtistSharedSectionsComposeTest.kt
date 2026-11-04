@@ -2,6 +2,8 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -9,8 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
+import com.music.bitchord.ui.theme.rememberArtworkPalette
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -61,4 +66,48 @@ class NativeArtistSharedSectionsComposeTest {
         compose.onNodeWithTag("release-menu").performClick()
         compose.runOnIdle { assertEquals("release-a", chosen) }
     }
+    @Test fun nativeAlbumCardKeepsMoreActionAndMainNavigationIndependent() {
+        var opened = 0
+        var options = 0
+        compose.setContent {
+            MaterialTheme {
+                val palette = rememberArtworkPalette(imageUrl = null)
+                NativeArtistReleaseCard(
+                    title = "Album", subtitle = "aespa",
+                    palette = palette,
+                    modifier = Modifier.testTag("native-release-card"),
+                    onClick = { opened++ },
+                    onMore = { options++ },
+                    artwork = { Box(Modifier.fillMaxSize()) },
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Opções de Album").performClick()
+        compose.onNodeWithTag("native-release-card").performClick()
+        compose.runOnIdle {
+            assertEquals(1, opened)
+            assertEquals(1, options)
+        }
+    }
+
+    @Test fun selectionReplacesTheMoreActionButPreservesSelectionCallback() {
+        var toggled = 0
+        compose.setContent {
+            MaterialTheme {
+                val palette = rememberArtworkPalette(imageUrl = null)
+                NativeArtistReleaseCard(
+                    title = "Album", subtitle = "artist", palette = palette,
+                    onClick = {},
+                    onMore = { error("Menu must be replaced during selection") },
+                    selectionMode = true,
+                    onToggleSelection = { toggled++ },
+                    artwork = { Box(Modifier.fillMaxSize()) },
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Opções de Album").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Selecionar Album").performClick()
+        compose.runOnIdle { assertEquals(1, toggled) }
+    }
+
 }
