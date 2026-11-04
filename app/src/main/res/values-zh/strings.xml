@@ -1267,6 +1267,7 @@
     <string name="spotify_import_none">这些歌曲都未在 YouTube Music 上找到。</string>
     <string name="spotify_import_title">导入 Spotify 播放列表</string>
     <string name="spotify_import_unmatched">%1$d 首歌曲未在 YouTube Music 上找到</string>
+    <string name="spotify_import_metadata_only">已将 %1$d 首歌曲仅作为元数据保存到播放列表。未验证匹配前不会关联音频。</string>
     <string name="spotify_library_subtitle">你的 Spotify 播放列表</string>
     <string name="spotify_sign_in">使用 Spotify 登录</string>
     <string name="spotify_use_spdc_token">使用 sp_dc 令牌</string>
