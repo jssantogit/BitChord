@@ -1868,20 +1868,25 @@ class SourcesTest {
     }
 
     @Test
-    fun `legacy YouTube stream resolution requires enabled YouTube source`() {
+    fun `legacy Youtube stream resolution is permanently disabled for all persisted source choices`() {
         val enabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
         val disabled = enabled.copy(enabled = false)
-        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(emptyList()))
-        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(enabled)))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(emptyList()))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(enabled)))
         assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(disabled)))
         assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
-            SourceConfig(kind = SourceKind.ADDON, enabled = true),
-            disabled,
-        )))
-        // Disabling an unrelated source does not turn YouTube off.
-        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
             enabled,
-            SourceConfig(kind = SourceKind.JIOSAAVN, enabled = false),
+            SourceConfig(kind = SourceKind.ADDON, enabled = true),
         )))
+    }
+
+    @Test
+    fun `historical Youtube source settings never become active audio candidates`() {
+        val yt = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val addon = SourceConfig(kind = SourceKind.ADDON, enabled = true)
+        val jio = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = true)
+        val eligible = SourceRegistry.audioCandidateConfigs(listOf(yt, addon, jio))
+        assertFalse(eligible.any { it.kind == SourceKind.YOUTUBE })
+        assertEquals(listOf(addon.id, jio.id), eligible.map { it.id })
     }
 }
