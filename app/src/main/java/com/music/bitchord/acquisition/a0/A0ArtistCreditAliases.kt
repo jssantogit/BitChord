@@ -44,8 +44,7 @@ internal object A0ArtistCreditAliases {
 
     /** An exact Latin alias, sourced only from the requested canonical artist. */
     fun latinAlias(canonicalArtist:String):String? {
-        val normalized=java.text.Normalizer.normalize(
-            canonicalArtist,java.text.Normalizer.Form.NFC)
+        val normalized=A0CjkOrthography.widthOnlyNfc(canonicalArtist)
         val match=explicit.matchEntire(normalized) ?: return null
         val first=match.groupValues[1].trim()
         val second=match.groupValues[2].trim()
