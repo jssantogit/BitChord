@@ -368,6 +368,19 @@ fun DetailScreen(
     }
     val isArtist = page.type == BrowseType.ARTIST
     val isLocalArtist = isArtist && LocalGroups.isArtist(page.browseId)
+    // Only the explicitly legacy artist browse feed carries provider-ranked
+    // tracks today. MusicBrainz catalog results do not provide popularity;
+    // locally available recordings never constitute ranking evidence.
+    val legacyRankedArtistFeed = isArtist && !isLocalArtist &&
+        !page.browseId.startsWith("catalog:")
+    val artistVisibleSections = nativeArtistVisibleSections(
+        NativeArtistSectionEvidence(
+            context = if (isLocalArtist) NativeArtistContext.LIBRARY
+                else NativeArtistContext.ONLINE_CATALOG,
+            hasTracks = isArtist && songs.isNotEmpty(),
+            hasVerifiedPopularity = legacyRankedArtistFeed,
+        ),
+    )
     val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     var localArtistRecent by remember(page.browseId) { mutableStateOf<ShelfItem?>(null) }
     LaunchedEffect(page.browseId, rawSongs, page.sections) {
@@ -762,15 +775,19 @@ fun DetailScreen(
                             )
                         }
                     }
-                } else if (isArtist && state.data.isNotEmpty()) {
-                    // An artist's full song list would bury the album shelves, so
-                    // it pages sideways four at a time and stops at twenty.
+                } else if (isArtist && (
+                    NativeArtistSection.TRACKS in artistVisibleSections ||
+                        NativeArtistSection.TOP_TRACKS in artistVisibleSections
+                )) {
+                    // Exactly one track shelf. An online page can claim "Mais
+                    // tocadas" only with ranking evidence; Library always shows
+                    // "Faixas", never a fabricated popularity chart.
                     item {
                         val top = state.data.take(MAX_ARTIST_SONGS)
                         val isCurrentRow = playingRowMatcher(top, currentSong)
                         SectionHeading(
-                            title = if (isLocalArtist) "Faixas"
-                                else stringResource(R.string.top_songs),
+                            title = if (NativeArtistSection.TOP_TRACKS in artistVisibleSections)
+                                stringResource(R.string.top_songs) else "Faixas",
                             palette = palette,
                             horizontalPadding = ARTIST_CONTENT_GUTTER,
                         )
