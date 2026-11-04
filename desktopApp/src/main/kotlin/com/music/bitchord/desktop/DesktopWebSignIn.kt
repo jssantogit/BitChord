@@ -4,6 +4,7 @@ import java.net.CookieHandler
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
 import javafx.application.Platform
 import javafx.concurrent.Worker
 import javafx.geometry.Insets
@@ -46,7 +47,21 @@ internal object DesktopWebSignIn {
     }
 
     /** Whether a sign-in window can be shown at all: it needs the JavaFX toolkit. */
-    val available: Boolean get() = DesktopPoTokenWebView.available
+    val available: Boolean by lazy {
+        // Spotify's JavaFX sign-in needs only the toolkit, not the retired
+        // BotGuard/PoToken player component that previously initialized it.
+        runCatching {
+            val started = CountDownLatch(1)
+            try {
+                Platform.startup { started.countDown() }
+            } catch (_: IllegalStateException) {
+                started.countDown()
+            }
+            Platform.setImplicitExit(false)
+            started.await()
+            true
+        }.getOrDefault(false)
+    }
 
     /** The music.youtube.com `Cookie` header, once the listener confirms the profile. */
     suspend fun captureYouTube(): String = capture(Service.YOUTUBE_MUSIC)
