@@ -48,6 +48,7 @@ import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
@@ -161,7 +162,11 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenSmartPlaylist: (String) -> Unit,
     onOpenCanonicalNormalPlaylist: (String) -> Unit,
     onAddSongsToCanonicalNormalPlaylist: (String) -> Unit = onOpenCanonicalNormalPlaylist,
-    onOpenNormalPlaylist: (ShelfItem) -> Unit,
+    onLegacyPlay: (String, List<Song>, Int) -> Unit,
+    onLegacyShuffle: (String, List<Song>) -> Unit,
+    onLegacyQueue: (List<Song>) -> Unit,
+    onLegacySongMenu: (Song) -> Unit,
+    onLegacySongSwipe: (Song) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
     onSmartShuffle: (String) -> Unit,
@@ -253,10 +258,7 @@ internal fun UnifiedPlaylistLibraryShelf(
         if (smartLoaded && normalLoaded) {
             val resolved = cards.firstOrNull { it.id == requested }
             if (resolved != null) {
-                when (resolved) {
-                    is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(resolved.shelfItem)
-                    else -> onSelectedCardChange(resolved)
-                }
+                onSelectedCardChange(resolved)
             }
             onPinnedPlaylistRequestConsumed()
         }
@@ -362,11 +364,7 @@ internal fun UnifiedPlaylistLibraryShelf(
         }
         items(visible, key = { it.id }) { card ->
             val openCard: () -> Unit = {
-                when (card) {
-                    is LibraryPlaylistCard.Smart,
-                    is LibraryPlaylistCard.CanonicalNormal -> onSelectedCardChange(card)
-                    is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(card.shelfItem)
-                }
+                onSelectedCardChange(card)
             }
             UnifiedPlaylistCompactRow(
                 card = card,
@@ -451,10 +449,10 @@ internal fun UnifiedPlaylistLibraryShelf(
                         }
                     }
                 }) else null,
-                onOpen = if (selected is LibraryPlaylistCard.Normal) ({
-                    onOpenNormalPlaylist(selected.shelfItem)
+                onOpen = {
+                    onSelectedCardChange(selected)
                     optionsFor = null
-                }) else null,
+                },
             )
         }
     }
@@ -494,6 +492,11 @@ internal fun UnifiedPlaylistLibraryShelf(
                     is LibraryPlaylistCard.Normal -> Unit
                 }
             },
+            onLegacyPlay = onLegacyPlay,
+            onLegacyShuffle = onLegacyShuffle,
+            onLegacyQueue = onLegacyQueue,
+            onLegacySongMenu = onLegacySongMenu,
+            onLegacySongSwipe = onLegacySongSwipe,
             onTrackQueue = { recordingId, intent ->
                 when (selected) {
                     is LibraryPlaylistCard.Smart ->
