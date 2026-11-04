@@ -20,6 +20,11 @@ internal fun historicalTrackHistoryAction(id: String): HistoricalTrackHistoryAct
         id.startsWith("file://", ignoreCase = true)
     if (local) return HistoricalTrackHistoryAction.Local(id)
     return CanonicalRemotePlaybackUri.decode(id)
+        ?.takeIf { request ->
+            // This is the only credential-resolving remote transport currently
+            // implemented. Never resurrect a legacy provider from history.
+            request.providerKey.startsWith("opensubsonic:")
+        }
         ?.let(HistoricalTrackHistoryAction::Remote)
         ?: HistoricalTrackHistoryAction.Search
 }
