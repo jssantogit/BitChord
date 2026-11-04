@@ -1,5 +1,7 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.catalog.artistCreditFromSubtitle
+
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -140,7 +142,6 @@ import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.listentogether.partyQueueIndexOf
 import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.TrackLog
-import com.music.bitchord.data.innertube.InnertubeParser
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LikeStatus
@@ -1724,7 +1725,7 @@ private fun BitChordApp(
             Song(
                 videoId = videoId,
                 title = item.title,
-                artist = InnertubeParser.artistFromSubtitle(item.subtitle),
+                artist = artistCreditFromSubtitle(item.subtitle),
                 thumbnailUrl = item.thumbnailUrl,
             )
         }
@@ -3388,7 +3389,7 @@ private fun BitChordApp(
                                             Song(
                                                 videoId = videoId,
                                                 title = item.title,
-                                                artist = InnertubeParser.artistFromSubtitle(item.subtitle),
+                                                artist = artistCreditFromSubtitle(item.subtitle),
                                                 thumbnailUrl = item.thumbnailUrl,
                                             ),
                                             QueueSource(
