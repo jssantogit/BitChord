@@ -181,7 +181,7 @@ internal object A0CanonicalAlbumPolicy {
         // Blind NFKD + mark stripping destroys Indic vowel distinctions
         // (for example गीत vs गत). Fold accents on LATIN letters only,
         // preserving non-Latin canonical combining marks and script words.
-        val composed=Normalizer.normalize(value,Normalizer.Form.NFC)
+        val composed=A0CjkOrthography.widthOnlyNfc(value)
         val latinMarks=Regex("\\p{M}+")
         val folded=buildString(composed.length) {
             for(ch in composed) {
