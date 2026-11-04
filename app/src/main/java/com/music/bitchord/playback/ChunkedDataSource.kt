@@ -10,7 +10,6 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
 import com.music.bitchord.data.innertube.PlayerClient
-import com.music.bitchord.data.innertube.StreamResolver
 import java.io.InterruptedIOException
 
 /**
@@ -137,16 +136,10 @@ class ChunkedDataSource(
         chunkOpen = true
     }
 
-    /**
-     * Hands a refusal back to whoever minted the URL that was refused.
-     *
-     * [StreamResolver] sorts out whether the URL was one of its own — see
-     * [StreamResolver.onPlaybackRefused]. Anything that isn't a refusal, or
-     * isn't from a client it models, costs nothing here.
-     */
+    /** Provider-neutral refusal diagnostics without invoking retired client state. */
     private fun report(spec: DataSpec, e: Exception) {
         if (e is HttpDataSource.InvalidResponseCodeException) {
-            StreamResolver.onPlaybackRefused(spec.uri.toString(), e.responseCode)
+            TrackLog.w(TAG, "HTTP ${e.responseCode} for ${spec.uri.host ?: "unknown host"}")
         }
     }
 
