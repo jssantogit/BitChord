@@ -106,7 +106,6 @@ import com.music.bitchord.data.listentogether.partyUpcomingAfter
 import com.music.bitchord.R
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.innertube.InnertubeParser
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.lyrics.EmbeddedLyrics
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsRepository
@@ -2417,57 +2416,15 @@ class PlaybackService : MediaLibraryService() {
         QueueShuffle.clearCanonicalContext()
     }
 
-    /** Follows the continuation independently of the detail-page lifecycle. */
-    private fun startBoundedContinuationLoading(contextToken: String) {
+    /**
+     * A persisted historical continuation token has no surviving provider.
+     * Release the handoff without contacting the retired YouTube endpoint.
+     * The queue entries already restored remain intact and in their order.
+     */
+    private fun startBoundedContinuationLoading(@Suppress("UNUSED_PARAMETER") contextToken: String) {
         boundedContinuationJob?.cancel()
-        boundedContinuationJob = scope.launch {
-            // A continuation token from a historical YouTube page cannot be
-            // revalidated through a surviving provider-owned MediaAsset.
-            // Release its handoff instead of retrying the retired endpoint.
-            if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
-                boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
-                return@launch
-            }
-            var failures = 0
-            while (isActive && boundedContextToken == contextToken) {
-                if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
-                    boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
-                    return@launch
-                }
-                val request = boundedContextRegistry.claimContinuation(contextToken) ?: return@launch
-                val page = withContext(Dispatchers.IO) {
-                    YtMusicRepository.moreSongs(request.continuationToken).getOrNull()
-                }
-                if (page == null) {
-                    // fail() leaves the token claimable. A single dropped
-                    // request used to end loading for good, leaving both the
-                    // queue and the page cut short; retry with backoff, then
-                    // hand the walk back to the detail page.
-                    boundedContextRegistry.fail(request)
-                    if (++failures > BOUNDED_CONTINUATION_RETRIES_MS.size) {
-                        boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
-                        return@launch
-                    }
-                    delay(BOUNDED_CONTINUATION_RETRIES_MS[failures - 1])
-                    continue
-                }
-                failures = 0
-                val source = boundedContextSource
-                val songs = page.songs.map { song ->
-                    if (source == null) song else song.copy(
-                        queueTier = QueueTier.CONTEXT,
-                        playbackSource = source.title,
-                        playbackSourceType = source.type,
-                        playbackSourceId = source.id,
-                    )
-                }
-                val result = boundedContextRegistry.complete(
-                    request,
-                    ContinuationPage(songs = songs, continuationToken = page.continuation),
-                )
-                if (result.status != ContinuationResultStatus.COMPLETED) return@launch
-            }
-        }
+        boundedContinuationJob = null
+        boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
     }
 
     private fun scheduleBoundedContextTopUp() {
