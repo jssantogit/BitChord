@@ -19,7 +19,6 @@ import androidx.media3.datasource.cache.ContentMetadata
 import androidx.media3.datasource.cache.ContentMetadataMutations
 import androidx.media3.datasource.cache.SimpleCache
 import java.io.IOException
-import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.DeviceCodecs
@@ -914,55 +913,6 @@ object AudioCache {
      * ahead and the player now owns this track — so there is no point hammering
      * it. A few spaced retries cover the hand-over, and then it is left alone.
      */
-    private suspend fun fetchWhole(videoId: String) {
-        repeat(MAX_ATTEMPTS) {
-            // The race this retry loop exists to cover is the *queue's own*:
-            // cancelling [job] tells a blocking network read to stop, but that
-            // takes until its next checkpoint, not instantly — so the walk
-            // that lost the entry to the player can still be a retry or two
-            // into asking for it again by the time [prefetchQueue] has moved
-            // this track's job on to a different one. Re-checking here is
-            // what makes that overlap cost one interrupted read instead of
-            // up to four full ones: once this videoId is no longer the track
-            // [pendingQueue] actually wants read ahead, every further attempt
-            // is spent on a track something else now owns, and asking again
-            // in five seconds would only be wrong for longer.
-            if (pendingQueue.firstOrNull() != videoId) {
-                TrackLog.d(TAG, "$videoId is no longer the read-ahead target; stopping", about = videoId)
-                return
-            }
-            if (cacheWholeOnce(videoId)) return
-            delay(RETRY_DELAY_MS)
-        }
-        TrackLog.d(TAG, "stopped short of caching $videoId in full", about = videoId)
-    }
-
-    /** @return true once every range of [videoId] is on disk. */
-    private suspend fun cacheWholeOnce(videoId: String): Boolean {
-        val total = runCatching { StreamResolver.contentLength(videoId) }.getOrNull()
-            ?: return false
-
-        var position = 0L
-        while (position < total) {
-            // Checked per chunk, not just once per pass: a track long enough
-            // to need several chunks can lose the race partway through one,
-            // and a queue change mid-pass is exactly the "the player has it
-            // now" case the guard in [fetchWhole] exists for.
-            if (pendingQueue.firstOrNull() != videoId) return false
-            val length = minOf(CHUNK_BYTES, total - position)
-            if (cache.getCachedBytes(videoId, position, length) < length) {
-                fetch(videoId, position, length)
-                // Written nowhere means the entry is held elsewhere; the rest
-                // of this pass would be just as wasted. See [fetch] for why
-                // this can be true even though the fetch just above returned
-                // without error.
-                if (cache.getCachedBytes(videoId, position, length) < length) return false
-            }
-            position += length
-        }
-        return true
-    }
-
     /**
      * Pulls [length] bytes of whatever [uri] names into the cache, under [uri]'s
      * own key rather than the plain videoId.
@@ -1203,104 +1153,8 @@ object AudioCache {
         )
     }
 
-    fun requestAnalysisHead(uri: Uri) {
-        // Legacy AutoMix alignment may otherwise call StreamResolver directly,
-        // outside the Media3 policy gate. Existing cached bytes remain intact,
-        // but no new YouTube request may start during backend retirement.
-        if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) return
-        // Each of these gates used to stop a head dead with nothing in the
-        // log to show for it: an unwired cache or upstream looked from the
-        // outside exactly like a network that refuses everything.
-        if (!::cache.isInitialized) {
-            TrackLog.w(TAG, "analysis head for $uri not started: cache is not initialised")
-            return
-        }
-        if (upstreamFactory == null) {
-            TrackLog.w(TAG, "analysis head for $uri not started: no upstream yet")
-            return
-        }
-        val videoId = uri.getQueryParameter("v") ?: return
-        // One round per track per session, and it is sized correctly up front
-        // rather than grown into. See [analysisHeadSize] for why growing it was
-        // the wrong shape.
-        if (analysisHeads.putIfAbsent(videoId, true) != null) return
-        // Checked before the round is claimed, so the playback thread pays a set
-        // lookup per tick rather than queueing coroutines four times a second on
-        // top of a fetch that is still running.
-        if (!analysisHeadsInFlight.add(videoId)) return
-        scope.launch {
-            try {
-                // An already scheduled analysis job must not race a provider
-                // policy change into a direct youtubei request.
-                if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
-                    return@launch
-                }
-                val total = runCatching { StreamResolver.contentLength(videoId) }
-                    .onFailure {
-                        TrackLog.w(TAG, "contentLength failed for $videoId: ${it.message}", videoId)
-                    }
-                    .getOrNull() ?: 0L
-                val want = analysisHeadSize(total)
-                analysisHeadWant[videoId] = want
-                TrackLog.w(
-                    TAG,
-                    "analysis head round for $videoId: total=$total want=$want " +
-                        "held=${alignmentPrefixBytes(videoId)}",
-                    videoId,
-                )
-                if (!clearPartialHead(videoId, want)) {
-                    TrackLog.w(TAG, "analysis head round for $videoId skipped: partial is held elsewhere", videoId)
-                    return@launch
-                }
-                fetch(
-                    cacheKey = videoId,
-                    // Do not inherit a JioSaavn/lossless StreamChoice from
-                    // playback. The base key is reserved for the lightweight
-                    // YouTube Opus copy used by Automix analysis.
-                    uri = Uri.parse(AutomixAnalysisSource.opusUri(videoId)),
-                    position = 0,
-                    length = want,
-                    pinKey = true,
-                )
-                if (alignmentPrefixBytes(videoId) < MIN_ALIGNMENT_PREFIX_BYTES) {
-                    // The plain Opus copy would not come: on the networks where
-                    // its googlevideo resolve fails it never does, while
-                    // playback of the very same track is unbothered because it
-                    // reads whichever source the substitution chose — which is
-                    // also exactly what the direction that *works* measures
-                    // against. So when the pinned copy comes up short, pull
-                    // that copy instead: alignment opens the fullest copy on
-                    // disk anyway, and a failed head here otherwise costs the
-                    // whole switch its smart align while the swap goes ahead
-                    // regardless.
-                    pull(
-                        videoId,
-                        Uri.parse("bitchord://watch?v=$videoId"),
-                        0,
-                        want,
-                        /* pinKey = */ false,
-                    )
-                }
-                if (total > 0) recordContentLength(videoId, total)
-                val held = alignmentPrefixBytes(videoId)
-                if (held < MIN_ALIGNMENT_PREFIX_BYTES) {
-                    // The one line that says *this* fetch failed, as opposed to
-                    // the read-ahead chatter around it: every cause below
-                    // already logs its own message at debug, but nothing said
-                    // where a round ended or what it had to work with.
-                    TrackLog.w(
-                        TAG,
-                        "analysis head for $videoId came up short: " +
-                            "held=$held want=$want total=$total " +
-                            "(cause in the read-ahead lines around this one)",
-                        videoId,
-                    )
-                }
-            } finally {
-                analysisHeadsInFlight.remove(videoId)
-            }
-        }
-    }
+    /** Archived video identifiers cannot initiate a second audio fetch. */
+    fun requestAnalysisHead(@Suppress("UNUSED_PARAMETER") uri: Uri) = Unit
 
     /**
      * How much of a track to pull for the analyzer, decided once from its real
