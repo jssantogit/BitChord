@@ -354,7 +354,9 @@ object SourceRegistry {
         // the instance it already had, rather than being replaced by an
         // identical-but-cold one every time an unrelated row is toggled.
         val previous = instances
-        instances = next.associate { config ->
+        // Keep retired YouTube configs readable, but never instantiate a
+        // YouTubeSource that a direct call could still use for network IO.
+        instances = next.filterNot { it.kind == SourceKind.YOUTUBE }.associate { config ->
             val existing = previous[config.id]?.takeIf { it.configuredBy(config) }
             config.id to (existing ?: build(config))
         }
