@@ -2410,22 +2410,11 @@ private fun BitChordApp(
     // mini player still costs nothing.
     val playerShowing = showNowPlaying
     var links by remember { mutableStateOf<Song?>(null) }
-    LaunchedEffect(
-        player.song?.videoId, playerShowing, usesCanonicalDiscovery, discoverySourceConfigs,
-    ) {
+    // No page-link enrichment is requested from the retired YouTube backend.
+    // Existing canonical IDs on the queued Song remain authoritative; a
+    // historical video ID alone cannot establish an artist or album identity.
+    LaunchedEffect(player.song?.videoId, playerShowing) {
         links = null
-        linksLoading = false
-        if (!playerShowing ||
-            !shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)
-        ) return@LaunchedEffect
-        val current = player.song ?: return@LaunchedEffect
-        if (current.albumId != null && current.artistId != null) return@LaunchedEffect
-        linksLoading = true
-        val resolved = YtMusicRepository.trackLinks(current.videoId).getOrNull()
-        // Ignore even an uncancellable legacy network response after opt-out.
-        if (shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)) {
-            links = resolved
-        }
         linksLoading = false
     }
     val playerSong = player.song?.let { current ->
