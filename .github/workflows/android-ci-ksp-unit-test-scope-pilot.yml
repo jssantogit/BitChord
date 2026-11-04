@@ -1,0 +1,111 @@
+name: Android Room KSP Test-Scope Pilot
+
+# Draft-only and non-required: no change to protected Android CI or release.
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/android-ci-ksp-unit-test-scope-pilot.yml'
+      - 'tests/test_ci_ksp_test_scope_pilot.py'
+      - 'build.gradle.kts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ksp-test-scope-pilot-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compare:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'infra/android-ci-ksp-unit-test-scope-pilot-v0'
+    name: Android Room KSP scope · ${{ matrix.mode }} (non-required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [global_room, dev_main_only_room]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Gradle with read-only shared cache
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+
+      - name: Non-secret local build properties
+        run: |
+          printf '%s\n' 'LASTFM_API_KEY=ci-placeholder' 'LASTFM_SECRET=ci-placeholder' > local.properties
+          chmod +x gradlew
+
+      - name: Verify pilot guard and required check contract
+        run: python3 -m unittest discover -s tests -p test_ci_ksp_test_scope_pilot.py -v
+
+      - name: Execute full Android tests before and after ABI-neutral Room DAO edit
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          case "$MODE" in
+            global_room) flags=() ;;
+            dev_main_only_room) flags=(-Pbitchord.roomProcessorMainOnlyPilot=true) ;;
+            *) echo 'Unexpected Room KSP comparison mode'; exit 2 ;;
+          esac
+          run_full() {
+            ./gradlew --build-cache --console=plain "${flags[@]}" -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+          }
+
+          source='app/src/main/java/com/music/bitchord/data/catalog/CanonicalCatalogDao.kt'
+          test -f "$source"
+          git diff --quiet HEAD -- "$source"
+          trap 'git restore -- "$source"' EXIT
+
+          initial_start=$SECONDS
+          run_full 2>&1 | tee "$RUNNER_TEMP/room-ksp-initial.log"
+          initial_seconds=$((SECONDS - initial_start))
+
+          printf '\n// BitChord ephemeral Room KSP scope probe; no runtime behavior change.\n' >> "$source"
+          if git diff --quiet HEAD -- "$source"; then
+            echo 'KSP source perturbation was not detected'; exit 2
+          fi
+
+          changed_start=$SECONDS
+          run_full 2>&1 | tee "$RUNNER_TEMP/room-ksp-changed.log"
+          changed_seconds=$((SECONDS - changed_start))
+
+          python3 - "$RUNNER_TEMP/room-ksp-changed.log" "$MODE" <<'PY'
+          import pathlib
+          import re
+          import sys
+          log = pathlib.Path(sys.argv[1]).read_text(errors="replace")
+          mode = sys.argv[2]
+          task = "kspDevDebugUnitTestKotlin"
+          matches = re.findall(r"^> Task :app:kspDevDebugUnitTestKotlin(?: (FROM-CACHE|UP-TO-DATE|SKIPPED|NO-SOURCE))?$", log, re.M)
+          if not matches:
+              state = "absent"
+          elif len(matches) == 1:
+              state = matches[0].lower().replace("-", "_") if matches[0] else "executed"
+          else:
+              state = "ambiguous"
+          print(f"ROOM_KSP_SCOPE_EVIDENCE mode={mode} test_ksp_state={state}")
+          PY
+
+          echo "ROOM_KSP_SCOPE_PILOT mode=$MODE initial_seconds=$initial_seconds source_change_seconds=$changed_seconds"
+          {
+            echo '### Room KSP processing configuration pilot'
+            echo "Mode: $MODE"
+            echo "Initial full suite: ${initial_seconds}s"
+            echo "Full suite after temporary Room DAO comment edit: ${changed_seconds}s"
+            echo 'No test, KSP task, Room schema or build step was disabled by the experiment.'
+            echo 'Full result requires both matrix variants GREEN plus comparable KSP task evidence.'
+            echo 'Do not infer a production speedup from one warm-run pair.'
+          } >> "$GITHUB_STEP_SUMMARY"
