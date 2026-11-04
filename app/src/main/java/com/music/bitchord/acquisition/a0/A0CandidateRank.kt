@@ -106,14 +106,26 @@ internal object A0CandidateRank {
         expectedAlbum:String?=null,
     ):Ranking {
         val parts=searchPhrase.orEmpty().split(Regex("\\s+[-–—]\\s+"),limit=2)
-        val titleSequence=tokens(if(parts.size==2)parts[1] else searchPhrase.orEmpty())
+        val canonicalTitle=if(parts.size==2)parts[1] else searchPhrase.orEmpty()
+        val canonicalTitleTokens=tokens(canonicalTitle)
         val artistSequence=if(parts.size==2) tokens(parts[0]) else emptyList()
-        val titleWords=titleSequence.distinct()
         val artistWords=artistSequence.distinct()
         val stem=name.substringBeforeLast('.',name)
         val fileTokens=tokens(stem)
         val fileWords=fileTokens.toSet()
         val stemParts=stem.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        // An explicitly bilingual CJK title can be credited by its COMPLETE
+        // parenthesized Latin variant. Never infer a translation from a peer:
+        // only the canonical title supplies this alias. A prefixed artist
+        // segment or track number is permitted, but arbitrary appended
+        // words/mixes or a title substring cannot satisfy the exception.
+        val aliasTokens=A0CjkTitleAliases.latinAlias(canonicalTitle)
+            ?.let(::tokens).orEmpty()
+        val titleSegment=if(stemParts.size==2)stemParts[1] else stem
+        val aliasMatchesExactly=aliasTokens.isNotEmpty() &&
+            tokens(titleSegment).dropWhile { it.all(Char::isDigit) }==aliasTokens
+        val titleSequence=if(aliasMatchesExactly)aliasTokens else canonicalTitleTokens
+        val titleWords=titleSequence.distinct()
         val parentSegments=remotePath.orEmpty().replace('\\','/')
             .split('/').dropLast(1)
         val folderWords=parentSegments.flatMap(::tokens).toSet()
