@@ -104,6 +104,8 @@ class A0BilingualArtistCreditTest {
         assertNull(A0ArtistCreditAliases.latinAlias("BTS (방탄소년단) feat Halsey"))
         assertNull(A0ArtistCreditAliases.latinAlias("BTS (방탄소년단 / 다른)"))
         assertEquals("BTS",A0ArtistCreditAliases.latinAlias("BTS (방탄소년단)"))
+        assertEquals("BTS",A0ArtistCreditAliases.latinAlias("BTS（방탄소년단）"))
+        assertEquals("BTS",A0ArtistCreditAliases.latinAlias("방탄소년단（BTS）"))
         assertEquals("BTS",A0ArtistCreditAliases.latinAlias("방탄소년단 (BTS)"))
     }
 }
