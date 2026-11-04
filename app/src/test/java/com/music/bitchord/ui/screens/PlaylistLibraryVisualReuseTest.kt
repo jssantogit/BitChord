@@ -41,6 +41,42 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistLibraryVisualReuseTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun playlistHighlightRequiresExactVerifiedRecordingId() {
+        assertEquals(
+            true, isVerifiedCanonicalPlaylistCurrentTrack(
+                "recording:known", "recording:known",
+            ),
+        )
+        assertEquals(
+            false, isVerifiedCanonicalPlaylistCurrentTrack(
+                "recording:known", "recording:other",
+            ),
+        )
+        assertEquals(
+            false, isVerifiedCanonicalPlaylistCurrentTrack(
+                "recording:known", null,
+            ),
+        )
+        assertEquals(false, isVerifiedCanonicalPlaylistCurrentTrack("", "recording:known"))
+    }
+
+    @Test fun activeCanonicalPlaylistRowShowsNativePlaybackHighlight() {
+        compose.setContent {
+            CanonicalPlaylistTrackRow(
+                track = V2DisplayRow(
+                    id = "recording:active",
+                    title = "Current Playlist Track",
+                    artist = "Artist",
+                ),
+                onPlay = {},
+                isCurrent = true,
+                isPlaying = true,
+            )
+        }
+        compose.onNodeWithTag("canonical-playlist-current-track").assertExists()
+        compose.onNodeWithText("Current Playlist Track").assertExists()
+    }
+
     @Test fun playlistSwipeIntentHonorsPlayerSettingWithoutConvertingRecordingIds() {
         assertEquals(
             com.music.bitchord.playback.CanonicalCollectionIntent.ADD_NEXT,

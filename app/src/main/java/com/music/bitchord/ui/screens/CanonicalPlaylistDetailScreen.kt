@@ -67,6 +67,7 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeDetailTrackSwipeContainer
+import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
@@ -233,6 +234,10 @@ internal fun CanonicalPlaylistTrackRow(
     onQueue: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
     subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    rowBackground: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.background,
+    activeTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    isCurrent: Boolean = false,
+    isPlaying: Boolean = false,
 ) {
     var menuExpanded by remember(track.id) { mutableStateOf(false) }
     val available = track.isAvailablePlaylistMember()
@@ -248,10 +253,16 @@ internal fun CanonicalPlaylistTrackRow(
     } else null
     NativeDetailTrackSwipeContainer(
         onSwipeToQueue = onSwipeToQueue,
-        rowBackground = titleColor.copy(alpha = 0f),
+        // The row must mask the queue reveal on an artwork-tinted page.
+        rowBackground = rowBackground,
     ) { rowModifier ->
     NativeDetailTrackRowFrame(
-        modifier = rowModifier,
+        modifier = rowModifier.then(
+            if (isCurrent) Modifier.testTag("canonical-playlist-current-track")
+            else Modifier,
+        ),
+        background = if (isCurrent) activeTint.copy(alpha = 0.14f)
+            else androidx.compose.ui.graphics.Color.Transparent,
         onClick = if (available) ({ onPlay(track.id) }) else null,
         onLongPress = if (available) ({ menuExpanded = true }) else null,
         onMore = if (available) ({ menuExpanded = true }) else null,
@@ -263,13 +274,16 @@ internal fun CanonicalPlaylistTrackRow(
             SmartPlaylistPreviewArtwork(
                 row = track, modifier = Modifier.fillMaxSize(),
             )
+            if (isCurrent && isPlaying) {
+                SearchPlayingBars(Modifier.align(Alignment.Center))
+            }
         }
         Spacer(Modifier.width(14.dp))
         NativeTrackRowText(
             title = {
                 Text(
                     track.title, style = MaterialTheme.typography.titleMedium,
-                    color = titleColor, maxLines = 1,
+                    color = if (isCurrent) activeTint else titleColor, maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             },
@@ -311,6 +325,13 @@ internal fun CanonicalPlaylistTrackRow(
     }
     }
 }
+
+/** The caller supplies only a verified canonical RecordingId, never a title or video ID. */
+internal fun isVerifiedCanonicalPlaylistCurrentTrack(
+    recordingId: String,
+    currentCanonicalRecordingId: String?,
+): Boolean = recordingId.isNotBlank() && currentCanonicalRecordingId != null &&
+    recordingId == currentCanonicalRecordingId
 
 /** The exact same queue intent selected by the shared SongRow swipe setting. */
 internal fun canonicalPlaylistSwipeIntent(playNext: Boolean): CanonicalCollectionIntent =
@@ -385,6 +406,8 @@ internal fun CanonicalPlaylistDetailScreen(
     onRowsReady: (List<V2DisplayRow>?) -> Unit = {},
     sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     listState: LazyListState? = null,
+    currentCanonicalRecordingId: String? = null,
+    isPlaying: Boolean = false,
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
@@ -672,6 +695,12 @@ internal fun CanonicalPlaylistDetailScreen(
                 onQueue = onTrackQueue,
                 titleColor = palette.onBackground,
                 subtitleColor = palette.onBackgroundVariant,
+                rowBackground = palette.background,
+                activeTint = palette.accent,
+                isCurrent = isVerifiedCanonicalPlaylistCurrentTrack(
+                    track.id, currentCanonicalRecordingId,
+                ),
+                isPlaying = isPlaying,
             )
             HorizontalDivider(
                 modifier = Modifier.padding(start = 80.dp),

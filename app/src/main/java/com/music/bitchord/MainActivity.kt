@@ -3120,6 +3120,11 @@ private fun BitChordApp(
                             onDetailRowsReady = { playlistDetailRows = it },
                             detailSort = playlistDetailSort,
                             onPlaylistCountChange = { playlistLibraryCount = it },
+                            // Never match title, legacy videoId or source alone.
+                            currentCanonicalRecordingId =
+                                com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity
+                                    .fromSong(player.song)?.recordingId,
+                            isPlaying = player.isPlaying,
                         )
                     } else if (key == "unified_library") {
                         com.music.bitchord.ui.screens.CanonicalRemoteLibraryScreen(

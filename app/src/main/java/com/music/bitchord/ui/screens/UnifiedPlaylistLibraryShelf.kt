@@ -189,6 +189,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     onDetailRowsReady: (List<V2DisplayRow>?) -> Unit = {},
     detailSort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     onPlaylistCountChange: (Int) -> Unit = {},
+    currentCanonicalRecordingId: String? = null,
+    isPlaying: Boolean = false,
 ) {
     val context = LocalContext.current.applicationContext
     val playlistPinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
@@ -521,6 +523,8 @@ internal fun UnifiedPlaylistLibraryShelf(
             onRowsReady = onDetailRowsReady,
             sort = detailSort,
             listState = detailListState,
+            currentCanonicalRecordingId = currentCanonicalRecordingId,
+            isPlaying = isPlaying,
         )
     }
 }
