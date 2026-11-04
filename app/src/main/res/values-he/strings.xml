@@ -1295,6 +1295,7 @@
     <string name="spotify_import_none">אף אחד מהשירים הללו לא נמצא ב-YouTube Music.</string>
     <string name="spotify_import_title">ייבוא פלייליסט מ-Spotify</string>
     <string name="spotify_import_unmatched">%1$d שירים לא נמצאו ב-YouTube Music</string>
+    <string name="spotify_import_metadata_only">רשימת ההשמעה נשמרה עם %1$d רצועות כנתוני מטא בלבד. לא שויך שמע ללא התאמה מאומתת.</string>
     <string name="spotify_library_subtitle">הפלייליסטים שלכם ב-Spotify</string>
     <string name="spotify_sign_in">התחברות עם Spotify</string>
     <string name="spotify_use_spdc_token">שימוש באסימון sp_dc</string>
