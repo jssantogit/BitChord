@@ -295,9 +295,9 @@ internal class HistoricalMediaAssetUnavailable(message: String) : java.io.IOExce
 internal fun historicalMediaUnavailableCause(error: Throwable?): HistoricalMediaAssetUnavailable? {
     var cause = error
     repeat(8) {
-        if (cause is HistoricalMediaAssetUnavailable) return cause
-        cause = cause?.cause?.takeIf { it !== cause }
-        if (cause == null) return null
+        val current = cause ?: return null
+        if (current is HistoricalMediaAssetUnavailable) return current
+        cause = current.cause?.takeIf { it !== current }
     }
     return null
 }
