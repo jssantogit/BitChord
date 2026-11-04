@@ -865,6 +865,34 @@ fun DetailScreen(
                 }
             }
 
+            if (page.type == BrowseType.ALBUM) {
+                item(key = "album-metadata-footer") {
+                    val year = page.subtitle.split("•", "·")
+                        .map(String::trim).firstOrNull {
+                            it.length == 4 && it.all(Char::isDigit)
+                        }
+                    val total = if (songs.isNotEmpty() && songs.all {
+                        it.durationMillis() > 0L
+                    }) songs.sumOf { it.durationMillis() }
+                    else if (canonicalTracks.isNotEmpty() && canonicalTracks.all {
+                        (it.durationMs ?: 0L) > 0L
+                    }) canonicalTracks.sumOf { it.durationMs ?: 0L }
+                    else null
+                    val minutes = total?.let { ((it + 30_000L) / 60_000L).coerceAtLeast(1L) }
+                    val count = if (songs.isNotEmpty()) songs.size else canonicalTracks.size
+                    val summary = count.takeIf { it > 0 }?.let {
+                        "$it ${if (it == 1) "música" else "músicas"}" +
+                            (minutes?.let { min ->
+                                ", $min ${if (min == 1L) "minuto" else "minutos"}"
+                            } ?: "")
+                    }
+                    NativeAlbumMetadataFooter(
+                        metadata = CanonicalAlbumFooterMetadata(year, summary),
+                        palette = palette,
+                    )
+                }
+            }
+
             // Tracks YouTube offers to round the playlist out, never folded
             // into the list above — see [DetailPage.suggestedSongs].
             if (suggested.isNotEmpty()) {
@@ -996,7 +1024,7 @@ private fun ReleaseHeader(
         if (songs.isNotEmpty()) songs.size else canonicalTracks.size,
         if (songs.isNotEmpty()) songs.playtime() else canonicalTime,
     )
-    val meta = metaOverride ?: originalMeta
+    val meta = if (page.type == BrowseType.ALBUM) "" else metaOverride ?: originalMeta
     // Every row on a release carries the same credit — see [pageCredit] — so
     // the first one speaks for the whole page, the same source the rows'
     // own long-press "Open artist" already reads from.
