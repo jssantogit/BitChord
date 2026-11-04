@@ -6008,34 +6008,11 @@ class PlaybackService : MediaLibraryService() {
             )
         }
 
-        val next = upcomingSongs.firstOrNull()
-        if (!preferAudio || next?.isVideo != true) {
-            preferredPrefetchJob = null
-            warm(upcomingSongs)
-            return
-        }
-
-        // Do not warm the video's bytes while its catalogue lookup is in
-        // flight: if that lookup succeeds, playback will ask for a different
-        // media id and every byte spent on the video would be wasted. An
-        // unchanged result is the fallback and is warmed on the same path.
-        AudioCache.cancel()
-        preferredPrefetchJob = scope.launch {
-            if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
-                return@launch
-            }
-            val preferred = runCatching { YtMusicRepository.resolveAudio(next) }
-                .onFailure {
-                    TrackLog.d(
-                        "BitChord",
-                        "music-only queue warm-up fell back to video: ${it.message}",
-                        about = next.videoId,
-                    )
-                }
-                .getOrDefault(next)
-            if (preferredPrefetchRequest != request) return@launch
-            warm(listOf(preferred) + upcomingSongs.drop(1))
-        }
+        // The old music-only prefetch queried YouTube for a substitute video.
+        // It is retired: read-ahead may warm only already-resolved queue items.
+        // Historical video rows have no authorized asset and are not warmed.
+        preferredPrefetchJob = null
+        warm(upcomingSongs.filterNot { it.isVideo })
     }
 
     /** Stops both rendition selection and byte read-ahead, and makes resume retry. */
