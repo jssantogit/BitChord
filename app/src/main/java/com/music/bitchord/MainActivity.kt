@@ -1795,41 +1795,11 @@ private fun BitChordApp(
             viewModel.openDetail(browseId, name, credit, artwork, type)
             return
         }
-        // Name-only Replay navigation must not silently restart InnerTube
-        // discovery when independent catalog mode has been selected.
-        if (!shouldRunLegacyYoutubeVersionLookup(usesCanonicalDiscovery, discoverySourceConfigs)) {
-            selectedTab = TAB_SEARCH
-            viewModel.setSearchSource(SearchSource.CANONICAL)
-            viewModel.searchFor(listOfNotNull(name, subtitle).joinToString(" "))
-            return
-        }
-        scope.launch {
-            val filter = if (type == BrowseType.ARTIST) {
-                SearchFilter.ARTISTS
-            } else {
-                SearchFilter.ALBUMS
-            }
-            val query = listOfNotNull(name, subtitle).joinToString(" ")
-            val hit = YtMusicRepository.search(query, filter).getOrNull()
-                ?.filterIsInstance<SearchResult.Browse>()
-                ?.firstOrNull()
-                ?.item
-            if (hit == null) {
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.couldnt_find, name),
-                    Toast.LENGTH_SHORT,
-                ).show()
-            } else {
-                viewModel.openDetail(
-                    hit.browseId,
-                    hit.title,
-                    hit.subtitle,
-                    hit.thumbnailUrl ?: artwork,
-                    hit.type,
-                )
-            }
-        }
+        // Unknown legacy browse identity is metadata, not authority to
+        // re-discover a YouTube page. Offer canonical catalog search instead.
+        selectedTab = TAB_SEARCH
+        viewModel.setSearchSource(SearchSource.CANONICAL)
+        viewModel.searchFor(listOfNotNull(name, subtitle).joinToString(" "))
     }
 
     /**
