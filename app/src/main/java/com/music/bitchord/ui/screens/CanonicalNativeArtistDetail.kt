@@ -108,6 +108,7 @@ internal fun CanonicalNativeArtistDetail(
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
     onReleaseOptions: (ReleaseEntity) -> Unit,
     onRateArtist: (() -> Unit)? = null,
+    onRateRelease: ((ReleaseEntity) -> Unit)? = null,
     selectedItems: List<CanonicalLibrarySelection>,
     onToggleSelection: (CanonicalLibrarySelection) -> Unit,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
@@ -266,6 +267,16 @@ internal fun CanonicalNativeArtistDetail(
                 it.artistDisplay.contains(query, ignoreCase = true)
         }
         val trustedEvidence = nativeReleases.evidence[selectedAlbum.id]
+        val albumRating by produceState<Double?>(initialValue = null, key1 = selectedAlbum.id) {
+            ListeningEventDatabase.get(context).canonicalEntityRatingDao()
+                .observe("ALBUM", selectedAlbum.id).collectLatest { saved ->
+                    value = saved?.ratingValue?.takeIf(::isValidCanonicalEntityRating)
+                }
+        }
+        val albumQuality = canonicalAlbumSourceQuality(albumRunningOrder, selectedSourceKey)
+        val albumFooter = canonicalAlbumFooterMetadata(
+            trustedEvidence?.firstReleaseDate, albumRunningOrder,
+        )
         val releasePalette = rememberArtworkPalette(
             imageUrl = canonicalNativeReleasePaletteUri(
                 nativeReleases.artwork[selectedAlbum.id]?.artworkUri,
@@ -281,9 +292,10 @@ internal fun CanonicalNativeArtistDetail(
                             selectedAlbum.title, trustedEvidence?.primaryType,
                         ),
                         credit = selectedAlbum.artistDisplay.orEmpty(),
-                        meta = canonicalAlbumDetailMeta(
-                            trustedEvidence?.primaryType, trustedEvidence?.firstReleaseDate, albumTracks,
-                        ),
+                        meta = "",
+                        rating = albumRating,
+                        quality = albumQuality,
+                        onRate = onRateRelease?.let { editor -> { editor(selectedAlbum) } },
                         palette = releasePalette,
                         sleeveSize = sleeve,
                         artwork = {
@@ -351,6 +363,12 @@ internal fun CanonicalNativeArtistDetail(
                         modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
                         color = releasePalette.divider,
+                    )
+                }
+                item(key = "artist-nested-album-footer") {
+                    NativeAlbumMetadataFooter(
+                        metadata = albumFooter,
+                        palette = releasePalette,
                     )
                 }
             }
