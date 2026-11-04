@@ -109,4 +109,25 @@ class A0CjkTextMatchingTest {
         assertEquals(listOf(setOf("상남자","boy","in","luv"),setOf("boy","in","luv")),
             A0ReleaseDiscoveryShadowAdapter.titleOptions(target))
     }
+
+    @Test fun realReleaseCollectorPreservesCjkTitleUsingExactCanonicalAlias() {
+        val target="BTS - 상남자 (Boy In Luv)"
+        val collector=A0ObservedCandidateHandoff(
+            java.net.Socket(),"local",81,true,searchPhrase=target,
+            requestedAlbum="Proof",collectReleaseShadow=true,
+            collectManualCandidates=false,releaseQueries=listOf(target)
+        )
+        val response=A0SoulseekSearchResponse(
+            "remote",81,listOf(A0SoulseekSearchFile(
+                "Shared\\Proof\\BTS - Boy In Luv.flac",
+                29_000_000L,"flac",mapOf(1 to 240,4 to 44100,5 to 16)
+            )),emptyList(),true,128_000,0
+        )
+        assertTrue(collector.offerParsed(response,"remote"))
+        assertEquals(1,collector.ticketScreening(81).titleMatched)
+        assertEquals(1,collector.ticketScreening(81).shadowInserted)
+        val choices=collector.releaseShadowChoices()
+        assertEquals(1,choices.size)
+        assertEquals(A0CandidateRank.Match.ALL_TERMS,choices.single().matchSignal)
+    }
 }
