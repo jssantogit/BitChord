@@ -765,14 +765,11 @@ fun DetailScreen(
                     item {
                         val top = state.data.take(MAX_ARTIST_SONGS)
                         val isCurrentRow = playingRowMatcher(top, currentSong)
-                        SectionHeading(
+                        NativeArtistTracksShelf(
                             title = if (NativeArtistSection.TOP_TRACKS in artistVisibleSections)
                                 stringResource(R.string.top_songs) else "Faixas",
-                            palette = palette,
-                            horizontalPadding = ARTIST_CONTENT_GUTTER,
-                        )
-                        NativeArtistTracksCarousel(
                             tracks = top,
+                            palette = palette,
                             horizontalPadding = ARTIST_CONTENT_GUTTER,
                         ) { song ->
                             CompactSongRow(
@@ -903,24 +900,20 @@ fun DetailScreen(
                 val displayItems = remember(shelf.items) {
                     if (canShowAll) shelf.items.take(ARTIST_ROW_MAX_ITEMS) else shelf.items
                 }
-                Column(Modifier.padding(top = 22.dp)) {
-                    SectionHeading(
-                        title = shelf.title,
-                        palette = palette,
-                        onShowAll = if (canShowAll) { { onActiveShelfChange(shelf) } } else null,
-                        horizontalPadding = ARTIST_CONTENT_GUTTER,
-                    )
-                    NativeArtistReleaseCarousel(
-                        releases = displayItems,
-                        horizontalPadding = ARTIST_CONTENT_GUTTER,
-                    ) { item ->
+                NativeArtistReleaseShelf(
+                    title = shelf.title,
+                    releases = displayItems,
+                    palette = palette,
+                    horizontalPadding = ARTIST_CONTENT_GUTTER,
+                    topPadding = 22.dp,
+                    onShowAll = if (canShowAll) { { onActiveShelfChange(shelf) } } else null,
+                ) { item ->
                         SectionCard(
                             item = item,
                             palette = palette,
                             onClick = { onSectionItemClick(item) },
                             onLongPress = onSectionItemLongPress?.let { { it(item) } },
                         )
-                    }
                 }
             }
             if (isArtist) aboutItem()

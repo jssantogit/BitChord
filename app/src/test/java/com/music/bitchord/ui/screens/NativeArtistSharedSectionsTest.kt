@@ -6,6 +6,23 @@ import org.junit.Test
 
 /** Guards the single native artist carousel used by catalog and Library. */
 class NativeArtistSharedSectionsTest {
+    @Test fun libraryAndOnlineArtistTrackShelvesRetainDistinctCapabilities() {
+        val library = nativeArtistVisibleSections(
+            NativeArtistSectionEvidence(
+                NativeArtistContext.LIBRARY, hasTracks = true,
+                hasVerifiedPopularity = true,
+            ),
+        )
+        val ranked = nativeArtistVisibleSections(
+            NativeArtistSectionEvidence(
+                NativeArtistContext.ONLINE_CATALOG, hasTracks = true,
+                hasVerifiedPopularity = true,
+            ),
+        )
+        assertEquals(setOf(NativeArtistSection.TRACKS), library)
+        assertEquals(setOf(NativeArtistSection.TOP_TRACKS), ranked)
+    }
+
     @Test fun artistCarouselCapsToTwentyAndKeepsOriginalOrder() {
         val tracks = (1..27).map { "recording-$it" }
         val columns = nativeArtistTrackColumns(tracks)

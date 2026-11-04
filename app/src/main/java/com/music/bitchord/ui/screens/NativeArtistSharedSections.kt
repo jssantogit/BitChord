@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.LazyColumn
@@ -118,6 +119,29 @@ internal fun NativeArtistDetailFrame(
     }
 }
 
+/**
+ * Shared visual artist track shelf. Canonical RecordingIds remain typed and
+ * playback/rating/menu callbacks stay in the owning source adapter.
+ */
+@Composable
+internal fun <T> NativeArtistTracksShelf(
+    title: String,
+    tracks: List<T>,
+    palette: ArtworkPalette,
+    horizontalPadding: Dp = PAGE_GUTTER,
+    itemKey: ((T) -> Any)? = null,
+    row: @Composable (T) -> Unit,
+) {
+    if (tracks.isEmpty()) return
+    SectionHeading(title, palette, horizontalPadding = horizontalPadding)
+    NativeArtistTracksCarousel(
+        tracks = tracks,
+        horizontalPadding = horizontalPadding,
+        itemKey = itemKey,
+        row = row,
+    )
+}
+
 private const val ARTIST_TRACK_LIMIT = 20
 private const val ARTIST_TRACK_ROWS_PER_COLUMN = 4
 
@@ -189,5 +213,39 @@ internal fun <T> NativeArtistReleaseCarousel(
         flingBehavior = rememberSnapFlingBehavior(lazyListState = scrollState),
     ) {
         items(releases, key = itemKey) { release -> card(release) }
+    }
+}
+
+/**
+ * Native release shelf for both online "Ver todos" and verified Library
+ * releases. Artwork, selection, rating, pin and options remain caller-owned.
+ */
+@Composable
+internal fun <T> NativeArtistReleaseShelf(
+    title: String,
+    releases: List<T>,
+    palette: ArtworkPalette,
+    horizontalPadding: Dp = PAGE_GUTTER,
+    topPadding: Dp = 0.dp,
+    itemSpacing: Dp = 14.dp,
+    onShowAll: (() -> Unit)? = null,
+    itemKey: ((T) -> Any)? = null,
+    card: @Composable (T) -> Unit,
+) {
+    if (releases.isEmpty()) return
+    Column(Modifier.padding(top = topPadding)) {
+        SectionHeading(
+            title = title,
+            palette = palette,
+            onShowAll = onShowAll,
+            horizontalPadding = horizontalPadding,
+        )
+        NativeArtistReleaseCarousel(
+            releases = releases,
+            horizontalPadding = horizontalPadding,
+            itemSpacing = itemSpacing,
+            itemKey = itemKey,
+            card = card,
+        )
     }
 }

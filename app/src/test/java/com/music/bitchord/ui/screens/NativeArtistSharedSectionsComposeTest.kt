@@ -69,6 +69,50 @@ class NativeArtistSharedSectionsComposeTest {
         compose.onNodeWithTag("release-menu").performClick()
         compose.runOnIdle { assertEquals("release-a", chosen) }
     }
+    @Test fun sharedArtistTrackShelfKeepsHeadingAndTypedRowAction() {
+        var plays = 0
+        compose.setContent {
+            MaterialTheme {
+                NativeArtistTracksShelf(
+                    title = "Faixas",
+                    tracks = listOf("recording-a"),
+                    palette = themeArtworkPalette(),
+                    itemKey = { it },
+                ) { recording ->
+                    IconButton(
+                        onClick = { if (recording == "recording-a") plays++ },
+                        modifier = Modifier.testTag("typed-track-action"),
+                    ) { Text("Play") }
+                }
+            }
+        }
+        compose.onNodeWithText("Faixas").assertExists()
+        compose.onNodeWithTag("typed-track-action").performClick()
+        compose.runOnIdle { assertEquals(1, plays) }
+    }
+
+    @Test fun sharedArtistReleaseShelfKeepsHeadingAndMenuAction() {
+        var opens = 0
+        compose.setContent {
+            MaterialTheme {
+                NativeArtistReleaseShelf(
+                    title = "Singles e EPs",
+                    releases = listOf("release-a"),
+                    palette = themeArtworkPalette(),
+                    itemKey = { it },
+                ) { release ->
+                    IconButton(
+                        onClick = { if (release == "release-a") opens++ },
+                        modifier = Modifier.testTag("typed-release-menu"),
+                    ) { Text("Menu") }
+                }
+            }
+        }
+        compose.onNodeWithText("Singles e EPs").assertExists()
+        compose.onNodeWithTag("typed-release-menu").performClick()
+        compose.runOnIdle { assertEquals(1, opens) }
+    }
+
     @Test fun nativeAlbumCardKeepsMoreActionAndMainNavigationIndependent() {
         var opened = 0
         var options = 0

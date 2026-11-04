@@ -4,12 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -224,15 +222,13 @@ internal fun CanonicalNativeArtistDetail(
                 }
             }
             if (NativeArtistSection.TRACKS in visibleSections) {
-                item(key = "artist-tracks-title") {
-                    SectionHeading("Faixas", palette)
-                }
-                // Like DetailScreen's native artist page, the songs page
-                // sideways in four-row columns; they must not push all the
-                // album/single carousels several screens below the fold.
-                item(key = "artist-tracks-carousel") {
-                    NativeArtistTracksCarousel(
+                // The same native artist section now serves Library tracks,
+                // while its rows keep RecordingId, selection and native rating.
+                item(key = "artist-tracks-shelf") {
+                    NativeArtistTracksShelf(
+                        title = "Faixas",
                         tracks = shownTracks,
+                        palette = palette,
                         horizontalPadding = PAGE_GUTTER,
                         itemKey = { it.recordingId },
                     ) { track ->
@@ -297,10 +293,11 @@ internal fun CanonicalNativeArtistDetail(
             }
             fun section(label: String, releases: List<ReleaseEntity>) {
                 if (releases.isEmpty()) return
-                item(key = "artist-section-$label") { SectionHeading(label, palette) }
-                item(key = "artist-cards-$label") {
-                    NativeArtistReleaseCarousel(
+                item(key = "artist-section-$label") {
+                    NativeArtistReleaseShelf(
+                        title = label,
                         releases = releases,
+                        palette = palette,
                         horizontalPadding = PAGE_GUTTER,
                         itemSpacing = 12.dp,
                         itemKey = { it.id },
