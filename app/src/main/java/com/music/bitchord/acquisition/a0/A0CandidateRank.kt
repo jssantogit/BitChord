@@ -161,13 +161,22 @@ internal object A0CandidateRank {
             !expectedAlbum.isNullOrBlank())
             latinAliasWords+tokens(expectedAlbum)
         else emptyList()
+        // Unlike the legacy general-artist matcher, this NEW bilingual
+        // exception cannot borrow credit from an unrelated distant ancestor.
+        // Permit an immediate exact artist directory, an exact artist+album
+        // directory, or an artist directory immediately wrapping the EXACT
+        // canonical album folder; nothing more.
+        val aliasLeaf=parentSegments.lastOrNull()?.let(::tokens).orEmpty()
+        val aliasParent=parentSegments.getOrNull(parentSegments.size-2)
+            ?.let(::tokens).orEmpty()
+        val exactAlbumWords=tokens(expectedAlbum.orEmpty())
         val aliasInFolder=latinAliasWords.isNotEmpty() &&
-            parentSegments.any { parent ->
-                val words=tokens(parent)
-                words==latinAliasWords ||
-                    (aliasAlbumFolderWords.isNotEmpty() &&
-                        words==aliasAlbumFolderWords)
-            }
+            (aliasLeaf==latinAliasWords ||
+                (aliasAlbumFolderWords.isNotEmpty() &&
+                    aliasLeaf==aliasAlbumFolderWords) ||
+                (exactAlbumWords.isNotEmpty() &&
+                    aliasLeaf==exactAlbumWords &&
+                    aliasParent==latinAliasWords))
         val artistInFilename=artistWords.isNotEmpty() &&
             (artistWords.all { it in fileWords } ||
                 compactInFilename || aliasInFilename)
