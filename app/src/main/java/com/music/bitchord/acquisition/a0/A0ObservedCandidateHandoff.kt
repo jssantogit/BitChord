@@ -119,7 +119,7 @@ internal class A0ObservedCandidateHandoff(
     // titles. Filtering empty tokens shifts lost-evidence flags to the wrong
     // canonical track and can hide truncated peer observations.
     private val releaseSlotTokens=releaseQueries.take(64)
-        .map(A0ReleaseDiscoveryShadowAdapter::titleTokens)
+        .map(A0ReleaseDiscoveryShadowAdapter::titleOptions)
 
     /**
      * Per validated search ticket: how many untrusted public file claims
@@ -148,7 +148,7 @@ internal class A0ObservedCandidateHandoff(
         if(!collectReleaseShadow)return
         val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(name)
         releaseSlotTokens.forEachIndexed { index,title ->
-            if(title.isNotEmpty() && file.containsAll(title))
+            if(A0ReleaseDiscoveryShadowAdapter.matchesTitleOptions(file,title))
                 releaseShadowLostSlots[index]=true
         }
     }
@@ -158,8 +158,8 @@ internal class A0ObservedCandidateHandoff(
         return releaseHitsCache[choice] ?: run {
             val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(choice.claim.filename)
             releaseSlotTokens.indices.filter { index ->
-                releaseSlotTokens[index].isNotEmpty() &&
-                    file.containsAll(releaseSlotTokens[index])
+                A0ReleaseDiscoveryShadowAdapter.matchesTitleOptions(
+                    file,releaseSlotTokens[index])
             }
         }
     }
@@ -347,8 +347,9 @@ internal class A0ObservedCandidateHandoff(
             if(!collectManualCandidates && collectReleaseShadow &&
                 releaseSlotTokens.isNotEmpty()) {
                 val fileWords=A0ReleaseDiscoveryShadowAdapter.fileTokens(basename)
-                if(releaseSlotTokens.none { it.isNotEmpty() &&
-                        fileWords.containsAll(it) }) {
+                if(releaseSlotTokens.none {
+                        A0ReleaseDiscoveryShadowAdapter.matchesTitleOptions(
+                            fileWords,it) }) {
                     shadowTitleFiltered=(shadowTitleFiltered+1).coerceAtMost(100000)
                     continue
                 }
