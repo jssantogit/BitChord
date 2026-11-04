@@ -194,37 +194,17 @@ object QualityUpgrade {
      * would light the badge for a search with no possible outcome.
      */
     fun settledForLess(
-        mediaId: String,
-        target: TrackMatcher.Target,
+        @Suppress("UNUSED_PARAMETER") mediaId: String,
+        @Suppress("UNUSED_PARAMETER") target: TrackMatcher.Target,
         inFlight: Deferred<SourceStream?>? = null,
-        playing: StreamFormat? = null,
-        servedBy: String? = null,
+        @Suppress("UNUSED_PARAMETER") playing: StreamFormat? = null,
+        @Suppress("UNUSED_PARAMETER") servedBy: String? = null,
     ): Boolean {
-        // Not gated on the request being lossless. A source ranked above
-        // YouTube can be worth swapping to on bitrate alone — see
-        // [SourceResolver.worthSwapping] — and requiring lossless here meant a
-        // lookup that was still running got cancelled outright the moment
-        // YouTube won the race, so a 320kbps source never finished and never
-        // played. [SourceResolver.upgradeFor] applies the real quality bar.
-        if (target.title.isBlank() || target.isVideo ||
-            mediaId in refused ||
-            !SourceResolver.canSubstituteForYouTube()
-        ) {
-            inFlight?.cancel()
-            return false
-        }
-        pending[mediaId] = Pending(target, inFlight, playing, servedBy)
-        NerdStats.onLosslessRaceStart(mediaId)
-        TrackLog.d(
-            TAG,
-            if (inFlight != null) {
-                "'${target.title}' started on the fallback; its lookup is still running"
-            } else {
-                "below request for '${target.title}'; will look again during playback"
-            },
-            about = mediaId,
-        )
-        return true
+        // This entry point served the old YouTube-vs-addon fallback race.
+        // The YouTube audio backend is retired, so no continuation or
+        // replacement search may be scheduled from a legacy video identity.
+        inFlight?.cancel()
+        return false
     }
 
     /** Whether [mediaId] is worth a second look — and hasn't already had one. */
@@ -276,21 +256,10 @@ object QualityUpgrade {
      * the decoder to settle first. Everything here is a fact about the queue
      * entry and the settings; nothing here touches the network.
      */
-    fun couldStillUpgrade(mediaId: String, uri: Uri?): Boolean {
-        if (uri == null || uri.getQueryParameter("v") == null ||
-            uri.getQueryParameter("m") == "1"
-        ) return false
-        // Already upgraded: this *is* the better copy. Except when the listener
-        // has asked by hand, where the marker is on a *reverted* item and
-        // saying "this is the copy that was chosen" is the very thing being
-        // overruled — see [askByHand].
-        if (mediaId !in handAsked && uri.getQueryParameter(MARKER) != null) return false
-        if (mediaId in asked || mediaId in refused || pending.containsKey(mediaId)) return false
-        // Same widening as [settledForLess]: a track playing off the cache is
-        // worth a second look whenever anything outranks YouTube, not only
-        // when lossless was asked for.
-        return SourceResolver.canSubstituteForYouTube()
-    }
+    fun couldStillUpgrade(
+        @Suppress("UNUSED_PARAMETER") mediaId: String,
+        @Suppress("UNUSED_PARAMETER") uri: Uri?,
+    ): Boolean = false
 
     /**
      * Marks a track that is playing without ever having been resolved.
