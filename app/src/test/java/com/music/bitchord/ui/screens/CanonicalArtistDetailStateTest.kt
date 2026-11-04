@@ -52,4 +52,16 @@ class CanonicalArtistDetailStateTest {
         assertEquals("artist-id", target?.entityId)
     }
 
+    @Test fun nestedAlbumNavigationKeysFollowIdentityNotOnlyArtistName() {
+        val homonymOne = canonicalArtistDetailNavigationKey("artist-a", "同名")
+        val homonymTwo = canonicalArtistDetailNavigationKey("artist-b", "同名")
+        assertTrue(homonymOne != homonymTwo)
+        assertEquals(homonymOne, canonicalArtistDetailNavigationKey("artist-a", "New stage name"))
+        assertTrue(
+            canonicalArtistDetailNavigationKey(null, "aespa") !=
+                canonicalArtistDetailNavigationKey(null, "エスパ"),
+        )
+        assertTrue(canonicalArtistDetailNavigationKey(null, "artist-a") != homonymOne)
+    }
+
 }
