@@ -1355,31 +1355,23 @@ class PlaybackService : MediaLibraryService() {
             // because these carry no `v` parameter and would otherwise fall
             // straight through unresolved.
             if (dataSpec.uri.authority == "source") {
-                val directYouTube =
-                    dataSpec.uri.getQueryParameter(DIRECT_YOUTUBE_PARAMETER) == "1"
+                // Retired YouTube fallback markers must never re-enter a source
+                // resolution path. Source-backed playback still resolves through
+                // the user's configured providers without this legacy override.
+                if (dataSpec.uri.getQueryParameter(DIRECT_YOUTUBE_PARAMETER) == "1") {
+                    throw java.io.IOException("Retired YouTube fallback is not an audio source")
+                }
                 val stream = runBlocking(about) {
                     withTimeout(RESOLVE_TIMEOUT_MS) {
-                        if (directYouTube) {
-                            SourceResolver.youtubeFallback(SourceResolver.targetIn(dataSpec.uri))
-                        } else {
-                            SourceResolver.resolve(dataSpec.uri)
-                        }
+                        SourceResolver.resolve(dataSpec.uri)
                     }
                 } ?: throw java.io.IOException(
-                    if (directYouTube) {
-                        "No YouTube audio fallback matched ${dataSpec.uri.getQueryParameter("n")}"
-                    } else {
-                        "No enabled source could serve ${dataSpec.uri.getQueryParameter("n")}"
-                    },
+                    "No enabled source could serve ${dataSpec.uri.getQueryParameter("n")}",
                 )
                 val configId = dataSpec.uri.getQueryParameter("s")
-                val sourceName = if (directYouTube) {
-                    "YouTube"
-                } else {
-                    stream.sourceConfigId?.let { SourceRegistry.config(it)?.displayName }
-                        ?: configId?.let { SourceRegistry.config(it)?.displayName }
-                        ?: "Source"
-                }
+                val sourceName = stream.sourceConfigId?.let { SourceRegistry.config(it)?.displayName }
+                    ?: configId?.let { SourceRegistry.config(it)?.displayName }
+                    ?: "Source"
                 val trackParam = dataSpec.uri.getQueryParameter("t")
                 val fullMediaId = mediaIdIn(dataSpec.uri)
                 NerdStats.onSourceStream(fullMediaId ?: trackParam, stream.format, sourceName)
@@ -1389,10 +1381,7 @@ class PlaybackService : MediaLibraryService() {
                 NerdStats.recordSource(trackParam, sourceName)
                 return@Resolver dataSpec.buildUpon()
                     .setUri(Uri.parse(stream.url))
-                    .setHttpRequestHeaders(
-                        if (directYouTube) StreamResolver.mediaHeadersFor(stream.url)
-                        else stream.headers,
-                    )
+                    .setHttpRequestHeaders(stream.headers)
                     .build()
             }
             val videoId = dataSpec.uri.getQueryParameter("v")
