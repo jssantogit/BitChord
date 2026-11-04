@@ -59,4 +59,24 @@ class NativeSearchRowTest {
         assertFalse(visual.downloadBadge)
         assertNull(visual.artworkUri)
     }
+    @Test fun recordingWithoutCreditUsesItsOwnLocalizedKindNotLegacyAlbumFallback() {
+        val row = CanonicalCatalogSearchRow(
+            musicBrainzId = "recording-mbid",
+            kind = CanonicalSearchKind.RECORDING,
+            title = "Hype Boy",
+            subtitle = null,
+        )
+        assertEquals("Gravação", canonicalNativeSearchRowUi(row, "Gravação").subtitle)
+    }
+
+    @Test fun searchKindFallbackAvoidsProviderEntityOrVideoIdentifiers() {
+        val row = CanonicalCatalogSearchRow(
+            musicBrainzId = "mbid",
+            kind = CanonicalSearchKind.RELEASE_GROUP,
+            title = "EP",
+            subtitle = null,
+        )
+        assertEquals("Álbum", canonicalNativeSearchRowUi(row, "Álbum").subtitle)
+    }
+
 }
