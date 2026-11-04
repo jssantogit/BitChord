@@ -8,6 +8,7 @@ import com.music.bitchord.ui.defaultDiscoverySearchSource
 import com.music.bitchord.ui.effectiveSearchSource
 import com.music.bitchord.ui.searchSourceForOrigin
 import com.music.bitchord.ui.shouldPrefetchLegacyYouTubeAccountData
+import com.music.bitchord.ui.shouldHandleExplicitLegacyYoutubeLink
 import com.music.bitchord.ui.shouldRunLegacyYoutubeVersionLookup
 import com.music.bitchord.ui.shouldUseCanonicalDiscovery
 import org.junit.Assert.assertEquals
@@ -48,6 +49,15 @@ class CanonicalCatalogCutoverTest {
         assertEquals(SearchSource.CANONICAL, effectiveSearchSource(SearchSource.YOUTUBE, emptyList()))
         assertEquals(SearchSource.ADDONS, effectiveSearchSource(SearchSource.ADDONS, youtubeEnabled))
         assertEquals(SearchSource.LIBRARY, effectiveSearchSource(SearchSource.LIBRARY, youtubeEnabled))
+    }
+
+    @Test fun explicitYoutubeLinksAreNotConflatedWithAutomaticCatalogProbes() {
+        val enabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true))
+        val disabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = false))
+        // Preserve explicit incoming links until a verified canonical mapping exists.
+        assertTrue(shouldHandleExplicitLegacyYoutubeLink(enabled))
+        assertFalse(shouldHandleExplicitLegacyYoutubeLink(disabled))
+        assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = enabled))
     }
 
     @Test fun startupPrefetchAndHiddenYoutubeCatalogProbesStayOff() {
