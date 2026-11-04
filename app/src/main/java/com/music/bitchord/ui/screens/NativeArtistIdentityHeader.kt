@@ -213,7 +213,7 @@ private fun SignedByCaption(
  * header already carries Apple's title logo.
  */
 @Composable
-private fun AboutSignature(
+internal fun AboutSignature(
     signature: ArtistSignature,
     name: String,
     palette: ArtworkPalette,
