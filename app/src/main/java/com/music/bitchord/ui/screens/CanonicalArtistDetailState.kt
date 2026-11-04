@@ -29,6 +29,17 @@ internal data class CanonicalArtistNativeReleases(
 }
 
 /**
+ * A verified artist identity, not its display string, owns nested album state.
+ * Local display-only groups remain independently keyed, with a disjoint
+ * namespace so no provider ID can collide with a visible name.
+ */
+internal fun canonicalArtistDetailNavigationKey(
+    artistId: String?,
+    artistName: String,
+): String = artistId?.takeIf { it.isNotBlank() }
+    ?.let { "artist-id:$it" } ?: "display-artist:$artistName"
+
+/**
  * Only a real Recording -> Release edge permits an album in an artist page.
  * Equal title/credit across two releases is never relationship evidence.
  * Release ordering follows the scoped provider response; repeated releases
