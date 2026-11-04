@@ -166,9 +166,9 @@ internal fun shouldUseCanonicalDiscovery(
     @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
 ): Boolean = true
 
-internal fun isYouTubeSourceEnabled(configs: List<SourceConfig>): Boolean = configs.none {
-    it.kind == SourceKind.YOUTUBE && !it.enabled
-}
+internal fun isYouTubeSourceEnabled(
+    @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
+): Boolean = false
 
 internal fun shouldPrefetchLegacyYouTubeAccountData(
     @Suppress("UNUSED_PARAMETER") signedIn: Boolean,
