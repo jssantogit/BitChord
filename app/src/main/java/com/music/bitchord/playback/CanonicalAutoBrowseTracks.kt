@@ -82,3 +82,14 @@ internal fun canonicalAutoQuickPicks(
     .filter { it.videoId !in excludedIds }
     .distinctBy(Song::videoId)
     .take(150)
+
+/** A bounded, metadata-only filter over already playable audio. No catalog
+ * aliases are synthesized, and a bare YouTube videoId is never searched. */
+internal fun canonicalAutoSearch(songs: List<Song>, rawQuery: String): List<Song> {
+    val term = rawQuery.trim()
+    if (term.isEmpty()) return emptyList()
+    return songs.filter {
+        it.title.contains(term, ignoreCase = true) ||
+            it.artist.contains(term, ignoreCase = true)
+    }.take(150)
+}
