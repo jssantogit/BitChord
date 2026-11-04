@@ -1046,25 +1046,26 @@ private fun ReleaseHeader(
     // own long-press "Open artist" already reads from.
     val artist = songs.firstOrNull()
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // Clear of the floating bar, which the sleeve no longer runs under.
-            .padding(top = topBarContentPadding(), bottom = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier
-                .size(sleeveSize)
-                .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
-                .background(palette.elevated)
-                .thumbnailBorder(SLEEVE_SHAPE),
-        ) {
-            // A cover that isn't there, or wouldn't load — a device folder, a
-            // playlist with nothing on it yet, files with no picture — gets a
-            // placeholder sleeve rather than an empty square. Not shown while a
-            // real one is still on its way, so a loading cover doesn't flash
-            // a glyph first.
+    val onCreditClick: (() -> Unit)? = artist?.let { song ->
+        song.artistId?.let { id ->
+            if (onArtistClick != null) {
+                { onArtistClick(id, song.artist) }
+            } else null
+        }
+    }
+
+    // Use the same approved native release compositor as unified Library
+    // albums, nested artist albums and normal/smart playlists. This adapter
+    // retains legacy artwork, Canvas, user library actions and credit links;
+    // no provider-specific detail DTO enters the visual composition.
+    NativeReleaseHeaderLayout(
+        title = page.title,
+        credit = credit,
+        meta = meta,
+        palette = palette,
+        sleeveSize = sleeveSize,
+        onCreditClick = onCreditClick,
+        artwork = {
             var artFailed by remember(page.thumbnailUrl) { mutableStateOf(false) }
             if (page.thumbnailUrl == null || artFailed) {
                 CoverPlaceholder(
@@ -1081,9 +1082,6 @@ private fun ReleaseHeader(
                 onState = { artFailed = it is AsyncImagePainter.State.Error },
                 modifier = Modifier.matchParentSize(),
             )
-            // Animated cover art, inside the same frame. Always running:
-            // unlike the player's sleeve there is no transport here to follow,
-            // and the page is only up while it's being read.
             canvas?.let { clip ->
                 CanvasArtworkPlayer(
                     canvas = clip,
@@ -1091,71 +1089,22 @@ private fun ReleaseHeader(
                     modifier = Modifier.matchParentSize(),
                 )
             }
-        }
-
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = page.title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = palette.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-        )
-        if (credit.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = credit,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Normal,
-                    fontSize = 19.sp,
-                ),
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .padding(horizontal = HEADER_GUTTER)
-                    .let { m ->
-                        val id = artist?.artistId
-                        if (id == null || onArtistClick == null) {
-                            m
-                        } else {
-                            m.clip(RoundedCornerShape(6.dp))
-                                .clickable { onArtistClick(id, artist.artist) }
-                        }
-                    },
-            )
-        }
-        if (meta.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.labelMedium,
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-            )
-        }
-
-        if (songs.isNotEmpty() || canonicalTracks.any { it.hasCatalogedAsset }) {
-            // Only where YouTube said the release can be saved and the caller
-            // is willing to take the write — see [onToggleLibrary].
-            val library = page.library?.takeIf { onToggleLibrary != null }
-            Spacer(Modifier.height(18.dp))
-            NativeReleaseActionRow(
-                onPlay = onPlay,
-                onShuffle = onShuffle,
-                isLocal = page.browseId.startsWith("local:"),
-                canShuffle = songs.isNotEmpty(),
-                isSaved = library?.saved,
-                onToggleLibrary = if (library == null) null else onToggleLibrary,
-            )
-        }
-    }
+        },
+        actions = {
+            if (songs.isNotEmpty() || canonicalTracks.any { it.hasCatalogedAsset }) {
+                val library = page.library?.takeIf { onToggleLibrary != null }
+                Spacer(Modifier.height(18.dp))
+                NativeReleaseActionRow(
+                    onPlay = onPlay,
+                    onShuffle = onShuffle,
+                    isLocal = page.browseId.startsWith("local:"),
+                    canShuffle = songs.isNotEmpty(),
+                    isSaved = library?.saved,
+                    onToggleLibrary = if (library == null) null else onToggleLibrary,
+                )
+            }
+        },
+    )
 }
 
 /**
