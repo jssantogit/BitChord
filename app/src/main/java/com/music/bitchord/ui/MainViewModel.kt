@@ -146,51 +146,41 @@ internal fun searchSourceForOrigin(
     canonicalMode: Boolean,
     configs: List<SourceConfig>,
 ): SearchSource = when (origin) {
-    SearchOrigin.GENERAL ->
-        if (shouldUseCanonicalDiscovery(canonicalMode, configs)) SearchSource.CANONICAL else SearchSource.YOUTUBE
+    SearchOrigin.GENERAL -> SearchSource.CANONICAL
     SearchOrigin.SERVER -> SearchSource.ADDONS
     SearchOrigin.LOCAL -> SearchSource.LIBRARY
 }
 
 /**
  * Playback source opt-out is authoritative for search too. A disabled YT
- * provider must not be contacted by a legacy search tab selection. Empty
- * configs (prior to registry init) retain historical behavior.
+ * provider must not be contacted by a legacy search tab selection, even if
+ * the pre-migration preference or source config still enables YouTube.
  */
 internal fun effectiveSearchSource(
     requested: SearchSource,
-    configs: List<SourceConfig>,
-): SearchSource = if (
-    requested == SearchSource.YOUTUBE &&
-    configs.any { it.kind == SourceKind.YOUTUBE && !it.enabled }
-) SearchSource.CANONICAL else requested
+    @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
+): SearchSource = if (requested == SearchSource.YOUTUBE) SearchSource.CANONICAL else requested
 
-/** Home and Explore keep the legacy feed until the user opts in or disables YouTube. */
+/** #208: discovery is canonical on new and upgraded installs, regardless of legacy opt-in. */
 internal fun shouldUseCanonicalDiscovery(
-    explicitlyEnabled: Boolean,
-    configs: List<SourceConfig>,
-): Boolean = explicitlyEnabled || configs.any {
-    it.kind == SourceKind.YOUTUBE && !it.enabled
-}
+    @Suppress("UNUSED_PARAMETER") explicitlyEnabled: Boolean,
+    @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
+): Boolean = true
 
 internal fun isYouTubeSourceEnabled(configs: List<SourceConfig>): Boolean = configs.none {
     it.kind == SourceKind.YOUTUBE && !it.enabled
 }
 
 internal fun shouldPrefetchLegacyYouTubeAccountData(
-    signedIn: Boolean,
-    canonicalDiscoveryEnabled: Boolean,
-    configs: List<SourceConfig>,
-): Boolean = signedIn && !shouldUseCanonicalDiscovery(canonicalDiscoveryEnabled, configs)
+    @Suppress("UNUSED_PARAMETER") signedIn: Boolean,
+    @Suppress("UNUSED_PARAMETER") canonicalDiscoveryEnabled: Boolean,
+    @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
+): Boolean = false
 
 internal fun defaultDiscoverySearchSource(
-    explicitlyEnabled: Boolean,
-    configs: List<SourceConfig>,
-): SearchSource = if (shouldUseCanonicalDiscovery(explicitlyEnabled, configs)) {
-    SearchSource.CANONICAL
-} else {
-    SearchSource.YOUTUBE
-}
+    @Suppress("UNUSED_PARAMETER") explicitlyEnabled: Boolean,
+    @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
+): SearchSource = SearchSource.CANONICAL
 
 internal enum class LegacyDiscoveryRequest {
     HOME,
@@ -202,9 +192,9 @@ internal enum class LegacyDiscoveryRequest {
 }
 
 internal fun shouldRunLegacyYoutubeVersionLookup(
-    canonicalMode: Boolean,
-    configs: List<SourceConfig>,
-): Boolean = !canonicalMode && isYouTubeSourceEnabled(configs)
+    @Suppress("UNUSED_PARAMETER") canonicalMode: Boolean,
+    @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
+): Boolean = false
 
 /** The legacy endpoint closure is never invoked while independent discovery is active. */
 internal class LegacyDiscoveryRequestGate(private val useCanonicalDiscovery: Boolean) {
