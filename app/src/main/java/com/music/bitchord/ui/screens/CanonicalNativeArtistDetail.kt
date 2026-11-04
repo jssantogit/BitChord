@@ -282,20 +282,14 @@ internal fun CanonicalNativeArtistDetail(
             (maxWidth / 0.95f).coerceAtMost(maxHeight * 0.6f)
         }
         val photoHeight by animateDpAsState(targetPhotoHeight, label = "native_artist_hero")
-        PageBackground(
-            page = null,
+        // Keep the approved DetailScreen backdrop and list structure, while
+        // supplying verified Library recordings, ratings and contextual menus.
+        NativeArtistDetailFrame(
             palette = palette,
-            canvas = null,
             artHeight = photoHeight,
             listState = listState,
-            // Never stretch a song/album sleeve into a claimed artist photo.
-            heroUrl = artistPhotoUrl,
-            modifier = Modifier.fillMaxSize(),
-        )
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 112.dp),
+            heroUrl = artistPhotoUrl,
         ) {
             item(key = "artist-header") {
                 ArtistHeader(
