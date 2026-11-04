@@ -1,0 +1,271 @@
+package com.music.bitchord.acquisition.a0
+
+import com.music.bitchord.download.SoulseekBatchPlan
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * A bounded, per-track policy+I/O boundary for an explicitly opted-in Soulseek worker.
+ *
+ * Unlike the shadow-only planners, this object composes a port that MAY
+ * perform P/F and A3 publication. A devDebug-only real Android port is now connected to the foreground queue. The service must supply account-generation guards,
+ * cancelable private transport, a real Android decoder and a durable publisher.
+ *
+ * Network failure may retry only another metadata-equivalent source. Once
+ * bytes arrive, any decoding or publication failure abstains: never silently
+ * spend another peer's bandwidth or publish unverified bytes.
+ */
+internal class A0AutoAcquisitionExecutor(private val port:Port) {
+    enum class DiagnosticStage {
+        FETCH_STARTED, FETCH_RETRYABLE, FETCH_EXCEPTION, RECEIPT_RECEIVED,
+        PROBE_UNAVAILABLE, POST_TRANSFER_GATE, DESTINATION_INVALID,
+        PUBLISH_RESULT, CLEANUP_EXCEPTION,
+    }
+    interface Port {
+        /** Safe enum-only events, no identities, paths or source metadata. */
+        fun diagnostic(stage:DiagnosticStage,reason:Enum<*>?=null) {}
+        /** One redacted terminal result per run; no source handles or user metadata. */
+        fun diagnosticOutcome(status:Status,reason:Reason?,attempts:Int) {}
+        /** Transport MUST enforce one authenticated Soulseek session and P/F limits. */
+        fun fetch(
+            candidate:A0ObservedCandidateHandoff.Choice,
+            isCancelled:()->Boolean,
+        ):FetchResult
+
+        /** In production, call A0AndroidAudioTechnicalProbe on the private receipt. */
+        fun inspect(
+            receipt:A0VerifiedByteStager.Receipt,
+            expectedExtension:String,
+            isCancelled:()->Boolean,
+        ):A0AutoPostTransferTechnicalGate.Decoded?
+
+        /** Caller MUST use A3/A2 with account-generation commitGuard, not raw file I/O. */
+        fun publish(
+            receipt:A0VerifiedByteStager.Receipt,
+            safeName:String,
+            isCancelled:()->Boolean,
+        ):PublishResult
+
+        /** MUST discard private scratch even on user logout, invalid audio or failure. */
+        fun cleanup(receipt:A0VerifiedByteStager.Receipt)
+
+        /** Close authenticated P/F sockets and finalize durable error phase. */
+        fun finish() {}
+    }
+
+    /** Unknown commit state must NEVER trigger a second automatic transfer. */
+    enum class PublishResult { DURABLE, ROLLED_BACK, UNCERTAIN }
+
+    sealed interface FetchResult {
+        data object RetryableConnectionFailure:FetchResult
+        class Received(val receipt:A0VerifiedByteStager.Receipt):FetchResult
+    }
+
+    enum class Status { PUBLISHED, MANUAL_REVIEW, CANCELLED, RECONCILE }
+    enum class Reason {
+        NO_EXPLICIT_CONSENT, NO_STRONG_CANDIDATE, EXHAUSTED_PEERS,
+        TRANSPORT_FAILURE, TECHNICAL_REJECTION,
+        INVALID_DESTINATION, PUBLICATION_FAILURE, PUBLICATION_UNCERTAIN,
+        CLEANUP_FAILURE,
+        REVOKED_OR_CANCELLED, SINGLE_FLIGHT
+    }
+    class Result(
+        val status:Status,
+        val reason:Reason?,
+        val attempts:Int,
+        /** In-memory only, never logged or persisted. */ 
+        internal val selectedSource:A0ObservedCandidateHandoff.Choice?=null,
+        /** Transient, bounded per-run evidence; never logged or persisted. */
+        internal val preAcceptFailedPeers:Set<String> = emptySet(),
+    ) {
+        override fun toString()="AutoAcquisitionResult(status=$status,reason=$reason,attempts=$attempts)"
+    }
+
+    private val running=AtomicBoolean(false)
+    private fun diagnostic(stage:DiagnosticStage,reason:Enum<*>?=null) {
+        try {port.diagnostic(stage,reason)}catch(_:Exception) {}
+    }
+    private fun manual(reason:Reason,attempts:Int=0)=
+        Result(Status.MANUAL_REVIEW,reason,attempts)
+    private fun cancelled(attempts:Int=0)=
+        Result(Status.CANCELLED,Reason.REVOKED_OR_CANCELLED,attempts)
+
+    /** Diagnostics must not alter the result even if the reporter fails. */
+    private fun recordOutcome(result:Result):Result {
+        try { port.diagnosticOutcome(result.status,result.reason,
+            result.attempts.coerceIn(0,3)) }catch(_:Exception) {}
+        return result
+    }
+
+    /**
+     * Must run on an I/O worker, never on the Android UI thread. This is NOT
+     * currently reachable via Downloads/DownloadService. All peer/file IDs
+     * remain in memory and no diagnostics emit them.
+     */
+    fun run(
+        target:SoulseekBatchPlan.Entry,
+        observed:List<A0ObservedCandidateHandoff.Choice>,
+        profile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+        userRequested:Boolean,
+        optedIn:Boolean,
+        isCancelled:()->Boolean={false},
+        stillAuthorized:()->Boolean,
+    ):Result {
+        if(!userRequested || !optedIn)
+            return recordOutcome(manual(Reason.NO_EXPLICIT_CONSENT))
+        if(!running.compareAndSet(false,true))
+            return recordOutcome(manual(Reason.SINGLE_FLIGHT))
+        try {
+            fun revoked()=isCancelled() || !stillAuthorized() ||
+                Thread.currentThread().isInterrupted
+            if(revoked())return recordOutcome(cancelled())
+            val choice=A0AutoCandidateSelectionPolicy.preview(target,observed,profile)
+            if(choice.status!=A0AutoCandidateSelectionPolicy.Status.PROVISIONAL ||
+                choice.sequentialAlternatives.isEmpty())
+                return recordOutcome(manual(Reason.NO_STRONG_CANDIDATE))
+            // Exact-score alternative editions may only follow an explicit
+            // pre-acceptance RetryableConnectionFailure, NEVER a receipt,
+            // failed technical inspection or uncertain A3 publication.
+            val order=(choice.sequentialAlternatives+
+                choice.preByteFallbacks).take(3)
+            val sequence=A0AutoRetrySequencer(order.size,
+                optIn=true,
+                equivalentClaimsConfirmed=choice.preByteFallbacks.isEmpty(),
+                independentlyEligibleExactScore=choice.preByteFallbacks.isNotEmpty())
+            val rejectedPeers=LinkedHashSet<String>()
+            fun report(result:Result)=recordOutcome(Result(result.status,result.reason,
+                result.attempts,result.selectedSource,rejectedPeers.toSet()))
+            while(true) {
+                if(revoked()) {
+                    sequence.cancel()
+                    return report(cancelled(sequence.attemptsStarted))
+                }
+                val attempt=sequence.begin()
+                    ?: return report(manual(Reason.EXHAUSTED_PEERS,sequence.attemptsStarted))
+                val candidate=order[attempt.alternativeIndex]
+                diagnostic(DiagnosticStage.FETCH_STARTED)
+                val download=try {
+                    port.fetch(candidate,::revoked)
+                }catch(error:Exception) {
+                    diagnostic(DiagnosticStage.FETCH_EXCEPTION,
+                        A0AcquisitionDiagnostics.fault(error))
+                    sequence.cancel()
+                    return report(if(revoked())cancelled(sequence.attemptsStarted)
+                        else manual(Reason.TRANSPORT_FAILURE,sequence.attemptsStarted))
+                }
+                when(download) {
+                    FetchResult.RetryableConnectionFailure -> {
+                        // No accepted upload or F bytes. Only this outcome
+                        // can influence peer preference for later album slots.
+                        rejectedPeers.add(candidate.peerUsername)
+                        diagnostic(DiagnosticStage.FETCH_RETRYABLE)
+                        sequence.complete(attempt,false)
+                        continue
+                    }
+                    is FetchResult.Received -> {
+                        var result:Result=manual(Reason.TECHNICAL_REJECTION,
+                            sequence.attemptsStarted)
+                        val receipt=download.receipt
+                        diagnostic(DiagnosticStage.RECEIPT_RECEIVED)
+                        try {
+                            if(revoked()) {
+                                sequence.cancel()
+                                result=cancelled(sequence.attemptsStarted)
+                            } else {
+                                val ext=candidate.claim.format.lowercase(
+                                    java.util.Locale.ROOT)
+                                val decoded=try {
+                                    port.inspect(receipt,ext,::revoked)
+                                }catch(error:Exception) {
+                                    diagnostic(DiagnosticStage.PROBE_UNAVAILABLE,
+                                        A0AcquisitionDiagnostics.fault(error))
+                                    null
+                                }
+                                if(decoded==null)
+                                    diagnostic(DiagnosticStage.PROBE_UNAVAILABLE)
+                                val assessed=A0AutoPostTransferTechnicalGate.assess(
+                                    profile=profile,requestedExtension=ext,
+                                    expectedDurationSeconds=target.durationSeconds,
+                                    receiptByteCount=receipt.byteCount,
+                                    actualByteCount=receipt.file.length(),
+                                    decoded=decoded)
+                                diagnostic(DiagnosticStage.POST_TRANSFER_GATE,
+                                    assessed.reason ?: assessed.status)
+                                if(revoked()) {
+                                    sequence.cancel()
+                                    result=cancelled(sequence.attemptsStarted)
+                                } else if(assessed.status!=
+                                    A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE) {
+                                    sequence.cancel()
+                                    result=manual(Reason.TECHNICAL_REJECTION,
+                                        sequence.attemptsStarted)
+                                } else {
+                                    val name=A5ManualSaveGate.safeDestinationName(
+                                        candidate.displayName,receipt.byteCount)
+                                    if(name==null) {
+                                        diagnostic(DiagnosticStage.DESTINATION_INVALID)
+                                        sequence.cancel()
+                                        result=manual(Reason.INVALID_DESTINATION,
+                                            sequence.attemptsStarted)
+                                    } else {
+                                        val published=try {
+                                            // The Port MUST check account generation
+                                            // synchronously within A3's AVAILABLE commit.
+                                            port.publish(receipt,name,::revoked)
+                                        }catch(_:Exception) {
+                                            // Any unclassified exception may have occurred
+                                            // AFTER the provider made the file visible.
+                                            PublishResult.UNCERTAIN
+                                        }
+                                        diagnostic(DiagnosticStage.PUBLISH_RESULT,published)
+                                        sequence.complete(attempt,
+                                            published==PublishResult.DURABLE)
+                                        result=when(published) {
+                                            PublishResult.DURABLE -> Result(
+                                                Status.PUBLISHED,null,
+                                                sequence.attemptsStarted,candidate)
+                                            PublishResult.UNCERTAIN -> Result(
+                                                Status.RECONCILE,Reason.PUBLICATION_UNCERTAIN,
+                                                sequence.attemptsStarted)
+                                            PublishResult.ROLLED_BACK ->
+                                                if(revoked())cancelled(sequence.attemptsStarted)
+                                                else manual(Reason.PUBLICATION_FAILURE,
+                                                    sequence.attemptsStarted)
+                                        }
+                                    }
+                                }
+                            }
+                        }catch(_:Exception) {
+                            sequence.cancel()
+                            result=if(revoked())cancelled(sequence.attemptsStarted)
+                                else manual(Reason.TECHNICAL_REJECTION,sequence.attemptsStarted)
+                        } finally {
+                            // Always release a received private receipt. A
+                            // failed cleanup cannot silently become success.
+                            try {
+                                port.cleanup(receipt)
+                            }catch(error:Exception) {
+                                diagnostic(DiagnosticStage.CLEANUP_EXCEPTION,
+                                    A0AcquisitionDiagnostics.fault(error))
+                                // No retry on cleanup errors, which may occur
+                                // AFTER a durable AVAILABLE commit. Never
+                                // request the same track again automatically.
+                                sequence.cancel()
+                                return report(Result(
+                                    if(result.status in setOf(Status.PUBLISHED,Status.RECONCILE))
+                                        result.status else Status.MANUAL_REVIEW,
+                                    Reason.CLEANUP_FAILURE,sequence.attemptsStarted,
+                                    if(result.status==Status.PUBLISHED)candidate else null))
+                            }
+                        }
+                        return report(result)
+                    }
+                }
+            }
+        }finally{
+            // Ports are per-track; never leave a socket or TRANSFERRING
+            // journal active after success, failure or user cancellation.
+            try { port.finish() }catch(_:Exception) {}
+            running.set(false)
+        }
+    }
+}

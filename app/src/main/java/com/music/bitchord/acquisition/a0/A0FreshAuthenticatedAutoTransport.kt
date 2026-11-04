@@ -1,0 +1,247 @@
+package com.music.bitchord.acquisition.a0
+
+import android.content.Context
+import java.io.File
+import java.io.IOException
+import java.net.Socket
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Real one-shot authenticated Soulseek transport for the FUTURE opt-in worker.
+ *
+ * A NEW server login and A0ServerAssociatedTransfer is created PER PEER.
+ * Search readers from other authenticated sessions are never reused.
+ *
+ * OFF/UNREACHABLE from UI and DownloadService: this is a devDebug-only
+ * implementation of A0AndroidAutoAcquisitionPort.AuthenticatedTransport.
+ * Only the future worker can supply a vetted Choice after user opt-in.
+ * The protocol is plaintext TCP: the user must have saved a dedicated account.
+ */
+internal class A0FreshAuthenticatedAutoTransport(
+    context:Context,
+    private val expectedGeneration:Long,
+    private val diagnosticScope:Int=A0AcquisitionDiagnostics.newScope(),
+):A0AndroidAutoAcquisitionPort.AuthenticatedTransport {
+    private val app=context.applicationContext
+    private val cancelled=AtomicBoolean(false)
+    @Volatile private var socket:Socket?=null
+    @Volatile private var transfer:A0ServerAssociatedTransfer?=null
+
+    override fun receive(
+        candidate:A0ObservedCandidateHandoff.Choice,
+        scratchDirectory:File,
+        isCancelled:()->Boolean,
+    ):A0AutoAcquisitionExecutor.FetchResult {
+        val start=android.os.SystemClock.elapsedRealtime()
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.TRANSPORT_START)
+        if(com.music.bitchord.BuildConfig.FLAVOR!="dev" || !com.music.bitchord.BuildConfig.DEBUG) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                A0AcquisitionDiagnostics.Fault.STATE)
+            throw IOException("Soulseek unattended transport is disabled")
+        }
+        val admission=A0AutoTransportAdmission.refusal(candidate)
+        if(admission!=null) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,admission)
+            throw IOException("Soulseek source admission rejected")
+        }
+        if(cancelled.get() || isCancelled()) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                A0AcquisitionDiagnostics.Fault.CANCELLED)
+            throw IOException("Soulseek auto transfer cancelled")
+        }
+        if(!SoulseekActiveSession.isCurrent(expectedGeneration)) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                A0AcquisitionDiagnostics.Fault.STATE)
+            throw IOException("Soulseek account generation revoked")
+        }
+        var session:A0AutoAuthenticatedServer.Session?=null
+        var current:A0ServerAssociatedTransfer?=null
+        var lastPhase:A0ServerAssociatedTransfer.Phase?=null
+        var fTokenValidated=false
+        var receivedBytes=0L
+        var firstByteElapsedMs=-1L
+        var lastByteElapsedMs=-1L
+        fun receiveCheckpoint(status:String) {
+            val payloadMs=if(lastByteElapsedMs>=firstByteElapsedMs &&
+                firstByteElapsedMs>=0L)
+                (lastByteElapsedMs-firstByteElapsedMs).coerceAtLeast(1L)
+                else -1L
+            val effectiveKiBps=if(payloadMs>0L)
+                ((receivedBytes/1024L)*1000L/payloadMs).coerceIn(0,1_000_000)
+                else -1L
+            // Aggregates only: never emit peer identity, filename or raw bytes.
+            com.music.bitchord.data.DebugLog.d("BitChord",
+                "soulseek_auto_receive_checkpoint status=$status" +
+                    " token_validated=$fTokenValidated" +
+                    " received_kib=${(receivedBytes/1024).coerceIn(0,262144)}" +
+                    " first_byte_elapsed_ms=$firstByteElapsedMs" +
+                    " payload_elapsed_ms=$payloadMs" +
+                    " effective_kibps=$effectiveKiBps" +
+                    " scope=$diagnosticScope")
+        }
+        try {
+            session=A0AutoAuthenticatedServer.open(
+                app,expectedGeneration,
+                isCancelled={ cancelled.get() || isCancelled() },
+                onSocketReady={socket=it},
+                onStage={stage ->
+                    A0AcquisitionDiagnostics.emit(diagnosticScope,
+                        A0AcquisitionDiagnostics.Phase.TRANSPORT_LOGIN_STAGE,
+                        reason=stage,
+                        elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
+                },
+            )
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_LOGIN_OK,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
+            val connection=session.socket
+            val username=session.username
+            current=A0ServerAssociatedTransfer()
+            if(!SoulseekActiveSession.registerAutoTransfer(current,expectedGeneration))
+                throw IOException("Soulseek account revoked before P/F")
+            transfer=current
+            val listing=A0OpenAudioCandidateGate.PublicPeerListing(
+                remoteFilename=candidate.remotePath,
+                reportedSize=candidate.sizeBytes,
+                locked=false,freeSlot=true,
+            )
+            val receipt=current.runObservedOnce(
+                authenticatedServer=connection,
+                localUsername=username,
+                peerUsername=candidate.peerUsername,
+                listing=listing,
+                privateDirectory=scratchDirectory,
+                onPhase={ phase ->
+                    lastPhase=phase
+                    A0AcquisitionDiagnostics.emit(diagnosticScope,
+                        A0AcquisitionDiagnostics.Phase.TRANSPORT_PEER_PHASE,
+                        reason=phase,
+                        elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
+                },
+                externalCancelled={
+                    cancelled.get() || isCancelled() ||
+                        !SoulseekActiveSession.isCurrent(expectedGeneration)
+                },
+                onTokenValidated={ fTokenValidated=true },
+                onProgress={ count ->
+                    if(count>0 && firstByteElapsedMs<0)
+                        firstByteElapsedMs=android.os.SystemClock.elapsedRealtime()-start
+                    receivedBytes=count
+                    if(count>0)
+                        lastByteElapsedMs=android.os.SystemClock.elapsedRealtime()-start
+                }
+            )
+            if(cancelled.get() || isCancelled() ||
+                !SoulseekActiveSession.isCurrent(expectedGeneration)) {
+                runCatching {receipt.file.delete()}
+                throw IOException("Soulseek auto transfer revoked after receiving bytes")
+            }
+            receiveCheckpoint("COMPLETE")
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_RECEIPT,
+                reason=lastPhase,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
+            return A0AutoAcquisitionExecutor.FetchResult.Received(receipt)
+        }catch(error:A0ServerAssociatedTransfer.PeerAddressFailure) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                reason=error.kind,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start,
+                count=error.unrelatedFrames)
+            if(error.kind==A0ServerAssociatedTransfer.AddressFailureKind.PEER_UNREACHABLE &&
+                !cancelled.get() && !isCancelled() &&
+                SoulseekActiveSession.isCurrent(expectedGeneration))
+                return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
+            throw IOException("Soulseek auto peer lookup failed",error)
+        }catch(error:Exception) {
+            val retryable=A0PreByteTransportRetryPolicy.canRetry(
+                lastPhase,error,
+                cancelled=cancelled.get() || isCancelled(),
+                sameGeneration=SoulseekActiveSession.isCurrent(expectedGeneration))
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_FAILURE,
+                reason=A0AcquisitionDiagnostics.fault(error),
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start,
+                count=lastPhase?.ordinal ?: -1)
+            if(lastPhase==A0ServerAssociatedTransfer.Phase.F_ESTABLISHED ||
+                lastPhase==A0ServerAssociatedTransfer.Phase.BYTES_RECEIVED)
+                receiveCheckpoint("FAILED")
+            val failureKind=when(error) {
+                is java.net.SocketTimeoutException -> "SOCKET_TIMEOUT"
+                is java.io.EOFException -> "PEER_EOF"
+                is java.net.SocketException -> "SOCKET_DISCONNECT"
+                is java.io.IOException -> "OTHER_IO"
+                else -> "OTHER"
+            }
+            com.music.bitchord.data.DebugLog.d("BitChord",
+                "soulseek_auto_peer_failure category=$failureKind" +
+                    " phase=${lastPhase?.name ?: "NONE"}" +
+                    " retryable=$retryable scope=$diagnosticScope")
+            if(retryable) {
+                // No upload accepted, no F opened, no receipt received.
+                // The executor may try only the NEXT metadata-equivalent
+                // source and will never switch to another edition on a tie.
+                com.music.bitchord.data.DebugLog.d("BitChord",
+                    "soulseek_auto_retry eligibility=PRE_ACCEPT_ONLY" +
+                        " cause=$failureKind" +
+                        " phase=${lastPhase?.name ?: "NONE"}" +
+                        " scope=$diagnosticScope")
+                return A0AutoAcquisitionExecutor.FetchResult.RetryableConnectionFailure
+            }
+            throw error
+        }finally {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.TRANSPORT_CLOSE,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-start)
+            current?.let {
+                SoulseekActiveSession.detachAutoTransfer(it)
+                runCatching {it.cancel()}
+            }
+            transfer=null
+            session?.close()
+            socket=null
+        }
+    }
+
+    override fun cancel() {
+        cancelled.set(true)
+        runCatching {transfer?.cancel()}
+        runCatching {socket?.close()}
+    }
+
+}
+
+/**
+ * Last defensive check before handling saved plaintext TCP credentials.
+ * Selection scoring happens separately per target, never inside this gate.
+ */
+internal object A0AutoTransportAdmission {
+    enum class Refusal {
+        PEER_NOT_READY, INVALID_BYTE_BOUND, UNSUPPORTED_CODEC,
+        UNSAFE_REMOTE_PATH, INVALID_PEER_IDENTIFIER,
+    }
+    fun refusal(candidate:A0ObservedCandidateHandoff.Choice):Refusal? {
+        if(candidate.peerAvailability.tier!=A0PeerAvailability.Tier.READY)
+            return Refusal.PEER_NOT_READY
+        if(candidate.sizeBytes !in A0ObservedTransferLimits.MIN_AUDIO_BYTES..
+                A0ObservedTransferLimits.MAX_AUDIO_BYTES)
+            return Refusal.INVALID_BYTE_BOUND
+        if(candidate.claim.format.lowercase(Locale.ROOT) !in
+                setOf("mp3","flac","wav","aac","opus","ogg"))
+            return Refusal.UNSUPPORTED_CODEC
+        if(!A0ModernIncomingTransfer.isSafeRemoteName(candidate.remotePath))
+            return Refusal.UNSAFE_REMOTE_PATH
+        if(runCatching {A0PeerRendezvousWire.getPeerAddress(
+                candidate.peerUsername)}.isFailure)
+            return Refusal.INVALID_PEER_IDENTIFIER
+        return null
+    }
+    fun accepts(candidate:A0ObservedCandidateHandoff.Choice):Boolean =
+        refusal(candidate)==null
+}

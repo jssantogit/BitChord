@@ -24,6 +24,11 @@ internal class A0ObservedCandidateHandoff(
         A0CanonicalAcquisitionIntent.QualityProfileSnapshot(),
     private val peerReliability:A0PeerReliabilityEvidence=A0PeerReliabilityEvidence(),
     private val collectReleaseShadow:Boolean=false,
+    private val releaseQueries:List<String> = emptyList(),
+    // Automatic discovery consumes release shadow only; avoid rebuilding the
+    // separate sorted manual selector for each untrusted peer file.
+    private val collectManualCandidates:Boolean=true,
+    private val acceptedSearchTokens:Set<Int> = setOf(searchToken),
 ) {
     class Choice internal constructor(
         val displayName:String,
@@ -83,13 +88,128 @@ internal class A0ObservedCandidateHandoff(
         val qualityMismatches:Int=0,
         val manualPrimary:Int=0,
         val shadowStrong:Int=0,
+        // Aggregate, title-unrelated filenames discarded before ranking.
+        // They are deliberately absent from per-slot MISSING_TERMS counts.
+        val shadowTitleFiltered:Int=0,
     )
     private val transport=A0ServerAssociatedTransfer(allowLoopbackForLocalTest)
     private val candidates=ArrayList<Choice>(384)
     // Separate bounded observation cache: long releases need up to 64 tracks
     // from the same peer, but the actual manual selector retains max 10/peer.
-    private val releaseShadow=ArrayList<Choice>(512)
+    // Album searches may contain hundreds of distinct, plausible responses
+    // across multiple titles. Give the album query twice the total budget,
+    // keeping per-peer 64 and per-slot 512 safety caps unchanged.
+    private val releaseShadowLimit=if(releaseQueries.size>1)1024 else 512
+    private val releaseShadow=ArrayList<Choice>(releaseShadowLimit)
     private val releaseShadowPerPeer=HashMap<String,Int>()
+    // Retained choices have immutable filenames and immutable title-slot
+    // matches. Re-tokenizing all 64 files of a full peer on each new offer
+    // caused long serialized publication stalls on the physical device.
+    private val releaseHitsCache=HashMap<Choice,List<Int>>()
+    private var shadowEvicted=0
+    private var shadowDroppedAtGlobalLimit=0
+    private var shadowDroppedAtPeerLimit=0
+    // A later sample must not look complete after the bounded collector
+    // discarded a competing edition or a relevant source.
+    private val releaseShadowLostSlots=BooleanArray(releaseQueries.take(64).size)
+    // Only an already-requested release may influence this read-only cache.
+    // Matching a file's title is a DISCOVERY hint, not identity proof or
+    // permission to transfer. No peer names or paths enter diagnostics.
+    // Keep the SAME indices as releaseQueries, including untokenizable
+    // titles. Filtering empty tokens shifts lost-evidence flags to the wrong
+    // canonical track and can hide truncated peer observations.
+    private val releaseSlotTokens=releaseQueries.take(64)
+        .map(A0ReleaseDiscoveryShadowAdapter::titleOptions)
+
+    /**
+     * Per validated search ticket: how many untrusted public file claims
+     * survived cheap title screening, duplicate rejection and shadow insertion.
+     * These are discovery funnel counts, NOT independently strong candidates.
+     * The random wire ticket stays private and never enters the diagnostic text.
+     */
+    data class TicketScreening(
+        val titleMatched:Int=0,
+        val uniqueAdmitted:Int=0,
+        val shadowInserted:Int=0,
+    )
+    private class TicketCounters {
+        var titleMatched=0
+        var uniqueAdmitted=0
+        var shadowInserted=0
+        fun snapshot()=TicketScreening(titleMatched,uniqueAdmitted,shadowInserted)
+    }
+    private val perTicket=HashMap<Int,TicketCounters>(3)
+
+    /** Snapshot only; independent of choice ranking and transfer authority. */
+    @Synchronized fun ticketScreening(token:Int):TicketScreening =
+        perTicket[token]?.snapshot() ?: TicketScreening()
+
+    private fun markLostName(name:String) {
+        if(!collectReleaseShadow)return
+        val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(name)
+        releaseSlotTokens.forEachIndexed { index,title ->
+            if(A0ReleaseDiscoveryShadowAdapter.matchesTitleOptions(file,title))
+                releaseShadowLostSlots[index]=true
+        }
+    }
+
+    private fun releaseSlotHits(choice:Choice):List<Int> {
+        if(releaseSlotTokens.isEmpty())return emptyList()
+        return releaseHitsCache[choice] ?: run {
+            val file=A0ReleaseDiscoveryShadowAdapter.fileTokens(choice.claim.filename)
+            releaseSlotTokens.indices.filter { index ->
+                A0ReleaseDiscoveryShadowAdapter.matchesTitleOptions(
+                    file,releaseSlotTokens[index])
+            }
+        }
+    }
+
+    /**
+     * Evict an overrepresented, unrelated file ONLY to preserve previously
+     * absent release slots from the SAME peer. A peer still gets at most 64
+     * observations and global shadow memory still stays at 512.
+     */
+    private fun releaseSamePeerVictim(peer:String,incoming:Choice):Choice? {
+        val related=releaseSlotHits(incoming)
+        if(related.isEmpty())return null
+        val siblings=releaseShadow.filter { it.peerUsername==peer }
+        val hitCounts=IntArray(releaseSlotTokens.size)
+        for(sibling in siblings)
+            for(slot in releaseSlotHits(sibling))hitCounts[slot]++
+        if(related.any { hitCounts[it]==0 }) {
+            return siblings.firstOrNull { releaseSlotHits(it).isEmpty() }
+                ?: siblings.firstOrNull { choice ->
+                    val slots=releaseSlotHits(choice)
+                    slots.isNotEmpty() && slots.all { hitCounts[it]>1 }
+                }
+        }
+        // Even when the title slot is represented, 64 LOW-QUALITY claims
+        // must not indefinitely hide a later codec/album-compatible claim.
+        // Only peer-independent quality/album evidence is used here; the
+        // preflight score refers to the current manual song, not siblings.
+        fun evidenceGrade(choice:Choice):Int {
+            val quality=when(choice.qualityEvidence.status) {
+                A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
+                A0DownloadQualityPolicy.Status.NOT_CONSTRAINED -> 4
+                A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL -> 2
+                else -> 0
+            }
+            val album=when(choice.albumEvidence.status) {
+                A0CanonicalAlbumPolicy.Status.MATCHING_CLAIM_UNVERIFIED,
+                A0CanonicalAlbumPolicy.Status.UNCONSTRAINED -> 2
+                A0CanonicalAlbumPolicy.Status.INCONCLUSIVE_MANUAL -> 1
+                else -> 0
+            }
+            return quality+album
+        }
+        val incomingGrade=evidenceGrade(incoming)
+        return siblings.firstOrNull { old ->
+            val oldHits=releaseSlotHits(old)
+            oldHits.isNotEmpty() && oldHits.any { it in related } &&
+                oldHits.all { hitCounts[it]>1 || it in related } &&
+                evidenceGrade(old)<incomingGrade
+        }
+    }
     private val canonicalManualTarget by lazy {
         // Badly formatted untrusted/search text must not crash the collector.
         // An invalid album claim loses confidence; it never grants one.
@@ -145,7 +265,11 @@ internal class A0ObservedCandidateHandoff(
     private var capDropped=0
     private var perPeerDropped=0
     private var claimBudgetDropped=0
-    private val seen=HashSet<Pair<String,String>>()
+    private val seen=A0BoundedPeerClaimLedger(8192)
+    // Bounded duplicate metadata witness: the dedup ledger alone would hide
+    // contradictions arriving on an identical (peer,path) within one search.
+    private val witnessedClaims=
+        LinkedHashMap<Pair<String,String>,A0CandidateClaimClusters.Claim>()
     private var replies=0
     private var publicSeen=0
     private var lockedSeen=0
@@ -153,11 +277,12 @@ internal class A0ObservedCandidateHandoff(
     private var unsupported=0
     private var unsafe=0
     private var noSlotSeen=0
+    private var shadowTitleFiltered=0
     private var readersStopped=false
     private var cancelled=false
     private var spent=false
 
-    init {require(searchToken>0)}
+    init {require(searchToken>0 && searchToken in acceptedSearchTokens)}
 
     /** A wire frame is credited as a valid peer reply only after the
      * authenticated search token and claimed peer identity pass every gate.
@@ -165,22 +290,30 @@ internal class A0ObservedCandidateHandoff(
      */
     fun offerSearchResult(frame:ByteArray,claimedPeerUsername:String):Boolean {
         val result=try {
-            A0SoulseekSearchResponseParser.parse(frame,searchToken)
+            A0SoulseekSearchResponseParser.parse(frame,acceptedSearchTokens)
         } catch (_:IOException) {return false} catch (_:IllegalArgumentException) {return false}
         return offerParsed(result,claimedPeerUsername)
     }
 
     @Synchronized
     fun offerParsed(result:A0SoulseekSearchResponse,claimedPeerUsername:String):Boolean {
-        if(cancelled||spent||readersStopped||result.token!=searchToken ||
+        if(cancelled||spent||readersStopped||result.token !in acceptedSearchTokens ||
             result.peerUsername!=claimedPeerUsername) return false
         try { A0PeerRendezvousWire.getPeerAddress(result.peerUsername) }
         catch (_:IllegalArgumentException) { return false }
         replies=(replies+1).coerceAtMost(100000)
         publicSeen=(publicSeen+result.files.size).coerceAtMost(100000)
         lockedSeen=(lockedSeen+result.lockedFiles.size).coerceAtMost(100000)
+        // Only the three already accepted auto-search tickets can allocate a
+        // counter bucket. Manual collection keeps its existing behavior.
+        val ticket=if(collectReleaseShadow && !collectManualCandidates &&
+            releaseSlotTokens.any { it.isNotEmpty() }) {
+            perTicket[result.token] ?: if(perTicket.size<3)
+                TicketCounters().also { perTicket[result.token]=it }
+            else null
+        } else null
 
-        val validExtensions=if(saveFormatsOnly) setOf("mp3","flac","wav","aac")
+        val validExtensions=if(saveFormatsOnly) setOf("mp3","flac","wav","aac","opus","ogg")
             else setOf("mp3","flac","wav","ogg","m4a","aac","opus")
         val locked=result.lockedFiles.map{it.remoteFilename}.toHashSet()
         for(file in result.files) {
@@ -207,14 +340,51 @@ internal class A0ObservedCandidateHandoff(
                 noSlotSeen=(noSlotSeen+1).coerceAtMost(100000)
                 continue
             }
+            // Auto search needs only requested release slots. A public
+            // response can list thousands of unrelated songs: do not rank,
+            // cluster or acquire the holder monitor for their expensive paths.
+            // Manual collection still evaluates every admissible audio file.
+            if(!collectManualCandidates && collectReleaseShadow &&
+                releaseSlotTokens.isNotEmpty()) {
+                val fileWords=A0ReleaseDiscoveryShadowAdapter.fileTokens(basename)
+                if(releaseSlotTokens.none {
+                        A0ReleaseDiscoveryShadowAdapter.matchesTitleOptions(
+                            fileWords,it) }) {
+                    shadowTitleFiltered=(shadowTitleFiltered+1).coerceAtMost(100000)
+                    continue
+                }
+            }
+            // Safety/format/size/availability checks and the release-title
+            // screen have passed. This still does not prove the artist.
+            ticket?.let { it.titleMatched=(it.titleMatched+1).coerceAtMost(100000) }
             val identity=result.peerUsername to path
-            if(!seen.add(identity)) {
+            val incomingClaim=A0CandidateClaimClusters.Claim(
+                filename=basename,format=ext,sizeBytes=file.sizeBytes,
+                bitrateKbps=file.attributes[0],
+                durationSeconds=file.attributes[1]?.takeIf { it in 1..14400 },
+                sampleRateHz=file.attributes[4]?.takeIf { it in 8000..384000 },
+                bitDepth=file.attributes[5]?.takeIf { it in 8..32 },
+            )
+            val earlier=witnessedClaims[identity]
+            if(earlier!=null && !A0CandidateClaimClusters.sameClaim(
+                    earlier,incomingClaim)) {
+                markLostName(earlier.filename)
+                markLostName(incomingClaim.filename)
+            }
+            if(!seen.admit(identity.first,identity.second)) {
                 duplicateCount=(duplicateCount+1).coerceAtMost(100000)
                 continue
             }
-            // Cap untrusted identity storage, never persist it or print it.
-            if(seen.size>8192) seen.clear()
+            if(witnessedClaims.size>=8192) {
+                val old=witnessedClaims.entries.iterator()
+                if(old.hasNext()) {
+                    markLostName(old.next().value.filename)
+                    old.remove()
+                }
+            }
+            witnessedClaims[identity]=incomingClaim
             eligible=(eligible+1).coerceAtMost(100000)
+            ticket?.let { it.uniqueAdmitted=(it.uniqueAdmitted+1).coerceAtMost(100000) }
             // Preserve out-of-range claims for the codec conflict gate: dropping
             // an impossible MP3 bitrate would quietly downgrade UNSAFE to
             // REVIEW/UNKNOWN. Only the UI exposure is bounded.
@@ -274,6 +444,8 @@ internal class A0ObservedCandidateHandoff(
                 "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
                 "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
                 "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+                "opus" -> A0CanonicalAcquisitionIntent.Codec.OPUS
+                "ogg" -> A0CanonicalAcquisitionIntent.Codec.VORBIS
                 else -> null
             }
             val qualityAssessment=A0DownloadQualityPolicy.evaluate(
@@ -282,7 +454,9 @@ internal class A0ObservedCandidateHandoff(
                 setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
                     A0CanonicalAcquisitionIntent.Codec.FLAC,
                     A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
-                    A0CanonicalAcquisitionIntent.Codec.AAC_ADTS),
+                    A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+                    A0CanonicalAcquisitionIntent.Codec.OPUS,
+                    A0CanonicalAcquisitionIntent.Codec.VORBIS),
             )
             val observedChoice=Choice(
                 displayName=displayName,sizeBytes=file.sizeBytes,
@@ -294,43 +468,58 @@ internal class A0ObservedCandidateHandoff(
                 preflight=preflight,peerAvailability=peerAvailability,
                 albumEvidence=album,identityEvidence=identityDecision,
                 qualityEvidence=qualityAssessment,
-                claim=A0CandidateClaimClusters.Claim(
-                    filename=basename,format=ext,sizeBytes=file.sizeBytes,
-                    bitrateKbps=bitrateRaw,durationSeconds=duration,
-                    sampleRateHz=sampleRate,bitDepth=bitDepth
-                )
+                claim=incomingClaim
             )
-            A0StableCandidateInsertion.add(candidates,observedChoice,choiceOrder)
+            if(collectManualCandidates)
+                A0StableCandidateInsertion.add(candidates,observedChoice,choiceOrder)
             if(collectReleaseShadow) {
                 val peer=result.peerUsername
                 val peerCount=releaseShadowPerPeer[peer] ?: 0
-                if(peerCount<64) {
-                    if(releaseShadow.size==512) {
-                        // One early burst cannot monopolize all 512 shadow
-                        // observations and hide later release-wide sources.
-                        // Evict only from a strictly better-represented peer
-                        // (or the oldest one when every peer has one slot).
-                        // This cache does NOT change the manual choices or P/F.
+                val victim=when {
+                    // Previously, 64 unrelated files from one peer forever
+                    // hid later tracks from that same release and source.
+                    peerCount>=64 -> releaseSamePeerVictim(peer,observedChoice)
+                    releaseShadow.size==releaseShadowLimit -> {
+                        // Retain prior cross-peer fairness: only replace
+                        // an entry from a more heavily represented peer.
                         val maxCount=releaseShadowPerPeer.values.maxOrNull() ?: 0
-                        if(maxCount>peerCount) {
-                            val victim=releaseShadow.firstOrNull {
-                                releaseShadowPerPeer[it.peerUsername]==maxCount
-                            }
-                            if(victim!=null) {
-                                releaseShadow.remove(victim)
-                                val remainder=checkNotNull(
-                                    releaseShadowPerPeer[victim.peerUsername])-1
-                                if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
-                                else releaseShadowPerPeer[victim.peerUsername]=remainder
-                            }
-                        }
+                        if(maxCount>peerCount)releaseShadow.firstOrNull {
+                            releaseShadowPerPeer[it.peerUsername]==maxCount
+                        } else null
                     }
-                    if(releaseShadow.size<512) {
-                        releaseShadow.add(observedChoice)
-                        releaseShadowPerPeer[peer]=peerCount+1
+                    else -> null
+                }
+                if(victim!=null) {
+                    shadowEvicted=(shadowEvicted+1).coerceAtMost(100000)
+                    releaseSlotHits(victim).forEach { releaseShadowLostSlots[it]=true }
+                    releaseShadow.remove(victim)
+                    releaseHitsCache.remove(victim)
+                    val remainder=checkNotNull(releaseShadowPerPeer[victim.peerUsername])-1
+                    if(remainder==0)releaseShadowPerPeer.remove(victim.peerUsername)
+                    else releaseShadowPerPeer[victim.peerUsername]=remainder
+                }
+                if(releaseShadow.size<releaseShadowLimit &&
+                    (releaseShadowPerPeer[peer] ?: 0)<64) {
+                    releaseShadow.add(observedChoice)
+                    // Counts insertion, not final retained snapshot: later
+                    // evictions are still reported separately.
+                    ticket?.let {
+                        it.shadowInserted=(it.shadowInserted+1).coerceAtMost(100000)
+                    }
+                    releaseHitsCache[observedChoice]=releaseSlotHits(observedChoice)
+                    releaseShadowPerPeer[peer]=(releaseShadowPerPeer[peer] ?: 0)+1
+                } else {
+                    if(releaseShadow.size>=releaseShadowLimit)
+                        shadowDroppedAtGlobalLimit=
+                            (shadowDroppedAtGlobalLimit+1).coerceAtMost(100000)
+                    else shadowDroppedAtPeerLimit=
+                        (shadowDroppedAtPeerLimit+1).coerceAtMost(100000)
+                    releaseSlotHits(observedChoice).forEach {
+                        releaseShadowLostSlots[it]=true
                     }
                 }
             }
+            if(collectManualCandidates) {
             // A single enthusiastic peer cannot displace every other source.
             val fromPeer=candidates.withIndex()
                 .filter { it.value.peerUsername==result.peerUsername }
@@ -357,6 +546,7 @@ internal class A0ObservedCandidateHandoff(
             if(candidates.size>384) {
                 candidates.removeAt(candidates.lastIndex)
                 capDropped=(capDropped+1).coerceAtMost(100000)
+            }
             }
         }
         return true
@@ -391,6 +581,7 @@ internal class A0ObservedCandidateHandoff(
         manualPrimary=A0ManualCandidatePolicy.primaryIndices(
             candidates,candidates.indices.toList()).size,
         shadowStrong=shadowEligibleIndices().size,
+        shadowTitleFiltered=shadowTitleFiltered,
         validBeforeLimit=eligible,
         duplicates=duplicateCount,
         capacityDropped=capDropped,
@@ -503,10 +694,45 @@ internal class A0ObservedCandidateHandoff(
     @Synchronized
     fun choices():List<Choice> = if(cancelled||spent)emptyList() else candidates.toList()
 
+    data class ReleaseShadowSnapshot(
+        val choices:List<Choice>,
+        val truncatedSlots:Set<Int>,
+        val shadowEvicted:Int=0,
+        val shadowDroppedAtGlobalLimit:Int=0,
+        val shadowDroppedAtPeerLimit:Int=0,
+    )
+
     @Synchronized
-    fun releaseShadowChoices():List<Choice> =
-        if(!collectReleaseShadow || cancelled || spent)emptyList()
-        else releaseShadow.toList()
+    fun releaseShadowSnapshot():ReleaseShadowSnapshot =
+        if(!collectReleaseShadow || cancelled || spent)
+            ReleaseShadowSnapshot(emptyList(),emptySet())
+        else ReleaseShadowSnapshot(
+            releaseShadow.toList(),
+            releaseShadowLostSlots.indices.filter { releaseShadowLostSlots[it] }.toSet(),
+            shadowEvicted,shadowDroppedAtGlobalLimit,shadowDroppedAtPeerLimit,
+        )
+
+    @Synchronized
+    fun releaseShadowChoices():List<Choice> = releaseShadowSnapshot().choices
+
+    /**
+     * The MANUAL primary list can contain plausible but auto-ineligible files.
+     * Only a fully eligible, READY automatic candidate may suppress the bounded
+     * fallback query. A search variant never changes canonical target identity.
+     */
+    @Synchronized
+    fun hasAutoReadyCandidateForSearchRecovery(
+        entry:com.music.bitchord.download.SoulseekBatchPlan.Entry,
+        quality:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+    ):Boolean {
+        val index=releaseQueries.indexOf(entry.query)
+        if(index<0 || index>=releaseShadowLostSlots.size || cancelled || spent)
+            return false
+        val related=releaseShadow.filter { index in releaseSlotHits(it) }
+        return A0AutoCandidateSelectionPolicy.preview(
+            entry,related,quality,sampleTruncated=releaseShadowLostSlots[index]
+        ).status==A0AutoCandidateSelectionPolicy.Status.PROVISIONAL
+    }
 
     @Synchronized
     fun hasCandidates()=candidates.isNotEmpty()&&!cancelled&&!spent
@@ -538,7 +764,7 @@ internal class A0ObservedCandidateHandoff(
             authenticatedServer,localUsername,selected.peerUsername,
             A0OpenAudioCandidateGate.PublicPeerListing(
                 selected.remotePath,selected.sizeBytes,locked=false,freeSlot=true
-            ),privateDirectory,onPhase
+            ),privateDirectory,onPhase=onPhase
         )
     }
 

@@ -16,6 +16,10 @@ import com.music.bitchord.download.A3AndroidAcquisitionLedger
 import com.music.bitchord.download.SoulseekBatchPayload
 import com.music.bitchord.download.SoulseekBatchSession
 import com.music.bitchord.download.SoulseekBatchPlan
+import com.music.bitchord.download.Downloads
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.download.SoulseekManualRecoveryTermination
+import com.music.bitchord.download.SoulseekManualLifecycleGate
 import android.widget.Toast
 import android.text.InputType
 import android.text.InputFilter
@@ -51,6 +55,9 @@ import java.util.UUID
  */
 class A0ManualLoginActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
+    private val lifecycleGate=SoulseekManualLifecycleGate()
+    /** Only the original, validated Activity may release the review lease. */
+    private var ownsManualReviewLease=false
     // Memory-only comparison; scoped to this Activity, never persisted.
     private val searchComparison=A0SearchComparison()
     @Volatile private var activeSocket: Socket? = null
@@ -67,11 +74,15 @@ class A0ManualLoginActivity : Activity() {
         super.onCreate(savedInstanceState)
         // Launched by the in-app song Download action, not the old A0 tool entry.
         val fromSongDownload = intent.hasExtra("bitchord.soulseek.manual.query")
+        val manualRecovery=intent.getBooleanExtra("bitchord.soulseek.manual.recovery",false)
+        val recoverySession=intent.getStringExtra("bitchord.soulseek.manual.review_session")
+        val recoveryToken=intent.getStringExtra("bitchord.soulseek.manual.review_token")
+        val recoveryIndices=intent.getIntArrayExtra("bitchord.soulseek.manual.review_indices")
         val hasBatch=intent.hasExtra("bitchord.soulseek.batch.queries")
         // Process death cannot be assumed to preserve the completion of a
         // MediaStore commit. Fail closed instead of silently restarting at
         // track one and risking a duplicate physical download.
-        if(hasBatch && savedInstanceState!=null) {
+        if((hasBatch || manualRecovery) && savedInstanceState!=null) {
             Toast.makeText(this,
                 "Lote interrompido. Faixas já salvas permanecem na biblioteca; " +
                     "abra o lançamento novamente para continuar manualmente.",
@@ -91,6 +102,39 @@ class A0ManualLoginActivity : Activity() {
             return
         }
         val batch=batchEntries?.let(::SoulseekBatchSession)
+        if(manualRecovery && (!fromSongDownload ||
+                recoverySession.isNullOrBlank() ||
+                recoveryIndices?.size!=(batchEntries?.size ?: 1) ||
+                recoveryIndices?.toList()!=recoveryIndices?.distinct())) {
+            Toast.makeText(this,"Revisão indisponível: nenhum download iniciado.",
+                Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+        if(manualRecovery) {
+            val preview=batchEntries ?: listOf(SoulseekBatchPlan.Entry(
+                trackId="single-manual-recovery",
+                query=intent.getStringExtra("bitchord.soulseek.manual.query").orEmpty(),
+                album=intent.getStringExtra("bitchord.soulseek.manual.album")
+                    ?.takeIf { it.isNotBlank() },
+                durationSeconds=intent.getIntExtra(
+                    "bitchord.soulseek.manual.duration_seconds",0)
+                    .takeIf { it in 15..7200 },
+            ))
+            if(!Downloads.validSoulseekManualReview(
+                    recoverySession.orEmpty(),
+                    recoveryToken.orEmpty(),
+                    recoveryIndices?.toList().orEmpty(),
+                    preview)) {
+                Toast.makeText(this,
+                    "Revisão expirada: confira a biblioteca antes de continuar.",
+                    Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
+            ownsManualReviewLease=true
+        }
+        val completedSingle=java.util.concurrent.atomic.AtomicBoolean(false)
         // The song search/candidates view has no visible credentials; allow
         // screenshots for QA. Legacy username/password tools stay protected.
         if (A0ScreenCapturePolicy.requiresSecureWindow(fromSongDownload)) {
@@ -110,9 +154,14 @@ class A0ManualLoginActivity : Activity() {
             it.setPadding(0, 12, 0, 12)
             page.addView(it)
         }
-        text(if (fromSongDownload) "Baixar com Soulseek" else
+        text(if (manualRecovery) "Revisar faixas manualmente" else
+            if (fromSongDownload) "Baixar com Soulseek" else
             "BitChord A0 — teste de conectividade P2P Soulseek")
-        text(if (fromSongDownload)
+        text(if (manualRecovery)
+            "A automação não selecionou com segurança estas faixas. Somente elas serão " +
+                "revisadas; músicas publicadas anteriormente não serão baixadas novamente. " +
+                "Você precisa pesquisar, escolher e autorizar cada arquivo manualmente."
+        else if (fromSongDownload)
             "Busque arquivos usando sua conta configurada em Configurações → Downloads. " +
                 "A pesquisa não baixa arquivos automaticamente: você deverá escolher um " +
                 "candidato e confirmar que tem autorização para salvá-lo."
@@ -189,7 +238,8 @@ class A0ManualLoginActivity : Activity() {
         }
         page.addView(transferAction)
         val saveConsent=CheckBox(this).apply {
-            text="Confirmo que posso armazenar o arquivo escolhido. " +
+            text="Confirmo que tenho autorização para salvar o arquivo escolhido " +
+                "manualmente ou os candidatos elegíveis selecionados automaticamente. " +
                 "O áudio ficará em Music/BitChord ou na pasta selecionada."
         }
         page.addView(saveConsent)
@@ -197,6 +247,9 @@ class A0ManualLoginActivity : Activity() {
             text="Baixar 1 arquivo autorizado como música local (piloto devDebug)"
         }
         page.addView(saveAction)
+        // No second AUTO entrypoint in this manual picker. MainActivity's
+        // guarded one-tap queue preserves the actual source recording ID;
+        // hand-edited searches here cannot mint canonical identity.
         val exportAction = Button(this).apply { text = "Exportar logs A0 (TXT)" }
         page.addView(exportAction)
         if (!fromSongDownload) text("Captura temporária se não existir uma captura manual ativa. " +
@@ -225,13 +278,16 @@ class A0ManualLoginActivity : Activity() {
             saveAction.isEnabled=false
             status.text="Falha ao limpar arquivos temporários do teste. Transferência bloqueada."
         }
-
         fun start(
             performSearch:Boolean,transferObserved:Boolean=false,saveToDevice:Boolean=false
         ) {
             require(!transferObserved || performSearch)
             require(!saveToDevice || transferObserved)
-            if(batch?.isComplete==true || (saveToDevice && batch?.currentSaved==true)) {
+            val recoveryOrdinal=batch?.index ?: 0
+            val recoveryQuery=batch?.current?.query ?: intent.getStringExtra(
+                "bitchord.soulseek.manual.query").orEmpty()
+            if(batch?.isComplete==true || (saveToDevice && batch?.currentSaved==true) ||
+                (batch==null && completedSingle.get())) {
                 status.text="Esta faixa já foi salva. Avance para a próxima do lote."
                 return
             }
@@ -311,6 +367,7 @@ class A0ManualLoginActivity : Activity() {
                 "Verificando uma sessão; nenhum arquivo será transferido."
             }
             val accountGeneration = SoulseekActiveSession.generation()
+            val lifecycleToken=lifecycleGate.token()
             worker.execute {
                 // Existing Diagnostics capture and structured tracing; no raw inputs.
                 val featureCapture = runCatching {
@@ -361,7 +418,47 @@ class A0ManualLoginActivity : Activity() {
                 var loginReplyProgress: A0LoginReadProgress? = null
                 var saveLedger:A3AcquisitionLedger?=null
                 var saveJobId:String?=null
+                var searchLease:A0SearchWindowBudget.Lease?=null
                 try {
+                    if(performSearch) {
+                        // Manual and automatic searches use the SAME account-
+                        // wide process budget. Wait before login, without
+                        // keeping a server connection idle for the rate limit.
+                        val budget=A0GlobalSearchWindowBudget.shared
+                        var announced=false
+                        var totalWaitMs=0L
+                        while(searchLease==null && !stopping &&
+                            lifecycleGate.isCurrent(lifecycleToken) &&
+                            SoulseekActiveSession.isCurrent(accountGeneration) &&
+                            !Thread.currentThread().isInterrupted) {
+                            val now=android.os.SystemClock.elapsedRealtime()
+                            searchLease=budget.tryAcquireUpTo(3,now)
+                            if(searchLease==null) {
+                                val delay=budget.waitMillis(1,now).coerceIn(1L,1000L)
+                                if(!announced) {
+                                    announced=true
+                                    runOnUiThread {
+                                        if(!stopping && lifecycleGate.isCurrent(lifecycleToken))
+                                            status.text="Aguardando limite seguro de pesquisas Soulseek. " +
+                                                "A espera pode ser cancelada."
+                                    }
+                                }
+                                Thread.sleep(delay)
+                                totalWaitMs+=delay
+                            }
+                        }
+                        if(searchLease==null || stopping ||
+                            !lifecycleGate.isCurrent(lifecycleToken) ||
+                            !SoulseekActiveSession.isCurrent(accountGeneration))
+                            throw IOException("Soulseek manual search admission cancelled")
+                        com.music.bitchord.data.DebugLog.d("BitChord",
+                            "soulseek_manual_search rate_budget_wait_ms=" +
+                                totalWaitMs.coerceIn(0L,300_000L))
+                        if(announced)runOnUiThread {
+                            if(!stopping && lifecycleGate.isCurrent(lifecycleToken))
+                                status.text="Janela de pesquisa disponível. Conectando ao Soulseek."
+                        }
+                    }
                     if(saveToDevice) {
                         val ledger=A3AndroidAcquisitionLedger.get(this@A0ManualLoginActivity)
                         val id=UUID.randomUUID().toString()
@@ -406,6 +503,7 @@ class A0ManualLoginActivity : Activity() {
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 18_000
                                 val token = SecureRandom().nextInt(Int.MAX_VALUE - 1) + 1
+                                val tickets=A0SearchTicketRegistry(token)
                                 val expectedDuration=SoulseekBatchPlan.expectedDuration(
                                     batch?.current,
                                     intent.getIntExtra("bitchord.soulseek.manual.duration_seconds",0)
@@ -423,6 +521,8 @@ class A0ManualLoginActivity : Activity() {
                                         qualityProfile=selectedQuality,
                                         peerReliability=peerReliability,
                                         collectReleaseShadow=batch!=null,
+                                        releaseQueries=batch?.entries?.map { it.query }.orEmpty(),
+                                        acceptedSearchTokens=tickets.accepted,
                                     ).also { transfer ->
                                         if (!SoulseekActiveSession.registerTransfer(
                                                 transfer, accountGeneration
@@ -432,6 +532,8 @@ class A0ManualLoginActivity : Activity() {
                                 } else null
                                 connection.getOutputStream().apply {
                                     write(A0OneShotPublicSearchWire.setWaitPort(listener.localPort))
+                                    check(checkNotNull(searchLease).commit(
+                                        android.os.SystemClock.elapsedRealtime()))
                                     write(A0OneShotPublicSearchWire.fileSearch(
                                         token, checkNotNull(requestedSearch)
                                     ))
@@ -466,6 +568,7 @@ class A0ManualLoginActivity : Activity() {
                                     val report=handoff?.progress() ?: return
                                     runOnUiThread {
                                         if (!stopping && !isFinishing && !isDestroyed &&
+                                            lifecycleGate.isCurrent(lifecycleToken) &&
                                             readerGate.isOpen()) {
                                             status.text="Pesquisando Soulseek: " +
                                                 report.responses + " respostas, " +
@@ -476,7 +579,9 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                 }
                                 // Collect peers over a fixed window; never stop at first match.
-                                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(18)
+                                val searchStartedAt=System.nanoTime()
+                                val deadline=searchStartedAt + TimeUnit.SECONDS.toNanos(18)
+                                val queueRejectionTimeline=A0PeerQueueRejectionTimeline()
                                 // The server reader only parses frames; indirect peer
                                 // handshakes run concurrently on peer-only sockets.
                                 val peerWorkers=A0PeerSearchWorkers(queueCapacity=128,parallelism=12)
@@ -490,19 +595,18 @@ class A0ManualLoginActivity : Activity() {
                                         try {
                                             peer.soTimeout = 3500
                                             val observation=A0OneShotPublicSearchWire.readOneDirectPeerReply(
-                                                peer.getInputStream(),token
-                                            ) { verifiedFrame, claimedPeer ->
-                                                // The outer wire reader checks protocol framing;
-                                                // the handoff also verifies token, identity and
-                                                // full search-response decoding. Only after both
-                                                // may this source receive a reliability credit.
-                                                if(handoff?.offerSearchResult(verifiedFrame,claimedPeer)==false)
-                                                    throw IOException("Invalid peer search response")
-                                                receivedValidP2pReply.set(true)
-                                                peerReliability.observe(claimedPeer,
-                                                    A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
-                                                discoveryProgress()
-                                            }
+                                                peer.getInputStream(),token,
+                                                acceptedSearchTokens=tickets.accepted,
+                                                onValidatedParsedReply={ parsed ->
+                                                    if(handoff?.offerParsed(parsed,parsed.peerUsername)==false)
+                                                        throw IOException("Invalid peer search response")
+                                                    tickets.creditValidated(parsed.token)
+                                                    receivedValidP2pReply.set(true)
+                                                    peerReliability.observe(parsed.peerUsername,
+                                                        A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
+                                                    discoveryProgress()
+                                                }
+                                            )
                                             trace.note(A0SmokeTrace.Stage.DIRECT_REPLY_ACCEPTED)
                                             if (!transferObserved) {
                                                 readerGate.publish(inbox,
@@ -584,7 +688,8 @@ class A0ManualLoginActivity : Activity() {
                                                         Socket().use { peer ->
                                                             activeIndirectPeers.add(peer)
                                                             try {
-                                                                if (stopping || !readerGate.isOpen()) return@use
+                                                                if (stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                                    !readerGate.isOpen()) return@use
                                                                 peer.connect(
                                                                     InetSocketAddress(offer.address,offer.port),1800
                                                                 )
@@ -596,15 +701,18 @@ class A0ManualLoginActivity : Activity() {
                                                                 }
                                                                 trace.note(A0SmokeTrace.Stage.PIERCE_SENT)
                                                                 val observation=A0IndirectSearchWire.readIndirectReply(
-                                                                    peer.getInputStream(),token,offer.username
-                                                                ) { frame, claimedPeer ->
-                                                                    if(handoff?.offerSearchResult(frame,claimedPeer)==false)
-                                                                        throw IOException("Invalid peer search response")
-                                                                    receivedValidP2pReply.set(true)
-                                                                    peerReliability.observe(claimedPeer,
-                                                                        A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
-                                                                    discoveryProgress()
-                                                                }
+                                                                    peer.getInputStream(),token,offer.username,
+                                                                    acceptedSearchTokens=tickets.accepted,
+                                                                    onValidatedParsedReply={ parsed ->
+                                                                        if(handoff?.offerParsed(parsed,offer.username)==false)
+                                                                            throw IOException("Invalid peer search response")
+                                                                        tickets.creditValidated(parsed.token)
+                                                                        receivedValidP2pReply.set(true)
+                                                                        peerReliability.observe(offer.username,
+                                                                            A0PeerReliabilityEvidence.Outcome.REPLY_VALID)
+                                                                        discoveryProgress()
+                                                                    }
+                                                                )
                                                                 trace.note(A0SmokeTrace.Stage.INDIRECT_REPLY_ACCEPTED)
                                                                 if (!transferObserved) {
                                                                     readerGate.publish(inbox,
@@ -643,6 +751,9 @@ class A0ManualLoginActivity : Activity() {
                                                     offerGate.releaseUnsubmitted(
                                                         offer.username,offer.token)
                                                     peerOfferBackpressure.incrementAndGet()
+                                                    queueRejectionTimeline.rejectedAt(
+                                                        TimeUnit.NANOSECONDS.toMillis(
+                                                            System.nanoTime()-searchStartedAt))
                                                 }
                                             }
                                             if (!framedServer.finishPendingFrame() &&
@@ -686,20 +797,33 @@ class A0ManualLoginActivity : Activity() {
                                         val sent=mutableSetOf(checkNotNull(requestedSearch))
                                         fun sendRescue(elapsedMillis:Long) {
                                             if (failedServerReader.get() || !readerGate.isOpen() ||
-                                                stopping || Thread.currentThread().isInterrupted)
+                                                stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                Thread.currentThread().isInterrupted)
                                                 return
                                             val variant=recovery.next(elapsedMillis,
                                                 handoff?.hasRelevantCandidateForSearchRecovery()==true,
                                                 sent) ?: return
+                                            val lease=checkNotNull(searchLease)
+                                            val now=android.os.SystemClock.elapsedRealtime()
+                                            if(lease.remaining()==0 && !lease.reserveOneMore(now)) {
+                                                com.music.bitchord.data.DebugLog.d("BitChord",
+                                                    "soulseek_manual_search fallback_budget_skipped=true")
+                                                return
+                                            }
+                                            val variantToken=generateSequence {
+                                                SecureRandom().nextInt(Int.MAX_VALUE-1)+1
+                                            }.take(8).firstOrNull(tickets::register) ?: return
+                                            if(!lease.commit(now))return
                                             try {
                                                 connection.getOutputStream().apply {
-                                                    write(A0OneShotPublicSearchWire.fileSearch(token,variant))
+                                                    write(A0OneShotPublicSearchWire.fileSearch(variantToken,variant))
                                                     flush()
                                                 }
                                                 sent.add(variant)
                                                 trace.note(A0SmokeTrace.Stage.SEARCH_VARIANT_SENT)
                                                 runOnUiThread {
-                                                    if(!stopping && readerGate.isOpen())
+                                                    if(!stopping && lifecycleGate.isCurrent(lifecycleToken) &&
+                                                        readerGate.isOpen())
                                                         status.text="Buscando outra variação segura; " +
                                                             "identidade, álbum e qualidade preservados."
                                                 }
@@ -709,24 +833,24 @@ class A0ManualLoginActivity : Activity() {
                                                     A0SmokeTrace.Reason.SERVER_IO_FAILURE)
                                             }
                                         }
-                                        val early=inbox.poll(6,TimeUnit.SECONDS)
+                                        val early=A0ManualSearchWait.poll(inbox,6,TimeUnit.SECONDS)
                                         handoff?.progress()?.let {
                                             windowEvidence.record(6,it.responses,it.provisionalClaims)
                                         }
                                         if(early==null)sendRescue(6000L)
-                                        val middle=early ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        val middle=early ?: A0ManualSearchWait.poll(inbox,6,TimeUnit.SECONDS)
                                         handoff?.progress()?.let {
                                             windowEvidence.record(12,it.responses,it.provisionalClaims)
                                         }
                                         if(middle==null)sendRescue(12000L)
-                                        val finalStatus=middle ?: inbox.poll(6,TimeUnit.SECONDS)
+                                        val finalStatus=middle ?: A0ManualSearchWait.poll(inbox,6,TimeUnit.SECONDS)
                                         // Capture the actual window-end observation BEFORE
                                         // server/peer shutdown and any later drain callbacks.
                                         handoff?.progress()?.let {
                                             windowEvidence.record(18,it.responses,it.provisionalClaims)
                                         }
                                         finalStatus
-                                    } else inbox.poll(12,TimeUnit.SECONDS)
+                                    } else A0ManualSearchWait.poll(inbox,12,TimeUnit.SECONDS)
                                     readerGate.stop()
                                     result = peerStatus ?: when {
                                         failedServerReader.get() ->
@@ -791,6 +915,19 @@ class A0ManualLoginActivity : Activity() {
                                     }
                                     trace.note(A0SmokeTrace.Stage.SEARCH_COMPLETED, finalOutcome)
                                 } finally {
+                                    // Diagnostic aggregates only: never log tokens,
+                                    // usernames, peer addresses or search terms.
+                                    val byTicket=tickets.responseCounts()
+                                    com.music.bitchord.data.DebugLog.d("BitChord",
+                                        "soulseek_manual_search tickets_sent=" +
+                                            tickets.accepted.size.coerceIn(1,3) +
+                                            " initial_replies=${byTicket[0]}" +
+                                            " fallback_1_replies=${byTicket[1]}" +
+                                            " fallback_2_replies=${byTicket[2]}")
+                                    // Release optional queries before any lengthy manual
+                                    // selection or P/F transfer; sent ones stay charged.
+                                    searchLease?.close()
+                                    searchLease=null
                                     readerGate.stop()
                                     if(transferObserved && !stopping) {
                                         // Do not interrupt a server Socket read then
@@ -822,7 +959,8 @@ class A0ManualLoginActivity : Activity() {
                                             workerQueueDropped=peerOfferBackpressure.get(),
                                             directCollectorDropped=directOfferBackpressure.get(),
                                             globalCapacityDropped=offerGate.capacityDropped,
-                                            duplicateTickets=offerGate.duplicateCount)
+                                            duplicateTickets=offerGate.duplicateCount,
+                                            rejectionTimeline=queueRejectionTimeline.snapshot())
                                         trace.peerSearchWorkerPressure(
                                             peerWorkers.snapshot(),directCollector.workerSnapshot())
                                         handoff?.progress()?.let {
@@ -888,7 +1026,8 @@ class A0ManualLoginActivity : Activity() {
                                         val choiceQueue=LinkedBlockingQueue<Int>(1)
                                         activeSelectionQueue=choiceQueue
                                         runOnUiThread {
-                                            if (stopping || isFinishing || isDestroyed ||
+                                            if (stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                isFinishing || isDestroyed ||
                                                 selectableIndices.isEmpty()) {
                                                 if(selectableIndices.isEmpty())status.text=
                                                     "Nenhum candidato de formato suportado nesta busca para salvar."
@@ -1114,13 +1253,15 @@ class A0ManualLoginActivity : Activity() {
                                         val selection=A0SelectionServerDrain.awaitChoice(
                                             connection,choiceQueue,35_000L,
                                             isCancelled={
-                                                stopping || Thread.currentThread().isInterrupted
+                                                stopping || !lifecycleGate.isCurrent(lifecycleToken) ||
+                                                    Thread.currentThread().isInterrupted
                                             }
                                         )
                                         trace.selectionDrain(selection.discardedFrames)
                                         val chosen=selection.index
                                         activeSelectionQueue=null
-                                        if (chosen==null || chosen<0 || stopping) {
+                                        if (chosen==null || chosen<0 || stopping ||
+                                            !lifecycleGate.isCurrent(lifecycleToken)) {
                                             result = "TESTE CANCELADO OU EXPIRADO. Nenhum arquivo recebido."
                                             finalOutcome=TraceOutcome.CANCELLED
                                             trace.note(
@@ -1159,16 +1300,58 @@ class A0ManualLoginActivity : Activity() {
                                                         receipt.byteCount,receipt.sha256Hex,
                                                         isCancelled={
                                                             stopping || Thread.currentThread().isInterrupted ||
+                                                                !lifecycleGate.isCurrent(lifecycleToken) ||
                                                                 !SoulseekActiveSession.isCurrent(accountGeneration)
                                                         },
                                                         commitGuard={ commit ->
+                                                            check(lifecycleGate.isCurrent(lifecycleToken) &&
+                                                                !stopping) {
+                                                                "Manual publication revoked by Activity stop"
+                                                            }
                                                             SoulseekActiveSession.commitIfCurrent(
                                                                 accountGeneration, commit
                                                             )
                                                         }
                                                     )
-                                                    trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     publishedForCurrent=true
+                                                    // Manual A3 publication must be indexed by
+                                                    // Biblioteca → Downloads as well as
+                                                    // appearing in Android local MediaStore.
+                                                    // This is a separate, already published URI:
+                                                    // never start another P/F if indexing fails.
+                                                    val queryForLibrary=(enteredSearch ?: recoveryQuery)
+                                                        .trim().take(120)
+                                                    val albumForLibrary=albumConstraint.orEmpty()
+                                                        .trim().take(120)
+                                                    val item=Song(
+                                                        videoId="soulseek-manual:$id",
+                                                        title=queryForLibrary.substringAfter(
+                                                            " - ",queryForLibrary),
+                                                        artist=queryForLibrary.substringBefore(
+                                                            " - ","Artista"),
+                                                        thumbnailUrl=null,
+                                                        albumName=albumForLibrary.takeIf { it.isNotBlank() },
+                                                    )
+                                                    runCatching {
+                                                        Downloads.rememberSoulseekPublished(item,saved)
+                                                    }.onFailure {
+                                                        android.util.Log.e("BitChord",
+                                                            "A3 manual published but Downloads index failed",it)
+                                                    }
+                                                    if(manualRecovery) {
+                                                        // Reconcile against the original
+                                                        // release slot only after A3 durable.
+                                                        val index=recoveryIndices?.getOrNull(
+                                                            recoveryOrdinal)
+                                                        if(index!=null && recoverySession!=null) {
+                                                            runCatching {
+                                                                Downloads.confirmSoulseekManualPublication(
+                                                                    recoverySession,index,recoveryQuery)
+                                                            }
+                                                        }
+                                                    }
+                                                    if(batch==null)completedSingle.set(true)
+                                                    trace.note(A0SmokeTrace.Stage.LOCAL_SAVE_PUBLISHED)
                                                     result="MÚSICA LOCAL SALVA: ${saved.byteCount} bytes. " +
                                                         "Confira Biblioteca → No dispositivo. " +
                                                         "SHA-256 observado não comprova autenticidade."
@@ -1219,6 +1402,19 @@ class A0ManualLoginActivity : Activity() {
                             activeListener = null
                         }
                     }
+                } catch (_: java.util.concurrent.CancellationException) {
+                    Thread.currentThread().interrupt()
+                    finalOutcome=TraceOutcome.CANCELLED
+                    finalReason=A0SmokeTrace.Reason.CANCELLED
+                    result="Busca cancelada. Nenhum novo arquivo autorizado."
+                } catch (_: InterruptedException) {
+                    // onDestroy may call shutdownNow while the 6/12/18-second
+                    // search inbox is blocked. This is cancellation, not an
+                    // uncaught crash or evidence of a failed A3 publication.
+                    Thread.currentThread().interrupt()
+                    finalOutcome=TraceOutcome.CANCELLED
+                    finalReason=A0SmokeTrace.Reason.CANCELLED
+                    result="Busca cancelada. Nenhum novo arquivo autorizado."
                 } catch (_: A0ExperimentalLoginCodec.LoginDenied) {
                     finalOutcome=TraceOutcome.FAILED
                     finalReason = A0SmokeTrace.Reason.LOGIN_DENIED
@@ -1335,6 +1531,8 @@ class A0ManualLoginActivity : Activity() {
                             "Nenhum novo item foi confirmado na biblioteca."
                     else "ERRO NO TESTE. Nenhuma credencial foi armazenada."
                 } finally {
+                    searchLease?.close()
+                    searchLease=null
                     val id=saveJobId
                     val journal=saveLedger
                     if(id!=null && journal!=null)runCatching {
@@ -1382,9 +1580,27 @@ class A0ManualLoginActivity : Activity() {
                         runCatching { Diagnostics.endFeatureCapture(owned) }
                     }
                 }
-                if (!stopping && !isFinishing && !isDestroyed) {
+                if(publishedForCurrent && batch!=null) {
+                    // A3 was already durably committed. Even when onStop
+                    // revoked the old network epoch, mark the slot saved:
+                    // otherwise returning to the Activity could re-download
+                    // the same physical file. This is after worker cleanup.
                     runOnUiThread {
-                        if (!stopping && !isFinishing && !isDestroyed) {
+                        if(!isDestroyed) {
+                            batch.markSaved()
+                            batchStatus?.text="Lote: faixa ${batch.index+1} de " +
+                                "${batch.entries.size} · ${batch.succeeded} salvas · " +
+                                "${batch.skipped} puladas."
+                            nextTrack?.text="Próxima faixa"
+                            nextTrack?.isEnabled=true
+                        }
+                    }
+                }
+                if (!stopping && lifecycleGate.isCurrent(lifecycleToken) &&
+                    !isFinishing && !isDestroyed) {
+                    runOnUiThread {
+                        if (!stopping && lifecycleGate.isCurrent(lifecycleToken) &&
+                            !isFinishing && !isDestroyed) {
                             status.text = result
                             if(batch!=null) {
                                 if(publishedForCurrent) batch.markSaved()
@@ -1442,6 +1658,13 @@ class A0ManualLoginActivity : Activity() {
             }
         }
         if (fromSongDownload) {
+            var reviewSlotSelected=!manualRecovery || batch==null
+            if(manualRecovery && batch!=null) {
+                // No first-song default in a bulk recovery. The user must
+                // choose one of the remaining slots before starting a search.
+                searchInput.setText("")
+                albumInput.setText("")
+            }
             // The old A0 diagnostic actions remain available only to internal
             // test callers. A normal Download tap immediately enters a guided
             // search, not a second login form or a technical transport menu.
@@ -1451,7 +1674,14 @@ class A0ManualLoginActivity : Activity() {
             ).forEach { it.visibility = View.GONE }
 
             fun confirmSearch() {
-                if(batch?.isComplete==true || batch?.currentSaved==true)return
+                if(batch?.isComplete==true || batch?.currentSaved==true ||
+                    (batch==null && completedSingle.get()))return
+                if(manualRecovery && batch!=null && !reviewSlotSelected) {
+                    com.music.bitchord.data.DebugLog.d("BitChord",
+                        "soulseek_manual_review_navigation action=SEARCH_BLOCKED_NO_SELECTION")
+                    status.text="Escolha uma das faixas pendentes antes de pesquisar."
+                    return
+                }
                 val saved = accountVault.read()
                 if (saved == null) {
                     status.text = "Configure sua conta em Configurações → Downloads → Soulseek."
@@ -1477,9 +1707,62 @@ class A0ManualLoginActivity : Activity() {
                         saveConsent.isChecked = true
                         start(true, transferObserved = true, saveToDevice = true)
                     }
-                    .setNegativeButton("Cancelar") { _, _ -> finish() }
-                    .setOnCancelListener { finish() }
+                    .apply {
+                        // A bulk review is a navigable set of pending tracks;
+                        // cancelling one search prompt must not discard the
+                        // other 22 untouched slots or the review lease.
+                        if(manualRecovery)
+                            setNegativeButton("Voltar",null)
+                        else {
+                            setNegativeButton("Cancelar") { _, _ -> finish() }
+                            setOnCancelListener { finish() }
+                        }
+                    }
                     .show()
+            }
+            // Only the existing manual picker may authorize a transfer.
+            // Show the full review set before proposing any one-track search.
+            val chooseReviewTrack=if(manualRecovery && batch!=null)
+                Button(this).apply {
+                    isAllCaps=false
+                    text="Escolher faixa para revisar"
+                    page.addView(this,page.childCount-1)
+                }else null
+            fun showPendingReviewTracks() {
+                val guided=batch ?: return
+                if(!manualRecovery || !action.isEnabled || guided.isComplete)return
+                val indices=guided.pendingIndices
+                if(indices.isEmpty())return
+                com.music.bitchord.data.DebugLog.d("BitChord",
+                    "soulseek_manual_review_navigation action=OPEN_CHOOSER" +
+                        " pending=${indices.size.coerceIn(0,64)}")
+                // Android AlertDialog suppresses the item list when both
+                // setMessage() and setItems() are supplied. The previous
+                // chooser therefore displayed ONLY a description + Voltar,
+                // trapping all pending slots. Use one list-owning dialog.
+                A0PendingReviewChooserDialog.create(this,indices,guided.entries) reviewSelection@{ slot ->
+                        if(!action.isEnabled)return@reviewSelection
+                        if(!guided.selectPending(slot))return@reviewSelection
+                        val entry=checkNotNull(guided.current)
+                        com.music.bitchord.data.DebugLog.d("BitChord",
+                            "soulseek_manual_review_navigation action=SELECT" +
+                                " original_slot=${recoveryIndices?.getOrNull(slot) ?: -1}" +
+                                " pending=${guided.pendingIndices.size.coerceIn(0,64)}")
+                        reviewSlotSelected=true
+                        searchInput.setText(entry.query)
+                        albumInput.setText(entry.album.orEmpty())
+                        intent.putExtra("bitchord.soulseek.manual.duration_seconds",
+                            entry.durationSeconds ?: 0)
+                        batchStatus?.text="Revisão: faixa ${slot+1} de " +
+                            "${guided.entries.size} · ${guided.pendingIndices.size} pendentes · " +
+                            "${guided.succeeded} salvas · ${guided.skipped} puladas."
+                        nextTrack?.isEnabled=false
+                        status.text="Faixa selecionada. Use Pesquisar candidatos para " +
+                            "escolher e autorizar um arquivo."
+                    }.show()
+            }
+            chooseReviewTrack?.setOnClickListener {
+                if(action.isEnabled)showPendingReviewTracks()
             }
             val retry = Button(this).apply {
                 text = "Pesquisar candidatos"
@@ -1520,6 +1803,7 @@ class A0ManualLoginActivity : Activity() {
                         status.text="Lote finalizado. Confira Biblioteca → Música local."
                     }else {
                         val entry=checkNotNull(batch.current)
+                        reviewSlotSelected=!manualRecovery
                         searchInput.setText(entry.query)
                         albumInput.setText(entry.album.orEmpty())
                         intent.putExtra("bitchord.soulseek.manual.duration_seconds",
@@ -1529,15 +1813,18 @@ class A0ManualLoginActivity : Activity() {
                             "${batch.skipped} puladas."
                         nextTrack?.isEnabled=false
                         status.text="Faixa ${batch.index+1} preparada. Selecione um candidato."
-                        confirmSearch()
+                        if(manualRecovery)showPendingReviewTracks()
+                        else confirmSearch()
                     }
                 }
             }
-            confirmSearch()
+            if(manualRecovery && batch!=null)showPendingReviewTracks()
+            else confirmSearch()
         }
     }
 
     override fun onStop() {
+        lifecycleGate.revoke()
         stopping = true
         activeSelectionQueue?.offer(-1)
         activeTransfer?.cancel()
@@ -1567,7 +1854,21 @@ class A0ManualLoginActivity : Activity() {
         activePeerWorkers?.cancel()
         activeIndirectPeers.toList().forEach { runCatching { it.close() } }
         activeSocket?.close()
-        worker.shutdownNow()
+        val reviewId=if(ownsManualReviewLease)
+            intent.getStringExtra("bitchord.soulseek.manual.review_session")
+        else null
+        val reviewToken=if(ownsManualReviewLease)
+            intent.getStringExtra("bitchord.soulseek.manual.review_token")
+        else null
+        if(reviewId!=null && reviewToken!=null) {
+            // A stale Activity cannot release another instance's A3 worker;
+            // even the original must await termination before releasing.
+            SoulseekManualRecoveryTermination.releaseAfterStop(worker) {
+                Downloads.closeSoulseekManualReview(reviewId,reviewToken)
+            }
+        }else {
+            worker.shutdownNow()
+        }
         super.onDestroy()
     }
 

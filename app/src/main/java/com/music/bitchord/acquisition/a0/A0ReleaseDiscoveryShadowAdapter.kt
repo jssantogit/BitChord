@@ -8,14 +8,14 @@ import java.util.Locale
  * a requested release. A track matched as part of a shared folder is NOT proof
  * that the peer offers the exact edition/master; all evidence remains untrusted.
  *
- * Bounded CPU: scan at most 512 memory-only observations per slot for a cheap
+ * Bounded CPU: scan at most 1024 memory-only release observations for a cheap
  * match/quality/album ranking, and perform at most 8192 full preflight
  * assessments in the existing background discovery worker. Unlike taking the
  * first N observations, this does not silently exclude a late relevant track.
  * Does not perform a new peer search or start a transfer.
  */
 internal object A0ReleaseDiscoveryShadowAdapter {
-    private const val MAX_OBSERVED_CHOICES=512
+    private const val MAX_OBSERVED_CHOICES=1024
 
     // Necessary-only match condition: title terms must be in the filename for
     // A0CandidateRank to return ALL_TERMS. File and query use the exact same
@@ -28,6 +28,24 @@ internal object A0ReleaseDiscoveryShadowAdapter {
 
     internal fun fileTokens(name:String):Set<String> =
         A0CandidateRank.tokens(name.substringBeforeLast('.',name)).toSet()
+
+    /** Necessary-condition only; a title match never establishes artist/album. */
+    internal fun titleOptions(query:String):List<Set<String>> {
+        val original=titleTokens(query)
+        val title=query.split(Regex("\\s+[-–—]\\s+"),limit=2)
+            .getOrNull(1).orEmpty()
+        val alias=A0CjkTitleAliases.latinAlias(title)
+            ?.let { A0CandidateRank.tokens(it).toSet() }.orEmpty()
+        return listOfNotNull(original.takeIf { it.isNotEmpty() },
+            alias.takeIf { it.isNotEmpty() }).distinct()
+    }
+
+    internal fun matchesTitleOptions(
+        file:Set<String>, options:List<Set<String>>,
+    ):Boolean=options.any { it.isNotEmpty() && file.containsAll(it) }
+
+    internal fun fileMatchesTitle(query:String,name:String):Boolean=
+        matchesTitleOptions(fileTokens(name),titleOptions(query))
     private data class Ranked(
         val candidate:A0ObservedCandidateHandoff.Choice,
         val ranking:A0CandidateRank.Ranking,
@@ -59,7 +77,9 @@ internal object A0ReleaseDiscoveryShadowAdapter {
         val supportedCodecs=setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
             A0CanonicalAcquisitionIntent.Codec.FLAC,
             A0CanonicalAcquisitionIntent.Codec.PCM_WAV,
-            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS)
+            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+            A0CanonicalAcquisitionIntent.Codec.OPUS,
+            A0CanonicalAcquisitionIntent.Codec.VORBIS)
         // Cache title-word sets exactly once per advertised file, not once per
         // release track. Avoid heavy rank/preflight for unrelated titles.
         val indexed=choices.take(MAX_OBSERVED_CHOICES).map { candidate ->
@@ -72,7 +92,7 @@ internal object A0ReleaseDiscoveryShadowAdapter {
         for(entry in entries) {
             val titleStart=titleMatchedPairs
             val rankStart=rankMatchedPairs
-            val title=titleTokens(entry.query)
+            val title=titleOptions(entry.query)
             val expectedArtist=entry.query.split(
                 Regex("\\s+[-–—]\\s+"),limit=2).firstOrNull()
             // Score the entire bounded release shadow, not the first 128/192
@@ -80,7 +100,7 @@ internal object A0ReleaseDiscoveryShadowAdapter {
             // to other songs or advertise the wrong quality/album.
             val shortlisted=indexed.asSequence()
                 .filter {
-                    val matches=title.isNotEmpty() && it.second.containsAll(title)
+                    val matches=matchesTitleOptions(it.second,title)
                     if(matches)titleMatchedPairs++
                     matches
                 }
@@ -97,7 +117,7 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                         declaredDurationSeconds=duration,
                         expectedDurationSeconds=entry.durationSeconds,
                         declaredSampleRateHz=sample,declaredBitDepth=depth,
-                        sizeBytes=candidate.sizeBytes)
+                        sizeBytes=candidate.sizeBytes,expectedAlbum=entry.album)
                     if(ranked.match!=A0CandidateRank.Match.ALL_TERMS)
                         return@mapNotNull null
                     rankMatchedPairs++
@@ -111,6 +131,8 @@ internal object A0ReleaseDiscoveryShadowAdapter {
                     val codec=when(ext) {
                         "mp3" -> A0CanonicalAcquisitionIntent.Codec.MP3
                         "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+                        "opus" -> A0CanonicalAcquisitionIntent.Codec.OPUS
+                        "ogg" -> A0CanonicalAcquisitionIntent.Codec.VORBIS
                         "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
                         "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
                         else -> null

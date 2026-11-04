@@ -9,7 +9,7 @@ package com.music.bitchord.data.settings
 enum class DownloadQualityProfile(val label:String,val explanation:String) {
     HI_RES("Hi-Res", "Sem perdas: FLAC/ALAC, preferencialmente 24-bit/96–192 kHz; apenas quando disponível"),
     LOSSLESS("Sem perdas", "FLAC/ALAC, até 24-bit/48 kHz no alvo; sem conversão de arquivo lossy"),
-    HIGH_QUALITY("Alta qualidade", "AAC 256 kbps ou MP3 320 kbps, conforme suporte da fonte; sem exigência de FLAC"),
+    HIGH_QUALITY("Alta qualidade", "MP3 320, AAC 256, Opus ≥160 ou Ogg Vorbis ≥192 kbps, conforme suporte real da fonte"),
     CUSTOM("Personalizado", "Escolher formato, bitrate, frequência em kHz e profundidade em bits"),
     ;
     companion object {
@@ -37,15 +37,15 @@ data class DownloadCustomOptions(
     val bitDepth:Int?=null,
 ) {
     init {
-        require(format in setOf("mp3","flac","wav","aac","m4a"))
+        require(format in setOf("mp3","flac","wav","aac","opus","ogg","m4a"))
         require(bitrateKbps==null || bitrateKbps in 32..1536)
         require(sampleRateHz==null || sampleRateHz in 8000..384000)
         require(bitDepth==null || bitDepth in 8..32)
     }
-    val isCurrentlySupportedForSoulseek:Boolean get() = format in setOf("mp3","flac","wav","aac")
+    val isCurrentlySupportedForSoulseek:Boolean get() = format in setOf("mp3","flac","wav","aac","opus","ogg")
     val description:String get() = buildString {
         append(format.uppercase())
-        if(format in setOf("mp3","aac","m4a"))
+        if(format in setOf("mp3","aac","opus","ogg","m4a"))
             bitrateKbps?.let { append(" · $it kbps") }
         else {
             sampleRateHz?.let { hz ->

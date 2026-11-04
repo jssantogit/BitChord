@@ -54,11 +54,17 @@ internal object A0CanonicalAlbumPolicy {
             return Assessment(Status.INCONCLUSIVE_MANUAL, Reason.UNTRUSTED_FORMAT_CONTROL)
         }
         val observed = normalize(claim.advertisedAlbum)
+        // Canonical bilingual artist credit can use its complete Latin
+        // name as a narrowly bounded spelling, never a generic substring.
+        val latinAlias = target.expectedArtist?.let(
+            A0ArtistCreditAliases::latinAlias)?.let(::normalize).orEmpty()
         if (observed.isEmpty()) {
             return Assessment(Status.INCONCLUSIVE_MANUAL, Reason.ALBUM_NOT_ADVERTISED)
         }
         if (claim.source == ClaimSource.DIRECTORY_HINT &&
-            (observed == normalize(target.expectedArtist) || observed in genericFolders ||
+            (observed == normalize(target.expectedArtist) ||
+                (latinAlias.isNotEmpty() && observed==latinAlias) ||
+                observed in genericFolders ||
                 observed.matches(Regex("(?:cd|disc|disk) ?[0-9]{1,2}")) ||
                 observed.matches(Regex("(?:vinyl|side) ?[a-d]")) ||
                 observed.matches(Regex("[0-9]{1,2}")))
@@ -72,7 +78,55 @@ internal object A0CanonicalAlbumPolicy {
         // evidence of an exact edition or acoustic master.
         val singleDescriptor = claim.source == ClaimSource.DIRECTORY_HINT &&
             observed == "$expected single"
-        if (observed != expected && !singleDescriptor) {
+        // "ILLIT - BREAK EVEN" names the exact requested artist and album,
+        // without year, codec, alternate edition or other extra labels.
+        // It is the same UNVERIFIED hint as a plain "BREAK EVEN" folder,
+        // never an authenticated release/master identity.
+        val artist=normalize(target.expectedArtist)
+        val exactArtistAlbum=claim.source == ClaimSource.DIRECTORY_HINT &&
+            artist.isNotEmpty() && observed == "$artist $expected"
+        val exactBilingualAliasArtistAlbum=
+            claim.source==ClaimSource.DIRECTORY_HINT &&
+                latinAlias.isNotEmpty() && observed=="$latinAlias $expected"
+        // A canonical multiword credit may be printed without word spaces:
+        // BLACK PINK -> BLACKPINK. Require a COMPLETE artist+album directory
+        // with no arbitrary suffixes. Explicit album fields never gain this
+        // exception, and this is still an unverified release-name hint.
+        val artistWords=artist.split(' ').filter(String::isNotEmpty)
+        val compactArtist=artistWords.takeIf {
+            it.size in 2..4 && it.all { word ->
+                word.length>=2 && word.all { character ->
+                    character.isDigit() ||
+                        Character.UnicodeScript.of(character.code)==
+                            Character.UnicodeScript.LATIN
+                }
+            }
+        }?.joinToString("")?.takeIf { it.length>=6 }
+        val exactCompactArtistAlbum=claim.source==ClaimSource.DIRECTORY_HINT &&
+            compactArtist!=null && observed=="$compactArtist $expected"
+        // Directory decorations such as "(2026)" and "[EP]" describe a
+        // calendar year/release type, not a new title or alternate master.
+        // Accept only the exact requested album (optionally exact artist)
+        // after removing these narrowly allowlisted edge descriptors.
+        // This remains an UNVERIFIED folder claim, never release identity.
+        val neutralYearEpFolder=claim.source==ClaimSource.DIRECTORY_HINT &&
+            run {
+                val words=observed.split(' ').toMutableList()
+                fun annotation(token:String):Boolean=
+                    token=="ep" || token.matches(Regex("(?:19|20)[0-9]{2}"))
+                while(words.isNotEmpty() && annotation(words.first()))
+                    words.removeAt(0)
+                while(words.isNotEmpty() && annotation(words.last()))
+                    words.removeAt(words.lastIndex)
+                val cleaned=words.joinToString(" ")
+                cleaned==expected || (artist.isNotEmpty() &&
+                    cleaned=="$artist $expected") ||
+                    (compactArtist!=null && cleaned=="$compactArtist $expected")
+            }
+        if (observed != expected && !singleDescriptor &&
+            !exactArtistAlbum && !exactBilingualAliasArtistAlbum &&
+            !exactCompactArtistAlbum &&
+            !neutralYearEpFolder) {
             // A peer's folder often combines artist, release, year and codec,
             // e.g. "ILLIT - BREAK EVEN [FLAC]". Exact album matching must
             // remain STRICT, but the composite hint cannot prove a conflict.
@@ -112,6 +166,10 @@ internal object A0CanonicalAlbumPolicy {
     private val genericFolders = setOf(
         "music", "downloads", "general", "unknown", "unknown album",
         "other", "misc", "tracks", "flac", "mp3", "lossless",
+        // Ogg/Opus/AAC can be technical leaf directories, never standalone
+        // proof of release identity. A selection may only skip ONE such
+        // folder when the direct parent is the exact requested album.
+        "ogg", "ogg vorbis", "vorbis", "opus", "aac",
     )
 
     private fun hasDisplayControl(ch: Char): Boolean =
@@ -120,10 +178,21 @@ internal object A0CanonicalAlbumPolicy {
 
     private fun normalize(value: String?): String {
         if (value.isNullOrBlank()) return ""
-        val folded = Normalizer.normalize(value, Normalizer.Form.NFKD)
-            .replace(Regex("\\p{M}+"), "")
-            .lowercase(Locale.ROOT)
-        return folded.split(Regex("[^\\p{L}\\p{N}]+"))
+        // Blind NFKD + mark stripping destroys Indic vowel distinctions
+        // (for example गीत vs गत). Fold accents on LATIN letters only,
+        // preserving non-Latin canonical combining marks and script words.
+        val composed=A0CjkOrthography.widthOnlyNfc(value)
+        val latinMarks=Regex("\\p{M}+")
+        val folded=buildString(composed.length) {
+            for(ch in composed) {
+                if(Character.UnicodeScript.of(ch.code)==
+                    Character.UnicodeScript.LATIN)
+                    append(Normalizer.normalize(ch.toString(),
+                        Normalizer.Form.NFKD).replace(latinMarks,""))
+                else append(ch)
+            }
+        }.lowercase(Locale.ROOT)
+        return folded.split(Regex("[^\\p{L}\\p{N}\\p{M}]+"))
             .filter(String::isNotEmpty).joinToString(" ")
     }
 }

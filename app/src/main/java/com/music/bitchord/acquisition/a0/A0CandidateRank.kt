@@ -20,19 +20,66 @@ internal object A0CandidateRank {
         VERSION_MISMATCH, DURATION_MISMATCH, SIZE_SUSPICIOUS, ENCODING_CONFLICT,
         ARTIST_CONFLICT, IDENTITY_AMBIGUOUS
     }
+    /** Sanitized classification, never an artist/name/path value. */
+    enum class ArtistCreditGap {
+        NONE, ABSENT, PARTIAL_FILENAME, PARTIAL_DIRECTORY, SPLIT_DIRECTORIES
+    }
 
     data class Ranking(
         val score:Int,
         val match:Match,
         val quality:Quality=Quality.UNKNOWN_ADVERTISED,
-        val warnings:List<Warning> = emptyList()
+        val warnings:List<Warning> = emptyList(),
+        // Sanitized missing-evidence flags. They never reveal requested or
+        // peer-supplied words, and do not change any selection threshold.
+        val titleTermsIncomplete:Boolean=false,
+        val artistCreditIncomplete:Boolean=false,
+        val artistCreditGap:ArtistCreditGap=ArtistCreditGap.NONE,
     )
     // Shared by the release shadow's cheap *necessary-condition* gate.
     // Never duplicate Unicode/token semantics in a separate prefilter.
+    // Blind NFKD + \\p{M} removal destroys non-Latin vowels: Hindi गीत
+    // and गत collapsed to the same title, risking a WRONG auto-selection.
+    // Compose canonical Unicode, then fold diacritics on Latin letters only.
+    private val latinDiacritics=Regex("\\p{M}+")
+    private val tokenSeparator=Regex("[^\\p{L}\\p{N}\\p{M}]+")
+    private val versionQualifiers=setOf("demo","live","acoustic",
+        "instrumental","studio","radio")
+    private val cappellaSpellings=setOf("cappella","capella")
     internal fun tokens(value:String):List<String> {
-        val folded=Normalizer.normalize(value,Normalizer.Form.NFKD)
-            .replace(Regex("\\p{M}+"),"").lowercase(Locale.ROOT)
-        return folded.split(Regex("[^\\p{L}\\p{N}]+")).filter(String::isNotBlank)
+        val composed=A0CjkOrthography.widthOnlyNfc(value)
+        val folded=buildString(composed.length) {
+            for(ch in composed) {
+                if(Character.UnicodeScript.of(ch.code)==Character.UnicodeScript.LATIN)
+                    append(Normalizer.normalize(ch.toString(),
+                        Normalizer.Form.NFKD).replace(latinDiacritics,""))
+                else append(ch)
+            }
+        }.lowercase(Locale.ROOT)
+        val raw=folded.split(tokenSeparator).filter {
+            token -> token.any(Char::isLetterOrDigit)
+        }
+        // Canonical edition labels sometimes use "Demo Ver." where a peer
+        // writes "Demo Version". Expand ONLY with the immediately preceding
+        // qualifier; a song title such as "Quiero Ver" is not "Quiero Version".
+        // "A Cappella"/"Acapella" are spelling variants of the same label.
+        // Both target and source use this exact function, including the
+        // release shadow's necessary-condition prefilter.
+        return buildList {
+            var i=0
+            while(i<raw.size) {
+                if(raw[i]=="a" && i+1<raw.size &&
+                    raw[i+1] in cappellaSpellings) {
+                    add("acapella")
+                    i+=2
+                    continue
+                }
+                if(raw[i]=="ver" && i>0 && raw[i-1] in versionQualifiers)
+                    add("version")
+                else add(raw[i])
+                i++
+            }
+        }
     }
 
     private fun containsPhrase(haystack:List<String>,phrase:List<String>):Boolean=
@@ -54,37 +101,138 @@ internal object A0CandidateRank {
         remotePath:String?=null, format:String?=null,
         declaredSampleRateHz:Int?=null, declaredBitDepth:Int?=null,
         declaredDurationSeconds:Int?=null, expectedDurationSeconds:Int?=null,
-        sizeBytes:Long?=null, queueLength:Int?=null
+        sizeBytes:Long?=null, queueLength:Int?=null,
+        /** Trusted requested release, never a peer-supplied album label. */
+        expectedAlbum:String?=null,
     ):Ranking {
         val parts=searchPhrase.orEmpty().split(Regex("\\s+[-–—]\\s+"),limit=2)
-        val titleSequence=tokens(if(parts.size==2)parts[1] else searchPhrase.orEmpty())
+        val canonicalTitle=if(parts.size==2)parts[1] else searchPhrase.orEmpty()
+        val canonicalTitleTokens=tokens(canonicalTitle)
         val artistSequence=if(parts.size==2) tokens(parts[0]) else emptyList()
-        val titleWords=titleSequence.distinct()
         val artistWords=artistSequence.distinct()
         val stem=name.substringBeforeLast('.',name)
         val fileTokens=tokens(stem)
         val fileWords=fileTokens.toSet()
+        val stemParts=stem.split(Regex("\\s+[-–—]\\s+"),limit=2)
+        // An explicitly bilingual CJK title can be credited by its COMPLETE
+        // parenthesized Latin variant. Never infer a translation from a peer:
+        // only the canonical title supplies this alias. A prefixed artist
+        // segment or track number is permitted, but arbitrary appended
+        // words/mixes or a title substring cannot satisfy the exception.
+        val aliasTokens=A0CjkTitleAliases.latinAlias(canonicalTitle)
+            ?.let(::tokens).orEmpty()
+        val titleSegment=if(stemParts.size==2)stemParts[1] else stem
+        val aliasMatchesExactly=aliasTokens.isNotEmpty() &&
+            tokens(titleSegment).dropWhile { it.all(Char::isDigit) }==aliasTokens
+        val titleSequence=if(aliasMatchesExactly)aliasTokens else canonicalTitleTokens
+        val titleWords=titleSequence.distinct()
         val parentSegments=remotePath.orEmpty().replace('\\','/')
             .split('/').dropLast(1)
         val folderWords=parentSegments.flatMap(::tokens).toSet()
-        val artistInFilename=artistWords.isNotEmpty() && artistWords.all { it in fileWords }
+        // Token-boundary-only orthographic equivalence: BLACK PINK vs
+        // BLACKPINK. A joined spelling must occur as the COMPLETE artist
+        // prefix before a separator (optional track number), or as one
+        // COMPLETE directory segment. Seeing it elsewhere in a title or
+        // in a decorated folder never authenticates the performer.
+        val compactArtistToken=artistSequence.takeIf {
+            it.size in 2..4 && it.all { word ->
+                word.length>=2 && word.all { character ->
+                    character.isDigit() ||
+                        Character.UnicodeScript.of(character.code)==
+                            Character.UnicodeScript.LATIN
+                }
+            }
+        }?.joinToString("")?.takeIf { it.length>=6 }
+        val compactInFilename=compactArtistToken!=null &&
+            stemParts.size==2 &&
+            tokens(stemParts[0]).dropWhile { word ->
+                word.all(Char::isDigit)
+            }==listOf(compactArtistToken)
+        val compactAlbumFolderTokens=if(compactArtistToken!=null &&
+            !expectedAlbum.isNullOrBlank())
+            listOf(compactArtistToken)+tokens(expectedAlbum)
+        else emptyList()
+        val compactInFolder=compactArtistToken!=null &&
+            parentSegments.any { parent ->
+                val words=tokens(parent)
+                words==listOf(compactArtistToken) ||
+                    (compactAlbumFolderTokens.isNotEmpty() &&
+                        words==compactAlbumFolderTokens)
+            }
+        // A parenthesized canonical native-script alias may be credited by
+        // the FULL Latin name, but only when it is an explicit filename
+        // artist prefix or an exact directory, never a title substring.
+        val bilingualLatinArtist=parts.getOrNull(0)?.let(
+            A0ArtistCreditAliases::latinAlias)
+        val latinAliasWords=bilingualLatinArtist?.let(::tokens).orEmpty()
+        val aliasInFilename=latinAliasWords.isNotEmpty() &&
+            stemParts.size==2 && tokens(stemParts[0]).dropWhile {
+                it.all(Char::isDigit)
+            }==latinAliasWords
+        val aliasAlbumFolderWords=if(latinAliasWords.isNotEmpty() &&
+            !expectedAlbum.isNullOrBlank())
+            latinAliasWords+tokens(expectedAlbum)
+        else emptyList()
+        // Unlike the legacy general-artist matcher, this NEW bilingual
+        // exception cannot borrow credit from an unrelated distant ancestor.
+        // Permit an immediate exact artist directory, an exact artist+album
+        // directory, or an artist directory immediately wrapping the EXACT
+        // canonical album folder; nothing more.
+        val aliasLeaf=parentSegments.lastOrNull()?.let(::tokens).orEmpty()
+        val aliasParent=parentSegments.getOrNull(parentSegments.size-2)
+            ?.let(::tokens).orEmpty()
+        val exactAlbumWords=tokens(expectedAlbum.orEmpty())
+        val aliasInFolder=latinAliasWords.isNotEmpty() &&
+            (aliasLeaf==latinAliasWords ||
+                (aliasAlbumFolderWords.isNotEmpty() &&
+                    aliasLeaf==aliasAlbumFolderWords) ||
+                (exactAlbumWords.isNotEmpty() &&
+                    aliasLeaf==exactAlbumWords &&
+                    aliasParent==latinAliasWords))
+        val artistInFilename=artistWords.isNotEmpty() &&
+            (artistWords.all { it in fileWords } ||
+                compactInFilename || aliasInFilename)
         // Folder context is supporting evidence only when the *same* folder
         // segment identifies the artist. "New/Jeans" cannot imply "New Jeans".
         // A title can itself contain the artist's name ("Queen Of Hearts").
         // That is not independent credit. When names overlap, a supporting
         // folder must match the actual artist phrase, not the whole song title.
         val artistTitleOverlap=artistSequence.any { it in titleSequence }
+        // When a song title contains its artist's words (for example
+        // "Queen - Queen Of Hearts"), a title-only filename cannot credit
+        // the performer. A single directory explicitly naming EXACTLY the
+        // requested artist followed by the EXACT requested album is an
+        // independent credit, just like an exact artist-only directory.
+        // No additional year/codec/edition tokens are allowed here.
+        // Album admission is still checked independently by the A3 selector.
+        val exactArtistAlbumFolderTokens=if(artistTitleOverlap &&
+            !expectedAlbum.isNullOrBlank())
+            artistSequence+tokens(expectedAlbum)
+        else emptyList()
         val artistInSingleFolder=artistWords.isNotEmpty() &&
-            parentSegments.any { parent ->
+            (compactInFolder || aliasInFolder || parentSegments.any { parent ->
                 val words=tokens(parent)
-                if(artistTitleOverlap) words==artistSequence
+                if(artistTitleOverlap)
+                    words==artistSequence ||
+                        (exactArtistAlbumFolderTokens.isNotEmpty() &&
+                            words==exactArtistAlbumFolderTokens)
                 else artistWords.all { it in words }
-            }
+            })
         val titleMatches=titleWords.count { it in fileWords }
         val artistMatches=artistWords.count { it in fileWords || it in folderWords }
         val titleComplete=titleWords.isNotEmpty() && titleMatches==titleWords.size
         val artistComplete=artistWords.isEmpty() ||
             artistInFilename || artistInSingleFolder
+        val artistCreditGap=when {
+            artistComplete -> ArtistCreditGap.NONE
+            artistWords.all { it in folderWords } ->
+                ArtistCreditGap.SPLIT_DIRECTORIES
+            artistWords.any { it in fileWords } ->
+                ArtistCreditGap.PARTIAL_FILENAME
+            artistWords.any { it in folderWords } ->
+                ArtistCreditGap.PARTIAL_DIRECTORY
+            else -> ArtistCreditGap.ABSENT
+        }
         val match=when {
             titleComplete && artistComplete -> Match.ALL_TERMS
             titleMatches>0 || artistMatches>0 -> Match.SOME_TERMS
@@ -104,14 +252,22 @@ internal object A0CandidateRank {
         val invalidMp3Bitrate=ext=="mp3" && declaredBitrateKbps!=null &&
             declaredBitrateKbps !in 32..320
         val validRate=declaredBitrateKbps?.takeIf {
-            it in 32..(if(ext=="mp3") 320 else 1536)
+            it in 32..(when(ext) {
+                "mp3" -> 320
+                "aac", "opus", "ogg" -> 512
+                else -> 1536
+            })
         }
         val lossless=ext in setOf("flac","wav")
         val quality=when {
             lossless && declaredSampleRateHz?.let { it in 8000..384000 } == true &&
                 declaredBitDepth?.let { it in 8..32 } == true -> Quality.LOSSLESS_ADVERTISED
             lossless -> Quality.UNKNOWN_ADVERTISED
-            validRate!=null && validRate>=256 -> Quality.HIGH_ADVERTISED
+            validRate!=null && validRate>=when(ext) {
+                "opus" -> 160
+                "ogg" -> 192
+                else -> 256
+            } -> Quality.HIGH_ADVERTISED
             validRate!=null && validRate>=160 -> Quality.MEDIUM_ADVERTISED
             validRate!=null -> Quality.LOW_ADVERTISED
             else -> Quality.UNKNOWN_ADVERTISED
@@ -148,9 +304,19 @@ internal object A0CandidateRank {
         if(titleSequence.isNotEmpty() && artistSequence.isNotEmpty()) {
             val observed=fileTokens.groupingBy { it }.eachCount()
             val titleOnly=titleSequence.groupingBy { it }.eachCount()
-            val artistAndTitle=(artistSequence+titleSequence)
+            // Count the exact artist spelling actually credited by this
+            // source, not both whitespace variants at once.
+            val creditedArtistTokens=when {
+                compactArtistToken!=null &&
+                    (compactInFilename || (compactInFolder &&
+                        !artistWords.all { it in fileWords })) ->
+                    listOf(compactArtistToken)
+                (aliasInFilename || aliasInFolder) -> latinAliasWords
+                else -> artistSequence
+            }
+            val artistAndTitle=(creditedArtistTokens+titleSequence)
                 .groupingBy { it }.eachCount()
-            val relevant=(artistSequence+titleSequence).toSet()
+            val relevant=(creditedArtistTokens+titleSequence).toSet()
             val actual=relevant.associateWith { observed[it] ?: 0 }
             val titleCounts=relevant.associateWith { titleOnly[it] ?: 0 }
             val combinedCounts=relevant.associateWith { artistAndTitle[it] ?: 0 }
@@ -169,14 +335,14 @@ internal object A0CandidateRank {
         // credit even when an ancestor directory is called "ILLIT".
         // Numeric track prefixes ("01 - Magnetic") and title-led suffixes
         // ("Magnetic - Master") are not treated as artist claims.
-        val stemParts=stem.split(Regex("\\s+[-–—]\\s+"),limit=2)
         if(artistWords.isNotEmpty() && stemParts.size==2) {
             val leading=tokens(stemParts[0]).toSet()
             val isTrackNumber=leading.isNotEmpty() &&
                 leading.all { token -> token.all(Char::isDigit) }
             val isTitlePrefix=titleWords.isNotEmpty() &&
                 titleWords.all { it in leading }
-            val isExpectedCredit=artistWords.all { it in leading }
+            val isExpectedCredit=artistWords.all { it in leading } ||
+                compactInFilename || aliasInFilename
             if(leading.isNotEmpty() && !isTrackNumber &&
                 !isTitlePrefix && !isExpectedCredit) {
                 score-=36
@@ -188,13 +354,25 @@ internal object A0CandidateRank {
         // Known presentation labels and track numbers are neutral; everything
         // else must be reviewed before any future unattended decision.
         if(titleWords.isNotEmpty() && artistWords.isNotEmpty()) {
-            val expectedWords=(artistWords+titleWords).toSet()
+            val expectedWords=(artistWords+titleWords).toMutableSet()
+            if(compactInFilename)compactArtistToken?.let(expectedWords::add)
             val neutralLabels=setOf(
                 "official","audio","hq","hd","320","kbps","256",
                 "cbr","vbr","track","stereo"
             )
+            // Peers often put an exact release title between artist and
+            // canonical song title: "ILLIT - BREAK EVEN - 01 - Song.flac".
+            // Do NOT ignore arbitrary extra words. Only the complete,
+            // ordered, locally requested album phrase is safe to discount.
+            // Canonical folder/quality gates still run independently later.
+            val albumTokens=tokens(expectedAlbum.orEmpty())
+            val exactAlbumInFilename=albumTokens.isNotEmpty() &&
+                containsPhrase(fileTokens,albumTokens)
+            val neutralAlbum=if(exactAlbumInFilename)albumTokens.toSet()
+                else emptySet()
             val unknown=fileWords.filter { token ->
                 token !in expectedWords && token !in neutralLabels &&
+                token !in neutralAlbum &&
                     !(token.length<=3 && token.all(Char::isDigit))
             }
             if(unknown.isNotEmpty()) {
@@ -209,7 +387,9 @@ internal object A0CandidateRank {
         val titleOrdered=containsPhrase(fileTokens,titleSequence)
         val artistOrdered=artistSequence.isEmpty() ||
             containsPhrase(fileTokens,artistSequence) ||
-            parentSegments.any { containsPhrase(tokens(it),artistSequence) }
+            parentSegments.any { containsPhrase(tokens(it),artistSequence) } ||
+            compactInFilename || compactInFolder ||
+            aliasInFilename || aliasInFolder
         if(match==Match.ALL_TERMS && (!titleOrdered || !artistOrdered)) {
             score-=9
             if(Warning.IDENTITY_AMBIGUOUS !in warnings)
@@ -260,6 +440,9 @@ internal object A0CandidateRank {
         // The queue belongs to the source, not the recording. It must never
         // change the musical score. Keep queueLength in the signature for
         // compatibility with existing rank callers and baseline fixtures.
-        return Ranking(score.coerceIn(0,100),match,quality,warnings.toList())
+        return Ranking(score.coerceIn(0,100),match,quality,warnings.toList(),
+            titleTermsIncomplete=!titleComplete,
+            artistCreditIncomplete=!artistComplete,
+            artistCreditGap=artistCreditGap)
     }
 }

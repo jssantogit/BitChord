@@ -192,4 +192,40 @@ class A2LocalAudioPublisherTest {
         assertEquals(0,factory.opened)
     }
 
+    private fun ogg(opus:Boolean)=ByteArray(128).also { bytes ->
+        "OggS".toByteArray().copyInto(bytes,0)
+        bytes[5]=2
+        bytes[26]=1
+        if(opus) {
+            bytes[27]=19
+            "OpusHead".toByteArray().copyInto(bytes,28)
+            bytes[36]=1;bytes[37]=2
+        }else {
+            bytes[27]=30;bytes[28]=1
+            "vorbis".toByteArray().copyInto(bytes,29)
+            bytes[39]=2
+            bytes[40]=0x80.toByte();bytes[41]=0xbb.toByte()
+        }
+    }
+
+    @Test fun onlyMatchingOggCodecAndExtensionMayPublish() {
+        for((opus,name,mime) in listOf(
+            Triple(true,"Test.opus","audio/opus"),
+            Triple(false,"Test.ogg","audio/ogg"))) {
+            val bytes=ogg(opus)
+            val sink=RecordingFactory()
+            val published=A2LocalAudioPublisher.publish(
+                file(bytes),name,bytes.size.toLong(),sha(bytes),sink)
+            assertEquals(mime,published.mimeType)
+            assertTrue(sink.sink.published)
+            val other=RecordingFactory()
+            try {
+                A2LocalAudioPublisher.publish(file(bytes),
+                    if(opus)"Test.ogg" else "Test.opus",
+                    bytes.size.toLong(),sha(bytes),other)
+                fail("Ogg codec and extension mismatch")
+            }catch(_:IOException){}
+            assertEquals(0,other.opened)
+        }
+    }
 }

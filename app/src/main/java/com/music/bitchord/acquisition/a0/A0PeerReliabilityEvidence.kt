@@ -14,6 +14,8 @@ internal class A0PeerReliabilityEvidence {
         val peerKey:String,
         val claimKey:String,
         val availability:A0PeerAvailability.Tier,
+        val queueLength:Int?=null,
+        val speedKiBps:Int?=null,
     ) {
         override fun toString()="Alternative(redacted)"
     }
@@ -73,7 +75,9 @@ internal class A0PeerReliabilityEvidence {
                     A0PeerAvailability.Tier.CONGESTED -> 1
                     A0PeerAvailability.Tier.UNAVAILABLE -> 0
                 }
-            }.thenBy { it.index })
+            }.thenBy { it.value.queueLength ?: Int.MAX_VALUE }
+                .thenByDescending { it.value.speedKiBps ?: -1 }
+                .thenBy { it.index })
             .take(maxPeers).map { it.value.peerKey }
     }
 

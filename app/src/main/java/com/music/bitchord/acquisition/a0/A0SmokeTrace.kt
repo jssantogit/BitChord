@@ -357,6 +357,7 @@ internal class A0SmokeTrace private constructor(
         directCollectorDropped:Int=0,
         globalCapacityDropped:Int=0,
         duplicateTickets:Int=0,
+        rejectionTimeline:A0PeerQueueRejectionTimeline.Summary?=null,
     ) {
         if(complete.get())return
         continuationTrace().event(
@@ -369,6 +370,12 @@ internal class A0SmokeTrace private constructor(
                 "directCollectorDropped" to directCollectorDropped.coerceIn(0,100000).toString(),
                 "globalCapacityDropped" to globalCapacityDropped.coerceIn(0,100000).toString(),
                 "duplicateTickets" to duplicateTickets.coerceIn(0,100000).toString(),
+                "workerDroppedBefore6" to (rejectionTimeline?.before6 ?: 0)
+                    .coerceIn(0,100000).toString(),
+                "workerDropped6To12" to (rejectionTimeline?.sixTo12 ?: 0)
+                    .coerceIn(0,100000).toString(),
+                "workerDroppedAfter12" to (rejectionTimeline?.after12 ?: 0)
+                    .coerceIn(0,100000).toString(),
             )
         )
     }

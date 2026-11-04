@@ -10,10 +10,9 @@ import com.music.bitchord.data.settings.DownloadCustomOptions
  */
 internal object A0SoulseekQualityProfiles {
     /**
-     * Current single Downloads preference. Soulseek's A5 publisher cannot save
-     * AAC/ALAC/M4A yet: never claim a preset makes those formats available.
-     * HIGH_QUALITY here intentionally means MP3 320; FLAC is NOT a result
-     * satisfying the requested lossy delivery target.
+     * HIGH_QUALITY offers distinct efficient lossy codecs at codec-specific
+     * thresholds. ALAC/M4A remains unsupported until the container and
+     * audio codec can be verified by a local extractor and A2 publisher.
      */
     fun snapshot(profile:DownloadQualityProfile,custom:DownloadCustomOptions=DownloadCustomOptions()):
         A0CanonicalAcquisitionIntent.QualityProfileSnapshot {
@@ -33,6 +32,8 @@ internal object A0SoulseekQualityProfiles {
                     "flac" -> A0CanonicalAcquisitionIntent.Codec.FLAC
                     "wav" -> A0CanonicalAcquisitionIntent.Codec.PCM_WAV
                     "aac" -> A0CanonicalAcquisitionIntent.Codec.AAC_ADTS
+                    "opus" -> A0CanonicalAcquisitionIntent.Codec.OPUS
+                    "ogg" -> A0CanonicalAcquisitionIntent.Codec.VORBIS
                     else -> null
                 }
                 // A requested unsupported custom codec must not expand into
@@ -46,10 +47,14 @@ internal object A0SoulseekQualityProfiles {
                     allowedCodecs=setOf(codec),
                     minBitrateKbps=custom.bitrateKbps?.takeIf {
                         codec in setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
-                            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS) },
+                            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+                            A0CanonicalAcquisitionIntent.Codec.OPUS,
+                            A0CanonicalAcquisitionIntent.Codec.VORBIS) },
                     minSampleRateHz=custom.sampleRateHz?.takeIf {
                         codec !in setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
-                            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS) },
+                            A0CanonicalAcquisitionIntent.Codec.AAC_ADTS,
+                            A0CanonicalAcquisitionIntent.Codec.OPUS,
+                            A0CanonicalAcquisitionIntent.Codec.VORBIS) },
                     minBitDepth=custom.bitDepth?.takeIf {
                         codec in setOf(A0CanonicalAcquisitionIntent.Codec.FLAC,
                             A0CanonicalAcquisitionIntent.Codec.PCM_WAV) },

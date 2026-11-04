@@ -95,18 +95,20 @@ internal object A0CandidatePreflight {
         val ext=format.lowercase(java.util.Locale.ROOT)
         val maxClaimedBitrate=when(ext) {
             "mp3" -> 320
-            // AAC ADTS beyond 512 kbps is unusual for the supported
-            // high-quality music preset. Keep it manually inspectable,
-            // not strong evidence for future unattended selection.
-            "aac" -> 512
+            "aac", "opus", "ogg" -> 512
             else -> 1536
         }
         val goodBitrate=declaredBitrateKbps?.takeIf {
             it in 32..maxClaimedBitrate
         }
         when(ext) {
-            "mp3", "aac" -> {
-                if(goodBitrate==null || goodBitrate<256) {
+            "mp3", "aac", "opus", "ogg" -> {
+                val minimum=when(ext) {
+                    "opus" -> 160
+                    "ogg" -> 192
+                    else -> 256
+                }
+                if(goodBitrate==null || goodBitrate<minimum) {
                     reasons.add(Reason.QUALITY_UNCONFIRMED)
                 }
                 if(goodBitrate!=null && length!=null) {

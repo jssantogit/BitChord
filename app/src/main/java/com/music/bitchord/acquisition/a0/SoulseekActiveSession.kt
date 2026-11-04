@@ -10,6 +10,7 @@ internal object SoulseekActiveSession {
     private var epoch = 0L
     private val sockets = mutableSetOf<Socket>()
     private val activeTransfers = mutableSetOf<A0ObservedCandidateHandoff>()
+    private val activeAutoTransfers=mutableSetOf<A0ServerAssociatedTransfer>()
 
     @Synchronized fun generation(): Long = epoch
 
@@ -39,6 +40,21 @@ internal object SoulseekActiveSession {
         activeTransfers.remove(transfer)
     }
 
+    @Synchronized fun registerAutoTransfer(
+        transfer:A0ServerAssociatedTransfer, expectedGeneration:Long,
+    ):Boolean {
+        if(expectedGeneration!=epoch) {
+            transfer.cancel()
+            return false
+        }
+        activeAutoTransfers.add(transfer)
+        return true
+    }
+
+    @Synchronized fun detachAutoTransfer(transfer:A0ServerAssociatedTransfer) {
+        activeAutoTransfers.remove(transfer)
+    }
+
     @Synchronized fun register(socket: Socket, expectedGeneration: Long): Boolean {
         if (expectedGeneration != epoch) {
             runCatching { socket.close() }
@@ -58,6 +74,8 @@ internal object SoulseekActiveSession {
         // is no longer in use. Its own cancel closes both peer channels.
         activeTransfers.forEach { runCatching { it.cancel() } }
         activeTransfers.clear()
+        activeAutoTransfers.forEach {runCatching {it.cancel()}}
+        activeAutoTransfers.clear()
         sockets.forEach { runCatching { it.close() } }
         sockets.clear()
     }

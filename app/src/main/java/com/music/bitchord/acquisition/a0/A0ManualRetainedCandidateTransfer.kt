@@ -1,0 +1,189 @@
+package com.music.bitchord.acquisition.a0
+
+import android.content.Context
+import android.os.Looper
+import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.download.A3AcquisitionLedger
+import com.music.bitchord.download.A3AndroidAcquisitionLedger
+import com.music.bitchord.download.SoulseekBatchPlan
+import com.music.bitchord.data.DebugLog as Log
+import java.io.IOException
+import java.util.UUID
+
+/**
+ * A HUMAN selected one of the peer offers already found by automatic search.
+ * No repeated discovery, no unattended selection and no second P/F retry.
+ * The candidate is an ephemeral in-process handle, not an Intent extra.
+ *
+ * Reuses a REQUESTED A3 automatic identity if a sibling transfer left the
+ * album reservation intact; otherwise synchronously reserves that canonical
+ * identity before the first socket opens. NEVER resurrect a failed transfer.
+ */
+internal object A0ManualRetainedCandidateTransfer {
+    enum class Status {
+        PUBLISHED, PRECHECK_REJECTED, TECHNICAL_REJECTION,
+        TRANSFER_FAILED, VERIFY_LIBRARY,
+    }
+    enum class Stage {
+        PRECHECK_REJECTED, SESSION_REVOKED, A3_RESERVATION_BLOCKED,
+        FETCH_STARTED, FETCH_FAILED, RECEIPT_STAGED, PROBE_UNAVAILABLE,
+        PROBE_COMPLETE, TECHNICAL_GATE_REJECTED, DESTINATION_INVALID,
+        PUBLICATION_DURABLE, PUBLICATION_ROLLED_BACK,
+        PUBLICATION_UNCERTAIN, UNEXPECTED_ERROR,
+    }
+
+    fun run(
+        context:Context,
+        entry:SoulseekBatchPlan.Entry,
+        choice:A0ObservedCandidateHandoff.Choice,
+        profile:A0CanonicalAcquisitionIntent.QualityProfileSnapshot,
+        sourceSong:Song,
+        isCancelled:()->Boolean,
+        slotIndex:Int=-1,
+        onTransport:(A0FreshAuthenticatedAutoTransport)->Unit={},
+        onDiagnostic:(Stage,A0AutoPostTransferTechnicalGate.Reason?)->Unit={_,_->},
+        onProbeFailure:(A0AndroidAudioTechnicalProbe.Failure)->Unit={},
+    ):Status {
+        check(BuildConfig.DEBUG && BuildConfig.FLAVOR=="dev")
+        check(Looper.myLooper()!=Looper.getMainLooper())
+        val traceScope=A0AcquisitionDiagnostics.newScope()
+        val traceStart=android.os.SystemClock.elapsedRealtime()
+        fun report(stage:Stage,reason:A0AutoPostTransferTechnicalGate.Reason?=null) {
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.REVIEW_STAGE,
+                reason=stage,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
+            try { onDiagnostic(stage,reason) }catch(_:Exception) {}
+        }
+        A0AcquisitionDiagnostics.emit(traceScope,
+            A0AcquisitionDiagnostics.Phase.REVIEW_START,
+            slot=slotIndex)
+        val allowed=A0ManualReviewCandidatePolicy.retain(
+            entry,listOf(choice),profile).singleOrNull()
+        if(allowed!==choice) {
+            report(Stage.PRECHECK_REJECTED)
+            return Status.PRECHECK_REJECTED
+        }
+        if(isCancelled()) {
+            report(Stage.SESSION_REVOKED)
+            return Status.TRANSFER_FAILED
+        }
+        val app=context.applicationContext
+        val generation=SoulseekActiveSession.generation()
+        fun revoked()=isCancelled() ||
+            !SoulseekActiveSession.isCurrent(generation) ||
+            Thread.currentThread().isInterrupted
+        if(revoked()) {
+            report(Stage.SESSION_REVOKED)
+            return Status.TRANSFER_FAILED
+        }
+        val ledger=A3AndroidAcquisitionLedger.get(app)
+        val id=try {
+            val existing=ledger.reservedForExplicitManualReview(
+                entry.trackId,entry.query,entry.album)
+            when {
+            existing==null -> UUID.randomUUID().toString().also { newId ->
+                ledger.reserveAutomaticBatch(listOf(
+                    A3AcquisitionLedger.AutomaticSlot(
+                        newId,entry.trackId,entry.query,entry.album)),
+                    commitGuard={ commit ->
+                        SoulseekActiveSession.commitIfCurrent(generation) {
+                            if(revoked())throw IOException("Review session revoked")
+                            commit()
+                        }
+                    })
+            }
+            existing.phase==A3AcquisitionLedger.Phase.REQUESTED -> existing.id
+                else -> throw A3AcquisitionLedger.AutomaticIdentityAlreadyReserved()
+            }
+        }catch(_:Exception) {
+            report(Stage.A3_RESERVATION_BLOCKED)
+            return Status.VERIFY_LIBRARY
+        }
+        val transport=A0FreshAuthenticatedAutoTransport(app,generation,traceScope)
+        val port=A0AndroidAutoAcquisitionPort(
+            app,generation,transport,id,reservedAutomatic=true,
+            sourceSong=sourceSong,diagnosticScope=traceScope,
+            onTechnicalProbeFailure=onProbeFailure)
+        var receipt:A0VerifiedByteStager.Receipt?=null
+        var result=Status.TRANSFER_FAILED
+        var publicationAttempted=false
+        try {
+            onTransport(transport)
+            if(revoked()) {
+                report(Stage.SESSION_REVOKED)
+                return Status.TRANSFER_FAILED
+            }
+            report(Stage.FETCH_STARTED)
+            val fetch=port.fetch(choice,::revoked)
+            if(fetch !is A0AutoAcquisitionExecutor.FetchResult.Received) {
+                report(Stage.FETCH_FAILED)
+                return Status.TRANSFER_FAILED
+            }
+            receipt=fetch.receipt
+            report(Stage.RECEIPT_STAGED)
+            val extension=choice.claim.format
+            val decoded=port.inspect(checkNotNull(receipt),extension,::revoked)
+            report(if(decoded==null)Stage.PROBE_UNAVAILABLE else Stage.PROBE_COMPLETE)
+            val assessed=A0AutoPostTransferTechnicalGate.assess(
+                profile,extension,entry.durationSeconds,
+                checkNotNull(receipt).byteCount,
+                checkNotNull(receipt).file.length(),decoded)
+            if(revoked()) {
+                report(Stage.SESSION_REVOKED)
+                return Status.TRANSFER_FAILED
+            }
+            if(assessed.status!=
+                A0AutoPostTransferTechnicalGate.Status.TECHNICALLY_PLAUSIBLE) {
+                if(decoded!=null)report(Stage.TECHNICAL_GATE_REJECTED,assessed.reason)
+                return Status.TECHNICAL_REJECTION
+            }
+            val safeName=A5ManualSaveGate.safeDestinationName(
+                choice.displayName,checkNotNull(receipt).byteCount)
+                ?: run {
+                    report(Stage.DESTINATION_INVALID)
+                    return Status.TECHNICAL_REJECTION
+                }
+            publicationAttempted=true
+            result=when(port.publish(checkNotNull(receipt),safeName,::revoked)) {
+                A0AutoAcquisitionExecutor.PublishResult.DURABLE->Status.PUBLISHED
+                A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK->Status.TRANSFER_FAILED
+                A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN->Status.VERIFY_LIBRARY
+            }
+            report(when(result) {
+                Status.PUBLISHED -> Stage.PUBLICATION_DURABLE
+                Status.TRANSFER_FAILED -> Stage.PUBLICATION_ROLLED_BACK
+                else -> Stage.PUBLICATION_UNCERTAIN
+            })
+            return result
+        }catch(error:Exception) {
+            val phase=A0ManualExceptionStage.phase(
+                receipt!=null,publicationAttempted)
+            val category=A0ManualExceptionStage.category(error)
+            runCatching {
+                Log.d("BitChord",
+                    "soulseek_manual_review exception_phase=${phase.name}" +
+                        " category=${category.name}")
+            }
+            A0AcquisitionDiagnostics.emit(traceScope,
+                A0AcquisitionDiagnostics.Phase.REVIEW_EXCEPTION,
+                reason=category,
+                elapsedMillis=android.os.SystemClock.elapsedRealtime()-traceStart)
+            report(Stage.UNEXPECTED_ERROR)
+            // No publish() was called before this exception; the A3 identity
+            // stays fenced, and the transfer is NOT automatically retried.
+            // Only exceptions during/after A3 publish require reconciliation.
+            return if(A0ManualExceptionStage.publicationMayBeUncertain(
+                    publicationAttempted))Status.VERIFY_LIBRARY
+                else Status.TRANSFER_FAILED
+        }finally {
+            try {
+                receipt?.let { port.cleanup(it) }
+            }catch(_:Exception) {
+                // The A3 identity remains fenced. Cleanup is best-effort
+                // only AFTER the physically durable transaction.
+            }finally {port.finish()}
+        }
+    }
+}

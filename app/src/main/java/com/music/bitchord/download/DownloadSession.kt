@@ -170,6 +170,29 @@ object DownloadSession {
     fun failed(videoId: String, reason: String) = set(videoId, DownloadProgress.Failed(reason))
 
     /**
+     * A foreground Service can be killed after its Job cleared Downloads.active
+     * but before DownloadSession was told that the download was interrupted.
+     * Settle that row, without resurrecting a user-forgotten item or replacing
+     * an A3-confirmed Done. Atomic against any competing completion.
+     */
+    fun interruptIfUnsettled(videoId:String,reason:String):Boolean {
+        while(true) {
+            val current=_state.value
+            val index=current.items.indexOfFirst { it.videoId==videoId }
+            if(index<0 || current.items[index].progress.settled)return false
+            val updated=current.items.toMutableList().also {
+                it[index]=it[index].copy(progress=DownloadProgress.Failed(reason))
+            }
+            val quiet=updated.none { !it.progress.settled }
+            val next=current.copy(
+                items=updated,
+                settledAt=if(quiet)tick() else current.settledAt,
+            )
+            if(_state.compareAndSet(current,next))return true
+        }
+    }
+
+    /**
      * Swap in the track that is actually being fetched.
      *
      * A music-video row is replaced by the catalogue track behind it on the way

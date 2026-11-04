@@ -51,6 +51,35 @@ class A0ModernIncomingTransferTest {
         assertTrue(receipt.file.name.endsWith(".verified"))
     }
 
+    @Test fun receiveCheckpointsRequireValidFTokenAndRealStagedBytes() {
+        val ticket=accept(uploadRequest(104,filename,wav.size.toLong()))
+        var tokenSeen=false
+        val progress=mutableListOf<Long>()
+        val receipt=A0ModernIncomingTransfer.receiveAfterFConnection(
+            ByteArrayInputStream(le32(104)+wav),ByteArrayOutputStream(),
+            ticket,files.root,onTokenValidated={ tokenSeen=true },
+            onProgress={ progress.add(it) })
+        assertTrue(tokenSeen)
+        assertTrue(progress.isNotEmpty())
+        assertEquals(wav.size.toLong(),progress.last())
+        assertEquals(wav.size.toLong(),receipt.byteCount)
+    }
+
+    @Test fun tokenMismatchProducesNoValidatedCheckpointOrFileProgress() {
+        val ticket=accept(uploadRequest(104,filename,wav.size.toLong()))
+        var tokenSeen=false
+        var progress=0L
+        expectIOException {
+            A0ModernIncomingTransfer.receiveAfterFConnection(
+                ByteArrayInputStream(le32(99)+wav),ByteArrayOutputStream(),
+                ticket,files.root,onTokenValidated={ tokenSeen=true },
+                onProgress={ progress=it })
+        }
+        assertTrue(!tokenSeen)
+        assertEquals(0L,progress)
+        assertTrue(files.root.listFiles().isNullOrEmpty())
+    }
+
     @Test
     fun wrongTokenMustFailBeforeSendingOffsetOrCreatingAnyFile() {
         val ticket = accept(uploadRequest(104, filename, wav.size.toLong()))

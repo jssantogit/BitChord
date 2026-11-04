@@ -9,8 +9,9 @@ class A5ManualSaveGateTest {
         assertEquals("Track.MP3",A5ManualSaveGate.safeDestinationName("Track.MP3",1024))
         assertEquals("sample.wav",A5ManualSaveGate.safeDestinationName("sample.wav",1024))
         assertEquals("radio.aac",A5ManualSaveGate.safeDestinationName("radio.aac",1024))
-        assertNull(A5ManualSaveGate.safeDestinationName("sound.ogg",1024))
-        assertNull(A5ManualSaveGate.safeDestinationName("song.opus",1024))
+        assertEquals("sound.ogg",A5ManualSaveGate.safeDestinationName("sound.ogg",1024))
+        assertEquals("song.opus",A5ManualSaveGate.safeDestinationName("song.opus",1024))
+        assertNull(A5ManualSaveGate.safeDestinationName("song.wma",1024))
         assertNull(A5ManualSaveGate.safeDestinationName("song.m4a",1024))
     }
     @Test fun untrustedPathsAndControlCharactersNeverBecomeDeviceNames() {

@@ -58,6 +58,9 @@ internal object A0OneShotPublicSearchWire {
     fun readOneDirectPeerReply(
         input: InputStream,
         expectedSearchToken: Int,
+        // Auto discovery consumes this once instead of re-inflating the frame.
+        onValidatedParsedReply: ((A0SoulseekSearchResponse) -> Unit)? = null,
+        acceptedSearchTokens: Set<Int> = setOf(expectedSearchToken),
         onValidatedReply: ((ByteArray, String) -> Unit)? = null
     ): Observation {
         require(expectedSearchToken > 0)
@@ -73,8 +76,9 @@ internal object A0OneShotPublicSearchWire {
         val responseLen = intLE(input)
         if (responseLen !in 6..MAX_PEER_SEARCH_BYTES - 4) fail()
         val response = intLEBytes(responseLen) + readExact(input, responseLen)
-        val parsed = A0SoulseekSearchResponseParser.parse(response, expectedSearchToken)
+        val parsed = A0SoulseekSearchResponseParser.parse(response, acceptedSearchTokens)
         if (parsed.peerUsername != claimedUser) fail()
+        onValidatedParsedReply?.invoke(parsed)
         // Never expose raw bytes in tracing or UI. This optional in-process
         // callback runs ONLY after the search token + claimed P identity match.
         onValidatedReply?.invoke(response, claimedUser)

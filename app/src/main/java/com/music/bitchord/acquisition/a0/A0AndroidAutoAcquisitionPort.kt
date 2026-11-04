@@ -1,0 +1,225 @@
+package com.music.bitchord.acquisition.a0
+
+import android.content.Context
+import android.os.Looper
+import com.music.bitchord.download.A3AndroidAcquisitionLedger
+import com.music.bitchord.download.A3PublicationCommitFailure
+import com.music.bitchord.download.Downloads
+import com.music.bitchord.data.DebugLog as Log
+import com.music.bitchord.data.model.Song
+import java.io.File
+import java.io.IOException
+import java.nio.file.Files
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * Real Android receipt validation + transactional publication half of #184.
+ * This is NOT registered with Downloads/DownloadService. The injected
+ * AuthenticatedTransport must create a fresh bounded Soulseek P/F connection
+ * per candidate, never reuse a reader-owned search socket, and close on cancel.
+ *
+ * Unlike a fake publication port, this uses actual Android MediaExtractor,
+ * private scratch storage, A2 publication and the durable A3 journal.
+ */
+internal class A0AndroidAutoAcquisitionPort(
+    context:Context,
+    private val expectedGeneration:Long,
+    private val transport:AuthenticatedTransport,
+    private val jobId:String=UUID.randomUUID().toString(),
+    private val reservedAutomatic:Boolean=false,
+    private val sourceSong:Song?=null,
+    private val diagnosticScope:Int=A0AcquisitionDiagnostics.newScope(),
+    private val onTechnicalProbeFailure:
+        (A0AndroidAudioTechnicalProbe.Failure)->Unit={},
+    /** UI observation only; A3 state advances before this callback. */
+    private val onTransferStarting:()->Unit={},
+):A0AutoAcquisitionExecutor.Port {
+    interface AuthenticatedTransport {
+        fun receive(
+            candidate:A0ObservedCandidateHandoff.Choice,
+            scratchDirectory:File,
+            isCancelled:()->Boolean,
+        ):A0AutoAcquisitionExecutor.FetchResult
+        fun cancel()
+    }
+
+    private val app=context.applicationContext
+    private val job by lazy {
+        A0AutoJobJournal(A3AndroidAcquisitionLedger.get(app),jobId,
+            reservedAutomatic=reservedAutomatic)
+    }
+    private val closed=AtomicBoolean(false)
+    private val scratchRoot by lazy {
+        A0AutoScratchRecovery.privateDirectory(app.cacheDir)
+    }
+
+    private fun requireWorker() {
+        check(Looper.myLooper()!=Looper.getMainLooper()) {
+            "Soulseek auto job cannot run on Android main thread"
+        }
+    }
+    private fun revoked(cancel:()->Boolean):Boolean =
+        closed.get() || cancel() ||
+            !SoulseekActiveSession.isCurrent(expectedGeneration) ||
+            Thread.currentThread().isInterrupted
+
+    private fun privateReceipt(receipt:A0VerifiedByteStager.Receipt):Boolean =
+        runCatching {
+            val file=receipt.file
+            file.isFile && !Files.isSymbolicLink(file.toPath()) &&
+                file.canonicalFile.parentFile==scratchRoot &&
+                file.length()==receipt.byteCount &&
+                receipt.byteCount in A0ObservedTransferLimits.MIN_AUDIO_BYTES..
+                    A0ObservedTransferLimits.MAX_AUDIO_BYTES
+        }.getOrDefault(false)
+
+    override fun diagnostic(
+        stage:A0AutoAcquisitionExecutor.DiagnosticStage,
+        reason:Enum<*>?,
+    ) {
+        runCatching {
+            Log.d("BitChord","soulseek_auto_gate stage=${stage.name}" +
+                " reason=${reason?.name ?: "NONE"} scope=$diagnosticScope")
+        }
+    }
+
+    override fun diagnosticOutcome(
+        status:A0AutoAcquisitionExecutor.Status,
+        reason:A0AutoAcquisitionExecutor.Reason?,
+        attempts:Int,
+    ) {
+        runCatching {
+            Log.d("BitChord","soulseek_auto_outcome scope=$diagnosticScope" +
+                " status=${status.name}" +
+                " reason=${reason?.name ?: "NONE"}" +
+                " attempts=${attempts.coerceIn(0,3)}")
+        }
+    }
+
+    override fun fetch(
+        candidate:A0ObservedCandidateHandoff.Choice,
+        isCancelled:()->Boolean,
+    ):A0AutoAcquisitionExecutor.FetchResult {
+        requireWorker()
+        if(revoked(isCancelled))throw IOException("Soulseek auto session revoked")
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_FETCH)
+        job.beginTransfer()
+        try { onTransferStarting() }catch(_:Exception) {}
+        val result=transport.receive(candidate,scratchRoot) { revoked(isCancelled) }
+        if(result is A0AutoAcquisitionExecutor.FetchResult.Received) {
+            val receipt=result.receipt
+            if(!privateReceipt(receipt) || revoked(isCancelled)) {
+                runCatching {receipt.file.delete()}
+                throw IOException("Soulseek private receipt rejected")
+            }
+            try {
+                job.staged()
+                A0AcquisitionDiagnostics.emit(diagnosticScope,
+                    A0AcquisitionDiagnostics.Phase.A3_STAGED)
+            }catch(error:Exception) {
+                runCatching {receipt.file.delete()}
+                throw IOException("Soulseek durable staging failed",error)
+            }
+        }
+        return result
+    }
+
+    override fun inspect(
+        receipt:A0VerifiedByteStager.Receipt,
+        expectedExtension:String,
+        isCancelled:()->Boolean,
+    ):A0AutoPostTransferTechnicalGate.Decoded? {
+        requireWorker()
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_INSPECT)
+        val precheckFailure=when {
+            revoked(isCancelled) ->
+                A0AndroidAudioTechnicalProbe.Failure.SOURCE_CHANGED_OR_REVOKED
+            !privateReceipt(receipt) ->
+                A0AndroidAudioTechnicalProbe.Failure.INVALID_PRIVATE_SOURCE
+            else -> null
+        }
+        if(precheckFailure!=null) {
+            runCatching {onTechnicalProbeFailure(precheckFailure)}
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.PROBE_REJECT,precheckFailure)
+            return null
+        }
+        return A0AndroidAudioTechnicalProbe.inspect(
+            receipt.file,expectedExtension,diagnosticScope,
+            onRefused=onTechnicalProbeFailure) { revoked(isCancelled) }
+    }
+
+    override fun publish(
+        receipt:A0VerifiedByteStager.Receipt,
+        safeName:String,
+        isCancelled:()->Boolean,
+    ):A0AutoAcquisitionExecutor.PublishResult {
+        requireWorker()
+        if(revoked(isCancelled) || !privateReceipt(receipt))
+            return A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_PUBLISH)
+        return try {
+            val published=A3AndroidAcquisitionLedger.publishStaged(
+                context=app,jobId=jobId,
+                privateFile=receipt.file,safeName=safeName,
+                byteCount=receipt.byteCount,observedDigest=receipt.sha256Hex,
+                isCancelled={revoked(isCancelled)},
+                commitGuard={ commit ->
+                    SoulseekActiveSession.commitIfCurrent(expectedGeneration,commit)
+                }
+            )
+            // Index the already-committed A3 MediaStore URI in the same
+            // library used by ordinary downloads. A failed UI-index update
+            // cannot roll back a successful publication or authorize
+            // a second peer transfer.
+            sourceSong?.let { song ->
+                runCatching { Downloads.rememberSoulseekPublished(song,published) }
+                    .onFailure {
+                        android.util.Log.e("BitChord",
+                            "A3 published audio, but Downloads index failed",it)
+                    }
+            }
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AutoAcquisitionExecutor.PublishResult.DURABLE)
+            A0AutoAcquisitionExecutor.PublishResult.DURABLE
+        }catch(_:A3PublicationCommitFailure.RolledBack) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK)
+            job.markRolledBack()
+            A0AutoAcquisitionExecutor.PublishResult.ROLLED_BACK
+        }catch(_:A3PublicationCommitFailure.ReconciliationRequired) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN)
+            job.markUncertain()
+            A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN
+        }catch(error:Exception) {
+            A0AcquisitionDiagnostics.emit(diagnosticScope,
+                A0AcquisitionDiagnostics.Phase.A3_RESULT,
+                A0AcquisitionDiagnostics.fault(error))
+            // A3 may have made a provider row visible before failure;
+            // without confirmed rollback, never permit silent re-download.
+            job.markUncertain()
+            A0AutoAcquisitionExecutor.PublishResult.UNCERTAIN
+        }
+    }
+
+    override fun cleanup(receipt:A0VerifiedByteStager.Receipt) {
+        requireWorker()
+        A0AcquisitionDiagnostics.emit(diagnosticScope,
+            A0AcquisitionDiagnostics.Phase.A3_CLEANUP)
+        if(!privateReceipt(receipt) || !receipt.file.delete())
+            throw IOException("Soulseek private receipt cleanup failed")
+    }
+
+    override fun finish() {
+        if(!closed.compareAndSet(false,true))return
+        try {transport.cancel()}finally{job.finish()}
+    }
+}

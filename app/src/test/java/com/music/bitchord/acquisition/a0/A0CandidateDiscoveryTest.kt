@@ -104,7 +104,7 @@ class A0CandidateDiscoveryTest {
             saveFormatsOnly = true
         )
         handoff.offerParsed(reply("peer", listOf(
-            A0SoulseekSearchFile("Music\\ILLIT Magnetic.ogg", 100000, "ogg", emptyMap()),
+            A0SoulseekSearchFile("Music\\ILLIT Magnetic.wma", 100000, "wma", emptyMap()),
             A0SoulseekSearchFile("Music\\ILLIT Magnetic.m4a", 100000, "m4a", emptyMap()),
             file("ILLIT Magnetic.mp3")
         )), "peer")

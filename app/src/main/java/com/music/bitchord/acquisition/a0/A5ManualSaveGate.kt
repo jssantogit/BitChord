@@ -9,7 +9,7 @@ package com.music.bitchord.acquisition.a0
  */
 internal object A5ManualSaveGate {
     private val badName=Regex("""[\\/:*?"<>|\x00-\x1F\x7F]""")
-    private val supported=setOf("wav","flac","mp3","aac")
+    private val supported=setOf("wav","flac","mp3","aac","opus","ogg")
 
     fun canSave(transferObserved:Boolean,userConfirmedSave:Boolean):Boolean=
         transferObserved && userConfirmedSave

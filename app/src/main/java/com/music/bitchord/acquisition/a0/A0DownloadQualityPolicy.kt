@@ -57,8 +57,8 @@ internal object A0DownloadQualityPolicy {
         if (preset == A0CanonicalAcquisitionIntent.QualityPreset.LEGACY_UNSPECIFIED) {
             return Assessment(Status.NOT_CONSTRAINED, Reason.LEGACY_DEFAULT)
         }
-        // The current Android saving path supports MP3, FLAC, WAV. This is
-        // not an HE-AAC/Opus or ALAC pipeline. Do not invent a transcoder.
+        // The supported codec set comes from the verified publisher. Generic
+        // M4A never proves ALAC and this policy never performs transcoding.
         if (preset == A0CanonicalAcquisitionIntent.QualityPreset.HIGH_EFFICIENCY) {
             return Assessment(Status.UNAVAILABLE, Reason.PRESET_NOT_SUPPORTED)
         }
@@ -92,6 +92,8 @@ internal object A0DownloadQualityPolicy {
             A0CanonicalAcquisitionIntent.Codec.FLAC -> "flac"
             A0CanonicalAcquisitionIntent.Codec.PCM_WAV -> "wav"
             A0CanonicalAcquisitionIntent.Codec.AAC_ADTS -> "aac"
+            A0CanonicalAcquisitionIntent.Codec.OPUS -> "opus"
+            A0CanonicalAcquisitionIntent.Codec.VORBIS -> "ogg"
         }
         if (ext != expectedExt) return uncertain(Reason.CONTAINER_CODEC_CONFLICT)
         if (codec !in supportedCodecs) {
@@ -112,18 +114,19 @@ internal object A0DownloadQualityPolicy {
                     else mismatch(profile.strict)
             }
             A0CanonicalAcquisitionIntent.QualityPreset.HIGH_QUALITY -> {
-                // A high-quality *lossy output* request is not fulfilled by
-                // returning FLAC instead. AAC-ADTS 256 or MP3 320, and the
-                // exact audio remains unverified until inspected locally.
-                if (lossless) return mismatch(profile.strict)
-                if (codec !in setOf(A0CanonicalAcquisitionIntent.Codec.MP3,
-                        A0CanonicalAcquisitionIntent.Codec.AAC_ADTS))
-                    return mismatch(profile.strict)
-                val rate = offer.bitrateKbps
+                // Efficient lossy codecs only: never silently substitute FLAC,
+                // ALAC or a generic M4A container for this profile.
+                if(lossless)return mismatch(profile.strict)
+                val minimum=when(codec) {
+                    A0CanonicalAcquisitionIntent.Codec.MP3 -> 320
+                    A0CanonicalAcquisitionIntent.Codec.AAC_ADTS -> 256
+                    A0CanonicalAcquisitionIntent.Codec.OPUS -> 160
+                    A0CanonicalAcquisitionIntent.Codec.VORBIS -> 192
+                    else -> return mismatch(profile.strict)
+                }
+                val rate=offer.bitrateKbps
                     ?: return uncertain(Reason.INSUFFICIENT_TECHNICAL_CLAIMS)
-                return if((codec==A0CanonicalAcquisitionIntent.Codec.MP3 && rate>=320) ||
-                    (codec==A0CanonicalAcquisitionIntent.Codec.AAC_ADTS && rate>=256))
-                    match() else mismatch(profile.strict)
+                return if(rate>=minimum)match() else mismatch(profile.strict)
             }
             A0CanonicalAcquisitionIntent.QualityPreset.CUSTOM -> {
                 if (profile.allowedCodecs.isNotEmpty() &&

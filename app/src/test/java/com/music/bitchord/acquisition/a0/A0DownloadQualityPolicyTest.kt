@@ -135,4 +135,34 @@ class A0DownloadQualityPolicyTest {
         assertEquals(A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL, impossible.status)
     }
 
+    @Test fun highQualityAcceptsOpusAndVorbisAtCodecSpecificThresholds() {
+        val p=profile(A0CanonicalAcquisitionIntent.QualityPreset.HIGH_QUALITY)
+        for((codec,ext,min) in listOf(
+            Triple(A0CanonicalAcquisitionIntent.Codec.OPUS,"opus",160),
+            Triple(A0CanonicalAcquisitionIntent.Codec.VORBIS,"ogg",192))) {
+            assertEquals(A0DownloadQualityPolicy.Status.COMPATIBLE_CLAIM_UNVERIFIED,
+                A0DownloadQualityPolicy.evaluate(p,
+                    A0DownloadQualityPolicy.Offer(codec,ext,min),setOf(codec)).status)
+            assertEquals(A0DownloadQualityPolicy.Status.INCOMPATIBLE,
+                A0DownloadQualityPolicy.evaluate(p,
+                    A0DownloadQualityPolicy.Offer(codec,ext,min-1),setOf(codec)).status)
+            assertEquals(A0DownloadQualityPolicy.Status.UNAVAILABLE,
+                A0DownloadQualityPolicy.evaluate(p,
+                    A0DownloadQualityPolicy.Offer(codec,ext,min),emptySet()).status)
+        }
+    }
+
+    @Test fun losslessDoesNotAcceptLossyOggNorGenericM4a() {
+        val p=profile(A0CanonicalAcquisitionIntent.QualityPreset.LOSSLESS)
+        for((codec,ext) in listOf(
+            A0CanonicalAcquisitionIntent.Codec.OPUS to "opus",
+            A0CanonicalAcquisitionIntent.Codec.VORBIS to "ogg")) {
+            assertEquals(A0DownloadQualityPolicy.Status.INCOMPATIBLE,
+                A0DownloadQualityPolicy.evaluate(p,
+                    A0DownloadQualityPolicy.Offer(codec,ext,320),setOf(codec)).status)
+        }
+        assertEquals(A0DownloadQualityPolicy.Status.INCONCLUSIVE_MANUAL,
+            A0DownloadQualityPolicy.evaluate(p,
+                A0DownloadQualityPolicy.Offer(null,"m4a"),emptySet()).status)
+    }
 }

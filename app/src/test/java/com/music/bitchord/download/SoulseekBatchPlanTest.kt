@@ -56,6 +56,51 @@ class SoulseekBatchPlanTest {
         assertEquals(2,session.succeeded)
         assertEquals(1,session.skipped)
     }
+    @Test fun choosingAReviewSlotDoesNotSkipOrRepeatOtherPendingTracks() {
+        val entries=(0 until 23).map { i ->
+            SoulseekBatchPlan.Entry("id-$i","BTS - Song $i","Proof",180)
+        }
+        val session=SoulseekBatchSession(entries)
+        assertTrue(session.selectPending(12))
+        assertEquals("BTS - Song 12",session.current?.query)
+        assertEquals(0,session.skipped)
+        assertEquals(23,session.pendingIndices.size)
+        assertTrue(session.markSaved())
+        assertEquals(22,session.pendingIndices.size)
+        assertFalse(session.selectPending(12)) // A3-published slot never revisited
+        assertTrue(session.selectPending(3))
+        assertEquals("BTS - Song 3",session.current?.query)
+        assertEquals(0,session.skipped)
+        assertTrue(session.advance()) // only the deliberately skipped slot 3
+        assertEquals(1,session.skipped)
+        assertEquals(4,session.index)
+        assertFalse(session.selectPending(3))
+        assertTrue(session.selectPending(0))
+        assertTrue(session.markSaved())
+        assertTrue(session.advance())
+        assertEquals(1,session.index)
+        assertEquals(2,session.succeeded)
+    }
+
+    @Test fun reviewNextSkipsAlreadyPublishedAndWrapsWithoutDuplicating() {
+        val entries=(0 until 3).map { i ->
+            SoulseekBatchPlan.Entry("id-$i","BTS - Song $i","Proof",180)
+        }
+        val session=SoulseekBatchSession(entries)
+        assertTrue(session.selectPending(2))
+        assertTrue(session.markSaved())
+        assertTrue(session.advance())
+        assertEquals(0,session.index)
+        assertFalse(session.selectPending(2))
+        assertTrue(session.advance())
+        assertEquals(1,session.index)
+        assertTrue(session.markSaved())
+        assertFalse(session.advance())
+        assertTrue(session.isComplete)
+        assertEquals(2,session.succeeded)
+        assertEquals(1,session.skipped)
+    }
+
     @Test fun editingWireQueryDoesNotChangeAlbumTrackIdentityForRanking() {
         val entry=SoulseekBatchPlan.Entry("2","ILLIT - Magnetic","SUPER REAL ME",161)
         assertEquals("ILLIT - Magnetic",
