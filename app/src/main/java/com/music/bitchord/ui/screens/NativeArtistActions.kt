@@ -102,7 +102,7 @@ internal fun ActionRow(
             CircleIconButton(
                 icon = if (artistRated) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                 contentDescription = "Avaliar artista",
-                onClick = onRateArtist,
+                onClick = { onRateArtist?.invoke() },
                 haptic = Haptic.ToggleOn,
                 size = ARTIST_SIDE_BUTTON,
             )
@@ -118,13 +118,6 @@ internal fun ActionRow(
     }
     Spacer(Modifier.height(bottomSpace))
 }
-
-/**
- * A labelled pill in the release page's action row. [filled] is Play: white
- * with black content, so the primary action survives every palette, filling
- * whatever width the row leaves it. Otherwise it wears the light veil and glass
- * rim of the circles beside it — Shuffle, on a page with no Add to sit opposite.
- */
 
 /**
  * The artist page's Play: a filled circle with the triangle punched out of it,
