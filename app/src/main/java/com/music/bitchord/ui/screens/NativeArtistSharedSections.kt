@@ -27,6 +27,61 @@ import com.music.bitchord.data.model.DetailPage
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /**
+ * Presentation context is not provider identity: both MediaStore and
+ * Navidrome are Library contexts; MusicBrainz and future metadata providers
+ * are online catalog contexts. A source can have some capabilities absent.
+ */
+internal enum class NativeArtistContext { LIBRARY, ONLINE_CATALOG }
+
+/**
+ * Exactly one track section may be visible. `TOP_TRACKS` means an upstream
+ * provider supplied an actual ordered popularity/ranking feed; a MusicBrainz
+ * discography or a set of locally available assets is not popularity evidence.
+ */
+internal enum class NativeArtistSection {
+    TRACKS,
+    TOP_TRACKS,
+    RECENT_ALBUM,
+    ALBUMS,
+    SINGLES_EPS,
+    RELEASES,
+}
+
+internal data class NativeArtistSectionEvidence(
+    val context: NativeArtistContext,
+    val hasTracks: Boolean,
+    val hasVerifiedPopularity: Boolean = false,
+    val hasRecentAlbum: Boolean = false,
+    val hasAlbums: Boolean = false,
+    val hasSinglesAndEps: Boolean = false,
+    val hasUnclassifiedReleases: Boolean = false,
+)
+
+/**
+ * One evidence-gated section policy for every artist detail entry point.
+ * No headline appears unless its own content exists, and library artists
+ * never display a 'Mais tocadas' heading without a provider ranking source.
+ *
+ * The online catalog can use "Faixas" for actual non-ranked recordings,
+ * but must not relabel those recordings as "Mais tocadas" by inference.
+ */
+internal fun nativeArtistVisibleSections(
+    evidence: NativeArtistSectionEvidence,
+): Set<NativeArtistSection> = buildSet {
+    if (evidence.hasTracks) {
+        add(
+            if (evidence.context == NativeArtistContext.ONLINE_CATALOG &&
+                evidence.hasVerifiedPopularity
+            ) NativeArtistSection.TOP_TRACKS else NativeArtistSection.TRACKS,
+        )
+    }
+    if (evidence.hasRecentAlbum) add(NativeArtistSection.RECENT_ALBUM)
+    if (evidence.hasAlbums) add(NativeArtistSection.ALBUMS)
+    if (evidence.hasSinglesAndEps) add(NativeArtistSection.SINGLES_EPS)
+    if (evidence.hasUnclassifiedReleases) add(NativeArtistSection.RELEASES)
+}
+
+/**
  * Exact native artist screen structure extracted from DetailScreen:
  * one photo wash beneath one scrolling list. The artist header, actions,
  * ratings, filters, albums and menus remain caller-provided native sections.
