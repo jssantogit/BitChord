@@ -40,6 +40,22 @@ class CanonicalAutoBrowseTracksTest {
         assertNull(canonicalAutoSong(row(mediaAssetId = "")))
     }
 
+    @Test fun autoSearchUsesTrackAndArtistMetadataWithoutProviderLookup() {
+        val songs = listOf(
+            Song(
+                videoId = "content://media/one", title = "Supernova", artist = "aespa",
+                thumbnailUrl = null, localUri = "content://media/one",
+            ),
+            Song(
+                videoId = "content://media/two", title = "Magnetic", artist = "ILLIT",
+                thumbnailUrl = null, localUri = "content://media/two",
+            ),
+        )
+        assertEquals(listOf("Supernova"), canonicalAutoSearch(songs, "super").map { it.title })
+        assertEquals(listOf("Supernova"), canonicalAutoSearch(songs, "aespa").map { it.title })
+        assertEquals(emptyList<Song>(), canonicalAutoSearch(songs, "not found"))
+    }
+
     @Test fun quickPicksKeepRemoteAudioWhenLocalLibraryIsEmptyOrInaccessible() {
         val remote = canonicalAutoSong(row())!!
         assertEquals(
