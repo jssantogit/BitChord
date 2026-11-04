@@ -65,6 +65,24 @@ class SpotifyImportCanonicalOptOutTest {
         assertEquals(tracks, unmatched)
     }
 
+    @Test fun resolverFailureDoesNotDropSpotifyMetadataOrOtherMatches() = runBlocking {
+        val tracks = listOf(
+            SpotifyImportTrack("Unavailable", "Artist A"),
+            SpotifyImportTrack("Available", "Artist B"),
+        )
+        val (songs, unmatched) = SpotifyImporter.resolveToSongsWithResolver(
+            tracks = tracks,
+            onProgress = { _, _ -> },
+            allowMatching = { true },
+            resolveTrack = { track ->
+                if (track.title == "Unavailable") error("temporary provider failure")
+                Song(videoId = "local:verified", title = track.title, artist = track.artist)
+            },
+        )
+        assertEquals(listOf("Available"), songs.map { it.title })
+        assertEquals(listOf("Unavailable"), unmatched.map { it.title })
+    }
+
     @Test fun emptyPlaylistHasNoNetworkOrSyntheticRows() = runBlocking {
         val (songs, unmatched) = SpotifyImporter.resolveToSongs(
             tracks = emptyList(),
