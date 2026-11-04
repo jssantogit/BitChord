@@ -96,4 +96,11 @@ class NativeArtistSharedSectionsTest {
         }
     }
 
+    @Test fun rankedLegacyBrowseIsNeverInferredForMusicBrainzOrLibrary() {
+        assertTrue(nativeArtistLegacyRankedFeed("UCverifiedLegacyArtist"))
+        assertTrue(!nativeArtistLegacyRankedFeed("catalog:ARTIST:verified-mbid"))
+        assertTrue(!nativeArtistLegacyRankedFeed("local:artist:abc"))
+        assertTrue(!nativeArtistLegacyRankedFeed("opensubsonic:artist:abc"))
+    }
+
 }
