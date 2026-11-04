@@ -137,10 +137,11 @@ object SourceRegistry {
         stored: List<SourceConfig>,
         forceJioSaavnOff: Boolean,
     ): List<SourceConfig> {
-        // Newly seeded installs keep the existing defaults (JioSaavn off,
-        // YouTube on), but persisted user opt-outs must remain authoritative.
-        // In particular, discovery must never silently re-enable YouTube.
-        val seeded = stored + BUILT_IN_KINDS
+        // YouTube is retired as a newly seeded source. Preserve existing
+        // serialized entries as historical settings until the final schema
+        // migration; neither discovery nor audio is allowed to use them.
+        // JioSaavn retains its existing explicit opt-in policy.
+        val seeded = stored + listOf(SourceKind.JIOSAAVN)
             .filter { kind -> stored.none { it.kind == kind } }
             .map { SourceConfig(kind = it) }
 
