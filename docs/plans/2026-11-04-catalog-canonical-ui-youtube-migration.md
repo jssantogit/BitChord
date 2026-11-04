@@ -185,3 +185,19 @@ O escopo não se encerra na tela de artista. O compositor deixa de receber DTOs 
 ### Gate para iniciar a deleção de backend
 
 A implementação e o teste de integração do **último HEAD** da PR #209 devem passar. Emulador A0 `skipped` não substitui o smoke físico; PR permanece draft e sem merge. Só então começar a retirada de integrações antigas em uma sequência rastreável e com reversão: identidade/links → navegação/DTOs → playback/SourceResolver → API/conta/PoToken → recursos/dependências/testes. Não usar o sucesso de testes puros como comprovação de paridade visual ou de áudio real.
+
+
+## Decisão de validação — 04/11/2026, após HEAD 90412de
+
+**Decisão do maintainer:** dispensar o smoke físico intermediário da PR #209. O próximo smoke físico no Galaxy A54 ocorrerá **somente após a remoção completa do backend YouTube**. Esta alteração modifica a ordem operacional dos gates D0–D5 anteriores; não significa que a paridade visual ou funcional já tenha sido comprovada em aparelho.
+
+**Política de execução até lá:**
+
+1. Manter uma única PR #209 em draft, sem merge na main, durante a migração e exclusão. CI Android, testes sharedUi, testes unitários de compatibilidade, checagens estáticas e revisão de regressões em relação à main pós-#205 são os gates intermediários obrigatórios.
+2. Migrar `LibraryPlaylistCard.Normal(ShelfItem)` e as entradas históricas para a página unificada de playlist **antes** de apagar `DetailScreen`, `Song`, `ShelfItem` ou chaves persistidas. A mesma árvore visual deve atender playlist online, local e Navidrome, com capacidades distintas e sem IDs artificiais.
+3. Substituir a busca `YtMusicRepository.search` do `SpotifyImporter` e a reconciliação `SpotifyImporter.matchTrack` no `MainViewModel` por resolução baseada em identidades canônicas e disponibilidade real de assets. Sem correspondência verificável, preservar a faixa Spotify como metadado sem playback, nunca selecionar o primeiro hit por conveniência.
+4. Preservar leitura e rastreabilidade de `videoId`, URIs e identificadores históricos na migração de playlists, histórico, downloads, links, fila restaurada e caches. Separar **compatibilidade de dados** da capacidade de fazer novas solicitações ao backend removido; não reescrever ou destruir dados antigos só para eliminar strings `videoId`.
+5. Remover consumidores restantes de playback, fila e `SourceResolver` com testes de MediaStore/Navidrome; depois excluir API, Innertube, PoToken, auth, sessão, módulos e dependências obsoletas de Android/Desktop/TV/WearOS. Verificar também letras, Spotify e deep links.
+6. Exigir CI verde no **último SHA da remoção integral** antes de gerar APK para o único smoke final. Esse smoke ainda deverá comprovar Biblioteca unificada, navegação/gestos/menus/ratings, playlists normais e inteligentes, links históricos, Spotify, MediaStore, Navidrome, reprodução, fila e downloads, comparando a UI à referência aprovada na #205.
+
+**Estado desta decisão:** plano operacional aprovado; não declarar backend removido nem smoke aprovado enquanto as alterações de código e a validação final não ocorrerem.
