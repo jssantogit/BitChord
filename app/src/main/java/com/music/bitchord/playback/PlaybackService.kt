@@ -1,5 +1,7 @@
 package com.music.bitchord.playback
 
+import com.music.bitchord.data.catalog.artistCreditFromSubtitle
+
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
@@ -105,7 +107,6 @@ import com.music.bitchord.data.listentogether.partyQueueIndexOf
 import com.music.bitchord.data.listentogether.partyUpcomingAfter
 import com.music.bitchord.R
 import com.music.bitchord.data.LocalMediaRepository
-import com.music.bitchord.data.innertube.InnertubeParser
 import com.music.bitchord.data.lyrics.EmbeddedLyrics
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsRepository
@@ -8179,7 +8180,7 @@ class PlaybackService : MediaLibraryService() {
             val song = Song(
                 videoId = vid,
                 title = title,
-                artist = InnertubeParser.artistFromSubtitle(subtitle),
+                artist = artistCreditFromSubtitle(subtitle),
                 thumbnailUrl = thumbnailUrl,
             )
             songCache[vid] = song
@@ -8209,7 +8210,7 @@ class PlaybackService : MediaLibraryService() {
         return Song(
             videoId = id,
             title = title,
-            artist = InnertubeParser.artistFromSubtitle(subtitle),
+            artist = artistCreditFromSubtitle(subtitle),
             thumbnailUrl = thumbnailUrl,
         )
     }
