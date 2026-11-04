@@ -20,9 +20,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalDiscoveryModeTest {
-    @Test fun defaultAndEnabledYoutubeKeepLegacyDiscovery() {
-        assertFalse(shouldUseCanonicalDiscovery(explicitlyEnabled = false, configs = emptyList()))
-        assertFalse(shouldUseCanonicalDiscovery(
+    @Test fun canonicalDiscoveryDoesNotDependOnOldOptIn() {
+        assertTrue(shouldUseCanonicalDiscovery(explicitlyEnabled = false, configs = emptyList()))
+        assertTrue(shouldUseCanonicalDiscovery(
             explicitlyEnabled = false,
             configs = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)),
         ))
@@ -44,7 +44,7 @@ class CanonicalDiscoveryModeTest {
     }
 
     @Test fun disablingAnUnrelatedSourceDoesNotChangeDiscoveryMode() {
-        assertFalse(shouldUseCanonicalDiscovery(
+        assertTrue(shouldUseCanonicalDiscovery(
             explicitlyEnabled = false,
             configs = listOf(SourceConfig(kind = SourceKind.ADDON, enabled = false)),
         ))
@@ -52,7 +52,7 @@ class CanonicalDiscoveryModeTest {
 
     @Test fun searchDefaultsToCatalogWhenOptedInOrYoutubeIsDisabled() {
         assertEquals(
-            SearchSource.YOUTUBE,
+            SearchSource.CANONICAL,
             defaultDiscoverySearchSource(explicitlyEnabled = false, configs = emptyList()),
         )
         assertEquals(
@@ -72,7 +72,7 @@ class CanonicalDiscoveryModeTest {
         val enabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true))
         val disabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = false))
 
-        assertTrue(shouldPrefetchLegacyYouTubeAccountData(
+        assertFalse(shouldPrefetchLegacyYouTubeAccountData(
             signedIn = true, canonicalDiscoveryEnabled = false, configs = enabled,
         ))
         assertFalse(shouldPrefetchLegacyYouTubeAccountData(
@@ -157,9 +157,9 @@ class CanonicalDiscoveryModeTest {
         assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = true, configs = enabled))
         assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = true, configs = emptyList()))
         assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = disabled))
-        assertTrue(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = enabled))
-        // No setting means existing installation behavior remains unchanged.
-        assertTrue(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = emptyList()))
+        assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = enabled))
+        // An old install must not reactivate background YouTube discovery.
+        assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = emptyList()))
     }
 
     @Test fun disabledYoutubeRejectsLegacyDetailLookupBeforeRequestAndDoesNotLeakStaleResponses() = runBlocking {
