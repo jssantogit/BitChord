@@ -112,3 +112,19 @@ internal fun canonicalAutoPlaylistSongs(
     } ?: return@mapNotNull null
     song.copy(localUri = candidate)
 }
+
+/**
+ * MediaBrowser input is not a source identity assertion. An external URI can
+ * be opened directly only when it is an actual local locator or a complete,
+ * provider-scoped remote request understood by CanonicalRemoteDataSource.
+ */
+internal fun canonicalAutoExternalUri(value: String?): String? {
+    if (value.isNullOrBlank()) return null
+    if (value.startsWith("content://", ignoreCase = true) ||
+        value.startsWith("file://", ignoreCase = true)
+    ) return value
+    return value.takeIf {
+        CanonicalRemotePlaybackUri.decode(it)
+            ?.providerKey?.startsWith("opensubsonic:") == true
+    }
+}
