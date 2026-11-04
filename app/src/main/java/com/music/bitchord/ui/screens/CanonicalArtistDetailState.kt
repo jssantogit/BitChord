@@ -234,7 +234,7 @@ internal fun rememberCanonicalArtistRating(
 @Composable
 internal fun rememberCanonicalNestedAlbumRating(releaseId: String): State<Double?> {
     val context = LocalContext.current.applicationContext
-    return produceState(initialValue = null, key1 = releaseId) {
+    return produceState<Double?>(initialValue = null, key1 = releaseId) {
         ListeningEventDatabase.get(context).canonicalEntityRatingDao()
             .observe("ALBUM", releaseId).collectLatest { saved ->
                 value = saved?.ratingValue?.takeIf(::isValidCanonicalEntityRating)
