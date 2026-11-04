@@ -122,9 +122,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 Diagnostics.span(DiagnosticCategory.STARTUP, "source_registry_init") {
                     SourceRegistry.init(this)
                 }
-                Diagnostics.span(DiagnosticCategory.STARTUP, "innertubex_init") {
-                    AndroidStreamHooks.initInnerTubeX(this)
-                }
                 // Its own directory: canvas clips are looping video, not audio, and
                 // belong in a cache AudioCache's own limit and eviction policy were
                 // never sized for. See CanvasCache's doc for why this one exists at
