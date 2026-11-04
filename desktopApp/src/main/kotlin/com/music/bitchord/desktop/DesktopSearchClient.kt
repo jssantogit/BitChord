@@ -1,7 +1,5 @@
 package com.music.bitchord.desktop
 
-import com.music.bitchord.data.YtMusicRepository
-import com.music.bitchord.data.innertube.Innertube
 import com.music.bitchord.data.model.ArtistPage
 import com.music.bitchord.data.model.BrowseItem
 import com.music.bitchord.data.model.BrowseType
@@ -14,18 +12,12 @@ import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.UserPlaylist
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
-/**
- * The desktop's door onto YouTube Music.
- *
- * Nothing here talks to YouTube itself any more: every call is the phone's own
- * [YtMusicRepository] / [Innertube], shared from `:shared`, so a parsing fix
- * lands on both at once. What stays is the desktop's calling convention — the
- * names its pages already use, and [DesktopCollection] for a browsed page.
- */
+/** Compatibility boundary for historical browse IDs, without the retired YouTube network client. */
 object DesktopSearchClient {
 
     suspend fun search(
@@ -36,102 +28,80 @@ object DesktopSearchClient {
         return DesktopSourceRegistry.search(query.trim(), filter)
     }
 
-    suspend fun home(): Result<HomeFeed> = YtMusicRepository.home()
+    private fun <T> retired(): Result<T> = Result.failure(
+        UnsupportedOperationException("Retired YouTube pages have no verified provider-backed asset"),
+    )
 
-    suspend fun moreHome(token: String): Result<HomeFeed> = YtMusicRepository.moreHome(token)
+    // These are archival YouTube-specific page and account entry points. Their
+    // serialized IDs may still appear in historical rows, but opening one must
+    // never contact the removed browse, session or stream backend.
+    suspend fun home(): Result<HomeFeed> = retired()
+    suspend fun moreHome(@Suppress("UNUSED_PARAMETER") token: String): Result<HomeFeed> = retired()
+    suspend fun homeSupplement(@Suppress("UNUSED_PARAMETER") browseId: String): Result<List<HomeShelf>> = retired()
+    val HOME_SUPPLEMENT_BROWSE_IDS: List<String> = emptyList()
+    suspend fun moodAndGenres(): Result<List<MoodGenreSection>> = retired()
+    suspend fun moodGenreShelves(
+        @Suppress("UNUSED_PARAMETER") browseId: String,
+        @Suppress("UNUSED_PARAMETER") params: String?,
+    ): Result<List<HomeShelf>> = retired()
+    suspend fun moodGenreArtwork(
+        @Suppress("UNUSED_PARAMETER") browseId: String,
+        @Suppress("UNUSED_PARAMETER") params: String?,
+    ): Result<String?> = retired()
 
-    suspend fun homeSupplement(browseId: String): Result<List<HomeShelf>> =
-        YtMusicRepository.homeSupplement(browseId)
+    suspend fun browse(
+        @Suppress("UNUSED_PARAMETER") browseId: String,
+        @Suppress("UNUSED_PARAMETER") fallback: BrowseItem? = null,
+    ): Result<DesktopCollection> = retired()
 
-    val HOME_SUPPLEMENT_BROWSE_IDS: List<String> get() = YtMusicRepository.HOME_SUPPLEMENT_BROWSE_IDS
-
-    suspend fun moodAndGenres(): Result<List<MoodGenreSection>> = YtMusicRepository.moodAndGenres()
-
-    suspend fun moodGenreShelves(browseId: String, params: String?): Result<List<HomeShelf>> =
-        YtMusicRepository.moodGenreShelves(browseId, params)
-
-    suspend fun moodGenreArtwork(browseId: String, params: String?): Result<String?> =
-        YtMusicRepository.moodGenreArtwork(browseId, params)
-
-    /** An album, playlist or artist song list, in the shape the desktop's collection page draws. */
-    suspend fun browse(browseId: String, fallback: BrowseItem? = null): Result<DesktopCollection> =
-        YtMusicRepository.browseSongs(browseId).map { page ->
-            val header = page.header
-            DesktopCollection(
-                browseId = browseId,
-                title = header?.title?.takeIf(String::isNotBlank)
-                    ?: fallback?.title?.takeIf(String::isNotBlank)
-                    ?: "Collection",
-                subtitle = header?.subtitle?.takeIf(String::isNotBlank) ?: fallback?.subtitle.orEmpty(),
-                thumbnailUrl = header?.thumbnailUrl ?: fallback?.thumbnailUrl,
-                type = fallback?.type?.takeIf { it != BrowseType.OTHER } ?: browseTypeOf(browseId),
-                songs = page.songs,
-                continuation = page.continuation,
-                owned = page.owned,
-            )
-        }
-
-    /** The rows after a collection's first page, and the token after those. */
     suspend fun moreCollectionSongs(
-        token: String,
+        @Suppress("UNUSED_PARAMETER") token: String,
         @Suppress("UNUSED_PARAMETER") artistFallback: String? = null,
-    ): Result<Pair<List<Song>, String?>> =
-        YtMusicRepository.moreSongs(token).map { it.songs to it.continuation }
+    ): Result<Pair<List<Song>, String?>> = retired()
 
-    suspend fun history(): Result<List<Song>> = YtMusicRepository.history()
+    suspend fun history(): Result<List<Song>> = retired()
+    suspend fun radio(@Suppress("UNUSED_PARAMETER") videoId: String): Result<List<Song>> = retired()
+    suspend fun trackLinks(@Suppress("UNUSED_PARAMETER") videoId: String): Result<Song> = retired()
+    suspend fun library(): Result<LibraryPage> = retired()
 
-    suspend fun radio(videoId: String): Result<List<Song>> = YtMusicRepository.radio(videoId)
+    suspend fun syncLikedIds(
+        @Suppress("UNUSED_PARAMETER") firstToken: String,
+        @Suppress("UNUSED_PARAMETER") onIds: suspend (Set<String>) -> Unit,
+    ) = Unit
 
-    suspend fun trackLinks(videoId: String): Result<Song> = YtMusicRepository.trackLinks(videoId)
-
-    suspend fun library(): Result<LibraryPage> = YtMusicRepository.library()
-
-    /** Follows Liked Music's pages past the first, handing each page's ids over as it lands. */
-    suspend fun syncLikedIds(firstToken: String, onIds: suspend (Set<String>) -> Unit) {
-        val seen = HashSet<String>()
-        var next: String? = firstToken
-        while (next != null && seen.add(next)) {
-            val page = YtMusicRepository.moreSongs(next).getOrNull() ?: return
-            onIds(page.songs.mapTo(HashSet()) { it.videoId })
-            next = page.continuation
-        }
-    }
-
-    suspend fun rate(videoId: String, status: LikeStatus): Result<Unit> = YtMusicRepository.rate(videoId, status)
-
-    suspend fun artistPage(browseId: String): Result<ArtistPage> = YtMusicRepository.artistPage(browseId)
-
-    suspend fun setSubscribed(channelId: String, subscribed: Boolean): Result<Unit> =
-        YtMusicRepository.setSubscribed(channelId, subscribed)
-
+    suspend fun rate(
+        @Suppress("UNUSED_PARAMETER") videoId: String,
+        @Suppress("UNUSED_PARAMETER") status: LikeStatus,
+    ): Result<Unit> = retired()
+    suspend fun artistPage(@Suppress("UNUSED_PARAMETER") browseId: String): Result<ArtistPage> = retired()
+    suspend fun setSubscribed(
+        @Suppress("UNUSED_PARAMETER") channelId: String,
+        @Suppress("UNUSED_PARAMETER") subscribed: Boolean,
+    ): Result<Unit> = retired()
     suspend fun createPlaylist(
-        title: String,
-        privacy: PlaylistPrivacy,
-        videoIds: List<String> = emptyList(),
-    ): Result<String> = YtMusicRepository.createPlaylist(title, privacy, videoIds)
-
-    suspend fun deletePlaylist(playlistId: String): Result<Unit> = YtMusicRepository.deletePlaylist(playlistId)
-
-    suspend fun renamePlaylist(playlistId: String, title: String): Result<Unit> =
-        YtMusicRepository.renamePlaylist(playlistId, title)
-
-    suspend fun addToPlaylist(playlistId: String, videoIds: List<String>): Result<Map<String, String>> =
-        YtMusicRepository.addToPlaylist(playlistId, videoIds)
-
-    suspend fun removeFromPlaylist(playlistId: String, entries: List<Pair<String, String>>): Result<Unit> =
-        YtMusicRepository.removeFromPlaylist(playlistId, entries)
-
-    /**
-     * Every entry of a playlist, in order — the whole list a reorder has to name, not the page of it
-     * that happens to be on screen. Fails rather than returning a partial list, since moving rows
-     * against an incomplete one would push entries it never saw.
-     */
-    suspend fun playlistEntries(browseId: String): Result<List<Song>> =
-        YtMusicRepository.playlistEntries(browseId)
-
-    /** Rearranges a playlist from [current] to [target], both lists of its entries' set-video-ids. */
-    suspend fun reorderPlaylist(playlistId: String, current: List<String>, target: List<String>): Result<Unit> =
-        YtMusicRepository.reorderPlaylist(playlistId, current, target)
+        @Suppress("UNUSED_PARAMETER") title: String,
+        @Suppress("UNUSED_PARAMETER") privacy: PlaylistPrivacy,
+        @Suppress("UNUSED_PARAMETER") videoIds: List<String> = emptyList(),
+    ): Result<String> = retired()
+    suspend fun deletePlaylist(@Suppress("UNUSED_PARAMETER") playlistId: String): Result<Unit> = retired()
+    suspend fun renamePlaylist(
+        @Suppress("UNUSED_PARAMETER") playlistId: String,
+        @Suppress("UNUSED_PARAMETER") title: String,
+    ): Result<Unit> = retired()
+    suspend fun addToPlaylist(
+        @Suppress("UNUSED_PARAMETER") playlistId: String,
+        @Suppress("UNUSED_PARAMETER") videoIds: List<String>,
+    ): Result<Map<String, String>> = retired()
+    suspend fun removeFromPlaylist(
+        @Suppress("UNUSED_PARAMETER") playlistId: String,
+        @Suppress("UNUSED_PARAMETER") entries: List<Pair<String, String>>,
+    ): Result<Unit> = retired()
+    suspend fun playlistEntries(@Suppress("UNUSED_PARAMETER") browseId: String): Result<List<Song>> = retired()
+    suspend fun reorderPlaylist(
+        @Suppress("UNUSED_PARAMETER") playlistId: String,
+        @Suppress("UNUSED_PARAMETER") current: List<String>,
+        @Suppress("UNUSED_PARAMETER") target: List<String>,
+    ): Result<Unit> = retired()
 
     // The old typeahead hit YouTube on every keystroke. Provider-owned search
     // is explicit; local recent queries stay available without network calls.
@@ -141,13 +111,14 @@ object DesktopSearchClient {
     suspend fun searchSuggestions(@Suppress("UNUSED_PARAMETER") input: String): Result<List<String>> =
         Result.success(emptyList())
 
-    suspend fun accountMenu(): Result<JsonObject> = runCatching { Innertube.accountMenu() }
+    suspend fun accountMenu(): Result<JsonObject> = retired()
 
-    suspend fun accountsList(): Result<JsonObject> = runCatching { Innertube.accountsList() }
+    suspend fun accountsList(): Result<JsonObject> = retired()
 
     /** The account's own playlists among a library shelf's items — the ones an edit can target. */
-    internal fun userPlaylists(items: List<com.music.bitchord.data.model.ShelfItem>) =
-        com.music.bitchord.data.innertube.InnertubeParser.parseUserPlaylists(items)
+    internal fun userPlaylists(
+        @Suppress("UNUSED_PARAMETER") items: List<com.music.bitchord.data.model.ShelfItem>,
+    ): List<UserPlaylist> = emptyList()
 
     internal fun isVideoId(id: String): Boolean = VIDEO_ID.matches(id)
 
