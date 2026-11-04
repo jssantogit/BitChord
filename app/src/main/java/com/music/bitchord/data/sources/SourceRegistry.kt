@@ -469,7 +469,14 @@ object SourceRegistry {
      * old address, which is precisely the state the user is in the middle of
      * correcting.
      */
-    suspend fun probeCandidate(config: SourceConfig): SourceHealth = build(config).health()
+    suspend fun probeCandidate(config: SourceConfig): SourceHealth {
+        // Historical source rows remain deserializable, but cannot become
+        // live YouTube clients through the editor's health-check endpoint.
+        if (config.kind == SourceKind.YOUTUBE) {
+            return SourceHealth.Rejected("YouTube Music is retired as an audio source")
+        }
+        return build(config).health()
+    }
 
     private fun build(config: SourceConfig): MusicSource = when (config.kind) {
         SourceKind.ADDON -> AddonSource(config)
