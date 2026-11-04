@@ -152,13 +152,6 @@ object SpotifyImporter {
             Pair(playlistTitle, tracks)
         }
 
-    /**
-     * Compatibility entry point for older callers. New Spotify resolution
-     * should inject a canonical asset resolver into resolveToSongs instead.
-     */
-    suspend fun matchTrack(track: SpotifyTrack): Song? =
-        LegacySpotifyYoutubeMatcher.matchTrack(track)
-
     /** Tracks the embed page lists before it cuts off. */
     private const val EMBED_TRACK_LIMIT = 100
     private const val PAGE_SIZE = 100
@@ -214,25 +207,9 @@ object SpotifyImporter {
     }
 
     /**
-     * Legacy entry point. The default YouTube matcher may only run while that
-     * source is explicitly permitted. Do not use for canonical Spotify imports.
-     */
-    suspend fun resolveToSongs(
-        tracks: List<SpotifyImportTrack>,
-        onProgress: (completed: Int, total: Int) -> Unit,
-        allowYoutubeMatching: () -> Boolean = { true },
-    ): Pair<List<Song>, List<SpotifyImportTrack>> =
-        resolveToSongsWithResolver(
-            tracks = tracks,
-            onProgress = onProgress,
-            allowMatching = allowYoutubeMatching,
-            resolveTrack = LegacySpotifyYoutubeMatcher::matchImportTrack,
-        )
-
-    /**
-     * Provider-neutral Spotify resolution. Callers must provide their own
-     * verified asset resolver and policy gate. The default legacy YouTube
-     * matcher is deliberately NOT inherited by this overload.
+     * Provider-neutral Spotify resolution. Callers must supply their own
+     * verified asset resolver and policy gate; no fallback service is called.
+     * Metadata-only public imports should not invent assets from title matches.
      */
     suspend fun resolveToSongsWithResolver(
         tracks: List<SpotifyImportTrack>,
