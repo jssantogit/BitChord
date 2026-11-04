@@ -60,6 +60,12 @@ class SpotifyCanonicalAssetMatcherTest {
         )))
     }
 
+    @Test fun unsupportedJellyfinProviderIsNotDeclaredPlayable() {
+        assertNull(selectSpotifyCanonicalAsset(spotify(), listOf(
+            asset(provider = "jellyfin:server1", uri = "https://server.invalid/play"),
+        )))
+    }
+
     @Test fun localWinsOverServerForSameVerifiedRecording() {
         val remote = asset(provider = "opensubsonic:server1", uri = "https://server.invalid/play")
         val local = asset()
