@@ -1,4 +1,4 @@
-"""Three-lane Android CI policy pilot: deterministic routing, no gate weakening.
+"""Android CI lane policy regression: deterministic routing, no gate weakening.
 
 Only static workflow/API contracts. Live runner behavior and throughput require
 a separately authorized on-main pilot and exact head CI evidence.
@@ -12,12 +12,12 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CHECK = ROOT / ".github/workflows/check.yml"
 
 
-class ThreeLanePilotTests(unittest.TestCase):
+class AndroidLanePilotRegressionTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.workflow = CHECK.read_text(encoding="utf-8")
 
-    def test_three_bounded_pr_groups_with_main_sha_isolation(self):
+    def test_existing_three_pr_groups_and_main_sha_isolation_remain(self):
         source = self.workflow
         self.assertIn("'bitchord-android-pr-lane-a'", source)
         self.assertIn("'bitchord-android-pr-lane-b'", source)
@@ -34,7 +34,7 @@ class ThreeLanePilotTests(unittest.TestCase):
             "catalog/c13-provider": "pr_a",
             "intelligence/l13-smart": "pr_a",
             "playback/b13-output": "pr_b",
-            "perf/d10-diagnostics": "pr_c",
+            "perf/d10-diagnostics": "pr_d",
             "infra/queue-overlap": "pr_c",
             "acquisition/a0": "pr_c",
             "other/external": "pr_c",

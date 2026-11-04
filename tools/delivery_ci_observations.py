@@ -65,6 +65,8 @@ def _lane_for_run(event, head_branch):
             return 'pr_a'
         if head_branch.startswith('playback/'):
             return 'pr_b'
+        if head_branch.startswith('perf/'):
+            return 'pr_d'
         return 'pr_c'
     return 'unknown'
 

@@ -1,4 +1,4 @@
-"""Regression tests for bounded CI lanes, including three-lane migration.
+"""Regression tests for bounded CI lanes, including four-lane migration.
 
 The required check and test scope must not change. These tests protect our
 routing contract; observable scheduler behavior must still be tested on GitHub.
@@ -10,10 +10,14 @@ CHECK = pathlib.Path(__file__).resolve().parents[1] / ".github/workflows/check.y
 
 
 def lane_for_pr_branch(branch: str) -> str:
-    """Independent static policy oracle matching the current three-lane routing."""
+    """Independent static policy oracle matching the current bounded PR-lane routing."""
     if branch.startswith(("catalog/", "intelligence/")):
         return "a"
-    return "b" if branch.startswith("playback/") else "c"
+    if branch.startswith("playback/"):
+        return "b"
+    if branch.startswith("perf/"):
+        return "d"
+    return "c"
 
 
 class AndroidLanePolicyTests(unittest.TestCase):
@@ -21,11 +25,12 @@ class AndroidLanePolicyTests(unittest.TestCase):
     def setUpClass(cls):
         cls.workflow = CHECK.read_text(encoding="utf-8")
 
-    def test_three_stable_pr_groups_with_main_outside(self):
+    def test_bounded_pr_groups_with_main_outside(self):
         yaml = self.workflow
         self.assertIn("'bitchord-android-pr-lane-a'", yaml)
         self.assertIn("'bitchord-android-pr-lane-b'", yaml)
         self.assertIn("'bitchord-android-pr-lane-c'", yaml)
+        self.assertIn("'bitchord-android-pr-lane-d'", yaml)
         self.assertIn("startsWith(github.head_ref, 'catalog/')", yaml)
         self.assertIn("startsWith(github.head_ref, 'intelligence/')", yaml)
         self.assertIn("github.event_name == 'pull_request'", yaml)
@@ -50,7 +55,7 @@ class AndroidLanePolicyTests(unittest.TestCase):
             "catalog/c7-canonical": "a",
             "intelligence/l8-integrity": "a",
             "playback/b8-output": "b",
-            "perf/d5-logs": "c",
+            "perf/d5-logs": "d",
             "acquisition/a0-on-device": "c",
             "infra/workflow-permissions-safety-v0": "c",
             "external/manual-branch": "c",
@@ -60,11 +65,11 @@ class AndroidLanePolicyTests(unittest.TestCase):
                 self.assertEqual(lane_for_pr_branch(branch), lane)
 
 
-    def test_migration_requires_three_lane_and_matching_first_party_observation(self):
+    def test_migration_keeps_first_party_observation_in_sync(self):
         from tools.delivery_ci_observations import _lane_for_run
         self.assertIn("'bitchord-android-pr-lane-c'", self.workflow)
         self.assertEqual('pr_b', _lane_for_run('pull_request', 'playback/b13'))
-        self.assertEqual('pr_c', _lane_for_run('pull_request', 'perf/d10'))
+        self.assertEqual('pr_d', _lane_for_run('pull_request', 'perf/d10'))
 
 
 if __name__ == "__main__":
