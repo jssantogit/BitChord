@@ -48,6 +48,27 @@ class CanonicalLibraryListRefinementsTest {
         ))
     }
 
+    @Test fun pinnedGridCardHasTitleAndSubtitleBelowArtworkInDarkTheme() {
+        compose.setContent {
+            MaterialTheme(
+                colorScheme = androidx.compose.material3.darkColorScheme(),
+            ) {
+                NativeLibraryEntityCard(
+                    title = "Álbum fixado",
+                    subtitle = "Artista",
+                    imageUrl = null,
+                    isArtist = false,
+                    onClick = {},
+                    artwork = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("native-library-card-title").assertExists()
+        compose.onNodeWithTag("native-library-card-subtitle").assertExists()
+        compose.onNodeWithText("Álbum fixado").assertExists()
+        compose.onNodeWithText("Artista").assertExists()
+    }
+
     @Test fun albumCategoryStartsWithAnExpandedNativeSearchAndRealPlayActions() {
         compose.setContent {
             MaterialTheme {
