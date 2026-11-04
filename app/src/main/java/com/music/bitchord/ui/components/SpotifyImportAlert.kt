@@ -38,26 +38,24 @@ import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.spotify.SpotifyImportTrack
 import com.music.bitchord.data.spotify.SpotifyImporter
+import com.music.bitchord.data.spotify.spotifyImportMetadataSong
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Paste a Spotify playlist link, match its songs on YouTube Music, keep the result.
+ * Paste a public Spotify playlist link and preserve all track metadata locally.
  *
  * The same frosted card as the addon editor, rather than a Material dialog.
- * The "who can see it" row exists only for [signedIn]: it is a YouTube Music
- * setting, and a playlist kept on this device has no audience to choose.
- * Songs that matched nothing are listed once the playlist is made, instead of
- * being dropped without a word.
+ * Public embed metadata does not prove a playable MediaAsset; missing audio
+ * stays visible rather than being guessed or silently discarded.
  */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SpotifyImportAlert(
     hazeState: HazeState,
     signedIn: Boolean,
-    allowYoutubeMatching: () -> Boolean = { true },
     /** Called once the songs are matched; [privacy] is meaningful only when signed in. */
     onImported: (title: String, privacy: PlaylistPrivacy, songs: List<Song>) -> Unit,
     onDismiss: () -> Unit,
@@ -78,29 +76,21 @@ fun SpotifyImportAlert(
             failed = true
             return
         }
-        if (!allowYoutubeMatching()) {
-            status = context.getString(R.string.spotify_import_youtube_required)
-            failed = true
-            return
-        }
         working = true
         failed = false
         status = context.getString(R.string.spotify_import_fetching)
         scope.launch {
             try {
                 val (name, tracks) = SpotifyImporter.fetchPlaylistTracks(id)
-                if (!allowYoutubeMatching()) error(context.getString(R.string.spotify_import_youtube_required))
-                val (songs, missed) = SpotifyImporter.resolveToSongs(
-                    tracks = tracks,
-                    onProgress = { done, total ->
-                        status = context.getString(R.string.spotify_import_matching, done, total)
-                    },
-                    allowYoutubeMatching = allowYoutubeMatching,
-                )
-                if (!allowYoutubeMatching()) error(context.getString(R.string.spotify_import_youtube_required))
-                if (songs.isEmpty()) error(context.getString(R.string.spotify_import_none))
+                if (tracks.isEmpty()) error(context.getString(R.string.spotify_import_none))
+                // No duration or provider-owned asset in the public embed.
+                // Preserve the entire playlist without fabricating a YouTube
+                // video or matching titles to unverified musical recordings.
+                val songs = tracks.mapIndexed { index, track ->
+                    spotifyImportMetadataSong(id, index, track)
+                }
                 onImported(name, privacy, songs)
-                if (missed.isEmpty()) onDismiss() else unmatched = missed
+                unmatched = tracks
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -127,7 +117,8 @@ fun SpotifyImportAlert(
             val missed = unmatched
             if (missed != null) {
                 Text(
-                    text = stringResource(R.string.spotify_import_unmatched, missed.size),
+                    text = "Playlist salva com ${missed.size} faixas como metadados. " +
+                        "Nenhum áudio foi associado sem correspondência verificada.",
                     modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
                     color = MaterialTheme.colorScheme.onSurface,
