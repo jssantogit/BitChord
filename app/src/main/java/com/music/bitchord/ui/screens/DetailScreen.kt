@@ -199,15 +199,10 @@ private const val SLEEVE_FRACTION = 0.76f
 /** ...and of its height, so a landscape window still shows the title under it. */
 private const val SLEEVE_MAX_HEIGHT = 0.5f
 
-internal val SLEEVE_SHAPE = RoundedCornerShape(12.dp)
-private val SLEEVE_SHADOW = 18.dp
 
 /** Shuffle and Add to Library either side of the release page's Play pill. */
-private val RELEASE_SIDE_BUTTON = 50.dp
-private val RELEASE_ACTION_GAP = 14.dp
 
 /** Past this the Play pill stops growing, so a tablet doesn't get a bar. */
-private val RELEASE_ACTIONS_MAX_WIDTH = 420.dp
 private val PILL_SHAPE = RoundedCornerShape(12.dp)
 
 /**
@@ -218,7 +213,7 @@ private val PILL_SHAPE = RoundedCornerShape(12.dp)
 private const val SEARCH_ITEM_INDEX = 1
 
 /** The inset the header text and the action pills share. */
-private val HEADER_GUTTER = PAGE_GUTTER + 8.dp
+internal val HEADER_GUTTER = PAGE_GUTTER + 8.dp
 
 /** Extra breathing room for the editorial copy on album and artist pages. */
 private val ABOUT_GUTTER = PAGE_GUTTER + 6.dp
@@ -1113,184 +1108,6 @@ private fun ReleaseHeader(
  * the canonical unified Album detail cannot drift into two Library action
  * pills or silently change the reference release visual hierarchy.
  */
-@Composable
-internal fun NativeReleaseActionRow(
-    onPlay: () -> Unit,
-    onShuffle: () -> Unit,
-    isLocal: Boolean,
-    canShuffle: Boolean = true,
-    isSaved: Boolean? = null,
-    onToggleLibrary: (() -> Unit)? = null,
-    // Reserved for a future pin on the unified Library landing page.
-    // Never attach playlist membership to the hero +.
-    reservePinAction: Boolean = false,
-    isPinnedInLibrary: Boolean = false,
-    onTogglePin: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .widthIn(max = RELEASE_ACTIONS_MAX_WIDTH)
-            .fillMaxWidth()
-            .padding(horizontal = HEADER_GUTTER),
-        horizontalArrangement = Arrangement.spacedBy(RELEASE_ACTION_GAP),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (isLocal) {
-            ActionPill(
-                icon = BitChordIcons.Play,
-                label = stringResource(R.string.play),
-                onClick = onPlay,
-                filled = true,
-                size = RELEASE_SIDE_BUTTON,
-                modifier = Modifier.weight(1f),
-            )
-            ActionPill(
-                icon = BitChordIcons.Shuffle,
-                label = stringResource(R.string.shuffle),
-                onClick = onShuffle,
-                filled = false,
-                size = RELEASE_SIDE_BUTTON,
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            CircleIconButton(
-                icon = BitChordIcons.Shuffle,
-                contentDescription = stringResource(R.string.shuffle),
-                onClick = onShuffle,
-                haptic = Haptic.Resume,
-                size = RELEASE_SIDE_BUTTON,
-                enabled = canShuffle,
-            )
-            ActionPill(
-                icon = BitChordIcons.Play,
-                label = stringResource(R.string.play),
-                onClick = onPlay,
-                filled = true,
-                size = RELEASE_SIDE_BUTTON,
-                modifier = Modifier.weight(1f),
-            )
-            CircleIconButton(
-                icon = if (reservePinAction && isPinnedInLibrary ||
-                    !reservePinAction && isSaved == true
-                ) BitChordIcons.Check else BitChordIcons.Plus,
-                contentDescription = if (reservePinAction) {
-                    if (isPinnedInLibrary) "Desafixar álbum da Biblioteca"
-                    else if (onTogglePin == null) "Fixar álbum na Biblioteca (em breve)"
-                    else "Fixar álbum na Biblioteca"
-                } else stringResource(
-                    if (isSaved == true) R.string.remove_from_library
-                    else R.string.add_to_library,
-                ),
-                onClick = {
-                    if (reservePinAction) onTogglePin?.invoke()
-                    else onToggleLibrary?.invoke()
-                },
-                haptic = if (reservePinAction && isPinnedInLibrary ||
-                    !reservePinAction && isSaved == true
-                ) Haptic.ToggleOff else Haptic.ToggleOn,
-                size = RELEASE_SIDE_BUTTON,
-                enabled = if (reservePinAction) onTogglePin != null
-                    else onToggleLibrary != null,
-            )
-        }
-    }
-}
-
-@Composable
-internal fun NativeReleaseHeaderLayout(
-    title: String,
-    credit: String,
-    meta: String,
-    palette: ArtworkPalette,
-    rating: Double? = null,
-    quality: SourceQuality? = null,
-    onRate: (() -> Unit)? = null,
-    sleeveSize: Dp,
-    artwork: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
-    topInset: Dp? = null,
-    onCreditClick: (() -> Unit)? = null,
-    actions: @Composable () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-            .padding(top = topInset ?: topBarContentPadding(), bottom = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(
-            Modifier.size(sleeveSize)
-                .shadow(SLEEVE_SHADOW, SLEEVE_SHAPE)
-                .background(palette.elevated)
-                .thumbnailBorder(SLEEVE_SHAPE),
-            content = artwork,
-        )
-        Spacer(Modifier.height(20.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = palette.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-        )
-        if (credit.isNotBlank()) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = credit,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Normal, fontSize = 19.sp,
-                ),
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = HEADER_GUTTER)
-                    .let { m -> if (onCreditClick == null) m
-                        else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
-            )
-        }
-        // The original rating slot shows first-party stars when saved. With
-        // no rating it uses the exact Now Playing source badge; never invent
-        // "Hi-Res" from bitrate or claim provider evidence was played.
-        if (rating != null && onRate != null) {
-            Spacer(Modifier.height(8.dp))
-            Box(
-                modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onRate)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .testTag("native-album-rating"),
-            ) {
-                CanonicalRatingStars(
-                    rating = RatingDisplay(localValue = rating),
-                    color = palette.onBackground,
-                )
-            }
-        } else if (rating == null && quality != null) {
-            Spacer(Modifier.height(8.dp))
-            SourceQualityBadge(
-                quality = quality,
-                color = palette.onBackgroundVariant,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.testTag("native-album-source-quality"),
-            )
-        }
-        if (meta.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = meta,
-                style = MaterialTheme.typography.labelMedium,
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-            )
-        }
-        actions()
-    }
-}
-
-
 /**
  * The filter box, shown under the header while the top bar's search button is on.
  *
