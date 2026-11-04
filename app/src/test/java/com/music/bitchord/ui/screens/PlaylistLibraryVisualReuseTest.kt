@@ -54,9 +54,8 @@ class PlaylistLibraryVisualReuseTest {
 
     @Test fun playlistDetailFrameRetainsNativeListGeometryAcrossSources() {
         compose.setContent {
-            val resolved = com.music.bitchord.ui.theme.rememberArtworkPalette(
-                imageUrl = null,
-            )
+            // This UI fixture needs only theme colors, not PlayerPlatform.
+            val resolved = com.music.bitchord.ui.theme.themeArtworkPalette()
             NativePlaylistDetailFrame(
                 palette = resolved,
                 listState = androidx.compose.foundation.lazy.rememberLazyListState(),
