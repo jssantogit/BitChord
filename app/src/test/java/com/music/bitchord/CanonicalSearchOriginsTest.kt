@@ -19,10 +19,10 @@ class CanonicalSearchOriginsTest {
         assertEquals(SearchOrigin.SERVER, searchOriginOf(SearchSource.ADDONS))
         assertEquals(SearchOrigin.LOCAL, searchOriginOf(SearchSource.LIBRARY))
     }
-    @Test fun generalUsesCatalogWithCanonicalModeOrYoutubeOptOut() {
+    @Test fun generalAlwaysUsesCatalogIndependentlyOfYoutube() {
         val on = listOf(SourceConfig(kind=SourceKind.YOUTUBE, enabled=true))
         val off = listOf(SourceConfig(kind=SourceKind.YOUTUBE, enabled=false))
-        assertEquals(SearchSource.YOUTUBE,searchSourceForOrigin(SearchOrigin.GENERAL,false,on))
+        assertEquals(SearchSource.CANONICAL,searchSourceForOrigin(SearchOrigin.GENERAL,false,on))
         assertEquals(SearchSource.CANONICAL,searchSourceForOrigin(SearchOrigin.GENERAL,true,on))
         assertEquals(SearchSource.CANONICAL,searchSourceForOrigin(SearchOrigin.GENERAL,false,off))
         assertEquals(SearchSource.ADDONS,searchSourceForOrigin(SearchOrigin.SERVER,true,off))
