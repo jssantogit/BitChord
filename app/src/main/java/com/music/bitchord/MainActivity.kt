@@ -1919,9 +1919,6 @@ private fun BitChordApp(
         // branches that only push a page are a beat away from a tap on one of
         // its rows, and half-serving a request would spend it.
         val session = controller ?: return@LaunchedEffect
-        val legacyAllowed = shouldRunLegacyYoutubeVersionLookup(
-            usesCanonicalDiscovery, discoverySourceConfigs,
-        )
         // An incoming, explicitly selected YouTube URL is a compatibility
         // action, not permission to restore YouTube as the discovery catalog.
         val explicitLegacyLinkAllowed = shouldHandleExplicitLegacyYoutubeLink(
@@ -1964,28 +1961,12 @@ private fun BitChordApp(
                 }
             }
             is LinkRequest.Search -> {
-                if (!legacyAllowed) {
-                    dismissPlayer()
-                    selectedTab = TAB_SEARCH
-                    viewModel.setSearchSource(SearchSource.CANONICAL)
-                    viewModel.searchFor(request.query)
-                } else {
-                val songs = if (!request.play) null else {
-                    YtMusicRepository.search(request.query, SearchFilter.SONGS).getOrNull()
-                        ?.filterIsInstance<SearchResult.Track>()
-                }
-                val top = songs?.firstOrNull()?.song
-                if (top != null) {
-                    playRadio(top, QueueSource(searchLabel, PlaybackSourceType.SEARCH))
-                } else {
-                    // Either the link was a search to look at, or "play X"
-                    // found nothing to start — and the results are a better
-                    // answer to a spoken request than silence is.
-                    dismissPlayer()
-                    selectedTab = TAB_SEARCH
-                    viewModel.searchFor(request.query)
-                }
-                }
+                // Generic text requests always use canonical discovery.
+                // A voice/play intent must never silently restart YouTube search.
+                dismissPlayer()
+                selectedTab = TAB_SEARCH
+                viewModel.setSearchSource(SearchSource.CANONICAL)
+                viewModel.searchFor(request.query)
             }
             // "Play music", nothing named. The playback service restores its
             // bounded queue before the controller connects, so this resumes
