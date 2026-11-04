@@ -27,8 +27,7 @@ object AndroidDiagnosticsHooks {
             }
         }
         TrackLog.sourcesLine = {
-            "sources: substitution=${SourceResolver.canSubstituteForYouTube()} " +
-                "request=${SourceResolver.requestForNow()}"
+            "sources: request=${SourceResolver.requestForNow()}"
         }
         TrackLog.headerLines = {
             listOf(
