@@ -31,7 +31,12 @@ class LibraryPlaylistPinStateTest {
         val smart = LibraryPlaylistCard.Smart(
             com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition(
                 id = "smart", name = "Smart",
-                query = com.music.bitchord.data.listening.SmartPlaylistV2Query(),
+                query = com.music.bitchord.data.listening.SmartPlaylistV2Query(
+                    com.music.bitchord.data.listening.SmartPlaylistRule.Group(
+                        com.music.bitchord.data.listening.SmartPlaylistRuleJoin.ALL,
+                        emptyList(),
+                    ),
+                ),
             ),
         )
         val normal = LibraryPlaylistCard.CanonicalNormal(
@@ -44,7 +49,8 @@ class LibraryPlaylistPinStateTest {
         assertTrue(canDeleteLibraryPlaylist(normal))
         assertFalse(canQueueLibraryPlaylist(LibraryPlaylistCard.Normal(
             com.music.bitchord.data.model.ShelfItem(
-                title = "Legacy", browseId = "local:playlist:test", subtitle = "",
+                title = "Legacy", browseId = "local:playlist:test",
+                subtitle = "", thumbnailUrl = null, videoId = null,
             ),
         )))
     }
