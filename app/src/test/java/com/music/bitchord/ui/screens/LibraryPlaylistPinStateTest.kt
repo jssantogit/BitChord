@@ -4,8 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.ConscryptMode
 
 /** Playlist pin identities are separate from canonical release/artist/recording IDs. */
+@ConscryptMode(ConscryptMode.Mode.OFF)
+@RunWith(RobolectricTestRunner::class)
 class LibraryPlaylistPinStateTest {
     @Test fun pinAndUnpinAreStableAcrossPlaylistTypes() {
         val normal = LibraryPlaylistPin("normal:playlist-1", "Normal")
@@ -34,7 +39,11 @@ class LibraryPlaylistPinStateTest {
                 query = com.music.bitchord.data.listening.SmartPlaylistV2Query(
                     com.music.bitchord.data.listening.SmartPlaylistRule.Group(
                         com.music.bitchord.data.listening.SmartPlaylistRuleJoin.ALL,
-                        emptyList(),
+                        listOf(com.music.bitchord.data.listening.SmartPlaylistRule.Comparison(
+                            field = com.music.bitchord.data.listening.SmartPlaylistRuleField.TOTAL_SKIPS,
+                            operator = com.music.bitchord.data.listening.SmartPlaylistRuleOperator.GREATER_THAN,
+                            value = 0.0,
+                        )),
                     ),
                 ),
             ),
