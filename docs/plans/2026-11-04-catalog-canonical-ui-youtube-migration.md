@@ -15,7 +15,7 @@ Status em 04/11/2026: **migração iniciada**, não concluída. Primeira PR [#20
 
 | Superfície | Principal caminho atual | Dependência/observação |
 | --- | --- | --- |
-| Home/Explorar | `MainActivity` → `MainViewModel.loadHome/loadExplore` → `CanonicalDiscoveryScreen` ou feed legado | Gate `shouldUseCanonicalDiscovery` era opt-in; #209 torna canônico obrigatório, inclusive instalações existentes |
+| Home/Explorar | `MainActivity` → `HomeScreen` nativo com `canonicalHomeState`/`canonicalCuratedHomeShelves` ou feed legado; `MainViewModel.loadHome/loadExplore` decide dados | O layout do Home já é compartilhado, enquanto a escolha de feed era opt-in; #209 torna o catálogo canônico obrigatório, inclusive instalações existentes |
 | Pesquisa Geral | `MainViewModel.SearchSource`, `SearchScreen`, `MusicBrainzCatalogSearch` | `SearchSource.YOUTUBE` era default/fallback; #209 converte para `CANONICAL`, preservando origem Local/Server |
 | Artista da Biblioteca | `CanonicalRemoteLibraryScreen` → `CanonicalNativeArtistDetail` | Já possui hero, ações, faixas, discografia e ratings nativos; referência de composição |
 | Artista online | `MainViewModel.openCanonicalNativeDetail` → `DetailPage` → `DetailScreen` | Mesmo quando MBID é válido, UI mantém `Song`, `browseId` e shelves de origem histórica |
