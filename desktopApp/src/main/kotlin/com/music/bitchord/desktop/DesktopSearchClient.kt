@@ -33,7 +33,7 @@ object DesktopSearchClient {
         filter: SearchFilter = SearchFilter.SONGS,
     ): Result<List<SearchResult>> {
         if (query.isBlank()) return Result.failure(IllegalArgumentException("Search query cannot be empty"))
-        return YtMusicRepository.search(query.trim(), filter)
+        return DesktopSourceRegistry.search(query.trim(), filter)
     }
 
     suspend fun home(): Result<HomeFeed> = YtMusicRepository.home()
@@ -133,10 +133,13 @@ object DesktopSearchClient {
     suspend fun reorderPlaylist(playlistId: String, current: List<String>, target: List<String>): Result<Unit> =
         YtMusicRepository.reorderPlaylist(playlistId, current, target)
 
-    suspend fun searchTypeahead(input: String): Result<List<SearchResult>> =
-        YtMusicRepository.searchTypeahead(input).map { it.rows }
+    // The old typeahead hit YouTube on every keystroke. Provider-owned search
+    // is explicit; local recent queries stay available without network calls.
+    suspend fun searchTypeahead(@Suppress("UNUSED_PARAMETER") input: String): Result<List<SearchResult>> =
+        Result.success(emptyList())
 
-    suspend fun searchSuggestions(input: String): Result<List<String>> = YtMusicRepository.searchSuggestions(input)
+    suspend fun searchSuggestions(@Suppress("UNUSED_PARAMETER") input: String): Result<List<String>> =
+        Result.success(emptyList())
 
     suspend fun accountMenu(): Result<JsonObject> = runCatching { Innertube.accountMenu() }
 
