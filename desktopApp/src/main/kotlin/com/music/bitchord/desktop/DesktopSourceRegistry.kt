@@ -221,108 +221,13 @@ internal object DesktopSourceRegistry {
         error("No configured provider can serve this recording")
     }
 
-    /**
-     * Resolves a track for immediate playback, racing the sources ranked above YouTube against
-     * YouTube itself.
-     */
+    /** Play a provider-verified stream; never race an archival YouTube URL. */
     suspend fun resolveLive(
         song: Song,
         quality: String?,
         excludedSourceId: String? = null,
-    ): Result<DesktopLiveResolution> = runCatching {
-        val available = playbackAdapters(quality)
-        val owned = available.any { it.owns(song) } ||
-            DesktopModuleSource.parseTrack(song.videoId) != null ||
-            song.videoId.startsWith("jiosaavn:")
-        if (owned) {
-            return@runCatching DesktopLiveResolution(resolve(song, quality, excludedSourceId).getOrThrow())
-        }
-
-        val youtube = available.firstOrNull {
-            it.config.kind == DesktopSourceKind.YOUTUBE && it.config.id != excludedSourceId
-        }
-        val higher = if (DesktopOriginalVersion.isPinned(song.videoId)) {
-            // Sent back to YouTube's own upload by hand.
-            DesktopTrackLog.log("'${song.title}' is pinned to YouTube's original by the listener")
-            emptyList()
-        } else {
-            available.filter {
-                it.config.kind != DesktopSourceKind.YOUTUBE && it.config.id != excludedSourceId
-            }
-        }
-        // Nothing outranks YouTube, so there is no race to run — this is the plain resolve.
-        if (higher.isEmpty() || youtube == null) {
-            return@runCatching DesktopLiveResolution(resolve(song, quality, excludedSourceId).getOrThrow())
-        }
-
-        // Both legs are parented to the registry's own scope rather than the caller's.
-        DesktopTrackLog.log(
-            "resolving '${song.title}' by '${song.artist}' — racing " +
-                higher.joinToString { it.descriptor.name } + " against YouTube",
-        )
-        if (song.isVideo) {
-            // A video upload is another recording, and can be another song altogether — the sources
-            // are never asked to stand in for one.
-            DesktopTrackLog.log("  this row is a video upload, so no source will be asked to match it")
-        } else {
-            DesktopTrackLog.log(
-                "  asking for: " + DesktopTrackMatcher.queries(song).joinToString(" | ").ifBlank { "(nothing)" },
-            )
-        }
-        val lookup = scope.async {
-            withTimeoutOrNull(SUBSTITUTE_TIMEOUT_MS) { firstSubstitute(higher, song, quality) }
-        }
-        val fallback = scope.async { youtube.resolve(song, quality).getOrNull() }
-
-        val quick: DesktopStream? = select {
-            lookup.onAwait { it }
-            // A YouTube leg that finished without a URL has not won anything.
-            fallback.onAwait { stream -> if (stream != null) null else lookup.await() }
-        }
-
-        if (quick != null) {
-            fallback.cancel()
-            DesktopTrackLog.log(
-                "substituted: '${song.title}' served by ${sourceNameFor(quick)} over YouTube" +
-                    " at ${quick.format.summary.ifBlank { "an unstated format" }}",
-            )
-            // Winning the race is not the same as being the best copy.
-            return@runCatching DesktopLiveResolution(quick, betterThan(quick, higher, song, quality))
-        }
-
-        val youtubeStream = fallback.await()
-            ?: lookup.await()
-            ?: error("No enabled music source could play this track")
-        // Still running means it lost the race rather than ran out of answers.
-        val pending = lookup.takeIf { it.isActive }
-        if (pending != null) {
-            DesktopTrackLog.log("'${song.title}' started on YouTube while the other sources keep looking")
-        }
-        DesktopLiveResolution(youtubeStream, pending)
-    }
-
-    /**
-     * A patient second look for a copy that beats the one now playing, or null when nothing could.
-     */
-    private fun betterThan(
-        playing: DesktopStream,
-        candidates: List<SourceAdapter>,
-        song: Song,
-        quality: String?,
-    ): Deferred<DesktopStream?>? {
-        if (playing.format.isLossless) return null
-        val winnerRank = configs().firstOrNull { it.id == playing.sourceId }?.kind?.rank
-            ?: DesktopSourceKind.YOUTUBE.rank
-        val better = candidates.filter { it.config.kind.rank < winnerRank }
-        if (better.isEmpty()) return null
-        DesktopTrackLog.log(
-            "still looking for a better copy of '${song.title}' from " +
-                better.joinToString { it.descriptor.name },
-        )
-        // The registry's own scope, like both legs of the race above: this outlives the call that
-        // started it by design.
-        return scope.async { withTimeoutOrNull(UPGRADE_TIMEOUT_MS) { firstSubstitute(better, song, quality) } }
-    }
+    ): Result<DesktopLiveResolution> =
+        resolve(song, quality, excludedSourceId).map(::DesktopLiveResolution)
 
     /** The first usable stream from any of [sources], each asked in parallel. */
     private suspend fun firstSubstitute(
