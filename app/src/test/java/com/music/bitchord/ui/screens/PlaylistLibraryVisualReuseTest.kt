@@ -95,8 +95,8 @@ class PlaylistLibraryVisualReuseTest {
         }
         compose.onNodeWithTag("canonical-playlist-current-track").assertExists()
         // The same 52dp artwork frame and playing bars as SongRow.
-        compose.onNodeWithTag("native-detail-track-artwork").assertExists()
-        compose.onNodeWithTag("native-detail-rating-slot").assertExists()
+        compose.onNodeWithTag("native-detail-track-artwork", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("native-detail-rating-slot", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Current Playlist Track").assertExists()
     }
 
@@ -281,7 +281,7 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("Canonical title").performClick()
         compose.onNodeWithText("Verified artist").assertExists()
         compose.onNodeWithText("Verified rating").assertExists()
-        compose.onNodeWithTag("native-detail-rating-slot").assertExists()
+        compose.onNodeWithTag("native-detail-rating-slot", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Native menu").assertExists()
         compose.runOnIdle { assertEquals(1, selected) }
     }
