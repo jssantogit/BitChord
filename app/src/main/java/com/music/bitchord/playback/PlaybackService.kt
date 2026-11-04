@@ -336,10 +336,17 @@ class PlaybackService : MediaLibraryService() {
         cachedRecents?.let { (at, songs) ->
             if (SystemClock.elapsedRealtime() - at < RECENTS_CACHE_TTL_MS && songs.isNotEmpty()) return songs
         }
+        // The restored queue is only a bounded recent-history window.
+        // Include entries up to its saved cursor, never upcoming tracks or
+        // bare historical YouTube video IDs without their downloaded audio.
         val songs = try {
-            withTimeoutOrNull(4000L) {
-                YtMusicRepository.recents().getOrNull()
-            } ?: emptyList()
+            LastPlayed.load()?.let { snapshot ->
+                canonicalAutoRecentSongs(snapshot.songs, snapshot.index) { id ->
+                    Downloads.verifiedSavedUri(id)
+                }
+            }.orEmpty()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             emptyList()
         }
@@ -364,9 +371,17 @@ class PlaybackService : MediaLibraryService() {
         }
         val recentsIds = cachedRecents?.second?.mapTo(HashSet()) { it.videoId } ?: emptySet()
         val songs = try {
-            withTimeoutOrNull(4000L) {
-                YtMusicRepository.quickPicks(excludeSongIds = recentsIds).getOrNull()
-            } ?: emptyList()
+            val local = LocalMediaRepository.getLocalMusic(this@PlaybackService)
+            val downloads = Downloads.getDownloadedSongs(this@PlaybackService)
+            val remote = CanonicalCatalogDatabase.get(this@PlaybackService)
+                .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
+                .let(::canonicalAutoSongs)
+            (local + downloads + remote)
+                .filter { it.videoId !in recentsIds }
+                .distinctBy(Song::videoId)
+                .take(150)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             emptyList()
         }
@@ -426,26 +441,6 @@ class PlaybackService : MediaLibraryService() {
         songs
     }
 
-    private var cachedHome: Pair<Long, com.music.bitchord.data.model.HomeFeed>? = null
-    private val homeMutex = Mutex()
-    private val HOME_CACHE_TTL_MS = 60_000L
-    private val HOME_NETWORK_TIMEOUT_MS = 2_500L
-
-    private suspend fun cachedHomeFeed(): com.music.bitchord.data.model.HomeFeed? = homeMutex.withLock {
-        cachedHome?.let { (at, feed) ->
-            if (SystemClock.elapsedRealtime() - at < HOME_CACHE_TTL_MS) return feed
-        }
-        val feed = try {
-            withTimeoutOrNull(HOME_NETWORK_TIMEOUT_MS) {
-                YtMusicRepository.home().getOrNull()
-            }
-        } catch (_: Exception) {
-            null
-        } ?: return null
-        cachedHome = SystemClock.elapsedRealtime() to feed
-        feed
-    }
-
     private var cachedPlaylistCards: Pair<Long, List<ShelfItem>>? = null
     private var cachedPlaylistCookie: String? = null
     private val playlistsMutex = Mutex()
@@ -499,7 +494,6 @@ class PlaybackService : MediaLibraryService() {
         val cookie = com.music.bitchord.data.innertube.Innertube.cookie
         return if (cookie != null && cookie == cachedPlaylistCookie) cachedPlaylistCards?.second.orEmpty() else emptyList()
     }
-    private fun snapshotHome(): com.music.bitchord.data.model.HomeFeed? = cachedHome?.second
 
     private fun isFresh(at: Long, ttlMs: Long): Boolean =
         SystemClock.elapsedRealtime() - at < ttlMs
@@ -8139,12 +8133,6 @@ class PlaybackService : MediaLibraryService() {
             val rootParams = LibraryParams.Builder()
                 .setExtras(rootExtras)
                 .build()
-            scope.launch(Dispatchers.IO) {
-                try {
-                    cachedHomeFeed()
-                } catch (_: Exception) {}
-            }
-
             return Futures.immediateFuture(LibraryResult.ofItem(rootItem, rootParams))
         }
 
@@ -8200,12 +8188,7 @@ class PlaybackService : MediaLibraryService() {
                         }
                         snapshot
                     } else {
-                        cachedQuickPicksSongs().ifEmpty {
-                            snapshotHome()?.shelves?.flatMap { it.items }
-                                ?.mapNotNull { it.toSongOrNull() }
-                                ?.distinctBy { it.videoId }
-                                .orEmpty()
-                        }
+                        cachedQuickPicksSongs()
                     }
                     songs.forEach { songCache[it.videoId] = it }
                     if (songs.isNotEmpty()) songs.map { it.toMediaItem() } else listOf(
@@ -8431,21 +8414,20 @@ class PlaybackService : MediaLibraryService() {
                 )
             }
 
-            // 5. Fallback to Quick Picks / Home shelves
-            val fallbackSongs = try {
-                withTimeoutOrNull(2500L) {
-                    val home = YtMusicRepository.home().getOrNull()
-                    home?.shelves?.flatMap { shelf ->
-                        shelf.items.mapNotNull { it.toMediaItemOrNull() }
-                    }?.distinctBy { it.mediaId }
-                } ?: emptyList()
+            // 4. When there is no on-device audio, resume with verified
+            // personal-server assets instead of contacting YouTube Home.
+            val remoteSongs = try {
+                CanonicalCatalogDatabase.get(this@PlaybackService)
+                    .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
+                    .let(::canonicalAutoSongs)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 emptyList()
             }
-
-            if (fallbackSongs.isNotEmpty()) {
+            if (remoteSongs.isNotEmpty()) {
                 return@future MediaSession.MediaItemsWithStartPosition(
-                    ImmutableList.copyOf(fallbackSongs),
+                    ImmutableList.copyOf(remoteSongs.map(Song::toMediaItem)),
                     0,
                     0L,
                 )
