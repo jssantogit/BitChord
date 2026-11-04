@@ -133,7 +133,6 @@ import com.music.bitchord.data.discord.discordAudioQualityLine
 import com.music.bitchord.data.innertube.PlaybackTracker
 import com.music.bitchord.data.stats.ListeningRecorder
 import com.music.bitchord.data.innertube.PlayerClient
-import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.isUnresolvedSpotify
@@ -285,6 +284,12 @@ private const val ALIGNMENT_HEAD_TIMEOUT_MS = 20_000L
  * second.
  */
 private const val ALIGNMENT_MEASURE_TIMEOUT_MS = 30_000L
+
+/**
+ * A persisted locator with no authorized audio asset is permanently unavailable.
+ * The Media3 failure policy must not retry it against a retired provider.
+ */
+internal class HistoricalMediaAssetUnavailable(message: String) : java.io.IOException(message)
 
 private fun Song.canStartStation(): Boolean =
     videoId.isNotBlank() &&
@@ -1357,7 +1362,7 @@ class PlaybackService : MediaLibraryService() {
                 // resolution path. Source-backed playback still resolves through
                 // the user's configured providers without this legacy override.
                 if (dataSpec.uri.getQueryParameter(DIRECT_YOUTUBE_PARAMETER) == "1") {
-                    throw java.io.IOException("Retired YouTube fallback is not an audio source")
+                    throw HistoricalMediaAssetUnavailable("Historical fallback has no authorized audio source")
                 }
                 val stream = runBlocking(about) {
                     withTimeout(RESOLVE_TIMEOUT_MS) {
@@ -1387,8 +1392,8 @@ class PlaybackService : MediaLibraryService() {
             // retired YouTube stream pipeline. MediaStore and canonical
             // OpenSubsonic assets are handled by their own datasource paths.
             if (dataSpec.uri.getQueryParameter("v") != null) {
-                throw java.io.IOException(
-                    "Legacy video ID has no authorized audio asset",
+                throw HistoricalMediaAssetUnavailable(
+                    "Historical video ID has no authorized audio asset",
                 )
             }
             return@Resolver dataSpec
@@ -3239,7 +3244,7 @@ class PlaybackService : MediaLibraryService() {
      * after the app had given up. Nothing in the log named it, because nothing
      * in the app had asked for it.
      *
-     * Only [StreamResolver.PermanentlyUnplayableException] is refused, and it is
+     * Only [HistoricalMediaAssetUnavailable] is refused, and it is
      * refused rather than delayed because the resolver has already established
      * the answer cannot change — it is the type it uses to say exactly that.
      * Everything else keeps the default behaviour, which is right: a shaped
@@ -3255,7 +3260,7 @@ class PlaybackService : MediaLibraryService() {
             var cause = error
             var depth = 0
             while (cause != null && depth++ < CAUSE_DEPTH) {
-                if (cause is StreamResolver.PermanentlyUnplayableException) return true
+                if (cause is HistoricalMediaAssetUnavailable) return true
                 cause = cause.cause?.takeIf { it !== cause }
             }
             return false
@@ -3425,7 +3430,7 @@ class PlaybackService : MediaLibraryService() {
         // seek-and-prepare at the end is skipped.
         //
         // A verdict counts as exhausting the attempts immediately. The resolver
-        // only throws [StreamResolver.PermanentlyUnplayableException] once it has
+        // only throws [HistoricalMediaAssetUnavailable] once it has
         // established that no client, no session and no extraction can serve the
         // track, so the two further attempts this would otherwise spend are two
         // more full walks for an answer already in hand — and in the report they
@@ -3835,7 +3840,7 @@ class PlaybackService : MediaLibraryService() {
         var cause = error
         var depth = 0
         while (cause != null && depth++ < PERMANENT_CAUSE_DEPTH) {
-            if (cause is StreamResolver.PermanentlyUnplayableException) {
+            if (cause is HistoricalMediaAssetUnavailable) {
                 return cause.message ?: "This track cannot be played"
             }
             cause = cause.cause?.takeIf { it !== cause }
