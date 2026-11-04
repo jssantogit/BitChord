@@ -238,22 +238,15 @@ internal fun CanonicalNativeArtistDetail(
                         )
                     }
                 }
-                itemsIndexed(visibleAlbumTracks, key = { _, track -> track.recordingId }) { index, track ->
-                    CanonicalTrackRow(
-                        track = track,
-                        artworkLoader = artworkLoader,
-                        onClick = { onTrackPlay(track) },
-                        onEditRating = { onTrackEditRating(track) },
-                        onOptions = { onTrackOptions(track) },
-                        albumTrackNumber = albumTrackNumbers[track.recordingId] ?: index + 1,
-                        palette = releasePalette,
-                    )
-                    if (index < visibleAlbumTracks.lastIndex) HorizontalDivider(
-                        modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
-                        thickness = 0.5.dp,
-                        color = releasePalette.divider,
-                    )
-                }
+                nativeCanonicalAlbumTrackRows(
+                    tracks = visibleAlbumTracks,
+                    artworkLoader = artworkLoader,
+                    palette = releasePalette,
+                    trackNumbers = albumTrackNumbers,
+                    onTrackPlay = onTrackPlay,
+                    onTrackEditRating = onTrackEditRating,
+                    onTrackOptions = onTrackOptions,
+                )
                 item(key = "artist-nested-album-footer") {
                     NativeAlbumMetadataFooter(
                         metadata = albumFooter,
