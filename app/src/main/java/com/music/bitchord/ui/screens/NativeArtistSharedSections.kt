@@ -46,15 +46,6 @@ internal enum class NativeArtistSection {
     RELEASES,
 }
 
-/**
- * Compatibility-only policy: the existing UC artist route is explicitly
- * populated by YtMusicRepository.artistPage's ranked song listing.
- * Never extend this heuristic to MusicBrainz, server libraries or future
- * online providers. Future rank sources must supply capability evidence.
- */
-internal fun nativeArtistLegacyRankedFeed(browseId: String): Boolean =
-    browseId.startsWith("UC")
-
 internal data class NativeArtistSectionEvidence(
     val context: NativeArtistContext,
     val hasTracks: Boolean,
