@@ -113,6 +113,38 @@ class NativeArtistSharedSectionsComposeTest {
         compose.runOnIdle { assertEquals(1, opens) }
     }
 
+    @Test fun nativeFeaturedReleaseUsesSameCardForTypedAlbumAndRetainsActions() {
+        var opened = 0
+        var options = 0
+        compose.setContent {
+            MaterialTheme {
+                NativeArtistTopReleaseCard(
+                    title = "Drama",
+                    subtitle = "aespa",
+                    label = "Álbum recente",
+                    palette = themeArtworkPalette(),
+                    onClick = { opened++ },
+                    artwork = { Box(Modifier.fillMaxSize()) },
+                    modifier = Modifier.testTag("native-featured-album"),
+                    trailing = {
+                        IconButton(
+                            onClick = { options++ },
+                            modifier = Modifier.testTag("featured-album-menu"),
+                        ) { Text("⋮") }
+                    },
+                )
+            }
+        }
+        compose.onNodeWithText("Drama").assertExists()
+        compose.onNodeWithText("Álbum recente").assertExists()
+        compose.onNodeWithTag("featured-album-menu").performClick()
+        compose.onNodeWithTag("native-featured-album").performClick()
+        compose.runOnIdle {
+            assertEquals(1, opened)
+            assertEquals(1, options)
+        }
+    }
+
     @Test fun nativeAlbumCardKeepsMoreActionAndMainNavigationIndependent() {
         var opened = 0
         var options = 0

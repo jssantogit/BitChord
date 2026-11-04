@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.Box
 import com.music.bitchord.R
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
@@ -257,26 +258,28 @@ internal fun CanonicalNativeArtistDetail(
                 NativeArtistSection.RECENT_ALBUM in visibleSections
             }?.let { release ->
                 item(key = "artist-recent-album") {
-                    SectionHeading("Álbum recente", palette)
-                    LibraryRow(
+                    val target = CanonicalLibrarySelection(
+                        CanonicalLibraryEntityType.ALBUM, release.id,
+                    )
+                    NativeArtistTopReleaseCard(
                         title = release.title,
                         subtitle = release.artistDisplay.orEmpty(),
-                        imageUrl = null,
-                        artwork = nativeReleases.artwork[release.id]?.let { track ->
-                            { CanonicalUnifiedArtwork(track, artworkLoader,
-                                Modifier.fillMaxSize()) }
-                        },
+                        label = stringResource(R.string.recent_album),
+                        palette = palette,
                         onClick = {
                             if (selectedItems.isNotEmpty()) {
-                                onToggleSelection(CanonicalLibrarySelection(
-                                    CanonicalLibraryEntityType.ALBUM, release.id,
-                                ))
+                                onToggleSelection(target)
                             } else openedRelease = release
                         },
-                        trailing = {
-                            val target = CanonicalLibrarySelection(
-                                CanonicalLibraryEntityType.ALBUM, release.id,
+                        artwork = {
+                            val track = nativeReleases.artwork[release.id]
+                            if (track != null) CanonicalUnifiedArtwork(
+                                track, artworkLoader, Modifier.fillMaxSize(),
+                            ) else CoverPlaceholder(
+                                Icons.Rounded.Album, Modifier.fillMaxSize(),
                             )
+                        },
+                        trailing = {
                             if (selectedItems.isNotEmpty()) {
                                 IconButton(onClick = { onToggleSelection(target) }) {
                                     Icon(
@@ -287,7 +290,6 @@ internal fun CanonicalNativeArtistDetail(
                                 }
                             } else RowMoreButton(onClick = { onReleaseOptions(release) })
                         },
-                        horizontalPadding = PAGE_GUTTER,
                     )
                 }
             }

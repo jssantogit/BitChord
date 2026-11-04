@@ -1475,102 +1475,64 @@ private fun ShelfItem.recentLabel(): Int {
  * The artist page's top-release card: sleeve, what it is and when, and its
  * title, in a rounded glass panel the width of the page.
  */
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Legacy ShelfItem is adapted here, never inside the canonical native card.
+ * CAA timing and signed-in save/unsave behavior remain unchanged.
+ */
 @Composable
 private fun TopReleaseCard(
     item: ShelfItem,
     palette: ArtworkPalette,
     onClick: () -> Unit,
     onLongPress: (() -> Unit)?,
-    /** Whether the album is in the library; null while that is still being read. */
     saved: Boolean?,
-    /** Null hides the button. */
     onToggleSaved: (() -> Unit)?,
 ) {
-    val shape = RoundedCornerShape(28.dp)
-    val coverShape = RoundedCornerShape(12.dp)
     val haptics = rememberHaptics()
     val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ARTIST_CONTENT_GUTTER)
-            .padding(bottom = 22.dp)
-            // A light veil rather than the dark glass: Apple's containers read
-            // slightly white against the page, and a dark panel reads as a hole.
-            .clip(shape)
-            .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), shape)
-            .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), shape)
-            .clip(shape)
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        AsyncImage(
-            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
-            contentDescription = null,
-            onState = observeCaaCover,
-            modifier = Modifier
-                .size(88.dp)
-                .clip(coverShape)
-                .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_COVER_EDGE_ALPHA), coverShape)
-                .background(palette.elevated),
-        )
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = item.subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = palette.onBackgroundVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+    NativeArtistTopReleaseCard(
+        title = item.title,
+        subtitle = item.subtitle,
+        label = stringResource(item.recentLabel()),
+        palette = palette,
+        onClick = onClick,
+        onLongPress = onLongPress,
+        artwork = {
+            AsyncImage(
+                model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
+                contentDescription = null,
+                onState = observeCaaCover,
+                modifier = Modifier.fillMaxSize(),
             )
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleLarge,
-                color = palette.onBackground,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = stringResource(item.recentLabel()),
-                style = MaterialTheme.typography.bodyMedium,
-                color = palette.onBackgroundVariant,
-                maxLines = 1,
-            )
-        }
-        if (onToggleSaved != null && saved != null) {
-            Spacer(Modifier.width(10.dp))
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
-                    .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
-                    .clickable {
-                        haptics.play(if (saved) Haptic.ToggleOff else Haptic.ToggleOn)
-                        onToggleSaved()
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (saved) Icons.Rounded.Check else Icons.Rounded.Add,
-                    contentDescription = stringResource(
-                        if (saved) R.string.remove_from_library else R.string.add_to_library,
-                    ),
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(22.dp),
-                )
+        },
+        trailing = if (onToggleSaved != null && saved != null) {
+            {
+                Spacer(Modifier.width(10.dp))
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
+                        .clickable {
+                            haptics.play(if (saved) Haptic.ToggleOff else Haptic.ToggleOn)
+                            onToggleSaved.invoke()
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (saved) Icons.Rounded.Check else Icons.Rounded.Add,
+                        contentDescription = stringResource(
+                            if (saved) R.string.remove_from_library else R.string.add_to_library,
+                        ),
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
-        }
-    }
+        } else null,
+    )
 }
-
-/** The white veil under Apple-style containers and their buttons. */
-/** A side button this user can't use — a guest's Add or Subscribe. */
-
-/** Brighter than the default 0.15 hairlines, as on Apple Music's own card. */
-private const val TOP_RELEASE_COVER_EDGE_ALPHA = 0.215f
 
 /**
  * Anonymous timing of the actual Coil CAA image consumer. Duration begins at
