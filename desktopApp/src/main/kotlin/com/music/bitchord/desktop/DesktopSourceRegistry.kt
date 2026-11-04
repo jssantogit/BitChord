@@ -3,10 +3,7 @@ package com.music.bitchord.desktop
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -276,10 +273,12 @@ internal object DesktopSourceRegistry {
         // This is an explicit second look. Empty catalogue answers and failed/expired stream URLs
         // from the first pass must not make the retry a cache hit.
         DesktopAddonSource.clearCompletedTrackCalls()
-        val playingRank = configs().firstOrNull { it.id == playing?.sourceId }?.kind?.rank
-            ?: DesktopSourceKind.YOUTUBE.rank
+        val sourceId = playing?.sourceId ?: return null
+        val playingRank = configs()
+            .firstOrNull { it.id == sourceId && it.kind != DesktopSourceKind.YOUTUBE }
+            ?.kind?.rank ?: return null
         val better = playbackAdapters(quality).filter {
-            it.config.kind != DesktopSourceKind.YOUTUBE && it.config.kind.rank < playingRank
+            it.config.id != sourceId && it.config.kind.rank < playingRank
         }
         if (better.isEmpty()) return null
         DesktopTrackLog.log(
@@ -378,11 +377,6 @@ internal object DesktopSourceRegistry {
     internal fun sourceNameFor(stream: DesktopStream): String =
         configs().firstOrNull { it.id == stream.sourceId }?.displayName ?: "a configured source"
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    /** How long the live path waits on the sources before starting on whatever YouTube has. */
-    private const val SUBSTITUTE_TIMEOUT_MS = 20_000L
-
     /**
      * The patient second look's budget. Longer than the race's, because nobody is waiting on the
      * first note by then and a cold addon routinely needs more than one call to settle.
@@ -404,5 +398,4 @@ internal object DesktopSourceRegistry {
             DesktopAudioQuality.entries.firstOrNull { it.name.equals(override, ignoreCase = true) }
         } ?: DesktopPersistence().audioQuality()
 
-    private fun youtubeCeiling(qualityOverride: String?): Int = ceiling(qualityOverride).maxKbps
 }
