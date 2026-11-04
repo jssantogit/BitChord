@@ -34,7 +34,7 @@ import com.music.bitchord.playback.BoundedContextPersistence
 import com.music.bitchord.playback.OriginalVersion
 import com.music.bitchord.playback.PlaybackListeningBridge
 import com.music.bitchord.data.innertube.Innertube
-import com.music.bitchord.data.innertube.AndroidStreamHooks
+import com.music.bitchord.data.AndroidDiagnosticsHooks
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
@@ -68,8 +68,8 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         // The player is drawn by the shared UI module; this is what it reads
         // underneath — settings, the Canvas decoder, outputs, the party.
-        Diagnostics.span(DiagnosticCategory.STARTUP, "stream_hooks_install_early") {
-            AndroidStreamHooks.installEarly()
+        Diagnostics.span(DiagnosticCategory.STARTUP, "diagnostics_hooks_install_early") {
+            AndroidDiagnosticsHooks.installEarly()
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "player_platform_install") {
             PlayerPlatform.install(AndroidPlayerHost(this))
