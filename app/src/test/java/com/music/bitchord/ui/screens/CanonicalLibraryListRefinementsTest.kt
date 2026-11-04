@@ -142,6 +142,23 @@ class CanonicalLibraryListRefinementsTest {
         assertEquals(null, canonicalAlbumFooterMetadata(null, tracks).date)
     }
 
+    @Test fun albumFooterRendersBelowTrackListWithoutInventedGenre() {
+        compose.setContent {
+            MaterialTheme {
+                NativeAlbumMetadataFooter(
+                    metadata = CanonicalAlbumFooterMetadata(
+                        date = "7 de dezembro de 2017",
+                        summary = "5 músicas, 12 minutos",
+                    ),
+                    palette = themeArtworkPalette(),
+                )
+            }
+        }
+        compose.onNodeWithTag("native-album-metadata-footer").assertExists()
+        compose.onNodeWithText("7 de dezembro de 2017").assertExists()
+        compose.onNodeWithText("5 músicas, 12 minutos").assertExists()
+    }
+
     @Test fun albumFooterOmitsUnverifiedGenreAndDateInsteadOfGuessing() {
         val metadata = canonicalAlbumFooterMetadata("unknown", emptyList())
         assertEquals(null, metadata.date)
