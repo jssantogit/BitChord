@@ -5212,31 +5212,15 @@ private fun BitChordApp(
                 BackHandler { showSpotifyImportDialog = false }
                 SpotifyImportAlert(
                     hazeState = hazeState,
-                    signedIn = signedIn,
-                    allowYoutubeMatching = {
-                        shouldRunLegacyYoutubeVersionLookup(
-                            canonicalMode = AppSettings.canonicalDiscoveryEnabled.value,
-                            configs = SourceRegistry.configs.value,
+                    // Imported public playlists are device-owned. No YouTube
+                    // privacy settings or account-side playlist creation.
+                    signedIn = false,
+                    onImported = { title, _, songs ->
+                        val saved = com.music.bitchord.data.spotify.LocalPlaylistStore
+                            .savePlaylist(title, songs)
+                        showQueueNotice(
+                            context.getString(R.string.spotify_import_done, saved.title),
                         )
-                    },
-                    onImported = { title, privacy, songs ->
-                        viewModel.createPlaylistWithVideoIds(
-                            title,
-                            privacy,
-                            songs.map { it.videoId },
-                            songs,
-                        ) { browseId, pTitle, savedLocally ->
-                            showQueueNotice(
-                                context.getString(
-                                    if (savedLocally && signedIn) R.string.spotify_import_local_fallback
-                                    else R.string.spotify_import_done,
-                                    pTitle,
-                                ),
-                            )
-                            browseId?.let { id ->
-                                viewModel.openDetail(id, pTitle, "${songs.size} songs", songs.firstOrNull()?.thumbnailUrl)
-                            }
-                        }
                     },
                     onDismiss = { showSpotifyImportDialog = false },
                 )
