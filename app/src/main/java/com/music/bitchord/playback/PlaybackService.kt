@@ -8155,33 +8155,18 @@ class PlaybackService : MediaLibraryService() {
                     )
                 }
                 MEDIA_LIKED_ID -> {
-                    if (com.music.bitchord.data.innertube.Innertube.cookie == null) {
-                        listOf(createLoginPromptItem())
-                    } else {
-                        val snapshot = snapshotLiked()
-                        val songs = if (snapshot.isNotEmpty()) {
-                            if (!isLikedFresh()) {
-                                refreshFolderInBackground(session, browser, parentId, params) {
-                                    cachedLikedSongs().size
-                                }
-                            }
-                            snapshot
-                        } else {
-                            cachedLikedSongs()
-                        }
-                        songs.forEach { songCache[it.videoId] = it }
-                        if (songs.isNotEmpty()) {
-                            songs.map { it.toMediaItem() }
-                        } else {
-                            listOf(
-                                createInfoItem(
-                                    "msg:empty_liked",
-                                    getString(R.string.auto_empty_liked_title),
-                                    getString(R.string.auto_empty_liked_subtitle),
-                                ),
-                            )
-                        }
-                    }
+                    // Session-known ratings only until the persisted native
+                    // rating catalog is linked to Android Auto. No YouTube
+                    // login prompt, cookie or inferred like membership.
+                    val songs = cachedLikedSongs()
+                    songs.forEach { songCache[it.videoId] = it }
+                    if (songs.isNotEmpty()) songs.map { it.toMediaItem() } else listOf(
+                        createInfoItem(
+                            "msg:empty_liked",
+                            getString(R.string.auto_empty_liked_title),
+                            getString(R.string.auto_empty_liked_subtitle),
+                        ),
+                    )
                 }
                 MEDIA_DOWNLOADS_ID -> {
                     val downloaded = Downloads.getDownloadedSongs(this@PlaybackService)
@@ -8195,28 +8180,14 @@ class PlaybackService : MediaLibraryService() {
                     )
                 }
                 MEDIA_PLAYLISTS_ID -> {
-                    if (com.music.bitchord.data.innertube.Innertube.cookie == null) {
-                        listOf(createLoginPromptItem())
-                    } else {
-                        val snapshot = snapshotPlaylistCards()
-                        val playlists = if (snapshot.isNotEmpty()) {
-                            if (!isPlaylistsFresh()) {
-                                refreshFolderInBackground(session, browser, parentId, params) {
-                                    cachedPlaylistCards().size
-                                }
-                            }
-                            snapshot
-                        } else {
-                            cachedPlaylistCards()
-                        }
-                        if (playlists.isNotEmpty()) playlists.map(::shelfToGridPlaylistItem) else listOf(
-                            createInfoItem(
-                                "msg:empty_playlists",
-                                getString(R.string.auto_empty_playlists_title),
-                                getString(R.string.auto_empty_playlists_subtitle),
-                            ),
-                        )
-                    }
+                    val playlists = cachedPlaylistCards()
+                    if (playlists.isNotEmpty()) playlists.map(::shelfToGridPlaylistItem) else listOf(
+                        createInfoItem(
+                            "msg:empty_playlists",
+                            getString(R.string.auto_empty_playlists_title),
+                            getString(R.string.auto_empty_playlists_subtitle),
+                        ),
+                    )
                 }
                 MEDIA_LOCAL_MUSIC_ID -> {
                     val local = LocalMediaRepository.getLocalMusic(this@PlaybackService)
@@ -8232,29 +8203,31 @@ class PlaybackService : MediaLibraryService() {
                 else -> {
                     when {
                         parentId.startsWith("playlist:") -> {
-                            val playlistId = parentId.removePrefix("playlist:")
-                            val songs = try {
-                                withTimeoutOrNull(2500L) {
-                                    YtMusicRepository.browseSongs("VL$playlistId").getOrNull()?.songs
-                                        ?: YtMusicRepository.browseSongs(playlistId).getOrNull()?.songs
-                                } ?: emptyList()
-                            } catch (_: Exception) {
-                                emptyList()
-                            }
-                            songs.forEach { songCache[it.videoId] = it }
-                            songs.map { it.toMediaItem() }
+                            // Former YouTube collection IDs are archival, not
+                            // a provider-authorized browse target.
+                            listOf(createInfoItem(
+                                "msg:unavailable_playlist",
+                                getString(R.string.auto_unavailable_title),
+                                getString(R.string.auto_unavailable_subtitle),
+                            ))
                         }
                         parentId.startsWith("browse:") -> {
                             val browseId = parentId.removePrefix("browse:")
-                            val songs = try {
-                                withTimeoutOrNull(2500L) {
-                                    YtMusicRepository.browseSongs(browseId).getOrNull()?.songs
-                                } ?: emptyList()
-                            } catch (_: Exception) {
-                                emptyList()
-                            }
+                            val saved = com.music.bitchord.data.spotify.LocalPlaylistStore
+                                .getPlaylist(browseId)
+                            val songs = saved?.songs?.let { entries ->
+                                canonicalAutoPlaylistSongs(entries) { id ->
+                                    Downloads.verifiedSavedUri(id)
+                                }
+                            }.orEmpty()
                             songs.forEach { songCache[it.videoId] = it }
-                            songs.map { it.toMediaItem() }
+                            if (songs.isNotEmpty()) songs.map { it.toMediaItem() } else listOf(
+                                createInfoItem(
+                                    "msg:unavailable_playlist",
+                                    getString(R.string.auto_unavailable_title),
+                                    getString(R.string.auto_unavailable_subtitle),
+                                ),
+                            )
                         }
                         else -> {
                             val cachedSong = songCache[parentId]
