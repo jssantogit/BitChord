@@ -201,3 +201,11 @@ A implementação e o teste de integração do **último HEAD** da PR #209 devem
 6. Exigir CI verde no **último SHA da remoção integral** antes de gerar APK para o único smoke final. Esse smoke ainda deverá comprovar Biblioteca unificada, navegação/gestos/menus/ratings, playlists normais e inteligentes, links históricos, Spotify, MediaStore, Navidrome, reprodução, fila e downloads, comparando a UI à referência aprovada na #205.
 
 **Estado desta decisão:** plano operacional aprovado; não declarar backend removido nem smoke aprovado enquanto as alterações de código e a validação final não ocorrerem.
+
+
+### Início do corte Spotify — fronteira de resolução (04/11/2026)
+
+- `LegacySpotifyYoutubeMatcher.kt` concentra os dois acessos históricos a `YtMusicRepository.search`, fora do corpo do `SpotifyImporter`. O caminho antigo ainda é utilizável enquanto os consumidores migratórios não têm alternativa completa.
+- `SpotifyImporter.resolveToSongsWithResolver` aceita explicitamente um resolvedor fornecido pelo consumidor e um gate de política de fonte independente; <b>não</b> herda o resolvedor YouTube implicitamente. O `resolveToSongs` antigo continua delegando à fronteira legada sob seu gate de opt-out, preservando a API anterior.
+- Cobertura `SpotifyImportCanonicalOptOutTest` ampliada: correspondências pelo resolvedor injetado e ausência total de consulta quando o gate está fechado, além da retenção das faixas não correspondidas. Essas adições são preparatórias: ainda falta um resolvedor canônico de verdade e a migração de `MainViewModel.openSpotifyPage`.
+- **HEAD do corte de código:** `059fc76e` — CI do novo commit ainda não confirmada na anotação. PR draft e main intacta; nenhum smoke físico intermediário.
