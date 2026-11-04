@@ -393,7 +393,6 @@ internal fun CanonicalNativeArtistDetail(
             (maxWidth / 0.95f).coerceAtMost(maxHeight * 0.6f)
         }
         val photoHeight by animateDpAsState(targetPhotoHeight, label = "native_artist_hero")
-        val artistTrackColumnWidth = trackColumnWidth(maxWidth)
         PageBackground(
             page = null,
             palette = palette,
@@ -445,35 +444,28 @@ internal fun CanonicalNativeArtistDetail(
                 // sideways in four-row columns; they must not push all the
                 // album/single carousels several screens below the fold.
                 item(key = "artist-tracks-carousel") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(shownTracks.take(20).chunked(4), key = { it.first().recordingId }) { column ->
-                            Column(Modifier.width(artistTrackColumnWidth)) {
-                                column.forEach { track ->
-                                    CanonicalTrackRow(
-                                        track, artworkLoader,
-                                        onClick = { onTrackPlay(track) },
-                                        onEditRating = { onTrackEditRating(track) },
-                                        onOptions = { onTrackOptions(track) },
-                                        selectionMode = selectedItems.isNotEmpty(),
-                                        selected = CanonicalLibrarySelection(
-                                            CanonicalLibraryEntityType.TRACK,
-                                            track.recordingId,
-                                        ) in selectedItems,
-                                        onToggleSelection = {
-                                            onToggleSelection(CanonicalLibrarySelection(
-                                                CanonicalLibraryEntityType.TRACK,
-                                                track.recordingId,
-                                            ))
-                                        },
-                                        compactForArtist = true,
-                                        palette = palette,
-                                    )
-                                }
-                            }
-                        }
+                    NativeArtistTracksCarousel(
+                        tracks = shownTracks,
+                        horizontalPadding = PAGE_GUTTER,
+                        itemKey = { it.recordingId },
+                    ) { track ->
+                        CanonicalTrackRow(
+                            track, artworkLoader,
+                            onClick = { onTrackPlay(track) },
+                            onEditRating = { onTrackEditRating(track) },
+                            onOptions = { onTrackOptions(track) },
+                            selectionMode = selectedItems.isNotEmpty(),
+                            selected = CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.TRACK, track.recordingId,
+                            ) in selectedItems,
+                            onToggleSelection = {
+                                onToggleSelection(CanonicalLibrarySelection(
+                                    CanonicalLibraryEntityType.TRACK, track.recordingId,
+                                ))
+                            },
+                            compactForArtist = true,
+                            palette = palette,
+                        )
                     }
                 }
             }
@@ -519,12 +511,13 @@ internal fun CanonicalNativeArtistDetail(
                 if (releases.isEmpty()) return
                 item(key = "artist-section-$label") { SectionHeading(label, palette) }
                 item(key = "artist-cards-$label") {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(releases, key = { it.id }) { release ->
-                            Box(Modifier.width(152.dp)) {
+                    NativeArtistReleaseCarousel(
+                        releases = releases,
+                        horizontalPadding = PAGE_GUTTER,
+                        itemSpacing = 12.dp,
+                        itemKey = { it.id },
+                    ) { release ->
+                        Box(Modifier.width(152.dp)) {
                             NativeLibraryEntityCard(
                                 title = release.title,
                                 subtitle = release.artistDisplay.orEmpty(),
@@ -552,7 +545,6 @@ internal fun CanonicalNativeArtistDetail(
                                     ))
                                 },
                             )
-                            }
                         }
                     }
                 }
