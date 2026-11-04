@@ -215,7 +215,6 @@ private const val SEARCH_ITEM_INDEX = 1
 /** The inset the header text and the action pills share. */
 
 /** Extra breathing room for the editorial copy on album and artist pages. */
-private val ABOUT_GUTTER = PAGE_GUTTER + 6.dp
 
 /** The artist bio and everything below it: the page edge every page shares. */
 private val ARTIST_CONTENT_GUTTER = PAGE_GUTTER
@@ -1531,64 +1530,6 @@ private fun AboutSignature(
         if (loaded) SignedByCaption(name = name, palette = palette, textAlign = TextAlign.Start)
     }
 }
-
-@Composable
-internal fun AboutSection(
-    title: String,
-    text: String?,
-    palette: ArtworkPalette,
-    horizontalPadding: Dp = ABOUT_GUTTER,
-    /** Drawn under the text. */
-    stats: (@Composable () -> Unit)? = null,
-    /** Drawn last, under the stats. */
-    footer: (@Composable () -> Unit)? = null,
-) {
-    var expanded by remember(text) { mutableStateOf(false) }
-    var clipped by remember(text) { mutableStateOf(false) }
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = palette.onBackground,
-            modifier = Modifier.padding(
-                start = horizontalPadding,
-                end = horizontalPadding,
-                top = 2.dp,
-                bottom = 6.dp,
-            ),
-        )
-        if (text != null) Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-            color = palette.onBackgroundVariant,
-            maxLines = if (expanded) Int.MAX_VALUE else 3,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { result -> if (!expanded) clipped = result.hasVisualOverflow },
-            modifier = Modifier
-                .fillMaxWidth()
-                .animateContentSize()
-                .padding(horizontal = horizontalPadding)
-                .let { m -> if (clipped || expanded) m.clickable { expanded = !expanded } else m },
-        )
-        if (clipped || expanded) {
-            Text(
-                text = stringResource(if (expanded) R.string.less else R.string.more),
-                style = MaterialTheme.typography.labelLarge,
-                color = palette.accent,
-                modifier = Modifier
-                    .padding(horizontal = horizontalPadding, vertical = 4.dp)
-                    .clickable { expanded = !expanded },
-            )
-        }
-        if (stats != null) {
-            Spacer(Modifier.height(if (text != null) 12.dp else 4.dp))
-            stats()
-        }
-        footer?.invoke()
-    }
-}
-
 
 /** Compact row used inside the artist song grid; no swipe, to keep the
  *  horizontal pager's gestures unambiguous. */
