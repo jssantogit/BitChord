@@ -450,26 +450,11 @@ object QualityUpgrade {
                     return late
                 }
             }
-            // It finished with nothing better, so the question gets asked
-            // again from scratch — this time waiting on every module, which is
-            // what the live path could not afford to do. The source already
-            // serving the track is left out — see [SourceResolver.upgradeFor].
-            SourceResolver.upgradeFor(
-                waiting.target.copy(durationSec = effectiveDurationSec),
-                playing = waiting.playing,
-                servedBy = waiting.servedBy,
-            ).also {
-                found = it
-                if (it != null && needsLosslessFollowUp(it.format)) {
-                    followUps[mediaId] = waiting.copy(
-                        target = waiting.target.copy(durationSec = effectiveDurationSec),
-                        inFlight = null,
-                        playing = it.format,
-                        servedBy = it.sourceConfigId,
-                    )
-                }
-                answered = true
-            }
+            // The old second network lookup searched for a substitute to the
+            // retired YouTube rendition. No new pending lookups can be opened
+            // by that backend; a surviving in-flight result is handled above.
+            // End the archival request rather than contacting any provider.
+            answered = true
         } finally {
             if (answered) {
                 // The question has now been asked, whatever the answer. Leaving
