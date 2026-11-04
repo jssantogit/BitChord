@@ -60,6 +60,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -588,10 +589,7 @@ private fun SongRowContent(
         }
         // Rating occupies the trailing strip; title/artist ellipsize to leave
         // space for it. Song lists no longer show per-track duration.
-        Column(
-            modifier = Modifier.padding(start = 8.dp),
-            horizontalAlignment = Alignment.End,
-        ) {
+        NativeDetailTrackRatingSlot {
             CanonicalSongRatingStars(song, color = MaterialTheme.colorScheme.onSurface)
             if (matching) {
                 CircularProgressIndicator(
@@ -680,6 +678,21 @@ fun NativeDetailTrackRowFrame(
             } else Modifier)
             .padding(horizontal = horizontalInset, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+/**
+ * One trailing rating geometry for legacy Song and canonical Recording rows.
+ * Rating provenance remains in the caller, not in this presentation slot.
+ */
+@Composable
+fun NativeDetailTrackRatingSlot(
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier.padding(start = 8.dp).testTag("native-detail-rating-slot"),
+        horizontalAlignment = Alignment.End,
         content = content,
     )
 }

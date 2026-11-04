@@ -68,6 +68,7 @@ import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowFrame
 import com.music.bitchord.ui.components.NativeDetailTrackSwipeContainer
 import com.music.bitchord.ui.components.NativeDetailTrackArtwork
+import com.music.bitchord.ui.components.NativeDetailTrackRatingSlot
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
@@ -292,11 +293,12 @@ internal fun CanonicalPlaylistTrackRow(
         )
         // Same rating strip as other native song lists. Keep duration in
         // metadata for sorting/planning, never as a trailing row label.
-        Spacer(Modifier.width(8.dp))
-        CanonicalRatingStars(
-            rating = track.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
-            color = titleColor,
-        )
+        NativeDetailTrackRatingSlot {
+            CanonicalRatingStars(
+                rating = track.canonicalPlaylistRating(LocalCanonicalRatingDisplay.current),
+                color = titleColor,
+            )
+        }
         if (available) {
             Box {
                 RowMoreButton(

@@ -76,6 +76,7 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithTag("canonical-playlist-current-track").assertExists()
         // The same 52dp artwork frame and playing bars as SongRow.
         compose.onNodeWithTag("native-detail-track-artwork").assertExists()
+        compose.onNodeWithTag("native-detail-rating-slot").assertExists()
         compose.onNodeWithText("Current Playlist Track").assertExists()
     }
 
