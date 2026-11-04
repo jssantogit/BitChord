@@ -89,4 +89,13 @@ class CanonicalAlbumDetailParityTest {
         assertEquals("ALLDAY PROJECT - EP", canonicalAlbumDisplayTitle("ALLDAY PROJECT - EP", "Album"))
         assertEquals("A - EP Collection", canonicalAlbumDisplayTitle("A - EP Collection", "EP"))
     }
+    @Test fun sharedNativeAlbumRowsKeepOriginalNumbersAfterSearchingOrSorting() {
+        val original = mapOf("song-c" to 3, "song-a" to 1, "song-b" to 2)
+        assertEquals(3, nativeCanonicalAlbumRowNumber("song-c", 0, original))
+        assertEquals(1, nativeCanonicalAlbumRowNumber("song-a", 1, original))
+        assertEquals(2, nativeCanonicalAlbumRowNumber("song-b", 2, original))
+        // Only truly missing evidence falls back to the visible position.
+        assertEquals(4, nativeCanonicalAlbumRowNumber("unknown", 3, original))
+    }
+
 }
