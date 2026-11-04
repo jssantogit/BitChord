@@ -1558,7 +1558,7 @@ internal fun NativeLoadingSpinner(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun RemoteBrowseMessage(message: String) {
+internal fun RemoteBrowseMessage(message: String) {
     Text(
         text = message,
         style = MaterialTheme.typography.bodySmall,
@@ -2104,6 +2104,33 @@ private fun NativeUnifiedLibraryBody(
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
     onEntitySelect: (CanonicalSelectedEntity) -> Unit,
 ) {
+    if (isAlbumDetail) {
+        NativeCanonicalLibraryAlbumDetail(
+            title = title,
+            tracks = tracks,
+            artworkLoader = artworkLoader,
+            heroArtworkUri = heroArtworkUri,
+            heroArtworkTrack = heroArtworkTrack,
+            albumCredit = albumCredit,
+            albumRating = albumRating,
+            albumQuality = albumQuality,
+            onRateAlbum = onRateAlbum,
+            albumFooter = albumFooter,
+            albumTrackNumbers = albumTrackNumbers,
+            albumPinned = albumPinned,
+            onToggleAlbumPin = onToggleAlbumPin,
+            query = query,
+            onQueryChange = onQueryChange,
+            searching = searching,
+            loading = filteredState is CanonicalSongFilterState.Loading,
+            failed = filteredState is CanonicalSongFilterState.Failed,
+            onTrackPlay = onTrackPlay,
+            onTrackEditRating = onTrackEditRating,
+            onTrackOptions = onTrackOptions,
+            onPlayAll = onPlayAll,
+        )
+        return
+    }
     // A genuine release detail inherits the exact native DetailScreen
     // artwork palette. Browse categories keep the neutral Library surface.
     val palette = rememberArtworkPalette(
