@@ -3396,12 +3396,8 @@ class PlaybackService : MediaLibraryService() {
         ) {
             return
         }
-        // An addon/JioSaavn stream gets one chance. If it fails after selection,
-        // retrying the ordinary item only lets the same deterministic lookup win
-        // again. Rebuild it as an explicit YouTube request instead. This also
-        // clears a DASH/HLS MIME left on an upgraded item, which otherwise makes
-        // Media3 parse YouTube's WebM bytes as a manifest forever.
-        if (fallbackFailedAlternativeToYouTube(item, uri, position)) return
+        // A failed source cannot be rerouted to retired YouTube audio. The
+        // normal bounded retry/skip budget handles unavailable assets.
         // Giving up on the *retry*, not on everything below it.
         //
         // A track that has exhausted its attempts is not finished with.
@@ -3535,55 +3531,6 @@ class PlaybackService : MediaLibraryService() {
                 player.prepare()
             }
         }
-    }
-
-    /**
-     * Replaces a failed addon/JioSaavn/quality-upgrade rendition with YouTube
-     * audio and never offers the failed source again during this playback.
-     */
-    private fun fallbackFailedAlternativeToYouTube(
-        item: MediaItem,
-        uri: Uri?,
-        position: Long,
-    ): Boolean {
-        val playbackUri = uri ?: return false
-        // A track the listener picked from an addon is that addon's or nothing:
-        // a YouTube Opus copy under it is a different, lesser recording they
-        // did not ask for. Let the ordinary retry/skip path deal with it.
-        if (playbackUri.authority == "source") return false
-        val videoId = playbackUri.getQueryParameter("v")
-        val substituted = videoId?.let(StreamChoice::isSubstitute) == true
-        if (!PlaybackFallback.isAlternative(playbackUri.toString(), substituted)) return false
-        val fallback = item.toYouTubeFallbackMediaItem() ?: return false
-        val mediaId = item.mediaId
-
-        QualityUpgrade.forget(mediaId)
-        QualityUpgrade.refuseUpgrades(mediaId)
-        videoId?.let {
-            StreamChoice.refuseSubstitutes(it)
-            StreamChoice.forget(it)
-        }
-        NerdStats.clearDeclared(mediaId)
-        recoveries.remove(mediaId)
-        TrackLog.w(
-            "BitChord",
-            "$mediaId failed on a higher-quality source; falling back to YouTube audio",
-            about = mediaId,
-        )
-
-        scope.launch(TrackLog.about(mediaId)) {
-            delay(RECOVERY_DELAY_MS)
-            withContext(Dispatchers.IO) { AudioCache.discard(playbackUri) }
-            withContext(Dispatchers.Main) {
-                val live = this@PlaybackService.player ?: return@withContext
-                if (live.currentMediaItem?.mediaId != mediaId) return@withContext
-                swappingMediaId = mediaId
-                live.replaceMediaItem(live.currentMediaItemIndex, fallback)
-                live.seekTo(live.currentMediaItemIndex, position)
-                live.prepare()
-            }
-        }
-        return true
     }
 
     /**
