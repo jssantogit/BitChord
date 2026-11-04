@@ -226,6 +226,11 @@ object SourceRegistry {
     internal fun enabledConfigs(configs: List<SourceConfig>): List<SourceConfig> =
         configs.filter { it.enabled && it.isComplete }
 
+    /** User-visible source selection is provider-neutral. Retired YouTube
+     * settings stay decoded for migration but cannot appear as an option. */
+    internal fun displayConfigs(configs: List<SourceConfig>): List<SourceConfig> =
+        configs.filterNot { it.kind == SourceKind.YOUTUBE }
+
     /**
      * Historical YouTube configuration is still read so users' saved choices
      * and playlists are not destroyed during migration. It is NOT an audio
