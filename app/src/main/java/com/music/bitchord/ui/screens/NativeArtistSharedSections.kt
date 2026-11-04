@@ -3,11 +3,17 @@ package com.music.bitchord.ui.screens
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -16,6 +22,49 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.trackColumnWidth
+import com.music.bitchord.data.canvas.CanvasArtwork
+import com.music.bitchord.data.model.DetailPage
+import com.music.bitchord.ui.theme.ArtworkPalette
+
+/**
+ * Exact native artist screen structure extracted from DetailScreen:
+ * one photo wash beneath one scrolling list. The artist header, actions,
+ * ratings, filters, albums and menus remain caller-provided native sections.
+ *
+ * Provider identity and playback do not belong in this frame. The original
+ * DetailScreen and the unified Library both use it with their existing
+ * section lists, making future migration additive rather than a redesign.
+ */
+@Composable
+internal fun NativeArtistDetailFrame(
+    palette: ArtworkPalette,
+    artHeight: Dp,
+    listState: LazyListState,
+    contentPadding: PaddingValues,
+    page: DetailPage? = null,
+    canvas: CanvasArtwork? = null,
+    heroUrl: String? = null,
+    modifier: Modifier = Modifier,
+    content: LazyListScope.() -> Unit,
+) {
+    Box(modifier.fillMaxSize().background(palette.wash)) {
+        PageBackground(
+            page = page,
+            palette = palette,
+            canvas = canvas,
+            artHeight = artHeight,
+            listState = listState,
+            heroUrl = heroUrl,
+            modifier = Modifier.matchParentSize(),
+        )
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = contentPadding,
+            content = content,
+        )
+    }
+}
 
 private const val ARTIST_TRACK_LIMIT = 20
 private const val ARTIST_TRACK_ROWS_PER_COLUMN = 4
