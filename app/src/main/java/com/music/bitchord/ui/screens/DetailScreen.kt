@@ -371,8 +371,8 @@ fun DetailScreen(
     // Only the explicitly legacy artist browse feed carries provider-ranked
     // tracks today. MusicBrainz catalog results do not provide popularity;
     // locally available recordings never constitute ranking evidence.
-    val legacyRankedArtistFeed = isArtist && !isLocalArtist &&
-        !page.browseId.startsWith("catalog:")
+    val legacyRankedArtistFeed = isArtist &&
+        nativeArtistLegacyRankedFeed(page.browseId)
     val artistVisibleSections = nativeArtistVisibleSections(
         NativeArtistSectionEvidence(
             context = if (isLocalArtist) NativeArtistContext.LIBRARY
