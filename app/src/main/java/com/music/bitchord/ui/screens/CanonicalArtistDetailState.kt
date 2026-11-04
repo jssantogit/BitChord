@@ -226,3 +226,18 @@ internal fun rememberCanonicalArtistRating(
             }
     }
 }
+
+/**
+ * A verified ReleaseId owns album rating regardless of whether the album was
+ * opened from the Library root or a nested artist. No provider browse ID.
+ */
+@Composable
+internal fun rememberCanonicalNestedAlbumRating(releaseId: String): State<Double?> {
+    val context = LocalContext.current.applicationContext
+    return produceState(initialValue = null, key1 = releaseId) {
+        ListeningEventDatabase.get(context).canonicalEntityRatingDao()
+            .observe("ALBUM", releaseId).collectLatest { saved ->
+                value = saved?.ratingValue?.takeIf(::isValidCanonicalEntityRating)
+            }
+    }
+}
