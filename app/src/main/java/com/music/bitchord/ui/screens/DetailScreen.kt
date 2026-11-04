@@ -169,6 +169,8 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.SongRow
+import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
+import com.music.bitchord.ui.components.NativeDetailTrackNumber
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.libraryGrid
@@ -711,21 +713,18 @@ fun DetailScreen(
                         key = { _, row -> "canonical:track:${row.trackMbid ?: row.musicBrainzId}" },
                     ) { index, row ->
                         val canPlay = row.hasCatalogedAsset && onCanonicalTrackPlay != null
-                        Row(
-                            modifier = Modifier.fillMaxWidth()
-                                .then(if (canPlay) Modifier.clickable {
-                                    onCanonicalTrackPlay?.invoke(row.musicBrainzId)
-                                } else Modifier)
-                                .padding(start = PAGE_GUTTER, end = PAGE_GUTTER, top = 12.dp, bottom = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = (index + 1).toString(),
-                                modifier = Modifier.width(34.dp),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = palette.onBackgroundVariant,
-                            )
-                            Column(Modifier.weight(1f)) {
+                        NativeDetailTrackRowLayout(
+                            onClick = if (canPlay) ({
+                                onCanonicalTrackPlay?.invoke(row.musicBrainzId)
+                            }) else null,
+                            textGap = PAGE_GUTTER,
+                            leading = {
+                                NativeDetailTrackNumber(
+                                    number = index + 1,
+                                    color = palette.onBackgroundVariant,
+                                )
+                            },
+                            title = {
                                 Text(
                                     text = row.title.replace(Regex("^\\d+\\.\\d+\\s+"), ""),
                                     style = MaterialTheme.typography.titleMedium,
@@ -733,6 +732,8 @@ fun DetailScreen(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                            },
+                            subtitle = {
                                 row.subtitle?.takeIf { it.isNotBlank() }?.let { artist ->
                                     Text(
                                         text = artist,
@@ -742,10 +743,10 @@ fun DetailScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                 }
-                            }
-                            // Individual track durations stay in metadata,
-                            // but no longer consume space in release list rows.
-                        }
+                            },
+                            rating = {},
+                            showRatingSlot = false,
+                        )
                         if (index < canonicalTracks.lastIndex) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
