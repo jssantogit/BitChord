@@ -158,3 +158,30 @@ O escopo não se encerra na tela de artista. O compositor deixa de receber DTOs 
 - [#208 — contrato de migração e unificação](https://github.com/jssantogit/BitChord/issues/208)
 - [#178 — auditoria inicial de substituição YouTube](https://github.com/jssantogit/BitChord/issues/178)
 - [DESIGN.md](../../DESIGN.md) e [CanonicalNativeArtistDetail.kt](../../app/src/main/java/com/music/bitchord/ui/screens/CanonicalNativeArtistDetail.kt)
+
+## Prontidão para a retirada do backend YouTube — inventário prévio (04/11/2026)
+
+**A decisão de produto é retirar inteiramente o YouTube Music e suas referências do fork.** A PR #209 realiza o desacoplamento incremental da interface; não é, por si, a retirada do backend. Conservar um adaptador temporariamente não é uma decisão de mantê-lo. Não misturar essa exclusão com a manutenção das fontes MediaStore/Navidrome, da importação opcional de Spotify ou das identidades do MusicBrainz.
+
+### Concluído no corte de componentes
+
+- Os detalhes da Biblioteca canônica (artista local/servidor e álbuns raiz/aninhados) já usam os compositores nativos compartilhados. O antigo `CanonicalNativeArtistDetail.kt` foi removido anteriormente; o estado de seções, avaliação, busca e navegação passou aos adaptadores/rotas tipadas.
+- Playlists canônicas e a rota `DetailScreen` compartilham a moldura de scroll de playlist, o header nativo e as ações; as faixas compartilham swipe, long press, estrutura, capa, texto, rating, menu e barras de reprodução. As playlists continuam distinguindo membro reproduzível de metadados sem asset; a seleção opera sobre `RecordingId` comprovado.
+- `NativeDetailTrackComponents.kt` não recebe `Song`, `videoId` ou `YtMusicRepository`. `LegacySongRow.kt` contém agora o adaptador de compatibilidade. `NativeDetailTrackRowLayout` é a **única composição física** para o adaptador antigo, `CanonicalPlaylistTrackRow` e `CanonicalTrackRow` (incluindo faixa numerada de álbum, playlist e seletor de artista/álbum/faixa). Os chamadores passam explicitamente a arte, ação, nota e identidade apropriadas, sem converter ID de fonte em ID canônico.
+- `NativeDetailSearchField.kt` centraliza a busca visual de artista/álbum/playlist. Os compositores canônicos a utilizam diretamente, não mais `DetailSearchField` definida em `DetailScreen.kt`; um alias de compatibilidade permanece para as rotas anteriores.
+- As faixas de álbum com metadados, mas sem asset elegível, usam a mesma geometria nativa numerada sem apresentar clique falso de reprodução. Nenhuma fila, rating, pin ou dado persistido é reescrito por essa refatoração.
+- A página de playlist com capa escolhida deriva sua paleta da **capa explícita**, e não da primeira faixa; sem capa escolhida, mantém fallback de artwork local.
+- Os testes Compose cobrem slot nativo de capa, nota, controle, ação e linha não reproduzível; seleção em listas canônicas, identidade da fila, e exclusividade do destaque de execução por RecordingId validado. Os testes de uma linha interna dentro de uma região clicável usam a árvore semântica *não mesclada* para não produzir falso negativo.
+
+### Fronteiras ainda legadas — NÃO excluir antes de migração verificada
+
+1. **Rota de playlist normal histórica:** `LibraryPlaylistCard.Normal(ShelfItem)` ainda abre `DetailScreen`, recebe conteúdo `DetailPage/Song` e preserva reprodução/ordenação da lista local `local:playlist:...`. `CanonicalPlaylistDetailScreen` não pode simplesmente receber esses IDs como `RecordingId`; tal conversão destruiria a distinção entre seleção antiga e asset canônico.
+2. **Artista/álbum online histórico:** `MainViewModel`, `DetailScreen`, `SearchScreen` e `LegacyArtistDetailAdapter` ainda interpretam `DetailPage`, `Song`, `ShelfItem`, `browseId` e feeds ranqueados `UC...`. Migrar cada entrada para alvo tipado e capacidades comprovadas. O *rank* de YouTube não deve vazar para telas locais ou MusicBrainz.
+3. **Backend/API e sessão:** `shared/.../YtMusicRepository.kt`, `shared/.../data/innertube/` (resolução de streams, cliente/player e PoToken), `app/.../data/sources/YouTubeSource.kt`, `app/.../auth/YtMusicLoginScreen.kt`, `app/.../data/innertube/`, `app/.../data/lyrics/YouTubeLyrics.kt` (no módulo shared), mais `desktopApp/.../DesktopYouTubeAuth.kt`, `DesktopYouTubeSession.kt` e `DesktopPoTokenWebView.kt` ainda existem. A retirada deve cobrir referências de compilação em Android, Desktop, TV/WearOS e recursos/configuração.
+4. **Fila e reprodução:** `MainActivity.kt`, `MainViewModel.kt`, `PlaybackService.kt`, `SourceResolver.kt` e `MusicLink.kt` têm caminhos de compatibilidade com fontes e links históricos. Manter a execução de MediaStore e OpenSubsonic no Media3 com comprovação de asset e de identidade, sem converter `videoId` em `RecordingId` a partir de nomes.
+5. **Dados e integrações existentes:** migrar ou desativar de forma não destrutiva os links compartilhados YT, entradas antigas de playlists, histórico, fila restaurada, downloads, metadados e caches. Preservar vínculos externos como histórico/arquivo quando apropriado, sem reativar descoberta ou autenticação YouTube.
+6. **Prova de remoção:** busca estática por imports, strings, recursos de login, dependências Gradle e IDs específicos de YouTube; compilação de todos os módulos atingidos; testes de fila, biblioteca, playlists, downloads, offline e reconhecimento de fontes; smoke físico Galaxy A54 com comparação contra a UI aprovada da main #205 e logs sem URLs autenticadas.
+
+### Gate para iniciar a deleção de backend
+
+A implementação e o teste de integração do **último HEAD** da PR #209 devem passar. Emulador A0 `skipped` não substitui o smoke físico; PR permanece draft e sem merge. Só então começar a retirada de integrações antigas em uma sequência rastreável e com reversão: identidade/links → navegação/DTOs → playback/SourceResolver → API/conta/PoToken → recursos/dependências/testes. Não usar o sucesso de testes puros como comprovação de paridade visual ou de áudio real.
