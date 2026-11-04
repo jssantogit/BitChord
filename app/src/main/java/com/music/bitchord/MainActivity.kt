@@ -3081,6 +3081,7 @@ private fun BitChordApp(
                                 }
                             },
                             onLegacyQueue = addSongsToQueue,
+                            onLegacyNext = playSongsNext,
                             onLegacySongMenu = openSongMenu,
                             onLegacySongSwipe = onSongSwipe,
                             onSmartAction = { id, intent ->
