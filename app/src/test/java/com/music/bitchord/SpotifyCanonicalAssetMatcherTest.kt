@@ -3,6 +3,8 @@ package com.music.bitchord
 import com.music.bitchord.data.catalog.SpotifyCanonicalAssetCandidate
 import com.music.bitchord.data.spotify.SpotifyTrack
 import com.music.bitchord.data.spotify.selectSpotifyCanonicalAsset
+import com.music.bitchord.data.spotify.spotifyCanonicalAssetAsSong
+import com.music.bitchord.playback.CanonicalRemotePlaybackUri
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -68,6 +70,26 @@ class SpotifyCanonicalAssetMatcherTest {
     @Test fun compatibleRemoteAssetIsEligibleWithoutExposingSourceKey() {
         val server = asset(provider = "opensubsonic:server1", uri = "https://server.invalid/play")
         assertEquals("rec-1", selectSpotifyCanonicalAsset(spotify(), listOf(server))?.recordingId)
+    }
+
+    @Test fun remoteSpotifyMatchUsesCredentialFreeCanonicalPlaybackUri() {
+        val candidate = asset(
+            provider = "opensubsonic:server1",
+            uri = "https://private-server.invalid/stream?token=secret",
+        )
+        val song = spotifyCanonicalAssetAsSong(spotify(), candidate)
+        val request = CanonicalRemotePlaybackUri.decode(song.localUri.orEmpty())
+        assertEquals("rec-1", request?.recordingId)
+        assertEquals(candidate.mediaAssetId, request?.mediaAssetId)
+        assertEquals("opensubsonic:server1", request?.providerKey)
+        org.junit.Assert.assertFalse(song.videoId.contains("private-server.invalid"))
+        org.junit.Assert.assertFalse(song.videoId.contains("secret"))
+    }
+
+    @Test fun localSpotifyMatchKeepsRealContentUri() {
+        val song = spotifyCanonicalAssetAsSong(spotify(), asset())
+        assertEquals("content://media/external/audio/media/15", song.localUri)
+        assertEquals(song.localUri, song.videoId)
     }
 
     @Test fun cappedSearchIsTreatedAsAmbiguousRatherThanFirstHit() {
