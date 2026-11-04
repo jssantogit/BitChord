@@ -253,6 +253,7 @@ internal fun CanonicalPlaylistTrackRow(
     NativeDetailTrackRowFrame(
         modifier = rowModifier,
         onClick = if (available) ({ onPlay(track.id) }) else null,
+        onLongPress = if (available) ({ menuExpanded = true }) else null,
         onMore = if (available) ({ menuExpanded = true }) else null,
         opacity = if (available) 1f else 0.45f,
     ) {
