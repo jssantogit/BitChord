@@ -183,7 +183,7 @@ object SourceRegistry {
      * apply no connection-quality ceiling — see [SourceResolver.forDownload].
      */
     fun active(): List<MusicSource> =
-        enabledConfigs(configs.value)
+        audioCandidateConfigs(configs.value)
             // Not in the walk at all while it would be refused anyway: an addon
             // that asked for a lossless output costs nothing — not even a timed
             // out search — while there isn't one. See [SourceConfig.checkValidLossless].
@@ -224,6 +224,14 @@ object SourceRegistry {
     /** The common eligibility gate used by playback and download source walks. */
     internal fun enabledConfigs(configs: List<SourceConfig>): List<SourceConfig> =
         configs.filter { it.enabled && it.isComplete }
+
+    /**
+     * Historical YouTube configuration is still read so users' saved choices
+     * and playlists are not destroyed during migration. It is NOT an audio
+     * source: both playback and downloads walk [active] from this list.
+     */
+    internal fun audioCandidateConfigs(configs: List<SourceConfig>): List<SourceConfig> =
+        enabledConfigs(configs).filterNot { it.kind == SourceKind.YOUTUBE }
 
     /**
      * [active], minus the sources the ceiling on the connection in hand does
@@ -302,12 +310,15 @@ object SourceRegistry {
     }
 
     /**
-     * Empty configs retain the historical fresh-install default. A persisted
-     * explicit YouTube opt-out must block even direct videoId resolution in
-     * the Media3 loader, not only Search/Home or SourceResolver selection.
+     * Backend removal gate. A legacy videoId is an archival locator, not
+     * permission to request YouTube audio. Retain this method temporarily
+     * while migrating the Media3 loader and persisted source configuration.
+     * No configuration (including a previously enabled YouTube switch)
+     * can reactivate network requests to the retiring backend.
      */
-    internal fun mayResolveLegacyYoutubeStream(configs: List<SourceConfig>): Boolean =
-        configs.none { it.kind == SourceKind.YOUTUBE && !it.enabled }
+    internal fun mayResolveLegacyYoutubeStream(
+        @Suppress("UNUSED_PARAMETER") configs: List<SourceConfig>,
+    ): Boolean = false
 
     /**
      * Puts the addons in [orderedIds], which is the order they will be asked in.
