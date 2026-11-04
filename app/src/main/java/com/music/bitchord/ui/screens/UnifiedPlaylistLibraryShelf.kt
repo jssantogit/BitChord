@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -177,6 +178,8 @@ internal fun UnifiedPlaylistLibraryShelf(
     filter: PlaylistLibraryTypeFilter = PlaylistLibraryTypeFilter.ALL,
     selectedCard: LibraryPlaylistCard? = null,
     onSelectedCardChange: (LibraryPlaylistCard?) -> Unit = {},
+    pinnedPlaylistRequest: String? = null,
+    onPinnedPlaylistRequestConsumed: () -> Unit = {},
     listState: LazyListState? = null,
     detailListState: LazyListState? = null,
     detailSearching: Boolean = false,
@@ -243,6 +246,19 @@ internal fun UnifiedPlaylistLibraryShelf(
         if (smartLoaded && normalLoaded) onPlaylistCountChange(cards.size)
     }
     val openedCard = selectedCard?.let { latestLibraryPlaylistCard(it, cards) }
+    LaunchedEffect(pinnedPlaylistRequest, cards, smartLoaded, normalLoaded) {
+        val requested = pinnedPlaylistRequest ?: return@LaunchedEffect
+        if (smartLoaded && normalLoaded) {
+            val resolved = cards.firstOrNull { it.id == requested }
+            if (resolved != null) {
+                when (resolved) {
+                    is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(resolved.shelfItem)
+                    else -> onSelectedCardChange(resolved)
+                }
+            }
+            onPinnedPlaylistRequestConsumed()
+        }
+    }
     val menuCard = optionsFor?.let { latestLibraryPlaylistCard(it, cards) }
     // Close options when a playlist disappears from the underlying Room store.
     LaunchedEffect(optionsFor?.id, cards) {
