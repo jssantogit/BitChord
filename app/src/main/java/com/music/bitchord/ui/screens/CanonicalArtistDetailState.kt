@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.Diagnostics
 import kotlinx.coroutines.CancellationException
@@ -169,5 +170,48 @@ internal fun rememberCanonicalArtistNestedRecordings(
         } catch (_: Exception) {
             emptyList()
         }
+    }
+}
+
+
+/**
+ * A first-party rating is bound only to a proven Library ArtistId or a
+ * dedicated DISPLAY_ARTIST group key. Never interpret a public MusicBrainz
+ * MBID, artist name or legacy videoId as a local rating identity.
+ */
+internal fun canonicalArtistRatingTarget(
+    artistId: String?,
+): CanonicalEntityRatingTarget? = artistId?.let { id ->
+    canonicalEntityRatingTarget(
+        CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, id),
+    )
+}
+
+internal data class CanonicalArtistRatingUiState(
+    val target: CanonicalEntityRatingTarget?,
+    val rated: Boolean = false,
+)
+
+/**
+ * The original Library rating observer lives in the provider-independent
+ * detail state. The shared native compositor will consume this exact state.
+ */
+@Composable
+internal fun rememberCanonicalArtistRating(
+    artistId: String?,
+): State<CanonicalArtistRatingUiState> {
+    val context = LocalContext.current.applicationContext
+    val target = canonicalArtistRatingTarget(artistId)
+    return produceState(
+        initialValue = CanonicalArtistRatingUiState(target),
+        key1 = target,
+    ) {
+        value = CanonicalArtistRatingUiState(target)
+        if (target == null) return@produceState
+        ListeningEventDatabase.get(context).canonicalEntityRatingDao()
+            .observe(target.entityType, target.entityId)
+            .collectLatest { saved ->
+                value = CanonicalArtistRatingUiState(target, rated = saved != null)
+            }
     }
 }
