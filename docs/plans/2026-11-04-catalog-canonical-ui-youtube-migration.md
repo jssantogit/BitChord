@@ -143,6 +143,15 @@ O escopo não se encerra na tela de artista. O compositor deixa de receber DTOs 
 - `NativeDetailSections.kt` passou a conter `AboutSection` (textos expansíveis e slots de estatísticas/rodapé), e a função duplicada foi **deletada** de `DetailScreen.kt`. Artistas e playlists continuam usando a composição original, sem alteração de gestos ou aparência.
 - **Próxima deleção estrutural:** somente depois de extrair todo o conteúdo condicional, filtros e menus do detalhe do artista da Biblioteca para uma composição única poderá ser removido `CanonicalNativeArtistDetail.kt`; idem no fluxo raiz de álbuns/Playlists. Eliminar o componente antes disso seria regressão, não avanço.
 
+### Redução de renderers legados — identidade de artista e álbum aninhado (04/11/2026)
+
+- **`NativeArtistIdentityHeader.kt`** recebeu, sem redesenho, o header visual original de artista (logos Apple Music, assinaturas, texto de fallback, transformação de tinta, retries de imagem), `SignedByCaption` e `AboutSignature`. As cópias do antigo `DetailScreen.kt` foram **deletadas**, com constantes visualmente equivalentes transferidas e teste Compose cobrindo nome de fallback sem imagem.
+- **`NativeArtistActions.kt`** contém a antiga linha de Play/Shuffle/Estrela e `PlayCircle` com a mesma geometria/haptics. O compositor agora recebe capacidades independentes `isSubscribed` e `onRateArtist`; o adaptador transforma `SubscriptionState` antes da fronteira nativa. Testes unitários cobrem exclusividade da estrela Follow/Rating/Unavailable.
+- **`NativeDetailSections.kt`** é dona de `AboutSection` e `SectionHeading`, incluindo expansão e slots, sem `DetailPage` ou `Song`; funções originais foram **removidas** de `DetailScreen.kt`.
+- **`NativeCanonicalNestedAlbumDetail.kt`** agora contém a composição antes embutida em `CanonicalNativeArtistDetail.kt`: Release header nativo, rating/qualidade, pin, busca, lista numerada de gravações disponíveis e rodapé. `CanonicalArtistDetailState.kt` passou a fornecer rating reativo independente de renderer; `NativeCanonicalAlbumRows.kt` calcula a busca sem modificar a ordem/números originais. O componente artist apenas passa ReleaseId validado, `RecordingIds`, arte/evidência e callbacks, preservando seleção, menus, pin, playlist, volta, ordenação e ações. Aproximadamente 85 linhas da UI aninhada foram retiradas do renderer do artista.
+- **Remoção definitiva de `CanonicalNativeArtistDetail.kt` ainda bloqueada** até a migração das seções exclusivas de artista para uma árvore de composição nativa única com teste de contexto local/servidor/online e smoke físico. Não remover rotas `catalog:...` que ainda indexam `DetailPage` ou URLs/caches legítimos.
+- **Gate de CI:** teste/compilação Android e `:sharedUi:jvmTest` para o último SHA; diferença de UI/gestos e reentrada em álbum aninhado precisam do smoke A54. Nenhum merge antecipado.
+
 ## Evidências
 
 - [#205 — Biblioteca/Playlists integrada](https://github.com/jssantogit/BitChord/pull/205)
