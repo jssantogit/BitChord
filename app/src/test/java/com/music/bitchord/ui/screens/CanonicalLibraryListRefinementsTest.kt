@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import com.music.bitchord.data.listening.CanonicalEntityRatingEntity
 import com.music.bitchord.data.listening.CanonicalSmartFilterContext
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.ui.components.SongRow
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import org.junit.Assert.assertEquals
@@ -124,6 +125,28 @@ class CanonicalLibraryListRefinementsTest {
         compose.onNodeWithText("Playlist song").assertExists()
         compose.onNodeWithText("Playlist artist").assertExists()
         compose.onNodeWithText("4:15").assertDoesNotExist()
+    }
+
+    @Test fun albumFooterKeepsOnlyVerifiedMetadataAndExactDuration() {
+        val tracks = listOf(
+            CanonicalBrowseTrack("r1", "A", "Artist", 70_000L, null, emptyList()),
+            CanonicalBrowseTrack("r2", "B", "Artist", 80_000L, null, emptyList()),
+        )
+        val metadata = canonicalAlbumFooterMetadata("2017-12-07", tracks)
+        assertEquals("7 de dezembro de 2017", metadata.date)
+        assertEquals("2 músicas, 2 minutos", metadata.summary)
+        assertEquals(null, metadata.genre)
+        assertEquals(null, canonicalAlbumFooterMetadata("2017-12-07",
+            tracks + tracks[0].copy(recordingId = "r3", durationMs = null)).summary
+            ?.takeIf { it.contains("minutos") })
+        assertEquals(null, canonicalAlbumFooterMetadata(null, tracks).date)
+    }
+
+    @Test fun albumFooterOmitsUnverifiedGenreAndDateInsteadOfGuessing() {
+        val metadata = canonicalAlbumFooterMetadata("unknown", emptyList())
+        assertEquals(null, metadata.date)
+        assertEquals(null, metadata.genre)
+        assertEquals(null, metadata.summary)
     }
 
     @Test fun nativeAlbumAndArtistRatingsAreScopedToTheirExactTypedIdentities() {
