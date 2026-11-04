@@ -21,7 +21,6 @@ import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.replay.ReplayCreditCard
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.EntityType
 import com.music.bitchord.data.model.SearchHistoryEntity
 import com.music.bitchord.ui.LocalPullToRefreshEnabled
@@ -2473,17 +2472,9 @@ fun BitChordDesktopApp() {
                     },
                 )
             }
-            if (signedIn) {
-                launch {
-                    YtMusicRepository.homeRecentlyPlayed()
-                        .onSuccess { shelf ->
-                            if (generation != homeGeneration) return@onSuccess
-                            homeRecentsLoading = false
-                            shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
-                        }
-                        .onFailure { if (generation == homeGeneration) homeRecentsLoading = false }
-                }
-            }
+            // Retired YouTube account recents are not queried. Historical
+            // listening state remains in local playback and listening stores.
+            homeRecentsLoading = false
             DesktopSearchClient.HOME_SUPPLEMENT_BROWSE_IDS.forEach { browseId ->
                 launch {
                     DesktopSearchClient.homeSupplement(browseId).onSuccess { shelves ->
@@ -3417,10 +3408,12 @@ fun BitChordDesktopApp() {
                                 if (id != null) {
                                     openArtist(id, name)
                                 } else {
-                                    scope.launch {
-                                        YtMusicRepository.findArtistPageId(name).getOrNull()
-                                            ?.let { found -> openArtist(found, name) }
-                                    }
+                                    // A text credit is not a verified artist id.
+                                    // Route to provider-neutral search instead
+                                    // of asking the retired YouTube browse API.
+                                    query = name
+                                    searchFilter = SearchFilter.ARTISTS
+                                    search()
                                 }
                             },
                             onOpenPlaybackSource = {
