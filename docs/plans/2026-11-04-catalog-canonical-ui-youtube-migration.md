@@ -68,6 +68,26 @@ Status em 04/11/2026: **migração iniciada**, não concluída. Primeira PR [#20
 - `CanonicalNativeArtistDetail` não é o novo padrão: o seu estado/casos funcionais são fonte para migração, e seu compositor será retirado. **Deletar o arquivo somente após** testes da Biblioteca local/Navidrome, MusicBrainz online/cache/offline e álbuns aninhados passarem sem regressão.
 - Mesmo princípio para álbum e demais entidades, evitando um "CompositorUniversal" que vire uma tela genérica com casos especiais para cada provedor.
 
+## Consolidação visual transversal — inventário de preservação (04/11/2026)
+
+**Decisão do owner:** a limpeza não está restrita ao artista ou a álbuns. Depois do primeiro compositor, repetir o inventário/extração nas demais telas de entidades e entradas do app, sempre **adicionando ao compositor nativo recursos que ainda estejam nas implementações secundárias**, e nunca descartando esses recursos para conseguir remover arquivos.
+
+| Área | Compositor/fonte atual | Comportamentos que o compositor consolidado deve absorver |
+| --- | --- | --- |
+| Artista | `DetailScreen` vs `CanonicalNativeArtistDetail` e prévias MusicBrainz de `SearchScreen` | Header e fotografia nativos; Faixas e, onde há ranking verificável, Mais tocadas; álbum recente, Álbuns, Singles/EPs, Lançamentos; busca, ordenação, filtro por origem, rating nativo (incluindo display-artist), pin, seleção/long-press, menus de faixa/álbum, adicionar álbum à playlist, nested album e back |
+| Álbum/edição | `DetailScreen.ReleaseHeader`, `NativeUnifiedLibraryBody`, nested album de `CanonicalNativeArtistDetail`, prévias MusicBrainz | `ReleaseGroup` vs `Release` sem fusão, capa/hero/paleta, créditos, número/ordem das faixas, avaliação, qualidade, filtro/ordenação, pin, PlaylistAdd, menus, footer e ações somente para `MediaAsset` real |
+| Faixa/Recording | `SongRow`, `CanonicalTrackRow`, `CanonicalPlaylistTrackRow`, busca e fila | Mesma linguagem de linha, fonte disponível/qualidade, reprodução/fila, avaliação, menu, long-press, seleção, metadados e contagem; não converter RecordingId em videoId |
+| Playlists normais/inteligentes | `DetailScreen` legado, `CanonicalPlaylistDetailScreen`, editor/preview existentes | Layout nativo aprovado, capa, filtros inteligentes, regras, reordenação, seleção, menus, downloads, edição, pin, reprodução de ativos disponíveis; sem misturar regras próprias de playlists |
+| Home, Explorar e Pesquisa | `HomeScreen` visual já compartilhado; `SearchScreen` origens Geral/Servidor/Local e telas de prévia | Um card por tipo de entidade com identificação tipada, estado de disponibilidade, filtros, menus, pin, navegação, sem reativar descoberta ou playback YouTube implicitamente |
+
+### Primeira extração de código (na PR #209)
+
+- `NativeArtistSharedSections.kt` é a **extração do carrossel horizontal existente**, não uma nova tela: `NativeArtistTracksCarousel` e `NativeArtistReleaseCarousel` agora são usados tanto por `DetailScreen` quanto por `CanonicalNativeArtistDetail`, com tipos de faixa/card distintos e callbacks próprios.
+- Comportamentos preservados no caminho da Biblioteca: `CanonicalTrackRow` ainda recebe `onTrackPlay`, `onTrackEditRating`, `onTrackOptions`, seleção e `onToggleSelection`; cards de lançamento mantêm `onReleaseOptions`, seleção e abertura de álbum aninhado. O compositor genérico não conhece `Song.videoId`, `RecordingId`, providerKeys ou MBIDs.
+- Sem alterações do contrato de avaliação, filtros de fonte, seleção, regras das playlists, downloads, fila ou playback. Sem remoção de `CanonicalNativeArtistDetail.kt` nesta etapa: ela ocorrerá após migração das outras seções/ações ao compositor nativo e validação completa.
+- Testes `NativeArtistSharedSectionsTest` verificam 20 faixas/4 por coluna, ordem de origem e grupos incompletos; `NativeArtistSharedSectionsComposeTest` verifica passagem dos callbacks de avaliação/menu/seleção de faixa e menu de álbum.
+- **Gate de refatoração:** o desaparecimento de um componente só conta como progresso quando seus comportamentos passam a existir e são testados na estrutura nativa compartilhada. Usar [`DESIGN.md`](../../DESIGN.md) e `tensions.md` como referências de visual, gestos e espaçamento.
+
 ## Evidências
 
 - [#205 — Biblioteca/Playlists integrada](https://github.com/jssantogit/BitChord/pull/205)
