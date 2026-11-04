@@ -2,15 +2,20 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.performClick
@@ -108,6 +113,32 @@ class NativeArtistSharedSectionsComposeTest {
         compose.onNodeWithContentDescription("Opções de Album").assertDoesNotExist()
         compose.onNodeWithContentDescription("Selecionar Album").performClick()
         compose.runOnIdle { assertEquals(1, toggled) }
+    }
+
+    @Test fun sharedNativeArtistFrameShowsContentAndKeepsClicksAlive() {
+        var ratingOpens = 0
+        compose.setContent {
+            MaterialTheme {
+                val palette = rememberArtworkPalette(imageUrl = null)
+                NativeArtistDetailFrame(
+                    palette = palette,
+                    artHeight = 220.dp,
+                    listState = rememberLazyListState(),
+                    contentPadding = PaddingValues(bottom = 12.dp),
+                ) {
+                    item(key = "artist-header") { Text("Mesmo artista") }
+                    item(key = "artist-rating") {
+                        IconButton(
+                            onClick = { ratingOpens++ },
+                            modifier = Modifier.testTag("artist-rating-in-frame"),
+                        ) { Text("★") }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithText("Mesmo artista").assertExists()
+        compose.onNodeWithTag("artist-rating-in-frame").performClick()
+        compose.runOnIdle { assertEquals(1, ratingOpens) }
     }
 
 }
