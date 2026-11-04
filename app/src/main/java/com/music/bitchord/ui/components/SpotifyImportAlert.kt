@@ -110,8 +110,7 @@ fun SpotifyImportAlert(
             val missed = unmatched
             if (missed != null) {
                 Text(
-                    text = "Playlist salva com ${missed.size} faixas como metadados. " +
-                        "Nenhum áudio foi associado sem correspondência verificada.",
+                    text = stringResource(R.string.spotify_import_metadata_only, missed.size),
                     modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
                     color = MaterialTheme.colorScheme.onSurface,
