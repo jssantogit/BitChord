@@ -130,7 +130,6 @@ import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.TrackLog
 import com.music.bitchord.data.discord.DiscordRPC
 import com.music.bitchord.data.discord.discordAudioQualityLine
-import com.music.bitchord.data.innertube.PlaybackTracker
 import com.music.bitchord.data.stats.ListeningRecorder
 import com.music.bitchord.data.innertube.PlayerClient
 import com.music.bitchord.data.model.LikeStatus
@@ -863,7 +862,7 @@ class PlaybackService : MediaLibraryService() {
                 )
                 failureCascade.onPlaybackStarted()
             }
-            if (isPlaying) registerCurrentPlay()
+            
             // Nothing to read ahead for while paused, and a pause is often
             // the last thing that happens before the process goes idle.
             if (isPlaying) prefetchAround(exoPlayer) else cancelPrefetch()
@@ -1056,7 +1055,6 @@ class PlaybackService : MediaLibraryService() {
                 // watchtime the 30-second sampler happened to have reported and
                 // is never marked finished — so the one play most likely to be
                 // a full, deliberate listen is the one recorded as abandoned.
-                PlaybackTracker.onPlaybackFinished(lastPositionSeconds)
                 lastPositionSeconds = 0
                 // The last track finished with nothing after it, so no
                 // transition will ever close it out. Scrobble it now.
@@ -2979,10 +2977,6 @@ class PlaybackService : MediaLibraryService() {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    private fun registerCurrentPlay() {
-        player?.currentMediaItem?.mediaId?.let(PlaybackTracker::onPlaying)
-    }
-
     /**
      * Everything that has to happen when a different song becomes the one
      * playing: history, scrobbles, ListenBrainz, the sleep timer, read-ahead
@@ -3122,7 +3116,6 @@ class PlaybackService : MediaLibraryService() {
 
         // currentPosition already belongs to the new item by now, so
         // the outgoing track is closed out on the last sampled value.
-        PlaybackTracker.onTrackChanged(lastPositionSeconds)
         lastPositionSeconds = 0
 
         // Scrobbling: stop old song, start new song
@@ -3175,7 +3168,7 @@ class PlaybackService : MediaLibraryService() {
             exoPlayer.pause()
             SleepTimer.cancel()
         }
-        if (exoPlayer.isPlaying) registerCurrentPlay()
+        
         savePlaybackState(exoPlayer)
         prefetchAround(exoPlayer)
         // The second look belongs to the track it was started for; the
@@ -5786,12 +5779,7 @@ class PlaybackService : MediaLibraryService() {
         AudioCache.cancel()
     }
 
-    /**
-     * Feeds played-seconds to [PlaybackTracker]. The tracker can't read the
-     * player itself — ExoPlayer is confined to this thread — and a history
-     * entry with no watchtime behind it barely registers as a listen, so the
-     * sampling has to come from here.
-     */
+    /** Samples elapsed audio for the device-owned listening history. */
     private fun reportProgress() {
         scope.launch {
             while (isActive) {
@@ -5802,9 +5790,6 @@ class PlaybackService : MediaLibraryService() {
                 val player = this@PlaybackService.player
                 if (player != null && player.isPlaying) {
                     lastPositionSeconds = player.currentPosition / 1000
-                    player.currentMediaItem?.mediaId?.let {
-                        PlaybackTracker.onProgress(it, lastPositionSeconds)
-                    }
                     // The device's own listening record — see [ListeningRecorder],
                     // which counts wall-clock time between ticks rather than
                     // reading the position. This loop is the only place in the app
@@ -6771,13 +6756,6 @@ class PlaybackService : MediaLibraryService() {
         serviceLyrics = null
         cancelPrefetch()
         trackAnalyzer.release()
-        // The YouTube Music history entry for whatever was playing, closed out
-        // on the same terms as the ListenBrainz submit below: a swipe-away never
-        // fires STATE_ENDED, and the tracker's own scope outlives this service,
-        // so the ping still goes out after the service scope is cancelled.
-        PlaybackTracker.onPlaybackFinished(
-            player?.currentPosition?.div(1000) ?: lastPositionSeconds,
-        )
         // Also the last chance to close out the track that was playing — a
         // swipe-away or stop never fires STATE_ENDED, so the session would
         // otherwise end with an un-scrobbled song. This must not ride on the
