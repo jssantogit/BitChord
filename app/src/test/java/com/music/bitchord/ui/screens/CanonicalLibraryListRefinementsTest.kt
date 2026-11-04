@@ -10,6 +10,8 @@ import com.music.bitchord.data.listening.CanonicalSmartFilterContext
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.ui.components.SongRow
+import com.music.bitchord.ui.components.SourceQuality
+import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -164,6 +166,49 @@ class CanonicalLibraryListRefinementsTest {
         assertEquals(null, metadata.date)
         assertEquals(null, metadata.genre)
         assertEquals(null, metadata.summary)
+    }
+
+    @Test fun unratedAlbumReusesPlayerSourceQualityBadgeRatherThanAnEmptyRatingLabel() {
+        compose.setContent {
+            MaterialTheme {
+                NativeReleaseHeaderLayout(
+                    title = "Release",
+                    credit = "Artist",
+                    meta = "",
+                    palette = themeArtworkPalette(),
+                    rating = null,
+                    quality = SourceQuality.LOSSLESS,
+                    onRate = {},
+                    sleeveSize = 80.dp,
+                    artwork = {},
+                    actions = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("native-album-source-quality").assertExists()
+        compose.onNodeWithTag("native-album-rating").assertDoesNotExist()
+        compose.onNodeWithText("Avaliar álbum").assertDoesNotExist()
+    }
+
+    @Test fun nativeAlbumRatingHasPriorityOverOtherwiseAvailableQuality() {
+        compose.setContent {
+            MaterialTheme {
+                NativeReleaseHeaderLayout(
+                    title = "Release",
+                    credit = "Artist",
+                    meta = "",
+                    palette = themeArtworkPalette(),
+                    rating = 4.5,
+                    quality = SourceQuality.HI_RES_LOSSLESS,
+                    onRate = {},
+                    sleeveSize = 80.dp,
+                    artwork = {},
+                    actions = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("native-album-rating").assertExists()
+        compose.onNodeWithTag("native-album-source-quality").assertDoesNotExist()
     }
 
     @Test fun nativeAlbumAndArtistRatingsAreScopedToTheirExactTypedIdentities() {
