@@ -270,6 +270,19 @@ internal fun CanonicalNativeArtistDetail(
             it.title.contains(query, ignoreCase = true) ||
             it.artistDisplay.contains(query, ignoreCase = true)
     }
+    val sections = nativeReleases.sections
+    // Local MediaStore and remote Navidrome are Library contexts: there
+    // is no verified popularity ranking to justify "Mais tocadas".
+    val visibleSections = nativeArtistVisibleSections(
+        NativeArtistSectionEvidence(
+            context = NativeArtistContext.LIBRARY,
+            hasTracks = shownTracks.isNotEmpty(),
+            hasRecentAlbum = sections.recentAlbum != null,
+            hasAlbums = sections.albums.isNotEmpty(),
+            hasSinglesAndEps = sections.singlesAndEps.isNotEmpty(),
+            hasUnclassifiedReleases = sections.unclassified.isNotEmpty(),
+        ),
+    )
     val artistPhotoUrl = canonicalArtistHeroPhotoUrl(
         appleArt?.heroUrl, heroArtworkTrack?.artworkUri,
     )
@@ -319,7 +332,7 @@ internal fun CanonicalNativeArtistDetail(
                     )
                 }
             }
-            if (shownTracks.isNotEmpty()) {
+            if (NativeArtistSection.TRACKS in visibleSections) {
                 item(key = "artist-tracks-title") {
                     SectionHeading("Faixas", palette)
                 }
@@ -353,8 +366,9 @@ internal fun CanonicalNativeArtistDetail(
                 }
             }
 
-            val sections = nativeReleases.sections
-            sections.recentAlbum?.let { release ->
+            sections.recentAlbum?.takeIf {
+                NativeArtistSection.RECENT_ALBUM in visibleSections
+            }?.let { release ->
                 item(key = "artist-recent-album") {
                     SectionHeading("Álbum recente", palette)
                     LibraryRow(
@@ -434,9 +448,15 @@ internal fun CanonicalNativeArtistDetail(
                     }
                 }
             }
-            section("Álbuns", sections.albums)
-            section("Singles e EPs", sections.singlesAndEps)
-            section("Lançamentos", sections.unclassified)
+            if (NativeArtistSection.ALBUMS in visibleSections) {
+                section("Álbuns", sections.albums)
+            }
+            if (NativeArtistSection.SINGLES_EPS in visibleSections) {
+                section("Singles e EPs", sections.singlesAndEps)
+            }
+            if (NativeArtistSection.RELEASES in visibleSections) {
+                section("Lançamentos", sections.unclassified)
+            }
         }
     }
 }
