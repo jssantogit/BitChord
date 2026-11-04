@@ -18,3 +18,12 @@ internal fun legacyPlaylistPlayableSong(song: Song, verifiedDownloadedUri: Strin
         .firstOrNull(::safe) ?: return null
     return song.copy(localUri = uri)
 }
+
+/** Preserve duplicate playlist entries and original order; drop only unavailable
+ * entries from playback, never from the stored or visible collection. */
+internal fun eligibleHistoricalPlaylistSongs(
+    songs: List<Song>,
+    verifiedDownloadedUri: (Song) -> String?,
+): List<Song> = songs.mapNotNull { song ->
+    legacyPlaylistPlayableSong(song, verifiedDownloadedUri(song))
+}
