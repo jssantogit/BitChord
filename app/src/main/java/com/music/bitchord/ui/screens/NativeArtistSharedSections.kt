@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -45,7 +44,9 @@ internal fun <T> NativeArtistTracksCarousel(
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val columnWidth = trackColumnWidth(maxWidth)
         val scrollState = rememberLazyListState()
-        val columns = remember(tracks) { nativeArtistTrackColumns(tracks) }
+        // Bounded to 20 tracks; do not compare a potentially huge Library list
+        // on each recomposition just to render its first five columns.
+        val columns = nativeArtistTrackColumns(tracks)
         val columnKey: ((List<T>) -> Any)? = itemKey?.let { key ->
             { column: List<T> -> key(column.first()) }
         }
