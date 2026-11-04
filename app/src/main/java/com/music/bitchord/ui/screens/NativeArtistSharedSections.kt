@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.data.canvas.CanvasArtwork
-import com.music.bitchord.data.model.DetailPage
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /**
@@ -105,7 +104,6 @@ internal fun NativeArtistDetailFrame(
     artHeight: Dp,
     listState: LazyListState,
     contentPadding: PaddingValues,
-    page: DetailPage? = null,
     canvas: CanvasArtwork? = null,
     heroUrl: String? = null,
     modifier: Modifier = Modifier,
@@ -113,7 +111,6 @@ internal fun NativeArtistDetailFrame(
 ) {
     Box(modifier.fillMaxSize().background(palette.wash)) {
         PageBackground(
-            page = page,
             palette = palette,
             canvas = canvas,
             artHeight = artHeight,
