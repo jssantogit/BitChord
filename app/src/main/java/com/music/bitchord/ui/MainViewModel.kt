@@ -2778,6 +2778,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val verified = mutableMapOf<String, RecordingMetadataEnrichment>()
             for (candidate in ranked) {
                 currentCoroutineContext().ensureActive()
+                // Do not spend eight MusicBrainz requests on a page that has
+                // already been closed. A partial result is not marked fresh,
+                // so returning to the artist can resume from warm metadata.
+                if (_detailStack.value.lastOrNull()?.browseId
+                        ?.equals("catalog:ARTIST:$id", ignoreCase = true) != true
+                ) break
                 val mbid = candidate.recordingMbid
                 val known = artistTopMetadataCache[mbid]
                 val record = if (known != null) known else try {
@@ -2803,11 +2809,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
                         artistMbid = id,
                         rows = rows,
-                        // Retry later when public stats exist but MusicBrainz
-                        // identity/artist-credit validation could not finish.
-                        fetchedAtMs = success?.fetchedAtMs?.takeIf { rows.isNotEmpty() },
+                        // Progressive rows are provisional until the bounded
+                        // MusicBrainz verification pass has completed.
                     )
                 }
+            }
+            if (artistPublicTopEpoch.isCurrent(generation) &&
+                _detailStack.value.lastOrNull()?.browseId
+                    ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
+            ) {
+                val rows = canonicalVerifiedArtistTopRows(id, ranked, verified)
+                _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
+                    artistMbid = id,
+                    rows = rows,
+                    // Empty metadata after a nonempty public chart can reflect
+                    // a transient MusicBrainz outage, so allow a later retry.
+                    fetchedAtMs = success?.fetchedAtMs?.takeIf { rows.isNotEmpty() },
+                )
             }
         }
     }
