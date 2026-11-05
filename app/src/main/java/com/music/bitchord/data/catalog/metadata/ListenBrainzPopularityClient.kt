@@ -27,6 +27,8 @@ internal data class ListenBrainzPopularityHttpResponse(
     val status: Int,
     val body: String,
     val retryAfterSeconds: Long? = null,
+    val rateLimitRemaining: Long? = null,
+    val rateLimitResetInSeconds: Long? = null,
 )
 
 internal class KtorListenBrainzPopularityTransport(
@@ -49,6 +51,8 @@ internal class KtorListenBrainzPopularityTransport(
             status = response.status.value,
             body = if (response.status.value == 200) response.bodyAsText() else "",
             retryAfterSeconds = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull(),
+            rateLimitRemaining = response.headers["X-RateLimit-Remaining"]?.toLongOrNull(),
+            rateLimitResetInSeconds = response.headers["X-RateLimit-Reset-In"]?.toLongOrNull(),
         )
     }
 }
@@ -60,16 +64,30 @@ internal class ListenBrainzRateLimiter(
 ) {
     private val mutex = Mutex()
     private var lastStart: Long? = null
+    private var serverResetNotBeforeMs: Long? = null
 
     suspend fun <T> run(block: suspend () -> T): T {
         mutex.lock()
         try {
-            lastStart?.let {
-                val wait = 1_000L - (nowMillis() - it)
-                if (wait > 0) waitMillis(wait)
-            }
+            val now = nowMillis()
+            val spacing = lastStart?.let { 1_000L - (now - it) } ?: 0L
+            val reset = serverResetNotBeforeMs?.let { it - now } ?: 0L
+            val wait = maxOf(spacing, reset)
+            if (wait > 0L) waitMillis(wait)
             lastStart = nowMillis()
             return block()
+        } finally {
+            mutex.unlock()
+        }
+    }
+
+    /** Follow the server's reset budget for both public reads and scrobbles. */
+    suspend fun observeRateLimit(remaining: Long?, resetInSeconds: Long?) {
+        if (remaining != 0L || resetInSeconds == null || resetInSeconds <= 0L) return
+        mutex.lock()
+        try {
+            val until = nowMillis() + resetInSeconds.coerceAtMost(300L) * 1_000L
+            serverResetNotBeforeMs = maxOf(serverResetNotBeforeMs ?: until, until)
         } finally {
             mutex.unlock()
         }
@@ -139,6 +157,7 @@ internal class ListenBrainzPopularityClient(
             } catch (_: Exception) {
                 return ListenBrainzPopularityFetchResult.Unavailable
             }
+            limiter.observeRateLimit(response.rateLimitRemaining, response.rateLimitResetInSeconds)
             if (response.status == 200) {
                 val parsed = parseListenBrainzRecordingPopularity(response.body, normalized)
                 if (parsed !is ListenBrainzPopularityParseResult.Success) {
