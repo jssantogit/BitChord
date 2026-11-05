@@ -47,7 +47,7 @@ internal fun parseListenBrainzRecordingPopularity(
     response: String,
     requestedRecordingMbids: List<String>,
 ): ListenBrainzPopularityParseResult {
-    if (requestedRecordingMbids.isEmpty() || requestedRecordingMbids.size > 100) {
+    if (response.length > 128_000 || requestedRecordingMbids.isEmpty() || requestedRecordingMbids.size > 100) {
         return ListenBrainzPopularityParseResult.Invalid
     }
     val requested = requestedRecordingMbids.map { it.lowercase(Locale.ROOT) }
