@@ -55,6 +55,37 @@ class ListenBrainzOutboxStoreTest {
         }
     }
 
+    @Test fun acknowledgedOccurrenceCannotReappearAfterWorkerRestart() {
+        val dir = Files.createTempDirectory("listenbrainz-ack").toFile()
+        try {
+            val file = File(dir, "pending.json")
+            val store = ListenBrainzOutboxStore(file)
+            assertTrue(store.enqueue(listen("played-once")))
+            assertTrue(store.remove("played-once", "accountA"))
+            val restarted = ListenBrainzOutboxStore(file)
+            assertFalse(restarted.enqueue(listen("played-once")))
+            assertTrue(restarted.pending("accountA").isEmpty())
+            assertTrue(restarted.enqueue(listen("different-occurrence")))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test fun acknowledgedHistoryIsRevokedWhenAccountChanges() {
+        val dir = Files.createTempDirectory("listenbrainz-revocation").toFile()
+        try {
+            val store = ListenBrainzOutboxStore(File(dir, "pending.json"))
+            assertTrue(store.enqueue(listen("same-id", "accountA")))
+            assertTrue(store.remove("same-id", "accountA"))
+            store.keepOnlyAccount("accountB")
+            assertTrue(store.enqueue(listen("same-id", "accountB")))
+            store.clear()
+            assertTrue(store.enqueue(listen("same-id", "accountA")))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
     @Test fun shortSkipAndMalformedMetadataCannotBeQueued() {
         assertFalse(listen("short").copy(listenedMs = 5_000L).isQualified())
         assertFalse(listen("bad-title").copy(title = " ").isQualified())
