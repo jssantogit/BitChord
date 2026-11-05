@@ -4,6 +4,8 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopRecording
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistCredit
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.ui.canonicalVerifiedArtistTopRows
+import com.music.bitchord.ui.CanonicalArtistPublicTopState
+import com.music.bitchord.ui.canonicalArtistPublicTopIsFresh
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,6 +17,30 @@ class CanonicalArtistPublicTopRowsTest {
     private val otherArtist = "b7ffd2af-418f-4be2-bdd1-22f8b48613db"
     private val first = "13dd61c7-ce73-4e97-9f0c-9f0e53144411"
     private val second = "22ad712e-ce73-9f0c-4e97-9f0e53144411"
+
+    @Test fun artistPublicRankIsFreshOnlyWithinSameArtistAndSixHourWindow() {
+        val row = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
+            musicBrainzId = first,
+            kind = CanonicalSearchKind.RECORDING,
+            title = "Song",
+            subtitle = "Artist",
+            artistScopeMbid = artist,
+        )
+        val state = CanonicalArtistPublicTopState(
+            artistMbid = artist, rows = listOf(row), fetchedAtMs = 1_000L,
+        )
+        assertTrue(canonicalArtistPublicTopIsFresh(artist.uppercase(), state, 1_000L))
+        assertTrue(canonicalArtistPublicTopIsFresh(artist, state, 1_000L + 60_000L))
+        assertFalse(canonicalArtistPublicTopIsFresh(otherArtist, state, 1_001L))
+        assertFalse(canonicalArtistPublicTopIsFresh(artist, state,
+            1_000L + 6L * 60 * 60 * 1_000L))
+        assertFalse(canonicalArtistPublicTopIsFresh(artist, state, 999L))
+        assertFalse(canonicalArtistPublicTopIsFresh(artist, state.copy(fetchedAtMs = null),
+            1_000L))
+        // A successful empty upstream chart is still fresh evidence of no rank.
+        assertTrue(canonicalArtistPublicTopIsFresh(artist,
+            state.copy(rows = emptyList()), 1_000L + 100L))
+    }
 
     @Test fun onlyIndependentMusicBrainzIdentityAndArtistCreditsCanSupplyTopRows() {
         val ranked = listOf(
