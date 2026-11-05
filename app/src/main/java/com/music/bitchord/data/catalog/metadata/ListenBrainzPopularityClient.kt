@@ -19,6 +19,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.util.Locale
 
+internal const val LISTENBRAINZ_PUBLIC_TTL_MS = 6L * 60 * 60 * 1_000
+
 /** Read-only, unauthenticated public popularity. No personal tokens or listens. */
 internal interface ListenBrainzPopularityTransport {
     suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse
@@ -173,7 +175,7 @@ internal class ListenBrainzPopularityClient(
         try {
             val saved = artistCache[id]
             if (saved != null && nowMillis() >= saved.atMs &&
-                nowMillis() - saved.atMs < CACHE_TTL_MS
+                nowMillis() - saved.atMs < LISTENBRAINZ_PUBLIC_TTL_MS
             ) {
                 return ListenBrainzArtistTopFetchResult.Success(saved.recordings, saved.atMs, fromCache = true)
             }
@@ -234,7 +236,7 @@ internal class ListenBrainzPopularityClient(
         try {
             val saved = cache[batch]
             if (saved != null && nowMillis() >= saved.atMs &&
-                nowMillis() - saved.atMs < CACHE_TTL_MS
+                nowMillis() - saved.atMs < LISTENBRAINZ_PUBLIC_TTL_MS
             ) {
                 return ListenBrainzPopularityFetchResult.Success(
                     orderObservations(saved.evidence, normalized), saved.atMs, fromCache = true)
@@ -295,7 +297,6 @@ internal class ListenBrainzPopularityClient(
 
     private companion object {
         val MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-        const val CACHE_TTL_MS = 6 * 60 * 60 * 1_000L
         const val MAX_CACHED_BATCHES = 32
     }
 }
