@@ -73,6 +73,21 @@ class CanonicalCuratedHomeFeedTest {
         ))
     }
 
+    @Test fun publicPopularityPreservesExactRecordingIdentityAcrossMbidCaseVariations() {
+        val mbid = "13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        val row = playable.copy(musicBrainzId = mbid.uppercase(java.util.Locale.ROOT),
+            hasCatalogedAsset = false)
+        val evidence = listOf(ListenBrainzPopularityEvidence.Known(mbid, 12, 3))
+        assertEquals(listOf(mbid),
+            canonicalPublicPopularityCandidates(listOf(row, row.copy(musicBrainzId = mbid))))
+        val shelf = canonicalPublicPopularityShelf(
+            rows = listOf(row), evidence = evidence, heading = "Popular na comunidade",
+        )
+        assertEquals("catalog:RECORDING:$mbid", shelf?.items?.single()?.browseId)
+        assertEquals(null, shelf?.items?.single()?.videoId)
+        assertEquals(row, canonicalEditorialRowForCard(listOf(row), shelf?.items?.single()?.browseId))
+    }
+
     @Test fun communityPopularityNeverInventsAlbumOrAudioFromCounts() {
         val known = playable.copy(hasCatalogedAsset = false)
         val listens = listOf(ListenBrainzPopularityEvidence.Known(known.musicBrainzId, 20, 4))
