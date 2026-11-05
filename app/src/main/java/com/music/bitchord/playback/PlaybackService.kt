@@ -137,6 +137,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.isUnresolvedSpotify
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.scrobbling.ListenBrainzManager
+import com.music.bitchord.data.scrobbling.ListenBrainzPlaybackClock
 import com.music.bitchord.data.scrobbling.ScrobbleManager
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.OutputPcmMode
@@ -601,6 +602,7 @@ class PlaybackService : MediaLibraryService() {
     private var listenBrainzStartMs: Long = 0L
 
     private var listenBrainzDurationMs: Long? = null
+    private val listenBrainzPlaybackClock = ListenBrainzPlaybackClock()
 
     /**
      * The gateway connection publishing what's playing to Discord, or null when
@@ -888,13 +890,19 @@ class PlaybackService : MediaLibraryService() {
             // otherwise stays silent on the site.
             if (isPlaying && song != null) {
                 if (listenBrainzSong?.videoId != song.videoId || listenBrainzStartMs == 0L) {
+                    listenBrainzPlaybackClock.reset()
                     listenBrainzSong = song
                     listenBrainzStartMs = System.currentTimeMillis()
                     listenBrainzDurationMs = durationMs
                 } else if (listenBrainzDurationMs == null) {
                     listenBrainzDurationMs = durationMs
                 }
+                listenBrainzPlaybackClock.onPlay(SystemClock.elapsedRealtime())
                 submitListenBrainzPlayingNow(song, exoPlayer.currentPosition, durationMs)
+            } else {
+                // Pause, buffering and loss of a playable item cannot count as
+                // active listening, even if the wall clock keeps advancing.
+                listenBrainzPlaybackClock.onPause(SystemClock.elapsedRealtime())
             }
 
             // Discord: a pause has to clear the presence, not just stop
@@ -1063,11 +1071,15 @@ class PlaybackService : MediaLibraryService() {
                     val lastStart = listenBrainzStartMs
                     val lastDuration = listenBrainzDurationMs
                         ?: exoPlayer.duration.takeIf { it > 0 }
-                    submitListenBrainzFinished(lastSong, lastStart, lastDuration)
+                    submitListenBrainzFinished(
+                        lastSong, lastStart, lastDuration,
+                        listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime()),
+                    )
                 }
                 listenBrainzSong = null
                 listenBrainzStartMs = 0L
                 listenBrainzDurationMs = null
+                listenBrainzPlaybackClock.reset()
                 // A missed/empty AutoPlay response can let the last queued
                 // track finish before anything is appended. There will be no
                 // item transition to run the ordinary refill path, so give the
@@ -3131,21 +3143,24 @@ class PlaybackService : MediaLibraryService() {
             scrobbleManager?.onSongStart(newSong, durationMs)
         }
 
-        // ListenBrainz: submit finished for old song, playing_now for new song.
-        // The finished listen only counts when the track actually ended —
-        // an auto-advance, a repeat, or a crossfade at the very end. A
-        // manual skip (SEEK) means the song wasn't listened to, so it must
-        // not be scrobbled.
-        val ended = previousEnded
+        // Close the previous *playback occurrence* using time actually played,
+        // not the time since start or the seek/skip transition reason. A manual
+        // skip after half a song can count; seeking to the end after seconds
+        // cannot. Repeat-one gets a brand-new independent timer.
         val prevSong = listenBrainzSong
         val prevStart = listenBrainzStartMs
-        if (prevSong != null && ended && prevStart > 0L) {
-            submitListenBrainzFinished(prevSong, prevStart, listenBrainzDurationMs)
+        if (prevSong != null && prevStart > 0L) {
+            submitListenBrainzFinished(
+                prevSong, prevStart, listenBrainzDurationMs,
+                listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime()),
+            )
         }
+        listenBrainzPlaybackClock.reset()
         listenBrainzSong = newSong
         listenBrainzStartMs = if (exoPlayer.isPlaying) System.currentTimeMillis() else 0L
         listenBrainzDurationMs = durationMs
         if (newSong != null && exoPlayer.isPlaying) {
+            listenBrainzPlaybackClock.onPlay(SystemClock.elapsedRealtime())
             submitListenBrainzPlayingNow(newSong, 0L, durationMs)
         }
 
@@ -6628,13 +6643,18 @@ class PlaybackService : MediaLibraryService() {
      * actually scrobbling — the settings are read at call time so the helper
      * stays a no-op whenever ListenBrainz is switched off.
      */
-    private fun submitListenBrainzFinished(song: Song, startMs: Long, durationMs: Long?) {
+    private fun submitListenBrainzFinished(
+        song: Song, startMs: Long, durationMs: Long?, listenedMs: Long,
+    ) {
         val lbEnabled = AppSettings.scrobblingAvailable && AppSettings.listenBrainzEnabled.value
         val lbToken = AppSettings.listenBrainzToken.value
         if (!lbEnabled || lbToken.isBlank()) return
         val endMs = System.currentTimeMillis()
         scope.launch {
-            ListenBrainzManager.submitFinished(lbToken, song, startMs, endMs, durationMs, AppSettings.listenBrainzPrimaryArtistOnly.value)
+            ListenBrainzManager.submitFinished(
+                lbToken, song, startMs, endMs, listenedMs, durationMs,
+                AppSettings.listenBrainzPrimaryArtistOnly.value,
+            )
         }
     }
 
@@ -6715,15 +6735,19 @@ class PlaybackService : MediaLibraryService() {
             val lbToken = AppSettings.listenBrainzToken.value
             if (lbEnabled && lbToken.isNotBlank()) {
                 val lastStart = listenBrainzStartMs
-                val lastDuration = player?.duration?.takeIf { it > 0 }
+                val lastDuration = listenBrainzDurationMs ?: player?.duration?.takeIf { it > 0 }
+                val lastPlayedMs =
+                    listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime())
                 CoroutineScope(Dispatchers.IO).launch {
                     ListenBrainzManager.submitFinished(
-                        lbToken, lastSong, lastStart, System.currentTimeMillis(), lastDuration,
+                        lbToken, lastSong, lastStart, System.currentTimeMillis(),
+                        lastPlayedMs, lastDuration,
                         AppSettings.listenBrainzPrimaryArtistOnly.value,
                     )
                 }
             }
         }
+        listenBrainzPlaybackClock.reset()
         scrobbleManager?.destroy()
         scrobbleManager = null
         // Last chance to get the current track's minutes onto disk: the scope is
