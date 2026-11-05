@@ -54,8 +54,8 @@ class CanonicalCatalogCutoverTest {
     @Test fun explicitYoutubeLinksAreNotConflatedWithAutomaticCatalogProbes() {
         val enabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true))
         val disabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = false))
-        // Preserve explicit incoming links until a verified canonical mapping exists.
-        assertTrue(shouldHandleExplicitLegacyYoutubeLink(enabled))
+        // Historical links remain parseable but must not activate the retired backend.
+        assertFalse(shouldHandleExplicitLegacyYoutubeLink(enabled))
         assertFalse(shouldHandleExplicitLegacyYoutubeLink(disabled))
         assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = enabled))
     }
