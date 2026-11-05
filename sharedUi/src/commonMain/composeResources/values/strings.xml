@@ -290,6 +290,7 @@
     <string name="canonical_search_hint">Search the music catalog. Metadata alone does not provide audio.</string>
     <string name="canonical_back">Back</string>
     <string name="canonical_cover_art">Album cover</string>
+    <string name="canonical_search_start">Search artists, songs, albums and more in MusicBrainz.</string>
     <string name="canonical_empty_search">No catalog entries found.</string>
     <string name="canonical_recording_kind">Recording</string>
     <string name="canonical_artist_kind">Artist · discography</string>
