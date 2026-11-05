@@ -32,7 +32,7 @@ object ListenBrainzManager {
                 val artist = if (primaryArtistOnly) song.artist.primaryArtist() else song.artist
                 val trackMetadata = """{"track_metadata":{"artist_name":"${escapeJson(artist)}","track_name":"${escapeJson(song.title)}",$releasePart"additional_info":{${durationPart}"position_ms":$positionMs,"submission_client":"BitChord"}}}"""
                 val bodyJson = "{\"listen_type\":\"playing_now\",\"payload\":[$trackMetadata]}"
-                Log.d(TAG, "submitPlayingNow: $bodyJson")
+                // Never log listening payloads: titles, artists and timestamps are personal data.
                 val body = bodyJson.toRequestBody("application/json".toMediaType())
                 val request =
                     Request.Builder()
@@ -44,11 +44,10 @@ object ListenBrainzManager {
 
                 Http.client.newCall(request).execute().use { resp ->
                     if (resp.isSuccessful) {
-                        Log.d(TAG, "playing_now submitted for ${song.title}")
+                        Log.d(TAG, "playing_now submitted")
                         true
                     } else {
-                        val bodyText = try { resp.body?.string() ?: "" } catch (_: Exception) { "" }
-                        Log.w(TAG, "playing_now submit failed: ${resp.code} - $bodyText")
+                        Log.w(TAG, "playing_now submit failed: HTTP ${resp.code}")
                         false
                     }
                 }
@@ -82,7 +81,7 @@ object ListenBrainzManager {
                 val artist = if (primaryArtistOnly) song.artist.primaryArtist() else song.artist
                 val trackMetadata = """{"listened_at":$listenedAtStart,"track_metadata":{"artist_name":"${escapeJson(artist)}","track_name":"${escapeJson(song.title)}",$releasePart"additional_info":{${durationPart}"start_ms":$startMs,"end_ms":$endMs,"submission_client":"BitChord"}}}"""
                 val bodyJson = "{\"listen_type\":\"single\",\"payload\":[$trackMetadata]}"
-                Log.d(TAG, "submitFinished: $bodyJson")
+                // Never log listening payloads: titles, artists and timestamps are personal data.
                 val body = bodyJson.toRequestBody("application/json".toMediaType())
                 val request =
                     Request.Builder()
@@ -94,11 +93,10 @@ object ListenBrainzManager {
 
                 Http.client.newCall(request).execute().use { resp ->
                     if (resp.isSuccessful) {
-                        Log.d(TAG, "finished listen submitted for ${song.title}")
+                        Log.d(TAG, "finished listen submitted")
                         true
                     } else {
-                        val bodyText = try { resp.body?.string() ?: "" } catch (_: Exception) { "" }
-                        Log.w(TAG, "finished listen submit failed: ${resp.code} - $bodyText")
+                        Log.w(TAG, "finished listen submit failed: HTTP ${resp.code}")
                         false
                     }
                 }
