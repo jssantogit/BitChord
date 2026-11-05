@@ -44,6 +44,15 @@ class ListenBrainzRecommendationFeedTest {
         )
     }
 
+    @Test fun hostileJsonTypesFailClosedWithoutThrowing() {
+        val badTypes = """{"payload":{"entity":[],"user_name":{},"last_updated":{},
+            "mbids":[{"recording_mbid":[],"score":{}}]}}"""
+        assertEquals(
+            ListenBrainzRecommendationParseResult.Malformed,
+            parseListenBrainzRecommendationFeed(badTypes, "mylistener", now),
+        )
+    }
+
     @Test fun invalidOrUnverifiableFreshnessCannotBePublishedAsRecommendations() {
         val data = """{"payload":{"entity":"recording","user_name":"mylistener",
             "last_updated":0,"mbids":[{"recording_mbid":"526bd613-fddd-4bd6-9137-ab709ac74cab","score":10}]}}"""
