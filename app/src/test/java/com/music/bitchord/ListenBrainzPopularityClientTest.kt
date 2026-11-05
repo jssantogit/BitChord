@@ -1,6 +1,7 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityClient
+import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopFetchResult
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityFetchResult
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityHttpResponse
@@ -17,13 +18,19 @@ class ListenBrainzPopularityClientTest {
 
     private class FakeTransport(
         val replies: MutableList<ListenBrainzPopularityHttpResponse>,
+        val artistReplies: MutableList<ListenBrainzPopularityHttpResponse> = mutableListOf(),
     ) : ListenBrainzPopularityTransport {
         var calls = 0
+        var artistCalls = 0
         val requests = mutableListOf<List<String>>()
         override suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse {
             calls += 1
             requests += recordingMbids
             return replies.removeAt(0)
+        }
+        override suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse {
+            artistCalls += 1
+            return artistReplies.removeAt(0)
         }
     }
 
@@ -80,6 +87,29 @@ class ListenBrainzPopularityClientTest {
         limiter.run { starts += clock }
         limiter.run { starts += clock }
         assertEquals(listOf(0L, 1_000L, 2_000L), starts)
+    }
+
+    @Test fun artistTopRankingsUseExactArtistMBIDAndCachePublicResults() = runBlocking {
+        val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
+        var clock = 1_000L
+        val body = """[{"recording_mbid":"$a","artist_mbids":["$artist"],
+            "recording_name":"同名","total_listen_count":15,"total_user_count":4}]"""
+        val transport = FakeTransport(
+            replies = mutableListOf(),
+            artistReplies = mutableListOf(ListenBrainzPopularityHttpResponse(200, body)),
+        )
+        val client = ListenBrainzPopularityClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { clock }, waitMillis = { clock += it }),
+            nowMillis = { clock },
+        )
+        val first = client.topRecordingsForArtist(artist) as ListenBrainzArtistTopFetchResult.Success
+        assertEquals(false, first.fromCache)
+        assertEquals(listOf(a), first.recordings.map { it.recordingMbid })
+        assertEquals(true, (client.topRecordingsForArtist(artist)
+            as ListenBrainzArtistTopFetchResult.Success).fromCache)
+        assertEquals(1, transport.artistCalls)
+        assertEquals(ListenBrainzArtistTopFetchResult.InvalidRequest,
+            client.topRecordingsForArtist("unknown"))
     }
 
     @Test fun serverRateLimitResetDefersFollowingPublicAndScrobbleRequests() = runBlocking {
