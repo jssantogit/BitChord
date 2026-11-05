@@ -64,6 +64,8 @@ class ListenBrainzOutboxStoreTest {
             assertTrue(store.remove("played-once", "accountA"))
             val restarted = ListenBrainzOutboxStore(file)
             assertFalse(restarted.enqueue(listen("played-once")))
+            assertTrue(restarted.isAcknowledged("played-once", "accountA"))
+            assertFalse(restarted.isAcknowledged("played-once", "accountB"))
             assertTrue(restarted.pending("accountA").isEmpty())
             assertTrue(restarted.enqueue(listen("different-occurrence")))
         } finally {
@@ -81,6 +83,22 @@ class ListenBrainzOutboxStoreTest {
             assertTrue(store.enqueue(listen("same-id", "accountB")))
             store.clear()
             assertTrue(store.enqueue(listen("same-id", "accountA")))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test fun legacyV1FileWithoutReceiptsRemainsReadableAndUpgradeable() {
+        val dir = Files.createTempDirectory("listenbrainz-v1").toFile()
+        try {
+            val file = File(dir, "pending.json")
+            file.writeText("""{"version":1,"listens":[]}""")
+            val store = ListenBrainzOutboxStore(file)
+            assertTrue(store.pending("accountA").isEmpty())
+            assertFalse(store.isAcknowledged("legacy", "accountA"))
+            assertTrue(store.enqueue(listen("legacy")))
+            assertTrue(store.remove("legacy", "accountA"))
+            assertTrue(ListenBrainzOutboxStore(file).isAcknowledged("legacy", "accountA"))
         } finally {
             dir.deleteRecursively()
         }
