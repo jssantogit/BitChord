@@ -4,6 +4,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
+import com.music.bitchord.ui.canonicalEditorialRowForCard
 import com.music.bitchord.ui.canonicalPublicPopularityCandidates
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.ui.canonicalExploreShelves
@@ -60,6 +61,10 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals("catalog:RECORDING:${known.musicBrainzId}", shelf?.items?.single()?.browseId)
         assertEquals(null, shelf?.items?.single()?.videoId)
         assertFalse(known.hasCatalogedAsset) // metadata-only stays metadata-only
+        assertEquals(known, canonicalEditorialRowForCard(listOf(release, known),
+            shelf?.items?.single()?.browseId))
+        assertEquals(null, canonicalEditorialRowForCard(listOf(release, known), null))
+        assertEquals(null, canonicalEditorialRowForCard(listOf(release, known), "local:pick:123"))
         assertEquals(null, canonicalPublicPopularityShelf(
             rows = listOf(known, other),
             evidence = listOf(ListenBrainzPopularityEvidence.Unknown(known.musicBrainzId)),
