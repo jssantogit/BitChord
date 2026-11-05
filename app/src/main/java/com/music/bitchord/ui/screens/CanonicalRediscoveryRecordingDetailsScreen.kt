@@ -47,6 +47,13 @@ internal sealed interface CanonicalRediscoveryRecordingState {
         val title: String,
         val artistDisplay: String,
     ) : CanonicalRediscoveryRecordingState
+
+    /** Public metadata identity only. No local RecordingId, feedback or audio claim. */
+    data class MetadataOnly(
+        val recordingMbid: String,
+        val title: String,
+        val artistDisplay: String,
+    ) : CanonicalRediscoveryRecordingState
 }
 
 private suspend fun loadCanonicalRecordingDetails(
@@ -132,6 +139,20 @@ internal fun CanonicalRediscoveryRecordingContent(
                     stringResource(Res.string.rediscovery_unavailable),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                 )
+                is CanonicalRediscoveryRecordingState.MetadataOnly -> {
+                    Text(
+                        text = state.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                    )
+                    Text(
+                        text = state.artistDisplay,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
+                    // Never pass a MusicBrainz ID to native rating, file lookup,
+                    // queue or playback APIs: it is not a local RecordingId.
+                }
                 is CanonicalRediscoveryRecordingState.Ready -> {
                     Text(
                         text = state.title,
