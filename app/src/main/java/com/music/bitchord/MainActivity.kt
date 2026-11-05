@@ -3301,120 +3301,37 @@ private fun BitChordApp(
                             contentPadding = listPadding,
                         )
                     } else when (key.removePrefix(TAB_KEY).toIntOrNull() ?: selectedTab) {
-                        TAB_HOME -> if (usesCanonicalDiscovery) {
-                            HomeScreen(
-                                state = canonicalHomeState,
-                                listState = homeListState,
-                                onItemClick = onCanonicalShelfClick,
-                                onRetry = viewModel::loadCanonicalDiscoveryCatalog,
-                                refreshing = MainViewModel.Feed.HOME in refreshing,
-                                onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
-                                pullState = homePull,
-                                contentPadding = listPadding,
-                                                                // Canonical and legacy Home share the native
-                                // "Início" heading; no legacy "Ouvir agora" split.
-                                title = stringResource(R.string.home),
-                                signedIn = true,
-                                leadHero = true,
-                                currentSong = player.song,
-                                isPlaying = player.isPlaying,
-                            )
-                        } else HomeScreen(
-                            state = homeState,
+                        // Home and Explore are the native, canonical surfaces.
+                        // Legacy YouTube feeds and mood-genre pages are not routes.
+                        TAB_HOME -> HomeScreen(
+                            state = canonicalHomeState,
                             listState = homeListState,
-                            currentSong = player.song,
-                            isPlaying = player.isPlaying,
-                                                        title = stringResource(R.string.home),
-                            signedIn = signedIn,
-                            // Do not advertise YouTube authentication on a music-first
-                            // canonical home. Provider configuration remains in Settings.
-                            onSignIn = null,
-                            onItemClick = { item, shelfTitle ->
-                                val song = shelfSong(item)
-                                // Hoisted because ShelfItem lives in :shared, and
-                                // Kotlin will not smart-cast a public nullable
-                                // property declared in another module.
-                                val browseId = item.browseId
-                                when {
-                                    song != null -> playRadio(
-                                        song,
-                                        QueueSource(shelfTitle, PlaybackSourceType.HOME),
-                                    )
-                                    browseId != null -> viewModel.openDetail(
-                                        browseId = browseId,
-                                        title = item.title,
-                                        subtitle = item.subtitle,
-                                        thumbnailUrl = item.thumbnailUrl,
-                                    )
-                                }
-                            },
-                            onItemLongPress = onShelfLongPress,
-                            onRetry = viewModel::loadHome,
+                            onItemClick = onCanonicalShelfClick,
+                            onRetry = viewModel::loadCanonicalDiscoveryCatalog,
                             refreshing = MainViewModel.Feed.HOME in refreshing,
                             onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
                             pullState = homePull,
                             contentPadding = listPadding,
-                            onLoadMore = viewModel::loadMoreHome,
-                            loadingMore = homeLoadingMore,
-                            recentlyPlayedLoading = homeRecentlyPlayedLoading,
+                            title = stringResource(R.string.home),
+                            signedIn = true,
+                            leadHero = true,
+                            currentSong = player.song,
+                            isPlaying = player.isPlaying,
                         )
-                        TAB_EXPLORE -> if (usesCanonicalDiscovery) {
-                            HomeScreen(
-                                state = canonicalHomeState,
-                                listState = exploreListState,
-                                onItemClick = onCanonicalShelfClick,
-                                onRetry = viewModel::loadCanonicalDiscoveryCatalog,
-                                refreshing = MainViewModel.Feed.EXPLORE in refreshing,
-                                onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
-                                pullState = explorePull,
-                                contentPadding = listPadding,
-                                title = stringResource(R.string.explore),
-                                signedIn = true,
-                                leadHero = false,
-                                currentSong = player.song,
-                                isPlaying = player.isPlaying,
-                            )
-                        } else selectedMoodGenre?.let { category ->
-                            MoodGenrePlaylistsScreen(
-                                title = category.title,
-                                state = moodGenreShelves,
-                                listState = moodGenreListState,
-                                onItemClick = { item ->
-                                    item.videoId?.let { videoId ->
-                                        playRadio(
-                                            Song(
-                                                videoId = videoId,
-                                                title = item.title,
-                                                artist = artistCreditFromSubtitle(item.subtitle),
-                                                thumbnailUrl = item.thumbnailUrl,
-                                            ),
-                                            QueueSource(
-                                                category.title,
-                                                PlaybackSourceType.EXPLORE,
-                                                category.browseId,
-                                            ),
-                                        )
-                                    } ?: item.browseId?.let { browseId ->
-                                        viewModel.openDetail(
-                                            browseId = browseId,
-                                            title = item.title,
-                                            subtitle = item.subtitle,
-                                            thumbnailUrl = item.thumbnailUrl,
-                                        )
-                                    }
-                                },
-                                onRetry = { viewModel.openMoodGenre(category) },
-                                contentPadding = listPadding,
-                            )
-                        } ?: ExploreScreen(
-                            state = exploreState,
+                        TAB_EXPLORE -> HomeScreen(
+                            state = canonicalHomeState,
                             listState = exploreListState,
-                            onCategoryClick = viewModel::openMoodGenre,
-                            onRetry = viewModel::loadExplore,
+                            onItemClick = onCanonicalShelfClick,
+                            onRetry = viewModel::loadCanonicalDiscoveryCatalog,
                             refreshing = MainViewModel.Feed.EXPLORE in refreshing,
                             onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
                             pullState = explorePull,
                             contentPadding = listPadding,
+                            title = stringResource(R.string.explore),
+                            signedIn = true,
+                            leadHero = false,
+                            currentSong = player.song,
+                            isPlaying = player.isPlaying,
                         )
                         TAB_SEARCH -> SearchScreen(
                             query = query,
