@@ -544,6 +544,43 @@ internal fun canonicalSitewideCommunityShelf(
 }
 
 /**
+ * This is a PERSONAL ListenBrainz CF score, never a public listen count.
+ * The inputs must already have independently verified MusicBrainz identity,
+ * and cards are always metadata-only. No synthesized Song.videoId/MediaAsset.
+ */
+internal fun canonicalPersonalRecommendationShelf(
+    rows: List<CanonicalCatalogSearchRow>,
+    rankings: List<com.music.bitchord.data.catalog.metadata.ListenBrainzRecordingRecommendation>,
+    heading: String,
+    limit: Int = 12,
+): HomeShelf? {
+    if (heading.isBlank() || limit <= 0) return null
+    val validRows = rows.asSequence()
+        .filter {
+            it.kind == CanonicalSearchKind.RECORDING &&
+                canonicalStreamingTitleIsSafe(it.title) &&
+                CATALOG_RECORDING_MBID.matches(it.musicBrainzId.lowercase(java.util.Locale.ROOT))
+        }.associateBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    val cards = rankings.asSequence()
+        .filter { it.score.isFinite() && it.score > 0.0 }
+        .sortedWith(compareByDescending<com.music.bitchord.data.catalog.metadata.ListenBrainzRecordingRecommendation> { it.score }
+            .thenBy { it.recordingMbid })
+        .distinctBy { it.recordingMbid.lowercase(java.util.Locale.ROOT) }
+        .mapNotNull { rank ->
+            val id = rank.recordingMbid.lowercase(java.util.Locale.ROOT)
+            val row = validRows[id] ?: return@mapNotNull null
+            ShelfItem(
+                title = row.title,
+                subtitle = row.subtitle.orEmpty(),
+                thumbnailUrl = row.artworkUri,
+                videoId = null,
+                browseId = "catalog:RECORDING:$id",
+            )
+        }.take(limit.coerceAtMost(12)).toList()
+    return cards.takeIf(List<ShelfItem>::isNotEmpty)?.let { HomeShelf(heading, it) }
+}
+
+/**
  * Public ListenBrainz discovery cards are navigation-only, even when the
  * same Recording also happens to have a local/server MediaAsset. This keeps
  * aggregate rankings distinct from the user's playback intent.
