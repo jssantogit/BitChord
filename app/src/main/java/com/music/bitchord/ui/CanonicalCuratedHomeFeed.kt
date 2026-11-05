@@ -4,6 +4,7 @@ import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.ui.screens.CanonicalServerSearchRow
@@ -429,3 +430,7 @@ internal fun canonicalExploreShelves(
     if (trending != null) return listOf(trending)
     return homeShelves.firstOrNull { it.items.isNotEmpty() }?.let { listOf(it) } ?: emptyList()
 }
+
+/** Feed sections share rendering, but listening events retain their actual tab provenance. */
+internal fun canonicalEditorialPlaybackSource(explore: Boolean): PlaybackSourceType =
+    if (explore) PlaybackSourceType.EXPLORE else PlaybackSourceType.HOME
