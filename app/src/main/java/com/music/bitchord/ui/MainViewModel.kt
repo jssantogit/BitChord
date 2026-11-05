@@ -2449,7 +2449,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val detailStack: StateFlow<List<DetailPage>> = _detailStack.asStateFlow()
 
     /** UI-side continuation fetches that can be handed to the playback service. */
-    private val fillInJobs = mutableMapOf<String, Job>()
 
     private val _releaseLibrary = MutableStateFlow<Map<String, LibraryState>>(emptyMap())
 
@@ -4216,11 +4215,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     it
                 }
             }
-            // Only once the first page is on screen: [fillIn] appends to it,
-            // and has nothing to append to before this.
-            if (canRunLegacyYoutubeCatalogLookup()) {
-                more?.let { fillIn(browseId, it, thumbnailUrl ?: artwork) }
-            }
         }
     }
 
@@ -4443,85 +4437,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Follows a detail page's continuations in the background, appending each
-     * page to what is already being read.
-     *
-     * A playlist of a few hundred tracks is several round trips, and taking
-     * them before showing anything meant a spinner for all of them. Growing
-     * the list underneath the reader is also what makes it safe to keep
-     * following continuations however deep the playlist runs — nobody is
-     * waiting on the last one — so a playlist past YouTube's ~1000-track,
-     * ten-page shelf still loads to the end instead of stopping there.
-     *
-     * Stops the moment the page leaves the stack: there is no one to append
-     * for. A page that adds nothing new (below) is the other exit, for a feed
-     * that loops back on itself instead of running dry.
-     */
-    private fun fillIn(browseId: String, token: String, artworkFallback: String?) {
-        fillInJobs[browseId]?.cancel()
-        fillInJobs[browseId] = viewModelScope.launch {
-            // Publish and draw the first response before spending the shared
-            // connection on page two. On a long playlist the continuation can
-            // otherwise start in the same main-loop turn as the state update,
-            // making a ready first screen feel as if it were still loading.
-            delay(150)
-            var next: String? = token
-            while (next != null) {
-                // Capture this page's continuation before passing it to a
-                // suspend lambda; `next` is reassigned after each response.
-                val requestedToken = next ?: break
-                val fetched = runLegacyYoutubeBrowseIfEnabled(
-                    enabled = ::canRunLegacyYoutubeCatalogLookup,
-                ) { YtMusicRepository.moreSongs(requestedToken).getOrNull() } ?: return@launch
-                // Repository calls may finish after cancellation. Do not let
-                // an in-flight UI page append after the playback service has
-                // taken the continuation over.
-                currentCoroutineContext().ensureActive()
-                // The same page can be on the stack twice (opened again from
-                // inside itself). One walk per browseId grows every copy; a
-                // second walk replaces the first, so each copy merges by key
-                // and only takes a token from a page that taught it something.
-                val stack = _detailStack.value
-                if (stack.none { it.browseId == browseId }) return@launch
-                var progressed = false
-                val updated = stack.map { current ->
-                    if (current.browseId != browseId) return@map current
-                    val existing = (current.songs as? UiState.Success)?.data ?: return@map current
-                    val known = existing.mapTo(HashSet()) { it.contextEntryKey() }
-                    val added = fetched.songs
-                        .filter { known.add(it.contextEntryKey()) }
-                        .withArtwork(artworkFallback)
-                    val knownVideoIds = (existing + added).mapTo(HashSet()) { it.videoId }
-                    // Suggestions can arrive on a later page than the real
-                    // tracks, once the playlist's own continuation runs dry —
-                    // see parsePlaylistShelf — so they're tracked separately
-                    // rather than folded into [known].
-                    val knownSuggested = current.suggestedSongs.mapTo(HashSet()) { it.videoId }
-                    val addedSuggested = fetched.suggested
-                        .filter { it.videoId !in knownVideoIds && knownSuggested.add(it.videoId) }
-                        .withArtwork(artworkFallback)
-                    if (added.isEmpty() && addedSuggested.isEmpty()) return@map current
-                    progressed = true
-                    current.copy(
-                        songs = UiState.Success(existing + added),
-                        suggestedSongs = current.suggestedSongs + addedSuggested,
-                        continuation = fetched.continuation,
-                    )
-                }
-                // A page with nothing new for any copy means the feed has looped
-                // back rather than run dry with a token still attached.
-                if (!progressed) return@launch
-                _detailStack.value = updated
-                next = fetched.continuation
-            }
-        }.also { job ->
-            job.invokeOnCompletion {
-                if (fillInJobs[browseId] === job) fillInJobs.remove(browseId)
-            }
-        }
-    }
-
-    /**
      * Applies the service-owned canonical context to its matching open page.
      *
      * The service only materialises a small queue window, while its registry
@@ -4535,16 +4450,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (index < 0) return
         val page = stack[index]
         if (page.type != BrowseType.ALBUM && page.type != BrowseType.PLAYLIST) return
-        // Exactly one loader walks the continuation. While the service owns
-        // it the page's own fill-in stops; when the service gives up (or never
-        // took it — a party, a Cast race) the page resumes from the newest token.
-        if (snapshot.serviceOwned) {
-            if (snapshot.continuationToken != null) fillInJobs.remove(browseId)?.cancel()
-        } else if (snapshot.released && snapshot.continuationToken != null &&
-            fillInJobs[browseId]?.isActive != true
-        ) {
-            fillIn(browseId, snapshot.continuationToken, page.thumbnailUrl)
-        }
+        // Service-owned canonical contexts supply their own verified continuation.
+        // The retired YouTube continuation loader must never be resumed here.
         val existing = (page.songs as? UiState.Success)?.data ?: return
         val known = existing.mapTo(HashSet()) { it.contextEntryKey() }
         val added = snapshot.songs
