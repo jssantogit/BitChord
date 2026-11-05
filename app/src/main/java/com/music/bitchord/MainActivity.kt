@@ -332,6 +332,7 @@ import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
+import com.music.bitchord.ui.canonicalEditorialRowForCard
 import com.music.bitchord.ui.canonicalPublicPopularityCandidates
 import com.music.bitchord.ui.canonicalEditorialPlaybackSource
 import com.music.bitchord.ui.canonicalLocalPickCardId
@@ -1925,9 +1926,7 @@ private fun BitChordApp(
         val selectedRemote = canonicalHomeRemotePicks.firstOrNull {
             isTrustedHomeServerAsset(it) && canonicalRemotePickCardId(it) == item.browseId
         }
-        val cached = cachedCanonicalRows.firstOrNull {
-            canonicalBrowseCardId(it) == item.browseId
-        }
+        val cached = canonicalEditorialRowForCard(cachedCanonicalRows, item.browseId)
         if (selectedLocal != null) {
             playFrom(
                 listOf(selectedLocal), 0,
