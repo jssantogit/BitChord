@@ -360,7 +360,7 @@ fun SearchScreen(
                     val recent = canonicalRecentSearchEntries(history)
                     if (recent.isEmpty()) {
                         item {
-                            MessageState("Pesquise artistas, músicas e álbuns no MusicBrainz.")
+                            MessageState(stringResource(Res.string.canonical_search_start))
                         }
                     } else {
                         recentSearches(
