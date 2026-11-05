@@ -20,7 +20,8 @@ internal fun NativeArtistPublicTopSection(
     onRecordingOpen: (CanonicalCatalogSearchRow) -> Unit,
 ) {
     val exact = rows.filter {
-        it.kind == CanonicalSearchKind.RECORDING && it.artistScopeMbid == artistMbid
+        it.kind == CanonicalSearchKind.RECORDING &&
+            it.artistScopeMbid?.equals(artistMbid, ignoreCase = true) == true
     }
     NativeArtistTracksShelf(
         title = stringResource(R.string.top_songs),
