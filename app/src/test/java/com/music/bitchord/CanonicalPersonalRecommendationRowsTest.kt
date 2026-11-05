@@ -45,6 +45,24 @@ class CanonicalPersonalRecommendationRowsTest {
         assertEquals(null, rows.single().artworkUri)
     }
 
+    @Test fun unsafeArtistControlsAreRejectedButCjkCreditsStayReadable() {
+        val verified = RecordingMetadataEnrichment(
+            musicBrainzId = recording,
+            title = "봄날",
+            artistDisplay = "방탄소년단",
+            artistCredits = listOf(MusicBrainzArtistCredit(artist, "방탄소년단")),
+        )
+        val good = canonicalVerifiedPersonalRecommendationRows(
+            ranks, mapOf(recording to verified),
+        )
+        assertEquals("방탄소년단", good.single().subtitle)
+        assertEquals("봄날", good.single().title)
+        val withControl = verified.copy(artistDisplay = "BTS\\u0001")
+        assertTrue(canonicalVerifiedPersonalRecommendationRows(
+            ranks, mapOf(recording to withControl),
+        ).isEmpty())
+    }
+
     @Test fun anAccountSwitchRevokesOldRecommendationVisibilityImmediately() {
         val state = CanonicalPersonalRecommendationState(
             accountDigest = canonicalRecommendationAccountKey("old-token"),
