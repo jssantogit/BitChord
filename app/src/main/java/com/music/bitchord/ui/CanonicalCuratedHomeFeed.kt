@@ -407,3 +407,25 @@ internal fun canonicalCuratedHomeShelves(
     val chart = (localTrending + catalogTrending).distinctBy { it.browseId }.take(16)
     if (chart.isNotEmpty()) add(HomeShelf(trendingHeading, chart))
 }
+
+/**
+ * Explore is discovery-first, not a second copy of the user's Home.
+ *
+ * Keep the exact verified release shelf when available. If there is no known
+ * published release (offline or cold install), show only one evidence-backed
+ * shelf from the existing feed: personal trending, then playable picks. Never
+ * manufacture public releases, streams, or a community-wide chart.
+ *
+ * Home itself is unchanged and continues to include all three editorial rows.
+ */
+internal fun canonicalExploreShelves(
+    homeShelves: List<HomeShelf>,
+    releasesHeading: String,
+    trendingHeading: String,
+): List<HomeShelf> {
+    val releases = homeShelves.firstOrNull { it.title == releasesHeading && it.items.isNotEmpty() }
+    if (releases != null) return listOf(releases)
+    val trending = homeShelves.firstOrNull { it.title == trendingHeading && it.items.isNotEmpty() }
+    if (trending != null) return listOf(trending)
+    return homeShelves.firstOrNull { it.items.isNotEmpty() }?.let(::listOf) ?: emptyList()
+}
