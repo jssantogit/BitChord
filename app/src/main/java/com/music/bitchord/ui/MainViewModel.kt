@@ -200,40 +200,30 @@ internal fun shouldRunLegacyYoutubeVersionLookup(
 internal fun shouldHandleExplicitLegacyYoutubeLink(configs: List<SourceConfig>): Boolean =
     isYouTubeSourceEnabled(configs)
 
-/** The legacy endpoint closure is never invoked while independent discovery is active. */
-internal class LegacyDiscoveryRequestGate(private val useCanonicalDiscovery: Boolean) {
+/**
+ * The retired YouTube backend has been deleted. A stale discovery-mode flag
+ * must never turn a previously supplied closure into a network request.
+ */
+internal class LegacyDiscoveryRequestGate(
+    @Suppress("UNUSED_PARAMETER") useCanonicalDiscovery: Boolean,
+) {
     suspend fun <T> run(
         @Suppress("UNUSED_PARAMETER") request: LegacyDiscoveryRequest,
-        legacyRequest: suspend () -> T,
-    ): T? = if (useCanonicalDiscovery) null else legacyRequest()
+        @Suppress("UNUSED_PARAMETER") legacyRequest: suspend () -> T,
+    ): T? = null
 }
 
-/**
- * No hidden YouTube lookup for Spotify metadata while canonical discovery is
- * active or YouTube is disabled. The second check rejects a legacy result
- * that completed after a mode/source switch; cancellation is best-effort.
- */
+/** Historical Spotify→YouTube matching is unavailable on Android. */
 internal suspend fun <T> runLegacySpotifyMatchIfAllowed(
-    allowed: () -> Boolean,
-    resolve: suspend () -> T?,
-): T? {
-    if (!allowed()) return null
-    val match = resolve()
-    return match.takeIf { allowed() }
-}
+    @Suppress("UNUSED_PARAMETER") allowed: () -> Boolean,
+    @Suppress("UNUSED_PARAMETER") resolve: suspend () -> T?,
+): T? = null
 
-/**
- * Only explicit, enabled legacy discovery may contact YouTube. A disable that
- * arrives during a non-cooperative provider call also discards the response.
- */
+/** An old enabled flag cannot initiate a removed YouTube browse endpoint. */
 internal suspend fun <T> runLegacyYoutubeBrowseIfEnabled(
-    enabled: () -> Boolean,
-    request: suspend () -> T,
-): T? {
-    if (!enabled()) return null
-    val value = request()
-    return value.takeIf { enabled() }
-}
+    @Suppress("UNUSED_PARAMETER") enabled: () -> Boolean,
+    @Suppress("UNUSED_PARAMETER") request: suspend () -> T,
+): T? = null
 
 /** A monotonically increasing token makes uncancellable old responses harmless. */
 internal class DiscoveryRequestEpoch {
