@@ -3281,8 +3281,13 @@ private fun BitChordApp(
                         val publicArtistMbid = page.browseId.takeIf {
                             it.startsWith("catalog:ARTIST:")
                         }?.removePrefix("catalog:ARTIST:")
-                        LaunchedEffect(page.browseId) {
-                            viewModel.loadCanonicalArtistPublicTop(publicArtistMbid)
+                        // Navigating through a nested album must not clear a
+                        // still-fresh artist chart or trigger an extra public
+                        // fetch when returning to that same artist.
+                        LaunchedEffect(publicArtistMbid) {
+                            if (publicArtistMbid != null) {
+                                viewModel.loadCanonicalArtistPublicTop(publicArtistMbid)
+                            }
                         }
                         val artistPublicTop by viewModel.canonicalArtistPublicTop
                             .collectAsStateWithLifecycle()
