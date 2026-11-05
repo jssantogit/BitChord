@@ -24,6 +24,27 @@ internal object ListenBrainzOutbox {
     private const val WORK_NAME = "listenbrainz-qualified-listens"
     private const val STORE_FILE = "listenbrainz-pending-v1.json"
 
+    fun capture(
+        token: String,
+        occurrenceId: String,
+        song: com.music.bitchord.data.model.Song,
+        startMs: Long,
+        endMs: Long,
+        listenedMs: Long,
+        durationMs: Long?,
+        primaryArtistOnly: Boolean,
+    ) = PendingListenBrainzListen(
+        occurrenceId = occurrenceId,
+        accountKey = accountKey(token),
+        startMs = startMs,
+        endMs = endMs,
+        listenedMs = listenedMs,
+        durationMs = durationMs?.takeIf { it > 0L } ?: 0L,
+        artist = if (primaryArtistOnly) song.artist.primaryArtist() else song.artist,
+        title = song.title,
+        album = song.albumName.orEmpty(),
+    )
+
     fun store(context: Context): ListenBrainzOutboxStore =
         ListenBrainzOutboxStore(File(context.applicationContext.noBackupFilesDir, STORE_FILE))
 
