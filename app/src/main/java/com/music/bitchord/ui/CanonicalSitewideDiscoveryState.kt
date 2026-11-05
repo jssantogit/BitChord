@@ -33,6 +33,26 @@ internal fun canonicalSitewideDiscoveryIsFresh(
 }
 
 /**
+ * Exact point at which a weekly badge must be reconsidered on a long-lived
+ * Explore screen. A Compose remember block must not freeze System.currentTimeMillis()
+ * at initial composition and continue showing an expired chart indefinitely.
+ * The caller ticks after this deadline and can request a fresh snapshot.
+ */
+internal fun canonicalSitewideDiscoveryExpiresAtMs(
+    state: CanonicalSitewideDiscoveryState,
+): Long? {
+    if (state.range != ListenBrainzSitewideRange.WEEK) return null
+    val ttl = LISTENBRAINZ_PUBLIC_TTL_MS
+    val maxUpstreamAge = 14L * 24L * 60L * 60L * 1_000L
+    val fetched = state.fetchedAtMs
+        ?.takeIf { it >= 0L && it <= Long.MAX_VALUE - ttl } ?: return null
+    val updatedSeconds = state.upstreamUpdatedAtSeconds
+        ?.takeIf { it > 0L && it <= (Long.MAX_VALUE - maxUpstreamAge) / 1_000L }
+        ?: return null
+    return minOf(fetched + ttl, updatedSeconds * 1_000L + maxUpstreamAge)
+}
+
+/**
  * Public sitewide counts supply only a position and recording MBID.
  * Titles, credits and durations come from a direct MusicBrainz Recording
  * lookup. A metadata-only chart row MUST NOT imply a playable asset.
