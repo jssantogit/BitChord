@@ -82,6 +82,29 @@ class ListenBrainzPopularityClientTest {
         assertEquals(listOf(0L, 1_000L, 2_000L), starts)
     }
 
+    @Test fun serverRateLimitResetDefersFollowingPublicAndScrobbleRequests() = runBlocking {
+        var clock = 0L
+        val waits = mutableListOf<Long>()
+        val responseA = ListenBrainzPopularityHttpResponse(
+            200, """[{"recording_mbid":"$a","total_listen_count":11,"total_user_count":2}]""",
+            rateLimitRemaining = 0, rateLimitResetInSeconds = 4,
+        )
+        val responseB = ListenBrainzPopularityHttpResponse(
+            200, """[{"recording_mbid":"$b","total_listen_count":22,"total_user_count":3}]""",
+        )
+        val transport = FakeTransport(mutableListOf(responseA, responseB))
+        val limiter = ListenBrainzRateLimiter(
+            nowMillis = { clock },
+            waitMillis = { millis -> waits += millis; clock += millis },
+        )
+        val client = ListenBrainzPopularityClient(transport, limiter, nowMillis = { clock })
+        assertTrue(client.recordingPopularity(listOf(a)) is ListenBrainzPopularityFetchResult.Success)
+        assertTrue(client.recordingPopularity(listOf(b)) is ListenBrainzPopularityFetchResult.Success)
+        assertEquals(listOf(4_000L), waits)
+        assertEquals(2, transport.calls)
+        assertEquals(4_000L, clock)
+    }
+
     @Test fun badResponseAndInvalidIdsFailClosedAndNeverCache() = runBlocking {
         val transport = FakeTransport(mutableListOf(
             ListenBrainzPopularityHttpResponse(200,
