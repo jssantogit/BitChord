@@ -1,0 +1,52 @@
+# Temporary PR-only smoke gate; remove from the draft before merge.
+# Never publishes a release artifact or installs over the production package.
+name: Refinements 209 Android smoke APK
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refinement-209-apk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dev-debug:
+    if: github.event.pull_request.number == 209
+    name: Android dev debug smoke artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure build properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+
+      - name: Build dev debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Publish PR 209 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-pr209-devdebug-${{ github.event.pull_request.head.sha }}
+          path: app/build/outputs/apk/dev/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
