@@ -6,6 +6,8 @@ import com.music.bitchord.data.jiosaavn.prioritizeExplicit
 import com.music.bitchord.data.jiosaavn.selectBestSaavnStream
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.AudioQuality
+import com.music.bitchord.data.settings.permits
 import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.sources.ModuleSource
 import com.music.bitchord.data.sources.MusicSource
@@ -41,6 +43,25 @@ class SourcesTest {
         /** What the raced fakes below all claim to hold, so the matcher accepts them. */
         const val RACE_TITLE = "Paniyon Sa"
         const val RACE_ARTIST = "Atif Aslam"
+    }
+
+    @Test
+    fun `retired YouTube is not eligible at any streaming quality`() {
+        AudioQuality.entries.forEach { quality ->
+            assertFalse(quality.permits(SourceKind.YOUTUBE))
+        }
+    }
+
+    @Test
+    fun `capped streaming can still ask a user configured addon`() {
+        for (quality in listOf(AudioQuality.LOW, AudioQuality.MEDIUM)) {
+            assertTrue(quality.permits(SourceKind.ADDON))
+            assertTrue(quality.permits(SourceKind.CUSTOM_MODULE))
+            assertTrue(quality.permits(SourceKind.MODULE))
+            assertFalse(quality.permits(SourceKind.JIOSAAVN))
+        }
+        assertTrue(AudioQuality.HIGH.permits(SourceKind.JIOSAAVN))
+        assertTrue(AudioQuality.LOSSLESS.permits(SourceKind.ADDON))
     }
 
     // ---- Track identity -----------------------------------------------------
