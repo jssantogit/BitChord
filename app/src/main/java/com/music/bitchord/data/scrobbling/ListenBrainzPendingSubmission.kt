@@ -42,6 +42,14 @@ internal fun listenBrainzImportPayload(listen: PendingListenBrainzListen): Strin
     }.toString()
 }
 
+internal fun listenBrainzSubmissionDisposition(status: Int): ListenBrainzSubmissionResult =
+    when (status) {
+        in 200..299 -> ListenBrainzSubmissionResult.ACCEPTED
+        401, 403 -> ListenBrainzSubmissionResult.AUTH_ERROR
+        400, 413, 422 -> ListenBrainzSubmissionResult.REJECTED
+        else -> ListenBrainzSubmissionResult.RETRYABLE
+    }
+
 internal suspend fun ListenBrainzManager.submitPending(
     token: String,
     listen: PendingListenBrainzListen,
@@ -60,20 +68,18 @@ internal suspend fun ListenBrainzManager.submitPending(
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Authorization", "Token $token")
                 .build()
-            ListenBrainzRequestBudget.limiter.run {
+            val (disposition, remaining, resetInSeconds) = ListenBrainzRequestBudget.limiter.run {
                 Http.client.newCall(request).execute().use { response ->
-                    ListenBrainzRequestBudget.limiter.observeRateLimit(
+                    Triple(
+                        listenBrainzSubmissionDisposition(response.code),
                         response.header("X-RateLimit-Remaining")?.toLongOrNull(),
                         response.header("X-RateLimit-Reset-In")?.toLongOrNull(),
                     )
-                    when (response.code) {
-                        in 200..299 -> ListenBrainzSubmissionResult.ACCEPTED
-                        401, 403 -> ListenBrainzSubmissionResult.AUTH_ERROR
-                        400, 413, 422 -> ListenBrainzSubmissionResult.REJECTED
-                        else -> ListenBrainzSubmissionResult.RETRYABLE
-                    }
                 }
             }
+            // Never acquire the limiter's mutex again while inside run().
+            ListenBrainzRequestBudget.limiter.observeRateLimit(remaining, resetInSeconds)
+            disposition
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (_: Exception) {
