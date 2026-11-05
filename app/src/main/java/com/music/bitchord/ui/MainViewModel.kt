@@ -320,7 +320,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Public cumulative community counts, never local/personal play history. */
     private val _canonicalExplorePublicPopularity =
         MutableStateFlow<List<ListenBrainzPopularityEvidence>>(emptyList())
-    val canonicalExplorePublicPopularity: StateFlow<List<ListenBrainzPopularityEvidence>> =
+    internal val canonicalExplorePublicPopularity: StateFlow<List<ListenBrainzPopularityEvidence>> =
         _canonicalExplorePublicPopularity.asStateFlow()
     private val listenBrainzPopularityClient = ListenBrainzPopularityClient()
     private val explorePublicPopularityEpoch = DiscoveryRequestEpoch()
