@@ -91,7 +91,8 @@ internal fun canonicalVerifiedPersonalRecommendationRows(
             val title = metadata.title?.trim()
                 ?.takeIf { canonicalStreamingTitleIsSafe(it) } ?: return@mapNotNull null
             val artist = metadata.artistDisplay?.trim()
-                ?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+                ?.takeIf { it.isNotEmpty() && it.none(Char::isISOControl) }
+                ?: return@mapNotNull null
             CanonicalCatalogSearchRow(
                 musicBrainzId = id,
                 kind = CanonicalSearchKind.RECORDING,
