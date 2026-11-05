@@ -338,6 +338,7 @@ import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
 import com.music.bitchord.ui.canonicalSitewideCommunityShelf
 import com.music.bitchord.ui.canonicalSitewideDiscoveryIsFresh
+import com.music.bitchord.ui.canonicalSitewideDiscoveryExpiresAtMs
 import com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly
 import com.music.bitchord.ui.canonicalEditorialRowForCard
 import com.music.bitchord.ui.canonicalPublicPopularityCandidates
@@ -1022,11 +1023,31 @@ private fun BitChordApp(
     // The current community week chart leads only when its exact Recording
     // MBIDs have catalog rows. Otherwise keep the existing all-time public
     // evidence rather than suggesting that a chart with no matches is empty.
+    // A remember block freezes time unless freshness is a state input. Wake
+    // once at the earliest cache/upstream expiry to retire a weekly chart even
+    // when Explore remains open without any unrelated recomposition.
+    var sitewideFreshnessNowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(
+        selectedTab, canonicalExploreSitewide.fetchedAtMs,
+        canonicalExploreSitewide.upstreamUpdatedAtSeconds,
+    ) {
+        if (selectedTab != TAB_EXPLORE) return@LaunchedEffect
+        val now = System.currentTimeMillis()
+        sitewideFreshnessNowMs = now
+        if (!canonicalSitewideDiscoveryIsFresh(canonicalExploreSitewide, now)) return@LaunchedEffect
+        val expiry = canonicalSitewideDiscoveryExpiresAtMs(canonicalExploreSitewide)
+            ?: return@LaunchedEffect
+        val remaining = expiry - now
+        if (remaining > 0L) delay(remaining + 1L)
+        sitewideFreshnessNowMs = System.currentTimeMillis()
+        viewModel.loadCanonicalExploreSitewide()
+    }
     val canonicalWeeklyCommunityShelf = remember(
         cachedCanonicalRows, canonicalExploreSitewide, canonicalCommunityHeading,
+        sitewideFreshnessNowMs,
     ) {
         if (canonicalSitewideDiscoveryIsFresh(
-                canonicalExploreSitewide, System.currentTimeMillis(),
+                canonicalExploreSitewide, sitewideFreshnessNowMs,
             )
         ) canonicalSitewideCommunityShelf(
             rows = cachedCanonicalRows + canonicalExploreSitewide.verifiedRows,
