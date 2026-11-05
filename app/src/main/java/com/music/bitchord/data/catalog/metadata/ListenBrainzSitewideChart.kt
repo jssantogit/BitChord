@@ -15,6 +15,28 @@ internal enum class ListenBrainzSitewideRange(val apiValue: String) {
     MONTH("month"),
 }
 
+/**
+ * The upstream clock is an observation about the published chart, not the
+ * time this device last fetched it. An old snapshot cannot become fresh by
+ * downloading the same JSON again. Keep this policy shared by cache and UI.
+ */
+internal fun listenBrainzSitewideSnapshotIsCurrent(
+    range: ListenBrainzSitewideRange,
+    lastUpdatedSeconds: Long?,
+    nowMs: Long,
+): Boolean {
+    val upstream = lastUpdatedSeconds
+        ?.takeIf { it > 0L && it <= Long.MAX_VALUE / 1_000L }
+        ?: return false
+    val age = nowMs - upstream * 1_000L
+    val dayMs = 24L * 60L * 60L * 1_000L
+    val maxAge = when (range) {
+        ListenBrainzSitewideRange.WEEK -> 14L * dayMs
+        ListenBrainzSitewideRange.MONTH -> 45L * dayMs
+    }
+    return age in (-dayMs)..maxAge
+}
+
 internal data class ListenBrainzSitewideRecording(
     val recordingMbid: String,
     val listenCount: Long,
