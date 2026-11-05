@@ -330,6 +330,7 @@ import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
+import com.music.bitchord.ui.canonicalExploreShelves
 import com.music.bitchord.ui.canonicalLocalPickCardId
 import com.music.bitchord.ui.canonicalRemotePickCardId
 import com.music.bitchord.ui.isPlayableLocalPick
@@ -993,8 +994,26 @@ private fun BitChordApp(
             todayIsoDate = canonicalFeedDate,
         )
     }
+    // Explore reuses the native shelf UI, but not Home's entire curated feed.
+    // Keep Home's three editorial shelves untouched and make Explore release-first.
+    val canonicalExploreShelves = remember(
+        canonicalHomeShelves, canonicalReleasesHeading, canonicalTrendingHeading,
+    ) {
+        canonicalExploreShelves(
+            homeShelves = canonicalHomeShelves,
+            releasesHeading = canonicalReleasesHeading,
+            trendingHeading = canonicalTrendingHeading,
+        )
+    }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeShelves.isNotEmpty() -> UiState.Success(canonicalHomeShelves)
+        canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
+        canonicalDiscoveryCatalog is UiState.Error ->
+            UiState.Error((canonicalDiscoveryCatalog as UiState.Error).message)
+        else -> UiState.Error(stringResource(R.string.canonical_discovery_cache_empty))
+    }
+    val canonicalExploreState: UiState<List<HomeShelf>> = when {
+        canonicalExploreShelves.isNotEmpty() -> UiState.Success(canonicalExploreShelves)
         canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
         canonicalDiscoveryCatalog is UiState.Error ->
             UiState.Error((canonicalDiscoveryCatalog as UiState.Error).message)
@@ -3311,7 +3330,7 @@ private fun BitChordApp(
                             isPlaying = player.isPlaying,
                         )
                         TAB_EXPLORE -> HomeScreen(
-                            state = canonicalHomeState,
+                            state = canonicalExploreState,
                             listState = exploreListState,
                             onItemClick = onCanonicalShelfClick,
                             onRetry = viewModel::loadCanonicalDiscoveryCatalog,
