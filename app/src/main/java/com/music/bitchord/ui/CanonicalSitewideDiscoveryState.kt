@@ -3,6 +3,7 @@ package com.music.bitchord.ui
 import com.music.bitchord.data.catalog.metadata.LISTENBRAINZ_PUBLIC_TTL_MS
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRange
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
+import com.music.bitchord.data.catalog.metadata.listenBrainzSitewideSnapshotIsCurrent
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -24,15 +25,11 @@ internal fun canonicalSitewideDiscoveryIsFresh(
     nowMs: Long,
 ): Boolean {
     val fetched = state.fetchedAtMs ?: return false
-    val upstreamSeconds = state.upstreamUpdatedAtSeconds
-        ?.takeIf { it in 1..(Long.MAX_VALUE / 1_000L) } ?: return false
-    val upstreamMs = upstreamSeconds * 1_000L
-    // A weekly chart with an ancient or unknown upstream snapshot is not a
-    // current weekly trend, even if fetched again five seconds ago.
-    val upstreamAgeMs = nowMs - upstreamMs
     return state.range == ListenBrainzSitewideRange.WEEK &&
         nowMs >= fetched && nowMs - fetched < LISTENBRAINZ_PUBLIC_TTL_MS &&
-        upstreamAgeMs in (-24L * 60 * 60 * 1_000)..(14L * 24 * 60 * 60 * 1_000)
+        listenBrainzSitewideSnapshotIsCurrent(
+            state.range, state.upstreamUpdatedAtSeconds, nowMs,
+        )
 }
 
 /**
