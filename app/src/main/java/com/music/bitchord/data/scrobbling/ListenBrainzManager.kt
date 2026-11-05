@@ -8,6 +8,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.music.bitchord.data.Http
+import com.music.bitchord.data.catalog.metadata.ListenBrainzRequestBudget
 
 object ListenBrainzManager {
     private const val TAG = "ListenBrainzManager"
@@ -42,13 +43,15 @@ object ListenBrainzManager {
                         .addHeader("Authorization", "Token $token")
                         .build()
 
-                Http.client.newCall(request).execute().use { resp ->
+                ListenBrainzRequestBudget.limiter.run {
+                    Http.client.newCall(request).execute().use { resp ->
                     if (resp.isSuccessful) {
                         Log.d(TAG, "playing_now submitted")
                         true
                     } else {
                         Log.w(TAG, "playing_now submit failed: HTTP ${resp.code}")
                         false
+                    }
                     }
                 }
             } catch (ex: Exception) {
@@ -91,13 +94,15 @@ object ListenBrainzManager {
                         .addHeader("Authorization", "Token $token")
                         .build()
 
-                Http.client.newCall(request).execute().use { resp ->
+                ListenBrainzRequestBudget.limiter.run {
+                    Http.client.newCall(request).execute().use { resp ->
                     if (resp.isSuccessful) {
                         Log.d(TAG, "finished listen submitted")
                         true
                     } else {
                         Log.w(TAG, "finished listen submit failed: HTTP ${resp.code}")
                         false
+                    }
                     }
                 }
             } catch (ex: Exception) {
