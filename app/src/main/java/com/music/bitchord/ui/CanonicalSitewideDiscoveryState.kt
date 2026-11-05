@@ -49,7 +49,7 @@ internal fun canonicalVerifiedSitewideRows(
     val verifiedById = musicBrainzMetadata.entries.associate {
         it.key.lowercase(Locale.ROOT) to it.value
     }
-    val validMbid = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    val validMbid = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
     return rankings.asSequence()
         .filter { it.listenCount > 0L }
         .sortedWith(compareByDescending<ListenBrainzSitewideRecording> { it.listenCount }
