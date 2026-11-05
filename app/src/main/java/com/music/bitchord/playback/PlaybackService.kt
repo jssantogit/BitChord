@@ -3143,6 +3143,8 @@ class PlaybackService : MediaLibraryService() {
             scrobbleManager?.onSongStart(newSong, durationMs)
         }
 
+        // The transition reason still controls end-of-song actions such as Sleep Timer.
+        val ended = previousEnded
         // Close the previous *playback occurrence* using time actually played,
         // not the time since start or the seek/skip transition reason. A manual
         // skip after half a song can count; seeking to the end after seconds
