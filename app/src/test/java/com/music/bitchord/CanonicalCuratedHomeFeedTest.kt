@@ -111,6 +111,23 @@ class CanonicalCuratedHomeFeedTest {
         ))
     }
 
+    @Test fun publicCommunityRecordingsAlwaysNavigateToMetadataOnExplore() {
+        val id = "catalog:RECORDING:13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        assertTrue(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.EXPLORE, "Popular na comunidade", "Popular na comunidade", id,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.HOME, "Popular na comunidade", "Popular na comunidade", id,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.EXPLORE, "Lançamentos", "Popular na comunidade", id,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.EXPLORE, "Popular na comunidade", "Popular na comunidade",
+            "local:pick:1",
+        ))
+    }
+
     @Test fun communityPopularityNeverInventsAlbumOrAudioFromCounts() {
         val known = playable.copy(hasCatalogedAsset = false)
         val listens = listOf(ListenBrainzPopularityEvidence.Known(known.musicBrainzId, 20, 4))
