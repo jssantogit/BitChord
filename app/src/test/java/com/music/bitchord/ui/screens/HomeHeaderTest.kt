@@ -13,6 +13,8 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.music.bitchord.data.model.UiState
+import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.ShelfItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
@@ -156,6 +158,52 @@ class HomeHeaderTest {
         compose.onNodeWithText("Explorar").assertExists()
         compose.onNodeWithText("Início").assertDoesNotExist()
         compose.onNodeWithText("Nenhum lançamento disponível").assertExists()
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun publicExploreShelfUsesTheSameNativeCardAndPreservesTypedRecordingNavigation() {
+        AppUi.install(object : AppUiHost {
+            override val swipeToPlayNext = MutableStateFlow(false)
+            override val homeRecentsViewType = MutableStateFlow(LibraryViewType.GRID)
+            override fun setHomeRecentsViewType(value: LibraryViewType) {
+                homeRecentsViewType.value = value
+            }
+            override val pinnedPlaylists = MutableStateFlow(emptyList<String>())
+            override val librarySort = MutableStateFlow(LibrarySort.DEFAULT)
+            @Composable override fun downloadedIds(): Set<String> = emptySet()
+        })
+        val id = "catalog:RECORDING:13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        var selectedId: String? = null
+        var selectedHeading: String? = null
+        compose.setContent {
+            MaterialTheme {
+                HomeScreen(
+                    state = UiState.Success(listOf(HomeShelf(
+                        title = "Popular na comunidade",
+                        items = listOf(ShelfItem("Magnetic", "ILLIT", null, null, id)),
+                    ))),
+                    listState = rememberLazyListState(),
+                    onItemClick = { item, heading ->
+                        selectedId = item.browseId
+                        selectedHeading = heading
+                    },
+                    onRetry = {},
+                    refreshing = false,
+                    onRefresh = {},
+                    pullState = rememberPullToRefreshState(),
+                    contentPadding = PaddingValues(),
+                    title = "Explorar",
+                    signedIn = true,
+                    leadHero = false,
+                )
+            }
+        }
+        compose.onNodeWithText("Popular na comunidade").assertExists()
+        compose.onNodeWithText("Magnetic").performClick()
+        compose.runOnIdle {
+            assertEquals(id, selectedId)
+            assertEquals("Popular na comunidade", selectedHeading)
+        }
     }
 
 }
