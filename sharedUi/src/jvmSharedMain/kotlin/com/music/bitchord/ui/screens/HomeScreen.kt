@@ -867,12 +867,31 @@ private fun HeroCard(
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
             .contextClick(onLongPress),
     ) {
-        AsyncImage(
-            model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
+        if (item.thumbnailUrl.isNullOrBlank() &&
+            item.browseId?.startsWith("catalog:") == true
+        ) {
+            // A public MBID does not guarantee release artwork. Keep the
+            // native hero layout legible until a genuine CAA image arrives.
+            Box(
+                modifier = Modifier.fillMaxSize().background(
+                    Brush.linearGradient(
+                        listOf(Color(0xFF25304E), Color(0xFF485573)),
+                    ),
+                ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.LibraryMusic, contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.60f),
+                    modifier = Modifier.size(68.dp))
+            }
+        } else {
+            AsyncImage(
+                model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
         Column(
             modifier = Modifier
@@ -1139,7 +1158,7 @@ internal fun ShelfCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     if (item.thumbnailUrl.isNullOrBlank() &&
-                        item.browseId?.startsWith("catalog:RECORDING:") == true
+                        item.browseId?.startsWith("catalog:") == true
                     ) {
                         // Rankings may have no release association. Display a
                         // recognisable metadata glyph rather than a blank tile
