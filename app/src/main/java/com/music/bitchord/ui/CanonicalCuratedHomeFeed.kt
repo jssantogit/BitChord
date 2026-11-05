@@ -1,6 +1,7 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.catalog.metadata.LISTENBRAINZ_PUBLIC_TTL_MS
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
@@ -543,6 +544,20 @@ internal fun canonicalExploreWithCommunityShelves(
         ?: return known
     return if (known.firstOrNull()?.title == releasesHeading) known + public else listOf(public)
 }
+
+/**
+ * View-state freshness follows the same six-hour budget as the public client.
+ * Re-entering Explore with an unchanged MBID batch should not flash an empty
+ * shelf or needlessly schedule a second request. Unknown rows are cached too.
+ */
+internal fun canonicalPublicPopularityCacheIsFresh(
+    requested: List<String>,
+    previous: List<String>?,
+    fetchedAtMs: Long?,
+    nowMs: Long,
+): Boolean = requested.isNotEmpty() && requested == previous &&
+    fetchedAtMs != null && nowMs >= fetchedAtMs &&
+    nowMs - fetchedAtMs < LISTENBRAINZ_PUBLIC_TTL_MS
 
 /** Feed sections share rendering, but listening events retain their actual tab provenance. */
 internal fun canonicalEditorialPlaybackSource(explore: Boolean): PlaybackSourceType =
