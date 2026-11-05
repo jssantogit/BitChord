@@ -109,3 +109,36 @@ internal fun canonicalPublicGenreReleaseShelf(
             canonicalNativeBrowseId(row))
     })
 }
+
+/** Keep the native Home shelves, filling gaps with verified worldwide metadata. */
+internal fun canonicalHomeWithWorldwideEditorial(
+    localShelves: List<HomeShelf>,
+    worldwideReleases: List<CanonicalCatalogSearchRow>,
+    picksHeading: String,
+    trendingHeading: String,
+    worldwideTrending: HomeShelf?,
+    todayIsoDate: String,
+): List<HomeShelf> {
+    val shelves = localShelves.toMutableList()
+    val daily = canonicalDailyPublicPicks(worldwideReleases, todayIsoDate)
+    if (daily.isNotEmpty()) {
+        val index = shelves.indexOfFirst { it.title == picksHeading }
+        if (index >= 0) {
+            val original = shelves[index]
+            shelves[index] = original.copy(
+                items = (original.items + daily)
+                    .distinctBy { it.browseId }.take(16),
+            )
+        } else {
+            shelves.add(minOf(1, shelves.size), HomeShelf(picksHeading, daily))
+        }
+    }
+    // World chart claims are always tied to ListenBrainz evidence. A local
+    // 'Em alta' row remains a valid offline fallback when no chart is current.
+    if (worldwideTrending != null && worldwideTrending.items.isNotEmpty()) {
+        val index = shelves.indexOfFirst { it.title == trendingHeading }
+        if (index >= 0) shelves[index] = worldwideTrending
+        else shelves.add(worldwideTrending)
+    }
+    return shelves
+}
