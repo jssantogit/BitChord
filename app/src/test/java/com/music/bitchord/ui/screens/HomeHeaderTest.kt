@@ -2,6 +2,10 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.music.bitchord.data.model.UiState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
@@ -103,6 +107,37 @@ class HomeHeaderTest {
         compose.onNodeWithTag("home-compact-title").assertDoesNotExist()
         compose.runOnIdle { largeHeadingOffscreen.value = true }
         compose.onNodeWithTag("home-compact-title").assertExists()
+    }
+
+    /**
+     * The official Home/Explore surface is one native component. Both tabs
+     * retain their own heading even when the catalogue has no loaded shelves.
+     */
+    @Test fun canonicalHomeAndExploreReuseNativeSurfaceWithoutLegacySignIn() {
+        val heading = mutableStateOf("Início")
+        compose.setContent {
+            MaterialTheme {
+                HomeScreen(
+                    state = UiState.Error("Nenhum lançamento disponível"),
+                    listState = rememberLazyListState(),
+                    onItemClick = { _, _ -> },
+                    onRetry = {},
+                    refreshing = false,
+                    onRefresh = {},
+                    pullState = rememberPullToRefreshState(),
+                    contentPadding = PaddingValues(),
+                    title = heading.value,
+                    signedIn = true,
+                    leadHero = heading.value == "Início",
+                )
+            }
+        }
+        compose.onNodeWithText("Início").assertExists()
+        compose.onNodeWithText("Nenhum lançamento disponível").assertExists()
+        compose.runOnIdle { heading.value = "Explorar" }
+        compose.onNodeWithText("Explorar").assertExists()
+        compose.onNodeWithText("Início").assertDoesNotExist()
+        compose.onNodeWithText("Nenhum lançamento disponível").assertExists()
     }
 
 }
