@@ -360,6 +360,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val artistTopMetadataCache = ConcurrentHashMap<String, RecordingMetadataEnrichment>()
 
 
+    // Public metadata discovery must work on a fresh installation with an
+    // empty Room catalog. This feed never manufactures a playable MediaAsset.
+    private val _canonicalWorldwideReleases =
+        MutableStateFlow<List<CanonicalCatalogSearchRow>>(emptyList())
+    val canonicalWorldwideReleases: StateFlow<List<CanonicalCatalogSearchRow>> =
+        _canonicalWorldwideReleases.asStateFlow()
+    private var worldwideReleaseJob: Job? = null
+    private val worldwideReleaseEpoch = DiscoveryRequestEpoch()
+    private var worldwideReleaseFetchedAtMs: Long = 0L
+    private var worldwideReleaseRetryAtMs: Long = 0L
+
+    private val _canonicalGenreResults =
+        MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>>(UiState.Loading)
+    val canonicalGenreResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>> =
+        _canonicalGenreResults.asStateFlow()
+    private var canonicalGenreJob: Job? = null
+    private val canonicalGenreEpoch = DiscoveryRequestEpoch()
+
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
 
@@ -3026,6 +3044,117 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Query current first-release dates globally, independently of local
+     * recordings. A brief absence is not a permanent empty-catalog state.
+     * Keep the most recent verified snapshot when the network is unavailable.
+     */
+    fun loadCanonicalWorldwideReleases(force: Boolean = false) {
+        if (worldwideReleaseJob?.isActive == true) return
+        val now = System.currentTimeMillis()
+        if (!force && (now < worldwideReleaseRetryAtMs ||
+                (worldwideReleaseFetchedAtMs > 0L &&
+                    now - worldwideReleaseFetchedAtMs < 6L * 60L * 60L * 1000L)
+            )
+        ) return
+        val generation = worldwideReleaseEpoch.next()
+        worldwideReleaseJob = viewModelScope.launch(Dispatchers.IO) {
+            val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+            val until = today.toString()
+            val hits = try {
+                val recent = musicBrainzSearch.searchRecentReleaseGroups(
+                    today.minusDays(30).toString(), until, limit = 100,
+                )
+                val first = (recent as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
+                if (first.isNotEmpty()) first else {
+                    (musicBrainzSearch.searchRecentReleaseGroups(
+                        today.minusDays(90).toString(), until, limit = 100,
+                    ) as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { emptyList() }
+            if (!worldwideReleaseEpoch.isCurrent(generation)) return@launch
+            val rows = canonicalPublicReleaseRows(
+                hits, today.minusDays(90).toString(), until,
+            )
+            if (rows.isEmpty()) {
+                worldwideReleaseRetryAtMs = System.currentTimeMillis() + 15L * 60_000L
+                return@launch
+            }
+            _canonicalWorldwideReleases.value = rows
+            worldwideReleaseFetchedAtMs = System.currentTimeMillis()
+            worldwideReleaseRetryAtMs = 0L
+
+            // Covers must be verified by their own group / official edition;
+            // the MusicBrainz search result itself has no trusted artwork.
+            val permits = Semaphore(2)
+            rows.take(18).forEach { row ->
+                launch {
+                    permits.withPermit {
+                        val cover = try { canonicalArtworkForRow(row) }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { null }
+                        if (cover != null && worldwideReleaseEpoch.isCurrent(generation)) {
+                            _canonicalWorldwideReleases.update { old ->
+                                old.map { current ->
+                                    if (current.musicBrainzId == row.musicBrainzId &&
+                                        canonicalNeedsCoverRefresh(current.artworkUri)
+                                    ) current.copy(artworkUri = cover)
+                                    else current
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Explore genre requests use actual MusicBrainz tags, not YouTube pages. */
+    fun loadCanonicalGenre(tag: String) {
+        val selected = canonicalExploreGenres.firstOrNull { it.tag == tag } ?: return
+        val generation = canonicalGenreEpoch.next()
+        canonicalGenreJob?.cancel()
+        _canonicalGenreResults.value = UiState.Loading
+        canonicalGenreJob = viewModelScope.launch(Dispatchers.IO) {
+            val response = try { musicBrainzSearch.searchReleaseGroupsForTag(selected.tag, 60) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            if (!canonicalGenreEpoch.isCurrent(generation)) return@launch
+            val hits = (response as? MusicBrainzCatalogSearchResult.Success)?.page?.items
+            if (hits == null) {
+                _canonicalGenreResults.value = UiState.Error(
+                    "Não foi possível carregar o gênero. Tente novamente.",
+                )
+                return@launch
+            }
+            val rows = canonicalPublicReleaseRows(
+                hits, "1900-01-01",
+                java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString(),
+            )
+            _canonicalGenreResults.value = UiState.Success(rows)
+            val permits = Semaphore(2)
+            rows.take(12).forEach { row ->
+                launch {
+                    permits.withPermit {
+                        val artwork = try { canonicalArtworkForRow(row) }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (_: Exception) { null }
+                        if (artwork != null && canonicalGenreEpoch.isCurrent(generation)) {
+                            _canonicalGenreResults.update { state ->
+                                if (state !is UiState.Success) state
+                                else UiState.Success(state.data.map {
+                                    if (it.musicBrainzId == row.musicBrainzId)
+                                        it.copy(artworkUri = artwork) else it
+                                })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fun loadCanonicalDiscoveryCatalog() {
         if (!isCanonicalDiscoverySelected()) return
         if (canonicalDiscoveryCatalogJob?.isActive == true) return
@@ -3392,7 +3521,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             try {
                 when (feed) {
-                    Feed.HOME, Feed.EXPLORE -> loadCanonicalDiscoveryCatalog()
+                    Feed.HOME, Feed.EXPLORE -> {
+                        loadCanonicalDiscoveryCatalog()
+                        loadCanonicalWorldwideReleases(force = true)
+                    }
                     Feed.LIBRARY -> loadLibrary()
                 }
             } finally {
@@ -3404,6 +3536,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun loadExplore() {
         _explore.value = UiState.Success(emptyList())
         loadCanonicalDiscoveryCatalog()
+        loadCanonicalWorldwideReleases()
     }
 
     /** An old YouTube category link has no valid provider-backed destination. */
@@ -3436,6 +3569,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _homeRecentlyPlayedLoading.value = false
         _homePendingShelves.value = 0
         loadCanonicalDiscoveryCatalog()
+        loadCanonicalWorldwideReleases()
     }
 
     fun loadMoreHome() {
