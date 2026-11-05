@@ -133,8 +133,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.music.bitchord.auth.DiscordLoginScreen
 import com.music.bitchord.auth.SpotifyLoginScreen
-import com.music.bitchord.auth.WebSessionMode
-import com.music.bitchord.auth.YtMusicLoginScreen
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.listentogether.JamInviteLink
@@ -601,7 +599,6 @@ private fun BitChordApp(
      * What the in-app browser is open for, or null while it is closed —
      * signing in, or picking a channel in YouTube Music's own Accounts list.
      */
-    var webSession by remember { mutableStateOf<WebSessionMode?>(null) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var settingsSection by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
     // Replay: the page, the stories over it, and the share sheet over those.
@@ -832,7 +829,6 @@ private fun BitChordApp(
         showSpotify = false
         libraryShowAll = null
         viewModel.clearDetail()
-        webSession = null
         showSettings = true
         showListenTogether = true
         JamInviteLink.handled()
@@ -3015,7 +3011,7 @@ private fun BitChordApp(
                             onSignIn = {
                                 showAccountScrobbling = false
                                 showSettings = false
-                                webSession = WebSessionMode.SIGN_IN
+                                showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled))
                             },
                             onSwitchChannel = {
                                 viewModel.loadChannels()
@@ -3050,7 +3046,7 @@ private fun BitChordApp(
                             onSignIn = {
                                 showListenTogether = false
                                 showSettings = false
-                                webSession = WebSessionMode.SIGN_IN
+                                showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled))
                             },
                             contentPadding = listPadding,
                             onEditServer = { editingPartyServer = true },
@@ -3066,7 +3062,7 @@ private fun BitChordApp(
                             account = account,
                             onSignIn = {
                                 showSettings = false
-                                webSession = WebSessionMode.SIGN_IN
+                                showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled))
                             },
                             onSignOut = { viewModel.signOut() },
                             onAccountScrobbling = {
@@ -3690,7 +3686,7 @@ private fun BitChordApp(
                             onShowAll = { shelf -> libraryShowAll = shelf },
                             replay = {},
 
-                            onSignIn = { webSession = WebSessionMode.SIGN_IN },
+                            onSignIn = { showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled)) },
                             onRetry = viewModel::loadLibrary,
                             refreshing = MainViewModel.Feed.LIBRARY in refreshing,
                             onRefresh = {
@@ -3806,7 +3802,7 @@ private fun BitChordApp(
                                 onSignIn = {
                                     settingsSubScreen = null
                                     showSettings = false
-                                    webSession = WebSessionMode.SIGN_IN
+                                    showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled))
                                 },
                                 onSwitchChannel = {
                                     viewModel.loadChannels()
@@ -3881,7 +3877,7 @@ private fun BitChordApp(
                                 onSignIn = {
                                     settingsSubScreen = null
                                     showSettings = false
-                                    webSession = WebSessionMode.SIGN_IN
+                                    showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled))
                                 },
                                 contentPadding = listPadding,
                                 onEditServer = { editingPartyServer = true },
@@ -5035,24 +5031,8 @@ private fun BitChordApp(
             visibleState = onboardingShown,
             signedIn = signedIn,
             accountName = account?.name.orEmpty(),
-            onSignIn = { webSession = WebSessionMode.SIGN_IN },
+            onSignIn = { showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled)) },
         )
-
-        // ---- Google sign-in (full screen WebView) ----
-        webSession?.let { mode ->
-            WebSessionOverlay(
-                mode = mode,
-                initialCookie = if (mode == WebSessionMode.SWITCH_CHANNEL) {
-                    googleAccounts.firstOrNull { it.accountId == activeAccountId }?.cookie
-                } else null,
-                viewModel = viewModel,
-                onClose = { webSession = null },
-                onAccepted = {
-                    webSession = null
-                    if (mode == WebSessionMode.SIGN_IN) selectedTab = TAB_LIBRARY
-                },
-            )
-        }
 
         // ---- Update available (once per launch; held until the welcome is done) ----
         if (showUpdateDialog && onboardingComplete) {
@@ -5232,7 +5212,7 @@ private fun BitChordApp(
                 onSelect = { selected, profile -> viewModel.selectProfile(selected.accountId, profile.profileId) },
                 onAddAccount = {
                     showAccountSelector = false
-                    webSession = WebSessionMode.SIGN_IN
+                    showQueueNotice(context.getString(R.string.legacy_library_youtube_disabled))
                 },
                 onRemoveAccount = { selected ->
                     viewModel.removeAccount(selected.accountId)
@@ -5787,91 +5767,6 @@ private fun ListenTogetherLatencyBadge(status: ServerConnectionState) {
                                 }
                             }
 
-}
-
-/** Full-screen sign-in remains isolated from the large BitChordApp Compose method. */
-@Composable
-private fun WebSessionOverlay(
-    mode: WebSessionMode,
-    initialCookie: String?,
-    viewModel: MainViewModel,
-    onClose: () -> Unit,
-    onAccepted: () -> Unit,
-) {
-    BackHandler { onClose() }
-    var captureRequest by remember(mode) { mutableIntStateOf(0) }
-    var captureFailed by remember(mode) { mutableStateOf(false) }
-    var pageReady by remember(mode) { mutableStateOf(false) }
-    var confirmingProfile by remember(mode) { mutableStateOf(false) }
-    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier.fillMaxWidth().statusBarsPadding()
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onClose) {
-                    Icon(Icons.Rounded.Close,
-                        contentDescription = stringResource(R.string.close),
-                        tint = MaterialTheme.colorScheme.onBackground)
-                }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = when (mode) {
-                            WebSessionMode.SIGN_IN -> stringResource(R.string.sign_in_youtube_music)
-                            WebSessionMode.SWITCH_CHANNEL -> stringResource(R.string.choose_profile)
-                        },
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
-                    if (pageReady) {
-                        Text(
-                            text = if (captureFailed) {
-                                stringResource(R.string.profile_unavailable)
-                            } else {
-                                stringResource(R.string.switch_profile_hint)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                        )
-                    }
-                }
-                if (pageReady) {
-                    TextButton(
-                        onClick = {
-                            captureFailed = false
-                            confirmingProfile = true
-                            captureRequest++
-                        },
-                        enabled = !confirmingProfile,
-                    ) {
-                        Text(
-                            if (confirmingProfile) stringResource(R.string.checking)
-                            else stringResource(R.string.use_this_profile),
-                        )
-                    }
-                }
-            }
-            YtMusicLoginScreen(
-                mode = mode,
-                initialCookie = initialCookie,
-                captureRequest = captureRequest,
-                onPageReady = { pageReady = it },
-                onCaptureUnavailable = {
-                    confirmingProfile = false
-                    captureFailed = true
-                },
-                onCaptured = { session ->
-                    viewModel.onWebSession(session, mode) { accepted ->
-                        confirmingProfile = false
-                        if (accepted) onAccepted()
-                        else captureFailed = true
-                    }
-                },
-            )
-        }
-    }
 }
 
 /**
