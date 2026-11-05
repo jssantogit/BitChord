@@ -366,6 +366,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         MutableStateFlow<List<CanonicalCatalogSearchRow>>(emptyList())
     val canonicalWorldwideReleases: StateFlow<List<CanonicalCatalogSearchRow>> =
         _canonicalWorldwideReleases.asStateFlow()
+    private val _canonicalWorldwideLoading = MutableStateFlow(false)
+    val canonicalWorldwideLoading: StateFlow<Boolean> =
+        _canonicalWorldwideLoading.asStateFlow()
     private var worldwideReleaseJob: Job? = null
     private val worldwideReleaseEpoch = DiscoveryRequestEpoch()
     private var worldwideReleaseFetchedAtMs: Long = 0L
@@ -3058,6 +3061,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         ) return
         val generation = worldwideReleaseEpoch.next()
+        _canonicalWorldwideLoading.value = true
         worldwideReleaseJob = viewModelScope.launch(Dispatchers.IO) {
             val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
             val until = today.toString()
@@ -3079,9 +3083,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             if (rows.isEmpty()) {
                 worldwideReleaseRetryAtMs = System.currentTimeMillis() + 15L * 60_000L
+                _canonicalWorldwideLoading.value = false
                 return@launch
             }
             _canonicalWorldwideReleases.value = rows
+            _canonicalWorldwideLoading.value = false
             worldwideReleaseFetchedAtMs = System.currentTimeMillis()
             worldwideReleaseRetryAtMs = 0L
 
@@ -3105,6 +3111,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             }
                         }
                     }
+                }
+            }
+        }.also { job ->
+            job.invokeOnCompletion {
+                if (worldwideReleaseEpoch.isCurrent(generation)) {
+                    _canonicalWorldwideLoading.value = false
                 }
             }
         }
