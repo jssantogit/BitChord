@@ -11,7 +11,21 @@ import java.util.Locale
 internal data class CanonicalArtistPublicTopState(
     val artistMbid: String? = null,
     val rows: List<CanonicalCatalogSearchRow> = emptyList(),
+    /** Successful public fetch time, including a verified empty upstream chart. */
+    val fetchedAtMs: Long? = null,
 )
+
+/** A visible artist rank cannot outlive the shared public popularity TTL. */
+internal fun canonicalArtistPublicTopIsFresh(
+    artistMbid: String,
+    state: CanonicalArtistPublicTopState,
+    nowMs: Long,
+): Boolean {
+    val fetched = state.fetchedAtMs ?: return false
+    return artistMbid.equals(state.artistMbid, ignoreCase = true) &&
+        nowMs >= fetched && nowMs - fetched < 
+            com.music.bitchord.data.catalog.metadata.LISTENBRAINZ_PUBLIC_TTL_MS
+}
 
 private val PUBLIC_ARTIST_MBID =
     Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
