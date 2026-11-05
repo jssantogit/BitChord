@@ -16,11 +16,28 @@ private const val PERSONAL_UPSTREAM_TTL_MS = 30L * 24L * 60L * 60L * 1_000L
  * independently verified MusicBrainz Recording metadata are both available.
  */
 internal data class CanonicalPersonalRecommendationState(
+    val accountDigest: String? = null,
     val recordings: List<ListenBrainzRecordingRecommendation> = emptyList(),
     val verifiedRows: List<CanonicalCatalogSearchRow> = emptyList(),
     val fetchedAtMs: Long? = null,
     val upstreamUpdatedSeconds: Long? = null,
 )
+
+/** Opaque comparison only; never display or persist a listener's account token. */
+internal fun canonicalRecommendationAccountKey(token: String): String? {
+    if (token.isBlank()) return null
+    return java.security.MessageDigest.getInstance("SHA-256")
+        .digest(token.toByteArray(Charsets.UTF_8))
+        .joinToString("") { byte ->
+            (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+}
+
+internal fun canonicalRecommendationBelongsToToken(
+    state: CanonicalPersonalRecommendationState,
+    token: String,
+): Boolean = state.accountDigest != null &&
+    state.accountDigest == canonicalRecommendationAccountKey(token)
 
 internal fun canonicalPersonalRecommendationExpiresAtMs(
     state: CanonicalPersonalRecommendationState,
