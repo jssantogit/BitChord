@@ -2747,10 +2747,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
                 .matches(it)
         }
-        if (id != null && _canonicalArtistPublicTop.value.artistMbid == id &&
-            (_canonicalArtistPublicTop.value.rows.isNotEmpty() ||
+        if (id != null && (
+            canonicalArtistPublicTopIsFresh(
+                id, _canonicalArtistPublicTop.value, System.currentTimeMillis(),
+            ) || (_canonicalArtistPublicTop.value.artistMbid == id &&
                 artistPublicTopJob?.isActive == true)
-        ) return
+        )) return
         val generation = artistPublicTopEpoch.next()
         artistPublicTopJob?.cancel()
         _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(artistMbid = id)
@@ -2763,8 +2765,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 ListenBrainzArtistTopFetchResult.Unavailable
             }
-            val ranked = (popularity as? ListenBrainzArtistTopFetchResult.Success)
-                ?.recordings?.take(8).orEmpty()
+            val success = popularity as? ListenBrainzArtistTopFetchResult.Success
+            val ranked = success?.recordings?.take(8).orEmpty()
+            if (success != null && ranked.isEmpty() && artistPublicTopEpoch.isCurrent(generation) &&
+                _detailStack.value.lastOrNull()?.browseId
+                    ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
+            ) {
+                _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
+                    artistMbid = id, fetchedAtMs = success.fetchedAtMs,
+                )
+            }
             val verified = mutableMapOf<String, RecordingMetadataEnrichment>()
             for (candidate in ranked) {
                 currentCoroutineContext().ensureActive()
@@ -2786,11 +2796,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // Progressively publish only independently verified rows. Old
                 // requests cannot repaint another artist after navigation.
                 if (artistPublicTopEpoch.isCurrent(generation) &&
-                    _detailStack.value.lastOrNull()?.browseId == "catalog:ARTIST:$id"
+                    _detailStack.value.lastOrNull()?.browseId
+                        ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
                 ) {
+                    val rows = canonicalVerifiedArtistTopRows(id, ranked, verified)
                     _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
                         artistMbid = id,
-                        rows = canonicalVerifiedArtistTopRows(id, ranked, verified),
+                        rows = rows,
+                        // Retry later when public stats exist but MusicBrainz
+                        // identity/artist-credit validation could not finish.
+                        fetchedAtMs = success?.fetchedAtMs?.takeIf { rows.isNotEmpty() },
                     )
                 }
             }
