@@ -2733,13 +2733,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             AppSettings.scrobblingAvailable && AppSettings.listenBrainzEnabled.value &&
                 it.isNotBlank()
         }
-        val account = token?.let { secret ->
-            java.security.MessageDigest.getInstance("SHA-256")
-                .digest(secret.toByteArray(Charsets.UTF_8))
-                .joinToString("") { byte ->
-                    (byte.toInt() and 0xff).toString(16).padStart(2, '0')
-                }
-        }
+        val account = token?.let(::canonicalRecommendationAccountKey)
         if (account != personalRecommendationAccountDigest) {
             personalRecommendationEpoch.next()
             personalRecommendationJob?.cancel()
@@ -2801,6 +2795,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (stillCurrent()) {
                         _canonicalExplorePersonalRecommendations.value =
                             CanonicalPersonalRecommendationState(
+                                accountDigest = account,
                                 recordings = success.items,
                                 verifiedRows = rows,
                                 upstreamUpdatedSeconds = success.upstreamUpdatedSeconds,
@@ -2812,6 +2807,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val rows = canonicalVerifiedPersonalRecommendationRows(candidates, verified)
                 _canonicalExplorePersonalRecommendations.value =
                     CanonicalPersonalRecommendationState(
+                        accountDigest = account,
                         recordings = success.items,
                         verifiedRows = rows,
                         fetchedAtMs = success.fetchedAtMs.takeIf { rows.isNotEmpty() },
