@@ -336,6 +336,8 @@ import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
 import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
+import com.music.bitchord.ui.canonicalSitewideCommunityShelf
+import com.music.bitchord.ui.canonicalSitewideDiscoveryIsFresh
 import com.music.bitchord.ui.canonicalEditorialRowForCard
 import com.music.bitchord.ui.canonicalPublicPopularityCandidates
 import com.music.bitchord.ui.canonicalEditorialPlaybackSource
@@ -776,6 +778,7 @@ private fun BitChordApp(
     val canonicalTrendingMbids by viewModel.canonicalTrendingRecordingMbids.collectAsStateWithLifecycle()
     val canonicalTrendingLocalSongs by viewModel.canonicalTrendingLocalSongs.collectAsStateWithLifecycle()
     val canonicalExplorePublicPopularity by viewModel.canonicalExplorePublicPopularity.collectAsStateWithLifecycle()
+    val canonicalExploreSitewide by viewModel.canonicalExploreSitewide.collectAsStateWithLifecycle()
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
 
@@ -975,6 +978,7 @@ private fun BitChordApp(
     LaunchedEffect(selectedTab, popularityCandidateIds) {
         if (selectedTab == TAB_EXPLORE) {
             viewModel.loadCanonicalExplorePublicPopularity(cachedCanonicalRows)
+            if (popularityCandidateIds.isNotEmpty()) viewModel.loadCanonicalExploreSitewide()
         }
     }
     val canonicalFeedDate = remember {
@@ -1014,10 +1018,26 @@ private fun BitChordApp(
     }
     // Explore reuses the native shelf UI, but not Home's entire curated feed.
     // Keep Home's three editorial shelves untouched and make Explore release-first.
-    val canonicalCommunityShelf = remember(
-        cachedCanonicalRows, canonicalExplorePublicPopularity, canonicalCommunityHeading,
+    // The current community week chart leads only when its exact Recording
+    // MBIDs have catalog rows. Otherwise keep the existing all-time public
+    // evidence rather than suggesting that a chart with no matches is empty.
+    val canonicalWeeklyCommunityShelf = remember(
+        cachedCanonicalRows, canonicalExploreSitewide, canonicalCommunityHeading,
     ) {
-        canonicalPublicPopularityShelf(
+        if (canonicalSitewideDiscoveryIsFresh(
+                canonicalExploreSitewide, System.currentTimeMillis(),
+            )
+        ) canonicalSitewideCommunityShelf(
+            rows = cachedCanonicalRows,
+            rankings = canonicalExploreSitewide.recordings,
+            heading = canonicalCommunityHeading,
+        ) else null
+    }
+    val canonicalCommunityShelf = remember(
+        cachedCanonicalRows, canonicalExplorePublicPopularity,
+        canonicalWeeklyCommunityShelf, canonicalCommunityHeading,
+    ) {
+        canonicalWeeklyCommunityShelf ?: canonicalPublicPopularityShelf(
             rows = cachedCanonicalRows,
             evidence = canonicalExplorePublicPopularity,
             heading = canonicalCommunityHeading,
