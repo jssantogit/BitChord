@@ -7,6 +7,12 @@ import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import java.util.Locale
 
+/** UI may only render a rank for the exact currently opened artist identity. */
+internal data class CanonicalArtistPublicTopState(
+    val artistMbid: String? = null,
+    val rows: List<CanonicalCatalogSearchRow> = emptyList(),
+)
+
 private val PUBLIC_ARTIST_MBID =
     Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
