@@ -77,6 +77,14 @@ internal class ListenBrainzOutboxStore(private val file: File) {
         load().listens.filter { it.accountKey == accountKey }
     }
 
+    /** A persisted receipt means a late callback is already handled, not lost. */
+    fun isAcknowledged(occurrenceId: String, accountKey: String): Boolean =
+        synchronized(fileLock) {
+            load().acknowledged.any {
+                it.occurrenceId == occurrenceId && it.accountKey == accountKey
+            }
+        }
+
     fun remove(occurrenceId: String, accountKey: String): Boolean = synchronized(fileLock) {
         val current = load()
         val remaining = current.listens.filterNot {
