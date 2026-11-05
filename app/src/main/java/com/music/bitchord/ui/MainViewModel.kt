@@ -31,6 +31,8 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityClient
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityFetchResult
 import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopFetchResult
+import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideFetchResult
+import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRange
 import com.music.bitchord.data.catalog.metadata.MusicBrainzMetadataEnrichmentProvider
 import com.music.bitchord.data.catalog.metadata.MetadataLookupResult
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
@@ -327,6 +329,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val canonicalExplorePublicPopularity: StateFlow<List<ListenBrainzPopularityEvidence>> =
         _canonicalExplorePublicPopularity.asStateFlow()
     private val listenBrainzPopularityClient = ListenBrainzPopularityClient()
+    private val _canonicalExploreSitewide =
+        MutableStateFlow(CanonicalSitewideDiscoveryState())
+    internal val canonicalExploreSitewide: StateFlow<CanonicalSitewideDiscoveryState> =
+        _canonicalExploreSitewide.asStateFlow()
+    private val sitewideEpoch = DiscoveryRequestEpoch()
+    private var sitewideJob: Job? = null
+    @Volatile private var sitewideRetryAfterMs: Long = 0L
     private val explorePublicPopularityEpoch = DiscoveryRequestEpoch()
     private var explorePublicPopularityJob: Job? = null
     @Volatile private var explorePublicPopularityFreshBatch: Pair<List<String>, Long>? = null
@@ -2698,6 +2707,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * recordings, and only when Explore actually requests it. Public popularity
      * never changes personal Em alta, MediaAsset availability, or ratings.
      */
+    /**
+     * Public ListenBrainz sitewide week chart. It is only an identity ranking;
+     * rendering later intersects with actual MusicBrainz catalog rows.
+     * Missing, expired and unavailable data never become invented trends.
+     */
+    fun loadCanonicalExploreSitewide() {
+        val now = System.currentTimeMillis()
+        if (canonicalSitewideDiscoveryIsFresh(_canonicalExploreSitewide.value, now) ||
+            sitewideJob?.isActive == true || now < sitewideRetryAfterMs
+        ) return
+        val generation = sitewideEpoch.next()
+        sitewideJob?.cancel()
+        _canonicalExploreSitewide.value = CanonicalSitewideDiscoveryState()
+        sitewideJob = viewModelScope.launch(Dispatchers.IO) {
+            val response = try {
+                listenBrainzPopularityClient.sitewideRecordings(
+                    ListenBrainzSitewideRange.WEEK, count = 25,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ListenBrainzSitewideFetchResult.Unavailable
+            }
+            if (!sitewideEpoch.isCurrent(generation)) return@launch
+            val success = response as? ListenBrainzSitewideFetchResult.Success
+            if (success == null) {
+                sitewideRetryAfterMs = System.currentTimeMillis() + 5L * 60_000L
+                return@launch
+            }
+            sitewideRetryAfterMs = 0L
+            _canonicalExploreSitewide.value = CanonicalSitewideDiscoveryState(
+                range = success.range,
+                recordings = success.recordings,
+                fetchedAtMs = success.fetchedAtMs,
+                upstreamUpdatedAtSeconds = success.lastUpdatedSeconds,
+            )
+        }
+    }
+
     fun loadCanonicalExplorePublicPopularity(rows: List<CanonicalCatalogSearchRow>) {
         val ids = canonicalPublicPopularityCandidates(rows)
         val previous = explorePublicPopularityFreshBatch
