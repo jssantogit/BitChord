@@ -39,7 +39,7 @@ import org.jetbrains.compose.resources.stringResource
  * provider ID, stream URL or playback entitlement. Those belong to the source
  * adapter and its explicit onClick callback.
  */
-internal data class NativeSearchRowUi(
+data class NativeSearchRowUi(
     val title: String,
     val subtitle: String,
     val artworkUri: String?,
@@ -55,10 +55,11 @@ internal data class NativeSearchRowUi(
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun NativeSearchResultRow(
+fun NativeSearchResultRow(
     row: NativeSearchRowUi,
     onClick: (() -> Unit)?,
     onLongPress: (() -> Unit)? = null,
+    horizontalPadding: androidx.compose.ui.unit.Dp = PAGE_GUTTER,
 ) {
     Row(
         modifier = Modifier
@@ -67,7 +68,7 @@ internal fun NativeSearchResultRow(
                 Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
                     .contextClick(onLongPress)
             } else Modifier)
-            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
+            .padding(horizontal = horizontalPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(52.dp)) {
