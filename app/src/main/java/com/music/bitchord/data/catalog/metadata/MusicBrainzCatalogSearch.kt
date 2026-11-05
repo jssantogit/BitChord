@@ -199,8 +199,10 @@ internal class MusicBrainzCatalogSearch(
         if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized)) {
             return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
         }
+        val musicBrainzTag = if (normalized == "rnb") "r&b" else normalized
         return searchReleaseGroupsInternal(
-            "tag:$normalized AND (primarytype:album OR primarytype:ep OR primarytype:single)",
+            "tag:\\\"$musicBrainzTag\\\" AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
             limit, 0, fieldedQuery = true,
         )
     }
