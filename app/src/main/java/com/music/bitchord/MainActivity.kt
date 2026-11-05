@@ -784,6 +784,11 @@ private fun BitChordApp(
     val canonicalTrendingLocalSongs by viewModel.canonicalTrendingLocalSongs.collectAsStateWithLifecycle()
     val canonicalExplorePublicPopularity by viewModel.canonicalExplorePublicPopularity.collectAsStateWithLifecycle()
     val canonicalExploreSitewide by viewModel.canonicalExploreSitewide.collectAsStateWithLifecycle()
+    val canonicalWorldwideReleases by viewModel.canonicalWorldwideReleases.collectAsStateWithLifecycle()
+    val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
+    var activeCanonicalGenre by remember {
+        mutableStateOf<com.music.bitchord.ui.CanonicalExploreGenre?>(null)
+    }
     val canonicalPersonalRecommendations by viewModel.canonicalExplorePersonalRecommendations.collectAsStateWithLifecycle()
     val listenBrainzAccountEnabled by AppSettings.listenBrainzEnabled.collectAsStateWithLifecycle()
     val listenBrainzAccountToken by AppSettings.listenBrainzToken.collectAsStateWithLifecycle()
@@ -988,9 +993,12 @@ private fun BitChordApp(
         selectedTab, popularityCandidateIds,
         listenBrainzAccountEnabled, listenBrainzAccountToken,
     ) {
+        if (selectedTab == TAB_HOME || selectedTab == TAB_EXPLORE) {
+            viewModel.loadCanonicalWorldwideReleases()
+            viewModel.loadCanonicalExploreSitewide()
+        }
         if (selectedTab == TAB_EXPLORE) {
             viewModel.loadCanonicalExplorePublicPopularity(cachedCanonicalRows)
-            viewModel.loadCanonicalExploreSitewide()
             // Personal discovery requires opt-in and uses no playback fallback.
             viewModel.loadCanonicalPersonalRecommendations()
         }
@@ -1003,7 +1011,7 @@ private fun BitChordApp(
     // of media URIs. Recompute the native Home shelves only when their input
     // snapshot, date, or the user's locale actually changes.
     val canonicalHomeShelves = remember(
-        downloadedReleases, cachedCanonicalRows,
+        downloadedReleases, cachedCanonicalRows, canonicalWorldwideReleases,
         canonicalHomeLocalPicks, canonicalHomeRemotePicks,
         canonicalTrendingMbids, canonicalTrendingLocalSongs,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
@@ -1019,7 +1027,8 @@ private fun BitChordApp(
                     browseId = Downloads.pageIdFor(collection.id),
                 )
             },
-            metadata = cachedCanonicalRows,
+            metadata = (cachedCanonicalRows + canonicalWorldwideReleases)
+                .distinctBy { it.kind to it.musicBrainzId },
             localPicks = canonicalHomeLocalPicks,
             remotePicks = canonicalHomeRemotePicks,
             trendingRecordingMbids = canonicalTrendingMbids,
@@ -1117,31 +1126,60 @@ private fun BitChordApp(
             heading = canonicalPersonalHeading,
         ) else null
     }
+    val worldwideTrendingShelf = remember(
+        canonicalWeeklyCommunityShelf, canonicalTrendingHeading,
+    ) {
+        canonicalWeeklyCommunityShelf?.copy(title = canonicalTrendingHeading)
+    }
+    val canonicalHomeDisplayShelves = remember(
+        canonicalHomeShelves, canonicalWorldwideReleases,
+        canonicalPicksHeading, canonicalTrendingHeading,
+        worldwideTrendingShelf, canonicalFeedDate,
+    ) {
+        com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
+            localShelves = canonicalHomeShelves,
+            worldwideReleases = canonicalWorldwideReleases,
+            picksHeading = canonicalPicksHeading,
+            trendingHeading = canonicalTrendingHeading,
+            worldwideTrending = worldwideTrendingShelf,
+            todayIsoDate = canonicalFeedDate,
+        )
+    }
     val canonicalExploreFeedShelves = remember(
-        canonicalHomeShelves, canonicalReleasesHeading, canonicalTrendingHeading,
+        canonicalHomeDisplayShelves, canonicalReleasesHeading, canonicalTrendingHeading,
         canonicalCommunityShelf, canonicalPersonalShelf,
     ) {
         val base = canonicalExploreWithCommunityShelves(
-            homeShelves = canonicalHomeShelves,
+            homeShelves = canonicalHomeDisplayShelves,
             releasesHeading = canonicalReleasesHeading,
             trendingHeading = canonicalTrendingHeading,
             community = canonicalCommunityShelf,
         )
-        canonicalPersonalShelf?.let { base + it } ?: base
+        // Genres are routes into public MusicBrainz metadata and remain
+        // visible on a completely fresh or offline installation.
+        (canonicalPersonalShelf?.let { base + it } ?: base) +
+            com.music.bitchord.ui.canonicalExploreGenreShelf("Gêneros")
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
-        canonicalHomeShelves.isNotEmpty() -> UiState.Success(canonicalHomeShelves)
+        canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
         canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
-        canonicalDiscoveryCatalog is UiState.Error ->
-            UiState.Error((canonicalDiscoveryCatalog as UiState.Error).message)
-        else -> UiState.Error(stringResource(R.string.canonical_discovery_cache_empty))
+        else -> UiState.Error("Não foi possível carregar lançamentos públicos. Verifique a conexão e tente novamente.")
     }
     val canonicalExploreState: UiState<List<HomeShelf>> = when {
         canonicalExploreFeedShelves.isNotEmpty() -> UiState.Success(canonicalExploreFeedShelves)
-        canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
-        canonicalDiscoveryCatalog is UiState.Error ->
-            UiState.Error((canonicalDiscoveryCatalog as UiState.Error).message)
-        else -> UiState.Error(stringResource(R.string.canonical_discovery_cache_empty))
+        else -> UiState.Loading
+    }
+    val canonicalGenreState: UiState<List<HomeShelf>> = when (val genreState = canonicalGenreResults) {
+        is UiState.Loading -> UiState.Loading
+        is UiState.Error -> UiState.Error(genreState.message)
+        is UiState.Success -> {
+            val genre = activeCanonicalGenre
+            val shelf = genre?.let {
+                com.music.bitchord.ui.canonicalPublicGenreReleaseShelf(it, genreState.data)
+            }
+            if (shelf != null) UiState.Success(listOf(shelf))
+            else UiState.Error("Não encontramos lançamentos verificados para este gênero.")
+        }
     }
     // What a browse id is recorded under in Downloads.collections, when it names
     // a release downloaded whole — see BrowseTarget.downloadId. A downloaded
@@ -2016,7 +2054,12 @@ private fun BitChordApp(
     // RecordingId or a synthetic media item. Reuse the native recording shell.
     var communityMetadataRecording by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
     val onCanonicalShelfClick: (ShelfItem, String, PlaybackSourceType) -> Unit =
-        { item, shelfTitle, tabOrigin ->
+        click@{ item, shelfTitle, tabOrigin ->
+        com.music.bitchord.ui.canonicalExploreGenreForBrowseId(item.browseId)?.let { genre ->
+            activeCanonicalGenre = genre
+            viewModel.loadCanonicalGenre(genre.tag)
+            return@click
+        }
         val selectedLocal = canonicalHomeLocalPicks.firstOrNull {
             isPlayableLocalPick(it) && canonicalLocalPickCardId(it) == item.browseId
         }
@@ -2031,14 +2074,18 @@ private fun BitChordApp(
         val isPersonalRecommendation = canonicalCommunityCardIsMetadataOnly(
             tabOrigin, shelfTitle, canonicalPersonalHeading, item.browseId,
         )
-        val isMetadataOnly = isPublicCommunity || isPersonalRecommendation
+        val isWorldwideChart = tabOrigin == PlaybackSourceType.HOME &&
+            shelfTitle == canonicalTrendingHeading &&
+            worldwideTrendingShelf?.items?.any { it.browseId == item.browseId } == true
+        val isMetadataOnly = isPublicCommunity || isPersonalRecommendation || isWorldwideChart
         val cached = canonicalEditorialRowForCard(
             when {
                 isPersonalRecommendation ->
                     canonicalPersonalRecommendations.verifiedRows + cachedCanonicalRows
-                isPublicCommunity ->
+                isPublicCommunity || isWorldwideChart ->
                     canonicalExploreSitewide.verifiedRows + cachedCanonicalRows
-                else -> cachedCanonicalRows
+                else -> (canonicalGenreResults as? UiState.Success)?.data.orEmpty() +
+                    canonicalWorldwideReleases + cachedCanonicalRows
             },
             item.browseId,
         )
@@ -2713,6 +2760,9 @@ private fun BitChordApp(
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = communityMetadataRecording != null) { communityMetadataRecording = null }
+        BackHandler(enabled = activeCanonicalGenre != null && selectedTab == TAB_EXPLORE &&
+            detail == null && communityMetadataRecording == null
+        ) { activeCanonicalGenre = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
         BackHandler(enabled = unifiedLibraryCategory != null) {
             if (unifiedLibraryDetailOpen) unifiedLibraryBackToken++
@@ -3523,19 +3573,34 @@ private fun BitChordApp(
                             isPlaying = player.isPlaying,
                         )
                         TAB_EXPLORE -> HomeScreen(
-                            state = canonicalExploreState,
+                            state = if (activeCanonicalGenre != null) canonicalGenreState
+                                    else canonicalExploreState,
                             listState = exploreListState,
                             onItemClick = { item, heading ->
                                 onCanonicalShelfClick(
                                     item, heading, canonicalEditorialPlaybackSource(explore = true),
                                 )
                             },
-                            onRetry = viewModel::loadCanonicalDiscoveryCatalog,
+                            onRetry = {
+                                val genre = activeCanonicalGenre
+                                if (genre != null) viewModel.loadCanonicalGenre(genre.tag)
+                                else {
+                                    viewModel.loadCanonicalWorldwideReleases(force = true)
+                                    viewModel.loadCanonicalExploreSitewide()
+                                }
+                            },
                             refreshing = MainViewModel.Feed.EXPLORE in refreshing,
-                            onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
+                            onRefresh = {
+                                val genre = activeCanonicalGenre
+                                if (genre != null) viewModel.loadCanonicalGenre(genre.tag)
+                                else viewModel.refresh(MainViewModel.Feed.EXPLORE)
+                            },
                             pullState = explorePull,
                             contentPadding = listPadding,
-                            title = stringResource(R.string.explore),
+                            title = activeCanonicalGenre?.title ?: stringResource(R.string.explore),
+                            onBack = if (activeCanonicalGenre != null) {
+                                { activeCanonicalGenre = null }
+                            } else null,
                             signedIn = true,
                             leadHero = false,
                             currentSong = player.song,
