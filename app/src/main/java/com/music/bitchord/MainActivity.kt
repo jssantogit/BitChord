@@ -2645,9 +2645,11 @@ private fun BitChordApp(
                         // was live, hit, and changed nothing on screen.
                         showSettings -> "settings"
                         showReplay -> "replay"
+                        // A metadata-only recording opened from an artist
+                        // overlays that detail; Back restores the artist intact.
+                        communityMetadataRecording != null -> "community_recording:" + communityMetadataRecording!!.musicBrainzId
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
-                        communityMetadataRecording != null -> "community_recording:" + communityMetadataRecording!!.musicBrainzId
                         showCanonicalMyRatings -> "my_ratings"
                         unifiedLibraryCategory != null -> "unified_library"
                         // The wizard is pushed FROM the playlist category. It must win
@@ -3276,6 +3278,14 @@ private fun BitChordApp(
                                 continuationToken = latestPage?.continuation ?: page.continuation,
                             )
                         }
+                        val publicArtistMbid = page.browseId.takeIf {
+                            it.startsWith("catalog:ARTIST:")
+                        }?.removePrefix("catalog:ARTIST:")
+                        LaunchedEffect(page.browseId) {
+                            viewModel.loadCanonicalArtistPublicTop(publicArtistMbid)
+                        }
+                        val artistPublicTop by viewModel.canonicalArtistPublicTop
+                            .collectAsStateWithLifecycle()
                         DetailScreen(
                             page = page,
                             currentSong = player.song,
@@ -3355,6 +3365,14 @@ private fun BitChordApp(
                             } else emptyList(),
                             onCanonicalTrackPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
+                            },
+                            canonicalPublicTopTracks = if (publicArtistMbid != null &&
+                                artistPublicTop.artistMbid == publicArtistMbid
+                            ) artistPublicTop.rows else emptyList(),
+                            onCanonicalPublicTopOpen = { recording ->
+                                // Public popularity is metadata, never stream
+                                // proof. Open the existing read-only detail.
+                                communityMetadataRecording = recording
                             },
                             contentPadding = listPadding,
                         )
