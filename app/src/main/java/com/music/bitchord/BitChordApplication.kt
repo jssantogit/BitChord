@@ -142,6 +142,15 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         Diagnostics.span(DiagnosticCategory.STARTUP, "app_settings_init") {
             AppSettings.init(this, authStore)
         }
+        // Revive qualified listens after process death without blocking cold-start.
+        // WorkManager persists the actual network job and waits for connectivity.
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.recover(
+                    this@BitChordApplication,
+                )
+            }
+        }
         // Before anything resolves a track: an addon with `checkValidLossless`
         // is gated on this, and the gate reads "no" until it has looked.
         Diagnostics.span(DiagnosticCategory.STARTUP, "lossless_output_init") {
