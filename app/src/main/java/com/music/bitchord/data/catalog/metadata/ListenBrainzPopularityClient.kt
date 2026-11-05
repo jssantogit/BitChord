@@ -48,14 +48,18 @@ internal class KtorListenBrainzPopularityTransport(
         }
     },
 ) : ListenBrainzPopularityTransport {
-    override suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse {
+    override suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
+        provider = "listenbrainz",
+        endpoint = "recording_popularity",
+        status = { http: ListenBrainzPopularityHttpResponse -> http.status },
+    ) {
         val response = client.post("https://api.listenbrainz.org/1/popularity/recording") {
             contentType(ContentType.Application.Json)
             header(HttpHeaders.UserAgent,
                 "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)")
             setBody(Json.encodeToString(mapOf("recording_mbids" to recordingMbids)))
         }
-        return ListenBrainzPopularityHttpResponse(
+        ListenBrainzPopularityHttpResponse(
             status = response.status.value,
             body = if (response.status.value == 200) response.bodyAsText() else "",
             retryAfterSeconds = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull(),
@@ -64,12 +68,16 @@ internal class KtorListenBrainzPopularityTransport(
         )
     }
 
-    override suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse {
+    override suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
+        provider = "listenbrainz",
+        endpoint = "artist_top",
+        status = { http: ListenBrainzPopularityHttpResponse -> http.status },
+    ) {
         val response = client.get("https://api.listenbrainz.org/1/popularity/top-recordings-for-artist/$artistMbid") {
             header(HttpHeaders.UserAgent,
                 "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)")
         }
-        return ListenBrainzPopularityHttpResponse(
+        ListenBrainzPopularityHttpResponse(
             status = response.status.value,
             body = if (response.status.value == 200) response.bodyAsText() else "",
             retryAfterSeconds = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull(),
@@ -79,7 +87,11 @@ internal class KtorListenBrainzPopularityTransport(
     }
     override suspend fun sitewideRecordings(
         range: ListenBrainzSitewideRange, count: Int,
-    ): ListenBrainzPopularityHttpResponse {
+    ): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
+        provider = "listenbrainz",
+        endpoint = "sitewide_week",
+        status = { http: ListenBrainzPopularityHttpResponse -> http.status },
+    ) {
         val response = client.get("https://api.listenbrainz.org/1/stats/sitewide/recordings") {
             header(HttpHeaders.UserAgent,
                 "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)")
@@ -87,7 +99,7 @@ internal class KtorListenBrainzPopularityTransport(
             parameter("count", count)
             parameter("offset", 0)
         }
-        return ListenBrainzPopularityHttpResponse(
+        ListenBrainzPopularityHttpResponse(
             status = response.status.value,
             body = if (response.status.value == 200) response.bodyAsText() else "",
             retryAfterSeconds = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull(),
