@@ -436,7 +436,9 @@ internal fun canonicalExploreShelves(
     if (releases != null) return listOf(releases)
     val trending = homeShelves.firstOrNull { it.title == trendingHeading && it.items.isNotEmpty() }
     if (trending != null) return listOf(trending)
-    return homeShelves.firstOrNull { it.items.isNotEmpty() }?.let { listOf(it) } ?: emptyList()
+    return homeShelves.firstOrNull {
+        it.title != releasesHeading && it.items.isNotEmpty()
+    }?.let { listOf(it) } ?: emptyList()
 }
 
 /** Feed sections share rendering, but listening events retain their actual tab provenance. */
