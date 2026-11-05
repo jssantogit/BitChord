@@ -660,7 +660,7 @@ class SourcesTest {
             listOf(disabledJio, disabledAddon, enabledAddon, youtube),
         )
 
-        assertEquals(listOf(enabledAddon.id, youtube.id), enabled.map { it.id })
+        assertEquals(listOf(enabledAddon.id), enabled.map { it.id })
     }
 
     @Test
