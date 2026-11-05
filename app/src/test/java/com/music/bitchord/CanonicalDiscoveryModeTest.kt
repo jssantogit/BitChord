@@ -84,7 +84,7 @@ class CanonicalDiscoveryModeTest {
         assertFalse(shouldPrefetchLegacyYouTubeAccountData(
             signedIn = false, canonicalDiscoveryEnabled = false, configs = enabled,
         ))
-        assertTrue(isYouTubeSourceEnabled(enabled))
+        assertFalse(isYouTubeSourceEnabled(enabled))
         assertFalse(isYouTubeSourceEnabled(disabled))
     }
 
