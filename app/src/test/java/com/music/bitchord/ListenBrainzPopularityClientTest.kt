@@ -69,6 +69,19 @@ class ListenBrainzPopularityClientTest {
         assertEquals(2, transport.calls)
     }
 
+    @Test fun separateCallersShareOneSecondRequestSpacing() = runBlocking {
+        var clock = 0L
+        val starts = mutableListOf<Long>()
+        val limiter = ListenBrainzRateLimiter(
+            nowMillis = { clock },
+            waitMillis = { clock += it },
+        )
+        limiter.run { starts += clock }
+        limiter.run { starts += clock }
+        limiter.run { starts += clock }
+        assertEquals(listOf(0L, 1_000L, 2_000L), starts)
+    }
+
     @Test fun badResponseAndInvalidIdsFailClosedAndNeverCache() = runBlocking {
         val transport = FakeTransport(mutableListOf(
             ListenBrainzPopularityHttpResponse(200,
