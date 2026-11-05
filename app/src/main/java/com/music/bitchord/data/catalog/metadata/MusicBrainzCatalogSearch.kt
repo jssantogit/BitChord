@@ -201,7 +201,7 @@ internal class MusicBrainzCatalogSearch(
         }
         val musicBrainzTag = if (normalized == "rnb") "r&b" else normalized
         return searchReleaseGroupsInternal(
-            "tag:\\\"$musicBrainzTag\\\" AND " +
+            "tag:\"$musicBrainzTag\" AND " +
                 "(primarytype:album OR primarytype:ep OR primarytype:single)",
             limit, 0, fieldedQuery = true,
         )
