@@ -8,6 +8,7 @@ import com.music.bitchord.ui.AppUiHost
 import com.music.bitchord.data.settings.LibrarySort
 import com.music.bitchord.data.settings.LibraryViewType
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -119,6 +120,7 @@ class HomeHeaderTest {
      * The official Home/Explore surface is one native component. Both tabs
      * retain their own heading even when the catalogue has no loaded shelves.
      */
+    @OptIn(ExperimentalMaterial3Api::class)
     @Test fun canonicalHomeAndExploreReuseNativeSurfaceWithoutLegacySignIn() {
         AppUi.install(object : AppUiHost {
             override val swipeToPlayNext = MutableStateFlow(false)
