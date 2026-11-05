@@ -325,6 +325,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val listenBrainzPopularityClient = ListenBrainzPopularityClient()
     private val explorePublicPopularityEpoch = DiscoveryRequestEpoch()
     private var explorePublicPopularityJob: Job? = null
+    @Volatile private var explorePublicPopularityFreshBatch: Pair<List<String>, Long>? = null
+    @Volatile private var explorePublicPopularityLoadingBatch: List<String>? = null
 
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
@@ -2686,14 +2688,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun loadCanonicalExplorePublicPopularity(rows: List<CanonicalCatalogSearchRow>) {
         val ids = canonicalPublicPopularityCandidates(rows)
+        val previous = explorePublicPopularityFreshBatch
+        if (canonicalPublicPopularityCacheIsFresh(
+                requested = ids, previous = previous?.first,
+                fetchedAtMs = previous?.second, nowMs = System.currentTimeMillis(),
+            ) || (ids.isNotEmpty() && ids == explorePublicPopularityLoadingBatch &&
+                explorePublicPopularityJob?.isActive == true)
+        ) return
         val generation = explorePublicPopularityEpoch.next()
         explorePublicPopularityJob?.cancel()
+        explorePublicPopularityLoadingBatch = if (ids.isEmpty()) null else ids
         if (ids.isEmpty()) {
+            explorePublicPopularityFreshBatch = null
             _canonicalExplorePublicPopularity.value = emptyList()
             return
         }
-        // When the catalog page changes, do not leave a previous page's rank on
-        // screen while the new MBID batch is still being checked.
+        // A changed MBID set invalidates previous ranks. For the exact same,
+        // fresh batch the fast path above retains UI and avoids repeated calls.
         _canonicalExplorePublicPopularity.value = emptyList()
         explorePublicPopularityJob = viewModelScope.launch(Dispatchers.IO) {
             val result = try {
@@ -2704,9 +2715,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ListenBrainzPopularityFetchResult.Unavailable
             }
             if (explorePublicPopularityEpoch.isCurrent(generation)) {
-                _canonicalExplorePublicPopularity.value =
-                    (result as? ListenBrainzPopularityFetchResult.Success)
-                        ?.observations.orEmpty()
+                val success = result as? ListenBrainzPopularityFetchResult.Success
+                explorePublicPopularityFreshBatch =
+                    success?.let { ids to it.fetchedAtMs }
+                explorePublicPopularityLoadingBatch = null
+                _canonicalExplorePublicPopularity.value = success?.observations.orEmpty()
             }
         }
     }
