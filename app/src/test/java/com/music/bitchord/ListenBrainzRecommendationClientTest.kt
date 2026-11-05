@@ -54,6 +54,26 @@ class ListenBrainzRecommendationClientTest {
         assertEquals(1, transport.recommendations) // cached, no repeat network
     }
 
+    @Test fun noRecommendationsAreNegativelyCachedForFifteenMinutesPerAccount() = runBlocking {
+        var time = now
+        val transport = FakeTransport().apply { responseCode = 204; body = "" }
+        val client = ListenBrainzRecommendationClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { time }, waitMillis = {}),
+            nowMillis = { time }, retryDelay = {},
+        )
+        assertEquals(ListenBrainzRecommendationFetchResult.NoRecommendations, client.recordings("first", 10))
+        assertEquals(ListenBrainzRecommendationFetchResult.NoRecommendations, client.recordings("first", 10))
+        assertEquals(1, transport.validates)
+        assertEquals(1, transport.recommendations)
+
+        // No model for one account must not suppress the other account's discovery.
+        assertEquals(ListenBrainzRecommendationFetchResult.NoRecommendations, client.recordings("second", 10))
+        assertEquals(2, transport.recommendations)
+        time += 15L * 60L * 1_000L
+        assertEquals(ListenBrainzRecommendationFetchResult.NoRecommendations, client.recordings("second", 10))
+        assertEquals(3, transport.recommendations)
+    }
+
     @Test fun ungeneratedRecommendationsAreDistinctFromMalformedContent() = runBlocking {
         val transport = FakeTransport().apply { responseCode = 204; body = "" }
         val client = ListenBrainzRecommendationClient(
