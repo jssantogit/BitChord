@@ -4582,116 +4582,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * A session lifted out of the in-app browser — a fresh sign-in, or the same
-     * login now pointed at a different channel.
-     *
-     * One path for both because they differ in exactly one thing: whether the
-     * cookie is new. What follows — adopt the identity the captured page
-     * reported, remember it, and refetch everything that belongs to a listener
-     * — is the same work either way.
+     * Compatibility entrypoint for a retired YouTube Music web session.
+     * Existing archived session records remain readable, but new cookies are
+     * neither verified against Innertube nor persisted by this route.
      */
     fun onWebSession(
-        session: CapturedSession,
-        mode: WebSessionMode,
+        @Suppress("UNUSED_PARAMETER") session: CapturedSession,
+        @Suppress("UNUSED_PARAMETER") mode: WebSessionMode,
         onComplete: (Boolean) -> Unit = {},
     ) {
-        if (!session.loggedIn) {
-            onComplete(false)
-            return
-        }
-        val oldAccountId = _activeAccountId.value
-        val oldProfileId = _activeProfileId.value
-        viewModelScope.launch {
-            // Validate the exact cookie/profile pair before writing any of it.
-            // The old implementation persisted first and unconditionally set
-            // signedIn=true; a half-finished channel chooser therefore became
-            // a durable broken "Personal" account.
-            Innertube.cookie = session.cookie
-            Innertube.adoptSessionScope(
-                pageId = session.pageId,
-                dataSyncId = session.dataSyncId,
-                authUser = session.authUser,
-                visitorData = session.visitorData,
-                clientVersion = session.clientVersion,
-                loggedIn = true,
-            )
-            Innertube.selectChannel(session.pageId, session.dataSyncId, session.authUser)
-
-            val account = withTimeoutOrNull(20_000L) {
-                var result = YtMusicRepository.account()
-                if (result.isFailure) {
-                    delay(750L)
-                    result = YtMusicRepository.account()
-                }
-                result.getOrNull()
-            }
-            if (account == null) {
-                restoreActiveSession(oldAccountId, oldProfileId)
-                onComplete(false)
-                return@launch
-            }
-
-            // A channel switch is another identity under the same Google
-            // login, never a new Google account. For a fresh sign-in, matching
-            // a non-empty email upgrades the existing entry instead of adding
-            // a duplicate after cookies rotate.
-            val accountId = when (mode) {
-                WebSessionMode.SWITCH_CHANNEL -> oldAccountId
-                WebSessionMode.SIGN_IN -> authStore.sessions.firstOrNull {
-                    account.email.isNotBlank() && it.email.equals(account.email, ignoreCase = true)
-                }?.accountId ?: sessionId(session.cookie, null)
-            }
-            if (accountId == null) {
-                restoreActiveSession(oldAccountId, oldProfileId)
-                onComplete(false)
-                return@launch
-            }
-            val previous = authStore.sessions.firstOrNull { it.accountId == accountId }
-            val selectedProfileId = profileId(session.pageId, session.dataSyncId, account.name)
-            val profile = YouTubeProfile(
-                profileId = selectedProfileId,
-                name = account.name,
-                handle = account.email,
-                avatar = account.thumbnailUrl,
-                pageId = session.pageId,
-                dataSyncId = session.dataSyncId,
-                authUser = session.authUser,
-                isBrandAccount = session.pageId != null,
-            )
-            val hasRealIdentity = profile.pageId != null || profile.dataSyncId != null
-            val profiles = previous?.profiles.orEmpty().filterNot { known ->
-                known.profileId == profile.profileId ||
-                    (hasRealIdentity && known.profileId.startsWith("profile:"))
-            } + profile
-            val stored = GoogleAccountSession(
-                accountId = accountId,
-                cookie = session.cookie,
-                name = account.name,
-                email = account.email,
-                profiles = profiles,
-                activeProfileId = profile.profileId,
-            )
-
-            val wasSignedIn = _signedIn.value
-            if (wasSignedIn) cacheCurrentListener()
-            authStore.upsertSession(stored)
-            authStore.cookie = session.cookie // legacy compatibility only
-            _googleAccounts.value = authStore.sessions
-            _activeAccountId.value = accountId
-            _activeProfileId.value = profile.profileId
-            _selectedChannelKey.value = profile.profileId
-            _selectedChannelName.value = account.name
-            _account.value = account
-            _channels.value = emptyList()
-            _signedIn.value = true
-
-            // Every resolver verdict and personalised page belongs to the
-            // identity that was active before validation succeeded.
-                if (wasSignedIn) clearListenerState()
-            reloadForAccount()
-            loadChannels(force = true)
-            onComplete(true)
-        }
+        onComplete(false)
     }
 
     /** Put request signing back exactly as it was after a rejected candidate. */
