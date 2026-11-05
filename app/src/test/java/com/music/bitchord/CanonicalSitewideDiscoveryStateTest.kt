@@ -4,11 +4,40 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRange
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
 import com.music.bitchord.ui.CanonicalSitewideDiscoveryState
 import com.music.bitchord.ui.canonicalSitewideDiscoveryIsFresh
+import com.music.bitchord.ui.canonicalSitewideDiscoveryExpiresAtMs
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalSitewideDiscoveryStateTest {
+    @Test fun expiryUsesEarliestOfCacheTtlAndUpstreamAge() {
+        val now = 1_800_000_000_000L
+        val day = 24L * 60L * 60L * 1_000L
+        val state = CanonicalSitewideDiscoveryState(
+            range = ListenBrainzSitewideRange.WEEK,
+            fetchedAtMs = now,
+            upstreamUpdatedAtSeconds = (now - 7L * day) / 1_000L,
+        )
+        assertTrue(canonicalSitewideDiscoveryIsFresh(state, now))
+        org.junit.Assert.assertEquals(
+            now + 6L * 60L * 60L * 1_000L,
+            canonicalSitewideDiscoveryExpiresAtMs(state),
+        )
+        val nearlyOutdated = state.copy(
+            upstreamUpdatedAtSeconds = (now - 14L * day + 120_000L) / 1_000L,
+        )
+        org.junit.Assert.assertEquals(
+            now + 120_000L,
+            canonicalSitewideDiscoveryExpiresAtMs(nearlyOutdated),
+        )
+        org.junit.Assert.assertEquals(null, canonicalSitewideDiscoveryExpiresAtMs(
+            state.copy(fetchedAtMs = null),
+        ))
+        org.junit.Assert.assertEquals(null, canonicalSitewideDiscoveryExpiresAtMs(
+            state.copy(upstreamUpdatedAtSeconds = null),
+        ))
+    }
+
     @Test fun onlyVerifiedFreshWeeklyObservationsCanDriveExplore() {
         val example = CanonicalSitewideDiscoveryState(
             range = ListenBrainzSitewideRange.WEEK,
