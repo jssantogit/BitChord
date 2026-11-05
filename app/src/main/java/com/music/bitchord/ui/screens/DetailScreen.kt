@@ -364,7 +364,7 @@ fun DetailScreen(
         onCanonicalPublicTopOpen != null
     ) canonicalPublicTopTracks.filter {
         it.kind == CanonicalSearchKind.RECORDING &&
-            it.artistScopeMbid == publicArtistMbid
+            it.artistScopeMbid?.equals(publicArtistMbid, ignoreCase = true) == true
     } else emptyList()
     val artistVisibleSections = nativeArtistVisibleSections(
         NativeArtistSectionEvidence(
