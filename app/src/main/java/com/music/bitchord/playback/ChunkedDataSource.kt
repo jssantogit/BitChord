@@ -9,7 +9,6 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.TransferListener
-import com.music.bitchord.data.innertube.PlayerClient
 import java.io.InterruptedIOException
 
 /**
@@ -38,7 +37,7 @@ import java.io.InterruptedIOException
  *
  * Transparent to everything above it. [CacheDataSource][androidx.media3.datasource.cache.CacheDataSource]
  * sees one continuous stream of the length it asked for. Bounded requests are
- * split too, so no caller can exceed [PlayerClient.rangeBytesFor].
+ * split too, so no caller can exceed the configured chunk size.
  */
 @UnstableApi
 class ChunkedDataSource(
@@ -101,7 +100,7 @@ class ChunkedDataSource(
             minOf(total, position + dataSpec.length)
         }
         bytesRemaining = (end - position).coerceAtLeast(0L)
-        rangeBytes = minOf(chunkBytes, PlayerClient.rangeBytesFor(dataSpec.uri.toString()))
+        rangeBytes = chunkBytes
         if (bytesRemaining > 0) openChunk()
         return bytesRemaining
     }
