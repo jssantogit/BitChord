@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Cached
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -128,6 +129,7 @@ fun HomeScreen(
     contentPadding: PaddingValues,
     /** The page's heading, or null for none — the desktop's pages carry no heading. */
     title: String?,
+    onBack: (() -> Unit)? = null,
     headerActions: List<HomeHeaderAction> = emptyList(),
     signedIn: Boolean = true,
     onSignIn: (() -> Unit)? = null,
@@ -196,7 +198,9 @@ fun HomeScreen(
             },
         ) {
             if (title != null) {
-                item(key = "home-title") { HomeTitle(title, actions = headerActions, trailing = headerTrailing) }
+                item(key = "home-title") {
+                    HomeTitle(title, actions = headerActions, onBack = onBack, trailing = headerTrailing)
+                }
             }
             if (!signedIn && onSignIn != null) {
                 item {
@@ -532,6 +536,7 @@ fun HomeTitle(
     actions: List<HomeHeaderAction> = emptyList(),
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
@@ -540,6 +545,11 @@ fun HomeTitle(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.testTag("home-back")) {
+                Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+            }
+        }
         Text(
             text = title,
             modifier = Modifier.weight(1f).testTag("home-title"),
@@ -1094,7 +1104,33 @@ internal fun ShelfCard(
                 icon = Icons.Rounded.Storage,
             )
             else -> {
-                Box(
+                if (item.browseId?.startsWith("catalog:GENRE:") == true) {
+                    // Genre is a navigation category. Its typography is
+                    // intentional artwork, not a fabricated release sleeve.
+                    val palettes = listOf(
+                        listOf(Color(0xFF412A82), Color(0xFF7B3B8E)),
+                        listOf(Color(0xFF135960), Color(0xFF178A7C)),
+                        listOf(Color(0xFF803B33), Color(0xFFBB6C41)),
+                        listOf(Color(0xFF1C4279), Color(0xFF436CB6)),
+                    )
+                    val index = (item.browseId.orEmpty().hashCode() and Int.MAX_VALUE) % palettes.size
+                    Box(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Brush.linearGradient(palettes[index]))
+                            .testTag("explore-genre-card"),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(18.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                } else Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
@@ -1102,12 +1138,31 @@ internal fun ShelfCard(
                         .thumbnailBorder(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
-                    AsyncImage(
-                        model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
-                        contentDescription = null,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    if (item.thumbnailUrl.isNullOrBlank() &&
+                        item.browseId?.startsWith("catalog:RECORDING:") == true
+                    ) {
+                        // Rankings may have no release association. Display a
+                        // recognisable metadata glyph rather than a blank tile
+                        // or an inferred album cover.
+                        Box(
+                            modifier = Modifier.fillMaxSize()
+                                .background(Brush.linearGradient(
+                                    listOf(Color(0xFF222433), Color(0xFF374153)),
+                                )),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Rounded.LibraryMusic, contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.72f),
+                                modifier = Modifier.size(46.dp))
+                        }
+                    } else {
+                        AsyncImage(
+                            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
                 }
             }
