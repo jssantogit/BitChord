@@ -237,16 +237,17 @@ fun TvSongActionMenuDialog(
 
 private enum class SongSheet { Actions, Playlist, Sleep, Equalizer }
 
-/**
- * A station seeded from [song], as the phone builds one: YouTube's radio for
- * it, with the song itself first. If it's already the one playing, it keeps
- * playing and only the rest of the queue is replaced.
- */
-private suspend fun MediaController.startStation(song: Song) {
-    val related = YtMusicRepository.radio(song.videoId).getOrNull()
-        ?.filterNot { it.videoId == song.videoId }
-        ?: return
-     }
+/** Picks one of the account's playlists for the song, or names a new one for it. */
+@Composable
+fun TvAddToPlaylistDialog(
+    song: Song,
+    viewModel: MainViewModel,
+    onDismiss: () -> Unit,
+) {
+    val playlists by viewModel.playlists.collectAsState()
+    val loading by viewModel.playlistsLoading.collectAsState()
+    var creating by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
     var result by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) { if (playlists.isEmpty()) viewModel.loadPlaylists() }
 
