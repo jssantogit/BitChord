@@ -43,9 +43,19 @@ internal data class PendingListenBrainzListen(
  */
 internal class ListenBrainzOutboxStore(private val file: File) {
     @Serializable
+    private data class AcknowledgedOccurrence(
+        val occurrenceId: String,
+        val accountKey: String,
+    )
+
+    // Backward-compatible v1 extension: older outbox files simply have no
+    // acknowledgements. Retaining bounded receipts prevents a late duplicate
+    // callback from replaying an already accepted occurrence after restart.
+    @Serializable
     private data class Envelope(
         val version: Int = 1,
         val listens: List<PendingListenBrainzListen> = emptyList(),
+        val acknowledged: List<AcknowledgedOccurrence> = emptyList(),
     )
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
@@ -53,47 +63,61 @@ internal class ListenBrainzOutboxStore(private val file: File) {
     fun enqueue(entry: PendingListenBrainzListen): Boolean = synchronized(fileLock) {
         if (!entry.isQualified()) return@synchronized false
         val current = load()
-        if (current.any { it.occurrenceId == entry.occurrenceId }) return@synchronized false
-        if (current.size >= MAX_PENDING) return@synchronized false
-        write(current + entry)
+        if (current.listens.any { it.occurrenceId == entry.occurrenceId &&
+                it.accountKey == entry.accountKey } ||
+            current.acknowledged.any { it.occurrenceId == entry.occurrenceId &&
+                it.accountKey == entry.accountKey }
+        ) return@synchronized false
+        if (current.listens.size >= MAX_PENDING) return@synchronized false
+        write(current.copy(listens = current.listens + entry))
         true
     }
 
     fun pending(accountKey: String): List<PendingListenBrainzListen> = synchronized(fileLock) {
-        load().filter { it.accountKey == accountKey }
+        load().listens.filter { it.accountKey == accountKey }
     }
 
     fun remove(occurrenceId: String, accountKey: String): Boolean = synchronized(fileLock) {
         val current = load()
-        val remaining = current.filterNot { it.occurrenceId == occurrenceId && it.accountKey == accountKey }
-        if (remaining.size == current.size) return@synchronized false
-        write(remaining)
+        val remaining = current.listens.filterNot {
+            it.occurrenceId == occurrenceId && it.accountKey == accountKey
+        }
+        if (remaining.size == current.listens.size) return@synchronized false
+        val receipt = AcknowledgedOccurrence(occurrenceId, accountKey)
+        write(current.copy(
+            listens = remaining,
+            acknowledged = (current.acknowledged.filterNot { it == receipt } + receipt)
+                .takeLast(MAX_ACKNOWLEDGED),
+        ))
         true
     }
 
     /** Privacy: do not silently replay an old account's listens using a new token. */
     fun keepOnlyAccount(accountKey: String) = synchronized(fileLock) {
         val current = load()
-        val kept = current.filter { it.accountKey == accountKey }
-        if (current.size != kept.size) write(kept)
+        val kept = current.listens.filter { it.accountKey == accountKey }
+        val receipts = current.acknowledged.filter { it.accountKey == accountKey }
+        if (current.listens.size != kept.size ||
+            current.acknowledged.size != receipts.size
+        ) write(current.copy(listens = kept, acknowledged = receipts))
     }
 
     fun clear() = synchronized(fileLock) {
-        write(emptyList())
+        write(Envelope())
     }
 
-    private fun load(): List<PendingListenBrainzListen> {
-        if (!file.exists()) return emptyList()
+    private fun load(): Envelope {
+        if (!file.exists()) return Envelope()
         val state = json.decodeFromString<Envelope>(file.readText(Charsets.UTF_8))
         require(state.version == 1) { "Unsupported ListenBrainz outbox version" }
-        return state.listens
+        return state
     }
 
-    private fun write(listens: List<PendingListenBrainzListen>) {
+    private fun write(state: Envelope) {
         val folder = file.parentFile ?: error("ListenBrainz outbox requires a private directory")
         check(folder.isDirectory || folder.mkdirs()) { "Failed to create ListenBrainz outbox directory" }
         val temp = File(folder, file.name + ".new")
-        val content = json.encodeToString(Envelope(listens = listens)).toByteArray(Charsets.UTF_8)
+        val content = json.encodeToString(state).toByteArray(Charsets.UTF_8)
         // MAX_PENDING and the per-field limits cap this file to a modest size.
         FileOutputStream(temp).use { out ->
             out.write(content)
@@ -111,6 +135,7 @@ internal class ListenBrainzOutboxStore(private val file: File) {
 
     private companion object {
         const val MAX_PENDING = 512
+        const val MAX_ACKNOWLEDGED = 1_024
         val fileLock = Any()
     }
 }
