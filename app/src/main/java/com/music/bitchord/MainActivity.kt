@@ -331,6 +331,7 @@ import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
+import com.music.bitchord.ui.canonicalEditorialPlaybackSource
 import com.music.bitchord.ui.canonicalLocalPickCardId
 import com.music.bitchord.ui.canonicalRemotePickCardId
 import com.music.bitchord.ui.isPlayableLocalPick
@@ -1886,7 +1887,8 @@ private fun BitChordApp(
         selectedTab = TAB_SEARCH
         searchFocusRequested = true
     }
-    val onCanonicalShelfClick: (ShelfItem, String) -> Unit = { item, shelfTitle ->
+    val onCanonicalShelfClick: (ShelfItem, String, PlaybackSourceType) -> Unit =
+        { item, shelfTitle, tabOrigin ->
         val selectedLocal = canonicalHomeLocalPicks.firstOrNull {
             isPlayableLocalPick(it) && canonicalLocalPickCardId(it) == item.browseId
         }
@@ -1899,7 +1901,7 @@ private fun BitChordApp(
         if (selectedLocal != null) {
             playFrom(
                 listOf(selectedLocal), 0,
-                QueueSource(shelfTitle, PlaybackSourceType.HOME),
+                QueueSource(shelfTitle, tabOrigin),
             )
         } else if (selectedRemote != null) {
             controller?.playCanonicalRemote(
@@ -3315,7 +3317,11 @@ private fun BitChordApp(
                         TAB_HOME -> HomeScreen(
                             state = canonicalHomeState,
                             listState = homeListState,
-                            onItemClick = onCanonicalShelfClick,
+                            onItemClick = { item, heading ->
+                                onCanonicalShelfClick(
+                                    item, heading, canonicalEditorialPlaybackSource(explore = false),
+                                )
+                            },
                             onRetry = viewModel::loadCanonicalDiscoveryCatalog,
                             refreshing = MainViewModel.Feed.HOME in refreshing,
                             onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
@@ -3330,7 +3336,11 @@ private fun BitChordApp(
                         TAB_EXPLORE -> HomeScreen(
                             state = canonicalExploreState,
                             listState = exploreListState,
-                            onItemClick = onCanonicalShelfClick,
+                            onItemClick = { item, heading ->
+                                onCanonicalShelfClick(
+                                    item, heading, canonicalEditorialPlaybackSource(explore = true),
+                                )
+                            },
                             onRetry = viewModel::loadCanonicalDiscoveryCatalog,
                             refreshing = MainViewModel.Feed.EXPLORE in refreshing,
                             onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
