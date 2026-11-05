@@ -3367,7 +3367,7 @@ private fun BitChordApp(
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },
                             canonicalPublicTopTracks = if (publicArtistMbid != null &&
-                                artistPublicTop.artistMbid == publicArtistMbid
+                                artistPublicTop.artistMbid?.equals(publicArtistMbid, ignoreCase = true) == true
                             ) artistPublicTop.rows else emptyList(),
                             onCanonicalPublicTopOpen = { recording ->
                                 // Public popularity is metadata, never stream
