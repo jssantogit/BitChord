@@ -7,6 +7,9 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityFetchResul
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityHttpResponse
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityTransport
 import com.music.bitchord.data.catalog.metadata.ListenBrainzRateLimiter
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -133,6 +136,68 @@ class ListenBrainzPopularityClientTest {
         assertEquals(listOf(4_000L), waits)
         assertEquals(2, transport.calls)
         assertEquals(4_000L, clock)
+    }
+
+    @Test fun reorderedExactMbidBatchReusesCacheWithoutChangingCallerOrder() = runBlocking {
+        val body = """[{"recording_mbid":"$a","total_listen_count":10,"total_user_count":3},
+            {"recording_mbid":"$b","total_listen_count":20,"total_user_count":4}]"""
+        val transport = FakeTransport(mutableListOf(ListenBrainzPopularityHttpResponse(200, body)))
+        val client = ListenBrainzPopularityClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { 0L }, waitMillis = {}),
+            nowMillis = { 500L },
+        )
+        val first = client.recordingPopularity(listOf(b, a))
+            as ListenBrainzPopularityFetchResult.Success
+        val second = client.recordingPopularity(listOf(a, b))
+            as ListenBrainzPopularityFetchResult.Success
+        fun ids(result: ListenBrainzPopularityFetchResult.Success) =
+            result.observations.map {
+                when (it) {
+                    is ListenBrainzPopularityEvidence.Known -> it.recordingMbid
+                    is ListenBrainzPopularityEvidence.Unknown -> it.recordingMbid
+                }
+            }
+        assertEquals(listOf(b, a), ids(first))
+        assertEquals(listOf(a, b), ids(second))
+        assertEquals(true, second.fromCache)
+        assertEquals(1, transport.calls)
+    }
+
+    @Test fun concurrentIdenticalPopularityRequestsShareOneNetworkFetch() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val releaseFirst = CompletableDeferred<Unit>()
+        var calls = 0
+        val response = ListenBrainzPopularityHttpResponse(
+            200, """[{"recording_mbid":"$a","total_listen_count":25,"total_user_count":5}]""",
+        )
+        val transport = object : ListenBrainzPopularityTransport {
+            override suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse {
+                calls++
+                if (calls == 1) {
+                    entered.complete(Unit)
+                    releaseFirst.await()
+                }
+                return response
+            }
+            override suspend fun topRecordingsForArtist(artistMbid: String) = response
+        }
+        val client = ListenBrainzPopularityClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { 0L }, waitMillis = {}),
+            nowMillis = { 100L },
+        )
+        val one = async(start = CoroutineStart.UNDISPATCHED) {
+            client.recordingPopularity(listOf(a))
+        }
+        entered.await()
+        val two = async(start = CoroutineStart.UNDISPATCHED) {
+            client.recordingPopularity(listOf(a))
+        }
+        releaseFirst.complete(Unit)
+        val first = one.await() as ListenBrainzPopularityFetchResult.Success
+        val second = two.await() as ListenBrainzPopularityFetchResult.Success
+        assertEquals(false, first.fromCache)
+        assertEquals(true, second.fromCache)
+        assertEquals(1, calls)
     }
 
     @Test fun badResponseAndInvalidIdsFailClosedAndNeverCache() = runBlocking {
