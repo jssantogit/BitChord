@@ -24,9 +24,8 @@ class ProviderLyricsTest {
             LyricsSource.BETTER_LYRICS_PORTATO,
             LyricsSource.PAXSENIX_SPOTIFY,
             LyricsSource.PAXSENIX_MUSIXMATCH,
-            LyricsSource.YOUTUBE_TRANSCRIPT,
-            LyricsSource.YOUTUBE_MUSIC,
         )))
+        assertTrue(LyricsSource.offered.none { it == LyricsSource.YOUTUBE_TRANSCRIPT || it == LyricsSource.YOUTUBE_MUSIC })
     }
 
     @Test
