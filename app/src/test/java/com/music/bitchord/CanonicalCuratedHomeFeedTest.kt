@@ -81,6 +81,18 @@ class CanonicalCuratedHomeFeedTest {
         assertTrue(onlySaved.isEmpty())
     }
 
+    @Test fun exploreFiltersMixedReleaseShelfInsteadOfLeakingSavedCollections() {
+        val downloaded = ShelfItem("Saved", "Downloaded", null, null, "local:download:42")
+        val verified = ShelfItem("Official", "EP", null, null,
+            "catalog:RELEASE_GROUP:11111111-1111-4111-8111-111111111111")
+        val home = listOf(
+            com.music.bitchord.data.model.HomeShelf("Lançamentos", listOf(downloaded, verified)),
+        )
+        val explore = canonicalExploreShelves(home, "Lançamentos", "Em alta")
+        assertEquals(listOf(verified), explore.single().items)
+        assertEquals(listOf(downloaded, verified), home.single().items)
+    }
+
     @Test fun exploreFallsBackToEvidenceBasedTrendingWhenNoReleaseIsKnown() {
         val home = feed(listOf(playable), trending = listOf(playable.musicBrainzId))
         val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
