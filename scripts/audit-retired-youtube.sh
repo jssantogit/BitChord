@@ -19,6 +19,15 @@ total=$(wc -l < "$output" | tr -d ' ')
 files=$(cut -d: -f1 "$output" | sort -u | wc -l | tr -d ' ')
 echo "Retired backend references: $total lines across $files source files"
 echo "This report is an inventory, not an authorization to delete archived identities."
+echo "External references to retired transport symbols (main + test sources):"
+test_roots=()
+for root in app/src shared/src desktopApp/src tvApp/src wearApp/src web/app/src; do
+  if [[ -d "$root" ]]; then test_roots+=("$root"); fi
+done
+if (( ${#test_roots[@]} > 0 )); then
+  git grep -n -E 'YtMusicRepository|(^|[^[:alnum:]_])(Innertube|InnertubeParser|StreamResolver|InnerTubeXResolver|PoTokenGenerator|PlayerClient)([^[:alnum:]_]|$)' -- "${test_roots[@]}" || true
+fi
+
 echo "All remaining references:"
 cat "$output"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
