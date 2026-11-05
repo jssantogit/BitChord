@@ -1984,6 +1984,10 @@ private fun BitChordApp(
             communityMetadataRecording = cached
         } else if (cached != null) {
             viewModel.openCanonicalNativeDetail(cached)
+        } else if (isPublicCommunity) {
+            // A stale community card must fail closed, never become an album
+            // with an invented detail type or a fallback playback source.
+            Unit
         } else {
             item.browseId?.let { id ->
                 val collection = downloadedReleases.firstOrNull {
