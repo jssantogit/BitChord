@@ -488,7 +488,9 @@ internal fun canonicalPublicPopularityShelf(
         .distinctBy { it.recordingMbid }
         .mapNotNull { known ->
             val row = recordings[known.recordingMbid] ?: return@mapNotNull null
-            val browseId = canonicalBrowseCardId(row) ?: return@mapNotNull null
+            // The ordinary Home card helper intentionally suppresses recordings
+            // without audio; this is an Explore metadata-navigation card.
+            val browseId = "catalog:RECORDING:${row.musicBrainzId}"
             ShelfItem(
                 title = row.title,
                 subtitle = row.subtitle.orEmpty(),
@@ -499,6 +501,29 @@ internal fun canonicalPublicPopularityShelf(
         }
         .take(limit.coerceAtMost(16)).toList()
     return cards.takeIf { it.isNotEmpty() }?.let { HomeShelf(heading, it) }
+}
+
+/**
+ * Resolve an editorial card by an exact typed catalog identity. In Explore,
+ * metadata-only public Recording cards navigate to detail, not playback.
+ * Missing browse keys and inferred/title-only joins are never accepted.
+ */
+internal fun canonicalEditorialRowForCard(
+    rows: List<CanonicalCatalogSearchRow>,
+    browseId: String?,
+): CanonicalCatalogSearchRow? {
+    if (browseId.isNullOrBlank()) return null
+    return rows.firstOrNull { row ->
+        val exactId = when (row.kind) {
+            CanonicalSearchKind.RECORDING -> if (CATALOG_RECORDING_MBID.matches(row.musicBrainzId)) {
+                "catalog:RECORDING:${row.musicBrainzId}"
+            } else null
+            CanonicalSearchKind.RELEASE, CanonicalSearchKind.RELEASE_GROUP ->
+                canonicalBrowseCardId(row)
+            CanonicalSearchKind.ARTIST -> null
+        }
+        exactId != null && exactId == browseId
+    }
 }
 
 /** Feed sections share rendering, but listening events retain their actual tab provenance. */
