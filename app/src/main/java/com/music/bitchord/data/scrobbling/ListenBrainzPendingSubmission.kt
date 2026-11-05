@@ -18,15 +18,8 @@ internal enum class ListenBrainzSubmissionResult {
  * days earlier when the phone was offline. We submit one at a time so an
  * uncertain response only risks replaying one occurrence, never a whole batch.
  */
-internal suspend fun ListenBrainzManager.submitPending(
-    token: String,
-    listen: PendingListenBrainzListen,
-): ListenBrainzSubmissionResult {
-    if (token.isBlank() || !listen.isQualified() ||
-        listen.accountKey != ListenBrainzOutbox.accountKey(token)
-    ) return ListenBrainzSubmissionResult.REJECTED
-
-    val bodyJson = buildJsonObject {
+internal fun listenBrainzImportPayload(listen: PendingListenBrainzListen): String {
+    return buildJsonObject {
         put("listen_type", "import")
         putJsonArray("payload") {
             addJsonObject {
@@ -47,6 +40,17 @@ internal suspend fun ListenBrainzManager.submitPending(
             }
         }
     }.toString()
+}
+
+internal suspend fun ListenBrainzManager.submitPending(
+    token: String,
+    listen: PendingListenBrainzListen,
+): ListenBrainzSubmissionResult {
+    if (token.isBlank() || !listen.isQualified() ||
+        listen.accountKey != ListenBrainzOutbox.accountKey(token)
+    ) return ListenBrainzSubmissionResult.REJECTED
+
+    val bodyJson = listenBrainzImportPayload(listen)
 
     return withContext(Dispatchers.IO) {
         try {
