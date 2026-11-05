@@ -2737,12 +2737,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 return@launch
             }
             sitewideRetryAfterMs = 0L
-            _canonicalExploreSitewide.value = CanonicalSitewideDiscoveryState(
+            val snapshot = CanonicalSitewideDiscoveryState(
                 range = success.range,
                 recordings = success.recordings,
                 fetchedAtMs = success.fetchedAtMs,
                 upstreamUpdatedAtSeconds = success.lastUpdatedSeconds,
             )
+            _canonicalExploreSitewide.value = snapshot
+            // If ListenBrainz's own snapshot is undated or too old, never
+            // spend MusicBrainz requests or advertise it as a weekly chart.
+            if (!canonicalSitewideDiscoveryIsFresh(snapshot, System.currentTimeMillis())) {
+                sitewideRetryAfterMs = System.currentTimeMillis() + 60L * 60_000L
+                return@launch
+            }
+            // Existing catalog rows already carry MusicBrainz identity; only
+            // missing top entries need independent direct MB recording reads.
+            val inCatalog = canonicalPublicPopularityCandidates(
+                (canonicalDiscoveryCatalog.value as? UiState.Success)?.data.orEmpty(),
+                limit = 100,
+            ).toSet()
+            val independentlyVerified = mutableMapOf<String, RecordingMetadataEnrichment>()
+            for (entry in success.recordings.take(8)) {
+                currentCoroutineContext().ensureActive()
+                if (!sitewideEpoch.isCurrent(generation)) return@launch
+                val mbid = entry.recordingMbid
+                if (mbid in inCatalog) continue
+                val cached = artistTopMetadataCache[mbid]
+                val metadata = if (cached != null) cached else try {
+                    (withTimeoutOrNull(12_000L) {
+                        artistTopMetadataProvider.lookupRecording(mbid)
+                    } as? MetadataLookupResult.Success)?.value
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                if (metadata != null && metadata.musicBrainzId.equals(mbid, ignoreCase = true)) {
+                    if (artistTopMetadataCache.size >= 64) artistTopMetadataCache.clear()
+                    artistTopMetadataCache[mbid] = metadata
+                    independentlyVerified[mbid] = metadata
+                    val rows = canonicalVerifiedSitewideRows(
+                        success.recordings, independentlyVerified,
+                    )
+                    if (sitewideEpoch.isCurrent(generation)) {
+                        _canonicalExploreSitewide.value = snapshot.copy(verifiedRows = rows)
+                    }
+                }
+            }
         }
     }
 
