@@ -54,9 +54,13 @@ internal object ListenBrainzOutbox {
     }
 
     fun enqueue(context: Context, entry: PendingListenBrainzListen): Boolean {
-        val added = store(context).enqueue(entry)
-        if (added) schedule(context)
-        return added
+        val outbox = store(context)
+        // A repeated callback for the same occurrence must not create another
+        // record, but it may need to reschedule an interrupted worker.
+        val admitted = outbox.enqueue(entry) ||
+            outbox.pending(entry.accountKey).any { it.occurrenceId == entry.occurrenceId }
+        if (admitted) schedule(context)
+        return admitted
     }
 
     /** Reconcile persisted listens after an app/process restart. */
