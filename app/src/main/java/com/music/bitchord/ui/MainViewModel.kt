@@ -4987,7 +4987,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _playlistsLoading.value = false
         _playlists.value = emptyList()
         _playlistOwned.value = emptyMap()
-        ownershipInFlight.clear()
         _songMenu.value = null
         _library.value = UiState.Loading
         _history.value = UiState.Loading
@@ -5054,7 +5053,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         LikeState.clear()
         _playlists.value = emptyList()
         _playlistOwned.value = emptyMap()
-        ownershipInFlight.clear()
         _songMenu.value = null
         loadHome()
     }
