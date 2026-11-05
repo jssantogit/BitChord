@@ -59,12 +59,10 @@ class ListenBrainzPopularityEvidenceTest {
             "not-json",
         )
         responses.forEach { response ->
-            val ids = if (response.contains("\"recording_mbid\":\"$a\"") &&
-                response.contains("\"recording_mbid\":\"$a\"", startIndex = 1)) {
-                listOf(a, b)
-            } else listOf(a)
-            assertEquals(ListenBrainzPopularityParseResult.Invalid,
-                parseListenBrainzRecordingPopularity(response, ids))
+            assertEquals(
+                ListenBrainzPopularityParseResult.Invalid,
+                parseListenBrainzRecordingPopularity(response, listOf(a)),
+            )
         }
         assertEquals(ListenBrainzPopularityParseResult.Invalid,
             parseListenBrainzRecordingPopularity("[]", listOf("bad-id")))
