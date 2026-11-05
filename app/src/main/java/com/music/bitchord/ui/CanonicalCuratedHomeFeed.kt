@@ -526,6 +526,24 @@ internal fun canonicalEditorialRowForCard(
     }
 }
 
+/**
+ * Home and Explore share rendering but never borrow one another's popularity
+ * claims. Verified releases lead; public all-time popularity is a distinct
+ * discovery section. If no public evidence exists, the existing personal
+ * fallback remains available offline.
+ */
+internal fun canonicalExploreWithCommunityShelves(
+    homeShelves: List<HomeShelf>,
+    releasesHeading: String,
+    trendingHeading: String,
+    community: HomeShelf?,
+): List<HomeShelf> {
+    val known = canonicalExploreShelves(homeShelves, releasesHeading, trendingHeading)
+    val public = community?.takeIf { it.items.isNotEmpty() && it.title.isNotBlank() }
+        ?: return known
+    return if (known.firstOrNull()?.title == releasesHeading) known + public else listOf(public)
+}
+
 /** Feed sections share rendering, but listening events retain their actual tab provenance. */
 internal fun canonicalEditorialPlaybackSource(explore: Boolean): PlaybackSourceType =
     if (explore) PlaybackSourceType.EXPLORE else PlaybackSourceType.HOME
