@@ -65,16 +65,26 @@ internal object ListenBrainzOutbox {
 
     /** Reconcile persisted listens after an app/process restart. */
     fun recover(context: Context) {
-        if (!AppSettings.scrobblingAvailable || !AppSettings.listenBrainzEnabled.value) return
+        if (!AppSettings.scrobblingAvailable || !AppSettings.listenBrainzEnabled.value) {
+            store(context).clear()
+            return
+        }
         val token = AppSettings.listenBrainzToken.value
-        if (token.isBlank()) return
-        if (store(context).pending(accountKey(token)).isNotEmpty()) schedule(context)
+        if (token.isBlank()) {
+            store(context).clear()
+            return
+        }
+        val outbox = store(context)
+        // A credential replaced outside the app's setter (e.g. a backup
+        // restore) must never inherit another account's listening history.
+        outbox.keepOnlyAccount(accountKey(token))
+        if (outbox.pending(accountKey(token)).isNotEmpty()) schedule(context)
     }
 
     /** Disabling or changing accounts revokes consent to replay past listens. */
     fun forget(context: Context) {
-        WorkManager.getInstance(context.applicationContext).cancelUniqueWork(WORK_NAME)
         store(context).clear()
+        WorkManager.getInstance(context.applicationContext).cancelUniqueWork(WORK_NAME)
     }
 
     private fun schedule(context: Context) {
@@ -127,7 +137,7 @@ internal class ListenBrainzOutboxWorker(
                     ListenBrainzSubmissionResult.RETRYABLE -> return Result.retry()
                     // Keep data when credentials are temporarily invalid; resume
                     // after explicit reconfiguration rather than hammering 401.
-                    ListenBrainzSubmissionResult.AUTH_ERROR -> return Result.success()
+                    ListenBrainzSubmissionResult.AUTH_ERROR -> return Result.failure()
                     // Malformed metadata will never become valid by retrying.
                     ListenBrainzSubmissionResult.REJECTED -> {
                         Log.w("ListenBrainzOutbox", "Discarding a rejected listen occurrence")
