@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistCredit
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.ui.CanonicalPersonalRecommendationState
 import com.music.bitchord.ui.canonicalPersonalRecommendationIsFresh
+import com.music.bitchord.ui.canonicalRecommendationAccountKey
+import com.music.bitchord.ui.canonicalRecommendationBelongsToToken
 import com.music.bitchord.ui.canonicalVerifiedPersonalRecommendationRows
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
@@ -41,6 +43,16 @@ class CanonicalPersonalRecommendationRowsTest {
         assertEquals(CanonicalSearchKind.RECORDING, rows.single().kind)
         assertFalse(rows.single().hasCatalogedAsset)
         assertEquals(null, rows.single().artworkUri)
+    }
+
+    @Test fun anAccountSwitchRevokesOldRecommendationVisibilityImmediately() {
+        val state = CanonicalPersonalRecommendationState(
+            accountDigest = canonicalRecommendationAccountKey("old-token"),
+            recordings = ranks,
+        )
+        assertTrue(canonicalRecommendationBelongsToToken(state, "old-token"))
+        assertFalse(canonicalRecommendationBelongsToToken(state, "new-token"))
+        assertFalse(canonicalRecommendationBelongsToToken(state, ""))
     }
 
     @Test fun aSnapshotDoesNotRemainFreshAfterCacheOrUpstreamExpiry() {
