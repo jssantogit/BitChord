@@ -2,6 +2,12 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import com.music.bitchord.ui.AppUi
+import com.music.bitchord.ui.AppUiHost
+import com.music.bitchord.data.settings.LibrarySort
+import com.music.bitchord.data.settings.LibraryViewType
+import kotlinx.coroutines.flow.MutableStateFlow
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -114,6 +120,16 @@ class HomeHeaderTest {
      * retain their own heading even when the catalogue has no loaded shelves.
      */
     @Test fun canonicalHomeAndExploreReuseNativeSurfaceWithoutLegacySignIn() {
+        AppUi.install(object : AppUiHost {
+            override val swipeToPlayNext = MutableStateFlow(false)
+            override val homeRecentsViewType = MutableStateFlow(LibraryViewType.GRID)
+            override fun setHomeRecentsViewType(value: LibraryViewType) {
+                homeRecentsViewType.value = value
+            }
+            override val pinnedPlaylists = MutableStateFlow(emptyList<String>())
+            override val librarySort = MutableStateFlow(LibrarySort.DEFAULT)
+            @Composable override fun downloadedIds(): Set<String> = emptySet()
+        })
         val heading = mutableStateOf("Início")
         compose.setContent {
             MaterialTheme {
