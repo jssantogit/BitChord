@@ -58,10 +58,16 @@ internal object ListenBrainzOutbox {
         val outbox = store(context)
         // A repeated callback for the same occurrence must not create another
         // record, but it may need to reschedule an interrupted worker.
-        val admitted = outbox.enqueue(entry) ||
+        val persisted = outbox.enqueue(entry) ||
             outbox.pending(entry.accountKey).any { it.occurrenceId == entry.occurrenceId }
-        if (admitted) schedule(context)
-        return admitted
+        if (persisted) {
+            schedule(context)
+            return true
+        }
+        // The worker may have acknowledged this occurrence before a late
+        // callback re-entered. It has already been delivered; do not label
+        // that success as an outbox overflow or schedule a duplicate.
+        return outbox.isAcknowledged(entry.occurrenceId, entry.accountKey)
     }
 
     /** Reconcile persisted listens after an app/process restart. */
