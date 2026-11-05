@@ -99,15 +99,15 @@ class CanonicalDiscoveryModeTest {
         assertTrue(called.isEmpty())
     }
 
-    @Test fun switchingBackToLegacyDiscoveryAllowsTheExistingEndpoints() = runBlocking {
+    @Test fun evenAnOldLegacyModeFlagCannotInvokeRemovedEndpoints() = runBlocking {
         val called = mutableListOf<LegacyDiscoveryRequest>()
         val gate = LegacyDiscoveryRequestGate(useCanonicalDiscovery = false)
 
         LegacyDiscoveryRequest.entries.forEach { request ->
-            gate.run(request) { called += request }
+            assertEquals(null, gate.run(request) { called += request; "unexpected" })
         }
 
-        assertEquals(LegacyDiscoveryRequest.entries.toSet(), called.toSet())
+        assertTrue(called.isEmpty())
     }
 
     @Test fun aResponseStartedBeforeModeChangeIsNoLongerCurrent() {
@@ -132,14 +132,14 @@ class CanonicalDiscoveryModeTest {
         assertEquals(0, calls)
     }
 
-    @Test fun legacyModeWithEnabledYoutubeCanStillMatchSpotifyAndPreservesResult() = runBlocking {
+    @Test fun historicalSpotifyMatchingCannotCallADeletedBackend() = runBlocking {
         var calls = 0
         val result = runLegacySpotifyMatchIfAllowed(allowed = { true }) {
             calls++
-            "matched-youtube-id"
+            "unexpected-youtube-id"
         }
-        assertEquals("matched-youtube-id", result)
-        assertEquals(1, calls)
+        assertEquals(null, result)
+        assertEquals(0, calls)
     }
 
     @Test fun changingToCanonicalWhileMatchingDiscardsLegacyResult() = runBlocking {
@@ -162,24 +162,15 @@ class CanonicalDiscoveryModeTest {
         assertFalse(shouldRunLegacyYoutubeVersionLookup(canonicalMode = false, configs = emptyList()))
     }
 
-    @Test fun disabledYoutubeRejectsLegacyDetailLookupBeforeRequestAndDoesNotLeakStaleResponses() = runBlocking {
+    @Test fun legacyBrowseNeverRunsEvenWhenAnOldFlagSaysEnabled() = runBlocking {
         var requests = 0
-        var active = false
-        val blocked = runLegacyYoutubeBrowseIfEnabled({ active }) {
-            requests++
-            "artist page"
+        for (enabled in listOf(false, true)) {
+            val response = runLegacyYoutubeBrowseIfEnabled({ enabled }) {
+                requests++
+                "unexpected page"
+            }
+            assertEquals(null, response)
         }
-        assertEquals(null, blocked)
         assertEquals(0, requests)
-        active = true
-        val stale = runLegacyYoutubeBrowseIfEnabled({ active }) {
-            requests++
-            active = false // opt-out while the suspend request was in progress
-            "late browse"
-        }
-        assertEquals(null, stale)
-        assertEquals(1, requests)
-        active = true
-        assertEquals("allowed", runLegacyYoutubeBrowseIfEnabled({ active }) { "allowed" })
     }
 }
