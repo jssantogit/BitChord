@@ -137,6 +137,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.isUnresolvedSpotify
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.scrobbling.ListenBrainzManager
+import com.music.bitchord.data.scrobbling.ListenBrainzOutbox
 import com.music.bitchord.data.scrobbling.ListenBrainzPlaybackClock
 import com.music.bitchord.data.scrobbling.ScrobbleManager
 import com.music.bitchord.data.settings.AppSettings
@@ -603,6 +604,9 @@ class PlaybackService : MediaLibraryService() {
 
     private var listenBrainzDurationMs: Long? = null
     private val listenBrainzPlaybackClock = ListenBrainzPlaybackClock()
+    private var listenBrainzOccurrenceId: String = UUID.randomUUID().toString()
+    private var listenBrainzOccurrenceQueued = false
+    private var listenBrainzThresholdJob: Job? = null
 
     /**
      * The gateway connection publishing what's playing to Discord, or null when
@@ -891,6 +895,8 @@ class PlaybackService : MediaLibraryService() {
             if (isPlaying && song != null) {
                 if (listenBrainzSong?.videoId != song.videoId || listenBrainzStartMs == 0L) {
                     listenBrainzPlaybackClock.reset()
+                    listenBrainzOccurrenceId = UUID.randomUUID().toString()
+                    listenBrainzOccurrenceQueued = false
                     listenBrainzSong = song
                     listenBrainzStartMs = System.currentTimeMillis()
                     listenBrainzDurationMs = durationMs
@@ -899,7 +905,10 @@ class PlaybackService : MediaLibraryService() {
                 }
                 listenBrainzPlaybackClock.onPlay(SystemClock.elapsedRealtime())
                 submitListenBrainzPlayingNow(song, exoPlayer.currentPosition, durationMs)
+                startListenBrainzThresholdWatcher()
             } else {
+                listenBrainzThresholdJob?.cancel()
+                listenBrainzThresholdJob = null
                 // Pause, buffering and loss of a playable item cannot count as
                 // active listening, even if the wall clock keeps advancing.
                 listenBrainzPlaybackClock.onPause(SystemClock.elapsedRealtime())
@@ -1079,6 +1088,8 @@ class PlaybackService : MediaLibraryService() {
                 listenBrainzSong = null
                 listenBrainzStartMs = 0L
                 listenBrainzDurationMs = null
+                listenBrainzThresholdJob?.cancel()
+                listenBrainzThresholdJob = null
                 listenBrainzPlaybackClock.reset()
                 // A missed/empty AutoPlay response can let the last queued
                 // track finish before anything is appended. There will be no
@@ -3157,13 +3168,18 @@ class PlaybackService : MediaLibraryService() {
                 listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime()),
             )
         }
+        listenBrainzThresholdJob?.cancel()
+        listenBrainzThresholdJob = null
         listenBrainzPlaybackClock.reset()
+        listenBrainzOccurrenceId = UUID.randomUUID().toString()
+        listenBrainzOccurrenceQueued = false
         listenBrainzSong = newSong
         listenBrainzStartMs = if (exoPlayer.isPlaying) System.currentTimeMillis() else 0L
         listenBrainzDurationMs = durationMs
         if (newSong != null && exoPlayer.isPlaying) {
             listenBrainzPlaybackClock.onPlay(SystemClock.elapsedRealtime())
             submitListenBrainzPlayingNow(newSong, 0L, durationMs)
+            startListenBrainzThresholdWatcher()
         }
 
         // The renderer is still configured for the track that just ended at
@@ -6645,18 +6661,63 @@ class PlaybackService : MediaLibraryService() {
      * actually scrobbling — the settings are read at call time so the helper
      * stays a no-op whenever ListenBrainz is switched off.
      */
+    /**
+     * Admit a listen exactly once per playback occurrence. Persist *before*
+     * making any HTTP attempt so a service stop or network failure cannot
+     * erase a qualified listen. The worker handles transport asynchronously.
+     */
     private fun submitListenBrainzFinished(
         song: Song, startMs: Long, durationMs: Long?, listenedMs: Long,
     ) {
-        val lbEnabled = AppSettings.scrobblingAvailable && AppSettings.listenBrainzEnabled.value
-        val lbToken = AppSettings.listenBrainzToken.value
-        if (!lbEnabled || lbToken.isBlank()) return
-        val endMs = System.currentTimeMillis()
-        scope.launch {
-            ListenBrainzManager.submitFinished(
-                lbToken, song, startMs, endMs, listenedMs, durationMs,
-                AppSettings.listenBrainzPrimaryArtistOnly.value,
-            )
+        if (listenBrainzOccurrenceQueued ||
+            !AppSettings.scrobblingAvailable || !AppSettings.listenBrainzEnabled.value
+        ) return
+        val token = AppSettings.listenBrainzToken.value
+        if (token.isBlank()) return
+        val entry = ListenBrainzOutbox.capture(
+            token = token,
+            occurrenceId = listenBrainzOccurrenceId,
+            song = song,
+            startMs = startMs,
+            endMs = System.currentTimeMillis(),
+            listenedMs = listenedMs,
+            durationMs = durationMs,
+            primaryArtistOnly = AppSettings.listenBrainzPrimaryArtistOnly.value,
+        )
+        if (!entry.isQualified()) return
+        try {
+            // false also means an occurrence is already safely stored.
+            ListenBrainzOutbox.enqueue(this, entry)
+            listenBrainzOccurrenceQueued = true
+        } catch (_: Exception) {
+            // Do not mark it queued: the next audible tick/transition may retry.
+            Log.w("PlaybackService", "ListenBrainz outbox persist/schedule failed")
+        }
+    }
+
+    /**
+     * Media3's isPlaying is the authority. A timer does not mark playback
+     * complete: it merely samples the monotonic clock and durably queues after
+     * the threshold, rather than waiting for a skip or service destruction.
+     */
+    private fun startListenBrainzThresholdWatcher() {
+        if (listenBrainzThresholdJob?.isActive == true ||
+            listenBrainzOccurrenceQueued ||
+            !AppSettings.scrobblingAvailable || !AppSettings.listenBrainzEnabled.value
+        ) return
+        listenBrainzThresholdJob = scope.launch {
+            while (isActive && !listenBrainzOccurrenceQueued) {
+                delay(2_000L)
+                val current = player ?: break
+                val song = listenBrainzSong ?: break
+                if (!current.isPlaying || current.currentMediaItem?.toSong()?.videoId != song.videoId) {
+                    break
+                }
+                val duration = listenBrainzDurationMs ?: current.duration.takeIf { it > 0L }
+                if (duration != null) listenBrainzDurationMs = duration
+                val played = listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime())
+                submitListenBrainzFinished(song, listenBrainzStartMs, duration, played)
+            }
         }
     }
 
@@ -6730,24 +6791,16 @@ class PlaybackService : MediaLibraryService() {
         // otherwise end with an un-scrobbled song. This must not ride on the
         // service scope: it is cancelled a few lines down, and the request
         // should still reach ListenBrainz.
+        listenBrainzThresholdJob?.cancel()
+        listenBrainzThresholdJob = null
         val lastSong = listenBrainzSong
         if (lastSong != null && listenBrainzStartMs > 0L) {
-            val lbEnabled =
-                AppSettings.scrobblingAvailable && AppSettings.listenBrainzEnabled.value
-            val lbToken = AppSettings.listenBrainzToken.value
-            if (lbEnabled && lbToken.isNotBlank()) {
-                val lastStart = listenBrainzStartMs
-                val lastDuration = listenBrainzDurationMs ?: player?.duration?.takeIf { it > 0 }
-                val lastPlayedMs =
-                    listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime())
-                CoroutineScope(Dispatchers.IO).launch {
-                    ListenBrainzManager.submitFinished(
-                        lbToken, lastSong, lastStart, System.currentTimeMillis(),
-                        lastPlayedMs, lastDuration,
-                        AppSettings.listenBrainzPrimaryArtistOnly.value,
-                    )
-                }
-            }
+            submitListenBrainzFinished(
+                lastSong,
+                listenBrainzStartMs,
+                listenBrainzDurationMs ?: player?.duration?.takeIf { it > 0L },
+                listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime()),
+            )
         }
         listenBrainzPlaybackClock.reset()
         scrobbleManager?.destroy()
