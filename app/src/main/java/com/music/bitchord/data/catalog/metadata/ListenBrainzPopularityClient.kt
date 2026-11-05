@@ -5,6 +5,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
+import io.ktor.client.request.parameter
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -25,6 +26,9 @@ internal const val LISTENBRAINZ_PUBLIC_TTL_MS = 6L * 60 * 60 * 1_000
 internal interface ListenBrainzPopularityTransport {
     suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse
     suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse
+    suspend fun sitewideRecordings(
+        range: ListenBrainzSitewideRange, count: Int,
+    ): ListenBrainzPopularityHttpResponse = ListenBrainzPopularityHttpResponse(503, "")
 }
 
 internal data class ListenBrainzPopularityHttpResponse(
@@ -64,6 +68,24 @@ internal class KtorListenBrainzPopularityTransport(
         val response = client.get("https://api.listenbrainz.org/1/popularity/top-recordings-for-artist/$artistMbid") {
             header(HttpHeaders.UserAgent,
                 "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)")
+        }
+        return ListenBrainzPopularityHttpResponse(
+            status = response.status.value,
+            body = if (response.status.value == 200) response.bodyAsText() else "",
+            retryAfterSeconds = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull(),
+            rateLimitRemaining = response.headers["X-RateLimit-Remaining"]?.toLongOrNull(),
+            rateLimitResetInSeconds = response.headers["X-RateLimit-Reset-In"]?.toLongOrNull(),
+        )
+    }
+    override suspend fun sitewideRecordings(
+        range: ListenBrainzSitewideRange, count: Int,
+    ): ListenBrainzPopularityHttpResponse {
+        val response = client.get("https://api.listenbrainz.org/1/stats/sitewide/recordings") {
+            header(HttpHeaders.UserAgent,
+                "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)")
+            parameter("range", range.apiValue)
+            parameter("count", count)
+            parameter("offset", 0)
         }
         return ListenBrainzPopularityHttpResponse(
             status = response.status.value,
@@ -138,6 +160,19 @@ internal sealed interface ListenBrainzArtistTopFetchResult {
     data object Malformed : ListenBrainzArtistTopFetchResult
 }
 
+internal sealed interface ListenBrainzSitewideFetchResult {
+    data class Success(
+        val recordings: List<ListenBrainzSitewideRecording>,
+        val range: ListenBrainzSitewideRange,
+        val lastUpdatedSeconds: Long?,
+        val fetchedAtMs: Long,
+        val fromCache: Boolean,
+    ) : ListenBrainzSitewideFetchResult
+    data object InvalidRequest : ListenBrainzSitewideFetchResult
+    data object Unavailable : ListenBrainzSitewideFetchResult
+    data object Malformed : ListenBrainzSitewideFetchResult
+}
+
 /**
  * A small in-memory TTL avoids repeated public requests when switching tabs.
  * Only verified responses are cached. This does not persist personal data.
@@ -159,12 +194,87 @@ internal class ListenBrainzPopularityClient(
     // rate limiter alone prevents bursts, not redundant simultaneous lookups.
     private val recordingFetchMutex = Mutex()
     private val artistFetchMutex = Mutex()
+    private val sitewideFetchMutex = Mutex()
+    private data class SitewideCacheValue(
+        val recordings: List<ListenBrainzSitewideRecording>,
+        val atMs: Long,
+        val lastUpdatedSeconds: Long?,
+    )
+    private val sitewideCache = mutableMapOf<Pair<ListenBrainzSitewideRange, Int>, SitewideCacheValue>()
     private val cache = mutableMapOf<List<String>, CacheValue>()
     private data class ArtistCacheValue(
         val recordings: List<ListenBrainzArtistTopRecording>,
         val atMs: Long,
     )
     private val artistCache = mutableMapOf<String, ArtistCacheValue>()
+
+    /**
+     * Explicit sitewide time-window discovery. Rankings are independent from
+     * personal listening and do not provide Recording metadata or a stream.
+     */
+    suspend fun sitewideRecordings(
+        range: ListenBrainzSitewideRange = ListenBrainzSitewideRange.WEEK,
+        count: Int = 25,
+    ): ListenBrainzSitewideFetchResult {
+        if (count !in 1..100) return ListenBrainzSitewideFetchResult.InvalidRequest
+        val key = range to count
+        sitewideFetchMutex.lock()
+        try {
+            cacheMutex.lock()
+            try {
+                val cached = sitewideCache[key]
+                val now = nowMillis()
+                if (cached != null && now >= cached.atMs &&
+                    now - cached.atMs < LISTENBRAINZ_PUBLIC_TTL_MS
+                ) return ListenBrainzSitewideFetchResult.Success(
+                    cached.recordings, range, cached.lastUpdatedSeconds,
+                    cached.atMs, fromCache = true,
+                )
+            } finally {
+                cacheMutex.unlock()
+            }
+            for (attempt in 0..1) {
+                val response = try {
+                    limiter.run { transport.sitewideRecordings(range, count) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    return ListenBrainzSitewideFetchResult.Unavailable
+                }
+                limiter.observeRateLimit(response.rateLimitRemaining, response.rateLimitResetInSeconds)
+                if (response.status == 200 || response.status == 204) {
+                    val parsed = if (response.status == 204) {
+                        ListenBrainzSitewideParseResult.Success(emptyList(), range.apiValue, null)
+                    } else parseListenBrainzSitewideRecordings(response.body, range)
+                    if (parsed !is ListenBrainzSitewideParseResult.Success) {
+                        return ListenBrainzSitewideFetchResult.Malformed
+                    }
+                    val at = nowMillis()
+                    cacheMutex.lock()
+                    try {
+                        if (sitewideCache.size >= MAX_CACHED_BATCHES) sitewideCache.clear()
+                        sitewideCache[key] = SitewideCacheValue(
+                            parsed.recordings, at, parsed.lastUpdatedSeconds,
+                        )
+                    } finally {
+                        cacheMutex.unlock()
+                    }
+                    return ListenBrainzSitewideFetchResult.Success(
+                        parsed.recordings, range, parsed.lastUpdatedSeconds,
+                        at, fromCache = false,
+                    )
+                }
+                if (attempt == 0 && response.status in setOf(429, 503)) {
+                    retryDelay((response.retryAfterSeconds ?: 1L).coerceIn(1L, 30L) * 1_000L)
+                    continue
+                }
+                return ListenBrainzSitewideFetchResult.Unavailable
+            }
+            return ListenBrainzSitewideFetchResult.Unavailable
+        } finally {
+            sitewideFetchMutex.unlock()
+        }
+    }
 
     suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzArtistTopFetchResult {
         val id = artistMbid.lowercase(Locale.ROOT)
