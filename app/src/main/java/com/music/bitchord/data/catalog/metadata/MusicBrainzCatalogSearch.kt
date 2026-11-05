@@ -169,6 +169,42 @@ internal class MusicBrainzCatalogSearch(
         return searchReleaseGroupsInternal("arid:$id", limit, offset, fieldedQuery = true)
     }
 
+    /**
+     * Public editorial discovery does not require a populated local index.
+     * Fielded Lucene queries must use dismax=false; date/type are server
+     * evidence, not inferred from a title or the app install date.
+     */
+    suspend fun searchRecentReleaseGroups(
+        fromIsoDate: String,
+        throughIsoDate: String,
+        limit: Int = 100,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val date = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        if (!date.matches(fromIsoDate) || !date.matches(throughIsoDate) ||
+            fromIsoDate > throughIsoDate
+        ) return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        return searchReleaseGroupsInternal(
+            "firstreleasedate:[$fromIsoDate TO $throughIsoDate] AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
+    /** Genre is a known MusicBrainz release-group tag, never arbitrary UI text. */
+    suspend fun searchReleaseGroupsForTag(
+        tag: String,
+        limit: Int = 40,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized)) {
+            return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        }
+        return searchReleaseGroupsInternal(
+            "tag:$normalized AND (primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
     private suspend fun searchReleaseGroupsInternal(
         query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =
