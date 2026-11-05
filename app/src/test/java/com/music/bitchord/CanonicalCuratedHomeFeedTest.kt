@@ -8,6 +8,7 @@ import com.music.bitchord.ui.canonicalEditorialRowForCard
 import com.music.bitchord.ui.canonicalPublicPopularityCandidates
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.ui.canonicalExploreShelves
+import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
 import com.music.bitchord.ui.canonicalEditorialPlaybackSource
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.ui.canonicalCoverLookupTarget
@@ -87,6 +88,36 @@ class CanonicalCuratedHomeFeedTest {
         ))
         assertEquals(listOf(known.musicBrainzId),
             canonicalPublicPopularityCandidates(listOf(release, known, known), limit = 40))
+    }
+
+    @Test fun communityShelfDoesNotReplaceVerifiedReleasesOrReenterHome() {
+        val original = feed(listOf(release, playable), listOf(local), listOf(playable.musicBrainzId))
+        val public = com.music.bitchord.data.model.HomeShelf(
+            "Popular na comunidade",
+            listOf(ShelfItem("Public recording", "", null, null,
+                "catalog:RECORDING:11111111-1111-4111-8111-111111111111")),
+        )
+        val explore = canonicalExploreWithCommunityShelves(
+            homeShelves = original, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta", community = public,
+        )
+        assertEquals(listOf("Lançamentos", "Popular na comunidade"), explore.map { it.title })
+        assertEquals(listOf("Lançamentos", "Escolha a dedo", "Em alta"), original.map { it.title })
+    }
+
+    @Test fun communityDiscoveryPrecedesPersonalFallbackWhenNoPublicReleaseExists() {
+        val localOnly = feed(emptyList(), listOf(local))
+        val public = com.music.bitchord.data.model.HomeShelf(
+            "Popular na comunidade",
+            listOf(ShelfItem("Public recording", "", null, null,
+                "catalog:RECORDING:11111111-1111-4111-8111-111111111111")),
+        )
+        assertEquals(listOf("Popular na comunidade"),
+            canonicalExploreWithCommunityShelves(localOnly, "Lançamentos", "Em alta", public)
+                .map { it.title })
+        assertEquals(listOf("Escolha a dedo"),
+            canonicalExploreWithCommunityShelves(localOnly, "Lançamentos", "Em alta", null)
+                .map { it.title })
     }
 
     @Test fun editorialPlaybackProvenanceTracksTheActualHomeOrExploreTab() {
