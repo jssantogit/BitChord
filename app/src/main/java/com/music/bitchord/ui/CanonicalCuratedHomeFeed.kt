@@ -424,7 +424,15 @@ internal fun canonicalExploreShelves(
     releasesHeading: String,
     trendingHeading: String,
 ): List<HomeShelf> {
-    val releases = homeShelves.firstOrNull { it.title == releasesHeading && it.items.isNotEmpty() }
+    // Home may label saved/downloaded collections as "Lançamentos" when the
+    // public catalog is cold. These are real user items, not discovery evidence.
+    // Only MusicBrainz release identities can lead Explore's release shelf.
+    val releases = homeShelves.firstOrNull { shelf ->
+        shelf.title == releasesHeading && shelf.items.any { item ->
+            val id = item.browseId.orEmpty()
+            id.startsWith("catalog:RELEASE_GROUP:") || id.startsWith("catalog:RELEASE:")
+        }
+    }
     if (releases != null) return listOf(releases)
     val trending = homeShelves.firstOrNull { it.title == trendingHeading && it.items.isNotEmpty() }
     if (trending != null) return listOf(trending)
