@@ -46,7 +46,7 @@ object ListenBrainzManager {
                 ListenBrainzRequestBudget.limiter.run {
                     Http.client.newCall(request).execute().use { resp ->
                         if (resp.isSuccessful) {
-                        Log.d(TAG, "playing_now submitted")
+                            Log.d(TAG, "playing_now submitted")
                             true
                         } else {
                             Log.w(TAG, "playing_now submit failed: HTTP ${resp.code}")
@@ -68,21 +68,26 @@ object ListenBrainzManager {
         song: Song?,
         startMs: Long,
         endMs: Long,
+        listenedMs: Long,
         durationMsOverride: Long? = null,
         primaryArtistOnly: Boolean = false,
     ): Boolean {
-        if (token.isBlank() || song == null) return false
+        // A completed HTTP request is not proof of a listen: short skips,
+        // seeks to the end and time spent paused must never be submitted.
+        if (token.isBlank() || song == null || startMs / 1_000L < 1_033_430_400L ||
+            endMs <= startMs
+        ) return false
         return withContext(Dispatchers.IO) {
             try {
-                val durationMs = durationMsOverride ?: parseDurationMs(song.durationText)
+                val durationMs = durationMsOverride?.takeIf { it > 0L }
+                    ?: parseDurationMs(song.durationText)
+                if (!listenBrainzQualifiesAsListen(listenedMs, durationMs)) {
+                    return@withContext false
+                }
                 val durationPart = if (durationMs > 0) "\"duration_ms\":$durationMs," else ""
                 val releaseName = song.albumName.orEmpty()
                 val releasePart = if (releaseName.isBlank()) "" else "\"release_name\":\"${escapeJson(releaseName)}\","
-                var listenedAtStart = startMs / 1000L
-                val MIN_LISTEN_TS = 1033430400L
-                if (listenedAtStart < MIN_LISTEN_TS) {
-                    listenedAtStart = System.currentTimeMillis() / 1000L
-                }
+                val listenedAtStart = startMs / 1_000L
                 val artist = if (primaryArtistOnly) song.artist.primaryArtist() else song.artist
                 val trackMetadata = """{"listened_at":$listenedAtStart,"track_metadata":{"artist_name":"${escapeJson(artist)}","track_name":"${escapeJson(song.title)}",$releasePart"additional_info":{${durationPart}"start_ms":$startMs,"end_ms":$endMs,"submission_client":"BitChord"}}}"""
                 val bodyJson = "{\"listen_type\":\"single\",\"payload\":[$trackMetadata]}"
@@ -99,7 +104,7 @@ object ListenBrainzManager {
                 ListenBrainzRequestBudget.limiter.run {
                     Http.client.newCall(request).execute().use { resp ->
                         if (resp.isSuccessful) {
-                        Log.d(TAG, "finished listen submitted")
+                            Log.d(TAG, "finished listen submitted")
                             true
                         } else {
                             Log.w(TAG, "finished listen submit failed: HTTP ${resp.code}")
