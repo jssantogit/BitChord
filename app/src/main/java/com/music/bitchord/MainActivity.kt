@@ -2026,9 +2026,11 @@ private fun BitChordApp(
         val isPublicCommunity = canonicalCommunityCardIsMetadataOnly(
             tabOrigin, shelfTitle, canonicalCommunityHeading, item.browseId,
         )
+        // A stale card must remain metadata-only even if the user disabled the
+        // account during a click: disabling removes the shelf, not its safety gate.
         val isPersonalRecommendation = canonicalCommunityCardIsMetadataOnly(
             tabOrigin, shelfTitle, canonicalPersonalHeading, item.browseId,
-        ) && listenBrainzAccountEnabled && listenBrainzAccountToken.isNotBlank()
+        )
         val isMetadataOnly = isPublicCommunity || isPersonalRecommendation
         val cached = canonicalEditorialRowForCard(
             when {
