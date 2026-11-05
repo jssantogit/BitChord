@@ -39,7 +39,8 @@ internal object ListenBrainzOutbox {
         startMs = startMs,
         endMs = endMs,
         listenedMs = listenedMs,
-        durationMs = durationMs?.takeIf { it > 0L } ?: 0L,
+        durationMs = durationMs?.takeIf { it > 0L }
+            ?: listenBrainzDurationMsFromLabel(song.durationText),
         artist = if (primaryArtistOnly) song.artist.primaryArtist() else song.artist,
         title = song.title,
         album = song.albumName.orEmpty(),
