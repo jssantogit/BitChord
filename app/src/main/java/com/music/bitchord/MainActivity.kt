@@ -328,6 +328,9 @@ import com.music.bitchord.ui.screens.LibraryGridPage
 import com.music.bitchord.ui.screens.LEGACY_PLAYLISTS_SHELF_TITLE
 import com.music.bitchord.ui.screens.LibraryScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
+import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingContent
+import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingState
+import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
@@ -1914,6 +1917,9 @@ private fun BitChordApp(
         selectedTab = TAB_SEARCH
         searchFocusRequested = true
     }
+    // Public recording metadata is a detail-only destination, not a local
+    // RecordingId or a synthetic media item. Reuse the native recording shell.
+    var communityMetadataRecording by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
     val onCanonicalShelfClick: (ShelfItem, String, PlaybackSourceType) -> Unit =
         { item, shelfTitle, tabOrigin ->
         val selectedLocal = canonicalHomeLocalPicks.firstOrNull {
@@ -1944,6 +1950,8 @@ private fun BitChordApp(
             cached.hasCatalogedAsset
         ) {
             executeMusicBrainzCatalog(cached.musicBrainzId, CanonicalCollectionIntent.PLAY_NOW)
+        } else if (cached?.kind == CanonicalSearchKind.RECORDING) {
+            communityMetadataRecording = cached
         } else if (cached != null) {
             viewModel.openCanonicalNativeDetail(cached)
         } else {
@@ -2585,6 +2593,7 @@ private fun BitChordApp(
         BackHandler(enabled = showAllLocalRecentAdditions && detail == null) { showAllLocalRecentAdditions = false }
         BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
+        BackHandler(enabled = communityMetadataRecording != null) { communityMetadataRecording = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
         BackHandler(enabled = unifiedLibraryCategory != null) {
             if (unifiedLibraryDetailOpen) unifiedLibraryBackToken++
@@ -2638,6 +2647,7 @@ private fun BitChordApp(
                         showReplay -> "replay"
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
+                        communityMetadataRecording != null -> "community_recording:" + communityMetadataRecording!!.musicBrainzId
                         showCanonicalMyRatings -> "my_ratings"
                         unifiedLibraryCategory != null -> "unified_library"
                         // The wizard is pushed FROM the playlist category. It must win
@@ -2939,6 +2949,18 @@ private fun BitChordApp(
                             recordingId = key.removePrefix("rediscovery:"),
                             onBack = { rediscoveryRecordingId = null },
                         )
+                    } else if (key.startsWith("community_recording:")) {
+                        val row = communityMetadataRecording
+                        if (row != null && key == "community_recording:" + row.musicBrainzId) {
+                            CanonicalRediscoveryRecordingContent(
+                                state = CanonicalRediscoveryRecordingState.MetadataOnly(
+                                    recordingMbid = row.musicBrainzId,
+                                    title = row.title,
+                                    artistDisplay = row.subtitle.orEmpty(),
+                                ),
+                                onBack = { communityMetadataRecording = null },
+                            )
+                        }
                     } else if (key == "history") {
                         HistoryScreen(
                             state = historyState,
@@ -4370,6 +4392,7 @@ private fun BitChordApp(
                     viewModel.clearDetail()
                     // Tab changes dismiss an open canonical Recording details page.
                     rediscoveryRecordingId = null
+                    communityMetadataRecording = null
                     showCanonicalMyRatings = false
                     showSmartPlaylistBuilder = false
                     viewModel.closeMoodGenre()
