@@ -338,6 +338,7 @@ import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
 import com.music.bitchord.ui.canonicalSitewideCommunityShelf
 import com.music.bitchord.ui.canonicalSitewideDiscoveryIsFresh
+import com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly
 import com.music.bitchord.ui.canonicalEditorialRowForCard
 import com.music.bitchord.ui.canonicalPublicPopularityCandidates
 import com.music.bitchord.ui.canonicalEditorialPlaybackSource
@@ -978,7 +979,7 @@ private fun BitChordApp(
     LaunchedEffect(selectedTab, popularityCandidateIds) {
         if (selectedTab == TAB_EXPLORE) {
             viewModel.loadCanonicalExplorePublicPopularity(cachedCanonicalRows)
-            if (popularityCandidateIds.isNotEmpty()) viewModel.loadCanonicalExploreSitewide()
+            viewModel.loadCanonicalExploreSitewide()
         }
     }
     val canonicalFeedDate = remember {
@@ -1028,7 +1029,7 @@ private fun BitChordApp(
                 canonicalExploreSitewide, System.currentTimeMillis(),
             )
         ) canonicalSitewideCommunityShelf(
-            rows = cachedCanonicalRows,
+            rows = cachedCanonicalRows + canonicalExploreSitewide.verifiedRows,
             rankings = canonicalExploreSitewide.recordings,
             heading = canonicalCommunityHeading,
         ) else null
@@ -1948,7 +1949,14 @@ private fun BitChordApp(
         val selectedRemote = canonicalHomeRemotePicks.firstOrNull {
             isTrustedHomeServerAsset(it) && canonicalRemotePickCardId(it) == item.browseId
         }
-        val cached = canonicalEditorialRowForCard(cachedCanonicalRows, item.browseId)
+        val isPublicCommunity = canonicalCommunityCardIsMetadataOnly(
+            tabOrigin, shelfTitle, canonicalCommunityHeading, item.browseId,
+        )
+        val cached = canonicalEditorialRowForCard(
+            if (isPublicCommunity) cachedCanonicalRows + canonicalExploreSitewide.verifiedRows
+            else cachedCanonicalRows,
+            item.browseId,
+        )
         if (selectedLocal != null) {
             playFrom(
                 listOf(selectedLocal), 0,
@@ -1966,6 +1974,8 @@ private fun BitChordApp(
                     artistDisplay = selectedRemote.artistDisplay,
                 ),
             )
+        } else if (isPublicCommunity && cached?.kind == CanonicalSearchKind.RECORDING) {
+            communityMetadataRecording = cached
         } else if (cached?.kind == CanonicalSearchKind.RECORDING &&
             cached.hasCatalogedAsset
         ) {
