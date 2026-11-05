@@ -122,7 +122,16 @@ object ListenBrainzManager {
         }
     }
 
-    private fun parseDurationMs(text: String?): Long {
+    private fun parseDurationMs(text: String?): Long = listenBrainzDurationMsFromLabel(text)
+
+    private fun escapeJson(s: String): String = listenBrainzEscapedJsonText(s)
+}
+
+/** Quotes are inserted by the payload; preserve every JSON string escape, including CJK/control chars. */
+internal fun listenBrainzEscapedJsonText(value: String): String =
+    JsonPrimitive(value).toString().removeSurrounding("\"")
+
+internal fun listenBrainzDurationMsFromLabel(text: String?): Long {
         val parts = text?.trim()?.split(':') ?: return 0L
         if (parts.size !in 2..3) return 0L
         val numbers = parts.map { value ->
@@ -141,10 +150,3 @@ object ListenBrainzManager {
             0L
         }
     }
-
-    private fun escapeJson(s: String): String = listenBrainzEscapedJsonText(s)
-}
-
-/** Quotes are inserted by the payload; preserve every JSON string escape, including CJK/control chars. */
-internal fun listenBrainzEscapedJsonText(value: String): String =
-    JsonPrimitive(value).toString().removeSurrounding("\"")
