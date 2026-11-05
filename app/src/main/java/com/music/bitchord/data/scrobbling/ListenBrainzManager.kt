@@ -123,12 +123,23 @@ object ListenBrainzManager {
     }
 
     private fun parseDurationMs(text: String?): Long {
-        if (text == null) return 0L
-        val parts = text.split(":")
-        if (parts.size != 2) return 0L
-        val minutes = parts[0].toLongOrNull() ?: return 0L
-        val seconds = parts[1].toLongOrNull() ?: return 0L
-        return (minutes * 60 + seconds) * 1000
+        val parts = text?.trim()?.split(':') ?: return 0L
+        if (parts.size !in 2..3) return 0L
+        val numbers = parts.map { value ->
+            if (value.isEmpty() || !value.all(Char::isDigit)) return 0L
+            value.toLongOrNull() ?: return 0L
+        }
+        val seconds = numbers.last()
+        val minutes = numbers[numbers.size - 2]
+        if (seconds !in 0L..59L || (parts.size == 3 && minutes !in 0L..59L)) return 0L
+        return try {
+            val totalMinutes = if (parts.size == 3) {
+                Math.addExact(Math.multiplyExact(numbers[0], 60L), minutes)
+            } else minutes
+            Math.multiplyExact(Math.addExact(Math.multiplyExact(totalMinutes, 60L), seconds), 1000L)
+        } catch (_: ArithmeticException) {
+            0L
+        }
     }
 
     private fun escapeJson(s: String): String = listenBrainzEscapedJsonText(s)
