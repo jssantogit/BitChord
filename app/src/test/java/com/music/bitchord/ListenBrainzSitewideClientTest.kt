@@ -57,6 +57,59 @@ class ListenBrainzSitewideClientTest {
         assertEquals(listOf("week" to 25, "month" to 25), fake.calls)
     }
 
+    @Test fun staleWeeklySnapshotIsNotPinnedInSixHourCache() = runBlocking {
+        var now = 1_800_000_000_000L
+        val stale = (now - 20L * 24L * 60L * 60L * 1_000L) / 1_000L
+        val updated = now / 1_000L
+        val fake = Fake().apply {
+            replies += ListenBrainzPopularityHttpResponse(200,
+                """{"payload":{"range":"week","offset":0,"last_updated":$stale,
+                "recordings":[{"recording_mbid":"$recording","listen_count":14}]}}""")
+            replies += ListenBrainzPopularityHttpResponse(200,
+                """{"payload":{"range":"week","offset":0,"last_updated":$updated,
+                "recordings":[{"recording_mbid":"$recording","listen_count":16}]}}""")
+        }
+        val client = ListenBrainzPopularityClient(
+            fake, ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = { now += it }),
+            nowMillis = { now },
+        )
+        val staleResult = client.sitewideRecordings()
+            as ListenBrainzSitewideFetchResult.Success
+        assertEquals(14L, staleResult.recordings.single().listenCount)
+        // An upstream snapshot twenty days old cannot keep the weekly feed
+        // unchanged for another six hours. A later request may refresh it.
+        now += 16L * 60L * 1_000L
+        val refreshed = client.sitewideRecordings()
+            as ListenBrainzSitewideFetchResult.Success
+        assertEquals(false, refreshed.fromCache)
+        assertEquals(16L, refreshed.recordings.single().listenCount)
+        assertEquals(2, fake.calls.size)
+    }
+
+    @Test fun noContentUsesShortNegativeTtlInsteadOfSixHours() = runBlocking {
+        var now = 1_800_000_000_000L
+        val fake = Fake().apply {
+            replies += ListenBrainzPopularityHttpResponse(204, "")
+            replies += ListenBrainzPopularityHttpResponse(200,
+                """{"payload":{"range":"week","offset":0,"last_updated":${now / 1000L},
+                "recordings":[{"recording_mbid":"$recording","listen_count":12}]}}""")
+        }
+        val client = ListenBrainzPopularityClient(
+            fake, ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = { now += it }),
+            nowMillis = { now },
+        )
+        assertTrue((client.sitewideRecordings() as ListenBrainzSitewideFetchResult.Success)
+            .recordings.isEmpty())
+        now += 2L * 60L * 1_000L
+        assertEquals(true, (client.sitewideRecordings()
+            as ListenBrainzSitewideFetchResult.Success).fromCache)
+        now += 14L * 60L * 1_000L
+        val recovered = client.sitewideRecordings() as ListenBrainzSitewideFetchResult.Success
+        assertEquals(false, recovered.fromCache)
+        assertEquals(12L, recovered.recordings.single().listenCount)
+        assertEquals(2, fake.calls.size)
+    }
+
     @Test fun sitewideRequestMustBeBoundedAndFailClosedOnWrongRange() = runBlocking {
         val fake = Fake().apply {
             replies += ListenBrainzPopularityHttpResponse(200,
