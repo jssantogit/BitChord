@@ -30,6 +30,10 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityClient
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityFetchResult
+import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopFetchResult
+import com.music.bitchord.data.catalog.metadata.MusicBrainzMetadataEnrichmentProvider
+import com.music.bitchord.data.catalog.metadata.MetadataLookupResult
+import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
@@ -327,6 +331,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var explorePublicPopularityJob: Job? = null
     @Volatile private var explorePublicPopularityFreshBatch: Pair<List<String>, Long>? = null
     @Volatile private var explorePublicPopularityLoadingBatch: List<String>? = null
+    private val _canonicalArtistPublicTop = MutableStateFlow(CanonicalArtistPublicTopState())
+    internal val canonicalArtistPublicTop: StateFlow<CanonicalArtistPublicTopState> =
+        _canonicalArtistPublicTop.asStateFlow()
+    private val artistPublicTopEpoch = DiscoveryRequestEpoch()
+    private var artistPublicTopJob: Job? = null
+    private val artistTopMetadataProvider by lazy { MusicBrainzMetadataEnrichmentProvider() }
+    private val artistTopMetadataCache = ConcurrentHashMap<String, RecordingMetadataEnrichment>()
+
 
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
@@ -2720,6 +2732,67 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     success?.let { ids to it.fetchedAtMs }
                 explorePublicPopularityLoadingBatch = null
                 _canonicalExplorePublicPopularity.value = success?.observations.orEmpty()
+            }
+        }
+    }
+
+    /**
+     * Only a canonical artist detail requests these public rankings. ListenBrainz
+     * establishes the ordering; the existing MusicBrainz client must independently
+     * prove both recording identity and artist credit before a row becomes visible.
+     * No listen is submitted and no MediaAsset or playback identity is generated.
+     */
+    fun loadCanonicalArtistPublicTop(artistMbid: String?) {
+        val id = artistMbid?.lowercase(Locale.ROOT)?.takeIf {
+            Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+                .matches(it)
+        }
+        if (id != null && _canonicalArtistPublicTop.value.artistMbid == id &&
+            (_canonicalArtistPublicTop.value.rows.isNotEmpty() ||
+                artistPublicTopJob?.isActive == true)
+        ) return
+        val generation = artistPublicTopEpoch.next()
+        artistPublicTopJob?.cancel()
+        _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(artistMbid = id)
+        if (id == null) return
+        artistPublicTopJob = viewModelScope.launch(Dispatchers.IO) {
+            val popularity = try {
+                listenBrainzPopularityClient.topRecordingsForArtist(id)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ListenBrainzArtistTopFetchResult.Unavailable
+            }
+            val ranked = (popularity as? ListenBrainzArtistTopFetchResult.Success)
+                ?.recordings?.take(8).orEmpty()
+            val verified = mutableMapOf<String, RecordingMetadataEnrichment>()
+            for (candidate in ranked) {
+                currentCoroutineContext().ensureActive()
+                val mbid = candidate.recordingMbid
+                val known = artistTopMetadataCache[mbid]
+                val record = if (known != null) known else try {
+                    val result = withTimeoutOrNull(16_000L) {
+                        artistTopMetadataProvider.lookupRecording(mbid)
+                    }
+                    (result as? MetadataLookupResult.Success)?.value
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                if (record != null && record.musicBrainzId.equals(mbid, ignoreCase = true)) {
+                    if (artistTopMetadataCache.size >= 64) artistTopMetadataCache.clear()
+                    artistTopMetadataCache[mbid] = record
+                    verified[mbid] = record
+                }
+                // Progressively publish only independently verified rows. Old
+                // requests cannot repaint another artist after navigation.
+                if (artistPublicTopEpoch.isCurrent(generation) &&
+                    _detailStack.value.lastOrNull()?.browseId == "catalog:ARTIST:$id"
+                ) {
+                    _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
+                        artistMbid = id,
+                        rows = canonicalVerifiedArtistTopRows(id, ranked, verified),
+                    )
+                }
             }
         }
     }
