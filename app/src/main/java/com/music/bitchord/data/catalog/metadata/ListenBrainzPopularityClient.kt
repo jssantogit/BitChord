@@ -209,6 +209,20 @@ internal class ListenBrainzPopularityClient(
     private val artistCache = mutableMapOf<String, ArtistCacheValue>()
 
     /**
+     * Negative, undated or already-outdated charts may recover upstream long
+     * before six hours. Keep a short negative TTL rather than pinning absent
+     * weekly discovery behind a successful HTTP 204/stale 200 response.
+     */
+    private fun sitewideCacheLifetimeMs(
+        range: ListenBrainzSitewideRange,
+        value: SitewideCacheValue,
+        nowMs: Long,
+    ): Long =
+        if (value.recordings.isNotEmpty() &&
+            listenBrainzSitewideSnapshotIsCurrent(range, value.lastUpdatedSeconds, nowMs)
+        ) LISTENBRAINZ_PUBLIC_TTL_MS else 15L * 60L * 1_000L
+
+    /**
      * Explicit sitewide time-window discovery. Rankings are independent from
      * personal listening and do not provide Recording metadata or a stream.
      */
@@ -225,7 +239,7 @@ internal class ListenBrainzPopularityClient(
                 val cached = sitewideCache[key]
                 val now = nowMillis()
                 if (cached != null && now >= cached.atMs &&
-                    now - cached.atMs < LISTENBRAINZ_PUBLIC_TTL_MS
+                    now - cached.atMs < sitewideCacheLifetimeMs(range, cached, now)
                 ) return ListenBrainzSitewideFetchResult.Success(
                     cached.recordings, range, cached.lastUpdatedSeconds,
                     cached.atMs, fromCache = true,
