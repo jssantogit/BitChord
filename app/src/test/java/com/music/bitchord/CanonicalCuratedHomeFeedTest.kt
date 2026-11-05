@@ -4,6 +4,8 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
+import com.music.bitchord.ui.canonicalEditorialPlaybackSource
+import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.ui.canonicalCoverLookupTarget
 import com.music.bitchord.ui.canonicalCoverLookupCandidates
 import com.music.bitchord.ui.canonicalArtistArtworkCandidate
@@ -36,6 +38,11 @@ class CanonicalCuratedHomeFeedTest {
         releasesHeading = "Lançamentos", picksHeading = "Escolha a dedo",
         trendingHeading = "Em alta", todayIsoDate = "2026-10-25",
     )
+
+    @Test fun editorialPlaybackProvenanceTracksTheActualHomeOrExploreTab() {
+        assertEquals(PlaybackSourceType.HOME, canonicalEditorialPlaybackSource(explore = false))
+        assertEquals(PlaybackSourceType.EXPLORE, canonicalEditorialPlaybackSource(explore = true))
+    }
 
     @Test fun explorePrioritizesVerifiedReleasesWhileHomeKeepsAllThreeShelves() {
         val home = feed(listOf(release, playable), listOf(local), listOf(playable.musicBrainzId))
