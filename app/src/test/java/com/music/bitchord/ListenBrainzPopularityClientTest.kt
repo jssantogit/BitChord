@@ -200,6 +200,74 @@ class ListenBrainzPopularityClientTest {
         assertEquals(1, calls)
     }
 
+    @Test fun cancellationReleasesFetchLockAndAllowsNextAttempt() = runBlocking {
+        val entered = CompletableDeferred<Unit>()
+        val neverFinishes = CompletableDeferred<Unit>()
+        var calls = 0
+        val transport = object : ListenBrainzPopularityTransport {
+            override suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse {
+                calls++
+                if (calls == 1) {
+                    entered.complete(Unit)
+                    neverFinishes.await()
+                }
+                return ListenBrainzPopularityHttpResponse(200,
+                    """[{"recording_mbid":"$a","total_listen_count":8,"total_user_count":2}]""")
+            }
+            override suspend fun topRecordingsForArtist(artistMbid: String) =
+                ListenBrainzPopularityHttpResponse(503, "")
+        }
+        val client = ListenBrainzPopularityClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { 0L }, waitMillis = {}),
+            nowMillis = { 50L },
+        )
+        val cancelled = async(start = CoroutineStart.UNDISPATCHED) {
+            client.recordingPopularity(listOf(a))
+        }
+        entered.await()
+        cancelled.cancel()
+        cancelled.join()
+        assertTrue(client.recordingPopularity(listOf(a)) is ListenBrainzPopularityFetchResult.Success)
+        assertEquals(2, calls)
+    }
+
+    @Test fun concurrentArtistTopRequestsShareFetchedEvidence() = runBlocking {
+        val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
+        val recording = a
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var calls = 0
+        val transport = object : ListenBrainzPopularityTransport {
+            override suspend fun recordingPopularity(recordingMbids: List<String>) =
+                ListenBrainzPopularityHttpResponse(503, "")
+            override suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse {
+                calls++
+                if (calls == 1) {
+                    entered.complete(Unit)
+                    release.await()
+                }
+                return ListenBrainzPopularityHttpResponse(200,
+                    """[{"recording_mbid":"$recording","artist_mbids":["$artist"],
+                    "total_listen_count":42,"total_user_count":6}]""")
+            }
+        }
+        val client = ListenBrainzPopularityClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { 0L }, waitMillis = {}),
+            nowMillis = { 70L },
+        )
+        val first = async(start = CoroutineStart.UNDISPATCHED) {
+            client.topRecordingsForArtist(artist)
+        }
+        entered.await()
+        val second = async(start = CoroutineStart.UNDISPATCHED) {
+            client.topRecordingsForArtist(artist)
+        }
+        release.complete(Unit)
+        assertEquals(false, (first.await() as ListenBrainzArtistTopFetchResult.Success).fromCache)
+        assertEquals(true, (second.await() as ListenBrainzArtistTopFetchResult.Success).fromCache)
+        assertEquals(1, calls)
+    }
+
     @Test fun badResponseAndInvalidIdsFailClosedAndNeverCache() = runBlocking {
         val transport = FakeTransport(mutableListOf(
             ListenBrainzPopularityHttpResponse(200,
