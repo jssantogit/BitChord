@@ -45,15 +45,17 @@ object ListenBrainzManager {
 
                 ListenBrainzRequestBudget.limiter.run {
                     Http.client.newCall(request).execute().use { resp ->
-                    if (resp.isSuccessful) {
+                        if (resp.isSuccessful) {
                         Log.d(TAG, "playing_now submitted")
-                        true
-                    } else {
-                        Log.w(TAG, "playing_now submit failed: HTTP ${resp.code}")
-                        false
-                    }
+                            true
+                        } else {
+                            Log.w(TAG, "playing_now submit failed: HTTP ${resp.code}")
+                            false
+                        }
                     }
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (ex: Exception) {
                 Log.e(TAG, "submitPlayingNow failed", ex)
                 false
@@ -96,15 +98,17 @@ object ListenBrainzManager {
 
                 ListenBrainzRequestBudget.limiter.run {
                     Http.client.newCall(request).execute().use { resp ->
-                    if (resp.isSuccessful) {
+                        if (resp.isSuccessful) {
                         Log.d(TAG, "finished listen submitted")
-                        true
-                    } else {
-                        Log.w(TAG, "finished listen submit failed: HTTP ${resp.code}")
-                        false
-                    }
+                            true
+                        } else {
+                            Log.w(TAG, "finished listen submit failed: HTTP ${resp.code}")
+                            false
+                        }
                     }
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (ex: Exception) {
                 Log.e(TAG, "submitFinished failed", ex)
                 false
