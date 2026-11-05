@@ -4188,75 +4188,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 artwork = localPlaylist.songs.firstOrNull { !it.thumbnailUrl.isNullOrBlank() }?.thumbnailUrl
             }
             val local = localPageState(browseId)
-            val state = when {
-                local != null -> local
-                resolved == BrowseType.ARTIST -> {
-                    runLegacyYoutubeBrowseIfEnabled(
-                        enabled = { canRunLegacyYoutubeCatalogLookup() },
-                    ) { YtMusicRepository.artistPage(browseId) }?.fold(
-                        onSuccess = { page ->
-                            sections = page.sections
-                            artwork = page.thumbnailUrl
-                            name = page.name
-                            description = page.description
-                            subscriberCountText = page.subscriberCountText
-                            monthlyListenerCount = page.monthlyListenerCount
-                            subscription = page.subscription
-                            if (page.songs.isEmpty()) {
-                                UiState.Error(text(R.string.no_tracks_here))
-                            } else {
-                                UiState.Success(page.songs.withArtwork(thumbnailUrl ?: artwork))
-                            }
-                        },
-                        onFailure = { UiState.Error(it.friendly()) },
-                    ) ?: UiState.Error(text(R.string.legacy_library_youtube_disabled))
-                }
-                else -> {
-                    runLegacyYoutubeBrowseIfEnabled(
-                        enabled = { canRunLegacyYoutubeCatalogLookup() },
-                    ) { YtMusicRepository.browseSongs(browseId) }?.fold(
-                        onSuccess = { page ->
-                            // Free here — the page that returned these rows is
-                            // the one thing that states who made the playlist,
-                            // so its own menu never has to go and ask. Recorded
-                            // even when the listing came back empty.
-                            page.owned?.let { setPlaylistOwned(browseId, it) }
-                            // Only for the caller that had nothing: a card's own
-                            // title is what the user just tapped, and must not
-                            // be swapped for the header's wording underneath them.
-                            page.header?.let { header ->
-                                if (title.isBlank()) name = header.title
-                                // Album cards often only carry the artist, while
-                                // the page header also carries the release year.
-                                // Prefer that richer line so the year appears
-                                // directly below the artist on the album page.
-                                if (resolved == BrowseType.ALBUM && header.subtitle.isNotBlank()) {
-                                    credit = header.subtitle
-                                } else if (subtitle.isBlank()) {
-                                    credit = header.subtitle
-                                }
-                                if (thumbnailUrl == null) artwork = header.thumbnailUrl
-                            }
-                            description = page.description
-                            if (page.songs.isEmpty()) {
-                                UiState.Error(text(R.string.no_tracks_here))
-                            } else {
-                                more = page.continuation
-                                suggested = page.suggested.withArtwork(thumbnailUrl ?: artwork)
-                                library = page.library
-                                UiState.Success(page.songs.withArtwork(thumbnailUrl ?: artwork))
-                            }
-                        },
-                        onFailure = { UiState.Error(it.friendly()) },
-                    ) ?: UiState.Error(text(R.string.legacy_library_youtube_disabled))
-                }
-            }
-            // An opt-out may arrive after the last network await, before the
-            // page is committed. Never publish legacy metadata in that race.
-            // Cached/downloaded tracks already shown above remain visible.
-            val safeState = if (local == null &&
-                !canRunLegacyYoutubeCatalogLookup()
-            ) UiState.Error(text(R.string.legacy_library_youtube_disabled)) else state
+            // Library/Spotify/provider-owned pages are resolved above. Historical
+            // YouTube browse IDs remain readable, but never initiate a network lookup.
+            val safeState = local ?: UiState.Error(text(R.string.legacy_library_youtube_disabled))
             // Update by id — the user may have pushed another page meanwhile.
             // A page showing its downloaded copy takes only a real listing: a
             // failed or empty fetch leaves the downloaded tracks up.
