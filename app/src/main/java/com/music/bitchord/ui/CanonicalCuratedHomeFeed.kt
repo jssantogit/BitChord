@@ -457,7 +457,7 @@ internal fun canonicalPublicPopularityCandidates(
     rows: List<CanonicalCatalogSearchRow>, limit: Int = 40,
 ): List<String> = rows.asSequence()
     .filter { it.kind == CanonicalSearchKind.RECORDING && canonicalStreamingTitleIsSafe(it.title) }
-    .map { it.musicBrainzId }
+    .map { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
     .filter { CATALOG_RECORDING_MBID.matches(it) }
     .distinct()
     .take(limit.coerceIn(0, 100))
@@ -481,9 +481,9 @@ internal fun canonicalPublicPopularityShelf(
     val recordings = rows.asSequence()
         .filter { it.kind == CanonicalSearchKind.RECORDING &&
             canonicalStreamingTitleIsSafe(it.title) &&
-            CATALOG_RECORDING_MBID.matches(it.musicBrainzId) }
-        .distinctBy { it.musicBrainzId }
-        .associateBy { it.musicBrainzId }
+            CATALOG_RECORDING_MBID.matches(it.musicBrainzId.lowercase(java.util.Locale.ROOT)) }
+        .distinctBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+        .associateBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
     val cards = publicListenBrainzRecordingRanking(evidence)
         .asSequence().filter { it.listeners > 0L && it.listens > 0L }
         .distinctBy { it.recordingMbid }
@@ -491,7 +491,7 @@ internal fun canonicalPublicPopularityShelf(
             val row = recordings[known.recordingMbid] ?: return@mapNotNull null
             // The ordinary Home card helper intentionally suppresses recordings
             // without audio; this is an Explore metadata-navigation card.
-            val browseId = "catalog:RECORDING:${row.musicBrainzId}"
+            val browseId = "catalog:RECORDING:${row.musicBrainzId.lowercase(java.util.Locale.ROOT)}"
             ShelfItem(
                 title = row.title,
                 subtitle = row.subtitle.orEmpty(),
@@ -516,14 +516,14 @@ internal fun canonicalEditorialRowForCard(
     if (browseId.isNullOrBlank()) return null
     return rows.firstOrNull { row ->
         val exactId = when (row.kind) {
-            CanonicalSearchKind.RECORDING -> if (CATALOG_RECORDING_MBID.matches(row.musicBrainzId)) {
-                "catalog:RECORDING:${row.musicBrainzId}"
+            CanonicalSearchKind.RECORDING -> if (CATALOG_RECORDING_MBID.matches(row.musicBrainzId.lowercase(java.util.Locale.ROOT))) {
+                "catalog:RECORDING:${row.musicBrainzId.lowercase(java.util.Locale.ROOT)}"
             } else null
             CanonicalSearchKind.RELEASE, CanonicalSearchKind.RELEASE_GROUP ->
                 canonicalBrowseCardId(row)
             CanonicalSearchKind.ARTIST -> null
         }
-        exactId != null && exactId == browseId
+        exactId != null && exactId.equals(browseId, ignoreCase = true)
     }
 }
 
