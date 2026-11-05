@@ -2747,7 +2747,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // If ListenBrainz's own snapshot is undated or too old, never
             // spend MusicBrainz requests or advertise it as a weekly chart.
             if (!canonicalSitewideDiscoveryIsFresh(snapshot, System.currentTimeMillis())) {
-                sitewideRetryAfterMs = System.currentTimeMillis() + 60L * 60_000L
+                // The public client uses a short negative TTL for undated
+                // or outdated charts. Retry at that boundary, not an hour later.
+                sitewideRetryAfterMs = System.currentTimeMillis() + 15L * 60_000L
                 return@launch
             }
             // Existing catalog rows already carry MusicBrainz identity; only
