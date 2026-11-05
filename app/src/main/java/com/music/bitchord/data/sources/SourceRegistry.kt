@@ -219,7 +219,7 @@ object SourceRegistry {
 
     /** The common eligibility gate used by playback and download source walks. */
     internal fun enabledConfigs(configs: List<SourceConfig>): List<SourceConfig> =
-        configs.filter { it.enabled && it.isComplete }
+        configs.filter { it.enabled && it.isComplete && it.kind != SourceKind.YOUTUBE }
 
     /** User-visible source selection is provider-neutral. Retired YouTube
      * settings stay decoded for migration but cannot appear as an option. */
