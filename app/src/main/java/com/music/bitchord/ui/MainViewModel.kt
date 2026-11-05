@@ -4694,7 +4694,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 is UiState.Success -> Result.success(local.data)
                 is UiState.Error -> Result.failure(IllegalStateException(local.message))
                 UiState.Loading -> Result.failure(IllegalStateException(text(R.string.no_tracks_here)))
-                null -> YtMusicRepository.allSongs(browseId)
+                null -> Result.failure(IllegalStateException(text(R.string.legacy_library_youtube_disabled)))
             }
             onResult(result.map { it.withArtwork(artworkFallback) })
         }
