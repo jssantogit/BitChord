@@ -9,6 +9,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.music.bitchord.data.Http
 import com.music.bitchord.data.catalog.metadata.ListenBrainzRequestBudget
+import kotlinx.serialization.json.JsonPrimitive
 
 object ListenBrainzManager {
     private const val TAG = "ListenBrainzManager"
@@ -130,5 +131,9 @@ object ListenBrainzManager {
         return (minutes * 60 + seconds) * 1000
     }
 
-    private fun escapeJson(s: String): String = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+    private fun escapeJson(s: String): String = listenBrainzEscapedJsonText(s)
 }
+
+/** Quotes are inserted by the payload; preserve every JSON string escape, including CJK/control chars. */
+internal fun listenBrainzEscapedJsonText(value: String): String =
+    JsonPrimitive(value).toString().removeSurrounding("\"")
