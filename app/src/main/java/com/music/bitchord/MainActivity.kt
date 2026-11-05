@@ -336,6 +336,9 @@ import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
 import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
+import com.music.bitchord.ui.canonicalPersonalRecommendationShelf
+import com.music.bitchord.ui.canonicalPersonalRecommendationIsFresh
+import com.music.bitchord.ui.canonicalPersonalRecommendationExpiresAtMs
 import com.music.bitchord.ui.canonicalSitewideCommunityShelf
 import com.music.bitchord.ui.canonicalSitewideDiscoveryIsFresh
 import com.music.bitchord.ui.canonicalSitewideDiscoveryExpiresAtMs
@@ -781,6 +784,9 @@ private fun BitChordApp(
     val canonicalTrendingLocalSongs by viewModel.canonicalTrendingLocalSongs.collectAsStateWithLifecycle()
     val canonicalExplorePublicPopularity by viewModel.canonicalExplorePublicPopularity.collectAsStateWithLifecycle()
     val canonicalExploreSitewide by viewModel.canonicalExploreSitewide.collectAsStateWithLifecycle()
+    val canonicalPersonalRecommendations by viewModel.canonicalExplorePersonalRecommendations.collectAsStateWithLifecycle()
+    val listenBrainzAccountEnabled by AppSettings.listenBrainzEnabled.collectAsStateWithLifecycle()
+    val listenBrainzAccountToken by AppSettings.listenBrainzToken.collectAsStateWithLifecycle()
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
 
@@ -972,15 +978,21 @@ private fun BitChordApp(
     val canonicalPicksHeading = stringResource(R.string.shelf_quick_picks)
     val canonicalTrendingHeading = stringResource(R.string.shelf_trending)
     val canonicalCommunityHeading = stringResource(R.string.shelf_listenbrainz_community)
+    val canonicalPersonalHeading = stringResource(R.string.shelf_for_you)
     val popularityCandidateIds = remember(cachedCanonicalRows) {
         canonicalPublicPopularityCandidates(cachedCanonicalRows)
     }
     // Only Explore requests public popularity. Metadata-only cards still open
     // their canonical details and cannot start playback without a MediaAsset.
-    LaunchedEffect(selectedTab, popularityCandidateIds) {
+    LaunchedEffect(
+        selectedTab, popularityCandidateIds,
+        listenBrainzAccountEnabled, listenBrainzAccountToken,
+    ) {
         if (selectedTab == TAB_EXPLORE) {
             viewModel.loadCanonicalExplorePublicPopularity(cachedCanonicalRows)
             viewModel.loadCanonicalExploreSitewide()
+            // Personal discovery requires opt-in and uses no playback fallback.
+            viewModel.loadCanonicalPersonalRecommendations()
         }
     }
     val canonicalFeedDate = remember {
@@ -1065,16 +1077,57 @@ private fun BitChordApp(
             heading = canonicalCommunityHeading,
         )
     }
+    // The same HomeScreen shelf compositor displays private recommendations;
+    // their MBIDs and per-user scores never contaminate public popularity.
+    // Tick on expiration so the section disappears even if Explore stays open.
+    var personalRecommendationNowMs by remember {
+        mutableStateOf(System.currentTimeMillis())
+    }
+    LaunchedEffect(
+        selectedTab, canonicalPersonalRecommendations.fetchedAtMs,
+        canonicalPersonalRecommendations.upstreamUpdatedSeconds,
+        listenBrainzAccountEnabled, listenBrainzAccountToken,
+    ) {
+        if (selectedTab != TAB_EXPLORE || !listenBrainzAccountEnabled ||
+            listenBrainzAccountToken.isBlank()
+        ) return@LaunchedEffect
+        val now = System.currentTimeMillis()
+        personalRecommendationNowMs = now
+        if (!canonicalPersonalRecommendationIsFresh(canonicalPersonalRecommendations, now)) {
+            return@LaunchedEffect
+        }
+        val expiry = canonicalPersonalRecommendationExpiresAtMs(canonicalPersonalRecommendations)
+            ?: return@LaunchedEffect
+        val remaining = expiry - now
+        if (remaining > 0L) delay(remaining + 1L)
+        personalRecommendationNowMs = System.currentTimeMillis()
+        viewModel.loadCanonicalPersonalRecommendations()
+    }
+    val canonicalPersonalShelf = remember(
+        canonicalPersonalRecommendations, canonicalPersonalHeading,
+        personalRecommendationNowMs, listenBrainzAccountEnabled, listenBrainzAccountToken,
+    ) {
+        if (listenBrainzAccountEnabled && listenBrainzAccountToken.isNotBlank() &&
+            canonicalPersonalRecommendationIsFresh(
+                canonicalPersonalRecommendations, personalRecommendationNowMs,
+            )
+        ) canonicalPersonalRecommendationShelf(
+            rows = canonicalPersonalRecommendations.verifiedRows,
+            rankings = canonicalPersonalRecommendations.recordings,
+            heading = canonicalPersonalHeading,
+        ) else null
+    }
     val canonicalExploreFeedShelves = remember(
         canonicalHomeShelves, canonicalReleasesHeading, canonicalTrendingHeading,
-        canonicalCommunityShelf,
+        canonicalCommunityShelf, canonicalPersonalShelf,
     ) {
-        canonicalExploreWithCommunityShelves(
+        val base = canonicalExploreWithCommunityShelves(
             homeShelves = canonicalHomeShelves,
             releasesHeading = canonicalReleasesHeading,
             trendingHeading = canonicalTrendingHeading,
             community = canonicalCommunityShelf,
         )
+        canonicalPersonalShelf?.let { base + it } ?: base
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeShelves.isNotEmpty() -> UiState.Success(canonicalHomeShelves)
@@ -1973,9 +2026,18 @@ private fun BitChordApp(
         val isPublicCommunity = canonicalCommunityCardIsMetadataOnly(
             tabOrigin, shelfTitle, canonicalCommunityHeading, item.browseId,
         )
+        val isPersonalRecommendation = canonicalCommunityCardIsMetadataOnly(
+            tabOrigin, shelfTitle, canonicalPersonalHeading, item.browseId,
+        ) && listenBrainzAccountEnabled && listenBrainzAccountToken.isNotBlank()
+        val isMetadataOnly = isPublicCommunity || isPersonalRecommendation
         val cached = canonicalEditorialRowForCard(
-            if (isPublicCommunity) cachedCanonicalRows + canonicalExploreSitewide.verifiedRows
-            else cachedCanonicalRows,
+            when {
+                isPersonalRecommendation ->
+                    canonicalPersonalRecommendations.verifiedRows + cachedCanonicalRows
+                isPublicCommunity ->
+                    canonicalExploreSitewide.verifiedRows + cachedCanonicalRows
+                else -> cachedCanonicalRows
+            },
             item.browseId,
         )
         if (selectedLocal != null) {
@@ -1995,7 +2057,7 @@ private fun BitChordApp(
                     artistDisplay = selectedRemote.artistDisplay,
                 ),
             )
-        } else if (isPublicCommunity && cached?.kind == CanonicalSearchKind.RECORDING) {
+        } else if (isMetadataOnly && cached?.kind == CanonicalSearchKind.RECORDING) {
             communityMetadataRecording = cached
         } else if (cached?.kind == CanonicalSearchKind.RECORDING &&
             cached.hasCatalogedAsset
@@ -2005,8 +2067,8 @@ private fun BitChordApp(
             communityMetadataRecording = cached
         } else if (cached != null) {
             viewModel.openCanonicalNativeDetail(cached)
-        } else if (isPublicCommunity) {
-            // A stale community card must fail closed, never become an album
+        } else if (isMetadataOnly) {
+            // Stale public or personal metadata cards fail closed; never become an album
             // with an invented detail type or a fallback playback source.
             Unit
         } else {
