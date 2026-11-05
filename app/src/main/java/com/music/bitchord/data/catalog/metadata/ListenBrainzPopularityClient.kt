@@ -153,6 +153,10 @@ internal class ListenBrainzPopularityClient(
     )
 
     private val cacheMutex = Mutex()
+    // Serialize same-category fetches and recheck TTL after waiting. The shared
+    // rate limiter alone prevents bursts, not redundant simultaneous lookups.
+    private val recordingFetchMutex = Mutex()
+    private val artistFetchMutex = Mutex()
     private val cache = mutableMapOf<List<String>, CacheValue>()
     private data class ArtistCacheValue(
         val recordings: List<ListenBrainzArtistTopRecording>,
@@ -163,6 +167,8 @@ internal class ListenBrainzPopularityClient(
     suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzArtistTopFetchResult {
         val id = artistMbid.lowercase(Locale.ROOT)
         if (!MBID.matches(id)) return ListenBrainzArtistTopFetchResult.InvalidRequest
+        artistFetchMutex.lock()
+        try {
         cacheMutex.lock()
         try {
             val saved = artistCache[id]
@@ -206,6 +212,9 @@ internal class ListenBrainzPopularityClient(
             return ListenBrainzArtistTopFetchResult.Unavailable
         }
         return ListenBrainzArtistTopFetchResult.Unavailable
+        } finally {
+            artistFetchMutex.unlock()
+        }
     }
 
     suspend fun recordingPopularity(ids: List<String>): ListenBrainzPopularityFetchResult {
@@ -216,14 +225,19 @@ internal class ListenBrainzPopularityClient(
             normalized.distinct().size != normalized.size
         ) return ListenBrainzPopularityFetchResult.InvalidRequest
 
+        // Canonicalize the batch for cache and upstream deduplication, but
+        // preserve the requested order in every public response.
+        val batch = normalized.sorted()
+        recordingFetchMutex.lock()
+        try {
         cacheMutex.lock()
         try {
-            val saved = cache[normalized]
+            val saved = cache[batch]
             if (saved != null && nowMillis() >= saved.atMs &&
                 nowMillis() - saved.atMs < CACHE_TTL_MS
             ) {
                 return ListenBrainzPopularityFetchResult.Success(
-                    saved.evidence, saved.atMs, fromCache = true)
+                    orderObservations(saved.evidence, normalized), saved.atMs, fromCache = true)
             }
         } finally {
             cacheMutex.unlock()
@@ -231,7 +245,7 @@ internal class ListenBrainzPopularityClient(
 
         for (attempt in 0..1) {
             val response = try {
-                limiter.run { transport.recordingPopularity(normalized) }
+                limiter.run { transport.recordingPopularity(batch) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -239,7 +253,7 @@ internal class ListenBrainzPopularityClient(
             }
             limiter.observeRateLimit(response.rateLimitRemaining, response.rateLimitResetInSeconds)
             if (response.status == 200) {
-                val parsed = parseListenBrainzRecordingPopularity(response.body, normalized)
+                val parsed = parseListenBrainzRecordingPopularity(response.body, batch)
                 if (parsed !is ListenBrainzPopularityParseResult.Success) {
                     return ListenBrainzPopularityFetchResult.Malformed
                 }
@@ -247,12 +261,12 @@ internal class ListenBrainzPopularityClient(
                 cacheMutex.lock()
                 try {
                     if (cache.size >= MAX_CACHED_BATCHES) cache.clear()
-                    cache[normalized] = CacheValue(parsed.observations, time)
+                    cache[batch] = CacheValue(parsed.observations, time)
                 } finally {
                     cacheMutex.unlock()
                 }
                 return ListenBrainzPopularityFetchResult.Success(
-                    parsed.observations, time, fromCache = false)
+                    orderObservations(parsed.observations, normalized), time, fromCache = false)
             }
             if (attempt == 0 && response.status in setOf(429, 503)) {
                 // Clamp Retry-After; never trust unbounded server delays.
@@ -262,6 +276,21 @@ internal class ListenBrainzPopularityClient(
             return ListenBrainzPopularityFetchResult.Unavailable
         }
         return ListenBrainzPopularityFetchResult.Unavailable
+        } finally {
+            recordingFetchMutex.unlock()
+        }
+    }
+
+    private fun orderObservations(
+        evidence: List<ListenBrainzPopularityEvidence>, requested: List<String>,
+    ): List<ListenBrainzPopularityEvidence> {
+        val byMbid = evidence.associateBy {
+            when (it) {
+                is ListenBrainzPopularityEvidence.Known -> it.recordingMbid
+                is ListenBrainzPopularityEvidence.Unknown -> it.recordingMbid
+            }
+        }
+        return requested.map(byMbid::getValue)
     }
 
     private companion object {
