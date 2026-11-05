@@ -88,6 +88,29 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals(row, canonicalEditorialRowForCard(listOf(row), shelf?.items?.single()?.browseId))
     }
 
+    @Test fun weeklySitewideRankUsesOnlyCachedMusicBrainzRecordingRows() {
+        val firstId = "13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        val otherId = "22ad712e-ce73-9f0c-4e97-9f0e53144411"
+        val known = playable.copy(musicBrainzId = firstId.uppercase(java.util.Locale.ROOT),
+            hasCatalogedAsset = false)
+        val another = playable.copy(musicBrainzId = otherId, title = "Album Title",
+            kind = CanonicalSearchKind.RELEASE)
+        val ranks = listOf(
+            com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording(otherId, 900),
+            com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording(firstId, 30),
+        )
+        val shelf = com.music.bitchord.ui.canonicalSitewideCommunityShelf(
+            rows = listOf(known, another), rankings = ranks,
+            heading = "Popular na comunidade",
+        )
+        assertEquals(listOf(known.title), shelf?.items?.map { it.title })
+        assertEquals("catalog:RECORDING:$firstId", shelf?.items?.single()?.browseId)
+        assertEquals(null, shelf?.items?.single()?.videoId)
+        assertEquals(null, com.music.bitchord.ui.canonicalSitewideCommunityShelf(
+            rows = listOf(another), rankings = ranks, heading = "Popular na comunidade",
+        ))
+    }
+
     @Test fun communityPopularityNeverInventsAlbumOrAudioFromCounts() {
         val known = playable.copy(hasCatalogedAsset = false)
         val listens = listOf(ListenBrainzPopularityEvidence.Known(known.musicBrainzId, 20, 4))
