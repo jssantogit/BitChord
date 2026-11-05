@@ -607,22 +607,18 @@ class SourcesTest {
     }
 
     @Test
-    fun `disabled YouTube stays disabled when source configurations are restored`() {
-        val disabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = false)
-        val firstBoot = SourceRegistry.sourcesForInit(
-            stored = listOf(disabled),
-            forceJioSaavnOff = true,
-        )
-        assertFalse(firstBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
+    fun `upgraded installations drop retired YouTube source entries without removing user sources`() {
+        val addon = SourceConfig(kind = SourceKind.ADDON, baseUrl = "https://example.invalid/manifest.json")
+        val legacyYoutube = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val stored = listOf(addon, legacyYoutube, legacyYoutube.copy(id = "yt-disabled", enabled = false))
+        val firstBoot = SourceRegistry.sourcesForInit(stored, forceJioSaavnOff = true)
+        assertFalse(firstBoot.any { it.kind == SourceKind.YOUTUBE })
+        assertEquals(addon, firstBoot.single { it.kind == SourceKind.ADDON })
         assertFalse(firstBoot.single { it.kind == SourceKind.JIOSAAVN }.enabled)
 
-        val nextBoot = SourceRegistry.sourcesForInit(
-            stored = firstBoot,
-            forceJioSaavnOff = false,
-        )
-        assertFalse(nextBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
-        assertFalse(SourceRegistry.sourcesForInit(emptyList(), true)
-            .any { it.kind == SourceKind.YOUTUBE })
+        val nextBoot = SourceRegistry.sourcesForInit(firstBoot, forceJioSaavnOff = false)
+        assertEquals(firstBoot, nextBoot)
+        assertFalse(SourceConfig(kind = SourceKind.YOUTUBE).enabled)
     }
 
     @Test
