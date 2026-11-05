@@ -6686,9 +6686,10 @@ class PlaybackService : MediaLibraryService() {
         )
         if (!entry.isQualified()) return
         try {
-            // false also means an occurrence is already safely stored.
-            ListenBrainzOutbox.enqueue(this, entry)
-            listenBrainzOccurrenceQueued = true
+            listenBrainzOccurrenceQueued = ListenBrainzOutbox.enqueue(this, entry)
+            if (!listenBrainzOccurrenceQueued) {
+                Log.w("PlaybackService", "ListenBrainz outbox full; occurrence not yet persisted")
+            }
         } catch (_: Exception) {
             // Do not mark it queued: the next audible tick/transition may retry.
             Log.w("PlaybackService", "ListenBrainz outbox persist/schedule failed")
@@ -6788,9 +6789,9 @@ class PlaybackService : MediaLibraryService() {
         trackAnalyzer.release()
         // Also the last chance to close out the track that was playing — a
         // swipe-away or stop never fires STATE_ENDED, so the session would
-        // otherwise end with an un-scrobbled song. This must not ride on the
-        // service scope: it is cancelled a few lines down, and the request
-        // should still reach ListenBrainz.
+        // otherwise end with an un-scrobbled song. Persist synchronously to
+        // the no-backup outbox before the service scope is cancelled. The
+        // WorkManager worker sends it later, including after process death.
         listenBrainzThresholdJob?.cancel()
         listenBrainzThresholdJob = null
         val lastSong = listenBrainzSong
