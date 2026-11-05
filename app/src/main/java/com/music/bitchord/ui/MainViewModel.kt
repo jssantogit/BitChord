@@ -4716,24 +4716,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * @param force refetch even if it is — after a switch, since the list
      *   itself reports which channel is active.
      */
-    fun loadChannels(force: Boolean = false) {
-        if (!_signedIn.value || !isYouTubeSourceEnabled(SourceRegistry.configs.value)) return
-        if (_channelsLoading.value) return
-        if (!force && _channels.value.isNotEmpty()) return
-        channelsLoadJob = viewModelScope.launch {
-            _channelsLoading.value = true
-            try {
-                YtMusicRepository.accountChannels()
-                    .onSuccess {
-                        if (isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
-                            _channels.value = it
-                            persistDetectedProfiles(it)
-                        }
-                    }
-            } finally {
-                _channelsLoading.value = false
-            }
-        }
+    fun loadChannels(@Suppress("UNUSED_PARAMETER") force: Boolean = false) {
+        // Historical account profiles remain decodable but cannot trigger a retired endpoint.
+        // This entrypoint is kept while legacy account controls are migrated.
     }
 
     /**
@@ -5009,18 +4994,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * itself.
      */
     private fun reloadForAccount() {
+        // Legacy Google identity changes no longer activate YouTube account endpoints.
+        // Canonical Home remains independent of the archived listener session.
         accountReloadJob?.cancel()
-        accountReloadJob = viewModelScope.launch {
-            if (!isYouTubeSourceEnabled(SourceRegistry.configs.value)) {
-                loadHome()
-                return@launch
-            }
-            Innertube.ensureSessionScope()
-            loadHome()
-            loadLibrary()
-            loadAccount()
-            loadPlaylists()
-        }
+        loadHome()
     }
 
     fun signOut() {
