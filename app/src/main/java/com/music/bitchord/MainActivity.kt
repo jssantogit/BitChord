@@ -996,7 +996,7 @@ private fun BitChordApp(
     }
     // Explore reuses the native shelf UI, but not Home's entire curated feed.
     // Keep Home's three editorial shelves untouched and make Explore release-first.
-    val canonicalExploreShelves = remember(
+    val canonicalExploreFeedShelves = remember(
         canonicalHomeShelves, canonicalReleasesHeading, canonicalTrendingHeading,
     ) {
         canonicalExploreShelves(
@@ -1013,7 +1013,7 @@ private fun BitChordApp(
         else -> UiState.Error(stringResource(R.string.canonical_discovery_cache_empty))
     }
     val canonicalExploreState: UiState<List<HomeShelf>> = when {
-        canonicalExploreShelves.isNotEmpty() -> UiState.Success(canonicalExploreShelves)
+        canonicalExploreFeedShelves.isNotEmpty() -> UiState.Success(canonicalExploreFeedShelves)
         canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
         canonicalDiscoveryCatalog is UiState.Error ->
             UiState.Error((canonicalDiscoveryCatalog as UiState.Error).message)
