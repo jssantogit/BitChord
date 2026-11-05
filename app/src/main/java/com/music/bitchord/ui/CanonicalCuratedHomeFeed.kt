@@ -3,6 +3,7 @@ package com.music.bitchord.ui
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.catalog.metadata.LISTENBRAINZ_PUBLIC_TTL_MS
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
+import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
 import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.model.BrowseType
@@ -502,6 +503,44 @@ internal fun canonicalPublicPopularityShelf(
         }
         .take(limit.coerceAtMost(16)).toList()
     return cards.takeIf { it.isNotEmpty() }?.let { HomeShelf(heading, it) }
+}
+
+/**
+ * Public sitewide weekly charts are a different signal from cumulative
+ * popularity or the user's personal "Em alta". The upstream sitewide MBID
+ * ranks only *already verified catalog rows*; no title/artist guessing,
+ * fake playback asset, or album identity is introduced.
+ */
+internal fun canonicalSitewideCommunityShelf(
+    rows: List<CanonicalCatalogSearchRow>,
+    rankings: List<ListenBrainzSitewideRecording>,
+    heading: String,
+    limit: Int = 16,
+): HomeShelf? {
+    if (heading.isBlank() || limit <= 0) return null
+    val catalog = rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RECORDING &&
+            canonicalStreamingTitleIsSafe(it.title) &&
+            CATALOG_RECORDING_MBID.matches(it.musicBrainzId.lowercase(java.util.Locale.ROOT)) }
+        .distinctBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+        .associateBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    val cards = rankings.asSequence()
+        .filter { it.listenCount > 0L }
+        .sortedWith(compareByDescending<ListenBrainzSitewideRecording> { it.listenCount }
+            .thenBy { it.recordingMbid })
+        .distinctBy { it.recordingMbid.lowercase(java.util.Locale.ROOT) }
+        .mapNotNull { rank ->
+            val mbid = rank.recordingMbid.lowercase(java.util.Locale.ROOT)
+            val row = catalog[mbid] ?: return@mapNotNull null
+            ShelfItem(
+                title = row.title,
+                subtitle = row.subtitle.orEmpty(),
+                thumbnailUrl = row.artworkUri,
+                videoId = null,
+                browseId = "catalog:RECORDING:$mbid",
+            )
+        }.take(limit.coerceAtMost(16)).toList()
+    return cards.takeIf(List<ShelfItem>::isNotEmpty)?.let { HomeShelf(heading, it) }
 }
 
 /**
