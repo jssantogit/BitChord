@@ -540,7 +540,7 @@ internal fun canonicalSitewideCommunityShelf(
                 browseId = "catalog:RECORDING:$mbid",
             )
         }.take(limit.coerceAtMost(16)).toList()
-    return cards.takeIf(List<ShelfItem>::isNotEmpty)?.let { HomeShelf(heading, it) }
+    return cards.takeIf { it.isNotEmpty() }?.let { HomeShelf(heading, it) }
 }
 
 /**
