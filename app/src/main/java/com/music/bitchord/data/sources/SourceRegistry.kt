@@ -74,15 +74,11 @@ data class SourceConfig(
 }
 
 /**
- * The user's sources, always tried in the fixed order [SourceKind] declares:
- * their own addons first, then JioSaavn, then YouTube Music.
+ * Configured Android audio sources: user-provided addons and opt-in JioSaavn.
  *
- * [SourceKind.YOUTUBE] is seeded on first run and cannot be deleted, only
- * disabled — it needs no configuration, so a "remove" would delete something
- * the user could not then re-create by typing anything in, it would just be a
- * switch that hides itself. Addons are entirely optional: with none
- * configured, YouTube is the only active source on a fresh install. JioSaavn
- * is present but off until the user accepts its catalogue-matching risk.
+ * Retired YouTube entries can still be decoded from old preference files, but
+ * are removed during initialization and are never offered in source settings,
+ * instantiated, or selected for playback and downloads.
  */
 object SourceRegistry {
 
@@ -137,10 +133,9 @@ object SourceRegistry {
         stored: List<SourceConfig>,
         forceJioSaavnOff: Boolean,
     ): List<SourceConfig> {
-        // YouTube is retired as a newly seeded source. Preserve existing
-        // serialized entries as historical settings until the final schema
-        // migration; neither discovery nor audio is allowed to use them.
-        // JioSaavn retains its existing explicit opt-in policy.
+        // Existing YouTube rows are removed from stored source configuration.
+        // Musical history and persisted track identities live elsewhere and
+        // are not touched by this migration. JioSaavn remains opt-in.
         val seeded = stored + listOf(SourceKind.JIOSAAVN)
             .filter { kind -> stored.none { it.kind == kind } }
             .map { SourceConfig(kind = it) }
@@ -231,11 +226,7 @@ object SourceRegistry {
     internal fun displayConfigs(configs: List<SourceConfig>): List<SourceConfig> =
         configs.filterNot { it.kind == SourceKind.YOUTUBE }
 
-    /**
-     * Historical YouTube configuration is still read so users' saved choices
-     * and playlists are not destroyed during migration. It is NOT an audio
-     * source: both playback and downloads walk [active] from this list.
-     */
+    /** An additional safety gate for legacy configs passed in by older callers. */
     internal fun audioCandidateConfigs(configs: List<SourceConfig>): List<SourceConfig> =
         enabledConfigs(configs).filterNot { it.kind == SourceKind.YOUTUBE }
 
@@ -310,12 +301,7 @@ object SourceRegistry {
         publish(configs.value.filterNot { it.id == configId })
     }
 
-    /**
-     * Explicit source opt-out is authoritative, including the built-in
-     * YouTube source. Legacy videoIds are not playable without this provider;
-     * PlaybackService refuses their network resolution when it is disabled.
-     * This leaves local/authorized remote MediaAssets unaffected.
-     */
+    /** No retired source can be re-enabled through saved settings or callers. */
     fun setEnabled(configId: String, enabled: Boolean) {
         if (config(configId)?.kind == SourceKind.YOUTUBE) return
         publish(configs.value.map { if (it.id == configId) it.copy(enabled = enabled) else it })
@@ -365,8 +351,7 @@ object SourceRegistry {
         // the instance it already had, rather than being replaced by an
         // identical-but-cold one every time an unrelated row is toggled.
         val previous = instances
-        // Keep retired YouTube configs readable, but never instantiate a
-        // YouTubeSource that a direct call could still use for network IO.
+        // Reject retired YouTube even if an old caller supplies a config.
         instances = next.filterNot { it.kind == SourceKind.YOUTUBE }.associate { config ->
             val existing = previous[config.id]?.takeIf { it.configuredBy(config) }
             config.id to (existing ?: build(config))
