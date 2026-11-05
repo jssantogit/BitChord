@@ -38,8 +38,14 @@ internal class ListenBrainzRecommendationClient(
         val count: Int,
         val success: ListenBrainzRecommendationFetchResult.Success,
     )
+    private data class NegativeCache(
+        val accountDigest: String,
+        val count: Int,
+        val fetchedAtMs: Long,
+    )
     private val mutex = Mutex()
     private var cached: Cached? = null
+    private var noRecommendations: NegativeCache? = null
 
     suspend fun recordings(token: String, count: Int = 16): ListenBrainzRecommendationFetchResult {
         if (token.isBlank()) return ListenBrainzRecommendationFetchResult.NotAuthenticated
@@ -56,6 +62,14 @@ internal class ListenBrainzRecommendationClient(
                     now >= it.success.fetchedAtMs &&
                     now - it.success.fetchedAtMs < 60L * 60L * 1_000L
             }?.let { return it.success.copy(fromCache = true) }
+
+            // A 204 means the CF model is not ready for this account.
+            // Avoid repeating token validation + the same 204 on every visit.
+            noRecommendations?.takeIf {
+                it.accountDigest == account && it.count == count &&
+                    now >= it.fetchedAtMs &&
+                    now - it.fetchedAtMs < 15L * 60L * 1_000L
+            }?.let { return ListenBrainzRecommendationFetchResult.NoRecommendations }
 
             val validated = try {
                 getWithRetry { transport.validateToken(token) }
@@ -74,13 +88,19 @@ internal class ListenBrainzRecommendationClient(
             } catch (_: Exception) {
                 return ListenBrainzRecommendationFetchResult.Unavailable
             }
-            if (response.status == 204) return ListenBrainzRecommendationFetchResult.NoRecommendations
+            if (response.status == 204) {
+                noRecommendations = NegativeCache(account, count, nowMillis())
+                return ListenBrainzRecommendationFetchResult.NoRecommendations
+            }
             if (response.status != 200) return ListenBrainzRecommendationFetchResult.Unavailable
             val parsed = parseListenBrainzRecommendationFeed(
                 response.body, expectedUser = user, nowSeconds = nowMillis() / 1_000L,
             ) as? ListenBrainzRecommendationParseResult.Success
                 ?: return ListenBrainzRecommendationFetchResult.Malformed
-            if (parsed.items.isEmpty()) return ListenBrainzRecommendationFetchResult.NoRecommendations
+            if (parsed.items.isEmpty()) {
+                noRecommendations = NegativeCache(account, count, nowMillis())
+                return ListenBrainzRecommendationFetchResult.NoRecommendations
+            }
             // A historical model is not a current personalized suggestion.
             if (parsed.lastUpdatedSeconds < nowMillis() / 1_000L - 30L * 24L * 60L * 60L) {
                 return ListenBrainzRecommendationFetchResult.Stale
@@ -91,6 +111,7 @@ internal class ListenBrainzRecommendationClient(
                 upstreamUpdatedSeconds = parsed.lastUpdatedSeconds,
                 fromCache = false,
             )
+            noRecommendations = null
             cached = Cached(account, count, success)
             return success
         } finally {
