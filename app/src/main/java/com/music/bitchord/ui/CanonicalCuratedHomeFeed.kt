@@ -544,6 +544,27 @@ internal fun canonicalSitewideCommunityShelf(
 }
 
 /**
+ * Public ListenBrainz discovery cards are navigation-only, even when the
+ * same Recording also happens to have a local/server MediaAsset. This keeps
+ * aggregate rankings distinct from the user's playback intent.
+ */
+internal fun canonicalCommunityCardIsMetadataOnly(
+    tabOrigin: PlaybackSourceType,
+    shelfTitle: String,
+    communityHeading: String,
+    browseId: String?,
+): Boolean {
+    if (tabOrigin != PlaybackSourceType.EXPLORE ||
+        shelfTitle != communityHeading || browseId == null
+    ) return false
+    val prefix = "catalog:RECORDING:"
+    return browseId.startsWith(prefix, ignoreCase = true) &&
+        CATALOG_RECORDING_MBID.matches(
+            browseId.substring(prefix.length).lowercase(java.util.Locale.ROOT),
+        )
+}
+
+/**
  * Resolve an editorial card by an exact typed catalog identity. In Explore,
  * metadata-only public Recording cards navigate to detail, not playback.
  * Missing browse keys and inferred/title-only joins are never accepted.
