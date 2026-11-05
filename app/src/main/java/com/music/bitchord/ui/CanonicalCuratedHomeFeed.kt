@@ -1,6 +1,9 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
+import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
+import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
@@ -441,6 +444,61 @@ internal fun canonicalExploreShelves(
     return homeShelves.firstOrNull {
         it.title != releasesHeading && it.items.isNotEmpty()
     }?.let { listOf(it) } ?: emptyList()
+}
+
+/**
+ * Public popularity is optional discovery evidence over KNOWN MusicBrainz
+ * recordings. We never fetch by song title, never claim an audio asset, and
+ * never treat an all-time community count as a personal or recent chart.
+ * Restrict candidate IDs to one bounded batch from the existing catalog.
+ */
+internal fun canonicalPublicPopularityCandidates(
+    rows: List<CanonicalCatalogSearchRow>, limit: Int = 40,
+): List<String> = rows.asSequence()
+    .filter { it.kind == CanonicalSearchKind.RECORDING && canonicalStreamingTitleIsSafe(it.title) }
+    .map { it.musicBrainzId }
+    .filter { CATALOG_RECORDING_MBID.matches(it) }
+    .distinct()
+    .take(limit.coerceIn(0, 100))
+    .toList()
+
+private val CATALOG_RECORDING_MBID =
+    Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+/**
+ * A public ListenBrainz observation is NOT a playable track or a release.
+ * Cards retain canonical Recording IDs and the existing native click gate,
+ * which opens metadata details if the user's library has no verified asset.
+ */
+internal fun canonicalPublicPopularityShelf(
+    rows: List<CanonicalCatalogSearchRow>,
+    evidence: List<ListenBrainzPopularityEvidence>,
+    heading: String,
+    limit: Int = 16,
+): HomeShelf? {
+    if (heading.isBlank() || limit <= 0) return null
+    val recordings = rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RECORDING &&
+            canonicalStreamingTitleIsSafe(it.title) &&
+            CATALOG_RECORDING_MBID.matches(it.musicBrainzId) }
+        .distinctBy { it.musicBrainzId }
+        .associateBy { it.musicBrainzId }
+    val cards = publicListenBrainzRecordingRanking(evidence)
+        .asSequence().filter { it.listeners > 0L && it.listens > 0L }
+        .distinctBy { it.recordingMbid }
+        .mapNotNull { known ->
+            val row = recordings[known.recordingMbid] ?: return@mapNotNull null
+            val browseId = canonicalBrowseCardId(row) ?: return@mapNotNull null
+            ShelfItem(
+                title = row.title,
+                subtitle = row.subtitle.orEmpty(),
+                thumbnailUrl = row.artworkUri,
+                videoId = null,
+                browseId = browseId,
+            )
+        }
+        .take(limit.coerceAtMost(16)).toList()
+    return cards.takeIf { it.isNotEmpty() }?.let { HomeShelf(heading, it) }
 }
 
 /** Feed sections share rendering, but listening events retain their actual tab provenance. */
