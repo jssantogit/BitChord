@@ -39,7 +39,6 @@ import com.music.bitchord.ui.screens.CanonicalServerSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.LikeState
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.SPOTIFY_MISSING_PREFIX
 import com.music.bitchord.data.model.SPOTIFY_PENDING_PREFIX
 import com.music.bitchord.data.spotify.SPOTIFY_PAGE_PREFIX
@@ -4594,14 +4593,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         onComplete(false)
     }
 
-    /** Put request signing back exactly as it was after a rejected candidate. */
-    private fun restoreActiveSession(accountId: String?, selectedProfileId: String?) {
-        val account = authStore.sessions.firstOrNull { it.accountId == accountId }
-        val profile = account?.profiles?.firstOrNull { it.profileId == selectedProfileId }
-        Innertube.cookie = account?.cookie
-        Innertube.selectChannel(profile?.pageId, profile?.dataSyncId, profile?.authUser)
-    }
-
     /** Selects an identity without ever allowing a response to replace it. */
     fun selectProfile(accountId: String, selectedProfileId: String, supplied: YouTubeProfile? = null) {
         val source = _googleAccounts.value.firstOrNull { it.accountId == accountId } ?: return
@@ -4624,8 +4615,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _activeAccountId.value = accountId
         _activeProfileId.value = profile.profileId
         authStore.cookie = updated.cookie
-        Innertube.cookie = updated.cookie
-        Innertube.selectChannel(profile.pageId, profile.dataSyncId, profile.authUser)
         _selectedChannelKey.value = profile.profileId
         _selectedChannelName.value = profile.name
         clearListenerState(restoreCached = true)
@@ -4645,39 +4634,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _googleAccounts.value = authStore.sessions
         if (fallback == null) { signOut(); return }
         selectProfile(fallback.accountId, fallback.activeProfileId ?: fallback.profiles.firstOrNull()?.profileId ?: return)
-    }
-
-    private fun persistDetectedProfiles(channels: List<AccountChannel>) {
-        val accountId = _activeAccountId.value ?: return
-        val current = authStore.sessions.firstOrNull { it.accountId == accountId } ?: return
-        val detected = channels.map { channel -> YouTubeProfile(
-            profileId(channel.pageId, channel.dataSyncId, channel.name), channel.name, channel.subtitle,
-            channel.thumbnailUrl, channel.pageId, channel.dataSyncId,
-            isBrandAccount = channel.pageId != null,
-        ) }
-        // A profile captured before its channel existed carries a provisional,
-        // name-hash id (see profileId()) rather than the pageId/dataSyncId Google
-        // reports here once the channel is live. Once Google actually reports a
-        // channel, that placeholder is stale — it would have been listed here
-        // too if it still lacked real ids — and it's dropped rather than kept
-        // alongside the identity it was standing in for. An empty response
-        // (channel not created yet, or a transient miss) must never drop it.
-        val stalePlaceholder = if (detected.isEmpty()) emptySet() else current.profiles
-            .filter { it.profileId.startsWith("profile:") }
-            .map { it.profileId }
-            .toSet()
-        // Keep the captured active identity if Google's endpoint temporarily
-        // omits it; an empty/partial response must never erase a selection.
-        val profiles = (current.profiles.filter { known ->
-            known.profileId !in stalePlaceholder && detected.none { it.profileId == known.profileId }
-        } + detected)
-        val selected = when {
-            current.activeProfileId != null && current.activeProfileId !in stalePlaceholder -> current.activeProfileId
-            current.activeProfileId in stalePlaceholder -> detected.singleOrNull()?.profileId
-            else -> null
-        } ?: profiles.firstOrNull()?.profileId
-        authStore.upsertSession(current.copy(profiles = profiles, activeProfileId = selected), activate = false)
-        _googleAccounts.value = authStore.sessions
     }
 
     /**
@@ -4751,13 +4707,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         authStore.signOut()
-        Innertube.cookie = null
         // The mirror image: verdicts reached with a session in hand say nothing
         // about what an anonymous walk will be told, and the clients stood down
         // for refusing the session deserve a fresh hearing without it.
         _signedIn.value = false
         _account.value = null
-        Innertube.selectChannel(null, null)
         _channels.value = emptyList()
         _selectedChannelKey.value = null
         _selectedChannelName.value = null
