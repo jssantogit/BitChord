@@ -331,6 +331,7 @@ import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
+import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
 import com.music.bitchord.ui.canonicalEditorialRowForCard
 import com.music.bitchord.ui.canonicalPublicPopularityCandidates
@@ -1023,17 +1024,12 @@ private fun BitChordApp(
         canonicalHomeShelves, canonicalReleasesHeading, canonicalTrendingHeading,
         canonicalCommunityShelf,
     ) {
-        val known = canonicalExploreShelves(
+        canonicalExploreWithCommunityShelves(
             homeShelves = canonicalHomeShelves,
             releasesHeading = canonicalReleasesHeading,
             trendingHeading = canonicalTrendingHeading,
+            community = canonicalCommunityShelf,
         )
-        val public = canonicalCommunityShelf
-        when {
-            public == null -> known
-            known.firstOrNull()?.title == canonicalReleasesHeading -> known + public
-            else -> listOf(public)
-        }
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeShelves.isNotEmpty() -> UiState.Success(canonicalHomeShelves)
