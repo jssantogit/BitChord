@@ -56,5 +56,13 @@ class ListenBrainzArtistTopRecordingsTest {
             "total_listen_count":1,"total_user_count":2}]"""
         assertEquals(ListenBrainzArtistTopParseResult.Invalid,
             parseListenBrainzArtistTopRecordings(invalidCounts, artist))
+        val duplicates = """[
+            {"recording_mbid":"$recording","artist_mbids":["$artist"],
+                "total_listen_count":10,"total_user_count":2},
+            {"recording_mbid":"$recording","artist_mbids":["$artist"],
+                "total_listen_count":12,"total_user_count":3}
+        ]"""
+        assertEquals(ListenBrainzArtistTopParseResult.Invalid,
+            parseListenBrainzArtistTopRecordings(duplicates, artist))
     }
 }
