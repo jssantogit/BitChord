@@ -6,7 +6,7 @@ set -euo pipefail
 # they remain readable until all historical data migrations are verified.
 pattern='YtMusicRepository|InnerTubeXResolver|Innertube[.]|InnertubeParser|StreamResolver[.]|PoTokenGenerator|PoTokenWebView|YouTubeSource|DesktopYouTubeAuth|DesktopYouTubeSession|youtubei[.]googleapis[.]com|music[.]youtube[.]com'
 roots=()
-for root in app/src/main shared/src desktopApp/src/main tvApp/src wearApp/src web/app/src; do
+for root in app/src/main shared/src sharedUi/src desktopUi/src desktopApp/src/main tv/src wearos/src web/app/src; do
   if [[ -d "$root" ]]; then roots+=("$root"); fi
 done
 
@@ -21,7 +21,7 @@ echo "Retired backend references: $total lines across $files source files"
 echo "This report is an inventory, not an authorization to delete archived identities."
 echo "External references to retired transport symbols (main + test sources):"
 test_roots=()
-for root in app/src shared/src desktopApp/src tvApp/src wearApp/src web/app/src; do
+for root in app/src shared/src sharedUi/src desktopUi/src desktopApp/src tv/src wearos/src web/app/src; do
   if [[ -d "$root" ]]; then test_roots+=("$root"); fi
 done
 if (( ${#test_roots[@]} > 0 )); then
