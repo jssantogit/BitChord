@@ -98,9 +98,10 @@ enum class LyricsSource(
         hidden = true,
     ),
     YOUTUBE_MUSIC(
-        label = "YouTube Music",
-        detail = "Plain lyrics from the playing video's Lyrics tab",
+        label = "YouTube Music (retired)",
+        detail = "Historical preference; provider no longer available",
         wordSynced = false,
+        hidden = true,
     ),
     MEGALOBIZ(
         label = "Megalobiz",
