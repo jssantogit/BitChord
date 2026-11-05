@@ -12,6 +12,56 @@ import org.junit.Test
 
 class MusicBrainzCatalogSearchTest {
     @Test
+    fun worldwideReleasesAndGenreUseFieldedQueriesNotLocalIndex() = runBlocking {
+        val calls = mutableListOf<Pair<String, Map<String, String>>>()
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    calls.add(path to parameters)
+                    return """{"count":1,"offset":0,"release-groups":[
+                        {"id":"03f3f1f2-12a4-4e47-9d52-459ee4a4f0ce",
+                         "title":"Public release","primary-type":"Album",
+                         "first-release-date":"2026-11-01",
+                         "artist-credit":[{"name":"Artist"}]}
+                    ]}"""
+                }
+            },
+        ))
+        assertTrue(search.searchRecentReleaseGroups("2026-10-01", "2026-11-05")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchReleaseGroupsForTag("k-pop")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertEquals(2, calls.size)
+        assertTrue(calls.all { it.first == "release-group" &&
+            it.second["dismax"] == "false" })
+        assertTrue(calls[0].second["query"].orEmpty().contains(
+            "firstreleasedate:[2026-10-01 TO 2026-11-05]"))
+        assertTrue(calls[1].second["query"].orEmpty().contains("tag:\"k-pop\""))
+    }
+
+    @Test
+    fun invalidWorldwideRangesAndUnsafeTagsFailWithoutNetwork() = runBlocking {
+        var calls = 0
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    calls++
+                    return "{}"
+                }
+            },
+        ))
+        assertTrue(search.searchRecentReleaseGroups("2026-12-01", "2026-11-05")
+            is com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult.Failure)
+        assertTrue(search.searchReleaseGroupsForTag("pop OR artist:whatever")
+            is com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult.Failure)
+        assertEquals(0, calls)
+    }
+
+    @Test
     fun paginationConsumesRawServerRowsEvenWhenSomeMbidsAreRejectedOrDuplicated() = runBlocking {
         val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
         val sped = "3e619ba2-34f0-4649-83d8-05483e2fabe5"
