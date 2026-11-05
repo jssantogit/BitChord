@@ -120,6 +120,31 @@ class CanonicalCuratedHomeFeedTest {
                 .map { it.title })
     }
 
+    @Test fun publicPopularityDoesNotFlickerOrRefetchForFreshMatchingMbidSet() {
+        val ids = listOf("13dd61c7-ce73-4e97-9f0c-9f0e53144411")
+        val at = 100_000L
+        assertTrue(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids, fetchedAtMs = at,
+            nowMs = at + 60_000L,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids.reversed() + "another", fetchedAtMs = at,
+            nowMs = at + 60_000L,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids, fetchedAtMs = at,
+            nowMs = at + 6 * 60 * 60 * 1_000L,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids, fetchedAtMs = at,
+            nowMs = at - 1,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = emptyList(), previous = emptyList(), fetchedAtMs = at,
+            nowMs = at,
+        ))
+    }
+
     @Test fun editorialPlaybackProvenanceTracksTheActualHomeOrExploreTab() {
         assertEquals(PlaybackSourceType.HOME, canonicalEditorialPlaybackSource(explore = false))
         assertEquals(PlaybackSourceType.EXPLORE, canonicalEditorialPlaybackSource(explore = true))
