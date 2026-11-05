@@ -77,6 +77,8 @@ class CanonicalCuratedHomeFeedTest {
         val explore = canonicalExploreShelves(home, "Lançamentos", "Em alta")
         assertEquals(listOf("Escolha a dedo"), explore.map { it.title })
         assertFalse(explore.flatMap { it.items }.any { it.browseId == saved.browseId })
+        val onlySaved = canonicalExploreShelves(home.take(1), "Lançamentos", "Em alta")
+        assertTrue(onlySaved.isEmpty())
     }
 
     @Test fun exploreFallsBackToEvidenceBasedTrendingWhenNoReleaseIsKnown() {
