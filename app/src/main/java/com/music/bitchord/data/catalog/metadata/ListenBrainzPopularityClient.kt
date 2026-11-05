@@ -5,6 +5,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -21,6 +22,7 @@ import java.util.Locale
 /** Read-only, unauthenticated public popularity. No personal tokens or listens. */
 internal interface ListenBrainzPopularityTransport {
     suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse
+    suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse
 }
 
 internal data class ListenBrainzPopularityHttpResponse(
@@ -46,6 +48,20 @@ internal class KtorListenBrainzPopularityTransport(
             header(HttpHeaders.UserAgent,
                 "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)")
             setBody(Json.encodeToString(mapOf("recording_mbids" to recordingMbids)))
+        }
+        return ListenBrainzPopularityHttpResponse(
+            status = response.status.value,
+            body = if (response.status.value == 200) response.bodyAsText() else "",
+            retryAfterSeconds = response.headers[HttpHeaders.RetryAfter]?.toLongOrNull(),
+            rateLimitRemaining = response.headers["X-RateLimit-Remaining"]?.toLongOrNull(),
+            rateLimitResetInSeconds = response.headers["X-RateLimit-Reset-In"]?.toLongOrNull(),
+        )
+    }
+
+    override suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse {
+        val response = client.get("https://api.listenbrainz.org/1/popularity/top-recordings-for-artist/$artistMbid") {
+            header(HttpHeaders.UserAgent,
+                "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)")
         }
         return ListenBrainzPopularityHttpResponse(
             status = response.status.value,
@@ -109,6 +125,17 @@ internal sealed interface ListenBrainzPopularityFetchResult {
     data object Malformed : ListenBrainzPopularityFetchResult
 }
 
+internal sealed interface ListenBrainzArtistTopFetchResult {
+    data class Success(
+        val recordings: List<ListenBrainzArtistTopRecording>,
+        val fetchedAtMs: Long,
+        val fromCache: Boolean,
+    ) : ListenBrainzArtistTopFetchResult
+    data object InvalidRequest : ListenBrainzArtistTopFetchResult
+    data object Unavailable : ListenBrainzArtistTopFetchResult
+    data object Malformed : ListenBrainzArtistTopFetchResult
+}
+
 /**
  * A small in-memory TTL avoids repeated public requests when switching tabs.
  * Only verified responses are cached. This does not persist personal data.
@@ -127,6 +154,59 @@ internal class ListenBrainzPopularityClient(
 
     private val cacheMutex = Mutex()
     private val cache = mutableMapOf<List<String>, CacheValue>()
+    private data class ArtistCacheValue(
+        val recordings: List<ListenBrainzArtistTopRecording>,
+        val atMs: Long,
+    )
+    private val artistCache = mutableMapOf<String, ArtistCacheValue>()
+
+    suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzArtistTopFetchResult {
+        val id = artistMbid.lowercase(Locale.ROOT)
+        if (!MBID.matches(id)) return ListenBrainzArtistTopFetchResult.InvalidRequest
+        cacheMutex.lock()
+        try {
+            val saved = artistCache[id]
+            if (saved != null && nowMillis() >= saved.atMs &&
+                nowMillis() - saved.atMs < CACHE_TTL_MS
+            ) {
+                return ListenBrainzArtistTopFetchResult.Success(saved.recordings, saved.atMs, fromCache = true)
+            }
+        } finally {
+            cacheMutex.unlock()
+        }
+
+        for (attempt in 0..1) {
+            val response = try {
+                limiter.run { transport.topRecordingsForArtist(id) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                return ListenBrainzArtistTopFetchResult.Unavailable
+            }
+            limiter.observeRateLimit(response.rateLimitRemaining, response.rateLimitResetInSeconds)
+            if (response.status == 200) {
+                val parsed = parseListenBrainzArtistTopRecordings(response.body, id)
+                if (parsed !is ListenBrainzArtistTopParseResult.Success) {
+                    return ListenBrainzArtistTopFetchResult.Malformed
+                }
+                val time = nowMillis()
+                cacheMutex.lock()
+                try {
+                    if (artistCache.size >= MAX_CACHED_BATCHES) artistCache.clear()
+                    artistCache[id] = ArtistCacheValue(parsed.recordings, time)
+                } finally {
+                    cacheMutex.unlock()
+                }
+                return ListenBrainzArtistTopFetchResult.Success(parsed.recordings, time, fromCache = false)
+            }
+            if (attempt == 0 && response.status in setOf(429, 503)) {
+                retryDelay((response.retryAfterSeconds ?: 1L).coerceIn(1L, 30L) * 1_000L)
+                continue
+            }
+            return ListenBrainzArtistTopFetchResult.Unavailable
+        }
+        return ListenBrainzArtistTopFetchResult.Unavailable
+    }
 
     suspend fun recordingPopularity(ids: List<String>): ListenBrainzPopularityFetchResult {
         // Conservative batch size. No title or artist-name matching allowed.
