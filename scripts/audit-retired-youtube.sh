@@ -19,8 +19,8 @@ total=$(wc -l < "$output" | tr -d ' ')
 files=$(cut -d: -f1 "$output" | sort -u | wc -l | tr -d ' ')
 echo "Retired backend references: $total lines across $files source files"
 echo "This report is an inventory, not an authorization to delete archived identities."
-echo "First 120 references:"
-head -n 120 "$output"
+echo "All remaining references:"
+cat "$output"
 if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
   {
     echo "### Retired YouTube backend audit"
