@@ -3556,54 +3556,13 @@ fun BitChordDesktopApp() {
 
                     if (overlays.signIn) {
                         DesktopSignInDialog(
-                            busy = signInBusy,
-                            error = signInError,
-                            webSignIn = DesktopWebSignIn.available,
-                            onWebSignIn = {
-                                webSignInJob?.cancel()
-                                webSignInJob = scope.launch {
-                                    signInError = null
-                                    signInBusy = WEB_SIGN_IN
-                                    try {
-                                        val cookie = DesktopWebSignIn.captureYouTube()
-                                        signIn(cookie, WEB_SIGN_IN)
-                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                                        throw cancelled
-                                    } catch (failure: Exception) {
-                                        DesktopTrackLog.log("sign-in: YouTube Music failed: ${failure.message}")
-                                        signInError = failure.message ?: "Could not complete the sign-in."
-                                    } finally {
-                                        signInBusy = null
-                                        webSignInJob = null
-                                    }
-                                }
-                            },
-                            onImport = { profile ->
-                                scope.launch {
-                                    when (val found = withContext(Dispatchers.IO) { DesktopBrowserCookies.read(profile) }) {
-                                        is DesktopBrowserCookies.Result.Session ->
-                            signIn(found.cookie, profile.label, profile.database.toString())
-                                        DesktopBrowserCookies.Result.SignedOut ->
-                                            signInError = "${profile.label} is not signed in."
-                                        is DesktopBrowserCookies.Result.Unavailable ->
-                                            signInError = "${profile.label}: ${found.reason}."
-                                    }
-                                }
-                            },
-                            onPaste = { pasted ->
-                                scope.launch {
-                                    if (!DesktopBrowserCookies.hasSigningSecret(pasted)) {
-                                        signInError = "That cookie has no signing secret in it — copy the whole header."
-                                    } else {
-                                        signIn(pasted, "the cookie you pasted")
-                                    }
-                                }
-                            },
-                            onDismiss = {
-                                webSignInJob?.cancel()
-                                overlays.signIn = false
-                                signInError = null
-                            },
+                            busy = null,
+                            error = null,
+                            webSignIn = false,
+                            onWebSignIn = {},
+                            onImport = {},
+                            onPaste = {},
+                            onDismiss = { overlays.signIn = false },
                         )
                     }
                     if (overlays.playlistDialog || playlistTarget != null) {
