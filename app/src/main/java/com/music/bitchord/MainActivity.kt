@@ -785,6 +785,7 @@ private fun BitChordApp(
     val canonicalExplorePublicPopularity by viewModel.canonicalExplorePublicPopularity.collectAsStateWithLifecycle()
     val canonicalExploreSitewide by viewModel.canonicalExploreSitewide.collectAsStateWithLifecycle()
     val canonicalWorldwideReleases by viewModel.canonicalWorldwideReleases.collectAsStateWithLifecycle()
+    val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
     var activeCanonicalGenre by remember {
         mutableStateOf<com.music.bitchord.ui.CanonicalExploreGenre?>(null)
@@ -1162,7 +1163,7 @@ private fun BitChordApp(
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
-        canonicalDiscoveryCatalog is UiState.Loading -> UiState.Loading
+        canonicalDiscoveryCatalog is UiState.Loading || canonicalWorldwideLoading -> UiState.Loading
         else -> UiState.Error("Não foi possível carregar lançamentos públicos. Verifique a conexão e tente novamente.")
     }
     val canonicalExploreState: UiState<List<HomeShelf>> = when {
