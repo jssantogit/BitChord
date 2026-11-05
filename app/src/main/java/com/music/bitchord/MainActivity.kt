@@ -331,6 +331,8 @@ import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
+import com.music.bitchord.ui.canonicalPublicPopularityShelf
+import com.music.bitchord.ui.canonicalPublicPopularityCandidates
 import com.music.bitchord.ui.canonicalEditorialPlaybackSource
 import com.music.bitchord.ui.canonicalLocalPickCardId
 import com.music.bitchord.ui.canonicalRemotePickCardId
@@ -768,6 +770,7 @@ private fun BitChordApp(
     val canonicalHomeRemotePicks by viewModel.canonicalHomeRemotePicks.collectAsStateWithLifecycle()
     val canonicalTrendingMbids by viewModel.canonicalTrendingRecordingMbids.collectAsStateWithLifecycle()
     val canonicalTrendingLocalSongs by viewModel.canonicalTrendingLocalSongs.collectAsStateWithLifecycle()
+    val canonicalExplorePublicPopularity by viewModel.canonicalExplorePublicPopularity.collectAsStateWithLifecycle()
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
 
@@ -958,6 +961,17 @@ private fun BitChordApp(
     val canonicalReleasesHeading = stringResource(R.string.shelf_new_releases)
     val canonicalPicksHeading = stringResource(R.string.shelf_quick_picks)
     val canonicalTrendingHeading = stringResource(R.string.shelf_trending)
+    val canonicalCommunityHeading = stringResource(R.string.shelf_listenbrainz_community)
+    val popularityCandidateIds = remember(cachedCanonicalRows) {
+        canonicalPublicPopularityCandidates(cachedCanonicalRows)
+    }
+    // Only Explore requests public popularity. Metadata-only cards still open
+    // their canonical details and cannot start playback without a MediaAsset.
+    LaunchedEffect(selectedTab, popularityCandidateIds) {
+        if (selectedTab == TAB_EXPLORE) {
+            viewModel.loadCanonicalExplorePublicPopularity(cachedCanonicalRows)
+        }
+    }
     val canonicalFeedDate = remember {
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
             .format(java.util.Date())
@@ -995,14 +1009,30 @@ private fun BitChordApp(
     }
     // Explore reuses the native shelf UI, but not Home's entire curated feed.
     // Keep Home's three editorial shelves untouched and make Explore release-first.
+    val canonicalCommunityShelf = remember(
+        cachedCanonicalRows, canonicalExplorePublicPopularity, canonicalCommunityHeading,
+    ) {
+        canonicalPublicPopularityShelf(
+            rows = cachedCanonicalRows,
+            evidence = canonicalExplorePublicPopularity,
+            heading = canonicalCommunityHeading,
+        )
+    }
     val canonicalExploreFeedShelves = remember(
         canonicalHomeShelves, canonicalReleasesHeading, canonicalTrendingHeading,
+        canonicalCommunityShelf,
     ) {
-        canonicalExploreShelves(
+        val known = canonicalExploreShelves(
             homeShelves = canonicalHomeShelves,
             releasesHeading = canonicalReleasesHeading,
             trendingHeading = canonicalTrendingHeading,
         )
+        val public = canonicalCommunityShelf
+        when {
+            public == null -> known
+            known.firstOrNull()?.title == canonicalReleasesHeading -> known + public
+            else -> listOf(public)
+        }
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeShelves.isNotEmpty() -> UiState.Success(canonicalHomeShelves)
