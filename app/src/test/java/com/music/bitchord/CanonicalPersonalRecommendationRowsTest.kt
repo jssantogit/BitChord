@@ -57,7 +57,7 @@ class CanonicalPersonalRecommendationRowsTest {
         )
         assertEquals("방탄소년단", good.single().subtitle)
         assertEquals("봄날", good.single().title)
-        val withControl = verified.copy(artistDisplay = "BTS\\u0001")
+        val withControl = verified.copy(artistDisplay = "BTS" + 1.toChar())
         assertTrue(canonicalVerifiedPersonalRecommendationRows(
             ranks, mapOf(recording to withControl),
         ).isEmpty())
