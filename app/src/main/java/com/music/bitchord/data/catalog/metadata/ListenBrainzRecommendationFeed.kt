@@ -3,11 +3,11 @@ package com.music.bitchord.data.catalog.metadata
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import java.util.Locale
 
 /** Only identity + a server-provided collaborative-filter score, never audio. */
@@ -44,12 +44,12 @@ internal fun parseListenBrainzRecommendationFeed(
         null
     } ?: return ListenBrainzRecommendationParseResult.Malformed
 
-    val responseUser = payload["user_name"]?.jsonPrimitive?.contentOrNull
+    val responseUser = (payload["user_name"] as? JsonPrimitive)?.contentOrNull
         ?: return ListenBrainzRecommendationParseResult.Malformed
     if (!responseUser.equals(expectedUser, ignoreCase = true) ||
-        payload["entity"]?.jsonPrimitive?.contentOrNull != "recording"
+        (payload["entity"] as? JsonPrimitive)?.contentOrNull != "recording"
     ) return ListenBrainzRecommendationParseResult.Malformed
-    val updated = payload["last_updated"]?.jsonPrimitive?.longOrNull
+    val updated = (payload["last_updated"] as? JsonPrimitive)?.longOrNull
         ?: return ListenBrainzRecommendationParseResult.Malformed
     if (updated <= 0L || nowSeconds <= 0L || updated > nowSeconds + 300L) {
         return ListenBrainzRecommendationParseResult.Malformed
@@ -63,14 +63,14 @@ internal fun parseListenBrainzRecommendationFeed(
     val seen = hashSetOf<String>()
     val entries = rawItems.mapNotNull { rawItem ->
         val node = rawItem as? JsonObject ?: return@mapNotNull null
-        val id = node["recording_mbid"]?.jsonPrimitive?.contentOrNull
+        val id = (node["recording_mbid"] as? JsonPrimitive)?.contentOrNull
             ?.lowercase(Locale.ROOT) ?: return@mapNotNull null
-        val score = node["score"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+        val score = (node["score"] as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null
         if (!validMbids.matches(id) || !score.isFinite() ||
             score <= 0.0 || !seen.add(id)
         ) return@mapNotNull null
         ListenBrainzRecordingRecommendation(id, score)
     }
-    val total = payload["total_mbid_count"]?.jsonPrimitive?.intOrNull?.takeIf { it >= 0 }
+    val total = (payload["total_mbid_count"] as? JsonPrimitive)?.intOrNull?.takeIf { it >= 0 }
     return ListenBrainzRecommendationParseResult.Success(entries, updated, total)
 }
