@@ -757,6 +757,7 @@
     <string name="shelf_from_the_community">Từ cộng đồng</string>
     <string name="shelf_youtube_charts">Bảng xếp hạng YouTube</string>
     <string name="shelf_trending">Thịnh hành</string>
+    <string name="shelf_listenbrainz_community">Phổ biến trong cộng đồng</string>
     <string name="shelf_recents">Gần đây</string>
     <string name="subscriptions">Đã đăng ký</string>
     <string name="card_views_format">%1$s lượt xem</string>
