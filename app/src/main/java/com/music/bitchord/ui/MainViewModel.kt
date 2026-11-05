@@ -27,6 +27,9 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityClient
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityFetchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
@@ -314,6 +317,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalTrendingLocalSongs = MutableStateFlow<List<Song>>(emptyList())
     val canonicalTrendingLocalSongs: StateFlow<List<Song>> =
         _canonicalTrendingLocalSongs.asStateFlow()
+    /** Public cumulative community counts, never local/personal play history. */
+    private val _canonicalExplorePublicPopularity =
+        MutableStateFlow<List<ListenBrainzPopularityEvidence>>(emptyList())
+    val canonicalExplorePublicPopularity: StateFlow<List<ListenBrainzPopularityEvidence>> =
+        _canonicalExplorePublicPopularity.asStateFlow()
+    private val listenBrainzPopularityClient = ListenBrainzPopularityClient()
+    private val explorePublicPopularityEpoch = DiscoveryRequestEpoch()
+    private var explorePublicPopularityJob: Job? = null
+
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
 
@@ -2666,6 +2678,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun legacyDiscoveryGate() = LegacyDiscoveryRequestGate(
         useCanonicalDiscovery = isCanonicalDiscoverySelected(),
     )
+
+    /**
+     * Fetch community popularity only for already known, canonically identified
+     * recordings, and only when Explore actually requests it. Public popularity
+     * never changes personal Em alta, MediaAsset availability, or ratings.
+     */
+    fun loadCanonicalExplorePublicPopularity(rows: List<CanonicalCatalogSearchRow>) {
+        val ids = canonicalPublicPopularityCandidates(rows)
+        val generation = explorePublicPopularityEpoch.next()
+        explorePublicPopularityJob?.cancel()
+        if (ids.isEmpty()) {
+            _canonicalExplorePublicPopularity.value = emptyList()
+            return
+        }
+        // When the catalog page changes, do not leave a previous page's rank on
+        // screen while the new MBID batch is still being checked.
+        _canonicalExplorePublicPopularity.value = emptyList()
+        explorePublicPopularityJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                listenBrainzPopularityClient.recordingPopularity(ids)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ListenBrainzPopularityFetchResult.Unavailable
+            }
+            if (explorePublicPopularityEpoch.isCurrent(generation)) {
+                _canonicalExplorePublicPopularity.value =
+                    (result as? ListenBrainzPopularityFetchResult.Success)
+                        ?.observations.orEmpty()
+            }
+        }
+    }
 
     fun loadCanonicalDiscoveryCatalog() {
         if (!isCanonicalDiscoverySelected()) return
