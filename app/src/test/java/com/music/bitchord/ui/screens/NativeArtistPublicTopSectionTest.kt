@@ -37,7 +37,9 @@ class NativeArtistPublicTopSectionTest {
         compose.setContent {
             MaterialTheme {
                 NativeArtistPublicTopSection(
-                    artistMbid = artist,
+                    // Incoming browse MBIDs may use uppercase hex. Identity
+                    // normalization must not make the verified shelf disappear.
+                    artistMbid = artist.uppercase(),
                     rows = listOf(correct, unrelated),
                     palette = themeArtworkPalette(),
                     onRecordingOpen = { opened += it.musicBrainzId },
