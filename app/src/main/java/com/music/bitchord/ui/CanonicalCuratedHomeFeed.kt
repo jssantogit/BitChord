@@ -427,5 +427,5 @@ internal fun canonicalExploreShelves(
     if (releases != null) return listOf(releases)
     val trending = homeShelves.firstOrNull { it.title == trendingHeading && it.items.isNotEmpty() }
     if (trending != null) return listOf(trending)
-    return homeShelves.firstOrNull { it.items.isNotEmpty() }?.let(::listOf) ?: emptyList()
+    return homeShelves.firstOrNull { it.items.isNotEmpty() }?.let { listOf(it) } ?: emptyList()
 }
