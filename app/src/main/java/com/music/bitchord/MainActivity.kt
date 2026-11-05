@@ -762,8 +762,6 @@ private fun BitChordApp(
         dark = !darkTheme && !showNowPlaying && !showReplay && replayStory == null && !onboardingVisible,
     )
 
-    val usesCanonicalDiscovery by viewModel.usesCanonicalDiscovery.collectAsStateWithLifecycle()
-    val discoverySourceConfigs by SourceRegistry.configs.collectAsStateWithLifecycle()
     val canonicalDiscoveryCatalog by viewModel.canonicalDiscoveryCatalog.collectAsStateWithLifecycle()
     val canonicalHomeLocalPicks by viewModel.canonicalHomeLocalPicks.collectAsStateWithLifecycle()
     val canonicalHomeRemotePicks by viewModel.canonicalHomeRemotePicks.collectAsStateWithLifecycle()
@@ -1663,7 +1661,7 @@ private fun BitChordApp(
      * without spending the request is what lets the second run serve it.
      */
     val linkRequest by MusicLink.pending.collectAsStateWithLifecycle()
-    LaunchedEffect(linkRequest, controller, usesCanonicalDiscovery, discoverySourceConfigs) {
+    LaunchedEffect(linkRequest, controller) {
         val request = linkRequest ?: return@LaunchedEffect
         // Nothing here can be served without somewhere to play it — even the
         // branches that only push a page are a beat away from a tap on one of
@@ -3523,8 +3521,8 @@ private fun BitChordApp(
                                         onSearchSourceChange(
                                             searchSourceForOrigin(
                                                 origin,
-                                                canonicalMode = usesCanonicalDiscovery,
-                                                configs = discoverySourceConfigs,
+                                                canonicalMode = true,
+                                                configs = SourceRegistry.configs.value,
                                             ),
                                         )
                                     },
