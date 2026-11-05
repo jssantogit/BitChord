@@ -36,8 +36,8 @@ data class SourceConfig(
     /** What the user called it. Blank falls back to the server's host, or the kind's own label. */
     val label: String = "",
     val baseUrl: String = "",
-    /** JioSaavn is opt-in because catalogue matches can select the wrong recording. */
-    val enabled: Boolean = kind != SourceKind.JIOSAAVN,
+    /** JioSaavn is opt-in; retired YouTube must never be enabled by default. */
+    val enabled: Boolean = kind != SourceKind.JIOSAAVN && kind != SourceKind.YOUTUBE,
     /**
      * The addon's `allowDownloads`, as its manifest last said. Stored rather
      * than asked each time so the answer is there without a request — see
@@ -148,7 +148,7 @@ object SourceRegistry {
         // The retired built-in module is removed, while a custom module entered
         // by the user is preserved.
         return seeded
-            .filterNot { it.kind == SourceKind.MODULE }
+            .filterNot { it.kind == SourceKind.MODULE || it.kind == SourceKind.YOUTUBE }
             .map { config ->
                 when {
                     config.kind == SourceKind.JIOSAAVN && forceJioSaavnOff -> config.copy(enabled = false)
@@ -278,12 +278,17 @@ object SourceRegistry {
 
     // ── Editing ─────────────────────────────────────────────────────────
 
-    fun add(config: SourceConfig) = publish(configs.value + config.tidied())
+    /** Retired kinds are readable for migration, never editable audio sources. */
+    fun add(config: SourceConfig) {
+        if (config.kind == SourceKind.YOUTUBE || config.kind == SourceKind.MODULE) return
+        publish(configs.value + config.tidied())
+    }
 
-    fun update(config: SourceConfig) =
-        config.tidied().let { tidied ->
-            publish(configs.value.map { if (it.id == tidied.id) tidied else it })
-        }
+    fun update(config: SourceConfig) {
+        if (config.kind == SourceKind.YOUTUBE || config.kind == SourceKind.MODULE) return
+        val tidied = config.tidied()
+        publish(configs.value.map { if (it.id == tidied.id) tidied else it })
+    }
 
     /**
      * The config as it should be stored, rather than as it was typed.
@@ -312,6 +317,7 @@ object SourceRegistry {
      * This leaves local/authorized remote MediaAssets unaffected.
      */
     fun setEnabled(configId: String, enabled: Boolean) {
+        if (config(configId)?.kind == SourceKind.YOUTUBE) return
         publish(configs.value.map { if (it.id == configId) it.copy(enabled = enabled) else it })
     }
 
