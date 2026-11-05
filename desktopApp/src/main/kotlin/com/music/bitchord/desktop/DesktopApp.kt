@@ -1146,10 +1146,14 @@ fun BitChordDesktopApp() {
 
     fun openAlbum(browseId: String) = openCollection(browseId)
 
-    /** Copies the track's YouTube Music link. */
+    /** Only historical YouTube identities can be shared as YouTube links. */
     fun shareSong(song: Song) {
+        if (!DesktopSearchClient.isVideoId(song.videoId)) {
+            DesktopTrackLog.log("share skipped for '${song.title}': no verified YouTube identity")
+            return
+        }
         DesktopExternalLinks.copy("https://music.youtube.com/watch?v=${song.videoId}")
-        DesktopTrackLog.log("copied a link to '${song.title}'")
+        DesktopTrackLog.log("copied a historical link to '${song.title}'")
     }
 
     /**
