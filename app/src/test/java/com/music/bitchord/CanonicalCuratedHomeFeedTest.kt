@@ -3,6 +3,7 @@ package com.music.bitchord
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
+import com.music.bitchord.ui.canonicalExploreShelves
 import com.music.bitchord.ui.canonicalCoverLookupTarget
 import com.music.bitchord.ui.canonicalCoverLookupCandidates
 import com.music.bitchord.ui.canonicalArtistArtworkCandidate
@@ -35,6 +36,31 @@ class CanonicalCuratedHomeFeedTest {
         releasesHeading = "Lançamentos", picksHeading = "Escolha a dedo",
         trendingHeading = "Em alta", todayIsoDate = "2026-10-25",
     )
+
+    @Test fun explorePrioritizesVerifiedReleasesWhileHomeKeepsAllThreeShelves() {
+        val home = feed(listOf(release, playable), listOf(local), listOf(playable.musicBrainzId))
+        val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta")
+        assertEquals(listOf("Lançamentos", "Escolha a dedo", "Em alta"), home.map { it.title })
+        assertEquals(listOf("Lançamentos"), explore.map { it.title })
+        assertEquals(home.first().items, explore.single().items)
+        assertFalse(explore.any { it.title == "Escolha a dedo" })
+    }
+
+    @Test fun exploreNeverAppearsEmptyWhenOfflineLibraryHasOnlyVerifiedPicks() {
+        val home = feed(emptyList(), listOf(local))
+        val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta")
+        assertEquals(listOf("Escolha a dedo"), explore.map { it.title })
+        assertEquals(canonicalLocalPickCardId(local), explore.single().items.single().browseId)
+    }
+
+    @Test fun exploreFallsBackToEvidenceBasedTrendingWhenNoReleaseIsKnown() {
+        val home = feed(listOf(playable), trending = listOf(playable.musicBrainzId))
+        val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta")
+        assertEquals(listOf("Em alta"), explore.map { it.title })
+    }
 
     @Test fun showsNativeReleasePickAndEvidenceBasedTrendingShelvesInEditorialOrder() {
         val shelves = feed(listOf(release, playable), listOf(local), listOf(playable.musicBrainzId))
