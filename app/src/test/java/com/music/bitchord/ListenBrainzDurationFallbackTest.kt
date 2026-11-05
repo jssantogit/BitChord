@@ -1,17 +1,11 @@
 package com.music.bitchord
 
-import com.music.bitchord.data.scrobbling.ListenBrainzManager
+import com.music.bitchord.data.scrobbling.listenBrainzDurationMsFromLabel
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ListenBrainzDurationFallbackTest {
-    private fun parse(value: String?): Long {
-        val parser = ListenBrainzManager::class.java.getDeclaredMethod(
-            "parseDurationMs", String::class.java,
-        )
-        parser.isAccessible = true
-        return parser.invoke(ListenBrainzManager, value) as Long
-    }
+    private fun parse(value: String?): Long = listenBrainzDurationMsFromLabel(value)
 
     @Test fun acceptsMinuteAndHourDurationLabels() {
         assertEquals(0L, parse("00:00"))
