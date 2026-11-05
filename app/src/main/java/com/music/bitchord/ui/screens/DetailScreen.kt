@@ -330,6 +330,9 @@ fun DetailScreen(
     /** Public tracklist metadata; never manufactured as a playable Song. */
     canonicalTracks: List<CanonicalCatalogSearchRow> = emptyList(),
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
+    /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
+    canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
+    onCanonicalPublicTopOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -354,12 +357,21 @@ fun DetailScreen(
     // locally available recordings never constitute ranking evidence.
     val legacyRankedArtistFeed = isArtist &&
         nativeArtistLegacyRankedFeed(page.browseId)
+    val publicArtistMbid = page.browseId.takeIf {
+        isArtist && it.startsWith("catalog:ARTIST:")
+    }?.removePrefix("catalog:ARTIST:")
+    val publicTopRows = if (publicArtistMbid != null &&
+        onCanonicalPublicTopOpen != null
+    ) canonicalPublicTopTracks.filter {
+        it.kind == CanonicalSearchKind.RECORDING &&
+            it.artistScopeMbid == publicArtistMbid
+    } else emptyList()
     val artistVisibleSections = nativeArtistVisibleSections(
         NativeArtistSectionEvidence(
             context = if (isLocalArtist) NativeArtistContext.LIBRARY
                 else NativeArtistContext.ONLINE_CATALOG,
-            hasTracks = isArtist && songs.isNotEmpty(),
-            hasVerifiedPopularity = legacyRankedArtistFeed,
+            hasTracks = isArtist && (songs.isNotEmpty() || publicTopRows.isNotEmpty()),
+            hasVerifiedPopularity = legacyRankedArtistFeed || publicTopRows.isNotEmpty(),
         ),
     )
     val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -754,6 +766,17 @@ fun DetailScreen(
                                 color = palette.divider,
                             )
                         }
+                    }
+                } else if (isArtist && publicArtistMbid != null &&
+                    publicTopRows.isNotEmpty() && onCanonicalPublicTopOpen != null
+                ) {
+                    item(key = "canonical-artist-public-top") {
+                        NativeArtistPublicTopSection(
+                            artistMbid = publicArtistMbid,
+                            rows = publicTopRows,
+                            palette = palette,
+                            onRecordingOpen = onCanonicalPublicTopOpen,
+                        )
                     }
                 } else if (isArtist && (
                     NativeArtistSection.TRACKS in artistVisibleSections ||
