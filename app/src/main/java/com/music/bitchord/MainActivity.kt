@@ -794,7 +794,7 @@ private fun BitChordApp(
     }
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
-    val selectedMoodGenre by viewModel.selectedMoodGenre.collectAsStateWithLifecycle()
+
     val libraryState by viewModel.library.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val searchSource by viewModel.searchSource.collectAsStateWithLifecycle()
@@ -2476,9 +2476,7 @@ private fun BitChordApp(
             enabled = detail != null && !showSettings && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs &&
                 !showEqualizer && !showReplay,
         ) { viewModel.closeDetail() }
-        BackHandler(enabled = selectedMoodGenre != null && detail == null && !showSettings && !showReplay) {
-            viewModel.closeMoodGenre()
-        }
+
         BackHandler(enabled = showDiscord) {
             showDiscord = false
         }
@@ -2523,7 +2521,7 @@ private fun BitChordApp(
         }
         BackHandler(
             enabled = detail == null && !showSettings && !showAccountScrobbling && !showSpotify &&
-                !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay && selectedMoodGenre == null &&
+                !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay &&
                 selectedTab != TAB_HOME,
         ) {
             selectedTab = TAB_HOME
@@ -3887,7 +3885,7 @@ private fun BitChordApp(
                 // Home reuses the shared account/profile pill, with no overflow menu.
                 // Never add separate Material 3 actions over its title.
                 val homeRootVisible = selectedTab == TAB_HOME &&
-                    detail == null && selectedMoodGenre == null &&
+                    detail == null &&
                     libraryShowAll == null && !showSettings &&
                     !showAccountScrobbling && !showSources && !showListenTogether &&
                     !showWearOs && !showEqualizer && !showDiscord &&
@@ -3919,7 +3917,7 @@ private fun BitChordApp(
                         showReplay -> stringResource(R.string.replay)
                         detail != null && detailActiveShelf != null -> detailActiveShelf?.title.orEmpty()
                         detail != null -> detail.title
-                        selectedMoodGenre != null -> selectedMoodGenre?.title.orEmpty()
+
                         selectedTab == TAB_HOME -> stringResource(R.string.home)
                         else -> tabs[selectedTab].label
                     },
@@ -3947,8 +3945,7 @@ private fun BitChordApp(
                             (libraryShowAll != null && detail == null) ||
                             (showAllLocalRecentAdditions && detail == null) ||
                             (unifiedLibraryCategory != null) ||
-                            (detail != null && detailActiveShelf != null) ||
-                            selectedMoodGenre != null -> true
+                            (detail != null && detailActiveShelf != null) -> true
                         showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null ->
                             // Always identify the Library's playlists collection.
                             // The in-list header can be scrolled off or restored
@@ -4011,13 +4008,13 @@ private fun BitChordApp(
                         showReplay -> ({ showReplay = false })
                         detailActiveShelf != null -> ({ detailActiveShelf = null })
                         detail != null -> ({ viewModel.closeDetail(); Unit })
-                        selectedMoodGenre != null -> ({ viewModel.closeMoodGenre(); Unit })
+
                         else -> null
                     },
                     modifier = Modifier.align(Alignment.TopCenter),
                     // Only on the Search tab itself, not on anything pushed over it.
                     accessory = if (
-                        selectedTab == TAB_SEARCH && detail == null && selectedMoodGenre == null &&
+                        selectedTab == TAB_SEARCH && detail == null &&
                         libraryShowAll == null && unifiedLibraryCategory == null &&
                         !showSettings && !showAccountScrobbling &&
                         !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showDiscord &&
