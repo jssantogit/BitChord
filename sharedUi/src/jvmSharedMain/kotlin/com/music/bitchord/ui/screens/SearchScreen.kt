@@ -359,7 +359,9 @@ fun SearchScreen(
                     // through a MusicBrainz-only history entry.
                     val recent = canonicalRecentSearchEntries(history)
                     if (recent.isEmpty()) {
-                        item { MessageState(stringResource(Res.string.search_empty)) }
+                        item {
+                            MessageState("Pesquise artistas, músicas e álbuns no MusicBrainz.")
+                        }
                     } else {
                         recentSearches(
                             history = recent,
