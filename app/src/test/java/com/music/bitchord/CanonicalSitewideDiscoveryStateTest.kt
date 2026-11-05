@@ -15,6 +15,7 @@ class CanonicalSitewideDiscoveryStateTest {
             recordings = listOf(ListenBrainzSitewideRecording(
                 "13dd61c7-ce73-4e97-9f0c-9f0e53144411", 30)),
             fetchedAtMs = 1000L,
+            upstreamUpdatedAtSeconds = 1L,
         )
         assertTrue(canonicalSitewideDiscoveryIsFresh(example, 1000L))
         assertTrue(canonicalSitewideDiscoveryIsFresh(example, 1000L + 100_000L))
@@ -25,5 +26,18 @@ class CanonicalSitewideDiscoveryStateTest {
             range = ListenBrainzSitewideRange.MONTH), 1100L))
         assertFalse(canonicalSitewideDiscoveryIsFresh(example.copy(
             fetchedAtMs = null), 1100L))
+        assertFalse(canonicalSitewideDiscoveryIsFresh(example.copy(
+            upstreamUpdatedAtSeconds = null), 1100L))
+        assertFalse(canonicalSitewideDiscoveryIsFresh(example.copy(
+            upstreamUpdatedAtSeconds = -1L), 1100L))
+        val today = 1_800_000_000_000L
+        assertFalse(canonicalSitewideDiscoveryIsFresh(example.copy(
+            fetchedAtMs = today - 60_000L,
+            upstreamUpdatedAtSeconds = (today - 20L * 24 * 60 * 60 * 1000) / 1000,
+        ), today))
+        assertTrue(canonicalSitewideDiscoveryIsFresh(example.copy(
+            fetchedAtMs = today - 60_000L,
+            upstreamUpdatedAtSeconds = (today - 7L * 24 * 60 * 60 * 1000) / 1000,
+        ), today))
     }
 }
