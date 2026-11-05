@@ -27,6 +27,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.ListenBrainzRecommendationClient
+import com.music.bitchord.data.catalog.metadata.ListenBrainzRecommendationFetchResult
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityClient
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityFetchResult
@@ -329,6 +331,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val canonicalExplorePublicPopularity: StateFlow<List<ListenBrainzPopularityEvidence>> =
         _canonicalExplorePublicPopularity.asStateFlow()
     private val listenBrainzPopularityClient = ListenBrainzPopularityClient()
+    private val _canonicalExplorePersonalRecommendations =
+        MutableStateFlow(CanonicalPersonalRecommendationState())
+    internal val canonicalExplorePersonalRecommendations: StateFlow<CanonicalPersonalRecommendationState> =
+        _canonicalExplorePersonalRecommendations.asStateFlow()
+    private val personalRecommendationClient = ListenBrainzRecommendationClient()
+    private val personalRecommendationEpoch = DiscoveryRequestEpoch()
+    private var personalRecommendationJob: Job? = null
+    private var personalRecommendationAccountDigest: String? = null
+    @Volatile private var personalRecommendationRetryAtMs = 0L
     private val _canonicalExploreSitewide =
         MutableStateFlow(CanonicalSitewideDiscoveryState())
     internal val canonicalExploreSitewide: StateFlow<CanonicalSitewideDiscoveryState> =
@@ -2712,6 +2723,106 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * rendering later intersects with actual MusicBrainz catalog rows.
      * Missing, expired and unavailable data never become invented trends.
      */
+    /**
+     * This is intentionally separate from the public community chart.
+     * Only an enabled ListenBrainz account is consulted, and only MusicBrainz
+     * independently verified recordings become metadata-only Explore cards.
+     */
+    fun loadCanonicalPersonalRecommendations() {
+        val token = AppSettings.listenBrainzToken.value.takeIf {
+            AppSettings.scrobblingAvailable && AppSettings.listenBrainzEnabled.value &&
+                it.isNotBlank()
+        }
+        val account = token?.let { secret ->
+            java.security.MessageDigest.getInstance("SHA-256")
+                .digest(secret.toByteArray(Charsets.UTF_8))
+                .joinToString("") { byte ->
+                    (byte.toInt() and 0xff).toString(16).padStart(2, '0')
+                }
+        }
+        if (account != personalRecommendationAccountDigest) {
+            personalRecommendationEpoch.next()
+            personalRecommendationJob?.cancel()
+            personalRecommendationJob = null
+            _canonicalExplorePersonalRecommendations.value = CanonicalPersonalRecommendationState()
+            personalRecommendationAccountDigest = account
+            personalRecommendationRetryAtMs = 0L
+        }
+        if (token == null) return
+        val now = System.currentTimeMillis()
+        if (canonicalPersonalRecommendationIsFresh(
+                _canonicalExplorePersonalRecommendations.value, now,
+            ) || personalRecommendationJob?.isActive == true ||
+            now < personalRecommendationRetryAtMs
+        ) return
+
+        val generation = personalRecommendationEpoch.next()
+        personalRecommendationJob?.cancel()
+        _canonicalExplorePersonalRecommendations.value = CanonicalPersonalRecommendationState()
+        personalRecommendationJob = viewModelScope.launch(Dispatchers.IO) {
+            val stillCurrent = {
+                personalRecommendationEpoch.isCurrent(generation) &&
+                    AppSettings.scrobblingAvailable &&
+                    AppSettings.listenBrainzEnabled.value &&
+                    AppSettings.listenBrainzToken.value == token
+            }
+            val response = try {
+                personalRecommendationClient.recordings(token, count = 16)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ListenBrainzRecommendationFetchResult.Unavailable
+            }
+            if (!stillCurrent()) return@launch
+            val success = response as? ListenBrainzRecommendationFetchResult.Success
+            if (success == null) {
+                personalRecommendationRetryAtMs = System.currentTimeMillis() + 15L * 60_000L
+                return@launch
+            }
+            val verified = mutableMapOf<String, RecordingMetadataEnrichment>()
+            val candidates = success.items.take(8)
+            for (candidate in candidates) {
+                currentCoroutineContext().ensureActive()
+                if (!stillCurrent()) return@launch
+                val id = candidate.recordingMbid
+                val cached = artistTopMetadataCache[id]
+                val metadata = if (cached != null) cached else try {
+                    (withTimeoutOrNull(16_000L) {
+                        artistTopMetadataProvider.lookupRecording(id)
+                    } as? MetadataLookupResult.Success)?.value
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                if (metadata != null && metadata.musicBrainzId.equals(id, ignoreCase = true)) {
+                    if (artistTopMetadataCache.size >= 64) artistTopMetadataCache.clear()
+                    artistTopMetadataCache[id] = metadata
+                    verified[id] = metadata
+                    val rows = canonicalVerifiedPersonalRecommendationRows(candidates, verified)
+                    if (stillCurrent()) {
+                        _canonicalExplorePersonalRecommendations.value =
+                            CanonicalPersonalRecommendationState(
+                                recordings = success.items,
+                                verifiedRows = rows,
+                                upstreamUpdatedSeconds = success.upstreamUpdatedSeconds,
+                            )
+                    }
+                }
+            }
+            if (stillCurrent()) {
+                val rows = canonicalVerifiedPersonalRecommendationRows(candidates, verified)
+                _canonicalExplorePersonalRecommendations.value =
+                    CanonicalPersonalRecommendationState(
+                        recordings = success.items,
+                        verifiedRows = rows,
+                        fetchedAtMs = success.fetchedAtMs.takeIf { rows.isNotEmpty() },
+                        upstreamUpdatedSeconds = success.upstreamUpdatedSeconds,
+                    )
+                personalRecommendationRetryAtMs =
+                    if (rows.isEmpty()) System.currentTimeMillis() + 15L * 60_000L else 0L
+            }
+        }
+    }
+
     fun loadCanonicalExploreSitewide() {
         val now = System.currentTimeMillis()
         if (canonicalSitewideDiscoveryIsFresh(_canonicalExploreSitewide.value, now) ||
