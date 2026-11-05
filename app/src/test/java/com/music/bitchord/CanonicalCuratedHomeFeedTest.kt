@@ -62,6 +62,23 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals(canonicalLocalPickCardId(local), explore.single().items.single().browseId)
     }
 
+    @Test fun exploreDoesNotPresentSavedDownloadAsPublicRelease() {
+        val saved = ShelfItem(
+            title = "Saved album", subtitle = "Downloaded",
+            thumbnailUrl = null, videoId = null, browseId = "local:download:album-1",
+        )
+        val home = listOf(
+            com.music.bitchord.data.model.HomeShelf("Lançamentos", listOf(saved)),
+            com.music.bitchord.data.model.HomeShelf(
+                "Escolha a dedo",
+                listOf(ShelfItem("Local track", "Artist", null, null, "local:pick:valid")),
+            ),
+        )
+        val explore = canonicalExploreShelves(home, "Lançamentos", "Em alta")
+        assertEquals(listOf("Escolha a dedo"), explore.map { it.title })
+        assertFalse(explore.flatMap { it.items }.any { it.browseId == saved.browseId })
+    }
+
     @Test fun exploreFallsBackToEvidenceBasedTrendingWhenNoReleaseIsKnown() {
         val home = feed(listOf(playable), trending = listOf(playable.musicBrainzId))
         val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
