@@ -54,6 +54,19 @@ class HomeHeaderTest {
         compose.onNodeWithTag("home-overflow").assertIsDisplayed()
     }
 
+    @Test fun genreDetailTitleProvidesAWorkingNativeBackAction() {
+        var backs = 0
+        compose.setContent {
+            MaterialTheme {
+                HomeTitle(title = "K-pop", onBack = { backs++ })
+            }
+        }
+        compose.onNodeWithText("K-pop").assertIsDisplayed()
+        compose.onNodeWithTag("home-back").assertIsDisplayed()
+        compose.onNodeWithTag("home-back").performClick()
+        compose.runOnIdle { assertEquals(1, backs) }
+    }
+
     @Test fun profileActionRemainsVisibleBesideTheNativeHomeTitle() {
         var profileOpens = 0
         compose.setContent {
