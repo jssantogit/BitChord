@@ -1,0 +1,27 @@
+name: TV and Wear Backend Removal Gate
+
+on:
+  pull_request:
+
+concurrency:
+  group: tv-wear-backend-removal-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  platform-compile:
+    name: TV and Wear · compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - name: Compile TV and Wear Android variants
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :tv:compileDevDebugKotlin :wearos:compileDevDebugKotlin
