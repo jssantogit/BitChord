@@ -11,6 +11,7 @@ import com.music.bitchord.ui.canonicalExploreGenres
 import com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial
 import com.music.bitchord.ui.canonicalPublicReleaseRows
 import com.music.bitchord.ui.canonicalPublicGenreRows
+import com.music.bitchord.ui.canonicalPublicNeedsMoreEditorialRows
 import com.music.bitchord.ui.canonicalPublicGenreReleaseShelf
 import com.music.bitchord.ui.canonicalGenreEditorialShelves
 import com.music.bitchord.ui.screens.CanonicalSearchKind
@@ -209,13 +210,56 @@ class CanonicalPublicDiscoveryTest {
             canonicalExploreGenres.first { it.tag == "rock" }, rows, "2026-11-06",
         )
         assertTrue(shelves.size >= 3)
-        assertTrue(shelves.first().title.contains("Rock"))
-        assertTrue(shelves.any { it.title.contains("Lançamentos") })
+        assertEquals("Para descobrir", shelves.first().title)
+        assertTrue(shelves.any { it.title == "Lançamentos" })
+        assertTrue(shelves.any { it.title == "Álbuns" })
+        assertTrue(shelves.any { it.title == "Singles e EPs" })
+        assertTrue(shelves.none { it.title.contains(" · Rock") })
         val allCards = shelves.flatMap { it.items }
         assertEquals(allCards.size, allCards.map { it.browseId }.distinct().size)
         assertTrue(allCards.all { it.videoId == null &&
             it.browseId.orEmpty().startsWith("catalog:RELEASE_GROUP:") })
         assertTrue(shelves.none { it.title.contains("Top") || it.title.contains("Em alta") })
+    }
+
+    @Test fun genreCategoryCardsCanUseVerifiedCoversWithoutChangingNavigation() {
+        val covers = mapOf("rock" to "https://coverartarchive.org/release-group/verified/front-500")
+        val rows = canonicalExploreGenreShelf("Gêneros", covers).items
+        assertEquals(covers["rock"], rows.first { it.title == "Rock" }.thumbnailUrl)
+        assertNull(rows.first { it.title == "Pop" }.thumbnailUrl)
+        assertEquals("catalog:GENRE:rock", rows.first { it.title == "Rock" }.browseId)
+    }
+
+    @Test fun sparseGenreStillReservesRealAlbumAndSingleSections() {
+        val samples = listOf(
+            recent.copy(musicBrainzId = "10000000-0000-4000-8000-000000000001", title = "A1"),
+            recent.copy(musicBrainzId = "10000000-0000-4000-8000-000000000002", title = "A2"),
+            recent.copy(musicBrainzId = "10000000-0000-4000-8000-000000000003", title = "A3"),
+            another.copy(musicBrainzId = "10000000-0000-4000-8000-000000000004", title = "S1"),
+            another.copy(musicBrainzId = "10000000-0000-4000-8000-000000000005", title = "S2"),
+            another.copy(musicBrainzId = "10000000-0000-4000-8000-000000000006", title = "S3"),
+        )
+        val rows = canonicalPublicReleaseRows(samples, "2026-10-01", "2026-11-06")
+        val shelves = canonicalGenreEditorialShelves(
+            canonicalExploreGenres.first { it.tag == "rock" }, rows, "2026-11-06",
+        )
+        assertTrue(shelves.any { it.title == "Lançamentos" })
+        assertTrue(shelves.any { it.title == "Álbuns" })
+        assertTrue(shelves.any { it.title == "Singles e EPs" })
+        assertEquals(shelves.flatMap { it.items }.size,
+            shelves.flatMap { it.items }.map { it.browseId }.distinct().size)
+    }
+
+    @Test fun tinyPublicBatchRequiresMoreDiscoveryBeforeHomeIsComplete() {
+        val few = canonicalPublicReleaseRows(listOf(recent, another), "2026-10-01", "2026-11-06")
+        assertTrue(canonicalPublicNeedsMoreEditorialRows(few))
+        val many = (1..36).map { index ->
+            val hit = if (index % 2 == 0) recent else another
+            hit.copy(musicBrainzId = "30000000-0000-4000-8000-${index.toString().padStart(12, '0')}",
+                title = "Release ${index}")
+        }
+        val rows = canonicalPublicReleaseRows(many, "2026-10-01", "2026-11-06")
+        assertFalse(canonicalPublicNeedsMoreEditorialRows(rows))
     }
 
     @Test fun worldwideHomeUsesDistinctReleasesAndFourEditorialSectionsWhenAvailable() {

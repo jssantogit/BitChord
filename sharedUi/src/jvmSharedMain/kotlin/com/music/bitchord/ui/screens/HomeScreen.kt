@@ -545,11 +545,6 @@ fun HomeTitle(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.testTag("home-back")) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
-            }
-        }
         Text(
             text = title,
             modifier = Modifier.weight(1f).testTag("home-title"),
@@ -558,6 +553,13 @@ fun HomeTitle(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        // A genre page must line up with Home/Explore, not indent the title
+        // by the back button's width. Keep Back reachable at the right.
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.testTag("home-back")) {
+                Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+            }
+        }
         trailing?.invoke()
         if (actions.isNotEmpty()) {
             Box {

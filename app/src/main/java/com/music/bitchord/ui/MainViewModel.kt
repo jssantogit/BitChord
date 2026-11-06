@@ -380,6 +380,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalGenreResults.asStateFlow()
     private var canonicalGenreJob: Job? = null
     private val canonicalGenreEpoch = DiscoveryRequestEpoch()
+    // Verified Cover Art Archive art for the original Explore category tiles.
+    // These are optional image previews, not metadata or playable identities.
+    private val _canonicalExploreGenreCovers = MutableStateFlow<Map<String, String>>(emptyMap())
+    val canonicalExploreGenreCovers: StateFlow<Map<String, String>> =
+        _canonicalExploreGenreCovers.asStateFlow()
+    private var canonicalGenrePreviewJob: Job? = null
+    private var canonicalGenrePreviewAttemptMs = 0L
 
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
@@ -3111,17 +3118,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val recentHits =
                     (recent as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
                 val recentRows = canonicalPublicReleaseRows(recentHits, narrowFrom, until)
-                // A nonempty raw search result can consist entirely of
-                // uncredited, untyped or unsafe editions. Widen only after
-                // applying the same eligibility rules as the visible shelf.
-                if (recentRows.isNotEmpty()) recentRows else {
+                // A valid but tiny first page must not strand Home at two
+                // sections. Expand in bounded historical windows, retaining
+                // only typed, dated releases with genuine MusicBrainz IDs.
+                val expandedRows = if (canonicalPublicNeedsMoreEditorialRows(recentRows)) {
                     val expanded = musicBrainzSearch.searchRecentReleaseGroups(
                         wideFrom, until, limit = 100,
                     )
-                    val expandedHits =
-                        (expanded as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
-                    canonicalPublicReleaseRows(expandedHits, wideFrom, until)
-                }
+                    val hits = (expanded as? MusicBrainzCatalogSearchResult.Success)
+                        ?.page?.items.orEmpty()
+                    canonicalPublicReleaseRows(hits, wideFrom, until)
+                } else emptyList()
+                val combined = (recentRows + expandedRows).distinctBy { it.musicBrainzId }
+                if (canonicalPublicNeedsMoreEditorialRows(combined)) {
+                    val historicalFrom = today.minusDays(365).toString()
+                    val historicalThrough = today.minusDays(91).toString()
+                    val historical = musicBrainzSearch.searchRecentReleaseGroups(
+                        historicalFrom, historicalThrough, limit = 100,
+                    )
+                    val hits = (historical as? MusicBrainzCatalogSearchResult.Success)
+                        ?.page?.items.orEmpty()
+                    (combined + canonicalPublicReleaseRows(
+                        hits, historicalFrom, historicalThrough,
+                    )).distinctBy { it.musicBrainzId }
+                } else combined
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { emptyList() }
             if (!worldwideReleaseEpoch.isCurrent(generation)) return@launch
@@ -3166,6 +3186,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Progressively decorate the native Explore grid with REAL covers. Each
+     * preview comes from a tagged MusicBrainz ReleaseGroup and its own trusted
+     * CAA lookup. No random artwork or obsolete YouTube requests.
+     *
+     * One bounded, sequential metadata scan respects the MusicBrainz request
+     * limiter. An unsuccessful scan is not repeated on every tab re-entry.
+     */
+    fun loadCanonicalExploreGenreCovers() {
+        if (canonicalGenrePreviewJob?.isActive == true) return
+        val now = System.currentTimeMillis()
+        if (now - canonicalGenrePreviewAttemptMs < 6L * 60L * 60L * 1000L) return
+        canonicalGenrePreviewAttemptMs = now
+        canonicalGenrePreviewJob = viewModelScope.launch(Dispatchers.IO) {
+            val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
+            for (genre in canonicalExploreGenres) {
+                currentCoroutineContext().ensureActive()
+                if (genre.tag in _canonicalExploreGenreCovers.value) continue
+                val result = try {
+                    musicBrainzSearch.searchReleaseGroupsForTag(genre.tag, limit = 20)
+                } catch (cancelled: CancellationException) { throw cancelled }
+                  catch (_: Exception) { null }
+                val hits = (result as? MusicBrainzCatalogSearchResult.Success)
+                    ?.page?.items.orEmpty()
+                val rows = canonicalPublicGenreRows(hits, today)
+                val previews = canonicalGenreArtworkPriority(genre, rows, today, limit = 3)
+                for (candidate in previews) {
+                    currentCoroutineContext().ensureActive()
+                    val cover = try {
+                        withTimeoutOrNull(5_000L) { canonicalArtworkForRow(candidate) }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                      catch (_: Exception) { null }
+                    if (!cover.isNullOrBlank()) {
+                        _canonicalExploreGenreCovers.update { it + (genre.tag to cover) }
+                        break
+                    }
+                }
+            }
+        }
+    }
+
     /** Explore genre requests use actual MusicBrainz tags, not YouTube pages. */
     fun loadCanonicalGenre(tag: String) {
         val selected = canonicalExploreGenres.firstOrNull { it.tag == tag } ?: return
@@ -3197,6 +3258,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             catch (cancelled: CancellationException) { throw cancelled }
                             catch (_: Exception) { null }
                         if (artwork != null && canonicalGenreEpoch.isCurrent(generation)) {
+                            _canonicalExploreGenreCovers.update { covers ->
+                                if (selected.tag in covers) covers else covers + (selected.tag to artwork)
+                            }
                             _canonicalGenreResults.update { state ->
                                 if (state !is UiState.Success) state
                                 else UiState.Success(state.data.map {

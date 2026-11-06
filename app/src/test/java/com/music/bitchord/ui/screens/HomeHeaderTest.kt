@@ -16,11 +16,13 @@ import com.music.bitchord.data.model.UiState
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import com.music.bitchord.ui.components.FrostedTopBar
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -65,6 +67,23 @@ class HomeHeaderTest {
         compose.onNodeWithTag("home-back").assertIsDisplayed()
         compose.onNodeWithTag("home-back").performClick()
         compose.runOnIdle { assertEquals(1, backs) }
+    }
+
+    @Test fun genreTitleStartsOnSameHorizontalLineAsHome() {
+        compose.setContent {
+            MaterialTheme {
+                Column {
+                    HomeTitle(title = "Início")
+                    HomeTitle(title = "Rock", onBack = {})
+                }
+            }
+        }
+        compose.runOnIdle {
+            val lefts = compose.onAllNodesWithTag("home-title")
+                .fetchSemanticsNodes().map { it.boundsInRoot.left }
+            assertEquals(2, lefts.size)
+            assertEquals(lefts[0], lefts[1], 0.5f)
+        }
     }
 
     @Test fun profileActionRemainsVisibleBesideTheNativeHomeTitle() {

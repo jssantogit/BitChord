@@ -123,12 +123,15 @@ internal val canonicalExploreGenres = listOf(
 internal fun canonicalExploreGenreForBrowseId(browseId: String?): CanonicalExploreGenre? =
     canonicalExploreGenres.firstOrNull { browseId == "catalog:GENRE:${it.tag}" }
 
-internal fun canonicalExploreGenreShelf(heading: String): HomeShelf =
+internal fun canonicalExploreGenreShelf(
+    heading: String,
+    verifiedCovers: Map<String, String> = emptyMap(),
+): HomeShelf =
     HomeShelf(heading, canonicalExploreGenres.map { genre ->
         ShelfItem(
             title = genre.title,
             subtitle = "",
-            thumbnailUrl = null,
+            thumbnailUrl = verifiedCovers[genre.tag],
             videoId = null,
             browseId = "catalog:GENRE:${genre.tag}",
         )
@@ -168,44 +171,71 @@ internal fun canonicalGenreEditorialShelves(
             .thenBy { it.musicBrainzId })
         .toList()
     if (eligible.isEmpty()) return emptyList()
-    // Allocate with stable ownership; never depend on title-only album matches.
+    // Reserve at least one genuine entry for each evidence-backed category
+    // before the hero uses all the limited results from a sparse tag search.
+    // Every MusicBrainz ReleaseGroup still appears in at most one section.
     val assigned = mutableSetOf<String>()
-    fun section(heading: String, candidates: List<CanonicalCatalogSearchRow>, limit: Int): HomeShelf? {
-        val selected = candidates.asSequence()
+    fun take(candidates: List<CanonicalCatalogSearchRow>, limit: Int): List<CanonicalCatalogSearchRow> {
+        val picked = candidates.asSequence()
             .filter { it.musicBrainzId.lowercase(Locale.ROOT) !in assigned }
-            .take(limit)
-            .toList()
-        selected.forEach { assigned += it.musicBrainzId.lowercase(Locale.ROOT) }
-        return selected.takeIf { it.isNotEmpty() }?.let { tracks ->
-            HomeShelf(heading, tracks.map { row ->
+            .take(limit).toList()
+        picked.forEach { assigned += it.musicBrainzId.lowercase(Locale.ROOT) }
+        return picked
+    }
+    fun shelf(title: String, rows: List<CanonicalCatalogSearchRow>): HomeShelf? =
+        rows.takeIf { it.isNotEmpty() }?.let { available ->
+            HomeShelf(title, available.map { row ->
                 ShelfItem(row.title, row.subtitle.orEmpty(), row.artworkUri, null,
                     canonicalNativeBrowseId(row))
             })
         }
-    }
+
     val freshSince = runCatching {
         LocalDate.parse(todayIsoDate).minusDays(180).toString()
     }.getOrDefault(todayIsoDate)
+    val fresh = eligible.filter { row ->
+        row.releaseDate?.let { it.length == 10 && it >= freshSince } == true
+    }
+    val albums = eligible.filter { canonicalEditorialReleaseType(it) == "Album" }
+    val singles = eligible.filter {
+        canonicalEditorialReleaseType(it) in setOf("Single", "EP")
+    }
     val featured = eligible.sortedWith(
         compareByDescending<CanonicalCatalogSearchRow> { !it.artworkUri.isNullOrBlank() }
             .thenBy { (it.musicBrainzId + todayIsoDate).hashCode() }
             .thenBy { it.musicBrainzId },
     )
-    return buildList {
-        section("Para descobrir · ${genre.title}", featured, 4)?.let(::add)
-        section("Lançamentos · ${genre.title}", eligible.filter {
-            it.releaseDate?.let { date ->
-                date.length == 10 && date >= freshSince
-            } == true
-        }, 12)?.let(::add)
-        section("Álbuns · ${genre.title}", eligible.filter {
-            canonicalEditorialReleaseType(it) == "Album"
-        }, 16)?.let(::add)
-        section("Singles e EPs · ${genre.title}", eligible.filter {
-            canonicalEditorialReleaseType(it) in setOf("Single", "EP")
-        }, 16)?.let(::add)
-        section("Mais para explorar · ${genre.title}", eligible, 16)?.let(::add)
+    val launchSeed = take(fresh, 1)
+    val albumSeed = take(albums, 1)
+    val singleSeed = take(singles, 1)
+    val discoveries = take(featured, if (eligible.size >= 12) 4 else 2)
+    val launches = launchSeed + take(fresh, 11)
+    val albumShelf = albumSeed + take(albums, 15)
+    val singleShelf = singleSeed + take(singles, 15)
+    val more = take(eligible, 16)
+    // The detail heading already names the genre: don't append ' · Rock'
+    // to each shelf. Missing evidence omits that shelf, not a fake release.
+    return listOfNotNull(
+        shelf("Para descobrir", discoveries),
+        shelf("Lançamentos", launches),
+        shelf("Álbuns", albumShelf),
+        shelf("Singles e EPs", singleShelf),
+        shelf("Mais para explorar", more),
+    )
+}
+
+/** One small release page is not enough to populate a diverse public Home.
+ * Prefer broadening the real MusicBrainz query before claiming the feed is complete. */
+internal fun canonicalPublicNeedsMoreEditorialRows(
+    rows: List<CanonicalCatalogSearchRow>,
+): Boolean {
+    val typed = rows.filter {
+        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null
     }
+    return typed.size < 30 ||
+        typed.none { canonicalEditorialReleaseType(it) == "Album" } ||
+        typed.none { canonicalEditorialReleaseType(it) in setOf("Single", "EP") }
 }
 
 /** Independent public metadata never becomes a playable song without an asset. */

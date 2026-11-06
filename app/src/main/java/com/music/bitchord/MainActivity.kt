@@ -787,6 +787,7 @@ private fun BitChordApp(
     val canonicalWorldwideReleases by viewModel.canonicalWorldwideReleases.collectAsStateWithLifecycle()
     val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
+    val canonicalExploreGenreCovers by viewModel.canonicalExploreGenreCovers.collectAsStateWithLifecycle()
     var activeCanonicalGenre by remember {
         mutableStateOf<com.music.bitchord.ui.CanonicalExploreGenre?>(null)
     }
@@ -1005,6 +1006,11 @@ private fun BitChordApp(
             // Explore now contains only genre navigation. An opted-in user's
             // private recommendations belong to Home, not the public grid.
             viewModel.loadCanonicalPersonalRecommendations()
+        }
+    }
+    LaunchedEffect(selectedTab, activeCanonicalGenre?.tag) {
+        if (selectedTab == TAB_EXPLORE && activeCanonicalGenre == null) {
+            viewModel.loadCanonicalExploreGenreCovers()
         }
     }
     val canonicalFeedDate = remember {
@@ -3593,7 +3599,9 @@ private fun BitChordApp(
                                 pullState = explorePull,
                                 contentPadding = listPadding,
                                 canonicalGenres = com.music.bitchord.ui
-                                    .canonicalExploreGenreShelf(canonicalGenresHeading).items,
+                                    .canonicalExploreGenreShelf(
+                                        canonicalGenresHeading, canonicalExploreGenreCovers,
+                                    ).items,
                                 onCanonicalGenreClick = { item ->
                                     onCanonicalShelfClick(
                                         item, canonicalGenresHeading,
