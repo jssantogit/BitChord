@@ -987,6 +987,9 @@ private fun BitChordApp(
     val canonicalCommunityHeading = stringResource(R.string.shelf_listenbrainz_community)
     val canonicalPersonalHeading = stringResource(R.string.shelf_for_you)
     val canonicalGenresHeading = stringResource(R.string.explore_genres)
+    val canonicalPublicAlbumsHeading = stringResource(R.string.albums)
+    val canonicalPublicSinglesHeading = stringResource(R.string.canonical_singles_eps)
+    val canonicalPublicMoreHeading = stringResource(R.string.more)
     val popularityCandidateIds = remember(cachedCanonicalRows) {
         canonicalPublicPopularityCandidates(cachedCanonicalRows)
     }
@@ -1040,6 +1043,9 @@ private fun BitChordApp(
             picksHeading = canonicalPicksHeading,
             trendingHeading = canonicalTrendingHeading,
             todayIsoDate = canonicalFeedDate,
+            albumsHeading = canonicalPublicAlbumsHeading,
+            singlesHeading = canonicalPublicSinglesHeading,
+            moreHeading = canonicalPublicMoreHeading,
         )
     }
     // Explore reuses the native shelf UI, but not Home's entire curated feed.
@@ -1139,6 +1145,7 @@ private fun BitChordApp(
     val canonicalHomeDisplayShelves = remember(
         canonicalHomeShelves, canonicalWorldwideReleases,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
+        canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
         worldwideTrendingShelf, canonicalFeedDate,
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
