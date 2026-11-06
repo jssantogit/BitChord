@@ -2842,7 +2842,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadCanonicalExploreSitewide() {
         val now = System.currentTimeMillis()
-        if (canonicalSitewideDiscoveryIsFresh(_canonicalExploreSitewide.value, now) ||
+        val previous = _canonicalExploreSitewide.value
+        val indexed = canonicalPublicPopularityCandidates(
+            (canonicalDiscoveryCatalog.value as? UiState.Success)?.data.orEmpty(),
+            limit = 100,
+        ).toSet()
+        val hasVerifiedRows = previous.verifiedRows.isNotEmpty() ||
+            previous.recordings.any { it.recordingMbid in indexed }
+        if ((canonicalSitewideDiscoveryIsFresh(previous, now) && hasVerifiedRows) ||
             sitewideJob?.isActive == true || now < sitewideRetryAfterMs
         ) return
         val generation = sitewideEpoch.next()
@@ -2887,30 +2894,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 limit = 100,
             ).toSet()
             val independentlyVerified = mutableMapOf<String, RecordingMetadataEnrichment>()
-            for (entry in success.recordings.take(8)) {
-                currentCoroutineContext().ensureActive()
-                if (!sitewideEpoch.isCurrent(generation)) return@launch
-                val mbid = entry.recordingMbid
-                if (mbid in inCatalog) continue
-                val cached = artistTopMetadataCache[mbid]
-                val metadata = if (cached != null) cached else try {
-                    (withTimeoutOrNull(12_000L) {
-                        artistTopMetadataProvider.lookupRecording(mbid)
-                    } as? MetadataLookupResult.Success)?.value
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { null }
-                if (metadata != null && metadata.musicBrainzId.equals(mbid, ignoreCase = true)) {
-                    if (artistTopMetadataCache.size >= 64) artistTopMetadataCache.clear()
-                    artistTopMetadataCache[mbid] = metadata
-                    independentlyVerified[mbid] = metadata
-                    val rows = canonicalVerifiedSitewideRows(
-                        success.recordings, independentlyVerified,
-                    )
-                    if (sitewideEpoch.isCurrent(generation)) {
-                        _canonicalExploreSitewide.value = snapshot.copy(verifiedRows = rows)
+            val permits = Semaphore(2)
+            // Checking just eight serial MBIDs could leave a perfectly valid
+            // weekly chart empty for minutes. Probe more exact candidates in
+            // bounded parallel, publishing proven rows as soon as each arrives.
+            coroutineScope {
+                canonicalSitewideMissingRecordingIds(
+                    success.recordings, inCatalog, limit = 16,
+                ).forEach { mbid ->
+                    launch {
+                        permits.withPermit {
+                            currentCoroutineContext().ensureActive()
+                            if (!sitewideEpoch.isCurrent(generation)) return@withPermit
+                            val cached = synchronized(artistTopMetadataCache) {
+                                artistTopMetadataCache[mbid]
+                            }
+                            val metadata = if (cached != null) cached else try {
+                                (withTimeoutOrNull(12_000L) {
+                                    artistTopMetadataProvider.lookupRecording(mbid)
+                                } as? MetadataLookupResult.Success)?.value
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) { null }
+                            if (metadata != null &&
+                                metadata.musicBrainzId.equals(mbid, ignoreCase = true) &&
+                                sitewideEpoch.isCurrent(generation)
+                            ) {
+                                synchronized(artistTopMetadataCache) {
+                                    if (artistTopMetadataCache.size >= 64)
+                                        artistTopMetadataCache.clear()
+                                    artistTopMetadataCache[mbid] = metadata
+                                }
+                                synchronized(independentlyVerified) {
+                                    independentlyVerified[mbid] = metadata
+                                    val verified = canonicalVerifiedSitewideRows(
+                                        success.recordings, independentlyVerified,
+                                    )
+                                    if (sitewideEpoch.isCurrent(generation)) {
+                                        _canonicalExploreSitewide.value =
+                                            snapshot.copy(verifiedRows = verified)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+            }
+            if (sitewideEpoch.isCurrent(generation) &&
+                independentlyVerified.isEmpty() &&
+                success.recordings.none { it.recordingMbid in inCatalog }
+            ) {
+                // Don't hide a chart for a full 6-hour TTL merely because
+                // MusicBrainz verification temporarily failed at startup.
+                sitewideRetryAfterMs = System.currentTimeMillis() + 15L * 60_000L
+                _canonicalExploreSitewide.value = snapshot.copy(fetchedAtMs = null)
             }
         }
     }
