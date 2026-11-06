@@ -1162,6 +1162,7 @@ private fun BitChordApp(
         // indexed local catalog. The same HomeScreen handles every shelf.
         com.music.bitchord.ui.canonicalExploreDiscoveryShelves(
             editorial = base,
+            releasesHeading = canonicalReleasesHeading,
             genres = com.music.bitchord.ui.canonicalExploreGenreShelf(canonicalGenresHeading),
             personal = canonicalPersonalShelf,
         )
