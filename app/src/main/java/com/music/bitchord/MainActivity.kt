@@ -1043,10 +1043,6 @@ private fun BitChordApp(
             picksHeading = canonicalPicksHeading,
             trendingHeading = canonicalTrendingHeading,
             todayIsoDate = canonicalFeedDate,
-            albumsHeading = canonicalPublicAlbumsHeading,
-            singlesHeading = canonicalPublicSinglesHeading,
-            moreHeading = canonicalPublicMoreHeading,
-            community = canonicalCommunityShelf,
         )
     }
     // Explore reuses the native shelf UI, but not Home's entire curated feed.
@@ -1157,6 +1153,10 @@ private fun BitChordApp(
             trendingHeading = canonicalTrendingHeading,
             worldwideTrending = worldwideTrendingShelf,
             todayIsoDate = canonicalFeedDate,
+            albumsHeading = canonicalPublicAlbumsHeading,
+            singlesHeading = canonicalPublicSinglesHeading,
+            moreHeading = canonicalPublicMoreHeading,
+            community = canonicalCommunityShelf,
         )
     }
     val canonicalExploreFeedShelves = remember(
