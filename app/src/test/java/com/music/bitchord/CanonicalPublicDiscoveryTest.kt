@@ -180,6 +180,47 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(shelves.none { it.title.contains("Top") || it.title.contains("Em alta") })
     }
 
+    @Test fun worldwideHomeUsesDistinctReleasesAndFourEditorialSectionsWhenAvailable() {
+        val all = (1..40).map { index ->
+            val id = "00000000-0000-4000-8002-${index.toString().padStart(12, '0')}"
+            val type = if (index % 3 == 0) "Single" else "Album"
+            recent.copy(
+                musicBrainzId = id,
+                title = "Verified title $index",
+                primaryType = type,
+                firstReleaseDate = "2026-11-01",
+                // The CAA identity for each cover is supplied by metadata,
+                // never inferred from a different title or provider.
+                artworkUri = if (index % 2 == 0) "https://coverartarchive.org/release-group/$id/front-500" else null,
+            )
+        }
+        val rows = canonicalPublicReleaseRows(all, "2026-10-01", "2026-11-06")
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-06", "Álbuns", "Singles e EPs", "Mais",
+        )
+        assertTrue("Expected multiple independent editorial sections", home.size >= 4)
+        assertEquals("Lançamentos", home.first().title)
+        val ids = home.flatMap { it.items }.map { it.browseId }
+        assertEquals("The same album must not appear twice in Home", ids.size, ids.distinct().size)
+        assertTrue(home.flatMap { it.items }.all { it.videoId == null })
+        assertTrue(home.first { it.title == "Escolha a dedo" }.items.first().thumbnailUrl != null)
+        // No worldwide ranking is fabricated from release dates alone.
+        assertTrue(home.none { it.title == "Em alta" })
+    }
+
+    @Test fun rankingShelfKeepsItsRealUpstreamEvidenceRatherThanInventingCharts() {
+        val real = HomeShelf("Em alta", listOf(
+            ShelfItem("Observed weekly song", "Artist", null, null,
+                "catalog:RECORDING:11111111-1111-4111-8111-111111111111"),
+        ))
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), emptyList(), "Lançamentos", "Escolha a dedo", "Em alta",
+            real, "2026-11-06", "Álbuns", "Singles e EPs", "Mais",
+        )
+        assertEquals(real, home.single())
+    }
+
     @Test fun publicChartOverridesLocalEmAltaOnlyWithVerifiedRanking() {
         val fallback = HomeShelf("Em alta", emptyList())
         val preserved = canonicalHomeWithWorldwideEditorial(
