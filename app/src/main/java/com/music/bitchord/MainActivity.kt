@@ -787,6 +787,8 @@ private fun BitChordApp(
     val canonicalWorldwideReleases by viewModel.canonicalWorldwideReleases.collectAsStateWithLifecycle()
     val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
+    val canonicalPublicPlaylists by viewModel.canonicalPublicPlaylists.collectAsStateWithLifecycle()
+    val canonicalPublicPlaylistDetail by viewModel.canonicalPublicPlaylistDetail.collectAsStateWithLifecycle()
     val canonicalExploreGenreCovers by viewModel.canonicalExploreGenreCovers.collectAsStateWithLifecycle()
     var activeCanonicalGenre by remember {
         mutableStateOf<com.music.bitchord.ui.CanonicalExploreGenre?>(null)
@@ -1009,8 +1011,13 @@ private fun BitChordApp(
         }
     }
     LaunchedEffect(selectedTab, activeCanonicalGenre?.tag) {
-        if (selectedTab == TAB_EXPLORE && activeCanonicalGenre == null) {
-            viewModel.loadCanonicalExploreGenreCovers()
+        when (selectedTab) {
+            TAB_HOME -> viewModel.loadCanonicalPublicPlaylists()
+            TAB_EXPLORE -> {
+                val genre = activeCanonicalGenre
+                if (genre == null) viewModel.loadCanonicalExploreGenreCovers()
+                else viewModel.loadCanonicalPublicPlaylists(genre.tag)
+            }
         }
     }
     val canonicalFeedDate = remember {
@@ -1143,12 +1150,17 @@ private fun BitChordApp(
     ) {
         canonicalWeeklyCommunityShelf?.copy(title = canonicalTrendingHeading)
     }
+    val canonicalHomePublicPlaylists = remember(canonicalPublicPlaylists) {
+        com.music.bitchord.ui.canonicalPublicPlaylistShelf(
+            "Playlists para descobrir", canonicalPublicPlaylists["home"].orEmpty(),
+        )
+    }
     val canonicalHomeDisplayShelves = remember(
         canonicalHomeShelves, canonicalWorldwideReleases,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
         canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
         worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
-        canonicalFeedDate,
+        canonicalHomePublicPlaylists, canonicalFeedDate,
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
@@ -1163,6 +1175,7 @@ private fun BitChordApp(
             moreHeading = canonicalPublicMoreHeading,
             community = canonicalCommunityShelf,
             personal = canonicalPersonalShelf,
+            publicPlaylists = canonicalHomePublicPlaylists,
         )
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
@@ -1177,6 +1190,7 @@ private fun BitChordApp(
             val shelves = activeCanonicalGenre?.let { genre ->
                 com.music.bitchord.ui.canonicalGenreEditorialShelves(
                     genre, genreState.data, canonicalFeedDate,
+                    playlists = canonicalPublicPlaylists[genre.tag].orEmpty(),
                 )
             }.orEmpty()
             if (shelves.isNotEmpty()) UiState.Success(shelves)
@@ -2057,11 +2071,23 @@ private fun BitChordApp(
         selectedTab = TAB_SEARCH
         searchFocusRequested = true
     }
+    var openedPublicPlaylist by remember {
+        mutableStateOf<com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist?>(null)
+    }
     // Public recording metadata is a detail-only destination, not a local
     // RecordingId or a synthetic media item. Reuse the native recording shell.
     var communityMetadataRecording by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
     val onCanonicalShelfClick: (ShelfItem, String, PlaybackSourceType) -> Unit =
         click@{ item, shelfTitle, tabOrigin ->
+        com.music.bitchord.data.catalog.metadata.publicPlaylistMbid(item.browseId)?.let { id ->
+            val candidate = canonicalPublicPlaylists.values.asSequence()
+                .flatMap { it.asSequence() }.firstOrNull { it.mbid == id }
+            if (candidate != null) {
+                openedPublicPlaylist = candidate
+                viewModel.loadCanonicalPublicPlaylistDetail(candidate)
+                return@click
+            }
+        }
         com.music.bitchord.ui.canonicalExploreGenreForBrowseId(item.browseId)?.let { genre ->
             activeCanonicalGenre = genre
             viewModel.loadCanonicalGenre(genre.tag)
@@ -2749,7 +2775,7 @@ private fun BitChordApp(
         BackHandler(
             enabled = detail == null && !showSettings && !showAccountScrobbling && !showSpotify &&
                 !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay &&
-                selectedTab != TAB_HOME,
+                selectedTab != TAB_HOME && openedPublicPlaylist == null,
         ) {
             selectedTab = TAB_HOME
         }
@@ -2770,8 +2796,9 @@ private fun BitChordApp(
         BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
         BackHandler(enabled = communityMetadataRecording != null) { communityMetadataRecording = null }
         BackHandler(enabled = activeCanonicalGenre != null && selectedTab == TAB_EXPLORE &&
-            detail == null && communityMetadataRecording == null
+            detail == null && communityMetadataRecording == null && openedPublicPlaylist == null
         ) { activeCanonicalGenre = null }
+        BackHandler(enabled = openedPublicPlaylist != null) { openedPublicPlaylist = null }
         BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
         BackHandler(enabled = unifiedLibraryCategory != null) {
             if (unifiedLibraryDetailOpen) unifiedLibraryBackToken++
@@ -2826,6 +2853,7 @@ private fun BitChordApp(
                         // A metadata-only recording opened from an artist
                         // overlays that detail; Back restores the artist intact.
                         communityMetadataRecording != null -> "community_recording:" + communityMetadataRecording!!.musicBrainzId
+                        openedPublicPlaylist != null -> "public_playlist:" + openedPublicPlaylist!!.mbid
                         detail != null -> detail.browseId
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         showCanonicalMyRatings -> "my_ratings"
@@ -3124,6 +3152,28 @@ private fun BitChordApp(
                                 )
                             },
                         )
+                    } else if (key.startsWith("public_playlist:")) {
+                        // Retain the previous destination through the exit animation.
+                        val heldPlaylist = remember(key) { mutableStateOf(openedPublicPlaylist) }
+                        openedPublicPlaylist?.takeIf {
+                            key == "public_playlist:" + it.mbid
+                        }?.let { heldPlaylist.value = it }
+                        heldPlaylist.value?.let { selected ->
+                            com.music.bitchord.ui.screens.CanonicalPublicPlaylistDetailScreen(
+                                playlist = selected,
+                                state = if (openedPublicPlaylist?.mbid == selected.mbid)
+                                    canonicalPublicPlaylistDetail else UiState.Loading,
+                                listState = pageDetailListState,
+                                contentPadding = listPadding,
+                                onBack = { openedPublicPlaylist = null },
+                                onRetry = { viewModel.loadCanonicalPublicPlaylistDetail(selected) },
+                                onVerifiedRecordingPlay = { recordingId ->
+                                    executeMusicBrainzCatalog(
+                                        recordingId, CanonicalCollectionIntent.PLAY_NOW,
+                                    )
+                                },
+                            )
+                        }
                     } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(
                             recordingId = key.removePrefix("rediscovery:"),

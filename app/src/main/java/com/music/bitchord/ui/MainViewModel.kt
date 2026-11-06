@@ -27,6 +27,9 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistDetail
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistClient
 import com.music.bitchord.data.catalog.metadata.ListenBrainzRecommendationClient
 import com.music.bitchord.data.catalog.metadata.ListenBrainzRecommendationFetchResult
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityClient
@@ -387,6 +390,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalExploreGenreCovers.asStateFlow()
     private var canonicalGenrePreviewJob: Job? = null
     private var canonicalGenrePreviewAttemptMs = 0L
+
+    /** Independent, anonymous public playlists per genre; NEVER user library data. */
+    private val publicPlaylistClient = ListenBrainzPublicPlaylistClient()
+    private val _canonicalPublicPlaylists =
+        MutableStateFlow<Map<String, List<ListenBrainzPublicPlaylist>>>(emptyMap())
+    val canonicalPublicPlaylists: StateFlow<Map<String, List<ListenBrainzPublicPlaylist>>> =
+        _canonicalPublicPlaylists.asStateFlow()
+    private val publicPlaylistQueryAt = ConcurrentHashMap<String, Long>()
+    private val publicPlaylistQueryJobs = ConcurrentHashMap<String, Job>()
+    private val _canonicalPublicPlaylistDetail =
+        MutableStateFlow<UiState<ListenBrainzPublicPlaylistDetail>>(UiState.Loading)
+    val canonicalPublicPlaylistDetail: StateFlow<UiState<ListenBrainzPublicPlaylistDetail>> =
+        _canonicalPublicPlaylistDetail.asStateFlow()
+    private val publicPlaylistDetailEpoch = DiscoveryRequestEpoch()
+    private var publicPlaylistDetailJob: Job? = null
 
     private val canonicalDiscoveryCatalogEpoch = DiscoveryRequestEpoch()
     private var canonicalDiscoveryCatalogJob: Job? = null
@@ -3231,6 +3249,44 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Small, cached public searches. An empty or failing query never delays
+     * MusicBrainz shelves or starts per-card requests. The 6h positive and
+     * 15m negative TTLs prevent rate-limit bursts across tab re-entries.
+     */
+    fun loadCanonicalPublicPlaylists(genreTag: String? = null) {
+        if (genreTag != null && canonicalExploreGenres.none { it.tag == genreTag }) return
+        val key = genreTag ?: "home"
+        val now = System.currentTimeMillis()
+        val previous = publicPlaylistQueryAt[key]
+        val cached = _canonicalPublicPlaylists.value.containsKey(key)
+        val ttl = if (cached) 6L * 60L * 60L * 1_000L else 15L * 60L * 1_000L
+        if (previous != null && now >= previous && now - previous < ttl) return
+        if (publicPlaylistQueryJobs[key]?.isActive == true) return
+        publicPlaylistQueryAt[key] = now
+        publicPlaylistQueryJobs[key] = viewModelScope.launch(Dispatchers.IO) {
+            val results = if (genreTag == null) publicPlaylistClient.searchHome()
+                else publicPlaylistClient.searchGenre(genreTag)
+            if (results != null) {
+                _canonicalPublicPlaylists.update { old -> old + (key to results) }
+                publicPlaylistQueryAt[key] = System.currentTimeMillis()
+            }
+        }
+    }
+
+    fun loadCanonicalPublicPlaylistDetail(selected: ListenBrainzPublicPlaylist) {
+        val generation = publicPlaylistDetailEpoch.next()
+        publicPlaylistDetailJob?.cancel()
+        _canonicalPublicPlaylistDetail.value = UiState.Loading
+        publicPlaylistDetailJob = viewModelScope.launch(Dispatchers.IO) {
+            val details = publicPlaylistClient.detail(selected)
+            if (!publicPlaylistDetailEpoch.isCurrent(generation)) return@launch
+            _canonicalPublicPlaylistDetail.value = if (details != null)
+                UiState.Success(details)
+            else UiState.Error("Não foi possível carregar esta playlist pública.")
         }
     }
 

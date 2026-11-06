@@ -1,6 +1,7 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
@@ -137,6 +138,22 @@ internal fun canonicalExploreGenreShelf(
         )
     })
 
+/** Public playlists use their own ListenBrainz MBID, never ReleaseGroup identity. */
+internal fun canonicalPublicPlaylistShelf(
+    heading: String,
+    playlists: List<ListenBrainzPublicPlaylist>,
+): HomeShelf? = playlists.takeIf { it.isNotEmpty() }?.let { entries ->
+    HomeShelf(heading, entries.distinctBy { it.mbid }.take(12).map { row ->
+        ShelfItem(
+            title = row.title,
+            subtitle = row.creator,
+            thumbnailUrl = row.artworkUrl,
+            videoId = null,
+            browseId = row.browseId,
+        )
+    })
+}
+
 internal fun canonicalPublicGenreReleaseShelf(
     genre: CanonicalExploreGenre,
     rows: List<CanonicalCatalogSearchRow>,
@@ -159,7 +176,9 @@ internal fun canonicalGenreEditorialShelves(
     genre: CanonicalExploreGenre,
     rows: List<CanonicalCatalogSearchRow>,
     todayIsoDate: String,
+    playlists: List<ListenBrainzPublicPlaylist> = emptyList(),
 ): List<HomeShelf> {
+    val playlistShelf = canonicalPublicPlaylistShelf("Playlists", playlists)
     val eligible = rows.asSequence()
         .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP &&
             canonicalEditorialReleaseType(it) != null &&
@@ -170,7 +189,7 @@ internal fun canonicalGenreEditorialShelves(
         .sortedWith(compareByDescending<CanonicalCatalogSearchRow> { it.releaseDate.orEmpty() }
             .thenBy { it.musicBrainzId })
         .toList()
-    if (eligible.isEmpty()) return emptyList()
+    if (eligible.isEmpty()) return listOfNotNull(playlistShelf)
     // Reserve at least one genuine entry for each evidence-backed category
     // before the hero uses all the limited results from a sparse tag search.
     // Every MusicBrainz ReleaseGroup still appears in at most one section.
@@ -218,6 +237,7 @@ internal fun canonicalGenreEditorialShelves(
     return listOfNotNull(
         shelf("Para descobrir", discoveries),
         shelf("Lançamentos", launches),
+        playlistShelf,
         shelf("Álbuns", albumShelf),
         shelf("Singles e EPs", singleShelf),
         shelf("Mais para explorar", more),
@@ -252,6 +272,7 @@ internal fun canonicalHomeWithWorldwideEditorial(
     moreHeading: String = "Mais",
     community: HomeShelf? = null,
     personal: HomeShelf? = null,
+    publicPlaylists: HomeShelf? = null,
 ): List<HomeShelf> {
     val shelves = localShelves.toMutableList()
     // Remove visual duplicates from an editorial feed, not from the canonical
@@ -343,6 +364,11 @@ internal fun canonicalHomeWithWorldwideEditorial(
     if (worldwideTrending == null && community?.items?.isNotEmpty() == true &&
         community.title.isNotBlank()
     ) shelves.add(minOf(2, shelves.size), community)
+    // Home is a global discovery feed, not the genre's format-by-format
+    // discography. Real public playlists replace the genre-like singles row.
+    publicPlaylists?.takeIf { it.items.isNotEmpty() }?.let { shelf ->
+        shelves.add(minOf(3, shelves.size), shelf)
+    }
     fun appendPublic(heading: String, rows: List<CanonicalCatalogSearchRow>) {
         val cards = unique(rows.map(::item).take(12))
         if (cards.isNotEmpty()) shelves.add(HomeShelf(heading, cards))
@@ -357,10 +383,12 @@ internal fun canonicalHomeWithWorldwideEditorial(
         canonicalNativeBrowseId(it) in selected ||
             it.musicBrainzId == reservedMore?.musicBrainzId
     }
-    appendPublic(singlesHeading,
-        listOfNotNull(reservedSingle) + unusedSingles.filter {
-            canonicalEditorialReleaseType(it) in setOf("EP", "Single")
-        })
+    if (publicPlaylists?.items.isNullOrEmpty()) {
+        appendPublic(singlesHeading,
+            listOfNotNull(reservedSingle) + unusedSingles.filter {
+                canonicalEditorialReleaseType(it) in setOf("EP", "Single")
+            })
+    }
     appendPublic(moreHeading,
         listOfNotNull(reservedMore) + publicRows.filterNot { canonicalNativeBrowseId(it) in selected })
     // A personal, account-verified ListenBrainz recommendation is not a genre

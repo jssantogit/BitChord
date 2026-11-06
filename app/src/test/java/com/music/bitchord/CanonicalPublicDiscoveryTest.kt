@@ -1,6 +1,8 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
+import com.music.bitchord.ui.canonicalPublicPlaylistShelf
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.ui.canonicalExploreDiscoveryShelves
@@ -260,6 +262,41 @@ class CanonicalPublicDiscoveryTest {
         }
         val rows = canonicalPublicReleaseRows(many, "2026-10-01", "2026-11-06")
         assertFalse(canonicalPublicNeedsMoreEditorialRows(rows))
+    }
+
+    @Test fun publicPlaylistsMakeGenreAndHomeDifferentWithoutFakeMedia() {
+        val playlist = ListenBrainzPublicPlaylist(
+            "33333333-3333-4333-8333-333333333333",
+            "Pop Discovery", "Curator", "Pop genre collection",
+        )
+        val playlists = canonicalPublicPlaylistShelf("Playlists", listOf(playlist))!!
+        assertEquals(playlist.browseId, playlists.items.single().browseId)
+        assertTrue(playlists.items.single().videoId == null)
+
+        val rows = canonicalPublicReleaseRows(
+            (1..10).map { index ->
+                val hit = if (index % 2 == 0) recent else another
+                hit.copy(
+                    musicBrainzId = "40000000-0000-4000-8000-${index.toString().padStart(12, '0')}",
+                    title = "Release ${index}",
+                )
+            }, "2026-10-01", "2026-11-06",
+        )
+        val genre = canonicalGenreEditorialShelves(
+            canonicalExploreGenres.first { it.tag == "pop" }, rows,
+            "2026-11-06", playlists = listOf(playlist),
+        )
+        assertEquals("Para descobrir", genre.first().title)
+        assertEquals(1, genre.count { it.title == "Playlists" })
+        assertTrue(genre.any { it.title == "Singles e EPs" })
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-06",
+            publicPlaylists = playlists.copy(title = "Playlists para descobrir"),
+        )
+        assertTrue(home.any { it.title == "Playlists para descobrir" })
+        assertTrue(home.none { it.title == "Singles e EPs" })
+        assertTrue(home.flatMap { it.items }.all { it.videoId == null })
     }
 
     @Test fun worldwideHomeUsesDistinctReleasesAndFourEditorialSectionsWhenAvailable() {
