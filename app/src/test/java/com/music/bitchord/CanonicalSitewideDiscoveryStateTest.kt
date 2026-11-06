@@ -5,6 +5,7 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
 import com.music.bitchord.ui.CanonicalSitewideDiscoveryState
 import com.music.bitchord.ui.canonicalSitewideDiscoveryIsFresh
 import com.music.bitchord.ui.canonicalSitewideDiscoveryExpiresAtMs
+import com.music.bitchord.ui.canonicalSitewideMissingRecordingIds
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -36,6 +37,20 @@ class CanonicalSitewideDiscoveryStateTest {
         org.junit.Assert.assertEquals(null, canonicalSitewideDiscoveryExpiresAtMs(
             state.copy(upstreamUpdatedAtSeconds = null),
         ))
+    }
+
+    @Test fun globalChartEnrichmentCanSkipCachedAndTryMoreThanEightCandidates() {
+        val chart = (1..25).map { n ->
+            ListenBrainzSitewideRecording(
+                "00000000-0000-4000-8000-${n.toString().padStart(12, '0')}",
+                (100 - n).toLong(),
+            )
+        }
+        val cached = chart.take(4).map { it.recordingMbid }.toSet()
+        val batch = canonicalSitewideMissingRecordingIds(chart, cached, limit = 16)
+        org.junit.Assert.assertEquals(16, batch.size)
+        assertTrue(batch.none { it in cached })
+        org.junit.Assert.assertEquals(chart.drop(4).take(16).map { it.recordingMbid }, batch)
     }
 
     @Test fun onlyVerifiedFreshWeeklyObservationsCanDriveExplore() {
