@@ -231,8 +231,14 @@ fun HomeScreen(
                     // The loading skeleton already owns the hero slot. Until
                     // Recently Played lands, every real shelf must retain its
                     // compact-card layout instead of briefly becoming a hero.
+                    val displayShelves = if (publicPlaylistNotice != null &&
+                        state.data.none { it.title.startsWith("Playlists") }
+                    ) state.data.toMutableList().apply {
+                        add(minOf(2, size), HomeShelf("Playlists", emptyList()))
+                    } else state.data
                     itemsIndexedShelves(
-                        shelves = state.data,
+                        shelves = displayShelves,
+                        emptyPlaylistNotice = publicPlaylistNotice,
                         onItemClick = onItemClick,
                         onItemLongPress = onItemLongPress,
                         currentSong = currentSong,
@@ -249,22 +255,6 @@ fun HomeScreen(
                             )
                         },
                     )
-                    // Keep the Playlists section visible while the slow public
-                    // search is pending or legitimately empty. Its text is
-                    // metadata state; it never becomes a fake clickable card.
-                    publicPlaylistNotice?.let { notice ->
-                        item(key = "public-playlists-notice") {
-                            Column(Modifier.padding(bottom = 26.dp)) {
-                                SectionHeader("Playlists")
-                                Text(
-                                    notice,
-                                    modifier = Modifier.padding(horizontal = PAGE_GUTTER),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                            }
-                        }
-                    }
                     if (loadingMore) feedMoreSkeleton()
                 }
             }
@@ -304,11 +294,26 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
     firstIsHero: Boolean = true,
     recentsViewType: LibraryViewType,
     onRecentsViewTypeToggle: () -> Unit,
+    emptyPlaylistNotice: String? = null,
 ) {
     shelves.forEachIndexed { index, shelf ->
         item(key = shelf.title + index) {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
-            if (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true)) {
+            if (shelf.title == "Playlists" && shelf.items.isEmpty() &&
+                emptyPlaylistNotice != null
+            ) {
+                // The native shelf position remains stable even while the
+                // public search is pending. No phantom or clickable playlist.
+                Column(Modifier.padding(bottom = 26.dp)) {
+                    SectionHeader(shelf.title)
+                    Text(
+                        emptyPlaylistNotice,
+                        modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            } else if (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true)) {
                 RecentShelf(
                     shelf = shelf,
                     onItemClick = openItem,
