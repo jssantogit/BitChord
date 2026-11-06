@@ -1337,13 +1337,18 @@ private fun BitChordApp(
 
     val homeListState = rememberLazyListState()
     val exploreListState = rememberLazyListState()
+    // Preserve the native genre-grid scroll when visiting an editorial detail.
+    val genreListState = rememberLazyListState()
+    LaunchedEffect(activeCanonicalGenre?.tag) {
+        genreListState.scrollToItem(0)
+    }
     val libraryListState = rememberLazyListState()
     val historyListState = rememberLazyListState()
     val libraryShowAllGridState = rememberLazyGridState()
     val searchListState = rememberLazyListState()
     val currentListState = when (selectedTab) {
         TAB_HOME -> homeListState
-        TAB_EXPLORE -> exploreListState
+        TAB_EXPLORE -> if (activeCanonicalGenre != null) genreListState else exploreListState
         TAB_LIBRARY -> libraryListState
         else -> searchListState
     }
@@ -3617,7 +3622,7 @@ private fun BitChordApp(
                             )
                         } else HomeScreen(
                             state = canonicalGenreState,
-                            listState = exploreListState,
+                            listState = genreListState,
                             onItemClick = { item, heading ->
                                 onCanonicalShelfClick(
                                     item, heading, canonicalEditorialPlaybackSource(explore = true),
