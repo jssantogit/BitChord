@@ -27,6 +27,7 @@
     <string name="home">Главная</string>
     <string name="play">Играть</string>
     <string name="explore">Обзор</string>
+    <string name="explore_genres">Жанры</string>
     <string name="listen_now">Слушать сейчас</string>
     <string name="downloads">Загрузки</string>
     <string name="downloaded_songs">Загруженные песни</string>
