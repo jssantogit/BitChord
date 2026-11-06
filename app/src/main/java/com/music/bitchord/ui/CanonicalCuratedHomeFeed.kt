@@ -590,8 +590,10 @@ internal fun canonicalCommunityCardIsMetadataOnly(
     shelfTitle: String,
     communityHeading: String,
     browseId: String?,
+    allowHome: Boolean = false,
 ): Boolean {
-    if (tabOrigin != PlaybackSourceType.EXPLORE ||
+    if ((tabOrigin != PlaybackSourceType.EXPLORE &&
+            !(allowHome && tabOrigin == PlaybackSourceType.HOME)) ||
         shelfTitle != communityHeading || browseId == null
     ) return false
     val prefix = "catalog:RECORDING:"
