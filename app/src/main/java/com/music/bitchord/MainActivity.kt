@@ -1046,6 +1046,7 @@ private fun BitChordApp(
             albumsHeading = canonicalPublicAlbumsHeading,
             singlesHeading = canonicalPublicSinglesHeading,
             moreHeading = canonicalPublicMoreHeading,
+            community = canonicalCommunityShelf,
         )
     }
     // Explore reuses the native shelf UI, but not Home's entire curated feed.
@@ -1146,7 +1147,7 @@ private fun BitChordApp(
         canonicalHomeShelves, canonicalWorldwideReleases,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
         canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
-        worldwideTrendingShelf, canonicalFeedDate,
+        worldwideTrendingShelf, canonicalCommunityShelf, canonicalFeedDate,
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
