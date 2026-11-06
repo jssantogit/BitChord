@@ -422,7 +422,9 @@ fun SearchScreen(
                     }
                 }
                 results == null -> if (history.isEmpty()) {
-                    item { MessageState(stringResource(Res.string.search_empty)) }
+                    // Even a legacy presentation fallback must not advertise
+                    // the removed YouTube Music discovery backend on Android.
+                    item { MessageState(stringResource(Res.string.canonical_search_start)) }
                 } else {
                     recentSearches(
                         history = history,
