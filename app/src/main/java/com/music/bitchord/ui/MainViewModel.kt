@@ -3101,7 +3101,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Covers must be verified by their own group / official edition;
             // the MusicBrainz search result itself has no trusted artwork.
             val permits = Semaphore(2)
-            rows.take(18).forEach { row ->
+            canonicalWorldwideArtworkPriority(rows, until).forEach { row ->
                 launch {
                     permits.withPermit {
                         val cover = try { canonicalArtworkForRow(row) }
@@ -3153,7 +3153,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             _canonicalGenreResults.value = UiState.Success(rows)
             val permits = Semaphore(2)
-            rows.take(12).forEach { row ->
+            val todayIso = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
+            canonicalGenreArtworkPriority(selected, rows, todayIso).forEach { row ->
                 launch {
                     permits.withPermit {
                         val artwork = try { canonicalArtworkForRow(row) }
