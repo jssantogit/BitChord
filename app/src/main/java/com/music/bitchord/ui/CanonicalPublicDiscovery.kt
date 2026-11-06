@@ -185,6 +185,7 @@ internal fun canonicalHomeWithWorldwideEditorial(
     singlesHeading: String = "Singles e EPs",
     moreHeading: String = "Mais",
     community: HomeShelf? = null,
+    personal: HomeShelf? = null,
 ): List<HomeShelf> {
     val shelves = localShelves.toMutableList()
     // Remove visual duplicates from an editorial feed, not from the canonical
@@ -261,6 +262,17 @@ internal fun canonicalHomeWithWorldwideEditorial(
         canonicalEditorialReleaseType(it) in setOf("EP", "Single")
     })
     appendPublic(moreHeading, publicRows.filterNot { canonicalNativeBrowseId(it) in selected })
+    // A personal, account-verified ListenBrainz recommendation is not a genre
+    // or public popularity claim. Never put it in Explore's taxonomy grid.
+    personal?.takeIf { it.title.isNotBlank() && it.items.isNotEmpty() }?.let { personalShelf ->
+        val uniquePersonal = personalShelf.items.filter { item ->
+            val id = item.browseId ?: return@filter false
+            selected.add(id)
+        }
+        if (uniquePersonal.isNotEmpty()) {
+            shelves.add(personalShelf.copy(items = uniquePersonal))
+        }
+    }
 
     return if (publicRows.isEmpty() && worldwideTrending == null) shelves
         else shelves.filter { it.items.isNotEmpty() }
