@@ -110,6 +110,68 @@ internal fun canonicalPublicGenreReleaseShelf(
     })
 }
 
+/**
+ * Apple's genre editorial rhythm on the existing native HomeScreen, but only
+ * using real MusicBrainz ReleaseGroup identities. No playlists, stations,
+ * top-songs or popularity rankings can be inferred from genre tags alone.
+ *
+ * Each card occurs in exactly one shelf. A deterministic daily highlight order
+ * provides variety without telling the listener it is a measured chart.
+ */
+internal fun canonicalGenreEditorialShelves(
+    genre: CanonicalExploreGenre,
+    rows: List<CanonicalCatalogSearchRow>,
+    todayIsoDate: String,
+): List<HomeShelf> {
+    val eligible = rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null &&
+            !it.subtitle.isNullOrBlank() &&
+            canonicalStreamingTitleIsSafe(it.title) &&
+            (it.releaseDate == null || it.releaseDate <= todayIsoDate) }
+        .distinctBy { it.musicBrainzId.lowercase(Locale.ROOT) }
+        .sortedWith(compareByDescending<CanonicalCatalogSearchRow> { it.releaseDate.orEmpty() }
+            .thenBy { it.musicBrainzId })
+        .toList()
+    if (eligible.isEmpty()) return emptyList()
+    // Allocate with stable ownership; never depend on title-only album matches.
+    val assigned = mutableSetOf<String>()
+    fun section(heading: String, candidates: List<CanonicalCatalogSearchRow>, limit: Int): HomeShelf? {
+        val selected = candidates.asSequence()
+            .filter { it.musicBrainzId.lowercase(Locale.ROOT) !in assigned }
+            .take(limit)
+            .toList()
+        selected.forEach { assigned += it.musicBrainzId.lowercase(Locale.ROOT) }
+        return selected.takeIf { it.isNotEmpty() }?.let { tracks ->
+            HomeShelf(heading, tracks.map { row ->
+                ShelfItem(row.title, row.subtitle.orEmpty(), row.artworkUri, null,
+                    canonicalNativeBrowseId(row))
+            })
+        }
+    }
+    val freshSince = runCatching {
+        LocalDate.parse(todayIsoDate).minusDays(180).toString()
+    }.getOrDefault(todayIsoDate)
+    val featured = eligible.sortedWith(
+        compareByDescending<CanonicalCatalogSearchRow> { !it.artworkUri.isNullOrBlank() }
+            .thenBy { (it.musicBrainzId + todayIsoDate).hashCode() }
+            .thenBy { it.musicBrainzId },
+    )
+    return buildList {
+        section("Para descobrir · ${genre.title}", featured, 4)?.let(::add)
+        section("Lançamentos · ${genre.title}", eligible.filter {
+            it.releaseDate?.length == 10 && it.releaseDate >= freshSince
+        }, 12)?.let(::add)
+        section("Álbuns · ${genre.title}", eligible.filter {
+            canonicalEditorialReleaseType(it) == "Album"
+        }, 16)?.let(::add)
+        section("Singles e EPs · ${genre.title}", eligible.filter {
+            canonicalEditorialReleaseType(it) in setOf("Single", "EP")
+        }, 16)?.let(::add)
+        section("Mais para explorar · ${genre.title}", eligible, 16)?.let(::add)
+    }
+}
+
 /** Keep the native Home shelves, filling gaps with verified worldwide metadata. */
 internal fun canonicalHomeWithWorldwideEditorial(
     localShelves: List<HomeShelf>,
