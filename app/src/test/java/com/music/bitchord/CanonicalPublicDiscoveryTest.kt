@@ -260,6 +260,19 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(cards.all { it.videoId == null })
     }
 
+    @Test fun allTimeCommunityEvidenceIsLabeledHonestlyWhenWeeklyChartUnavailable() {
+        val observed = HomeShelf("Popular na comunidade", listOf(
+            ShelfItem("Observed recording", "Artist", null, null,
+                "catalog:RECORDING:33333333-3333-4333-8333-333333333333"),
+        ))
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), emptyList(), "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-06", community = observed,
+        )
+        assertEquals(listOf(observed), home)
+        assertTrue(home.none { it.title == "Em alta" })
+    }
+
     @Test fun publicChartOverridesLocalEmAltaOnlyWithVerifiedRanking() {
         val fallback = HomeShelf("Em alta", emptyList())
         val preserved = canonicalHomeWithWorldwideEditorial(
