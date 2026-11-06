@@ -25,6 +25,7 @@
     <string name="home">Ana sayfa</string>
     <string name="play">Çal</string>
     <string name="explore">Keşfet</string>
+    <string name="explore_genres">Türler</string>
     <string name="listen_now">Şimdi Dinle</string>
     <string name="downloads">İndirmeler</string>
     <string name="downloaded_songs">İndirilen şarkılar</string>
