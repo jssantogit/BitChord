@@ -370,6 +370,7 @@ import com.music.bitchord.ui.screens.SmartCollectionActionSource
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderEntry
 import com.music.bitchord.ui.screens.explicitCoverUri
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderScreen
+import com.music.bitchord.ui.screens.ExploreScreen
 import com.music.bitchord.ui.screens.SearchScreen
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.ui.onboarding.OnboardingScreen
@@ -3560,8 +3561,8 @@ private fun BitChordApp(
                             contentPadding = listPadding,
                         )
                     } else when (key.removePrefix(TAB_KEY).toIntOrNull() ?: selectedTab) {
-                        // Home and Explore are the native, canonical surfaces.
-                        // Legacy YouTube feeds and mood-genre pages are not routes.
+                        // Home keeps its native feed. Explore's root reuses the
+                        // existing native category grid, never Home shelves.
                         TAB_HOME -> HomeScreen(
                             state = canonicalHomeState,
                             listState = homeListState,
@@ -3581,29 +3582,42 @@ private fun BitChordApp(
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
                         )
-                        TAB_EXPLORE -> HomeScreen(
-                            state = if (activeCanonicalGenre != null) canonicalGenreState
-                                    else canonicalExploreState,
+                        TAB_EXPLORE -> if (activeCanonicalGenre == null) {
+                            ExploreScreen(
+                                state = UiState.Success(
+                                    emptyList<com.music.bitchord.data.model.MoodGenreSection>(),
+                                ),
+                                listState = exploreListState,
+                                onCategoryClick = {},
+                                onRetry = {},
+                                refreshing = MainViewModel.Feed.EXPLORE in refreshing,
+                                onRefresh = { viewModel.refresh(MainViewModel.Feed.EXPLORE) },
+                                pullState = explorePull,
+                                contentPadding = listPadding,
+                                canonicalGenres = com.music.bitchord.ui
+                                    .canonicalExploreGenreShelf(canonicalGenresHeading).items,
+                                onCanonicalGenreClick = { item ->
+                                    onCanonicalShelfClick(
+                                        item, canonicalGenresHeading,
+                                        canonicalEditorialPlaybackSource(explore = true),
+                                    )
+                                },
+                            )
+                        } else HomeScreen(
+                            state = canonicalGenreState,
                             listState = exploreListState,
                             onItemClick = { item, heading ->
                                 onCanonicalShelfClick(
                                     item, heading, canonicalEditorialPlaybackSource(explore = true),
                                 )
                             },
-                            onRetry = {
-                                val genre = activeCanonicalGenre
-                                if (genre != null) viewModel.loadCanonicalGenre(genre.tag)
-                                else {
-                                    viewModel.loadCanonicalWorldwideReleases(force = true)
-                                    viewModel.loadCanonicalExploreSitewide()
-                                }
-                            },
+                            onRetry = { activeCanonicalGenre?.let {
+                                viewModel.loadCanonicalGenre(it.tag)
+                            } },
                             refreshing = MainViewModel.Feed.EXPLORE in refreshing,
-                            onRefresh = {
-                                val genre = activeCanonicalGenre
-                                if (genre != null) viewModel.loadCanonicalGenre(genre.tag)
-                                else viewModel.refresh(MainViewModel.Feed.EXPLORE)
-                            },
+                            onRefresh = { activeCanonicalGenre?.let {
+                                viewModel.loadCanonicalGenre(it.tag)
+                            } },
                             pullState = explorePull,
                             contentPadding = listPadding,
                             title = activeCanonicalGenre?.title ?: stringResource(R.string.explore),
