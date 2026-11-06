@@ -1054,7 +1054,9 @@ private fun BitChordApp(
         selectedTab, canonicalExploreSitewide.fetchedAtMs,
         canonicalExploreSitewide.upstreamUpdatedAtSeconds,
     ) {
-        if (selectedTab != TAB_EXPLORE) return@LaunchedEffect
+        // Home's worldwide "Em alta" consumes this same verified weekly
+        // snapshot. Expire it on both tabs, not only while Explore is open.
+        if (selectedTab != TAB_EXPLORE && selectedTab != TAB_HOME) return@LaunchedEffect
         val now = System.currentTimeMillis()
         sitewideFreshnessNowMs = now
         if (!canonicalSitewideDiscoveryIsFresh(canonicalExploreSitewide, now)) return@LaunchedEffect
