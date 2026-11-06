@@ -184,6 +184,7 @@ internal fun canonicalHomeWithWorldwideEditorial(
     albumsHeading: String = "Álbuns",
     singlesHeading: String = "Singles e EPs",
     moreHeading: String = "Mais",
+    community: HomeShelf? = null,
 ): List<HomeShelf> {
     val shelves = localShelves.toMutableList()
     // Remove visual duplicates from an editorial feed, not from the canonical
@@ -243,6 +244,12 @@ internal fun canonicalHomeWithWorldwideEditorial(
         if (index >= 0) shelves[index] = worldwideTrending
         else shelves.add(minOf(2, shelves.size), worldwideTrending)
     }
+    // All-time community observations remain useful discovery evidence, but
+    // must NEVER masquerade as a current weekly "Em alta" chart. If a fresh
+    // weekly chart is available, don't render the same ranked songs twice.
+    if (worldwideTrending == null && community?.items?.isNotEmpty() == true &&
+        community.title.isNotBlank()
+    ) shelves.add(minOf(2, shelves.size), community)
     fun appendPublic(heading: String, rows: List<CanonicalCatalogSearchRow>) {
         val cards = unique(rows.map(::item).take(12))
         if (cards.isNotEmpty()) shelves.add(HomeShelf(heading, cards))
