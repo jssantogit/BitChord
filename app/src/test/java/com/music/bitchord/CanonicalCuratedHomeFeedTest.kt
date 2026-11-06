@@ -119,6 +119,13 @@ class CanonicalCuratedHomeFeedTest {
         assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
             PlaybackSourceType.HOME, "Popular na comunidade", "Popular na comunidade", id,
         ))
+        assertTrue(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.HOME, "Para você", "Para você", id, allowHome = true,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.HOME, "Para você", "Para você", "catalog:ARTIST:bad",
+            allowHome = true,
+        ))
         assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
             PlaybackSourceType.EXPLORE, "Lançamentos", "Popular na comunidade", id,
         ))
