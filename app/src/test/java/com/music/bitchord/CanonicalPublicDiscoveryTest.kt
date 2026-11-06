@@ -11,6 +11,7 @@ import com.music.bitchord.ui.canonicalExploreGenres
 import com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial
 import com.music.bitchord.ui.canonicalPublicReleaseRows
 import com.music.bitchord.ui.canonicalPublicGenreReleaseShelf
+import com.music.bitchord.ui.canonicalGenreEditorialShelves
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -146,6 +147,37 @@ class CanonicalPublicDiscoveryTest {
         assertEquals("catalog:RELEASE_GROUP:${recent.musicBrainzId}",
             results!!.items.single().browseId)
         assertNull(results.items.single().videoId)
+    }
+
+    @Test fun nativeGenreDetailBuildsDistinctEditorialSectionsWithoutInventedCharts() {
+        val sample = buildList {
+            repeat(5) { index ->
+                add(recent.copy(
+                    musicBrainzId = "00000000-0000-4000-8000-${(index + 1).toString().padStart(12, '0')}",
+                    title = "Album ${index + 1}",
+                    firstReleaseDate = if (index < 2) "2026-11-01" else "2025-05-10",
+                ))
+            }
+            repeat(5) { index ->
+                add(another.copy(
+                    musicBrainzId = "00000000-0000-4000-8001-${(index + 1).toString().padStart(12, '0')}",
+                    title = "Single ${index + 1}",
+                    firstReleaseDate = if (index < 2) "2026-11-01" else "2025-05-10",
+                ))
+            }
+        }
+        val rows = canonicalPublicReleaseRows(sample, "2025-01-01", "2026-11-06")
+        val shelves = canonicalGenreEditorialShelves(
+            canonicalExploreGenres.first { it.tag == "rock" }, rows, "2026-11-06",
+        )
+        assertTrue(shelves.size >= 3)
+        assertTrue(shelves.first().title.contains("Rock"))
+        assertTrue(shelves.any { it.title.contains("Lançamentos") })
+        val allCards = shelves.flatMap { it.items }
+        assertEquals(allCards.size, allCards.map { it.browseId }.distinct().size)
+        assertTrue(allCards.all { it.videoId == null &&
+            it.browseId.orEmpty().startsWith("catalog:RELEASE_GROUP:") })
+        assertTrue(shelves.none { it.title.contains("Top") || it.title.contains("Em alta") })
     }
 
     @Test fun publicChartOverridesLocalEmAltaOnlyWithVerifiedRanking() {
