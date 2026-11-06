@@ -33,12 +33,18 @@ class MusicBrainzCatalogSearchTest {
             is MusicBrainzCatalogSearchResult.Success)
         assertTrue(search.searchReleaseGroupsForTag("k-pop")
             is MusicBrainzCatalogSearchResult.Success)
-        assertEquals(2, calls.size)
+        assertTrue(search.searchReleaseGroupsForTag("hip-hop")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchReleaseGroupsForTag("rnb")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertEquals(4, calls.size)
         assertTrue(calls.all { it.first == "release-group" &&
             it.second["dismax"] == "false" })
         assertTrue(calls[0].second["query"].orEmpty().contains(
             "firstreleasedate:[2026-10-01 TO 2026-11-05]"))
         assertTrue(calls[1].second["query"].orEmpty().contains("tag:\"k-pop\""))
+        assertTrue(calls[2].second["query"].orEmpty().contains("tag:\"hip hop\""))
+        assertTrue(calls[3].second["query"].orEmpty().contains("tag:\"r&b\""))
     }
 
     @Test
