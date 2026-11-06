@@ -10,6 +10,7 @@ import com.music.bitchord.ui.canonicalExploreGenreShelf
 import com.music.bitchord.ui.canonicalExploreGenres
 import com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial
 import com.music.bitchord.ui.canonicalPublicReleaseRows
+import com.music.bitchord.ui.canonicalPublicGenreRows
 import com.music.bitchord.ui.canonicalPublicGenreReleaseShelf
 import com.music.bitchord.ui.canonicalGenreEditorialShelves
 import com.music.bitchord.ui.screens.CanonicalSearchKind
@@ -151,6 +152,39 @@ class CanonicalPublicDiscoveryTest {
         assertEquals("catalog:RELEASE_GROUP:${recent.musicBrainzId}",
             results!!.items.single().browseId)
         assertNull(results.items.single().videoId)
+    }
+
+    @Test fun genrePagesIncludeHistoricallyVerifiedAlbumsWithPartialOrUnknownDates() {
+        val samples = listOf(
+            recent.copy(musicBrainzId = "11111111-1111-4111-8111-111111111111",
+                title = "Year only", firstReleaseDate = "1998"),
+            recent.copy(musicBrainzId = "22222222-2222-4222-8222-222222222222",
+                title = "Month only", firstReleaseDate = "2001-04"),
+            recent.copy(musicBrainzId = "33333333-3333-4333-8333-333333333333",
+                title = "Undated album", firstReleaseDate = null),
+            recent.copy(musicBrainzId = "44444444-4444-4444-8444-444444444444",
+                title = "Future year", firstReleaseDate = "2028"),
+            recent.copy(musicBrainzId = "55555555-5555-4555-8555-555555555555",
+                title = "Invalid month", firstReleaseDate = "2001-14"),
+            recent.copy(musicBrainzId = "66666666-6666-4666-8666-666666666666",
+                title = "Uncredited", artistDisplay = null, firstReleaseDate = "1998"),
+            recent.copy(musicBrainzId = "77777777-7777-4777-8777-777777777777",
+                title = "Invalid type", primaryType = "Other", firstReleaseDate = "1998"),
+        )
+        // The worldwide new-releases shelf must remain strict; genre discovery
+        // is not claiming that an undated or year-only album launched recently.
+        assertTrue(canonicalPublicReleaseRows(samples, "2026-10-01", "2026-11-06").isEmpty())
+        val rows = canonicalPublicGenreRows(samples, "2026-11-06")
+        assertEquals(listOf("Year only", "Month only", "Undated album"), rows.map { it.title })
+        assertEquals(listOf("1998", "2001-04", null), rows.map { it.releaseDate })
+        val shelves = canonicalGenreEditorialShelves(
+            canonicalExploreGenres.first { it.tag == "rock" }, rows, "2026-11-06",
+        )
+        assertTrue(shelves.isNotEmpty())
+        assertTrue(shelves.none { it.title.startsWith("Lançamentos") })
+        assertTrue(shelves.flatMap { it.items }.all {
+            it.videoId == null && it.browseId.orEmpty().startsWith("catalog:RELEASE_GROUP:")
+        })
     }
 
     @Test fun nativeGenreDetailBuildsDistinctEditorialSectionsWithoutInventedCharts() {
