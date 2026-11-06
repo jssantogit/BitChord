@@ -135,6 +135,9 @@ class CanonicalPublicDiscoveryTest {
         assertEquals("Gêneros", shelf.title)
         assertEquals(canonicalExploreGenres.size, shelf.items.size)
         assertTrue(shelf.items.all { it.videoId == null && it.thumbnailUrl == null })
+        // The category card itself names the genre; repeating a metadata
+        // provider below all twelve tiles is not useful user-facing content.
+        assertTrue(shelf.items.all { it.subtitle.isBlank() })
         assertEquals("K-pop", canonicalExploreGenreForBrowseId("catalog:GENRE:k-pop")?.title)
         assertNull(canonicalExploreGenreForBrowseId("catalog:GENRE:youtube"))
         val genre = canonicalExploreGenreForBrowseId("catalog:GENRE:pop")!!
