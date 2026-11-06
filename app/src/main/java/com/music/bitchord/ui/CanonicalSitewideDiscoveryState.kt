@@ -95,3 +95,17 @@ internal fun canonicalVerifiedSitewideRows(
             )
         }.take(limit.coerceAtMost(12)).toList()
 }
+
+/** A bounded batch of exact public MBIDs, excluding already catalogued rows.
+ * Ranking remains public; no title, cover or audio is inferred from counts. */
+internal fun canonicalSitewideMissingRecordingIds(
+    rankings: List<ListenBrainzSitewideRecording>,
+    knownRecordingMbids: Set<String>,
+    limit: Int = 16,
+): List<String> = rankings.asSequence()
+    .filter { it.listenCount > 0L }
+    .map { it.recordingMbid.lowercase(Locale.ROOT) }
+    .filter { it !in knownRecordingMbids }
+    .distinct()
+    .take(limit.coerceIn(0, 25))
+    .toList()
