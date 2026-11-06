@@ -285,6 +285,18 @@ class CanonicalPublicDiscoveryTest {
         assertEquals(listOf(personal), home)
     }
 
+    @Test fun personalAndCommunityCardsDoNotShowTheSameRecordingTwice() {
+        val item = ShelfItem("Shared recording", "Artist", null, null,
+            "catalog:RECORDING:44444444-4444-4444-8444-444444444444")
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), emptyList(), "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-06",
+            community = HomeShelf("Popular na comunidade", listOf(item)),
+            personal = HomeShelf("Para você", listOf(item)),
+        )
+        assertEquals(1, home.flatMap { it.items }.count { it.browseId == item.browseId })
+    }
+
     @Test fun publicChartOverridesLocalEmAltaOnlyWithVerifiedRanking() {
         val fallback = HomeShelf("Em alta", emptyList())
         val preserved = canonicalHomeWithWorldwideEditorial(
