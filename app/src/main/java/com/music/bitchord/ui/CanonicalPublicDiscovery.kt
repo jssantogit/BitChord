@@ -347,10 +347,16 @@ internal fun canonicalHomeWithWorldwideEditorial(
         val cards = unique(rows.map(::item).take(12))
         if (cards.isNotEmpty()) shelves.add(HomeShelf(heading, cards))
     }
-    val unused = publicRows.filterNot { canonicalNativeBrowseId(it) in selected }
+    val unused = publicRows.filterNot {
+        canonicalNativeBrowseId(it) in selected ||
+            it.musicBrainzId == reservedMore?.musicBrainzId
+    }
     appendPublic(albumsHeading,
         listOfNotNull(reservedAlbum) + unused.filter { canonicalEditorialReleaseType(it) == "Album" })
-    val unusedSingles = publicRows.filterNot { canonicalNativeBrowseId(it) in selected }
+    val unusedSingles = publicRows.filterNot {
+        canonicalNativeBrowseId(it) in selected ||
+            it.musicBrainzId == reservedMore?.musicBrainzId
+    }
     appendPublic(singlesHeading,
         listOfNotNull(reservedSingle) + unusedSingles.filter {
             canonicalEditorialReleaseType(it) in setOf("EP", "Single")
