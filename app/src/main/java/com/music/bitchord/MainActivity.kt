@@ -1145,7 +1145,7 @@ private fun BitChordApp(
         worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
         canonicalFeedDate,
     ) {
-        val editorial = com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
+        com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
             worldwideReleases = canonicalWorldwideReleases,
             releasesHeading = canonicalReleasesHeading,
