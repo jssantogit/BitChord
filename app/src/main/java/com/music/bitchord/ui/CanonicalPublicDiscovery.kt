@@ -255,7 +255,8 @@ internal fun canonicalHomeWithWorldwideEditorial(
     })
     appendPublic(moreHeading, publicRows.filterNot { canonicalNativeBrowseId(it) in selected })
 
-    return shelves.filter { it.items.isNotEmpty() }
+    return if (publicRows.isEmpty() && worldwideTrending == null) shelves
+        else shelves.filter { it.items.isNotEmpty() }
 }
 
 
