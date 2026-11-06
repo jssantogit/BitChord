@@ -126,7 +126,8 @@ class CanonicalPublicDiscoveryTest {
     @Test fun publicChartOverridesLocalEmAltaOnlyWithVerifiedRanking() {
         val fallback = HomeShelf("Em alta", emptyList())
         val preserved = canonicalHomeWithWorldwideEditorial(
-            listOf(fallback), emptyList(), "Escolha a dedo", "Em alta", null, "2026-11-05",
+            listOf(fallback), emptyList(), "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-05",
         )
         assertEquals(fallback, preserved.single())
         assertTrue(canonicalDailyPublicPicks(emptyList(), "2026-11-05").isEmpty())
