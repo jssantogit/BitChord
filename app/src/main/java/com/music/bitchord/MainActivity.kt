@@ -1134,12 +1134,13 @@ private fun BitChordApp(
     }
     val canonicalHomeDisplayShelves = remember(
         canonicalHomeShelves, canonicalWorldwideReleases,
-        canonicalPicksHeading, canonicalTrendingHeading,
+        canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
         worldwideTrendingShelf, canonicalFeedDate,
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
             worldwideReleases = canonicalWorldwideReleases,
+            releasesHeading = canonicalReleasesHeading,
             picksHeading = canonicalPicksHeading,
             trendingHeading = canonicalTrendingHeading,
             worldwideTrending = worldwideTrendingShelf,
@@ -1156,10 +1157,13 @@ private fun BitChordApp(
             trendingHeading = canonicalTrendingHeading,
             community = canonicalCommunityShelf,
         )
-        // Genres are routes into public MusicBrainz metadata and remain
-        // visible on a completely fresh or offline installation.
-        (canonicalPersonalShelf?.let { base + it } ?: base) +
-            com.music.bitchord.ui.canonicalExploreGenreShelf("Gêneros")
+        // Keep genre entry points in the first viewport, even without an
+        // indexed local catalog. The same HomeScreen handles every shelf.
+        com.music.bitchord.ui.canonicalExploreDiscoveryShelves(
+            editorial = base,
+            genres = com.music.bitchord.ui.canonicalExploreGenreShelf("Gêneros"),
+            personal = canonicalPersonalShelf,
+        )
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
