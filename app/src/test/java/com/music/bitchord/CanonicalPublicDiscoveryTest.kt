@@ -273,6 +273,18 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(home.none { it.title == "Em alta" })
     }
 
+    @Test fun verifiedPersonalRecommendationsBelongOnHomeNotGenreRoot() {
+        val personal = HomeShelf("Para você", listOf(
+            ShelfItem("Verified recording", "Credited artist", null, null,
+                "catalog:RECORDING:44444444-4444-4444-8444-444444444444"),
+        ))
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), emptyList(), "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-06", personal = personal,
+        )
+        assertEquals(listOf(personal), home)
+    }
+
     @Test fun publicChartOverridesLocalEmAltaOnlyWithVerifiedRanking() {
         val fallback = HomeShelf("Em alta", emptyList())
         val preserved = canonicalHomeWithWorldwideEditorial(
