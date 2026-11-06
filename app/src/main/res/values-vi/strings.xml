@@ -25,6 +25,7 @@
     <string name="home">Trang chủ</string>
     <string name="play">Phát</string>
     <string name="explore">Khám phá</string>
+    <string name="explore_genres">Thể loại</string>
     <string name="listen_now">Nghe ngay</string>
     <string name="downloads">Tải xuống</string>
     <string name="downloaded_songs">Bài hát đã tải</string>
