@@ -101,11 +101,19 @@ class CanonicalPublicDiscoveryTest {
                 "catalog:RECORDING:22222222-2222-4222-8222-222222222222"),
         ))
         val genres = canonicalExploreGenreShelf("Gêneros")
-        val result = canonicalExploreDiscoveryShelves(listOf(releases, community), genres, personal)
+        val result = canonicalExploreDiscoveryShelves(listOf(releases, community), "Lançamentos", genres, personal)
         assertEquals(listOf("Lançamentos", "Gêneros", "Popular na comunidade", "Para você"),
             result.map { it.title })
         assertEquals(listOf(genres),
-            canonicalExploreDiscoveryShelves(emptyList(), genres, null))
+            canonicalExploreDiscoveryShelves(emptyList(), "Lançamentos", genres, null))
+        // A daily public pick can contain a ReleaseGroup, but its shelf is
+        // not Lançamentos. Categories should still lead Explore here.
+        val picks = releases.copy(title = "Escolha a dedo")
+        assertEquals(listOf("Gêneros", "Escolha a dedo"),
+            canonicalExploreDiscoveryShelves(
+                listOf(picks), "Lançamentos", genres, null,
+            ).map { it.title })
+
     }
 
     @Test fun genreNavigationExistsWithoutAlbumsAndNeverProducesPlayableSongs() {
