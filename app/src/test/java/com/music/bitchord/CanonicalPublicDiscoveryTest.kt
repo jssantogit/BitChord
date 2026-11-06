@@ -175,8 +175,8 @@ class CanonicalPublicDiscoveryTest {
         // is not claiming that an undated or year-only album launched recently.
         assertTrue(canonicalPublicReleaseRows(samples, "2026-10-01", "2026-11-06").isEmpty())
         val rows = canonicalPublicGenreRows(samples, "2026-11-06")
-        assertEquals(listOf("Year only", "Month only", "Undated album"), rows.map { it.title })
-        assertEquals(listOf("1998", "2001-04", null), rows.map { it.releaseDate })
+        assertEquals(listOf("Month only", "Year only", "Undated album"), rows.map { it.title })
+        assertEquals(listOf("2001-04", "1998", null), rows.map { it.releaseDate })
         val shelves = canonicalGenreEditorialShelves(
             canonicalExploreGenres.first { it.tag == "rock" }, rows, "2026-11-06",
         )
