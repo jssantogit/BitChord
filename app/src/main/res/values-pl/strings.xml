@@ -28,6 +28,7 @@
     <string name="home">Główna</string>
     <string name="play">Odtwórz</string>
     <string name="explore">Odkrywaj</string>
+    <string name="explore_genres">Gatunki</string>
     <string name="listen_now">Posłuchaj teraz</string>
     <string name="downloads">Pobrane</string>
     <string name="downloaded_songs">Pobrane piosenki</string>
