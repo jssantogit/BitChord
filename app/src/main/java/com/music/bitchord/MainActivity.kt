@@ -993,8 +993,8 @@ private fun BitChordApp(
     val popularityCandidateIds = remember(cachedCanonicalRows) {
         canonicalPublicPopularityCandidates(cachedCanonicalRows)
     }
-    // Only Explore requests public popularity. Metadata-only cards still open
-    // their canonical details and cannot start playback without a MediaAsset.
+    // Explore is only the genre index. Public and opted-in discovery requests
+    // feed Home, and never manufacture a playable MediaAsset.
     LaunchedEffect(
         selectedTab, popularityCandidateIds,
         listenBrainzAccountEnabled, listenBrainzAccountToken,
@@ -1002,6 +1002,7 @@ private fun BitChordApp(
         if (selectedTab == TAB_HOME) {
             viewModel.loadCanonicalWorldwideReleases()
             viewModel.loadCanonicalExploreSitewide()
+            viewModel.loadCanonicalExplorePublicPopularity(cachedCanonicalRows)
             // Explore now contains only genre navigation. An opted-in user's
             // private recommendations belong to Home, not the public grid.
             viewModel.loadCanonicalPersonalRecommendations()
@@ -1103,7 +1104,7 @@ private fun BitChordApp(
         canonicalPersonalRecommendations.upstreamUpdatedSeconds,
         listenBrainzAccountEnabled, listenBrainzAccountToken,
     ) {
-        if (selectedTab != TAB_EXPLORE || !listenBrainzAccountEnabled ||
+        if (selectedTab != TAB_HOME || !listenBrainzAccountEnabled ||
             listenBrainzAccountToken.isBlank()
         ) return@LaunchedEffect
         val now = System.currentTimeMillis()
@@ -1156,13 +1157,8 @@ private fun BitChordApp(
             singlesHeading = canonicalPublicSinglesHeading,
             moreHeading = canonicalPublicMoreHeading,
             community = canonicalCommunityShelf,
+            personal = canonicalPersonalShelf,
         )
-        val personal = canonicalPersonalShelf
-        if (personal == null) editorial else {
-            val existing = editorial.flatMap { it.items }.mapNotNull { it.browseId }.toSet()
-            val freshCards = personal.items.filter { it.browseId !in existing }
-            if (freshCards.isEmpty()) editorial else editorial + personal.copy(items = freshCards)
-        }
     }
     val canonicalExploreFeedShelves = remember(
         canonicalHomeDisplayShelves, canonicalReleasesHeading, canonicalTrendingHeading,
