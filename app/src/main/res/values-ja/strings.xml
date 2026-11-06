@@ -24,6 +24,7 @@
     <string name="home">ホーム</string>
     <string name="play">再生</string>
     <string name="explore">見つける</string>
+    <string name="explore_genres">ジャンル</string>
     <string name="listen_now">今すぐ聴く</string>
     <string name="downloads">ダウンロード</string>
     <string name="downloaded_songs">ダウンロード済みの曲</string>
