@@ -25,6 +25,7 @@
     <string name="home">होम</string>
     <string name="play">चलाएं</string>
     <string name="explore">एक्सप्लोर करें</string>
+    <string name="explore_genres">संगीत शैलियाँ</string>
     <string name="listen_now">अभी सुनें</string>
     <string name="downloads">डाउनलोड</string>
     <string name="downloaded_songs">डाउनलोड किए गए गाने</string>
