@@ -26,6 +26,7 @@
     <string name="home">Accueil</string>
     <string name="play">Lecture</string>
     <string name="explore">Explorer</string>
+    <string name="explore_genres">Genres</string>
     <string name="listen_now">Écouter maintenant</string>
     <string name="downloads">Téléchargements</string>
     <string name="downloaded_songs">Chansons téléchargées</string>
