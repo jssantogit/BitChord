@@ -92,8 +92,12 @@ class CanonicalPublicDiscoveryTest {
             null, "2026-11-05",
         )
         assertEquals(listOf("Lançamentos", "Escolha a dedo"), online.map { it.title })
-        assertEquals(listOf(recent.musicBrainzId, another.musicBrainzId),
+        assertEquals(listOf(recent.musicBrainzId),
             online.first().items.map { it.browseId!!.removePrefix("catalog:RELEASE_GROUP:") })
+        assertEquals("catalog:RELEASE_GROUP:${another.musicBrainzId}",
+            online.first { it.title == "Escolha a dedo" }.items.single().browseId)
+        assertEquals(online.flatMap { it.items }.size,
+            online.flatMap { it.items }.map { it.browseId }.distinct().size)
         assertTrue(online.first().items.none { it.videoId != null })
         val offline = canonicalHomeWithWorldwideEditorial(
             listOf(stale), emptyList(), "Lançamentos", "Escolha a dedo", "Em alta",
