@@ -3241,23 +3241,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalGenreJob?.cancel()
         _canonicalGenreResults.value = UiState.Loading
         canonicalGenreJob = viewModelScope.launch(Dispatchers.IO) {
-            val response = try { musicBrainzSearch.searchReleaseGroupsForTag(selected.tag, 60) }
+            val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+            val todayIso = today.toString()
+            val historical = try { musicBrainzSearch.searchReleaseGroupsForTag(selected.tag, 60) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { null }
             if (!canonicalGenreEpoch.isCurrent(generation)) return@launch
-            val hits = (response as? MusicBrainzCatalogSearchResult.Success)?.page?.items
-            if (hits == null) {
+            // The tag-only page can be entirely historical; query the same
+            // verified tag over the recent window so 'Lançamentos' isn't
+            // accidentally hidden by MusicBrainz relevance ordering.
+            val recent = try {
+                musicBrainzSearch.searchRecentReleaseGroupsForTag(
+                    selected.tag, today.minusDays(180).toString(), todayIso, limit = 40,
+                )
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { null }
+            if (!canonicalGenreEpoch.isCurrent(generation)) return@launch
+            val historicalHits = (historical as? MusicBrainzCatalogSearchResult.Success)
+                ?.page?.items
+            val recentHits = (recent as? MusicBrainzCatalogSearchResult.Success)
+                ?.page?.items
+            if (historicalHits == null && recentHits == null) {
                 _canonicalGenreResults.value = UiState.Error(
                     "Não foi possível carregar o gênero. Tente novamente.",
                 )
                 return@launch
             }
-            val rows = canonicalPublicGenreRows(
-                hits, java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString(),
-            )
+            val hits = (historicalHits.orEmpty() + recentHits.orEmpty())
+                .distinctBy { it.musicBrainzId }
+            val rows = canonicalPublicGenreRows(hits, todayIso)
             _canonicalGenreResults.value = UiState.Success(rows)
             val permits = Semaphore(2)
-            val todayIso = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
             canonicalGenreArtworkPriority(selected, rows, todayIso).forEach { row ->
                 launch {
                     permits.withPermit {

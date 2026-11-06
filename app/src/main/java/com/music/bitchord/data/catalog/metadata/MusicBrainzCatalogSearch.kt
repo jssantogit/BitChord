@@ -213,6 +213,38 @@ internal class MusicBrainzCatalogSearch(
         )
     }
 
+    /**
+     * Current genre releases need an independent date-scoped query. A plain
+     * tag search is relevance-ranked and can return sixty historical albums
+     * without a single genuinely recent record.
+     */
+    suspend fun searchRecentReleaseGroupsForTag(
+        tag: String,
+        fromIsoDate: String,
+        throughIsoDate: String,
+        limit: Int = 40,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        val date = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized) ||
+            !date.matches(fromIsoDate) || !date.matches(throughIsoDate) ||
+            fromIsoDate > throughIsoDate
+        ) return MusicBrainzCatalogSearchResult.Failure(
+            MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+        )
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND " +
+                "firstreleasedate:[$fromIsoDate TO $throughIsoDate] AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
     private suspend fun searchReleaseGroupsInternal(
         query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =
