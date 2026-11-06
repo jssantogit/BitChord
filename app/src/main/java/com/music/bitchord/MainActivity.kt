@@ -1183,11 +1183,12 @@ private fun BitChordApp(
         is UiState.Loading -> UiState.Loading
         is UiState.Error -> UiState.Error(genreState.message)
         is UiState.Success -> {
-            val genre = activeCanonicalGenre
-            val shelf = genre?.let {
-                com.music.bitchord.ui.canonicalPublicGenreReleaseShelf(it, genreState.data)
-            }
-            if (shelf != null) UiState.Success(listOf(shelf))
+            val shelves = activeCanonicalGenre?.let { genre ->
+                com.music.bitchord.ui.canonicalGenreEditorialShelves(
+                    genre, genreState.data, canonicalFeedDate,
+                )
+            }.orEmpty()
+            if (shelves.isNotEmpty()) UiState.Success(shelves)
             else UiState.Error("Não encontramos lançamentos verificados para este gênero.")
         }
     }
@@ -3625,7 +3626,7 @@ private fun BitChordApp(
                                 { activeCanonicalGenre = null }
                             } else null,
                             signedIn = true,
-                            leadHero = false,
+                            leadHero = true,
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
                         )
