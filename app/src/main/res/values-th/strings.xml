@@ -24,6 +24,7 @@
     <string name="home">หน้าแรก</string>
     <string name="play">เล่น</string>
     <string name="explore">สำรวจ</string>
+    <string name="explore_genres">แนวเพลง</string>
     <string name="listen_now">ฟังตอนนี้</string>
     <string name="downloads">การดาวน์โหลด</string>
     <string name="downloaded_songs">เพลงที่ดาวน์โหลดไว้</string>
