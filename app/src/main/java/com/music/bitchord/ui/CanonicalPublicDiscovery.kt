@@ -128,7 +128,7 @@ internal fun canonicalGenreEditorialShelves(
             canonicalEditorialReleaseType(it) != null &&
             !it.subtitle.isNullOrBlank() &&
             canonicalStreamingTitleIsSafe(it.title) &&
-            (it.releaseDate == null || it.releaseDate <= todayIsoDate) }
+            (it.releaseDate?.let { date -> date <= todayIsoDate } ?: true) }
         .distinctBy { it.musicBrainzId.lowercase(Locale.ROOT) }
         .sortedWith(compareByDescending<CanonicalCatalogSearchRow> { it.releaseDate.orEmpty() }
             .thenBy { it.musicBrainzId })
@@ -160,7 +160,9 @@ internal fun canonicalGenreEditorialShelves(
     return buildList {
         section("Para descobrir · ${genre.title}", featured, 4)?.let(::add)
         section("Lançamentos · ${genre.title}", eligible.filter {
-            it.releaseDate?.length == 10 && it.releaseDate >= freshSince
+            it.releaseDate?.let { date ->
+                date.length == 10 && date >= freshSince
+            } == true
         }, 12)?.let(::add)
         section("Álbuns · ${genre.title}", eligible.filter {
             canonicalEditorialReleaseType(it) == "Album"
