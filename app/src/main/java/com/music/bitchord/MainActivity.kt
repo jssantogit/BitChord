@@ -999,13 +999,11 @@ private fun BitChordApp(
         selectedTab, popularityCandidateIds,
         listenBrainzAccountEnabled, listenBrainzAccountToken,
     ) {
-        if (selectedTab == TAB_HOME || selectedTab == TAB_EXPLORE) {
+        if (selectedTab == TAB_HOME) {
             viewModel.loadCanonicalWorldwideReleases()
             viewModel.loadCanonicalExploreSitewide()
-        }
-        if (selectedTab == TAB_EXPLORE) {
-            viewModel.loadCanonicalExplorePublicPopularity(cachedCanonicalRows)
-            // Personal discovery requires opt-in and uses no playback fallback.
+            // Explore now contains only genre navigation. An opted-in user's
+            // private recommendations belong to Home, not the public grid.
             viewModel.loadCanonicalPersonalRecommendations()
         }
     }
@@ -1143,9 +1141,10 @@ private fun BitChordApp(
         canonicalHomeShelves, canonicalWorldwideReleases,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
         canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
-        worldwideTrendingShelf, canonicalCommunityShelf, canonicalFeedDate,
+        worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
+        canonicalFeedDate,
     ) {
-        com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
+        val editorial = com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
             worldwideReleases = canonicalWorldwideReleases,
             releasesHeading = canonicalReleasesHeading,
@@ -1158,6 +1157,12 @@ private fun BitChordApp(
             moreHeading = canonicalPublicMoreHeading,
             community = canonicalCommunityShelf,
         )
+        val personal = canonicalPersonalShelf
+        if (personal == null) editorial else {
+            val existing = editorial.flatMap { it.items }.mapNotNull { it.browseId }.toSet()
+            val freshCards = personal.items.filter { it.browseId !in existing }
+            if (freshCards.isEmpty()) editorial else editorial + personal.copy(items = freshCards)
+        }
     }
     val canonicalExploreFeedShelves = remember(
         canonicalHomeDisplayShelves, canonicalReleasesHeading, canonicalTrendingHeading,
@@ -2092,6 +2097,7 @@ private fun BitChordApp(
         // account during a click: disabling removes the shelf, not its safety gate.
         val isPersonalRecommendation = canonicalCommunityCardIsMetadataOnly(
             tabOrigin, shelfTitle, canonicalPersonalHeading, item.browseId,
+            allowHome = true,
         )
         val isWorldwideChart = tabOrigin == PlaybackSourceType.HOME &&
             shelfTitle == canonicalTrendingHeading &&
