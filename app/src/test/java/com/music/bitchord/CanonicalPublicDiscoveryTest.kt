@@ -221,6 +221,41 @@ class CanonicalPublicDiscoveryTest {
         assertEquals(real, home.single())
     }
 
+    @Test fun homeSeparatesLaunchesPicksAndAdditionalAlbumAndSingleShelves() {
+        val releases = (1..55).map { index ->
+            val kind = when (index % 3) {
+                0 -> "Album"
+                1 -> "Single"
+                else -> "EP"
+            }
+            recent.copy(
+                musicBrainzId = "00000000-0000-4000-8000-${index.toString().padStart(12, '0')}",
+                title = "Unique release ${index}",
+                primaryType = kind,
+                firstReleaseDate = "2026-11-${(1 + index % 5).toString().padStart(2, '0')}",
+                artworkUri = "https://coverartarchive.org/release-group/${index}/front-500",
+            )
+        }
+        val rows = canonicalPublicReleaseRows(releases, "2026-10-01", "2026-11-06")
+        val chart = HomeShelf("Em alta", listOf(
+            ShelfItem("World chart", "Global artist", null, null,
+                "catalog:RECORDING:11111111-1111-4111-8111-111111111111"),
+        ))
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",
+            chart, "2026-11-06", "Álbuns recentes", "Singles e EPs",
+        )
+        assertEquals(
+            listOf("Lançamentos", "Escolha a dedo", "Em alta",
+                "Álbuns recentes", "Singles e EPs"), home.map { it.title },
+        )
+        val cards = home.flatMap { it.items }
+        assertEquals(cards.size, cards.map { it.browseId }.distinct().size)
+        assertEquals(cards.size, cards.map { it.title to it.subtitle }.distinct().size)
+        assertTrue(home.all { it.items.isNotEmpty() })
+        assertTrue(cards.all { it.videoId == null })
+    }
+
     @Test fun publicChartOverridesLocalEmAltaOnlyWithVerifiedRanking() {
         val fallback = HomeShelf("Em alta", emptyList())
         val preserved = canonicalHomeWithWorldwideEditorial(
