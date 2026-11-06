@@ -3065,22 +3065,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         worldwideReleaseJob = viewModelScope.launch(Dispatchers.IO) {
             val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
             val until = today.toString()
-            val hits = try {
+            val rows = try {
+                val narrowFrom = today.minusDays(30).toString()
+                val wideFrom = today.minusDays(90).toString()
                 val recent = musicBrainzSearch.searchRecentReleaseGroups(
-                    today.minusDays(30).toString(), until, limit = 100,
+                    narrowFrom, until, limit = 100,
                 )
-                val first = (recent as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
-                if (first.isNotEmpty()) first else {
-                    (musicBrainzSearch.searchRecentReleaseGroups(
-                        today.minusDays(90).toString(), until, limit = 100,
-                    ) as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
+                val recentHits =
+                    (recent as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
+                val recentRows = canonicalPublicReleaseRows(recentHits, narrowFrom, until)
+                // A nonempty raw search result can consist entirely of
+                // uncredited, untyped or unsafe editions. Widen only after
+                // applying the same eligibility rules as the visible shelf.
+                if (recentRows.isNotEmpty()) recentRows else {
+                    val expanded = musicBrainzSearch.searchRecentReleaseGroups(
+                        wideFrom, until, limit = 100,
+                    )
+                    val expandedHits =
+                        (expanded as? MusicBrainzCatalogSearchResult.Success)?.page?.items.orEmpty()
+                    canonicalPublicReleaseRows(expandedHits, wideFrom, until)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { emptyList() }
             if (!worldwideReleaseEpoch.isCurrent(generation)) return@launch
-            val rows = canonicalPublicReleaseRows(
-                hits, today.minusDays(90).toString(), until,
-            )
             if (rows.isEmpty()) {
                 worldwideReleaseRetryAtMs = System.currentTimeMillis() + 15L * 60_000L
                 _canonicalWorldwideLoading.value = false
