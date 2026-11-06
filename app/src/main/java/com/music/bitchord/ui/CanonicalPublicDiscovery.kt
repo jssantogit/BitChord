@@ -17,11 +17,45 @@ internal fun canonicalPublicReleaseRows(
     hits: List<MusicBrainzReleaseGroupHit>,
     fromIsoDate: String,
     throughIsoDate: String,
+): List<CanonicalCatalogSearchRow> = canonicalPublicTypedReleaseRows(hits) { date ->
+    date != null && date.length == 10 && date >= fromIsoDate &&
+        date <= throughIsoDate && runCatching { LocalDate.parse(date) }.isSuccess
+}
+
+/**
+ * A genre is a historical browse category, NOT a world new-release chart.
+ * MusicBrainz can know a real ReleaseGroup and artist credit while only knowing
+ * its year/month, or no release date at all. Keep that incomplete evidence
+ * unchanged instead of hiding the album or inventing a day of release.
+ */
+internal fun canonicalPublicGenreRows(
+    hits: List<MusicBrainzReleaseGroupHit>,
+    throughIsoDate: String,
+): List<CanonicalCatalogSearchRow> {
+    val today = runCatching { LocalDate.parse(throughIsoDate) }.getOrNull()
+        ?: return emptyList()
+    return canonicalPublicTypedReleaseRows(hits) { date ->
+        when (date?.length) {
+            null, 0 -> true
+            4 -> runCatching { java.time.Year.parse(date).value <= today.year }
+                .getOrDefault(false)
+            7 -> runCatching {
+                java.time.YearMonth.parse(date) <= java.time.YearMonth.from(today)
+            }.getOrDefault(false)
+            10 -> runCatching { LocalDate.parse(date) <= today }
+                .getOrDefault(false)
+            else -> false
+        }
+    }
+}
+
+/** Common type, identity and credit gate for world and genre discovery. */
+private fun canonicalPublicTypedReleaseRows(
+    hits: List<MusicBrainzReleaseGroupHit>,
+    acceptsDate: (String?) -> Boolean,
 ): List<CanonicalCatalogSearchRow> = hits.asSequence()
     .filter { hit ->
-        val date = hit.firstReleaseDate.orEmpty()
-        date.length == 10 && date >= fromIsoDate && date <= throughIsoDate &&
-            runCatching { LocalDate.parse(date) }.isSuccess &&
+        acceptsDate(hit.firstReleaseDate) &&
             !hit.artistDisplay.isNullOrBlank() &&
             canonicalStreamingTitleIsSafe(hit.title) &&
             CanonicalEditorialDiscography.classify(
