@@ -184,7 +184,7 @@ internal fun canonicalExploreDiscoveryShelves(
     personal: HomeShelf?,
 ): List<HomeShelf> {
     val lead = editorial.firstOrNull()
-    val hasPublicReleaseLead = lead?.title == releasesHeading &&
+    val hasPublicReleaseLead = lead != null && lead.title == releasesHeading &&
         lead.items.isNotEmpty() && lead.items.all { item ->
             val id = item.browseId.orEmpty()
             id.startsWith("catalog:RELEASE_GROUP:") ||
