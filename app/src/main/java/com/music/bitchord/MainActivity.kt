@@ -334,7 +334,6 @@ import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
-import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
 import com.music.bitchord.ui.canonicalPublicPopularityShelf
 import com.music.bitchord.ui.canonicalPersonalRecommendationShelf
 import com.music.bitchord.ui.canonicalPersonalRecommendationIsFresh
@@ -1160,33 +1159,10 @@ private fun BitChordApp(
             personal = canonicalPersonalShelf,
         )
     }
-    val canonicalExploreFeedShelves = remember(
-        canonicalHomeDisplayShelves, canonicalReleasesHeading, canonicalTrendingHeading,
-        canonicalCommunityShelf, canonicalPersonalShelf, canonicalGenresHeading,
-    ) {
-        val base = canonicalExploreWithCommunityShelves(
-            homeShelves = canonicalHomeDisplayShelves,
-            releasesHeading = canonicalReleasesHeading,
-            trendingHeading = canonicalTrendingHeading,
-            community = canonicalCommunityShelf,
-        )
-        // Keep genre entry points in the first viewport, even without an
-        // indexed local catalog. The same HomeScreen handles every shelf.
-        com.music.bitchord.ui.canonicalExploreDiscoveryShelves(
-            editorial = base,
-            releasesHeading = canonicalReleasesHeading,
-            genres = com.music.bitchord.ui.canonicalExploreGenreShelf(canonicalGenresHeading),
-            personal = canonicalPersonalShelf,
-        )
-    }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
         canonicalDiscoveryCatalog is UiState.Loading || canonicalWorldwideLoading -> UiState.Loading
         else -> UiState.Error("Não foi possível carregar lançamentos públicos. Verifique a conexão e tente novamente.")
-    }
-    val canonicalExploreState: UiState<List<HomeShelf>> = when {
-        canonicalExploreFeedShelves.isNotEmpty() -> UiState.Success(canonicalExploreFeedShelves)
-        else -> UiState.Loading
     }
     val canonicalGenreState: UiState<List<HomeShelf>> = when (val genreState = canonicalGenreResults) {
         is UiState.Loading -> UiState.Loading
