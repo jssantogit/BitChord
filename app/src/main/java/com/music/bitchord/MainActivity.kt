@@ -3564,7 +3564,12 @@ private fun BitChordApp(
                                     item, heading, canonicalEditorialPlaybackSource(explore = false),
                                 )
                             },
-                            onRetry = viewModel::loadCanonicalDiscoveryCatalog,
+                            onRetry = {
+                                viewModel.loadCanonicalDiscoveryCatalog()
+                                // A cold install has no local catalog to refill;
+                                // retry the public MusicBrainz release query too.
+                                viewModel.loadCanonicalWorldwideReleases(force = true)
+                            },
                             refreshing = MainViewModel.Feed.HOME in refreshing,
                             onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
                             pullState = homePull,
