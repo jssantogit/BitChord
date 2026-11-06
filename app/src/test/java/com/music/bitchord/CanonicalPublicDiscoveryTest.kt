@@ -2,6 +2,8 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.ui.canonicalExploreDiscoveryShelves
 import com.music.bitchord.ui.canonicalDailyPublicPicks
 import com.music.bitchord.ui.canonicalExploreGenreForBrowseId
 import com.music.bitchord.ui.canonicalExploreGenreShelf
@@ -37,11 +39,12 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(picks.all { it.videoId == null &&
             it.browseId.orEmpty().startsWith("catalog:RELEASE_GROUP:") })
         val home = canonicalHomeWithWorldwideEditorial(
-            emptyList(), rows, "Escolha a dedo", "Em alta",
+            emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",
             null, "2026-11-05",
         )
-        assertEquals("Escolha a dedo", home.single().title)
-        assertFalse(home.single().items.isEmpty())
+        assertEquals(listOf("Lançamentos", "Escolha a dedo"), home.map { it.title })
+        assertEquals("catalog:RELEASE_GROUP:${recent.musicBrainzId}", home.first().items.first().browseId)
+        assertTrue(home.flatMap { it.items }.all { it.videoId == null })
     }
 
     @Test fun disallowFutureUncreditedUntypedOrVideoEditionsFromPublicReleases() {
@@ -60,6 +63,49 @@ class CanonicalPublicDiscoveryTest {
             "2026-10-01", "2026-11-05",
         )
         assertEquals(listOf(recent.musicBrainzId), rows.map { it.musicBrainzId })
+    }
+
+    @Test fun publicReleasesReplaceStaleLocalLaunchShelfButOfflineLocalFallbackSurvives() {
+        val stale = HomeShelf("Lançamentos", listOf(
+            ShelfItem("Downloaded album", "Offline", null, null, "local:album:old"),
+        ))
+        val fresh = canonicalPublicReleaseRows(
+            listOf(recent, another), "2026-10-01", "2026-11-05",
+        )
+        val online = canonicalHomeWithWorldwideEditorial(
+            listOf(stale), fresh, "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-05",
+        )
+        assertEquals(listOf("Lançamentos", "Escolha a dedo"), online.map { it.title })
+        assertEquals(listOf(recent.musicBrainzId, another.musicBrainzId),
+            online.first().items.map { it.browseId!!.removePrefix("catalog:RELEASE_GROUP:") })
+        assertTrue(online.first().items.none { it.videoId != null })
+        val offline = canonicalHomeWithWorldwideEditorial(
+            listOf(stale), emptyList(), "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-05",
+        )
+        assertEquals(listOf(stale), offline)
+    }
+
+    @Test fun exploreGenreCardsAppearImmediatelyAfterPublicReleaseShelf() {
+        val releases = HomeShelf("Lançamentos", listOf(
+            ShelfItem("Verified", "Artist", null, null,
+                "catalog:RELEASE_GROUP:${recent.musicBrainzId}"),
+        ))
+        val community = HomeShelf("Popular na comunidade", listOf(
+            ShelfItem("Song", "Artist", null, null,
+                "catalog:RECORDING:11111111-1111-4111-8111-111111111111"),
+        ))
+        val personal = HomeShelf("Para você", listOf(
+            ShelfItem("Discovery", "Artist", null, null,
+                "catalog:RECORDING:22222222-2222-4222-8222-222222222222"),
+        ))
+        val genres = canonicalExploreGenreShelf("Gêneros")
+        val result = canonicalExploreDiscoveryShelves(listOf(releases, community), genres, personal)
+        assertEquals(listOf("Lançamentos", "Gêneros", "Popular na comunidade", "Para você"),
+            result.map { it.title })
+        assertEquals(listOf(genres),
+            canonicalExploreDiscoveryShelves(emptyList(), genres, null))
     }
 
     @Test fun genreNavigationExistsWithoutAlbumsAndNeverProducesPlayableSongs() {
