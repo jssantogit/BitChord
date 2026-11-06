@@ -265,6 +265,7 @@ internal fun canonicalHomeWithWorldwideEditorial(
     // A personal, account-verified ListenBrainz recommendation is not a genre
     // or public popularity claim. Never put it in Explore's taxonomy grid.
     personal?.takeIf { it.title.isNotBlank() && it.items.isNotEmpty() }?.let { personalShelf ->
+        selected.addAll(shelves.flatMap { shelf -> shelf.items.mapNotNull { it.browseId } })
         val uniquePersonal = personalShelf.items.filter { item ->
             val id = item.browseId ?: return@filter false
             selected.add(id)
