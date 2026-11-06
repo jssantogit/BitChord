@@ -291,6 +291,30 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(home.none { it.title == "Em alta" })
     }
 
+    @Test fun aSmallVerifiedReleaseBatchCanStillFillFiveDistinctHomeShelves() {
+        val samples = (1..8).map { index ->
+            val hit = if (index % 2 == 0) recent else another
+            hit.copy(
+                musicBrainzId = "40000000-0000-4000-8000-${index.toString().padStart(12, '0')}",
+                title = "Album or single ${index}",
+            )
+        }
+        val rows = canonicalPublicReleaseRows(samples, "2026-10-01", "2026-11-06")
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-06", "Álbuns", "Singles e EPs", "Mais para explorar",
+        )
+        assertEquals(
+            listOf("Lançamentos", "Escolha a dedo", "Álbuns",
+                "Singles e EPs", "Mais para explorar"),
+            home.map { it.title },
+        )
+        val cards = home.flatMap { it.items }
+        assertEquals(8, cards.size)
+        assertEquals(cards.size, cards.map { it.browseId }.distinct().size)
+        assertTrue(home.none { it.title == "Em alta" })
+    }
+
     @Test fun rankingShelfKeepsItsRealUpstreamEvidenceRatherThanInventingCharts() {
         val real = HomeShelf("Em alta", listOf(
             ShelfItem("Observed weekly song", "Artist", null, null,

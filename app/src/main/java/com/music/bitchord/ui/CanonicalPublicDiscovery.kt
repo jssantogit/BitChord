@@ -141,7 +141,7 @@ internal fun canonicalPublicGenreReleaseShelf(
     genre: CanonicalExploreGenre,
     rows: List<CanonicalCatalogSearchRow>,
 ): HomeShelf? = rows.takeIf { it.isNotEmpty() }?.let { available ->
-    HomeShelf("Lançamentos · ${genre.title}", available.map { row ->
+    HomeShelf("Lançamentos", available.map { row ->
         ShelfItem(row.title, row.subtitle.orEmpty(), row.artworkUri, null,
             canonicalNativeBrowseId(row))
     })
@@ -275,12 +275,35 @@ internal fun canonicalHomeWithWorldwideEditorial(
         val id = card.browseId ?: return@filter false
         selected.add(id)
     }
+    // Give each real editorial format a minimum allocation before the Home
+    // hero and daily picks use the limited first public result page.
+    // If the verified ListenBrainz chart is missing, a distinct 'Mais' shelf
+    // can complete five sections without pretending to be 'Em alta'.
+    val supportsFive = publicRows.size >= 5
+    val reservedAlbum = if (supportsFive) publicRows.asReversed().firstOrNull {
+        canonicalEditorialReleaseType(it) == "Album"
+    } else null
+    val reservedSingle = if (supportsFive) publicRows.asReversed().firstOrNull {
+        canonicalEditorialReleaseType(it) in setOf("Single", "EP")
+    } else null
+    val hasRealChartOrCommunity = worldwideTrending?.items?.isNotEmpty() == true ||
+        community?.items?.isNotEmpty() == true
+    val reservedMore = if (supportsFive && !hasRealChartOrCommunity) {
+        publicRows.asReversed().firstOrNull {
+            it.musicBrainzId != reservedAlbum?.musicBrainzId &&
+                it.musicBrainzId != reservedSingle?.musicBrainzId
+        }
+    } else null
+    val reservedIds = listOfNotNull(reservedAlbum, reservedSingle, reservedMore)
+        .map(::canonicalNativeBrowseId).toSet()
     if (publicRows.isNotEmpty()) {
         // Reserve enough releases for separately curated shelves instead of
         // using all 24 on the hero and repeating them under Quick Picks.
         val launchCount = if (publicRows.size <= 10)
             maxOf(1, publicRows.size / 2) else minOf(10, publicRows.size / 3)
-        val launches = unique(publicRows.take(launchCount).map(::item))
+        val launches = unique(publicRows.filterNot {
+            canonicalNativeBrowseId(it) in reservedIds
+        }.take(launchCount).map(::item))
         val index = shelves.indexOfFirst { it.title == releasesHeading }
         if (index >= 0) shelves[index] = shelves[index].copy(items = launches)
         else shelves.add(0, HomeShelf(releasesHeading, launches))
@@ -295,7 +318,10 @@ internal fun canonicalHomeWithWorldwideEditorial(
     val picksIndex = shelves.indexOfFirst { it.title == picksHeading }
     val existingPicks = shelves.getOrNull(picksIndex).takeIf { picksIndex >= 0 }?.items.orEmpty()
     val availablePicks = canonicalDailyPublicPicks(
-        publicRows.filterNot { canonicalNativeBrowseId(it) in selected },
+        publicRows.filterNot {
+            canonicalNativeBrowseId(it) in selected ||
+                canonicalNativeBrowseId(it) in reservedIds
+        },
         todayIsoDate, limit = 24,
     ).sortedWith(compareByDescending<ShelfItem> { !it.thumbnailUrl.isNullOrBlank() })
     val picks = unique((existingPicks + availablePicks).distinctBy { it.browseId }.take(16))
@@ -322,12 +348,15 @@ internal fun canonicalHomeWithWorldwideEditorial(
         if (cards.isNotEmpty()) shelves.add(HomeShelf(heading, cards))
     }
     val unused = publicRows.filterNot { canonicalNativeBrowseId(it) in selected }
-    appendPublic(albumsHeading, unused.filter { canonicalEditorialReleaseType(it) == "Album" })
+    appendPublic(albumsHeading,
+        listOfNotNull(reservedAlbum) + unused.filter { canonicalEditorialReleaseType(it) == "Album" })
     val unusedSingles = publicRows.filterNot { canonicalNativeBrowseId(it) in selected }
-    appendPublic(singlesHeading, unusedSingles.filter {
-        canonicalEditorialReleaseType(it) in setOf("EP", "Single")
-    })
-    appendPublic(moreHeading, publicRows.filterNot { canonicalNativeBrowseId(it) in selected })
+    appendPublic(singlesHeading,
+        listOfNotNull(reservedSingle) + unusedSingles.filter {
+            canonicalEditorialReleaseType(it) in setOf("EP", "Single")
+        })
+    appendPublic(moreHeading,
+        listOfNotNull(reservedMore) + publicRows.filterNot { canonicalNativeBrowseId(it) in selected })
     // A personal, account-verified ListenBrainz recommendation is not a genre
     // or public popularity claim. Never put it in Explore's taxonomy grid.
     personal?.takeIf { it.title.isNotBlank() && it.items.isNotEmpty() }?.let { personalShelf ->

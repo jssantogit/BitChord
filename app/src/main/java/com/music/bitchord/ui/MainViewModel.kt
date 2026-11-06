@@ -3122,25 +3122,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // sections. Expand in bounded historical windows, retaining
                 // only typed, dated releases with genuine MusicBrainz IDs.
                 val expandedRows = if (canonicalPublicNeedsMoreEditorialRows(recentRows)) {
-                    val expanded = musicBrainzSearch.searchRecentReleaseGroups(
-                        wideFrom, until, limit = 100,
-                    )
-                    val hits = (expanded as? MusicBrainzCatalogSearchResult.Success)
-                        ?.page?.items.orEmpty()
-                    canonicalPublicReleaseRows(hits, wideFrom, until)
+                    try {
+                        val expanded = musicBrainzSearch.searchRecentReleaseGroups(
+                            wideFrom, until, limit = 100,
+                        )
+                        val hits = (expanded as? MusicBrainzCatalogSearchResult.Success)
+                            ?.page?.items.orEmpty()
+                        canonicalPublicReleaseRows(hits, wideFrom, until)
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                      catch (_: Exception) { emptyList() }
                 } else emptyList()
                 val combined = (recentRows + expandedRows).distinctBy { it.musicBrainzId }
                 if (canonicalPublicNeedsMoreEditorialRows(combined)) {
                     val historicalFrom = today.minusDays(365).toString()
                     val historicalThrough = today.minusDays(91).toString()
-                    val historical = musicBrainzSearch.searchRecentReleaseGroups(
-                        historicalFrom, historicalThrough, limit = 100,
-                    )
-                    val hits = (historical as? MusicBrainzCatalogSearchResult.Success)
-                        ?.page?.items.orEmpty()
-                    (combined + canonicalPublicReleaseRows(
-                        hits, historicalFrom, historicalThrough,
-                    )).distinctBy { it.musicBrainzId }
+                    val older = try {
+                        val historical = musicBrainzSearch.searchRecentReleaseGroups(
+                            historicalFrom, historicalThrough, limit = 100,
+                        )
+                        val hits = (historical as? MusicBrainzCatalogSearchResult.Success)
+                            ?.page?.items.orEmpty()
+                        canonicalPublicReleaseRows(
+                            hits, historicalFrom, historicalThrough,
+                        )
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                      catch (_: Exception) { emptyList() }
+                    (combined + older).distinctBy { it.musicBrainzId }
                 } else combined
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { emptyList() }
