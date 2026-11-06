@@ -93,7 +93,7 @@ internal fun canonicalExploreGenreShelf(heading: String): HomeShelf =
     HomeShelf(heading, canonicalExploreGenres.map { genre ->
         ShelfItem(
             title = genre.title,
-            subtitle = "MusicBrainz",
+            subtitle = "",
             thumbnailUrl = null,
             videoId = null,
             browseId = "catalog:GENRE:${genre.tag}",
