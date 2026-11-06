@@ -40,6 +40,15 @@ class ListenBrainzPublicPlaylistTest {
         assertNull(parseListenBrainzPublicPlaylistSearch("""{"playlists":"bad"}""", "rock"))
     }
 
+    @Test fun publicOnlySearchMayOmitPublicFlagButCannotExposePrivate() {
+        val body = """{"playlists":[
+            {"playlist_mbid":"$rock","title":"Rock in the world"},
+            {"playlist_mbid":"$pop","title":"Private Rock","public":false}
+        ]}"""
+        assertEquals(listOf(rock),
+            parseListenBrainzPublicPlaylistSearch(body, "rock")!!.map { it.mbid })
+    }
+
     @Test fun jspfDetailPreservesRealMbidsAndDoesNotPromoteInvalidUrls() {
         val selected = ListenBrainzPublicPlaylist(rock, "Classic Rock", "Curator", null)
         val body = """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$rock",

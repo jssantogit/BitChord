@@ -788,6 +788,7 @@ private fun BitChordApp(
     val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
     val canonicalPublicPlaylists by viewModel.canonicalPublicPlaylists.collectAsStateWithLifecycle()
+    val canonicalPublicPlaylistSearchStatus by viewModel.canonicalPublicPlaylistSearchStatus.collectAsStateWithLifecycle()
     val canonicalPublicPlaylistDetail by viewModel.canonicalPublicPlaylistDetail.collectAsStateWithLifecycle()
     val canonicalExploreGenreCovers by viewModel.canonicalExploreGenreCovers.collectAsStateWithLifecycle()
     var activeCanonicalGenre by remember {
@@ -1155,6 +1156,17 @@ private fun BitChordApp(
             "Playlists para descobrir", canonicalPublicPlaylists["home"].orEmpty(),
         )
     }
+    val canonicalHomePlaylistNotice = remember(
+        canonicalPublicPlaylistSearchStatus, canonicalHomePublicPlaylists,
+    ) {
+        if (canonicalHomePublicPlaylists != null) null else when (
+            val state = canonicalPublicPlaylistSearchStatus["home"]
+        ) {
+            is UiState.Error -> state.message
+            is UiState.Success -> "Nenhuma playlist pública de descoberta encontrada."
+            else -> "Procurando playlists públicas..."
+        }
+    }
     val canonicalHomeDisplayShelves = remember(
         canonicalHomeShelves, canonicalWorldwideReleases,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
@@ -1182,6 +1194,15 @@ private fun BitChordApp(
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
         canonicalDiscoveryCatalog is UiState.Loading || canonicalWorldwideLoading -> UiState.Loading
         else -> UiState.Error("Não foi possível carregar lançamentos públicos. Verifique a conexão e tente novamente.")
+    }
+    val canonicalGenrePlaylistNotice = activeCanonicalGenre?.tag?.let { tag ->
+        if (!canonicalPublicPlaylists[tag].isNullOrEmpty()) null else when (
+            val state = canonicalPublicPlaylistSearchStatus[tag]
+        ) {
+            is UiState.Error -> state.message
+            is UiState.Success -> "Nenhuma playlist pública encontrada para este gênero."
+            else -> "Procurando playlists deste gênero..."
+        }
     }
     val canonicalGenreState: UiState<List<HomeShelf>> = when (val genreState = canonicalGenreResults) {
         is UiState.Loading -> UiState.Loading
@@ -3632,6 +3653,7 @@ private fun BitChordApp(
                             contentPadding = listPadding,
                             title = stringResource(R.string.home),
                             signedIn = true,
+                            publicPlaylistNotice = canonicalHomePlaylistNotice,
                             leadHero = true,
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
@@ -3677,6 +3699,7 @@ private fun BitChordApp(
                             pullState = explorePull,
                             contentPadding = listPadding,
                             title = activeCanonicalGenre?.title ?: stringResource(R.string.explore),
+                            publicPlaylistNotice = canonicalGenrePlaylistNotice,
                             onBack = if (activeCanonicalGenre != null) {
                                 { activeCanonicalGenre = null }
                             } else null,

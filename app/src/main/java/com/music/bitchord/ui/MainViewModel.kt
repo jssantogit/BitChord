@@ -397,6 +397,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         MutableStateFlow<Map<String, List<ListenBrainzPublicPlaylist>>>(emptyMap())
     val canonicalPublicPlaylists: StateFlow<Map<String, List<ListenBrainzPublicPlaylist>>> =
         _canonicalPublicPlaylists.asStateFlow()
+    private val _canonicalPublicPlaylistSearchStatus =
+        MutableStateFlow<Map<String, UiState<List<ListenBrainzPublicPlaylist>>>>(emptyMap())
+    val canonicalPublicPlaylistSearchStatus: StateFlow<
+        Map<String, UiState<List<ListenBrainzPublicPlaylist>>>
+    > = _canonicalPublicPlaylistSearchStatus.asStateFlow()
     private val publicPlaylistQueryAt = ConcurrentHashMap<String, Long>()
     private val publicPlaylistQueryJobs = ConcurrentHashMap<String, Job>()
     private val _canonicalPublicPlaylistDetail =
@@ -3263,16 +3268,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val now = System.currentTimeMillis()
         val previous = publicPlaylistQueryAt[key]
         val cached = _canonicalPublicPlaylists.value.containsKey(key)
-        val ttl = if (cached) 6L * 60L * 60L * 1_000L else 15L * 60L * 1_000L
+        val hasRows = cached && _canonicalPublicPlaylists.value[key]?.isNotEmpty() == true
+        val ttl = if (hasRows) 6L * 60L * 60L * 1_000L else 15L * 60L * 1_000L
         if (previous != null && now >= previous && now - previous < ttl) return
         if (publicPlaylistQueryJobs[key]?.isActive == true) return
         publicPlaylistQueryAt[key] = now
+        _canonicalPublicPlaylistSearchStatus.update { old -> old + (key to UiState.Loading) }
         publicPlaylistQueryJobs[key] = viewModelScope.launch(Dispatchers.IO) {
             val results = if (genreTag == null) publicPlaylistClient.searchHome()
                 else publicPlaylistClient.searchGenre(genreTag)
             if (results != null) {
                 _canonicalPublicPlaylists.update { old -> old + (key to results) }
                 publicPlaylistQueryAt[key] = System.currentTimeMillis()
+                _canonicalPublicPlaylistSearchStatus.update { old ->
+                    old + (key to UiState.Success(results))
+                }
+            } else {
+                _canonicalPublicPlaylistSearchStatus.update { old ->
+                    old + (key to UiState.Error("Playlists públicas indisponíveis no momento."))
+                }
             }
         }
     }

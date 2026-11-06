@@ -63,9 +63,11 @@ internal interface ListenBrainzPublicPlaylistTransport {
 internal class KtorListenBrainzPublicPlaylistTransport(
     private val client: HttpClient = HttpClient(OkHttp) {
         install(HttpTimeout) {
-            requestTimeoutMillis = 12_000L
+            // The public trigram search is unusually slow upstream (often
+            // >30 seconds). Fetch asynchronously; never block MusicBrainz UI.
+            requestTimeoutMillis = 90_000L
             connectTimeoutMillis = 8_000L
-            socketTimeoutMillis = 12_000L
+            socketTimeoutMillis = 90_000L
         }
     },
 ) : ListenBrainzPublicPlaylistTransport {
@@ -146,7 +148,9 @@ internal fun parseListenBrainzPublicPlaylistSearch(
         ?: listOf("discover", "discovery", "descoberta")
     return incoming.asSequence().mapNotNull { node ->
         val data = node as? JsonObject ?: return@mapNotNull null
-        if ((data["public"] as? JsonPrimitive)?.booleanOrNull != true)
+        // This endpoint returns only public playlists. Missing flag is
+        // acceptable on older versions, but explicit private is never shown.
+        if ((data["public"] as? JsonPrimitive)?.booleanOrNull == false)
             return@mapNotNull null
         val mbid = checkedPlaylistId(data.optionalText("playlist_mbid"))
             ?: return@mapNotNull null

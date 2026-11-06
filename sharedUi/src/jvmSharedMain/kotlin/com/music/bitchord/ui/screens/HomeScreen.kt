@@ -154,6 +154,8 @@ fun HomeScreen(
     isPlaying: Boolean = false,
     /** Native account access while the floating Home actions are hidden. */
     headerTrailing: (@Composable () -> Unit)? = null,
+    /** An honest empty/loading result, not a synthetic playlist card. */
+    publicPlaylistNotice: String? = null,
 ) {
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
 
@@ -247,6 +249,22 @@ fun HomeScreen(
                             )
                         },
                     )
+                    // Keep the Playlists section visible while the slow public
+                    // search is pending or legitimately empty. Its text is
+                    // metadata state; it never becomes a fake clickable card.
+                    publicPlaylistNotice?.let { notice ->
+                        item(key = "public-playlists-notice") {
+                            Column(Modifier.padding(bottom = 26.dp)) {
+                                SectionHeader("Playlists")
+                                Text(
+                                    notice,
+                                    modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
+                        }
+                    }
                     if (loadingMore) feedMoreSkeleton()
                 }
             }
