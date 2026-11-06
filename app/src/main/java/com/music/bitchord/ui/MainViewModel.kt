@@ -395,18 +395,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val publicPlaylistClient = ListenBrainzPublicPlaylistClient()
     private val _canonicalPublicPlaylists =
         MutableStateFlow<Map<String, List<ListenBrainzPublicPlaylist>>>(emptyMap())
-    val canonicalPublicPlaylists: StateFlow<Map<String, List<ListenBrainzPublicPlaylist>>> =
+    internal val canonicalPublicPlaylists: StateFlow<Map<String, List<ListenBrainzPublicPlaylist>>> =
         _canonicalPublicPlaylists.asStateFlow()
     private val _canonicalPublicPlaylistSearchStatus =
         MutableStateFlow<Map<String, UiState<List<ListenBrainzPublicPlaylist>>>>(emptyMap())
-    val canonicalPublicPlaylistSearchStatus: StateFlow<
+    internal val canonicalPublicPlaylistSearchStatus: StateFlow<
         Map<String, UiState<List<ListenBrainzPublicPlaylist>>>
     > = _canonicalPublicPlaylistSearchStatus.asStateFlow()
     private val publicPlaylistQueryAt = ConcurrentHashMap<String, Long>()
     private val publicPlaylistQueryJobs = ConcurrentHashMap<String, Job>()
     private val _canonicalPublicPlaylistDetail =
         MutableStateFlow<UiState<ListenBrainzPublicPlaylistDetail>>(UiState.Loading)
-    val canonicalPublicPlaylistDetail: StateFlow<UiState<ListenBrainzPublicPlaylistDetail>> =
+    internal val canonicalPublicPlaylistDetail: StateFlow<UiState<ListenBrainzPublicPlaylistDetail>> =
         _canonicalPublicPlaylistDetail.asStateFlow()
     private val publicPlaylistDetailEpoch = DiscoveryRequestEpoch()
     private var publicPlaylistDetailJob: Job? = null
@@ -3291,7 +3291,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun loadCanonicalPublicPlaylistDetail(selected: ListenBrainzPublicPlaylist) {
+    internal fun loadCanonicalPublicPlaylistDetail(selected: ListenBrainzPublicPlaylist) {
         val generation = publicPlaylistDetailEpoch.next()
         publicPlaylistDetailJob?.cancel()
         _canonicalPublicPlaylistDetail.value = UiState.Loading
