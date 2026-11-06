@@ -25,6 +25,7 @@
     <string name="home">Home</string>
     <string name="play">Play</string>
     <string name="explore">Explore</string>
+    <string name="explore_genres">Genres</string>
     <string name="listen_now">Listen Now</string>
     <string name="canonical_discovery_header">Catalog discovery</string>
     <string name="canonical_discovery_setting_title">Catalog-first Home and Explore</string>
