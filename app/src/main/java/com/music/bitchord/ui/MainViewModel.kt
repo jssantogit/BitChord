@@ -3184,9 +3184,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 return@launch
             }
-            val rows = canonicalPublicReleaseRows(
-                hits, "1900-01-01",
-                java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString(),
+            val rows = canonicalPublicGenreRows(
+                hits, java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString(),
             )
             _canonicalGenreResults.value = UiState.Success(rows)
             val permits = Semaphore(2)
