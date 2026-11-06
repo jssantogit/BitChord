@@ -47,6 +47,20 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(home.flatMap { it.items }.all { it.videoId == null })
     }
 
+    @Test fun aNonemptyRawShortWindowCanStillHaveNoEligiblePublicRows() {
+        // The worldwide loader must inspect verified rows, not just whether
+        // MusicBrainz returned a nonempty raw page before trying 90 days.
+        val uncredited = recent.copy(artistDisplay = null)
+        val first = canonicalPublicReleaseRows(
+            listOf(uncredited), "2026-10-06", "2026-11-05",
+        )
+        assertTrue(first.isEmpty())
+        val expanded = canonicalPublicReleaseRows(
+            listOf(another), "2026-08-07", "2026-11-05",
+        )
+        assertEquals(listOf(another.musicBrainzId), expanded.map { it.musicBrainzId })
+    }
+
     @Test fun disallowFutureUncreditedUntypedOrVideoEditionsFromPublicReleases() {
         val rows = canonicalPublicReleaseRows(
             listOf(
