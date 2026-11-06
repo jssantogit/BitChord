@@ -24,6 +24,7 @@
     <string name="home">首页</string>
     <string name="play">播放</string>
     <string name="explore">探索</string>
+    <string name="explore_genres">音乐类型</string>
     <string name="listen_now">立即收听</string>
     <string name="downloads">下载内容</string>
     <string name="downloaded_songs">已下载的歌曲</string>
