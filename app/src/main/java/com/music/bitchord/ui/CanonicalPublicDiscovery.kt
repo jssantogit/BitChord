@@ -179,15 +179,17 @@ internal fun canonicalHomeWithWorldwideEditorial(
  */
 internal fun canonicalExploreDiscoveryShelves(
     editorial: List<HomeShelf>,
+    releasesHeading: String,
     genres: HomeShelf,
     personal: HomeShelf?,
 ): List<HomeShelf> {
     val lead = editorial.firstOrNull()
-    val hasPublicReleaseLead = lead?.items?.any { item ->
-        val id = item.browseId.orEmpty()
-        id.startsWith("catalog:RELEASE_GROUP:") ||
-            id.startsWith("catalog:RELEASE:")
-    } == true
+    val hasPublicReleaseLead = lead?.title == releasesHeading &&
+        lead.items.isNotEmpty() && lead.items.all { item ->
+            val id = item.browseId.orEmpty()
+            id.startsWith("catalog:RELEASE_GROUP:") ||
+                id.startsWith("catalog:RELEASE:")
+        }
     return buildList {
         if (hasPublicReleaseLead && lead != null) add(lead)
         add(genres)
