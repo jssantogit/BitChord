@@ -114,12 +114,40 @@ internal fun canonicalPublicGenreReleaseShelf(
 internal fun canonicalHomeWithWorldwideEditorial(
     localShelves: List<HomeShelf>,
     worldwideReleases: List<CanonicalCatalogSearchRow>,
+    releasesHeading: String,
     picksHeading: String,
     trendingHeading: String,
     worldwideTrending: HomeShelf?,
     todayIsoDate: String,
 ): List<HomeShelf> {
     val shelves = localShelves.toMutableList()
+    // Lançamentos must work on a completely empty installation: MusicBrainz
+    // public ReleaseGroup identities are enough for metadata-only navigation.
+    // Never label a user's old download as a *new worldwide* release when the
+    // public feed has verified current releases available.
+    val publicReleases = worldwideReleases.asSequence()
+        .filter {
+            it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                canonicalEditorialReleaseType(it) != null
+        }
+        .distinctBy { it.musicBrainzId.lowercase(Locale.ROOT) }
+        .sortedWith(compareByDescending<CanonicalCatalogSearchRow> {
+            it.releaseDate.orEmpty()
+        }.thenBy { it.musicBrainzId })
+        .take(24)
+        .map { row ->
+            ShelfItem(row.title, row.subtitle.orEmpty(), row.artworkUri,
+                null, canonicalNativeBrowseId(row))
+        }
+        .toList()
+    if (publicReleases.isNotEmpty()) {
+        val index = shelves.indexOfFirst { it.title == releasesHeading }
+        if (index >= 0) {
+            shelves[index] = shelves[index].copy(items = publicReleases)
+        } else {
+            shelves.add(0, HomeShelf(releasesHeading, publicReleases))
+        }
+    }
     val daily = canonicalDailyPublicPicks(worldwideReleases, todayIsoDate)
     if (daily.isNotEmpty()) {
         val index = shelves.indexOfFirst { it.title == picksHeading }
@@ -141,4 +169,29 @@ internal fun canonicalHomeWithWorldwideEditorial(
         else shelves.add(worldwideTrending)
     }
     return shelves
+}
+
+
+/**
+ * Genres belong to Explore's first viewport, not beyond the community and
+ * personal feeds. Keep releases first when genuinely public; otherwise make
+ * categories the first shelf. The existing native HomeScreen renders all cards.
+ */
+internal fun canonicalExploreDiscoveryShelves(
+    editorial: List<HomeShelf>,
+    genres: HomeShelf,
+    personal: HomeShelf?,
+): List<HomeShelf> {
+    val lead = editorial.firstOrNull()
+    val hasPublicReleaseLead = lead?.items?.any { item ->
+        val id = item.browseId.orEmpty()
+        id.startsWith("catalog:RELEASE_GROUP:") ||
+            id.startsWith("catalog:RELEASE:")
+    } == true
+    return buildList {
+        if (hasPublicReleaseLead && lead != null) add(lead)
+        add(genres)
+        addAll(if (hasPublicReleaseLead) editorial.drop(1) else editorial)
+        personal?.takeIf { it.items.isNotEmpty() }?.let(::add)
+    }
 }
