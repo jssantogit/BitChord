@@ -985,6 +985,7 @@ private fun BitChordApp(
     val canonicalTrendingHeading = stringResource(R.string.shelf_trending)
     val canonicalCommunityHeading = stringResource(R.string.shelf_listenbrainz_community)
     val canonicalPersonalHeading = stringResource(R.string.shelf_for_you)
+    val canonicalGenresHeading = stringResource(R.string.explore_genres)
     val popularityCandidateIds = remember(cachedCanonicalRows) {
         canonicalPublicPopularityCandidates(cachedCanonicalRows)
     }
@@ -1149,7 +1150,7 @@ private fun BitChordApp(
     }
     val canonicalExploreFeedShelves = remember(
         canonicalHomeDisplayShelves, canonicalReleasesHeading, canonicalTrendingHeading,
-        canonicalCommunityShelf, canonicalPersonalShelf,
+        canonicalCommunityShelf, canonicalPersonalShelf, canonicalGenresHeading,
     ) {
         val base = canonicalExploreWithCommunityShelves(
             homeShelves = canonicalHomeDisplayShelves,
@@ -1161,7 +1162,7 @@ private fun BitChordApp(
         // indexed local catalog. The same HomeScreen handles every shelf.
         com.music.bitchord.ui.canonicalExploreDiscoveryShelves(
             editorial = base,
-            genres = com.music.bitchord.ui.canonicalExploreGenreShelf("Gêneros"),
+            genres = com.music.bitchord.ui.canonicalExploreGenreShelf(canonicalGenresHeading),
             personal = canonicalPersonalShelf,
         )
     }
