@@ -1396,4 +1396,5 @@
     <string name="search_origin_local">מקומי</string>
     <string name="pause_resume_fade">עמעום בהשהיה ובחידוש</string>
     <string name="pause_resume_fade_subtitle">מנמיך בהדרגה את עוצמת הקול בהשהיה ומגביר אותה בחידוש</string>
+    <string name="home_global_discovery">תגליות מוזיקליות מרחבי העולם</string>
 </resources>

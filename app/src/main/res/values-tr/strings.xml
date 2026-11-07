@@ -1348,4 +1348,5 @@
     <string name="search_origin_local">Yerel</string>
     <string name="pause_resume_fade">Duraklatma ve devam ettirmede ses geçişi</string>
     <string name="pause_resume_fade_subtitle">Duraklatırken sesi kademeli azaltır, devam ettirirken artırır</string>
+    <string name="home_global_discovery">Dünyadan keşifler</string>
 </resources>

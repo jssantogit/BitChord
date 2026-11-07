@@ -1368,4 +1368,5 @@
     <string name="search_origin_local">Lokal</string>
     <string name="pause_resume_fade">Fade saat jeda dan lanjut</string>
     <string name="pause_resume_fade_subtitle">Mengecilkan volume secara halus saat dijeda dan menaikkannya saat dilanjutkan</string>
+    <string name="home_global_discovery">Penemuan musik dari seluruh dunia</string>
 </resources>

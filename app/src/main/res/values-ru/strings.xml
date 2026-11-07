@@ -1423,4 +1423,5 @@
     <string name="search_origin_local">Локально</string>
     <string name="pause_resume_fade">Плавное затухание при паузе и возобновлении</string>
     <string name="pause_resume_fade_subtitle">Плавно уменьшает громкость при паузе и увеличивает при возобновлении</string>
+    <string name="home_global_discovery">Открытия со всего мира</string>
 </resources>

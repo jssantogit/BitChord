@@ -314,6 +314,35 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(home.flatMap { it.items }.all { it.videoId == null })
     }
 
+    @Test fun worldwideHomeKeepsGenreFormatsOnlyInGenreDetails() {
+        val samples = (1..12).map { index ->
+            val sample = if (index % 2 == 0) recent else another
+            sample.copy(
+                musicBrainzId = "50000000-0000-4000-8000-${index.toString().padStart(12, '0')}",
+                title = "Worldwide discovery ${index}",
+            )
+        }
+        val rows = canonicalPublicReleaseRows(samples, "2026-10-01", "2026-11-06")
+        val playlist = ListenBrainzPublicPlaylist(
+            "60000000-0000-4000-8000-000000000001",
+            "Global Discoveries", "ListenBrainz", null,
+        )
+        val home = canonicalHomeWithWorldwideEditorial(
+            emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",
+            null, "2026-11-06",
+            publicPlaylists = canonicalPublicPlaylistShelf(
+                "Playlists para descobrir", listOf(playlist),
+            ),
+            globalDiscoveryHeading = "Descobertas do mundo",
+        )
+        assertEquals(listOf("Lançamentos", "Escolha a dedo",
+            "Playlists para descobrir", "Descobertas do mundo", "Mais"),
+            home.map { it.title })
+        assertTrue(home.none { it.title == "Álbuns" || it.title == "Singles e EPs" })
+        val ids = home.flatMap { it.items }.mapNotNull { it.browseId }
+        assertEquals(ids.size, ids.distinct().size)
+    }
+
     @Test fun worldwideHomeUsesDistinctReleasesAndFourEditorialSectionsWhenAvailable() {
         val all = (1..40).map { index ->
             val id = "00000000-0000-4000-8002-${index.toString().padStart(12, '0')}"

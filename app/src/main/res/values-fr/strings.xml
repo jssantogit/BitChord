@@ -1392,4 +1392,5 @@
     <string name="search_origin_local">Local</string>
     <string name="pause_resume_fade">Fondu à la pause et à la reprise</string>
     <string name="pause_resume_fade_subtitle">Diminue progressivement le volume à la pause et le rétablit à la reprise</string>
+    <string name="home_global_discovery">Découvertes du monde</string>
 </resources>

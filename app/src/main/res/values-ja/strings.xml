@@ -1369,4 +1369,5 @@
     <string name="search_origin_local">ローカル</string>
     <string name="pause_resume_fade">一時停止・再開時のフェード</string>
     <string name="pause_resume_fade_subtitle">一時停止時に音量を徐々に下げ、再開時に徐々に上げます</string>
+    <string name="home_global_discovery">世界の音楽との出会い</string>
 </resources>

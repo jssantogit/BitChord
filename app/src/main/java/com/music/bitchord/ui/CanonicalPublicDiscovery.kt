@@ -305,6 +305,8 @@ internal fun canonicalHomeWithWorldwideEditorial(
     community: HomeShelf? = null,
     personal: HomeShelf? = null,
     publicPlaylists: HomeShelf? = null,
+    /** Home worldwide discovery does not repeat the genre discography grid. */
+    globalDiscoveryHeading: String? = null,
 ): List<HomeShelf> {
     val shelves = localShelves.toMutableList()
     // Remove visual duplicates from an editorial feed, not from the canonical
@@ -409,17 +411,27 @@ internal fun canonicalHomeWithWorldwideEditorial(
         canonicalNativeBrowseId(it) in selected ||
             it.musicBrainzId == reservedMore?.musicBrainzId
     }
-    appendPublic(albumsHeading,
-        listOfNotNull(reservedAlbum) + unused.filter { canonicalEditorialReleaseType(it) == "Album" })
-    val unusedSingles = publicRows.filterNot {
-        canonicalNativeBrowseId(it) in selected ||
-            it.musicBrainzId == reservedMore?.musicBrainzId
-    }
-    if (publicPlaylists?.items.isNullOrEmpty()) {
-        appendPublic(singlesHeading,
-            listOfNotNull(reservedSingle) + unusedSingles.filter {
-                canonicalEditorialReleaseType(it) in setOf("EP", "Single")
+    if (globalDiscoveryHeading != null) {
+        // Unlike genre detail, Home mixes verified release types in a single
+        // worldwide discovery shelf. Reserve one album and one single when
+        // available, and never reuse the dedicated More item.
+        appendPublic(globalDiscoveryHeading,
+            listOfNotNull(reservedAlbum, reservedSingle) + unused)
+    } else {
+        appendPublic(albumsHeading,
+            listOfNotNull(reservedAlbum) + unused.filter {
+                canonicalEditorialReleaseType(it) == "Album"
             })
+        val unusedSingles = publicRows.filterNot {
+            canonicalNativeBrowseId(it) in selected ||
+                it.musicBrainzId == reservedMore?.musicBrainzId
+        }
+        if (publicPlaylists?.items.isNullOrEmpty()) {
+            appendPublic(singlesHeading,
+                listOfNotNull(reservedSingle) + unusedSingles.filter {
+                    canonicalEditorialReleaseType(it) in setOf("EP", "Single")
+                })
+        }
     }
     appendPublic(moreHeading,
         listOfNotNull(reservedMore) + publicRows.filterNot { canonicalNativeBrowseId(it) in selected })

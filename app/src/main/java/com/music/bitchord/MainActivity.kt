@@ -998,6 +998,7 @@ private fun BitChordApp(
     val canonicalPublicAlbumsHeading = stringResource(R.string.albums)
     val canonicalPublicSinglesHeading = stringResource(R.string.canonical_singles_eps)
     val canonicalPublicMoreHeading = stringResource(R.string.more)
+    val canonicalHomeGlobalDiscoveryHeading = stringResource(R.string.home_global_discovery)
     val popularityCandidateIds = remember(cachedCanonicalRows) {
         canonicalPublicPopularityCandidates(cachedCanonicalRows)
     }
@@ -1153,7 +1154,7 @@ private fun BitChordApp(
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
         canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
         worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
-        canonicalHomePublicPlaylists, canonicalFeedDate,
+        canonicalHomePublicPlaylists, canonicalHomeGlobalDiscoveryHeading, canonicalFeedDate,
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
@@ -1169,6 +1170,7 @@ private fun BitChordApp(
             community = canonicalCommunityShelf,
             personal = canonicalPersonalShelf,
             publicPlaylists = canonicalHomePublicPlaylists,
+            globalDiscoveryHeading = canonicalHomeGlobalDiscoveryHeading,
         )
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
