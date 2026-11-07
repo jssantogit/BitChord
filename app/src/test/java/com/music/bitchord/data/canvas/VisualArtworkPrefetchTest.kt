@@ -19,7 +19,7 @@ class VisualArtworkPrefetchTest {
         assertEquals(
             listOf("artist.jpg", "album1.jpg", "album2.jpg"),
             planVisualArtworkPrefetch(cards, maxRequests = 3)
-                .map { it.url.substringAfterLast('/') },
+                .map { requireNotNull(it.url).substringAfterLast('/') },
         )
     }
 
