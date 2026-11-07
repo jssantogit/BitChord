@@ -513,6 +513,11 @@ fun DetailScreen(
     // on an album that was closed and reopened would be a page that appears to
     // have lost most of its tracks.
     var query by rememberSaveable(page.browseId) { mutableStateOf("") }
+    val canonicalVisibleTrackIndices = remember(canonicalTracks, query, songSort) {
+        canonicalMetadataAlbumVisibleIndices(
+            canonicalTracks.map { it.title to it.subtitle }, query, songSort,
+        )
+    }
     // Whether the field still owes the keyboard an appearance. Held here rather
     // than in the field, which is a row in a lazy list: scrolled out of sight it
     // is disposed, and a field that asks for focus every time it is composed
@@ -835,9 +840,10 @@ fun DetailScreen(
                     // tracklist. A metadata-only row is simply non-playable;
                     // no synthetic video IDs or technical warning labels.
                     itemsIndexed(
-                        items = canonicalTracks,
-                        key = { _, row -> "canonical:track:${row.trackMbid ?: row.musicBrainzId}" },
-                    ) { index, row ->
+                        items = canonicalVisibleTrackIndices,
+                        key = { _, original -> "canonical:track:$original" },
+                    ) { index, originalIndex ->
+                        val row = canonicalTracks[originalIndex]
                         val canPlay = row.hasCatalogedAsset && onCanonicalTrackPlay != null
                         NativeDetailTrackRowLayout(
                             onClick = if (canPlay) ({
@@ -846,7 +852,7 @@ fun DetailScreen(
                             textGap = PAGE_GUTTER,
                             leading = {
                                 NativeDetailTrackNumber(
-                                    number = index + 1,
+                                    number = originalIndex + 1,
                                     color = palette.onBackgroundVariant,
                                 )
                             },
@@ -873,7 +879,7 @@ fun DetailScreen(
                             rating = {},
                             showRatingSlot = false,
                         )
-                        if (index < canonicalTracks.lastIndex) {
+                        if (index < canonicalVisibleTrackIndices.lastIndex) {
                             HorizontalDivider(
                                 modifier = Modifier.padding(start = NUMBERED_ROW_DIVIDER_INSET),
                                 thickness = 0.5.dp,
