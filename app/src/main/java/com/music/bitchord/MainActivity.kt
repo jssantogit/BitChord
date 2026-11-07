@@ -4039,6 +4039,7 @@ private fun BitChordApp(
                                         )
                                     },
                                     localPlaylists = localPlaylistItems,
+                                    onOpenCatalog = { id -> viewModel.openCanonicalNativeShelfItem(id) },
                                     onOpenPlaylist = { playlistId ->
                                         // Public ListenBrainz playlists keep their own
                                         // identity and open the native online adapter.

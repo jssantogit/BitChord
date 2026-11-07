@@ -187,11 +187,13 @@ internal fun CanonicalPinnedLibraryHomeSection(
         com.music.bitchord.data.listening.CanonicalSmartFilterContext,
     ) -> Unit,
     onOpenPlaylist: (String) -> Unit = {},
+    onOpenCatalog: (String) -> Unit = {},
     localPlaylists: List<ShelfItem> = emptyList(),
 ) {
     CanonicalPinnedLibraryShelf(
         refreshRequested = refreshRequested,
         onOpenPlaylist = onOpenPlaylist,
+        onOpenCatalog = onOpenCatalog,
         localPlaylists = localPlaylists,
         onOpen = { pin ->
             when (val target = canonicalLibraryPinOpenTarget(pin)) {
@@ -213,6 +215,7 @@ internal fun CanonicalPinnedLibraryShelf(
     onOpen: (CanonicalLibraryPin) -> Unit,
     refreshRequested: Boolean = false,
     onOpenPlaylist: (String) -> Unit = {},
+    onOpenCatalog: (String) -> Unit = {},
     localPlaylists: List<ShelfItem> = emptyList(),
 ) {
     val context = LocalContext.current.applicationContext
@@ -220,7 +223,9 @@ internal fun CanonicalPinnedLibraryShelf(
     val pins by repo.pins.collectAsStateWithLifecycle()
     val playlistPinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
     val playlistPins by playlistPinRepo.pins.collectAsStateWithLifecycle()
-    if (pins.isEmpty() && playlistPins.isEmpty()) return
+    val catalogPinRepo = remember(context) { CatalogMetadataPinRepository.get(context) }
+    val catalogPins by catalogPinRepo.pins.collectAsStateWithLifecycle()
+    if (pins.isEmpty() && playlistPins.isEmpty() && catalogPins.isEmpty()) return
 
     val smartRepo = remember(context) {
         SmartPlaylistV2DefinitionRepository(
@@ -301,13 +306,17 @@ internal fun CanonicalPinnedLibraryShelf(
     var expanded by remember { mutableStateOf(false) }
     var optionsFor by remember { mutableStateOf<CanonicalLibraryPin?>(null) }
     var playlistOptionsFor by remember { mutableStateOf<LibraryPlaylistPin?>(null) }
+    var catalogOptionsFor by remember { mutableStateOf<CatalogMetadataPin?>(null) }
+    var ratingCatalogFor by remember { mutableStateOf<CatalogMetadataPin?>(null) }
     var playlistSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
-    // Both identity families share one 3-column Library shelf. A playlist ID
-    // is never passed through the canonical Recording/Release/Artist pin store.
-    val items: List<Pair<PinnedLibraryCard?, LibraryPlaylistPin?>> =
-        cards.map { it to null } + playlistPins.map { null to it }
+    // All three typed identity families share one native 3-column Library shelf.
+    // Metadata-only online items never masquerade as available MediaAssets.
+    val items: List<Triple<PinnedLibraryCard?, LibraryPlaylistPin?, CatalogMetadataPin?>> =
+        cards.map { Triple(it, null, null) } +
+        playlistPins.map { Triple(null, it, null) } +
+        catalogPins.map { Triple(null, null, it) }
     val visible = if (expanded) items else items.take(6)
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -324,7 +333,7 @@ internal fun CanonicalPinnedLibraryShelf(
         }
         visible.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                row.forEach { (card, playlist) ->
+                row.forEach { (card, playlist, catalog) ->
                     Box(Modifier.weight(1f)) {
                         if (card != null) {
                             NativeLibraryEntityCard(
@@ -409,6 +418,19 @@ internal fun CanonicalPinnedLibraryShelf(
                                     })
                                 },
                             )
+                        } else if (catalog != null) {
+                            NativeLibraryEntityCard(
+                                title = catalog.title,
+                                subtitle = catalog.subtitle.ifBlank {
+                                    if (catalog.browseId.startsWith("catalog:ARTIST:")) "Artista"
+                                    else "Álbum"
+                                },
+                                imageUrl = catalog.artworkUrl,
+                                isArtist = catalog.browseId.startsWith("catalog:ARTIST:"),
+                                onClick = { onOpenCatalog(catalog.browseId) },
+                                onMore = { catalogOptionsFor = catalog },
+                                onLongPress = { catalogOptionsFor = catalog },
+                            )
                         }
                     }
                 }
@@ -419,6 +441,33 @@ internal fun CanonicalPinnedLibraryShelf(
             TextButton(onClick = { expanded = !expanded }) {
                 Text(if (expanded) "Mostrar menos" else "Ver todos os fixados")
             }
+        }
+    }
+    catalogOptionsFor?.let { pin ->
+        ModalBottomSheet(
+            onDismissRequest = { catalogOptionsFor = null },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            Column(Modifier.fillMaxWidth().padding(PAGE_GUTTER)) {
+                Text(pin.title, style = MaterialTheme.typography.titleLarge)
+                TextButton(onClick = {
+                    catalogOptionsFor = null
+                    ratingCatalogFor = pin
+                }) { Text("Avaliar") }
+                TextButton(onClick = {
+                    catalogPinRepo.toggle(pin)
+                    catalogOptionsFor = null
+                }) { Text("Desafixar da Biblioteca") }
+            }
+        }
+    }
+    ratingCatalogFor?.let { pin ->
+        canonicalCatalogEntityRatingTarget(pin.browseId)?.let { target ->
+            CanonicalCatalogEntityRatingDialog(
+                target = target,
+                title = if (target.entityType == "ARTIST") "Avaliar artista" else "Avaliar álbum",
+                onDismiss = { ratingCatalogFor = null },
+            )
         }
     }
     optionsFor?.let { pin ->
