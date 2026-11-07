@@ -16,6 +16,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.platform.LocalContext
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.metadata.CoverArtArchive
+import com.music.bitchord.data.catalog.metadata.CoverArtSize
+import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
+import com.music.bitchord.ui.loadCanonicalCoversProgressively
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -36,6 +47,18 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.theme.ArtworkPalette
 
+/** Only a confirmed Release MBID can supply the front for a recording.
+ * A title/artist match would risk showing the wrong edition's cover. */
+internal fun nativePublicTopCoverReleaseIds(
+    rows: List<CanonicalCatalogSearchRow>,
+): List<String> = rows.asSequence()
+    .filter { it.artworkUri.isNullOrBlank() }
+    .mapNotNull { it.coverReleaseMbid }
+    .filter(String::isNotBlank)
+    .distinct()
+    .take(10)
+    .toList()
+
 /**
  * Online rank and Library tracks share the native track row geometry. The
  * online adapter never promotes a Recording MBID into a playable asset or
@@ -52,6 +75,33 @@ internal fun NativeArtistPublicTopSection(
     val exact = rows.filter {
         it.kind == CanonicalSearchKind.RECORDING &&
             it.artistScopeMbid?.equals(artistMbid, ignoreCase = true) == true
+    }
+    val context = LocalContext.current.applicationContext
+    val coverArt = remember(context) {
+        CoverArtArchive(
+            store = RoomMusicBrainzCoverArtStore(
+                CanonicalCatalogDatabase.get(context).catalogDao(),
+            ),
+        )
+    }
+    val coverIds = nativePublicTopCoverReleaseIds(exact)
+    val recoveredCovers by produceState(
+        initialValue = emptyMap<String, String>(), key1 = coverIds,
+    ) {
+        if (coverIds.isEmpty()) return@produceState
+        loadCanonicalCoversProgressively(
+            keys = coverIds,
+            maxConcurrent = 2,
+            fetch = { edition ->
+                withContext(Dispatchers.IO) {
+                    try {
+                        coverArt.findCover(edition, null, CoverArtSize.THUMBNAIL)
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                      catch (_: Exception) { null }
+                }
+            },
+            publish = { batch -> value = value + batch },
+        )
     }
     NativeArtistTracksShelf(
         title = stringResource(R.string.top_songs),
@@ -75,7 +125,8 @@ internal fun NativeArtistPublicTopSection(
                         .background(palette.onBackground.copy(alpha = 0.08f)),
                 ) {
                     CoverPlaceholder(Icons.Rounded.MusicNote, Modifier.fillMaxSize())
-                    recording.artworkUri?.takeIf(String::isNotBlank)?.let { art ->
+                    (recording.artworkUri?.takeIf(String::isNotBlank)
+                        ?: recoveredCovers[recording.coverReleaseMbid])?.let { art ->
                         AsyncImage(
                             model = art.artworkAt(ROW_ART_PX),
                             contentDescription = null,
