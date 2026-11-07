@@ -787,13 +787,18 @@ private fun BitChordApp(
     val canonicalWorldwideReleases by viewModel.canonicalWorldwideReleases.collectAsStateWithLifecycle()
     val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
-    val canonicalPublicPlaylists by viewModel.canonicalPublicPlaylists.collectAsStateWithLifecycle()
-    val canonicalPublicPlaylistSearchStatus by viewModel.canonicalPublicPlaylistSearchStatus.collectAsStateWithLifecycle()
-    val canonicalPublicPlaylistDetail by viewModel.canonicalPublicPlaylistDetail.collectAsStateWithLifecycle()
     val canonicalExploreGenreCovers by viewModel.canonicalExploreGenreCovers.collectAsStateWithLifecycle()
     var activeCanonicalGenre by remember {
         mutableStateOf<com.music.bitchord.ui.CanonicalExploreGenre?>(null)
     }
+    val publicPlaylistUi = com.music.bitchord.ui.rememberCanonicalPublicPlaylistUi(
+        viewModel = viewModel,
+        homeSelected = selectedTab == TAB_HOME,
+        exploreSelected = selectedTab == TAB_EXPLORE,
+        genreTag = activeCanonicalGenre?.tag,
+    )
+    val canonicalPublicPlaylists = publicPlaylistUi.playlists
+    val canonicalPublicPlaylistDetail = publicPlaylistUi.detail
     val canonicalPersonalRecommendations by viewModel.canonicalExplorePersonalRecommendations.collectAsStateWithLifecycle()
     val listenBrainzAccountEnabled by AppSettings.listenBrainzEnabled.collectAsStateWithLifecycle()
     val listenBrainzAccountToken by AppSettings.listenBrainzToken.collectAsStateWithLifecycle()
@@ -1011,16 +1016,6 @@ private fun BitChordApp(
             viewModel.loadCanonicalPersonalRecommendations()
         }
     }
-    LaunchedEffect(selectedTab, activeCanonicalGenre?.tag) {
-        when (selectedTab) {
-            TAB_HOME -> viewModel.loadCanonicalPublicPlaylists()
-            TAB_EXPLORE -> {
-                val genre = activeCanonicalGenre
-                if (genre == null) viewModel.loadCanonicalExploreGenreCovers()
-                else viewModel.loadCanonicalPublicPlaylists(genre.tag)
-            }
-        }
-    }
     val canonicalFeedDate = remember {
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
             .format(java.util.Date())
@@ -1151,22 +1146,8 @@ private fun BitChordApp(
     ) {
         canonicalWeeklyCommunityShelf?.copy(title = canonicalTrendingHeading)
     }
-    val canonicalHomePublicPlaylists = remember(canonicalPublicPlaylists) {
-        com.music.bitchord.ui.canonicalPublicPlaylistShelf(
-            "Playlists para descobrir", canonicalPublicPlaylists["home"].orEmpty(),
-        )
-    }
-    val canonicalHomePlaylistNotice = remember(
-        canonicalPublicPlaylistSearchStatus, canonicalHomePublicPlaylists,
-    ) {
-        if (canonicalHomePublicPlaylists != null) null else when (
-            val state = canonicalPublicPlaylistSearchStatus["home"]
-        ) {
-            is UiState.Error -> state.message
-            is UiState.Success -> "Nenhuma playlist pública de descoberta encontrada."
-            else -> "Procurando playlists públicas..."
-        }
-    }
+    val canonicalHomePublicPlaylists = publicPlaylistUi.homeShelf
+    val canonicalHomePlaylistNotice = publicPlaylistUi.homeNotice
     val canonicalHomeDisplayShelves = remember(
         canonicalHomeShelves, canonicalWorldwideReleases,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
@@ -1195,15 +1176,7 @@ private fun BitChordApp(
         canonicalDiscoveryCatalog is UiState.Loading || canonicalWorldwideLoading -> UiState.Loading
         else -> UiState.Error("Não foi possível carregar lançamentos públicos. Verifique a conexão e tente novamente.")
     }
-    val canonicalGenrePlaylistNotice = activeCanonicalGenre?.tag?.let { tag ->
-        if (!canonicalPublicPlaylists[tag].isNullOrEmpty()) null else when (
-            val state = canonicalPublicPlaylistSearchStatus[tag]
-        ) {
-            is UiState.Error -> state.message
-            is UiState.Success -> "Nenhuma playlist pública encontrada para este gênero."
-            else -> "Procurando playlists deste gênero..."
-        }
-    }
+    val canonicalGenrePlaylistNotice = publicPlaylistUi.genreNotice
     // The genre's public playlists are an independent ListenBrainz feed.
     // MusicBrainz failure must not hide a real playlist that has already loaded.
     val activeGenrePlaylists = activeCanonicalGenre?.tag?.let { tag ->
