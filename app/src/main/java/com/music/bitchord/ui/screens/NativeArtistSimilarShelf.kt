@@ -27,6 +27,8 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.net.URI
+import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.VisualStillMedia
 import java.util.Locale
 
 private val similarArtistClient by lazy { ListenBrainzSimilarArtistsClient() }
@@ -41,9 +43,16 @@ internal fun nativeArtistSimilarPhotoTargets(
 ): List<ListenBrainzSimilarArtist> =
     artists.distinctBy { it.mbid.lowercase(Locale.ROOT) }.take(8)
 
-internal fun nativeArtistSimilarPortraitUri(url: String?): String? {
+internal fun nativeArtistSimilarPortraitUri(
+    url: String?, trustedSavedUri: String? = null,
+): String? {
     if (url.isNullOrBlank() || url.length > 2_000) return null
     val uri = runCatching { URI(url) }.getOrNull() ?: return null
+    // Exact provider-validated still saved by our own VisualStillMedia store:
+    // never accept an arbitrary file:// value from metadata or a remote API.
+    if (uri.scheme.equals("file", ignoreCase = true)) {
+        return url.takeIf { trustedSavedUri != null && it == trustedSavedUri }
+    }
     val host = uri.host?.lowercase(Locale.ROOT) ?: return null
     return url.takeIf {
         uri.scheme.equals("https", ignoreCase = true) &&
@@ -59,6 +68,7 @@ internal suspend fun resolveNativeSimilarPortraits(
     artists: List<ListenBrainzSimilarArtist>,
     lookup: suspend (String) -> String?,
     onResolved: (String, String) -> Unit,
+    trustedSavedUri: (String) -> String? = { null },
 ) = coroutineScope {
     val permits = Semaphore(2)
     artists.map { candidate ->
@@ -67,7 +77,9 @@ internal suspend fun resolveNativeSimilarPortraits(
                 permits.withPermit { lookup(candidate.name) }
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { null }
-            nativeArtistSimilarPortraitUri(url)?.let { onResolved(candidate.mbid, it) }
+            nativeArtistSimilarPortraitUri(
+                url, trustedSavedUri = trustedSavedUri(candidate.name),
+            )?.let { onResolved(candidate.mbid, it) }
         }
     }.joinAll()
 }
@@ -103,6 +115,9 @@ internal fun NativeArtistSimilarShelf(
                 }
             },
             onResolved = { mbid, portrait -> value = value + (mbid to portrait) },
+            trustedSavedUri = { name ->
+                AppleArtistArtRepository.savedHeroFile(name)?.toURI()?.toString()
+            },
         )
     }
     if (visible.isEmpty()) return
