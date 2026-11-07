@@ -161,6 +161,14 @@ data class CanonicalCatalogDetailPage(
     val totalCount: Int? = null,
 )
 
+/** A verified public playlist row is metadata, not a playable Song. */
+data class CanonicalPublicPlaylistSearchRow(
+    val mbid: String,
+    val title: String,
+    val creator: String,
+    val artworkUri: String?,
+)
+
 @Composable
 fun SearchScreen(
     query: String,
@@ -220,6 +228,8 @@ fun SearchScreen(
     /** Public MusicBrainz discovery shows metadata-only rows with no play actions. */
     searchingCanonical: Boolean = false,
     canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
+    canonicalPublicPlaylists: UiState<List<CanonicalPublicPlaylistSearchRow>>? = null,
+    onCanonicalPlaylistOpen: (CanonicalPublicPlaylistSearchRow) -> Unit = {},
     canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
     onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
     onCanonicalBack: () -> Unit = {},
@@ -340,6 +350,7 @@ fun SearchScreen(
                     available = if (searchingCanonical) listOf(
                         SearchFilter.ALL, SearchFilter.SONGS,
                         SearchFilter.ALBUMS, SearchFilter.ARTISTS,
+                        SearchFilter.PLAYLISTS,
                     ) else SearchFilter.entries,
                 )
             }
@@ -372,6 +383,10 @@ fun SearchScreen(
                             onClear = onHistoryClear,
                         )
                     }
+                } else if (filter == SearchFilter.PLAYLISTS && canonicalDetail == null) {
+                    canonicalPublicPlaylistSearchResults(
+                        canonicalPublicPlaylists, onCanonicalPlaylistOpen,
+                    )
                 } else canonicalMusicBrainzResults(
                     query, canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
                     onCanonicalLoadMore, canonicalLoadingMore,
@@ -562,6 +577,35 @@ fun SearchScreen(
  * not that the user owns an audio rendition. Keep the UI strictly non-playable
  * until canonical availability resolution is wired for each Recording MBID.
  */
+private fun LazyListScope.canonicalPublicPlaylistSearchResults(
+    results: UiState<List<CanonicalPublicPlaylistSearchRow>>?,
+    onOpen: (CanonicalPublicPlaylistSearchRow) -> Unit,
+) {
+    when (results) {
+        null -> item(key = "public-playlists:hint") {
+            MessageState("Pesquise playlists públicas por nome.")
+        }
+        UiState.Loading -> songListSkeleton(keyPrefix = "public-playlists:search")
+        is UiState.Error -> item(key = "public-playlists:error") { MessageState(results.message) }
+        is UiState.Success -> if (results.data.isEmpty()) {
+            item(key = "public-playlists:empty") { MessageState("Nenhuma playlist pública encontrada.") }
+        } else items(
+            items = results.data,
+            key = { "public-playlist:${it.mbid}" },
+        ) { playlist ->
+            NativeSearchResultRow(
+                row = NativeSearchRowUi(
+                    title = playlist.title,
+                    subtitle = playlist.creator,
+                    artworkUri = playlist.artworkUri,
+                    artistPortrait = false,
+                ),
+                onClick = { onOpen(playlist) },
+            )
+        }
+    }
+}
+
 private fun LazyListScope.canonicalMusicBrainzResults(
     query: String,
     results: UiState<List<CanonicalCatalogSearchRow>>?,
