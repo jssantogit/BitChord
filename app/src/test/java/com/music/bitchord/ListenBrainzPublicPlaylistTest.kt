@@ -58,7 +58,7 @@ class ListenBrainzPublicPlaylistTest {
             {"title":"Two","creator":"Singer","identifier":"https://youtube.com/abc"},
             {"title":"Three","creator":"Band","identifier":[
               "https://musicbrainz.org/recording/$pop", "https://example.org/other"]}
-          ]}}}"""
+          ]}}"""
         val actual = parseListenBrainzPublicPlaylistDetail(body, selected)!!
         assertEquals(listOf("One", "Two", "Three"), actual.tracks.map { it.title })
         assertEquals(listOf(song, null, pop), actual.tracks.map { it.recordingMbid })
