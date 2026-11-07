@@ -51,4 +51,30 @@ class NativeArtistPublicTopSectionTest {
         compose.onNodeWithText("Canonical recording").performClick()
         compose.runOnIdle { assertEquals(listOf(correct.musicBrainzId), opened) }
     }
+
+    @Test fun sampledPopularityUsesTopTracksTitleAndDisclosesPartialRanking() {
+        val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
+        val row = CanonicalCatalogSearchRow(
+            musicBrainzId = "13dd61c7-ce73-4e97-9f0c-9f0e53144411",
+            kind = CanonicalSearchKind.RECORDING,
+            title = "Sample recording",
+            subtitle = "Artist",
+            artistScopeMbid = artist,
+        )
+        compose.setContent {
+            MaterialTheme {
+                NativeArtistPublicTopSection(
+                    artistMbid = artist,
+                    rows = listOf(row),
+                    palette = themeArtworkPalette(),
+                    sampled = true,
+                    onRecordingOpen = {},
+                )
+            }
+        }
+        compose.onNodeWithText("Populares no catálogo").assertDoesNotExist()
+        compose.onNodeWithText("Amostra de gravações com contagens verificadas").assertExists()
+        compose.onNodeWithText("Sample recording").assertExists()
+    }
+
 }
