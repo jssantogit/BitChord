@@ -46,7 +46,8 @@ internal fun nativeAlbumEditorialFooter(
     val verified = evidence as? DiscogsEditionEnrichment.Verified ?: return null
     val display = DiscogsEditionPresentation.from(verified, nowMillis) ?: return null
     val lines = buildList {
-        display.labelLines.take(2).forEach { label ->
+        // Keep the first edition label and avoid a wall of credits.
+        display.labelLines.take(1).forEach { label ->
             add(("Gravadora · " + label).take(320))
         }
         display.formats.take(4).filter { it.isNotBlank() }.let { formats ->
