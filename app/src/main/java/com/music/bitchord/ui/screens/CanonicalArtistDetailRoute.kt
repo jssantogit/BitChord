@@ -61,6 +61,15 @@ internal fun CanonicalArtistDetailRoute(
     val nativeReleases by rememberCanonicalArtistReleases(
         tracks, sourceKeys, selectedSourceKey,
     )
+    // Preserve the exact Recording→Release sleeve when opening the shared
+    // action sheet from a nested artist detail; the root album map may be
+    // scoped to Artists and therefore cannot resolve the release cover.
+    val releaseOptionsWithArtwork: (ReleaseEntity) -> Unit = { release ->
+        val cover = nativeReleases.artwork[release.id]?.artworkUri
+        onReleaseOptions(if (cover.isNullOrBlank()) release else release.copy(
+            artworkUri = cover,
+        ))
+    }
 
     var appleArt by remember(artistName) {
         mutableStateOf(AppleArtistArtRepository.cached(artistName))
@@ -86,7 +95,7 @@ internal fun CanonicalArtistDetailRoute(
         albumPlaylistToken = albumPlaylistToken,
         onNestedDetailChanged = onNestedDetailChanged,
         onQueryChange = onQueryChange,
-        onReleaseOptions = onReleaseOptions,
+        onReleaseOptions = releaseOptionsWithArtwork,
         onNestedAlbumAddToPlaylist = onNestedAlbumAddToPlaylist,
     )
     val releaseRecordingIds by rememberCanonicalArtistNestedRecordings(
@@ -146,7 +155,7 @@ internal fun CanonicalArtistDetailRoute(
         onTrackPlay = onTrackPlay,
         onTrackEditRating = onTrackEditRating,
         onTrackOptions = onTrackOptions,
-        onReleaseOptions = onReleaseOptions,
+        onReleaseOptions = releaseOptionsWithArtwork,
         onRateArtist = onRateArtist,
         onPlayAll = onPlayAll,
     )
