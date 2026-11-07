@@ -72,11 +72,14 @@ internal fun parseListenBrainzArtistTopRecordings(
             (row.listens == 0L && row.listeners == 0L)
         ) continue
         val listens = row.listens ?: return ListenBrainzArtistTopParseResult.Invalid
-        val listeners = row.listeners ?: return ListenBrainzArtistTopParseResult.Invalid
-        if (listens < 0 || listeners < 0 || listeners > listens) {
+        // Listen counts can be published without a unique-listener count.
+        // Missing listeners are unknown, never zero and never a reason to
+        // discard an otherwise verified source ranking.
+        val listeners = row.listeners
+        if (listens < 0 || (listeners != null && (listeners < 0 || listeners > listens))) {
             return ListenBrainzArtistTopParseResult.Invalid
         }
-        if (listens > 0 && listeners > 0) {
+        if (listens > 0 && (listeners == null || listeners > 0)) {
             val coverRelease = row.caaReleaseMbid?.lowercase(Locale.ROOT)
                 ?.takeIf(TOP_ARTIST_MBID::matches)
             val coverId = row.caaId?.takeIf { it > 0L }
@@ -90,6 +93,6 @@ internal fun parseListenBrainzArtistTopRecordings(
     }
     return ListenBrainzArtistTopParseResult.Success(accepted.sortedWith(
         compareByDescending<ListenBrainzArtistTopRecording> { it.listens }
-            .thenByDescending { it.listeners }.thenBy { it.recordingMbid },
+            .thenByDescending { it.listeners ?: -1L }.thenBy { it.recordingMbid },
     ))
 }
