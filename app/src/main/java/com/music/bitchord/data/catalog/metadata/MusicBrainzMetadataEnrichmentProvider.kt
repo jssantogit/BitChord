@@ -236,7 +236,7 @@ internal class MusicBrainzMetadataEnrichmentProvider(
                     release.id.validMbidOrNull() != null &&
                     release.group?.primaryType?.lowercase(java.util.Locale.ROOT) in
                         setOf("album", "single", "ep") &&
-                    release.group.secondaryTypes.orEmpty().none {
+                    release.group?.secondaryTypes.orEmpty().none {
                         it.lowercase(java.util.Locale.ROOT) in disallowed
                     }
             }
