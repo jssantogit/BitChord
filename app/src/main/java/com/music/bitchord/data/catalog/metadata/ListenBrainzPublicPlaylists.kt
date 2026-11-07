@@ -263,7 +263,7 @@ internal fun parseListenBrainzPublicPlaylistSearch(
             ?.let(::publicPlaylistPlainText)
         ListenBrainzPublicPlaylist(mbid, title, creator, description)
     }.filter { aliases == null || matchesPlaylistWords(it, aliases) }
-        .distinctBy { it.mbid }.take(12).toList()
+        .distinctBy { it.mbid }.take(24).toList()
 }
 
 /** Read-only JSPF; recording IDs are validated links, not inferred by title. */
