@@ -231,7 +231,7 @@ private fun publicGenreAliases(tag: String): List<String> = when (tag) {
  * Search and detail still allow legitimate one-word titles. */
 internal fun isDescriptivePublicPlaylistTitle(title: String): Boolean {
     val clean = title.trim()
-    return clean.length >= 5 && clean.split(Regex("""\\s+"""))
+    return clean.length >= 5 && clean.split(Regex("""\s+"""))
         .count { it.any(Char::isLetterOrDigit) } >= 2
 }
 
