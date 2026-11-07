@@ -394,4 +394,52 @@ class ListenBrainzPublicPlaylistTest {
         assertEquals(22, parsed.map { it.mbid }.distinct().size)
     }
 
+
+    @Test fun homeSkipsOnlyGenericFuzzyHitsAndRetriesDescriptiveQuery() = runBlocking {
+        val calls = mutableListOf<String>()
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    calls += query
+                    return ListenBrainzPublicPlaylistHttp(200, if (query == "music")
+                        """{"playlists":[{"playlist_mbid":"$rock","title":"Music","public":true},
+                            {"playlist_mbid":"$pop","title":"Rock","public":true}]}"""
+                    else """{"playlists":[{"playlist_mbid":"$rock",
+                        "title":"Classic rock essentials","public":true}]}""")
+                }
+                override suspend fun detail(mbid: String) =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(listOf("Classic rock essentials"),
+            client.searchHome()!!.map { it.title })
+        assertEquals(listOf("music", "essentials"), calls)
+    }
+
+    @Test fun publicTypedSearchUsesWiderCandidatePoolWithoutShowingFuzzyFalseMatches() = runBlocking {
+        val calls = mutableListOf<String>()
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    calls += "narrow"
+                    return ListenBrainzPublicPlaylistHttp(200, """{"playlists":[]}""")
+                }
+                override suspend fun searchWide(query: String): ListenBrainzPublicPlaylistHttp {
+                    calls += "wide"
+                    return ListenBrainzPublicPlaylistHttp(200, """{"playlists":[
+                      {"playlist_mbid":"$pop","title":"RANDOM fake collection","public":true},
+                      {"playlist_mbid":"$rock","title":"Best ILLIT songs","public":true}
+                    ]}""")
+                }
+                override suspend fun detail(mbid: String) =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(listOf(rock), client.searchPublicQuery("ILLIT").map { it.mbid })
+        assertEquals(listOf("wide"), calls)
+        assertTrue(client.searchPublicQuery("ab").isEmpty())
+    }
+
 }
