@@ -907,6 +907,7 @@ private fun BitChordApp(
     val detailSongSorts by AppSettings.detailSongSorts.collectAsStateWithLifecycle()
     val songSort = detail?.browseId?.let { detailSongSorts[it] } ?: SongSort.DEFAULT
     var songSortMenuOpen by remember { mutableStateOf(false) }
+    var catalogAlbumOverflowOpen by remember(detail?.browseId) { mutableStateOf(false) }
     // A device folder's equivalents — its sort and whether it is a grid —
     // kept apart for Downloads and shared by every other folder, as they
     // always were. Up here because both the page and the top bar's menu read
@@ -4665,7 +4666,9 @@ private fun BitChordApp(
                             // Shuffle / Play / Add.
                             if ((isReleaseDetail || isLocalDetail) && detail != null) {
                                 val releaseSongs = (detail.songs as? UiState.Success)?.data.orEmpty()
-                                if (releaseSongs.isNotEmpty()) {
+                                val isOnlineAlbumMetadata = detail.browseId.startsWith("catalog:RELEASE:") ||
+                                    detail.browseId.startsWith("catalog:RELEASE_GROUP:")
+                                if (releaseSongs.isNotEmpty() || isOnlineAlbumMetadata) {
                                     NativeCollectionSearchAction(
                                         searching = detailSearching,
                                         contentDescription = stringResource(
@@ -4686,7 +4689,22 @@ private fun BitChordApp(
                                         if (isLocalDetail) folderMenuOpen = true else songSortMenuOpen = true
                                     },
                                 )
-                                if (isReleaseDetail && releaseSongs.isNotEmpty()) {
+                                if (isReleaseDetail && isOnlineAlbumMetadata) {
+                                    Box {
+                                        NativeCollectionOverflowAction(
+                                            contentDescription = stringResource(R.string.more),
+                                            onClick = { catalogAlbumOverflowOpen = true },
+                                        )
+                                        com.music.bitchord.ui.screens.CanonicalCatalogReleaseOverflowMenu(
+                                            browseId = detail.browseId,
+                                            title = detail.title,
+                                            subtitle = detail.subtitle.orEmpty(),
+                                            cover = detail.thumbnailUrl,
+                                            expanded = catalogAlbumOverflowOpen,
+                                            onDismiss = { catalogAlbumOverflowOpen = false },
+                                        )
+                                    }
+                                } else if (isReleaseDetail && releaseSongs.isNotEmpty()) {
                                     // The page's own tracks, in the order the page
                                     // shows them, so the sheet has them already and
                                     // Play, Shuffle and Open are the buttons beside
