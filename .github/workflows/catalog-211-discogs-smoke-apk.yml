@@ -1,0 +1,99 @@
+# PR #211 — approved personal Android smoke, no production publication.
+# This workflow exists only in the Discogs feature PR and fires when its
+# smoke request or workflow itself changes, or via workflow_dispatch.
+name: Discogs 211 Android native smoke APK
+
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - .github/workflows/catalog-211-discogs-smoke-apk.yml
+      - docs/plans/catalog-211-physical-smoke-request.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discogs-211-physical-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android-dev-debug:
+    name: Verify native Discogs and package A54 candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact Discogs PR HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify native integration and no legacy artist screen
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 8cd27a8d14d25e91460ad435da4f9595bb8e23b2 HEAD
+          test -f app/src/main/java/com/music/bitchord/ui/screens/NativeCanonicalNestedAlbumDetail.kt
+          test -f app/src/main/java/com/music/bitchord/ui/screens/NativeCanonicalAlbumContent.kt
+          ! test -e app/src/main/java/com/music/bitchord/ui/screens/CanonicalNativeArtistDetail.kt
+          grep -Fq 'editorialEvidence = nestedEditorialEvidence' app/src/main/java/com/music/bitchord/ui/screens/CanonicalArtistDetailRoute.kt
+          grep -Fq 'editorialEvidence = libraryEditorialEvidence' app/src/main/java/com/music/bitchord/ui/screens/CanonicalRemoteLibraryScreen.kt
+          grep -Fq 'discogsOnlineAlbumEditionMbid' app/src/main/java/com/music/bitchord/ui/screens/DetailScreen.kt
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle build cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure Android build
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" >> local.properties
+          chmod +x gradlew
+
+      - name: Gate by full Android unit tests
+        run: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+
+      - name: Gate by shared playback regression
+        run: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+
+      - name: Assemble installable unsigned-for-production dev debug APK
+        run: ./gradlew --no-daemon --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Record exact commit and APK SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'feature=Discogs edition evidence PR 211\n' > catalog-211-smoke-build.txt
+          printf 'commit=%s\n' "$(git rev-parse HEAD)" >> catalog-211-smoke-build.txt
+          printf 'target=Android Galaxy A54 physical smoke; dev debug only, not production signed\n' >> catalog-211-smoke-build.txt
+          find app/build/outputs/apk/dev/debug -name '*.apk' -type f -print -exec sha256sum '{}' \; >> catalog-211-smoke-build.txt
+          test -s catalog-211-smoke-build.txt
+
+      - name: Upload installable smoke candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-pr211-discogs-native-a54-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/dev/debug/*.apk
+            catalog-211-smoke-build.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-pr211-discogs-test-reports-${{ github.sha }}
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 7
