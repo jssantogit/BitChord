@@ -68,6 +68,58 @@ class ListenBrainzPublicPlaylistTest {
             body.replace("\"track\":", "\"different\":"), selected))
     }
 
+    @Test fun homePublicDiscoveryAcceptsVerifiedGlobalPlaylistsWithoutDiscoverInTitle() {
+        // Global Home discovery is not a genre nor a title search for the word
+        // 'discover'. The old word gate incorrectly discarded every result.
+        val found = parseListenBrainzPublicPlaylistSearch(response())!!
+        assertEquals(listOf(rock, pop), found.map { it.mbid })
+    }
+
+    @Test fun genreSearchFallsBackToVerifiedPhraseAfterFuzzyEmptyResult() = runBlocking {
+        val requests = mutableListOf<String>()
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    requests += query
+                    return ListenBrainzPublicPlaylistHttp(200, if (query == "metal") {
+                        """{"playlists":[]}"""
+                    } else {
+                        """{"playlists":[
+                          {"playlist_mbid":"$rock","title":"Heavy Metal Classics",
+                           "creator":"real-author","public":true},
+                          {"playlist_mbid":"$pop","title":"Heavy Metal Private",
+                           "public":false},
+                          {"playlist_mbid":"44444444-4444-4444-8444-444444444444",
+                           "title":"Metallurgy","public":true}
+                        ]}"""
+                    })
+                }
+                override suspend fun detail(mbid: String) =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(listOf(rock), client.searchGenre("metal")!!.map { it.mbid })
+        assertEquals(listOf("metal", "heavy metal"), requests)
+    }
+
+    @Test fun homeSearchCanDisplayRealCommunityListsOnFirstGeneralQuery() = runBlocking {
+        val queries = mutableListOf<String>()
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    queries += query
+                    return ListenBrainzPublicPlaylistHttp(200, response())
+                }
+                override suspend fun detail(mbid: String) =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(2, client.searchHome()!!.size)
+        assertEquals(listOf("music"), queries)
+    }
+
     @Test fun publicSearchWorksWithoutTokensAndRestrictsGenreQueries() = runBlocking {
         val requests = mutableListOf<String>()
         val fake = object : ListenBrainzPublicPlaylistTransport {

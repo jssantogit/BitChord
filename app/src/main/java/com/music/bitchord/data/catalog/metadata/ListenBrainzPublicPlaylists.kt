@@ -128,6 +128,27 @@ internal fun publicPlaylistGenreQuery(tag: String): String = when (tag) {
     else -> tag
 }
 
+/** Fuzzy search can return 200 with no relevant match. Retry a bounded,
+ * genre-specific phrase rather than mislabel unrelated playlists. */
+internal fun publicPlaylistGenreQueries(tag: String): List<String> = listOf(
+    publicPlaylistGenreQuery(tag),
+    when (tag) {
+        "metal" -> "heavy metal"
+        "rock" -> "rock music"
+        "pop" -> "pop music"
+        "hip-hop" -> "hip hop music"
+        "rnb" -> "rhythm and blues"
+        "k-pop" -> "kpop"
+        "electronic" -> "electronic music"
+        "classical" -> "classical music"
+        "jazz" -> "jazz music"
+        "folk" -> "folk music"
+        "ambient" -> "ambient music"
+        "punk" -> "punk rock"
+        else -> tag
+    },
+).distinct()
+
 private fun publicGenreAliases(tag: String): List<String> = when (tag) {
     "hip-hop" -> listOf("hip hop", "hip-hop", "hiphop")
     "rnb" -> listOf("r&b", "rnb", "rhythm and blues")
@@ -144,8 +165,11 @@ internal fun parseListenBrainzPublicPlaylistSearch(
     val root = parsedJson(body, 300_000) ?: return null
     val incoming = root["playlists"] as? JsonArray ?: return null
     if (incoming.size > 100) return null
+    // Home is a global public-playlist discovery shelf, not a search
+    // for playlists literally containing the word "discover". ListenBrainz
+    // already ordered the public search hits by query similarity. A genre,
+    // unlike Home, still needs exact descriptive evidence.
     val aliases = genreTag?.let(::publicGenreAliases)
-        ?: listOf("discover", "discovery", "descoberta")
     return incoming.asSequence().mapNotNull { node ->
         val data = node as? JsonObject ?: return@mapNotNull null
         // This endpoint returns only public playlists. Missing flag is
@@ -161,7 +185,7 @@ internal fun parseListenBrainzPublicPlaylistSearch(
             ?: "ListenBrainz"
         val description = data.optionalText("description")?.takeIf { it.length <= 1_000 }
         ListenBrainzPublicPlaylist(mbid, title, creator, description)
-    }.filter { matchesPlaylistWords(it, aliases) }
+    }.filter { aliases == null || matchesPlaylistWords(it, aliases) }
         .distinctBy { it.mbid }.take(12).toList()
 }
 
@@ -211,16 +235,28 @@ internal class ListenBrainzPublicPlaylistClient(
     suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? {
         if (tag !in setOf("pop", "rock", "hip-hop", "electronic", "k-pop", "rnb",
                 "jazz", "metal", "classical", "folk", "ambient", "punk")) return null
-        return search(publicPlaylistGenreQuery(tag), tag)
+        return search(publicPlaylistGenreQueries(tag), tag)
     }
-    suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? = search("discover", null)
+    suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
+        search(listOf("music", "mix", "playlist"), null)
 
-    private suspend fun search(query: String, tag: String?): List<ListenBrainzPublicPlaylist>? {
-        val response = try { limiter.run { transport.search(query) } }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { return null }
-        if (response.status != 200) return null
-        return parseListenBrainzPublicPlaylistSearch(response.body, tag)
+    private suspend fun search(
+        queries: List<String>, tag: String?,
+    ): List<ListenBrainzPublicPlaylist>? {
+        var completed = false
+        for (query in queries.distinct()) {
+            val response = try { limiter.run { transport.search(query) } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            if (response?.status != 200) continue
+            val matches = parseListenBrainzPublicPlaylistSearch(response.body, tag)
+                ?: continue
+            completed = true
+            if (matches.isNotEmpty()) return matches
+        }
+        // A valid empty upstream response differs from an unavailable API.
+        // Never manufacture playlist IDs when every verified query is empty.
+        return if (completed) emptyList() else null
     }
 
     suspend fun detail(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? {

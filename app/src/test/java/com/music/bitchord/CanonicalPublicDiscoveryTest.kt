@@ -226,6 +226,30 @@ class CanonicalPublicDiscoveryTest {
         assertTrue(shelves.none { it.title.contains("Top") || it.title.contains("Em alta") })
     }
 
+    @Test fun genreSearchKeepsOlderAlbumsWhenRecentSinglesFillTheFirstForty() {
+        val singles = (1..62).map { index ->
+            another.copy(
+                musicBrainzId = "50000000-0000-4000-8001-${index.toString().padStart(12, '0')}",
+                title = "Single ${index}", firstReleaseDate = "2026-11-01",
+            )
+        }
+        val albums = (1..12).map { index ->
+            recent.copy(
+                musicBrainzId = "60000000-0000-4000-8001-${index.toString().padStart(12, '0')}",
+                title = "Metal Album ${index}", firstReleaseDate = "2002-01-01",
+            )
+        }
+        val rows = canonicalPublicGenreRows(singles + albums, "2026-11-06")
+        assertEquals(40, rows.size)
+        assertTrue(rows.any { it.releaseKind == "Album" })
+        val shelves = canonicalGenreEditorialShelves(
+            canonicalExploreGenres.first { it.tag == "metal" }, rows, "2026-11-06",
+        )
+        assertTrue(shelves.any { it.title == "Álbuns" })
+        assertEquals(shelves.flatMap { it.items }.size,
+            shelves.flatMap { it.items }.map { it.browseId }.distinct().size)
+    }
+
     @Test fun genreCategoryCardsCanUseVerifiedCoversWithoutChangingNavigation() {
         val covers = mapOf("rock" to "https://coverartarchive.org/release-group/verified/front-500")
         val rows = canonicalExploreGenreShelf("Gêneros", covers).items

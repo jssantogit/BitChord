@@ -245,6 +245,32 @@ internal class MusicBrainzCatalogSearch(
         )
     }
 
+    /**
+     * Preserve genre album shelves even when the top relevance-ranked and
+     * recent pages contain only EPs and singles. The server still establishes
+     * both the tag association and the primary Album type.
+     */
+    suspend fun searchAlbumReleaseGroupsForTag(
+        tag: String,
+        limit: Int = 24,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized)) {
+            return MusicBrainzCatalogSearchResult.Failure(
+                MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+            )
+        }
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND primarytype:album",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
     private suspend fun searchReleaseGroupsInternal(
         query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =

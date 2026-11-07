@@ -3339,8 +3339,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val hits = (historicalHits.orEmpty() + recentHits.orEmpty())
                 .distinctBy { it.musicBrainzId }
-            val rows = canonicalPublicGenreRows(hits, todayIso)
+            var rows = canonicalPublicGenreRows(hits, todayIso)
             _canonicalGenreResults.value = UiState.Success(rows)
+            // A relevance-ranked MusicBrainz tag result can be all EPs/singles.
+            // Publish those immediately, then fetch Album-typed tag evidence
+            // separately instead of making the Album shelf disappear.
+            if (rows.none { canonicalEditorialReleaseType(it) == "Album" }) {
+                val additional = try {
+                    musicBrainzSearch.searchAlbumReleaseGroupsForTag(selected.tag, 24)
+                } catch (cancelled: CancellationException) { throw cancelled }
+                  catch (_: Exception) { null }
+                if (!canonicalGenreEpoch.isCurrent(generation)) return@launch
+                val albumHits = (additional as? MusicBrainzCatalogSearchResult.Success)
+                    ?.page?.items.orEmpty()
+                if (albumHits.isNotEmpty()) {
+                    val enriched = canonicalPublicGenreRows(
+                        hits + albumHits, todayIso,
+                    )
+                    if (enriched.any { canonicalEditorialReleaseType(it) == "Album" }) {
+                        rows = enriched
+                        _canonicalGenreResults.value = UiState.Success(rows)
+                    }
+                }
+            }
             val permits = Semaphore(2)
             canonicalGenreArtworkPriority(selected, rows, todayIso).forEach { row ->
                 launch {

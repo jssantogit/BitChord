@@ -35,7 +35,7 @@ internal fun canonicalPublicGenreRows(
 ): List<CanonicalCatalogSearchRow> {
     val today = runCatching { LocalDate.parse(throughIsoDate) }.getOrNull()
         ?: return emptyList()
-    return canonicalPublicTypedReleaseRows(hits) { date ->
+    val valid = canonicalPublicTypedReleaseRows(hits, { date ->
         when (date?.length) {
             null, 0 -> true
             4 -> runCatching { java.time.Year.parse(date).value <= today.year }
@@ -47,13 +47,29 @@ internal fun canonicalPublicGenreRows(
                 .getOrDefault(false)
             else -> false
         }
-    }
+    }, maxItems = 120)
+    // The world-news feed can simply lead with newest releases. A historical
+    // genre page must NOT let 40 recent Singles crowd every Album out before
+    // the editorial composer ever receives it.
+    val albumIds = valid.filter { canonicalEditorialReleaseType(it) == "Album" }
+        .take(12).map { it.musicBrainzId }.toSet()
+    val singleIds = valid.filter {
+        canonicalEditorialReleaseType(it) in setOf("Single", "EP")
+    }.take(12).map { it.musicBrainzId }.toSet()
+    val selected = albumIds + singleIds
+    return (valid.filter { it.musicBrainzId in selected } +
+        valid.filterNot { it.musicBrainzId in selected }.take((40 - selected.size).coerceAtLeast(0)))
+        .sortedWith(compareByDescending<CanonicalCatalogSearchRow> {
+            it.releaseDate.orEmpty()
+        }.thenBy { it.musicBrainzId })
+        .take(40)
 }
 
 /** Common type, identity and credit gate for world and genre discovery. */
 private fun canonicalPublicTypedReleaseRows(
     hits: List<MusicBrainzReleaseGroupHit>,
     acceptsDate: (String?) -> Boolean,
+    maxItems: Int = 40,
 ): List<CanonicalCatalogSearchRow> = hits.asSequence()
     .filter { hit ->
         acceptsDate(hit.firstReleaseDate) &&
@@ -79,7 +95,7 @@ private fun canonicalPublicTypedReleaseRows(
             artworkUri = hit.artworkUri,
         )
     }
-    .take(40)
+    .take(maxItems)
     .toList()
 
 /**

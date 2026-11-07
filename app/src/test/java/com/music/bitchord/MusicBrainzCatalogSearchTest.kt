@@ -53,6 +53,35 @@ class MusicBrainzCatalogSearchTest {
             "firstreleasedate:[2026-10-01 TO 2026-11-05]"))
     }
 
+    @Test fun genreAlbumQueryPinsOfficialTagAndAlbumType() = runBlocking {
+        val requests = mutableListOf<String>()
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    requests += parameters["query"].orEmpty()
+                    assertEquals("release-group", path)
+                    assertEquals("false", parameters["dismax"])
+                    return """{"count":1,"offset":0,"release-groups":[
+                      {"id":"03f3f1f2-12a4-4e47-9d52-459ee4a4f0ce",
+                       "title":"Metal album","primary-type":"Album",
+                       "artist-credit":[{"name":"Metal Band"}]}
+                    ]}"""
+                }
+            },
+        ))
+        assertTrue(search.searchAlbumReleaseGroupsForTag("metal")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchAlbumReleaseGroupsForTag("rnb")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(requests[0].contains("tag:\"metal\" AND primarytype:album"))
+        assertTrue(requests[1].contains("tag:\"r&b\" AND primarytype:album"))
+        assertTrue(search.searchAlbumReleaseGroupsForTag("metal OR artist:*")
+            is MusicBrainzCatalogSearchResult.Failure)
+        assertEquals(2, requests.size)
+    }
+
     @Test
     fun invalidWorldwideRangesAndUnsafeTagsFailWithoutNetwork() = runBlocking {
         var calls = 0
