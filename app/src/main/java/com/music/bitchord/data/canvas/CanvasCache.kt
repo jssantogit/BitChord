@@ -92,6 +92,11 @@ object CanvasCache {
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         return CacheDataSource.Factory()
             .setCache(savedCache)
+            // This layer is READ-ONLY for normal playback. Only the explicit
+            // saveForOffline downloader may write to the protected store.
+            // Otherwise every streamed Canvas silently becomes a permanent
+            // non-evictable download, even with STREAM_ONLY selected.
+            .setCacheWriteDataSinkFactory(null)
             .setUpstreamDataSourceFactory(ordinary)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
