@@ -426,6 +426,8 @@ internal fun CanonicalPlaylistDetailScreen(
 ) {
     BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
+    val playlistPinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
+    val pinnedPlaylists by playlistPinRepo.pins.collectAsStateWithLifecycle()
     val historicalPlaylists by LocalPlaylistStore.playlists.collectAsStateWithLifecycle()
     val historicalSongs = (card as? LibraryPlaylistCard.Normal)?.let { normal ->
         historicalPlaylists.firstOrNull { it.browseId == normal.shelfItem.browseId }?.songs
@@ -610,11 +612,15 @@ internal fun CanonicalPlaylistDetailScreen(
                                     onLegacyShuffle(card.id, playableHistoricalSongs)
                                 } else onShuffle()
                             },
-                            isLocal = card is LibraryPlaylistCard.Normal,
-                            onAddToQueue = {
-                                if (card is LibraryPlaylistCard.Normal) {
-                                    onLegacyQueue(playableHistoricalSongs)
-                                } else onAction(CanonicalCollectionIntent.ADD_TO_QUEUE)
+                            // Every playlist with a + uses it to pin in the
+                            // Library. Queue actions remain in the existing
+                            // overflow/track sheets, never hidden behind +.
+                            isLocal = false,
+                            reservePinAction = true,
+                            pinTargetLabel = "playlist",
+                            isPinnedInLibrary = pinnedPlaylists.any { it.id == card.id },
+                            onTogglePin = {
+                                playlistPinRepo.toggle(LibraryPlaylistPin(card.id, card.title))
                             },
                         )
                     }
