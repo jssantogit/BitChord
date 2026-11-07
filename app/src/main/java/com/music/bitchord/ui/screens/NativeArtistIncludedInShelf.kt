@@ -5,12 +5,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.layout.ContentScale
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtSize
+import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistAppearance
@@ -24,7 +29,20 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private val appearancesClient by lazy { MusicBrainzArtistAppearancesClient() }
-private val appearanceCoverArt by lazy { CoverArtArchive() }
+/** A metadata-only guest credit is not proof the host album belongs to the
+ * featured artist. Require exact Recording identity AND independently
+ * corroborated commercial edition evidence before painting a track card. */
+internal fun nativeArtistEditorialGuestTracks(
+    appearances: List<MusicBrainzArtistAppearance>,
+): List<MusicBrainzArtistAppearance> = appearances.asSequence()
+    .filter {
+        it.commerciallyVerified && !it.recordingMbid.isNullOrBlank() &&
+            !it.trackTitle.isNullOrBlank() &&
+            canonicalStreamingTitleIsSafe(it.trackTitle)
+    }
+    .distinctBy { it.recordingMbid }
+    .take(12)
+    .toList()
 
 /** Only exact MusicBrainz Release/ReleaseGroup identities enter CAA.
  * Cap network work while preserving group-only sleeves from valid editions. */
@@ -66,6 +84,12 @@ internal fun NativeArtistIncludedInShelf(
     palette: ArtworkPalette,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
 ) {
+    val context = LocalContext.current.applicationContext
+    val appearanceCoverArt = remember(context) {
+        CoverArtArchive(store = RoomMusicBrainzCoverArtStore(
+            CanonicalCatalogDatabase.get(context).catalogDao(),
+        ))
+    }
     val appearances by produceState<List<MusicBrainzArtistAppearance>>(
         initialValue = emptyList(), key1 = artistMbid,
     ) {
@@ -74,13 +98,14 @@ internal fun NativeArtistIncludedInShelf(
         } catch (cancelled: CancellationException) { throw cancelled }
           catch (_: Exception) { emptyList() }
     }
+    val visibleTracks = nativeArtistEditorialGuestTracks(appearances)
     val covers by produceState(initialValue = emptyMap<String, String>(),
-        key1 = appearances,
+        key1 = visibleTracks,
     ) {
         // Verified edition/group identity survives the concurrent fetch.
         // Fast CAA images appear independently of a slower first response.
         resolveNativeIncludedInCovers(
-            appearances = appearances,
+            appearances = visibleTracks,
             lookup = { releaseId, groupId ->
                 withContext(Dispatchers.IO) {
                     try {
@@ -94,14 +119,14 @@ internal fun NativeArtistIncludedInShelf(
             onResolved = { batch -> value = value + batch },
         )
     }
-    if (appearances.isEmpty()) return
+    if (visibleTracks.isEmpty()) return
     NativeArtistReleaseShelf(
         title = "Incluído em",
-        releases = appearances,
+        releases = visibleTracks,
         palette = palette,
         horizontalPadding = PAGE_GUTTER,
         topPadding = 22.dp,
-        itemKey = { it.releaseGroupMbid },
+        itemKey = { it.recordingMbid ?: it.releaseGroupMbid },
     ) { appearance ->
         val page = CanonicalCatalogSearchRow(
             musicBrainzId = appearance.releaseGroupMbid,
@@ -113,8 +138,8 @@ internal fun NativeArtistIncludedInShelf(
             artworkUri = covers[appearance.releaseGroupMbid],
         )
         NativeArtistReleaseCard(
-            title = appearance.title,
-            subtitle = appearance.artistCredit,
+            title = appearance.trackTitle ?: appearance.title,
+            subtitle = appearance.artistCredit + " · " + appearance.title,
             palette = palette,
             onClick = { onOpen(page) },
             artwork = {
