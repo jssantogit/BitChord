@@ -1414,6 +1414,8 @@
     <string name="visual_offline_artist_stills">Fotos de artistas</string>
     <string name="visual_offline_album_stills">Capas de álbuns</string>
     <string name="visual_offline_player_stills">Capas do Now Playing</string>
+    <string name="visual_offline_images_group">Fotos e capas salvas</string>
+    <string name="visual_offline_motion_group">Animações salvas</string>
     <string name="visual_offline_still_limit">Limite de imagens salvas</string>
     <string name="visual_offline_still_limit_subtitle">Espaço máximo para fotos de artistas, capas de álbuns e do Now Playing</string>
     <string name="visual_offline_motion_limit">Limite de animações salvas</string>
