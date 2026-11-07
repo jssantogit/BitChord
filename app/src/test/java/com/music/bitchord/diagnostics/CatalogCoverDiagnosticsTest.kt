@@ -43,6 +43,7 @@ class CatalogCoverDiagnosticsTest {
         ))
         assertEquals(true, lines.contains("direct_front_candidates=2"))
         assertEquals(true, lines.contains("coil_load_success=1 coil_load_errors=1"))
+        assertEquals(true, lines.contains("coil_load_started=0 coil_load_cancellations=0"))
         assertEquals(true, lines.contains("coil_sources memory=0 disk=1 network=0 other=0"))
         assertEquals(true, lines.contains(
             "coil_disk_bytes_on_loader_init=1024 coil_disk_capacity_bytes=104857600 app_update_disk_retained=true",
