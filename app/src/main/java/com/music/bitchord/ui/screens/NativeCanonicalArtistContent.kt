@@ -2,7 +2,10 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
@@ -148,9 +151,17 @@ internal fun NativeCanonicalArtistContent(
                             val track = nativeReleases.artwork[release.id]
                             if (track != null) CanonicalUnifiedArtwork(
                                 track, artworkLoader, Modifier.fillMaxSize(),
-                            ) else CoverPlaceholder(
-                                Icons.Rounded.Album, Modifier.fillMaxSize(),
-                            )
+                            ) else Box(Modifier.fillMaxSize()) {
+                                CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())
+                                release.artworkUri?.takeIf(String::isNotBlank)?.let { uri ->
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                         },
                         trailing = {
                             if (selectedItems.isNotEmpty()) {
@@ -236,9 +247,17 @@ internal fun NativeCanonicalArtistContent(
                                 val track = nativeReleases.artwork[release.id]
                                 if (track != null) CanonicalUnifiedArtwork(
                                     track, artworkLoader, Modifier.fillMaxSize(),
-                                ) else CoverPlaceholder(
-                                    Icons.Rounded.Album, Modifier.fillMaxSize(),
-                                )
+                                ) else Box(Modifier.fillMaxSize()) {
+                                CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())
+                                release.artworkUri?.takeIf(String::isNotBlank)?.let { uri ->
+                                    AsyncImage(
+                                        model = uri,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize(),
+                                    )
+                                }
+                            }
                             },
                         )
                     }
