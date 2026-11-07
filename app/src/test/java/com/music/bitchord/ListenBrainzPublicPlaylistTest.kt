@@ -358,4 +358,27 @@ class ListenBrainzPublicPlaylistTest {
             .map { it.mbid })
         assertEquals(2, requests)
     }
+
+    @Test fun publicTextSearchFiltersBeforeTwelveItemDisplayLimit() = runBlocking {
+        // Fuzzy upstream ordering may put a relevant playlist after twelve
+        // unrelated matches. Exact match must be applied before truncation.
+        val noise = (1..12).joinToString(",") { n ->
+            val id = n.toString(16).padStart(8, '0') + "-1111-4111-8111-111111111111"
+            """{"playlist_mbid":"$id","title":"Unrelated collection $n","public":true}"""
+        }
+        val body = """{"playlists":[$noise,
+          {"playlist_mbid":"$rock","title":"ILLIT favorites","public":true}]}"""
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) = ListenBrainzPublicPlaylistHttp(
+                    200, body,
+                )
+                override suspend fun detail(mbid: String) =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(listOf(rock), client.searchPublicQuery("illit").map { it.mbid })
+    }
+
 }
