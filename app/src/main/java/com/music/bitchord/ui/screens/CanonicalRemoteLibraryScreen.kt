@@ -184,6 +184,8 @@ internal data class CanonicalAlbumFooterMetadata(
     val date: String?,
     val summary: String?,
     val genre: String? = null,
+    /** Source-evidenced supplementary release fields; never a new catalog entity. */
+    val editorialEvidence: com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment? = null,
 )
 
 /** Only metadata backed by the release/track catalog is shown. */
@@ -2602,7 +2604,9 @@ internal fun NativeAlbumMetadataFooter(
     metadata: CanonicalAlbumFooterMetadata,
     palette: ArtworkPalette,
 ) {
-    if (metadata.date == null && metadata.summary == null && metadata.genre == null) return
+    if (metadata.date == null && metadata.summary == null && metadata.genre == null &&
+        nativeAlbumEditorialFooter(metadata.editorialEvidence, System.currentTimeMillis()) == null
+    ) return
     Column(
         modifier = Modifier.fillMaxWidth()
             .padding(horizontal = PAGE_GUTTER, vertical = 26.dp)
@@ -2621,6 +2625,10 @@ internal fun NativeAlbumMetadataFooter(
             Text(it, style = MaterialTheme.typography.bodyMedium,
                 color = palette.onBackgroundVariant)
         }
+        NativeAlbumEditorialFooter(
+            evidence = metadata.editorialEvidence,
+            palette = palette,
+        )
     }
 }
 
