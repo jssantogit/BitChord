@@ -38,6 +38,7 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityFetchResul
 import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopFetchResult
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideFetchResult
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRange
+import com.music.bitchord.data.catalog.metadata.listenBrainzSitewideSnapshotIsCurrent
 import com.music.bitchord.data.catalog.metadata.MusicBrainzMetadataEnrichmentProvider
 import com.music.bitchord.data.catalog.metadata.MetadataLookupResult
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
@@ -3057,11 +3058,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ListenBrainzArtistTopFetchResult.Unavailable
             }
             val success = popularity as? ListenBrainzArtistTopFetchResult.Success
-            // The per-artist chart can be unavailable while exact Recording
-            // popularity works. A sampled candidate ranking is presented as
-            // partial, not as a worldwide top chart.
+            // Artist-wide popularity may 401. Before the old arbitrary
+            // first-page MusicBrainz search, try the real all-time sitewide
+            // ListenBrainz counts. Only source rows with this exact Artist MBID
+            // qualify. This is not Spotify stream data, nor a full artist chart.
             val original = success?.recordings?.take(8).orEmpty()
-            val sampledRanking = if (original.isEmpty() &&
+            val allTimeRanking = if (original.isEmpty() &&
+                _detailStack.value.lastOrNull()?.browseId
+                    ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
+            ) try {
+                val global = withTimeoutOrNull(12_000L) {
+                    listenBrainzPopularityClient.sitewideRecordings(
+                        ListenBrainzSitewideRange.ALL_TIME, count = 100,
+                    )
+                }
+                if (global is ListenBrainzSitewideFetchResult.Success &&
+                    listenBrainzSitewideSnapshotIsCurrent(
+                        ListenBrainzSitewideRange.ALL_TIME,
+                        global.lastUpdatedSeconds, System.currentTimeMillis(),
+                    )
+                ) canonicalArtistSitewideAllTimeRanking(id, global.recordings, limit = 8)
+                else emptyList()
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { emptyList() }
+            else emptyList()
+            // For artists outside the top-100 sitewide, the bounded recording
+            // popularity sample is still explicitly partial, never Spotify.
+            val sampledRanking = if (original.isEmpty() && allTimeRanking.isEmpty() &&
                 _detailStack.value.lastOrNull()?.browseId
                     ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
             ) try {
@@ -3082,7 +3105,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { emptyList() }
             else emptyList()
-            val ranked = original.ifEmpty { sampledRanking }
+            val ranked = original.ifEmpty { allTimeRanking }.ifEmpty { sampledRanking }
             // This exact MBID -> canonical Recording -> MediaAsset association
             // is a presentation hint only. The playback executor still verifies
             // source authorization and streamability before starting playback.
@@ -3093,7 +3116,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     .catalogDao().musicBrainzRecordingMbidsWithAssets(ids).toSet()
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { emptySet() }
-            val sampled = original.isEmpty() && sampledRanking.isNotEmpty()
+            val sampled = original.isEmpty() && allTimeRanking.isEmpty() && sampledRanking.isNotEmpty()
             if (success != null && ranked.isEmpty() && artistPublicTopEpoch.isCurrent(generation) &&
                 _detailStack.value.lastOrNull()?.browseId
                     ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
