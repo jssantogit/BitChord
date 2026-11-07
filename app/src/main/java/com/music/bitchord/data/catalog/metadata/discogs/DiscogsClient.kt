@@ -7,6 +7,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsChannel
+import io.ktor.utils.io.cancel
 import io.ktor.utils.io.readAvailable
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
