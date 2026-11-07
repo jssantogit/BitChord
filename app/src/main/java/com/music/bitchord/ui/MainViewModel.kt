@@ -3301,6 +3301,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _canonicalPublicPlaylistDetail.value = if (details != null)
                 UiState.Success(details)
             else UiState.Error("Não foi possível carregar esta playlist pública.")
+            if (details == null) return@launch
+            // Display the JSPF immediately. Covers enrich asynchronously from
+            // exact Recording MBIDs, never a title-based search or an audio source.
+            // Shared ListenBrainz budget spaces requests without blocking the UI.
+            val unresolved = details.tracks.asSequence()
+                .filter { it.artworkUrl == null }
+                .mapNotNull { it.recordingMbid }.distinct().take(150).toList()
+            var enriched = details
+            for (batch in unresolved.chunked(25)) {
+                currentCoroutineContext().ensureActive()
+                val artwork = publicPlaylistClient.artworkForRecordings(batch)
+                if (!publicPlaylistDetailEpoch.isCurrent(generation)) return@launch
+                if (artwork.isEmpty()) continue
+                enriched = enriched.copy(tracks = enriched.tracks.map { track ->
+                    val uri = if (track.artworkUrl == null) track.recordingMbid?.let(artwork::get)
+                        else null
+                    if (uri != null) track.copy(artworkUrl = uri) else track
+                })
+                _canonicalPublicPlaylistDetail.value = UiState.Success(enriched)
+            }
         }
     }
 
