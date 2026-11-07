@@ -65,4 +65,23 @@ class ListenBrainzArtistTopRecordingsTest {
         assertEquals(ListenBrainzArtistTopParseResult.Invalid,
             parseListenBrainzArtistTopRecordings(duplicates, artist))
     }
+
+    @Test fun trustedCaaReleaseReferenceEnrichesArtistTopCoverWithoutGuessing() {
+        val release = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val response = """[
+          {"recording_mbid":"$recording","artist_mbids":["$artist"],
+           "total_listen_count":100,"total_user_count":10,
+           "caa_release_mbid":"$release","caa_id":1234567890},
+          {"recording_mbid":"$another","artist_mbids":["$artist"],
+           "total_listen_count":50,"total_user_count":5,
+           "caa_release_mbid":"../../fake","caa_id":555}
+        ]"""
+        val rows = (parseListenBrainzArtistTopRecordings(
+            response, artist,
+        ) as ListenBrainzArtistTopParseResult.Success).recordings
+        assertEquals("https://coverartarchive.org/release/$release/1234567890-250.jpg",
+            rows.first().artworkUri)
+        assertEquals(null, rows.last().artworkUri)
+    }
+
 }
