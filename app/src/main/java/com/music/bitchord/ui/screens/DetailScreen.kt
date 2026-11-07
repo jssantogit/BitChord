@@ -954,6 +954,17 @@ fun DetailScreen(
                         )
                 }
             }
+            if (isArtist && publicArtistMbid != null &&
+                onCanonicalFeaturedReleaseOpen != null
+            ) {
+                item(key = "artist-included-in") {
+                    NativeArtistIncludedInShelf(
+                        artistMbid = publicArtistMbid,
+                        palette = palette,
+                        onOpen = onCanonicalFeaturedReleaseOpen,
+                    )
+                }
+            }
             if (isArtist) aboutItem()
         }
 
