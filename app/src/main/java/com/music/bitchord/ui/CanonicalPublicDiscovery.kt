@@ -1,5 +1,6 @@
 package com.music.bitchord.ui
 
+import com.music.bitchord.data.catalog.metadata.isDescriptivePublicPlaylistTitle
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
@@ -157,11 +158,8 @@ internal fun canonicalExploreGenreShelf(
 /** A valid public playlist can have a one-word title, but these are too
  * generic to fill a recommendation shelf. Keep them searchable by name.
  */
-internal fun canonicalPublicPlaylistTitleIsDescriptive(title: String): Boolean {
-    val clean = title.trim()
-    return clean.length >= 5 && clean.split(Regex("""\s+"""))
-        .count { it.any(Char::isLetterOrDigit) } >= 2
-}
+internal fun canonicalPublicPlaylistTitleIsDescriptive(title: String): Boolean =
+    isDescriptivePublicPlaylistTitle(title)
 
 /** Public playlists use their own ListenBrainz MBID, never ReleaseGroup identity. */
 internal fun canonicalPublicPlaylistShelf(
