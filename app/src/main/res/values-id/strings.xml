@@ -24,6 +24,7 @@
     <string name="home">Beranda</string>
     <string name="play">Putar</string>
     <string name="explore">Jelajahi</string>
+    <string name="explore_genres">Genre</string>
     <string name="listen_now">Dengarkan Sekarang</string>
     <string name="downloads">Unduhan</string>
     <string name="downloaded_songs">Lagu yang diunduh</string>
@@ -439,7 +440,7 @@
     <string name="signing_in">Sedang masuk…</string>
     <string name="sleep_timer">Timer tidur</string>
     <string name="sources_no_lossless">Tidak ada sumber aktif yang dapat menyediakan audio lossless. Tambahkan modul kustom untuk memutar file lossless yang tersedia tanpa transcoding.</string>
-    <string name="sources_order_footer">Jika suatu sumber tidak memiliki trek atau tidak dapat dijangkau, BitChord mencoba sumber berikutnya. Sumber di atas YouTube dapat menggantikan rekamannya saat menghasilkan versi yang lebih baik.</string>
+    <string name="sources_order_footer">Jika suatu sumber tidak memiliki trek atau tidak dapat dijangkau, BitChord mencoba sumber berikutnya.</string>
     <string name="sources_order_header">Sumber, dicoba dalam urutan ini</string>
     <string name="sources_quality_capped">Koneksi ini diatur di bawah Kualitas tinggi, sehingga stream ditranskode agar sesuai dengan batas tersebut. Unduhan tidak terpengaruh.</string>
     <string name="jiosaavn_mismatch_warning">Bisa mencocokkan versi lagu yang salah. Aktifkan dengan risiko sendiri.</string>
@@ -951,6 +952,7 @@
     <string name="shelf_top_tunes_right_now">Lagu populer saat ini</string>
 
     <string name="shelf_trending">Sedang tren</string>
+    <string name="shelf_listenbrainz_community">Populer di komunitas</string>
 
     <string name="shelf_trending_community_playlists">Playlist komunitas populer</string>
 
@@ -1267,6 +1269,7 @@
     <string name="spotify_import_none">Tidak ada lagu itu yang ditemukan di YouTube Music.</string>
     <string name="spotify_import_title">Impor playlist Spotify</string>
     <string name="spotify_import_unmatched">%1$d lagu tidak ditemukan di YouTube Music</string>
+    <string name="spotify_import_metadata_only">Playlist disimpan dengan %1$d lagu hanya sebagai metadata. Tidak ada audio yang ditautkan tanpa kecocokan terverifikasi.</string>
     <string name="spotify_library_subtitle">Playlist Spotify Anda</string>
     <string name="spotify_sign_in">Masuk dengan Spotify</string>
     <string name="spotify_use_spdc_token">Gunakan token sp_dc</string>
@@ -1365,4 +1368,5 @@
     <string name="search_origin_local">Lokal</string>
     <string name="pause_resume_fade">Fade saat jeda dan lanjut</string>
     <string name="pause_resume_fade_subtitle">Mengecilkan volume secara halus saat dijeda dan menaikkannya saat dilanjutkan</string>
+    <string name="home_global_discovery">Penemuan musik dari seluruh dunia</string>
 </resources>

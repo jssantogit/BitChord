@@ -2,9 +2,6 @@ package com.music.bitchord.ui.tv.auth
 
 import android.content.Context
 import android.util.Log
-import com.music.bitchord.data.YtMusicRepository
-import com.music.bitchord.data.model.SearchFilter
-import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +44,8 @@ object TvAuthServer {
     var onPreviousAction: (() -> Unit)? = null
     var onSeekAction: ((Long) -> Unit)? = null
     var onPlaySongAction: ((Song) -> Unit)? = null
+    /** Only verified, injected sources can respond to remote searches. */
+    var onSearchSongs: (suspend (String) -> List<Song>)? = null
     var onKeyAction: ((String) -> Unit)? = null
 
     fun getLocalIpAddress(): String? {
@@ -196,19 +195,15 @@ object TvAuthServer {
                             sendJsonResponse(writer, "[]")
                         } else {
                             scope.launch {
-                                val results = YtMusicRepository.search(q, SearchFilter.SONGS).getOrDefault(emptyList())
+                                val songs = onSearchSongs?.invoke(q).orEmpty()
                                 val arr = JSONArray()
-                                results.take(15).forEach { item ->
-                                    val song = (item as? SearchResult.Track)?.song
-                                    if (song != null) {
-                                        val itemObj = JSONObject().apply {
-                                            put("videoId", song.videoId)
-                                            put("title", song.title)
-                                            put("subtitle", song.artist)
-                                            put("thumbnailUrl", song.thumbnailUrl ?: "")
-                                        }
-                                        arr.put(itemObj)
-                                    }
+                                songs.take(15).forEach { song ->
+                                    arr.put(JSONObject().apply {
+                                        put("videoId", song.videoId)
+                                        put("title", song.title)
+                                        put("subtitle", song.artist)
+                                        put("thumbnailUrl", song.thumbnailUrl ?: "")
+                                    })
                                 }
                                 sendJsonResponse(writer, arr.toString())
                             }

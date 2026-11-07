@@ -106,4 +106,71 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(false, shouldCompactNativeArtistHero("https://example.com/portrait.jpg"))
     }
 
+
+    @Test fun latestSingleCanBeFeaturedWithoutAnAlbum() {
+        val album = release("older-album")
+        val single = release("latest-single")
+        val ep = release("older-ep")
+        val sections = canonicalArtistReleaseSections(listOf(album, single, ep),
+            mapOf(
+                album.id to CanonicalArtistReleaseEvidence(album.id, "Album", "2024-03-01"),
+                single.id to CanonicalArtistReleaseEvidence(single.id, "Single", "2026-08-20"),
+                ep.id to CanonicalArtistReleaseEvidence(ep.id, "EP", "2025-05-04"),
+            ),
+        )
+        assertEquals("older-album", sections.recentAlbum?.id)
+        assertEquals("latest-single", sections.recentRelease?.id)
+    }
+
+    @Test fun onlyVerifiedDatesAndTypesMayBecomeFeaturedReleases() {
+        val ep = release("date-less-ep")
+        val invalid = release("invalid")
+        val typed = release("dated-ep")
+        val sections = canonicalArtistReleaseSections(listOf(ep, invalid, typed),
+            mapOf(
+                ep.id to CanonicalArtistReleaseEvidence(ep.id, "EP", null),
+                invalid.id to CanonicalArtistReleaseEvidence(invalid.id, "Other", "2026-07-02"),
+                typed.id to CanonicalArtistReleaseEvidence(typed.id, "EP", "2026-02-15"),
+            ),
+        )
+        assertNull(sections.recentAlbum)
+        assertEquals("dated-ep", sections.recentRelease?.id)
+        assertNull(canonicalArtistReleaseSections(listOf(ep), emptyMap(),
+            recordingCountsByRelease = mapOf(ep.id to 1)).recentRelease)
+    }
+
+    @Test fun nativeHeroCanUseARealReleaseDateEvenWithoutReleaseGroupType() {
+        val dated = release("verified-edition")
+        val undated = release("untagged")
+        val result = canonicalArtistReleaseSections(listOf(undated, dated),
+            mapOf(dated.id to CanonicalArtistReleaseEvidence(dated.id, null, "2026-08-18")),
+            recordingCountsByRelease = mapOf(undated.id to 3, dated.id to 1))
+        assertEquals("verified-edition", result.recentRelease?.id)
+        assertNull(result.recentAlbum)
+    }
+
+    @Test fun artistReleaseDateShowsLocalizedReadableDay() {
+        assertEquals("18 de set. de 2026", canonicalArtistReleaseDateLabel("2026-09-18"))
+        assertEquals("2026", canonicalArtistReleaseDateLabel("2026"))
+        assertEquals(null, canonicalArtistReleaseDateLabel("20xx-09-18"))
+    }
+
+    @Test fun trustedEditionDateEnablesLibraryHeroWithoutGroupClassification() {
+        val release = release("exact-release")
+        val proof = canonicalArtistReleaseEvidenceWithTrustedDate(
+            release.id, null, "2026-09-18")
+        assertEquals("2026-09-18", proof.firstReleaseDate)
+        assertNull(proof.primaryType)
+        assertEquals("exact-release", canonicalArtistReleaseSections(
+            listOf(release), mapOf(release.id to proof)).recentRelease?.id)
+    }
+
+    @Test fun groupFirstDateOutranksEditionDateAndEmptyMetadataStaysUnknown() {
+        val group = CanonicalArtistReleaseEvidence("release", "Single", "2025-04-20")
+        val proof = canonicalArtistReleaseEvidenceWithTrustedDate(
+            "release", group, "2026-01-31")
+        assertEquals("2025-04-20", proof.firstReleaseDate)
+        assertNull(canonicalArtistReleaseEvidenceWithTrustedDate(
+            "release", null, null).firstReleaseDate)
+    }
 }

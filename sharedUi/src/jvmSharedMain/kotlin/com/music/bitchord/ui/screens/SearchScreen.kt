@@ -161,6 +161,14 @@ data class CanonicalCatalogDetailPage(
     val totalCount: Int? = null,
 )
 
+/** A verified public playlist row is metadata, not a playable Song. */
+data class CanonicalPublicPlaylistSearchRow(
+    val mbid: String,
+    val title: String,
+    val creator: String,
+    val artworkUri: String?,
+)
+
 @Composable
 fun SearchScreen(
     query: String,
@@ -220,6 +228,8 @@ fun SearchScreen(
     /** Public MusicBrainz discovery shows metadata-only rows with no play actions. */
     searchingCanonical: Boolean = false,
     canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
+    canonicalPublicPlaylists: UiState<List<CanonicalPublicPlaylistSearchRow>>? = null,
+    onCanonicalPlaylistOpen: (CanonicalPublicPlaylistSearchRow) -> Unit = {},
     canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
     onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
     onCanonicalBack: () -> Unit = {},
@@ -340,6 +350,7 @@ fun SearchScreen(
                     available = if (searchingCanonical) listOf(
                         SearchFilter.ALL, SearchFilter.SONGS,
                         SearchFilter.ALBUMS, SearchFilter.ARTISTS,
+                        SearchFilter.PLAYLISTS,
                     ) else SearchFilter.entries,
                 )
             }
@@ -359,7 +370,9 @@ fun SearchScreen(
                     // through a MusicBrainz-only history entry.
                     val recent = canonicalRecentSearchEntries(history)
                     if (recent.isEmpty()) {
-                        item { MessageState(stringResource(Res.string.search_empty)) }
+                        item {
+                            MessageState(stringResource(Res.string.canonical_search_start))
+                        }
                     } else {
                         recentSearches(
                             history = recent,
@@ -370,6 +383,10 @@ fun SearchScreen(
                             onClear = onHistoryClear,
                         )
                     }
+                } else if (filter == SearchFilter.PLAYLISTS && canonicalDetail == null) {
+                    canonicalPublicPlaylistSearchResults(
+                        canonicalPublicPlaylists, onCanonicalPlaylistOpen,
+                    )
                 } else canonicalMusicBrainzResults(
                     query, canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
                     onCanonicalLoadMore, canonicalLoadingMore,
@@ -420,7 +437,9 @@ fun SearchScreen(
                     }
                 }
                 results == null -> if (history.isEmpty()) {
-                    item { MessageState(stringResource(Res.string.search_empty)) }
+                    // Even a legacy presentation fallback must not advertise
+                    // the removed YouTube Music discovery backend on Android.
+                    item { MessageState(stringResource(Res.string.canonical_search_start)) }
                 } else {
                     recentSearches(
                         history = history,
@@ -558,6 +577,35 @@ fun SearchScreen(
  * not that the user owns an audio rendition. Keep the UI strictly non-playable
  * until canonical availability resolution is wired for each Recording MBID.
  */
+private fun LazyListScope.canonicalPublicPlaylistSearchResults(
+    results: UiState<List<CanonicalPublicPlaylistSearchRow>>?,
+    onOpen: (CanonicalPublicPlaylistSearchRow) -> Unit,
+) {
+    when (results) {
+        null -> item(key = "public-playlists:hint") {
+            MessageState("Pesquise playlists públicas por nome.")
+        }
+        UiState.Loading -> songListSkeleton(keyPrefix = "public-playlists:search")
+        is UiState.Error -> item(key = "public-playlists:error") { MessageState(results.message) }
+        is UiState.Success -> if (results.data.isEmpty()) {
+            item(key = "public-playlists:empty") { MessageState("Nenhuma playlist pública encontrada.") }
+        } else items(
+            items = results.data,
+            key = { "public-playlist:${it.mbid}" },
+        ) { playlist ->
+            NativeSearchResultRow(
+                row = NativeSearchRowUi(
+                    title = playlist.title,
+                    subtitle = playlist.creator,
+                    artworkUri = playlist.artworkUri,
+                    artistPortrait = false,
+                ),
+                onClick = { onOpen(playlist) },
+            )
+        }
+    }
+}
+
 private fun LazyListScope.canonicalMusicBrainzResults(
     query: String,
     results: UiState<List<CanonicalCatalogSearchRow>>?,
@@ -646,24 +694,16 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                     CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
                     CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
                 }
-                val nativeItem = canonicalRowAsBrowseItem(row).copy(
-                    subtitle = canonicalDisplaySubtitle(row, kind),
-                )
-                // Reuse the same native 52dp artwork, typography and artist/album
-                // rows as the established Search interface. MusicBrainz remains
-                // metadata; a Recording without an owned asset has no click.
-                BrowseRow(
-                    item = nativeItem,
+                // No BrowseItem or synthetic browseId is created merely to
+                // display a canonical MusicBrainz row. The native layout takes
+                // presentation data, and playback stays evidence-gated.
+                NativeSearchResultRow(
+                    row = canonicalNativeSearchRowUi(row, kind),
                     onClick = when {
                         row.kind != CanonicalSearchKind.RECORDING -> ({ onOpen(row) })
                         row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
                         else -> null
                     },
-                    localDownloaded = row.kind == CanonicalSearchKind.RECORDING &&
-                        row.hasVerifiedLocalAsset,
-                    durationLabel = if (row.kind == CanonicalSearchKind.RECORDING) {
-                        canonicalDurationLabel(row.durationMs)
-                    } else null,
                 )
                 if (index < section.second.lastIndex) {
                     HorizontalDivider(
@@ -709,16 +749,48 @@ private fun LazyListScope.canonicalMusicBrainzResults(
 fun canonicalRecentSearchEntries(history: List<SearchHistoryEntity>): List<SearchHistoryEntity> =
     history.filter { it.id.startsWith("q:") }
 
-/** Identity-preserving, client-side category view over four MusicBrainz types. */
-/** A display-only adapter: never turn a public MBID into a videoId or stream URI. */
-fun canonicalRowAsBrowseItem(row: CanonicalCatalogSearchRow): BrowseItem = BrowseItem(
-    browseId = "catalog:${row.kind}:${row.musicBrainzId}",
+/**
+ * Canonical metadata is adapted straight into the existing native search row.
+ * This is presentation, not a claim of a playable asset or a YT browse route.
+ */
+internal fun canonicalNativeSearchRowUi(
+    row: CanonicalCatalogSearchRow,
+    kindLabel: String,
+): NativeSearchRowUi {
+    val subtitle = canonicalDisplaySubtitle(row, kindLabel).ifBlank {
+        // A recording without credits is still a recording. Use the supplied
+        // localized kind, not the old BrowseType.ALBUM fallback used by the
+        // legacy search adapter.
+        kindLabel.substringBefore('·').trim()
+    }
+    return NativeSearchRowUi(
+        title = row.title,
+        subtitle = subtitle,
+        artworkUri = row.artworkUri.takeUnless {
+            row.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                !canonicalVerifiedGroupType(row)
+        },
+        artistPortrait = row.kind == CanonicalSearchKind.ARTIST,
+        downloadBadge = row.kind == CanonicalSearchKind.RECORDING &&
+            row.hasVerifiedLocalAsset,
+        durationLabel = if (row.kind == CanonicalSearchKind.RECORDING) {
+            canonicalDurationLabel(row.durationMs)
+        } else null,
+    )
+}
+
+/**
+ * Server result is already a source-scoped asset; its private URI stays in
+ * the provider executor. No synthetic BrowseItem is needed for presentation.
+ */
+internal fun canonicalServerNativeSearchRowUi(
+    row: CanonicalServerSearchRow,
+): NativeSearchRowUi = NativeSearchRowUi(
     title = row.title,
-    subtitle = row.subtitle.orEmpty(),
-    thumbnailUrl = row.artworkUri.takeUnless {
-        row.kind == CanonicalSearchKind.RELEASE_GROUP && !canonicalVerifiedGroupType(row)
-    },
-    type = if (row.kind == CanonicalSearchKind.ARTIST) BrowseType.ARTIST else BrowseType.ALBUM,
+    subtitle = row.artistDisplay.ifBlank { BrowseType.OTHER.name.lowercase(Locale.ROOT)
+        .replaceFirstChar { it.uppercase(Locale.ROOT) } },
+    artworkUri = row.artworkUri,
+    artistPortrait = false,
 )
 
 /** Only positive, independently supplied release classification may create an album tile. */
@@ -843,15 +915,6 @@ fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String):
                 ?.takeUnless { it.equals("Other", ignoreCase = true) }.orEmpty()
     }
 
-/** A Server asset uses the same native search row as other browseable content. */
-fun canonicalServerRowAsBrowseItem(row: CanonicalServerSearchRow): BrowseItem = BrowseItem(
-    browseId = "server:asset:${row.mediaAssetId}",
-    title = row.title,
-    subtitle = row.artistDisplay,
-    thumbnailUrl = row.artworkUri,
-    type = BrowseType.OTHER,
-)
-
 /** Searchable files provided by configured servers, with live access checked at play. */
 private fun LazyListScope.canonicalServerSearchRows(
     rows: UiState<List<CanonicalServerSearchRow>>?,
@@ -870,8 +933,8 @@ private fun LazyListScope.canonicalServerSearchRows(
         items = results,
         key = { _, row -> "server:${row.mediaAssetId}" },
     ) { _, row ->
-        BrowseRow(
-            item = canonicalServerRowAsBrowseItem(row),
+        NativeSearchResultRow(
+            row = canonicalServerNativeSearchRowUi(row),
             onClick = { onPlay(row) },
         )
         HorizontalDivider(
@@ -1444,7 +1507,10 @@ private fun RecentSearchEntityRow(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * Legacy BrowseItem is an adapter at the edge of old search sources.
+ * Shared native result layout never receives browse IDs or source models.
+ */
 @Composable
 private fun BrowseRow(
     item: BrowseItem,
@@ -1453,76 +1519,21 @@ private fun BrowseRow(
     localDownloaded: Boolean = false,
     durationLabel: String? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) {
-                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-                    .contextClick(onLongPress)
-            } else Modifier)
-            .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(52.dp)) {
-            AsyncImage(
-                model = item.thumbnailUrl.artworkAt(ROW_ART_PX),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(52.dp)
-                    .clip(
-                        if (item.type == BrowseType.ARTIST) CircleShape
-                        else RoundedCornerShape(8.dp),
-                    )
-                    .thumbnailBorder(
-                        if (item.type == BrowseType.ARTIST) CircleShape
-                        else RoundedCornerShape(8.dp),
-                    )
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-            )
-            if (localDownloaded && item.type != BrowseType.ARTIST) {
-                Box(
-                    modifier = Modifier.align(Alignment.BottomEnd)
-                        .padding(2.dp)
-                        .size(17.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.82f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.Rounded.DownloadDone,
-                        contentDescription = stringResource(Res.string.downloaded),
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp),
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = item.subtitle.ifBlank { item.type.name.lowercase(Locale.ROOT).replaceFirstChar { it.uppercase(Locale.ROOT) } },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        durationLabel?.let { duration ->
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
+    NativeSearchResultRow(
+        row = NativeSearchRowUi(
+            title = item.title,
+            subtitle = item.subtitle.ifBlank {
+                item.type.name.lowercase(Locale.ROOT)
+                    .replaceFirstChar { it.uppercase(Locale.ROOT) }
+            },
+            artworkUri = item.thumbnailUrl,
+            artistPortrait = item.type == BrowseType.ARTIST,
+            downloadBadge = localDownloaded,
+            durationLabel = durationLabel,
+        ),
+        onClick = onClick,
+        onLongPress = onLongPress,
+    )
 }
 
 /** Display-only duration from actual MusicBrainz recording evidence. */

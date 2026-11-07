@@ -9,11 +9,29 @@ internal data class CanonicalArtistReleaseEvidence(
     val firstReleaseDate: String?,
 )
 
+/**
+ * MusicBrainz edition chronology is direct, validated ReleaseId evidence.
+ * Prefer the linked ReleaseGroup first date; use its own trusted Official
+ * edition date only when no group date exists. Never derive a date from a
+ * provider's upload/scan timestamp or a release title.
+ */
+internal fun canonicalArtistReleaseEvidenceWithTrustedDate(
+    releaseId: String,
+    groupEvidence: CanonicalArtistReleaseEvidence?,
+    exactEditionDate: String?,
+): CanonicalArtistReleaseEvidence =
+    CanonicalArtistReleaseEvidence(
+        releaseId = releaseId,
+        primaryType = groupEvidence?.primaryType,
+        firstReleaseDate = groupEvidence?.firstReleaseDate ?: exactEditionDate,
+    )
+
 internal data class CanonicalArtistReleaseSections(
     val albums: List<ReleaseEntity>,
     val singlesAndEps: List<ReleaseEntity>,
     val unclassified: List<ReleaseEntity>,
     val recentAlbum: ReleaseEntity?,
+    val recentRelease: ReleaseEntity? = null,
 )
 
 /**
@@ -26,8 +44,9 @@ internal data class CanonicalArtistReleaseSections(
  * partially downloaded album is officially a single; never persist it as
  * ReleaseGroup truth or use it for metadata filters.
  *
- * Unknown/explicitly other types stay in "Lançamentos". Only an explicitly
- * typed Album with a real full date may become "Álbum recente".
+ * Unknown/explicitly other types stay in "Lançamentos". A typed Album,
+ * Single or EP with a verified full release date may become the hero release;
+ * browse-only classifications cannot claim a new release.
  */
 internal fun canonicalArtistReleaseSections(
     releases: List<ReleaseEntity>,
@@ -63,7 +82,24 @@ internal fun canonicalArtistReleaseSections(
         }
     }.maxWithOrNull(compareBy<Pair<String, ReleaseEntity>> { it.first }
         .thenBy { it.second.id })?.second
-    return CanonicalArtistReleaseSections(albums, singles, other, recent)
+    // The latest genuinely dated release may be a Single or EP, not only an
+    // Album. Do not infer dates or types from a local track count.
+    val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+    val latest = releases.mapNotNull { release ->
+        val proof = evidence[release.id] ?: return@mapNotNull null
+        // A proven edition date is enough for a generic "recent release"
+        // even when its ReleaseGroup type has not been indexed yet. Do not
+        // invent "Album", "Single" or "EP" from a track count.
+        val type = proof.primaryType?.trim()?.lowercase(java.util.Locale.ROOT)
+        if (type != null && type.isNotBlank() &&
+            type !in setOf("album", "single", "ep")) return@mapNotNull null
+        val date = proof.firstReleaseDate?.takeIf { validDate.matches(it) }
+            ?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+            ?.takeIf { !it.isAfter(today) } ?: return@mapNotNull null
+        date to release
+    }.maxWithOrNull(compareBy<Pair<java.time.LocalDate, ReleaseEntity>> { it.first }
+        .thenBy { it.second.id })?.second
+    return CanonicalArtistReleaseSections(albums, singles, other, recent, latest)
 }
 
 /** Album detail includes all currently eligible recordings in this release,
@@ -86,3 +122,15 @@ internal fun shouldShowNativeArtistSearch(searching: Boolean, query: String): Bo
 /** Artist photo is optional; leave no 60%-height empty canvas when it is missing. */
 internal fun shouldCompactNativeArtistHero(artistPhotoUrl: String?): Boolean =
     artistPhotoUrl.isNullOrBlank()
+
+
+/** Canonical release chronology is a display date, never MediaStore DATE_ADDED. */
+internal fun canonicalArtistReleaseDateLabel(value: String?): String? {
+    val date = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    if (Regex("""\d{4}""").matches(date)) return date
+    val parsed = date.takeIf { Regex("""\d{4}-\d{2}-\d{2}""").matches(it) }
+        ?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() } ?: return null
+    return parsed.format(java.time.format.DateTimeFormatter.ofPattern(
+        "d 'de' MMM 'de' yyyy", java.util.Locale.forLanguageTag("pt-BR"),
+    ))
+}

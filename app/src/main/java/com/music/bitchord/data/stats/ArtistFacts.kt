@@ -5,9 +5,6 @@ import android.net.Uri
 import android.util.Log
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.data.Http
-import com.music.bitchord.data.YtMusicRepository
-import com.music.bitchord.data.model.SearchFilter
-import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.settings.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -141,7 +138,7 @@ object ArtistFacts {
     fun imageFor(artist: String): String? = known[key(artist)]?.image
 
     /** The artist's page, so a chart row opens it without searching first. */
-    fun browseIdFor(artist: String): String? = known[key(artist)]?.browseId
+    fun browseIdFor(@Suppress("UNUSED_PARAMETER") artist: String): String? = null
 
     /**
      * An artist was played. Looks them up if anything about them is missing.
@@ -151,7 +148,7 @@ object ArtistFacts {
      * when it opens.
      */
     fun noticed(artist: String) {
-        if (!ready) return
+        if (!ready || !genresAvailable) return
         val key = key(artist)
         if (key.isEmpty() || key.length > MAX_NAME_LENGTH) return
         val entry = known[key]
@@ -165,11 +162,10 @@ object ArtistFacts {
         // A miss is remembered too, or an artist neither service has heard of is
         // asked about on every play forever. It expires, because the reason for
         // a miss is as often a dropped connection as an unknown artist.
-        val wantsCard = browseId == null &&
-            System.currentTimeMillis() - cardAt > TimeUnit.DAYS.toMillis(RETRY_DAYS)
-        val wantsGenres = genresAvailable && genres.isEmpty() &&
+        // Archived artwork/page ids remain persisted, but this cache must not
+        // trigger new YouTube search requests to refresh them.
+        return genresAvailable && genres.isEmpty() &&
             System.currentTimeMillis() - genresAt > TimeUnit.DAYS.toMillis(RETRY_DAYS)
-        return wantsCard || wantsGenres
     }
 
     // ── The lookups ─────────────────────────────────────────────────────────
@@ -185,10 +181,6 @@ object ArtistFacts {
     private suspend fun worker() {
         for (name in requests) {
             val existing = known[key(name)]
-            if (existing?.browseId == null) {
-                runCatching { fetchCard(name) }
-                    .onFailure { Log.w(TAG, "Artist lookup failed for $name", it) }
-            }
             if (genresAvailable && existing?.genres.isNullOrEmpty()) {
                 runCatching { fetchGenres(name) }
                     .onFailure { Log.w(TAG, "Genre lookup failed for $name", it) }
@@ -208,26 +200,6 @@ object ArtistFacts {
      * that is the same lookup the app already makes to find a video's catalogue
      * release, and the same one a person would make.
      */
-    private suspend fun fetchCard(name: String) {
-        val hit = YtMusicRepository.search(name, SearchFilter.ARTISTS).getOrNull()
-            ?.filterIsInstance<SearchResult.Browse>()
-            ?.firstOrNull()
-            ?.item
-        val entry = known[key(name)] ?: StoredArtist(key = key(name))
-        known[key(name)] = entry.copy(
-            // Only when the hit is actually this artist. A search for a name
-            // nobody has heard of still returns *something*, and filing a
-            // stranger's photograph under someone else's name is worse than
-            // keeping the sleeve.
-            image = hit?.thumbnailUrl?.takeIf { hit.title.equals(name, ignoreCase = true) }
-                ?: entry.image,
-            browseId = hit?.browseId?.takeIf { hit.title.equals(name, ignoreCase = true) }
-                ?: entry.browseId,
-            cardAt = System.currentTimeMillis(),
-        )
-        dirty = true
-    }
-
     private fun fetchGenres(name: String) {
         val url = "https://ws.audioscrobbler.com/2.0/?method=artist.gettoptags" +
             "&artist=${Uri.encode(name)}" +

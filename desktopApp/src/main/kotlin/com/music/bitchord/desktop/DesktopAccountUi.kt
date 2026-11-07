@@ -272,211 +272,52 @@ private fun DesktopSelectorAction(
     }
 }
 
-/** What [DesktopSignInDialog]'s `busy` holds while the in-app sign-in window is open. */
+/** Historical YouTube authentication is retired. Keep this notice while old account controls migrate. */
 internal const val WEB_SIGN_IN = "Google"
 
-/** Signing in: Google's own page in a BitChord window, a browser to take the session from, or the cookie by hand. */
 @Composable
 internal fun DesktopSignInDialog(
-    /** Whether the in-app sign-in window can be shown; see [DesktopWebSignIn]. */
-    webSignIn: Boolean,
-    onWebSignIn: () -> Unit,
-    onImport: (DesktopBrowserCookies.Profile) -> Unit,
-    onPaste: (String) -> Unit,
-    busy: String?,
-    error: String?,
+    @Suppress("UNUSED_PARAMETER") webSignIn: Boolean,
+    @Suppress("UNUSED_PARAMETER") onWebSignIn: () -> Unit,
+    @Suppress("UNUSED_PARAMETER") onImport: (DesktopBrowserCookies.Profile) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onPaste: (String) -> Unit,
+    @Suppress("UNUSED_PARAMETER") busy: String?,
+    @Suppress("UNUSED_PARAMETER") error: String?,
     onDismiss: () -> Unit,
 ) {
-    var profiles by remember { mutableStateOf<List<DesktopBrowserCookies.Profile>?>(null) }
-    var pasting by remember { mutableStateOf(false) }
-    var pasted by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) {
-        profiles = withContext(Dispatchers.IO) {
-            DesktopBrowserCookies.profiles().filterNot {
-                DesktopPlatform.isWindows && it.family == DesktopBrowserCookies.Family.CHROMIUM
-            }
-        }
-    }
-
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                // Swallows clicks without dismissing: leaving now would cancel a sign-in that is
-                // still open, so only the close button does that.
+            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = {},
+                    onClick = onDismiss,
                 ),
         )
         val shape = RoundedCornerShape(20.dp)
         Column(
-            Modifier
-                .widthIn(max = 520.dp)
-                .fillMaxWidth()
-                .clip(shape)
-                .desktopBarGlass(shape)
-                .padding(bottom = 8.dp),
+            Modifier.widthIn(max = 520.dp).fillMaxWidth()
+                .clip(shape).desktopBarGlass(shape).padding(22.dp),
         ) {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp, top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    DesktopStrings["sign_in_youtube_music", "Sign in to YouTube Music"],
+                    "YouTube Music sign-in retired",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White,
-                    modifier = Modifier.weight(1f).padding(top = 10.dp),
+                    modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Rounded.Close, DesktopStrings["close", "Close"], tint = DesktopSecondary)
                 }
             }
             Text(
-                if (webSignIn) {
-                    "Sign in with Google in a BitChord window, then choose \"Use this profile\"."
-                } else {
-                    DesktopStrings[
-                        "d_google_signs_in_inside_a_browser",
-                        "Google signs in inside a browser and hands back a session. Pick a browser " +
-                            "here that is already signed in and BitChord will use its session.",
-                    ]
-                },
+                "Stored account information remains available for historical compatibility, " +
+                    "but BitChord no longer collects YouTube Music cookies or opens its login flow.",
                 style = MaterialTheme.typography.bodySmall,
                 color = DesktopSecondary,
-                modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 10.dp),
+                modifier = Modifier.padding(top = 10.dp),
             )
-            error?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = DesktopAccent,
-                    modifier = Modifier.padding(horizontal = 22.dp).padding(bottom = 8.dp),
-                )
-            }
-            when {
-                pasting -> {
-                    Text(
-                        DesktopStrings["d_paste_the_cookie_header_for_music_youtube_com", "Paste the Cookie header for music.youtube.com."],
-                        style = MaterialTheme.typography.bodySmall,
-                        color = DesktopSecondary,
-                        modifier = Modifier.padding(horizontal = 22.dp),
-                    )
-                    BasicTextField(
-                        value = pasted,
-                        onValueChange = { pasted = it },
-                        singleLine = false,
-                        textStyle = MaterialTheme.typography.bodySmall.copy(color = Color.White),
-                        cursorBrush = SolidColor(DesktopAccent),
-                        modifier = Modifier
-                            .padding(horizontal = 22.dp, vertical = 10.dp)
-                            .fillMaxWidth()
-                            .heightIn(min = 84.dp, max = 160.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White.copy(alpha = 0.08f))
-                            .padding(12.dp),
-                    )
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(onClick = { pasting = false }) { Text(DesktopStrings["back", "Back"], color = DesktopSecondary) }
-                        TextButton(
-                            onClick = { onPaste(pasted.trim()) },
-                            enabled = pasted.isNotBlank() && busy == null,
-                        ) {
-                            Text(DesktopStrings["sign_in", "Sign in"], color = DesktopAccent)
-                        }
-                    }
-                }
-                profiles == null -> Row(
-                    Modifier.fillMaxWidth().padding(22.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(color = DesktopAccent, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text(DesktopStrings["d_looking_for_browsers", "Looking for browsers…"], color = DesktopSecondary)
-                }
-                else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                    val found = profiles.orEmpty()
-                    if (webSignIn) {
-                        item(key = "web-sign-in") {
-                            Row(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 62.dp)
-                                    .clickable(enabled = busy == null) { onWebSignIn() }
-                                    .padding(horizontal = 22.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("Sign in with Google", color = Color.White)
-                                    Text(
-                                        if (busy == WEB_SIGN_IN) {
-                                            "Finish in the sign-in window, then choose \"Use this profile\""
-                                        } else {
-                                            "Opens Google's sign-in page in a BitChord window"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = DesktopSecondary,
-                                    )
-                                }
-                                if (busy == WEB_SIGN_IN) {
-                                    CircularProgressIndicator(color = DesktopAccent, modifier = Modifier.size(14.dp))
-                                }
-                            }
-                        }
-                    }
-                    if (found.isEmpty() && !webSignIn) {
-                        item {
-                            Text(
-                                DesktopStrings["d_no_browser_profile_was_found_on_this_machine", "No browser profile was found on this machine."],
-                                style = MaterialTheme.typography.bodySmall,
-                                color = DesktopSecondary,
-                                modifier = Modifier.padding(horizontal = 22.dp, vertical = 8.dp),
-                            )
-                        }
-                    }
-                    items(found.size, key = { found[it].database.toString() }) { index ->
-                        val profile = found[index]
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 52.dp)
-                                .clickable(enabled = busy == null) { onImport(profile) }
-                                .padding(horizontal = 22.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(profile.label, color = Color.White, modifier = Modifier.weight(1f))
-                            if (busy == profile.label) {
-                                CircularProgressIndicator(color = DesktopAccent, modifier = Modifier.size(14.dp))
-                            }
-                        }
-                    }
-                    item {
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 52.dp)
-                                .clickable { pasting = true }
-                                .padding(horizontal = 22.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Rounded.ContentPaste,
-                                null,
-                                tint = Color.White.copy(alpha = 0.85f),
-                                modifier = Modifier.size(18.dp),
-                            )
-                            Spacer(Modifier.width(14.dp))
-                            Text(DesktopStrings["d_paste_a_cookie_instead", "Paste a cookie instead"], color = Color.White)
-                        }
-                    }
-                }
-            }
         }
     }
 }

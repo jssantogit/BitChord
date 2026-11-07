@@ -63,25 +63,23 @@ internal enum class DesktopSourceKind(
 
 /** The stream ceiling in force, as the rungs the settings sheet offers. */
 internal enum class DesktopAudioQuality(
-    /** Ceiling for the YouTube ladder. */
+    /** Historical quality limit, interpreted by the available provider. */
     val maxKbps: Int,
     val label: String,
     val detail: String,
 ) {
-    LOW(64, "Low", "~64 kbps · smallest download"),
-    MEDIUM(Int.MAX_VALUE, "Medium", "Best available · ~171 kbps Opus"),
-    HIGH(Int.MAX_VALUE, "High", "JioSaavn up to 320kbps, YouTube fallback"),
+    LOW(64, "Low", "Low-bitrate source rendition where available"),
+    MEDIUM(Int.MAX_VALUE, "Medium", "Provider-selected balanced quality"),
+    HIGH(Int.MAX_VALUE, "High", "Best available lossy rendition"),
     LOSSLESS(Int.MAX_VALUE, "Lossless", "Your addons + JioSaavn, bit-exact where available"),
     ;
 
-    /** Whether a stream started under this ceiling may be served by [kind]. */
-    fun permits(kind: DesktopSourceKind): Boolean = when (this) {
-        LOSSLESS -> true
-        // No lossless answer is wanted here, and a source that can serve one is the slow half of
-        // the list.
-        HIGH -> !kind.supportsLossless
-        MEDIUM, LOW -> kind == DesktopSourceKind.YOUTUBE
-    }
+    /**
+     * Legacy quality rungs cannot activate a retired transport. Eligibility
+     * depends on whether the user's provider actually supports a stream;
+     * individual adapters decide whether the requested tier can be served.
+     */
+    fun permits(kind: DesktopSourceKind): Boolean = kind != DesktopSourceKind.YOUTUBE
 
     companion object {
         /** The stored rung, migrating what older builds wrote. */

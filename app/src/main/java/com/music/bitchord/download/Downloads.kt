@@ -7,7 +7,6 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import com.music.bitchord.data.DebugLog as Log
 import androidx.core.content.ContextCompat
-import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.DownloadQuality
@@ -1097,74 +1096,13 @@ object Downloads {
      *   than to the middle of this one. [Downloader.fetch] resolves again after
      *   a mid-download refusal and has to ask for the same rung it started on.
      */
-    private suspend fun routeFor(context: Context, track: Song, quality: DownloadQuality): Route {
-        // Defense in depth against previously queued jobs and direct worker paths.
-        error("Conventional download resolution is disabled; Soulseek requires manual selection")
-        fromSources(track, quality)?.let { (stream, storable) ->
-            // A manifest is an index, not audio. Whichever kind it is, fetching
-            // it as a file writes the index into something named `.flac` —
-            // which is exactly what a `.mpd` did until [OfflineDash] existed:
-            // a 2.7 KB download that reported success and could never play.
-            // Read off the URL rather than off `stream.format`, which describes
-            // the audio inside and says nothing about the envelope.
-            val dash = OfflineDash.handles(stream.url)
-            val hls = stream.url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
-            val packaged = hls || dash
-            // A manifest's segments are joined back into one ordinary file —
-            // see [ManifestFile] — exported or not, so a lossless download is
-            // a `.flac` wherever it lands. Exports used to decline manifests
-            // instead, which meant YouTube: Tidal serves every lossless tier
-            // as a manifest, so an exporting user heard FLAC and saved 131kbps
-            // AAC. Only a codec the assembler can't file falls through to the
-            // package (in-app) or YouTube (export) below.
-            if (packaged && storable.extension in ManifestFile.EXTENSIONS) {
-                return Route(
-                    extension = storable.extension,
-                    mimeType = storable.mimeType,
-                    describe = "${stream.format.summary} (assembled from ${if (dash) "DASH" else "HLS"})",
-                    downloadFormat = stream.format.downloadBadge(),
-                    write = { sink, onProgress ->
-                        ManifestFile.write(
-                            context.cacheDir, stream.url, stream.headers, dash,
-                            storable.extension, sink, onProgress,
-                        )
-                    },
-                )
-            }
-            if (packaged && AppSettings.exportDownloads.value) {
-                Log.d(TAG, "can't export a .${storable.extension} manifest; taking YouTube for ${track.videoId}")
-                return@let
-            }
-            return Route(
-                // DASH is saved *as* HLS — see [OfflineDash] for why — so both
-                // kinds land as the same package and are named for what was
-                // written rather than for what was fetched.
-                extension = if (packaged) "m3u8" else storable.extension,
-                mimeType = if (packaged) "application/vnd.apple.mpegurl" else storable.mimeType,
-                describe = stream.format.summary,
-                downloadFormat = stream.format.downloadBadge(),
-                taggable = true,
-                offlineHls = Manifest(stream.url, stream.headers, dash = dash).takeIf { packaged },
-                write = { sink, onProgress ->
-                    Downloader.fetchDirect(stream.url, stream.headers, sink, onProgress)
-                },
-            )
-        }
-        // MediaStore.Audio refuses audio/webm on affected Android versions.
-        // Keep Opus for app-private downloads, but pin exported downloads to
-        // AAC-in-MP4 for both the initial resolve and any mid-transfer retry.
-        val requireM4a = AppSettings.exportDownloads.value
-        val stream = StreamResolver.resolveForDownload(track.videoId, quality.maxKbps, requireM4a)
-        return Route(
-            extension = stream.downloadExtension,
-            mimeType = stream.downloadMimeType,
-            describe = "${stream.kbps}kbps ${stream.mimeType}",
-            downloadFormat = youtubeDownloadBadge(stream.downloadExtension, stream.kbps),
-            write = { sink, onProgress ->
-                Downloader.fetch(track.videoId, stream, quality.maxKbps, requireM4a, sink, onProgress)
-            },
-        )
-    }
+    private suspend fun routeFor(
+        @Suppress("UNUSED_PARAMETER") context: Context,
+        @Suppress("UNUSED_PARAMETER") track: Song,
+        @Suppress("UNUSED_PARAMETER") quality: DownloadQuality,
+    ): Route = throw UnsupportedOperationException(
+        "Legacy HTTP and YouTube download routes are retired; Soulseek uses the candidate picker",
+    )
 
     /**
      * The stream to keep for [track] from a configured source, with how to file

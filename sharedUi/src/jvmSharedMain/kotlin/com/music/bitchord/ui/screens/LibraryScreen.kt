@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LibraryPage
 import com.music.bitchord.data.model.ShelfItem
@@ -539,4 +538,6 @@ private fun HomeShelf.sortedForLibrary(sort: LibrarySort): HomeShelf = when (sor
 }
 
 /** The library feed whose cards are the account's own — see [PlaylistShelf]. */
-private const val PLAYLISTS = YtMusicRepository.PLAYLISTS_SHELF
+/** Historical display title for stored library shelves; not a provider identity. */
+const val LEGACY_PLAYLISTS_SHELF_TITLE = "Playlists"
+private const val PLAYLISTS = LEGACY_PLAYLISTS_SHELF_TITLE

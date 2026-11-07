@@ -1,12 +1,9 @@
 package com.music.bitchord.data.spotify
 
 import com.music.bitchord.data.Http
-import com.music.bitchord.data.YtMusicRepository
-import com.music.bitchord.data.model.SearchFilter
-import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.model.Song
-import com.music.bitchord.data.sources.TrackMatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -155,28 +152,6 @@ object SpotifyImporter {
             Pair(playlistTitle, tracks)
         }
 
-    /**
-     * The YouTube Music song that is [track], or null if there is none: the
-     * best candidate by title, artist, length and album, and failing that the
-     * search's first hit.
-     */
-    suspend fun matchTrack(track: SpotifyTrack): Song? {
-        val query = listOf(track.title, track.artist).filter { it.isNotBlank() }.joinToString(" ")
-        val candidates = YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull()
-            ?.filterIsInstance<SearchResult.Track>()
-            ?.map { it.song }
-            .orEmpty()
-        return TrackMatcher.best(
-            candidates,
-            TrackMatcher.Target(
-                title = track.title,
-                artist = track.artist,
-                durationSec = track.durationMs.takeIf { it > 0 }?.div(1000),
-                album = track.album,
-            ),
-        ) ?: candidates.firstOrNull()
-    }
-
     /** Tracks the embed page lists before it cuts off. */
     private const val EMBED_TRACK_LIMIT = 100
     private const val PAGE_SIZE = 100
@@ -232,14 +207,15 @@ object SpotifyImporter {
     }
 
     /**
-     * Resolves a list of Spotify tracks to full Song objects using Innertube search.
-     * Reports real-time progress via [onProgress].
+     * Provider-neutral Spotify resolution. Callers must supply their own
+     * verified asset resolver and policy gate; no fallback service is called.
+     * Metadata-only public imports should not invent assets from title matches.
      */
-    suspend fun resolveToSongs(
+    suspend fun resolveToSongsWithResolver(
         tracks: List<SpotifyImportTrack>,
         onProgress: (completed: Int, total: Int) -> Unit,
-        /** Live source policy, checked before and after each network lookup. */
-        allowYoutubeMatching: () -> Boolean = { true },
+        allowMatching: () -> Boolean,
+        resolveTrack: suspend (SpotifyImportTrack) -> Song?,
     ): Pair<List<Song>, List<SpotifyImportTrack>> = coroutineScope {
         val total = tracks.size
         val completedCount = AtomicInteger(0)
@@ -248,17 +224,22 @@ object SpotifyImporter {
         val deferredResults = tracks.map { track ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
-                    if (!allowYoutubeMatching()) {
+                    if (!allowMatching()) {
                         val done = completedCount.incrementAndGet()
                         onProgress(done, total)
                         return@withPermit Pair<Song?, SpotifyImportTrack?>(null, track)
                     }
-                    val query = "${track.title} ${track.artist}".trim()
-                    val searchResult = YtMusicRepository.search(query, SearchFilter.SONGS).getOrNull()
+                    val resolved = try {
+                        resolveTrack(track)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // One provider failure is one unmatched Spotify track,
+                        // not a reason to discard the entire imported playlist.
+                        null
+                    }
                     // Discard responses that completed after source opt-out.
-                    val matchedSong = if (allowYoutubeMatching()) {
-                        searchResult?.filterIsInstance<SearchResult.Track>()?.firstOrNull()?.song
-                    } else null
+                    val matchedSong = if (allowMatching()) resolved else null
 
                     val done = completedCount.incrementAndGet()
                     onProgress(done, total)

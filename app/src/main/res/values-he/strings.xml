@@ -27,6 +27,7 @@
     <string name="home">בית</string>
     <string name="play">הפעלה</string>
     <string name="explore">גלה</string>
+    <string name="explore_genres">ז׳אנרים</string>
     <string name="listen_now">האזן עכשיו</string>
     <string name="downloads">הורדות</string>
     <string name="downloaded_songs">שירים שהורדו</string>
@@ -418,7 +419,7 @@
     <string name="signing_in">מתחבר…</string>
     <string name="sleep_timer">טיימר שינה</string>
     <string name="sources_no_lossless">שום מקור מופעל אינו יכול לספק שמע ללא אובדן נתונים. הוסף מודול מותאם אישית כדי להפעיל קבצים זמינים ללא אובדן נתונים ללא המרה.</string>
-    <string name="sources_order_footer">אם למקור אין רצועה, BitChord מנסה את הבא. מקורות מעל YouTube יכולים להחליפו כשהם מוצאים גרסה טובה יותר.</string>
+    <string name="sources_order_footer">אם למקור אין רצועה, BitChord מנסה את הבא.</string>
     <string name="sources_order_header">מקורות, נוסו בסדר זה</string>
     <string name="sources_quality_capped">חיבור זה מוגדר מתחת לאיכות גבוהה, ולכן השידורים מומרים כדי להתאים למגבלה. הורדות אינן מושפעות.</string>
     <string name="jiosaavn_mismatch_warning">עלול להתאים גרסה שגויה של שיר. ההפעלה על אחריותכם.</string>
@@ -977,6 +978,7 @@
     <string name="shelf_top_tunes_right_now">השירים החמים עכשיו</string>
 
     <string name="shelf_trending">פופולרי עכשיו</string>
+    <string name="shelf_listenbrainz_community">פופולרי בקהילה</string>
 
     <string name="shelf_trending_community_playlists">פלייליסטים קהילתיים פופולריים</string>
 
@@ -1295,6 +1297,7 @@
     <string name="spotify_import_none">אף אחד מהשירים הללו לא נמצא ב-YouTube Music.</string>
     <string name="spotify_import_title">ייבוא פלייליסט מ-Spotify</string>
     <string name="spotify_import_unmatched">%1$d שירים לא נמצאו ב-YouTube Music</string>
+    <string name="spotify_import_metadata_only">רשימת ההשמעה נשמרה עם %1$d רצועות כנתוני מטא בלבד. לא שויך שמע ללא התאמה מאומתת.</string>
     <string name="spotify_library_subtitle">הפלייליסטים שלכם ב-Spotify</string>
     <string name="spotify_sign_in">התחברות עם Spotify</string>
     <string name="spotify_use_spdc_token">שימוש באסימון sp_dc</string>
@@ -1393,4 +1396,5 @@
     <string name="search_origin_local">מקומי</string>
     <string name="pause_resume_fade">עמעום בהשהיה ובחידוש</string>
     <string name="pause_resume_fade_subtitle">מנמיך בהדרגה את עוצמת הקול בהשהיה ומגביר אותה בחידוש</string>
+    <string name="home_global_discovery">תגליות מוזיקליות מרחבי העולם</string>
 </resources>

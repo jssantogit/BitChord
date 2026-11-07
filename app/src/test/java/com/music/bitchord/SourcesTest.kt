@@ -6,6 +6,8 @@ import com.music.bitchord.data.jiosaavn.prioritizeExplicit
 import com.music.bitchord.data.jiosaavn.selectBestSaavnStream
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.settings.AudioQuality
+import com.music.bitchord.data.settings.permits
 import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.sources.ModuleSource
 import com.music.bitchord.data.sources.MusicSource
@@ -41,6 +43,25 @@ class SourcesTest {
         /** What the raced fakes below all claim to hold, so the matcher accepts them. */
         const val RACE_TITLE = "Paniyon Sa"
         const val RACE_ARTIST = "Atif Aslam"
+    }
+
+    @Test
+    fun `retired YouTube is not eligible at any streaming quality`() {
+        AudioQuality.entries.forEach { quality ->
+            assertFalse(quality.permits(SourceKind.YOUTUBE))
+        }
+    }
+
+    @Test
+    fun `capped streaming can still ask a user configured addon`() {
+        for (quality in listOf(AudioQuality.LOW, AudioQuality.MEDIUM)) {
+            assertTrue(quality.permits(SourceKind.ADDON))
+            assertTrue(quality.permits(SourceKind.CUSTOM_MODULE))
+            assertTrue(quality.permits(SourceKind.MODULE))
+            assertFalse(quality.permits(SourceKind.JIOSAAVN))
+        }
+        assertTrue(AudioQuality.HIGH.permits(SourceKind.JIOSAAVN))
+        assertTrue(AudioQuality.LOSSLESS.permits(SourceKind.ADDON))
     }
 
     // ---- Track identity -----------------------------------------------------
@@ -598,31 +619,27 @@ class SourcesTest {
     }
 
     @Test
-    fun `JioSaavn is off by default on a fresh install`() {
+    fun `fresh installs seed no Youtube source and preserve JioSaavn opt in policy`() {
         assertFalse(SourceConfig(kind = SourceKind.JIOSAAVN).enabled)
         val sources = SourceRegistry.sourcesForInit(emptyList(), forceJioSaavnOff = true)
 
         assertFalse(sources.single { it.kind == SourceKind.JIOSAAVN }.enabled)
-        assertTrue(sources.single { it.kind == SourceKind.YOUTUBE }.enabled)
+        assertFalse(sources.any { it.kind == SourceKind.YOUTUBE })
     }
 
     @Test
-    fun `disabled YouTube stays disabled when source configurations are restored`() {
-        val disabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = false)
-        val firstBoot = SourceRegistry.sourcesForInit(
-            stored = listOf(disabled),
-            forceJioSaavnOff = true,
-        )
-        assertFalse(firstBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
+    fun `upgraded installations drop retired YouTube source entries without removing user sources`() {
+        val addon = SourceConfig(kind = SourceKind.ADDON, baseUrl = "https://example.invalid/manifest.json")
+        val legacyYoutube = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val stored = listOf(addon, legacyYoutube, legacyYoutube.copy(id = "yt-disabled", enabled = false))
+        val firstBoot = SourceRegistry.sourcesForInit(stored, forceJioSaavnOff = true)
+        assertFalse(firstBoot.any { it.kind == SourceKind.YOUTUBE })
+        assertEquals(addon, firstBoot.single { it.kind == SourceKind.ADDON })
         assertFalse(firstBoot.single { it.kind == SourceKind.JIOSAAVN }.enabled)
 
-        val nextBoot = SourceRegistry.sourcesForInit(
-            stored = firstBoot,
-            forceJioSaavnOff = false,
-        )
-        assertFalse(nextBoot.single { it.kind == SourceKind.YOUTUBE }.enabled)
-        assertTrue(SourceRegistry.sourcesForInit(emptyList(), true)
-            .single { it.kind == SourceKind.YOUTUBE }.enabled)
+        val nextBoot = SourceRegistry.sourcesForInit(firstBoot, forceJioSaavnOff = false)
+        assertEquals(firstBoot, nextBoot)
+        assertFalse(SourceConfig(kind = SourceKind.YOUTUBE).enabled)
     }
 
     @Test
@@ -664,7 +681,7 @@ class SourcesTest {
             listOf(disabledJio, disabledAddon, enabledAddon, youtube),
         )
 
-        assertEquals(listOf(enabledAddon.id, youtube.id), enabled.map { it.id })
+        assertEquals(listOf(enabledAddon.id), enabled.map { it.id })
     }
 
     @Test
@@ -1086,39 +1103,26 @@ class SourcesTest {
         assertNull(TrackMatcher.best(emptyList(), target))
     }
 
-    // ---- What a lossy source has to beat to become a file -------------------
+    // ---- Provider-neutral download fidelity --------------------------------
 
-    /**
-     * The case the floor exists for: JioSaavn's top rendition is better than
-     * anything YouTube's AAC ladder holds, so a download takes it rather than
-     * filing a copy worse than the one that would have been streamed.
-     */
     @Test
-    fun `a 320 from a source is worth keeping over youtube's aac`() {
-        assertTrue(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp4", kbps = 320)))
+    fun `known 128 kbps provider rendition remains a valid download without YouTube`() {
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "mp3", kbps = 128)))
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "aac", kbps = 256)))
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "mp4", kbps = 320)))
     }
 
-    /**
-     * Below the top of YouTube's own ladder, a source's copy is trading one
-     * lossy file for another and giving up the more reliable fetch to do it —
-     * including at 256, where the two are a wash and the tie goes to YouTube.
-     */
     @Test
-    fun `a thinner rendition loses to youtube's aac`() {
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp3", kbps = 128)))
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp4", kbps = 160)))
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "aac", kbps = 256)))
+    fun `lossless and immersive renditions do not require a bitrate tag`() {
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "flac")))
+        assertTrue(SourceResolver.isDownloadableRendition(StreamFormat(codec = "eac3-joc")))
     }
 
-    /**
-     * A download has to name the file before the first byte lands, so a source
-     * that described its rendition as nothing has said nothing worth keeping —
-     * unlike playback, which can hand the URL to the decoder and find out.
-     */
     @Test
-    fun `an unstated rendition is not worth keeping`() {
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat()))
-        assertFalse(SourceResolver.beatsYouTubeAac(StreamFormat(codec = "mp4")))
+    fun `undescribed source rendition cannot be silently saved`() {
+        assertFalse(SourceResolver.isDownloadableRendition(StreamFormat()))
+        assertFalse(SourceResolver.isDownloadableRendition(StreamFormat(codec = "mp4")))
+        assertFalse(SourceResolver.isDownloadableRendition(StreamFormat(codec = "aac", kbps = 0)))
     }
 
     // ---- Which sources are worth asking before a track is played ------------
@@ -1868,20 +1872,46 @@ class SourcesTest {
     }
 
     @Test
-    fun `legacy YouTube stream resolution requires enabled YouTube source`() {
+    fun `legacy Youtube stream resolution is permanently disabled for all persisted source choices`() {
         val enabled = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
         val disabled = enabled.copy(enabled = false)
-        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(emptyList()))
-        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(enabled)))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(emptyList()))
+        assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(enabled)))
         assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(disabled)))
         assertFalse(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
-            SourceConfig(kind = SourceKind.ADDON, enabled = true),
-            disabled,
-        )))
-        // Disabling an unrelated source does not turn YouTube off.
-        assertTrue(SourceRegistry.mayResolveLegacyYoutubeStream(listOf(
             enabled,
-            SourceConfig(kind = SourceKind.JIOSAAVN, enabled = false),
+            SourceConfig(kind = SourceKind.ADDON, enabled = true),
         )))
     }
+
+    @Test
+    fun `source settings hide retired Youtube while retaining disabled user addons`() {
+        val yt = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val addon = SourceConfig(kind = SourceKind.ADDON, enabled = false)
+        val jio = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = false)
+        val visible = SourceRegistry.displayConfigs(listOf(yt, addon, jio))
+        assertEquals(listOf(addon.id, jio.id), visible.map { it.id })
+    }
+
+    @Test
+    fun `historical Youtube source settings never become active audio candidates`() {
+        val yt = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val addon = SourceConfig(kind = SourceKind.ADDON, baseUrl = "https://example.invalid/addon", enabled = true)
+        val incompleteAddon = SourceConfig(kind = SourceKind.ADDON, enabled = true)
+        val jio = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = true)
+        val eligible = SourceRegistry.audioCandidateConfigs(listOf(yt, addon, incompleteAddon, jio))
+        assertFalse(eligible.any { it.kind == SourceKind.YOUTUBE })
+        assertFalse(eligible.any { it.id == incompleteAddon.id })
+        assertEquals(listOf(addon.id, jio.id), eligible.map { it.id })
+    }
+    @Test
+    fun `retired Youtube source cannot be probed through the source registry`() = runBlocking {
+        val legacy = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
+        val health = SourceRegistry.probeCandidate(legacy)
+        assertEquals(
+            SourceHealth.Rejected("YouTube Music is retired as an audio source"),
+            health,
+        )
+    }
+
 }

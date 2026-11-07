@@ -24,6 +24,7 @@
     <string name="home">首页</string>
     <string name="play">播放</string>
     <string name="explore">探索</string>
+    <string name="explore_genres">音乐类型</string>
     <string name="listen_now">立即收听</string>
     <string name="downloads">下载内容</string>
     <string name="downloaded_songs">已下载的歌曲</string>
@@ -439,7 +440,7 @@
     <string name="signing_in">正在登录…</string>
     <string name="sleep_timer">睡眠定时器</string>
     <string name="sources_no_lossless">已启用的来源均无法提供无损音频。添加自定义模块即可播放可用的无损文件，而无需转码。</string>
-    <string name="sources_order_footer">如果某个来源没有该曲目或无法访问，BitChord 会尝试下一个来源。排在 YouTube 之前的来源如果返回更好的版本，可以替换其录音。</string>
+    <string name="sources_order_footer">如果某个来源没有该曲目或无法访问，BitChord 会尝试下一个来源。</string>
     <string name="sources_order_header">来源，按此顺序尝试</string>
     <string name="sources_quality_capped">此连接的设置低于高品质，因此串流会被转码以符合该限制，下载不受影响。</string>
     <string name="jiosaavn_mismatch_warning">可能匹配到歌曲的错误版本。启用风险自负。</string>
@@ -951,6 +952,7 @@
     <string name="shelf_top_tunes_right_now">当前热门金曲</string>
 
     <string name="shelf_trending">热门趋势</string>
+    <string name="shelf_listenbrainz_community">社区热门</string>
 
     <string name="shelf_trending_community_playlists">热门社区播放列表</string>
 
@@ -1267,6 +1269,7 @@
     <string name="spotify_import_none">这些歌曲都未在 YouTube Music 上找到。</string>
     <string name="spotify_import_title">导入 Spotify 播放列表</string>
     <string name="spotify_import_unmatched">%1$d 首歌曲未在 YouTube Music 上找到</string>
+    <string name="spotify_import_metadata_only">已将 %1$d 首歌曲仅作为元数据保存到播放列表。未验证匹配前不会关联音频。</string>
     <string name="spotify_library_subtitle">你的 Spotify 播放列表</string>
     <string name="spotify_sign_in">使用 Spotify 登录</string>
     <string name="spotify_use_spdc_token">使用 sp_dc 令牌</string>
@@ -1358,4 +1361,5 @@
     <string name="search_origin_local">本地</string>
     <string name="pause_resume_fade">暂停与继续播放时淡入淡出</string>
     <string name="pause_resume_fade_subtitle">暂停时逐渐降低音量，继续播放时逐渐提高音量</string>
+    <string name="home_global_discovery">全球音乐发现</string>
 </resources>

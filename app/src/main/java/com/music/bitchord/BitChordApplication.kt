@@ -33,14 +33,12 @@ import com.music.bitchord.playback.LastPlayed
 import com.music.bitchord.playback.BoundedContextPersistence
 import com.music.bitchord.playback.OriginalVersion
 import com.music.bitchord.playback.PlaybackListeningBridge
-import com.music.bitchord.data.innertube.Innertube
-import com.music.bitchord.data.innertube.AndroidStreamHooks
+import com.music.bitchord.data.AndroidDiagnosticsHooks
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.sources.SourceRegistry
-import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceResolver
 import com.music.bitchord.data.sources.StructuredSourceResolutionTraceReporter
 import com.music.bitchord.data.stats.ArtistFacts
@@ -68,8 +66,8 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         // The player is drawn by the shared UI module; this is what it reads
         // underneath — settings, the Canvas decoder, outputs, the party.
-        Diagnostics.span(DiagnosticCategory.STARTUP, "stream_hooks_install_early") {
-            AndroidStreamHooks.installEarly()
+        Diagnostics.span(DiagnosticCategory.STARTUP, "diagnostics_hooks_install_early") {
+            AndroidDiagnosticsHooks.installEarly()
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "player_platform_install") {
             PlayerPlatform.install(AndroidPlayerHost(this))
@@ -98,9 +96,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         SpotifyLibrary.auth = SpotifyLibrary.Auth {
             SpotifyToken.accessToken()?.let { SpotifyLibrary.Tokens(it, SpotifyToken.clientToken()) }
         }
-        // The per-app language picker, which YouTube Music's `hl` follows.
-        // Full tag (zh-Hant / zh-Hans preserved); Innertube maps to hl/gl.
-        Innertube.appLanguage = { AppCompatDelegate.getApplicationLocales().get(0)?.toLanguageTag() }
         Diagnostics.span(DiagnosticCategory.STARTUP, "locale_migration") {
             migrateScriptOnlyAppLocale()
         }
@@ -122,9 +117,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 Diagnostics.span(DiagnosticCategory.STARTUP, "source_registry_init") {
                     SourceRegistry.init(this)
                 }
-                Diagnostics.span(DiagnosticCategory.STARTUP, "innertubex_init") {
-                    AndroidStreamHooks.initInnerTubeX(this)
-                }
                 // Its own directory: canvas clips are looping video, not audio, and
                 // belong in a cache AudioCache's own limit and eviction policy were
                 // never sized for. See CanvasCache's doc for why this one exists at
@@ -145,22 +137,19 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 authStore.select(restoredSession.accountId, restoredSession.activeProfileId)
             }
             authStore.cookie = restoredSession?.cookie
-            Innertube.cookie = restoredSession?.cookie
-            // Which account that cookie actually acts as. Read here rather than on
-            // demand so the answer is usually in hand before the first request needs
-            // it: a play registered under the wrong account is indistinguishable, to
-            // the listener, from one that was never registered at all. Fire and
-            // forget — every caller works without it, just less precisely.
-            if (restoredSession != null) {
-                // After the cookie, never before: setting the cookie clears any
-                // channel the last session was acting as, so restoring the choice
-                // first would restore it into the value about to be wiped.
-                restoredSession.profiles.firstOrNull { it.profileId == restoredSession.activeProfileId }
-                    ?.let { Innertube.selectChannel(it.pageId, it.dataSyncId, it.authUser) }
-            }
+
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "app_settings_init") {
             AppSettings.init(this, authStore)
+        }
+        // Revive qualified listens after process death without blocking cold-start.
+        // WorkManager persists the actual network job and waits for connectivity.
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching {
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.recover(
+                    this@BitChordApplication,
+                )
+            }
         }
         // Before anything resolves a track: an addon with `checkValidLossless`
         // is gated on this, and the gate reads "no" until it has looked.
@@ -248,19 +237,6 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "background_join_wait") {
             backgroundInit.join()
-        }
-        // Warming YouTube's account scope is a discovery request. Wait until
-        // persisted settings and source opt-outs are loaded, and skip it when
-        // the app is configured for independent discovery. Cookie/channel
-        // restoration above still happens so explicit playback keeps its gate.
-        val youtubeDisabled = SourceRegistry.configs.value.any {
-            it.kind == SourceKind.YOUTUBE && !it.enabled
-        }
-        if (restoredSession != null &&
-            !AppSettings.canonicalDiscoveryEnabled.value &&
-            !youtubeDisabled
-        ) {
-            CoroutineScope(Dispatchers.IO).launch { Innertube.ensureSessionScope() }
         }
         Diagnostics.event(
             category = DiagnosticCategory.STARTUP,

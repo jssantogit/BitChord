@@ -122,7 +122,6 @@ class DesktopPersistence {
             DesktopTrackLog.log("stored sources could not be read; leaving them untouched")
             return listOf(
                 DesktopSourceConfig("jiosaavn", DesktopSourceKind.JIOSAAVN, enabled = sourceEnabled("jiosaavn")),
-                DesktopSourceConfig("youtube", DesktopSourceKind.YOUTUBE),
             )
         }
         // A build-seeded module index is no longer carried, and the one this app used to ship has
@@ -139,16 +138,11 @@ class DesktopPersistence {
                     ),
                 )
             }
-            if (none { it.kind == DesktopSourceKind.YOUTUBE }) {
-                add(DesktopSourceConfig("youtube", DesktopSourceKind.YOUTUBE))
-            }
         }
 
-        // YouTube remains the non-removable catalogue fallback, matching the Android source
-        // registry.
-        val normalized = withBuiltIns.map {
-            if (it.kind == DesktopSourceKind.YOUTUBE && !it.enabled) it.copy(enabled = true) else it
-        }.inSourceOrder()
+        // Previously stored YouTube entries remain readable for migration,
+        // but are never seeded or force-enabled on new installations.
+        val normalized = withBuiltIns.inSourceOrder()
         if (stored == null || normalized != stored || (DesktopPlatform.isWindows && protected == null)) {
             saveSourceConfigs(normalized)
             if (DesktopPlatform.isWindows && stored == null) {

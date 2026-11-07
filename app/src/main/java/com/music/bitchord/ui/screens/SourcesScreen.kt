@@ -83,15 +83,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Where the app is allowed to get audio from.
+ * User-visible configured audio sources, excluding retired transports.
  *
- * The order is fixed rather than something to argue with: the addons a user
- * added are tried first, because they are the sources chosen on purpose, and
- * YouTube Music is tried last, since it needs no setup and has the full
- * catalogue behind it. Nothing on this screen downloads code, and nothing on
- * it can teach the app a new way to behave after it has shipped — an addon
- * answers questions with JSON, and this app is the only thing here running
- * anything.
+ * User-added sources are tried first, followed by the optional built-in
+ * JioSaavn source. The source registry filters legacy serialized YouTube rows
+ * before they reach this UI; provider identities do not define musical identity.
  */
 @Composable
 fun SourcesScreen(
@@ -121,7 +117,8 @@ fun SourcesScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val configs by SourceRegistry.configs.collectAsStateWithLifecycle()
+    val storedConfigs by SourceRegistry.configs.collectAsStateWithLifecycle()
+    val configs = SourceRegistry.displayConfigs(storedConfigs)
     val wifiQuality by AppSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
     val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
@@ -241,12 +238,11 @@ fun SourcesScreen(
                         awaitingOutput = if (config.enabled && config.awaitsLosslessOutput) losslessOutput else null,
                         onMetered = metered == true,
                         ceiling = ceiling,
-                        // Anything the user configured is theirs to edit or
-                        // delete. JioSaavn and YouTube have no address to
-                        // change, so a tap on them would open an empty editor.
+                        // User-configured sources can be edited; JioSaavn has no
+                        // address to change, so it has no editor.
                         onClick = if (config.kind.needsServer) ({ onEditSource(config) }) else null,
-                        // Every source, including YouTube, honors its switch.
-                        // JioSaavn alone retains its explicit enable confirmation.
+                        // Every visible source honors its switch; JioSaavn
+                        // retains its explicit enable confirmation.
                         onToggle = { enabled ->
                             if (config.kind == SourceKind.JIOSAAVN && enabled && !config.enabled) {
                                 onConfirmJioSaavn()

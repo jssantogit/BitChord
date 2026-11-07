@@ -18,31 +18,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 
 /**
- * Whether a stream started under this ceiling may be served by [kind].
+ * Whether an enabled source may receive the connection's quality request.
  *
- * Asked per stream rather than written into
- * [SourceConfig.enabled][com.music.bitchord.data.sources.SourceConfig.enabled],
- * which is what this used to do — an `applyQualityPreset` call flipped the
- * module and JioSaavn switches the moment a rung was picked. Two things
- * were wrong with that and both were reported together: picking a rung for
- * *mobile data* turned the sources off while sitting on Wi-Fi, and nothing
- * turned them back on when the connection changed, so a Wi-Fi ceiling of
- * Lossless still had no lossless source to reach. A ceiling is a property
- * of the connection in force; the switches on the Sources screen are the
- * user's standing choice. Storing the first in the second lost the second.
- *
- * [SourceKind.YOUTUBE] is permitted on every rung: it is what [maxKbps]
- * caps, and it is the only source that can answer at all when the ones
- * above it are skipped.
+ * Historical YouTube source settings never permit a stream. Addons and module
+ * indexes can receive a capped request; JioSaavn currently supplies its fixed
+ * high-bitrate rendition, so it cannot satisfy the lower bitrate ceilings.
+ * The resolver still passes the chosen request to each eligible provider.
  */
-fun AudioQuality.permits(kind: SourceKind): Boolean = when (this) {
-    AudioQuality.LOSSLESS -> true
-    // No lossless answer is wanted here, and a source that can serve one is
-    // the slow half of the list: an addon fronting several catalogues walks
-    // all of them before it answers, which is seconds spent to land on a
-    // transcode JioSaavn already has at 320.
-    AudioQuality.HIGH -> !kind.canServeLossless
-    AudioQuality.MEDIUM, AudioQuality.LOW -> kind == SourceKind.YOUTUBE
+fun AudioQuality.permits(kind: SourceKind): Boolean {
+    if (kind == SourceKind.YOUTUBE) return false
+    return when (this) {
+        AudioQuality.LOSSLESS -> true
+        AudioQuality.HIGH -> !kind.canServeLossless
+        AudioQuality.MEDIUM, AudioQuality.LOW ->
+            kind == SourceKind.ADDON || kind == SourceKind.CUSTOM_MODULE || kind == SourceKind.MODULE
+    }
 }
 
 /**
@@ -149,6 +139,7 @@ enum class SongSort {
 object AppSettings {
 
     private lateinit var prefs: SharedPreferences
+    private var settingsAppContext: Context? = null
 
     /** Only for the Discord, WebDAV and SMB secrets — everything else on here is plain prefs. */
     private lateinit var authStore: AuthStore
@@ -737,6 +728,7 @@ object AppSettings {
      * one here was a measurable slice of cold start.
      */
     fun init(context: Context, authStore: AuthStore) {
+        settingsAppContext = context.applicationContext
         prefs = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
         this.authStore = authStore
         com.music.bitchord.data.spotify.LocalPlaylistStore.init(context)
@@ -1568,11 +1560,27 @@ object AppSettings {
     fun setListenBrainzEnabled(value: Boolean) {
         listenBrainzEnabled.value = value
         prefs.edit().putBoolean(KEY_LISTENBRAINZ_ENABLED, value).apply()
+        settingsAppContext?.let { context ->
+            // A disabled account must not replay old offline listens on a later
+            // opt-in; old playback is not renewed consent.
+            if (!value) {
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.forget(context)
+            } else {
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.recover(context)
+            }
+        }
     }
 
     fun setListenBrainzToken(value: String) {
+        val changed = listenBrainzToken.value != value
         listenBrainzToken.value = value
         prefs.edit().putString(KEY_LISTENBRAINZ_TOKEN, value).apply()
+        if (changed) {
+            settingsAppContext?.let {
+                // Never replay pending listens using a different account token.
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.forget(it)
+            }
+        }
     }
 
     fun setListenBrainzPrimaryArtistOnly(value: Boolean) {

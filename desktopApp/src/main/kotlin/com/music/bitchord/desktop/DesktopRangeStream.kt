@@ -1,6 +1,5 @@
 package com.music.bitchord.desktop
 
-import com.music.bitchord.data.innertube.StreamResolver
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -68,9 +67,8 @@ internal class DesktopRangeStream(
             client.send(request.GET().build(), HttpResponse.BodyHandlers.ofByteArray())
         }.getOrNull() ?: return false
         if (response.statusCode() !in 200..299) {
-            // A URL cleared before playback has been refused mid-track: tell the resolver, as the
-            // phone's ChunkedDataSource does, so it forgets it and benches the client that minted it.
-            StreamResolver.onPlaybackRefused(url, response.statusCode())
+            // The URL belongs to its provider. Do not invoke the retired
+            // YouTube playback resolver on a failed HTTP request.
             return false
         }
 

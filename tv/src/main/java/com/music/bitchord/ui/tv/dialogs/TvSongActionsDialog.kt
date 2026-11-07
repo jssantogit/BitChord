@@ -24,7 +24,6 @@ import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PlaylistPlay
-import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,15 +43,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.media3.session.MediaController
 import com.music.bitchord.data.LikeState
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.playback.SleepTimer
-import com.music.bitchord.playback.beginRadioQueue
-import com.music.bitchord.playback.commitRadioQueue
 import com.music.bitchord.playback.playSongs
 import com.music.bitchord.playback.toMediaItem
 import com.music.bitchord.ui.MainViewModel
@@ -114,7 +110,6 @@ fun TvSongActionMenuDialog(
     onOpenArtist: ((String) -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
-    val scope = rememberCoroutineScope()
     var sheet by remember { mutableStateOf(SongSheet.Actions) }
     val sleepDeadline by SleepTimer.deadline.collectAsState()
     val sleepAfterTrack by SleepTimer.afterTrack.collectAsState()
@@ -168,17 +163,6 @@ fun TvSongActionMenuDialog(
                     trailingIcon = Icons.Rounded.PlaylistPlay,
                     onClick = {
                         mediaController?.addMediaItem(song.toMediaItem())
-                        onDismiss()
-                    },
-                )
-            }
-            item {
-                TvListRow(
-                    title = "Start Station",
-                    trailingIcon = Icons.Rounded.Radio,
-                    onClick = {
-                        val controller = mediaController
-                        if (controller != null) scope.launch { controller.startStation(song) }
                         onDismiss()
                     },
                 )
@@ -252,27 +236,6 @@ fun TvSongActionMenuDialog(
 }
 
 private enum class SongSheet { Actions, Playlist, Sleep, Equalizer }
-
-/**
- * A station seeded from [song], as the phone builds one: YouTube's radio for
- * it, with the song itself first. If it's already the one playing, it keeps
- * playing and only the rest of the queue is replaced.
- */
-private suspend fun MediaController.startStation(song: Song) {
-    val related = YtMusicRepository.radio(song.videoId).getOrNull()
-        ?.filterNot { it.videoId == song.videoId }
-        ?: return
-    beginRadioQueue()
-    val index = currentMediaItemIndex
-    if (index >= 0 && currentMediaItem?.mediaId == song.videoId) {
-        if (index + 1 < mediaItemCount) removeMediaItems(index + 1, mediaItemCount)
-        if (index > 0) removeMediaItems(0, index)
-        addMediaItems(1, related.map { it.toMediaItem() })
-    } else {
-        playSongs(listOf(song) + related, 0)
-    }
-    commitRadioQueue()
-}
 
 /** Picks one of the account's playlists for the song, or names a new one for it. */
 @Composable

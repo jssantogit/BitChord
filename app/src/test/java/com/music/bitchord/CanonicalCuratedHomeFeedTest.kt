@@ -3,6 +3,14 @@ package com.music.bitchord
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
+import com.music.bitchord.ui.canonicalPublicPopularityShelf
+import com.music.bitchord.ui.canonicalEditorialRowForCard
+import com.music.bitchord.ui.canonicalPublicPopularityCandidates
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
+import com.music.bitchord.ui.canonicalExploreShelves
+import com.music.bitchord.ui.canonicalExploreWithCommunityShelves
+import com.music.bitchord.ui.canonicalEditorialPlaybackSource
+import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.ui.canonicalCoverLookupTarget
 import com.music.bitchord.ui.canonicalCoverLookupCandidates
 import com.music.bitchord.ui.canonicalArtistArtworkCandidate
@@ -35,6 +43,230 @@ class CanonicalCuratedHomeFeedTest {
         releasesHeading = "Lançamentos", picksHeading = "Escolha a dedo",
         trendingHeading = "Em alta", todayIsoDate = "2026-10-25",
     )
+
+    @Test fun communityPopularityRanksOnlyVerifiedCachedRecordingIdentities() {
+        val known = playable.copy(hasCatalogedAsset = false)
+        val other = playable.copy(musicBrainzId = "00000000-0000-0000-0000-000000000003",
+            title = "Lucky Girl Syndrome", hasCatalogedAsset = true)
+        val evidence = listOf(
+            ListenBrainzPopularityEvidence.Unknown(other.musicBrainzId),
+            ListenBrainzPopularityEvidence.Known(known.musicBrainzId, 1200, 80),
+            ListenBrainzPopularityEvidence.Known("00000000-0000-0000-0000-000000000099", 8000, 1000),
+        )
+        val shelf = canonicalPublicPopularityShelf(
+            rows = listOf(release, known, other), evidence = evidence,
+            heading = "Popular na comunidade",
+        )
+        assertEquals("Popular na comunidade", shelf?.title)
+        assertEquals(listOf("Magnetic"), shelf?.items?.map { it.title })
+        assertEquals("catalog:RECORDING:${known.musicBrainzId}", shelf?.items?.single()?.browseId)
+        assertEquals(null, shelf?.items?.single()?.videoId)
+        assertFalse(known.hasCatalogedAsset) // metadata-only stays metadata-only
+        assertEquals(known, canonicalEditorialRowForCard(listOf(release, known),
+            shelf?.items?.single()?.browseId))
+        assertEquals(null, canonicalEditorialRowForCard(listOf(release, known), null))
+        assertEquals(null, canonicalEditorialRowForCard(listOf(release, known), "local:pick:123"))
+        assertEquals(null, canonicalPublicPopularityShelf(
+            rows = listOf(known, other),
+            evidence = listOf(ListenBrainzPopularityEvidence.Unknown(known.musicBrainzId)),
+            heading = "Popular na comunidade",
+        ))
+    }
+
+    @Test fun publicPopularityPreservesExactRecordingIdentityAcrossMbidCaseVariations() {
+        val mbid = "13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        val row = playable.copy(musicBrainzId = mbid.uppercase(java.util.Locale.ROOT),
+            hasCatalogedAsset = false)
+        val evidence = listOf(ListenBrainzPopularityEvidence.Known(mbid, 12, 3))
+        assertEquals(listOf(mbid),
+            canonicalPublicPopularityCandidates(listOf(row, row.copy(musicBrainzId = mbid))))
+        val shelf = canonicalPublicPopularityShelf(
+            rows = listOf(row), evidence = evidence, heading = "Popular na comunidade",
+        )
+        assertEquals("catalog:RECORDING:$mbid", shelf?.items?.single()?.browseId)
+        assertEquals(null, shelf?.items?.single()?.videoId)
+        assertEquals(row, canonicalEditorialRowForCard(listOf(row), shelf?.items?.single()?.browseId))
+    }
+
+    @Test fun weeklySitewideRankUsesOnlyCachedMusicBrainzRecordingRows() {
+        val firstId = "13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        val otherId = "22ad712e-ce73-9f0c-4e97-9f0e53144411"
+        val known = playable.copy(musicBrainzId = firstId.uppercase(java.util.Locale.ROOT),
+            hasCatalogedAsset = false)
+        val another = playable.copy(musicBrainzId = otherId, title = "Album Title",
+            kind = CanonicalSearchKind.RELEASE)
+        val ranks = listOf(
+            com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording(otherId, 900),
+            com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording(firstId, 30),
+        )
+        val shelf = com.music.bitchord.ui.canonicalSitewideCommunityShelf(
+            rows = listOf(known, another), rankings = ranks,
+            heading = "Popular na comunidade",
+        )
+        assertEquals(listOf(known.title), shelf?.items?.map { it.title })
+        assertEquals("catalog:RECORDING:$firstId", shelf?.items?.single()?.browseId)
+        assertEquals(null, shelf?.items?.single()?.videoId)
+        assertEquals(null, com.music.bitchord.ui.canonicalSitewideCommunityShelf(
+            rows = listOf(another), rankings = ranks, heading = "Popular na comunidade",
+        ))
+    }
+
+    @Test fun publicCommunityRecordingsAlwaysNavigateToMetadataOnExplore() {
+        val id = "catalog:RECORDING:13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        assertTrue(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.EXPLORE, "Popular na comunidade", "Popular na comunidade", id,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.HOME, "Popular na comunidade", "Popular na comunidade", id,
+        ))
+        assertTrue(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.HOME, "Para você", "Para você", id, allowHome = true,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.HOME, "Para você", "Para você", "catalog:ARTIST:bad",
+            allowHome = true,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.EXPLORE, "Lançamentos", "Popular na comunidade", id,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalCommunityCardIsMetadataOnly(
+            PlaybackSourceType.EXPLORE, "Popular na comunidade", "Popular na comunidade",
+            "local:pick:1",
+        ))
+    }
+
+    @Test fun communityPopularityNeverInventsAlbumOrAudioFromCounts() {
+        val known = playable.copy(hasCatalogedAsset = false)
+        val listens = listOf(ListenBrainzPopularityEvidence.Known(known.musicBrainzId, 20, 4))
+        val shelf = canonicalPublicPopularityShelf(
+            rows = listOf(release.copy(musicBrainzId = known.musicBrainzId)),
+            evidence = listens, heading = "Popular na comunidade",
+        )
+        assertEquals(null, shelf)
+        assertEquals(null, canonicalPublicPopularityShelf(
+            rows = listOf(known),
+            evidence = listOf(ListenBrainzPopularityEvidence.Known(known.musicBrainzId, 0, 0)),
+            heading = "Popular na comunidade",
+        ))
+        assertEquals(listOf(known.musicBrainzId),
+            canonicalPublicPopularityCandidates(listOf(release, known, known), limit = 40))
+    }
+
+    @Test fun communityShelfDoesNotReplaceVerifiedReleasesOrReenterHome() {
+        val original = feed(listOf(release, playable), listOf(local), listOf(playable.musicBrainzId))
+        val public = com.music.bitchord.data.model.HomeShelf(
+            "Popular na comunidade",
+            listOf(ShelfItem("Public recording", "", null, null,
+                "catalog:RECORDING:11111111-1111-4111-8111-111111111111")),
+        )
+        val explore = canonicalExploreWithCommunityShelves(
+            homeShelves = original, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta", community = public,
+        )
+        assertEquals(listOf("Lançamentos", "Popular na comunidade"), explore.map { it.title })
+        assertEquals(listOf("Lançamentos", "Escolha a dedo", "Em alta"), original.map { it.title })
+    }
+
+    @Test fun communityDiscoveryPrecedesPersonalFallbackWhenNoPublicReleaseExists() {
+        val localOnly = feed(emptyList(), listOf(local))
+        val public = com.music.bitchord.data.model.HomeShelf(
+            "Popular na comunidade",
+            listOf(ShelfItem("Public recording", "", null, null,
+                "catalog:RECORDING:11111111-1111-4111-8111-111111111111")),
+        )
+        assertEquals(listOf("Popular na comunidade"),
+            canonicalExploreWithCommunityShelves(localOnly, "Lançamentos", "Em alta", public)
+                .map { it.title })
+        assertEquals(listOf("Escolha a dedo"),
+            canonicalExploreWithCommunityShelves(localOnly, "Lançamentos", "Em alta", null)
+                .map { it.title })
+    }
+
+    @Test fun publicPopularityDoesNotFlickerOrRefetchForFreshMatchingMbidSet() {
+        val ids = listOf("13dd61c7-ce73-4e97-9f0c-9f0e53144411")
+        val at = 100_000L
+        assertTrue(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids, fetchedAtMs = at,
+            nowMs = at + 60_000L,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids.reversed() + "another", fetchedAtMs = at,
+            nowMs = at + 60_000L,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids, fetchedAtMs = at,
+            nowMs = at + 6 * 60 * 60 * 1_000L,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = ids, previous = ids, fetchedAtMs = at,
+            nowMs = at - 1,
+        ))
+        assertFalse(com.music.bitchord.ui.canonicalPublicPopularityCacheIsFresh(
+            requested = emptyList(), previous = emptyList(), fetchedAtMs = at,
+            nowMs = at,
+        ))
+    }
+
+    @Test fun editorialPlaybackProvenanceTracksTheActualHomeOrExploreTab() {
+        assertEquals(PlaybackSourceType.HOME, canonicalEditorialPlaybackSource(explore = false))
+        assertEquals(PlaybackSourceType.EXPLORE, canonicalEditorialPlaybackSource(explore = true))
+    }
+
+    @Test fun explorePrioritizesVerifiedReleasesWhileHomeKeepsAllThreeShelves() {
+        val home = feed(listOf(release, playable), listOf(local), listOf(playable.musicBrainzId))
+        val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta")
+        assertEquals(listOf("Lançamentos", "Escolha a dedo", "Em alta"), home.map { it.title })
+        assertEquals(listOf("Lançamentos"), explore.map { it.title })
+        assertEquals(home.first().items, explore.single().items)
+        assertFalse(explore.any { it.title == "Escolha a dedo" })
+    }
+
+    @Test fun exploreNeverAppearsEmptyWhenOfflineLibraryHasOnlyVerifiedPicks() {
+        val home = feed(emptyList(), listOf(local))
+        val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta")
+        assertEquals(listOf("Escolha a dedo"), explore.map { it.title })
+        assertEquals(canonicalLocalPickCardId(local), explore.single().items.single().browseId)
+    }
+
+    @Test fun exploreDoesNotPresentSavedDownloadAsPublicRelease() {
+        val saved = ShelfItem(
+            title = "Saved album", subtitle = "Downloaded",
+            thumbnailUrl = null, videoId = null, browseId = "local:download:album-1",
+        )
+        val home = listOf(
+            com.music.bitchord.data.model.HomeShelf("Lançamentos", listOf(saved)),
+            com.music.bitchord.data.model.HomeShelf(
+                "Escolha a dedo",
+                listOf(ShelfItem("Local track", "Artist", null, null, "local:pick:valid")),
+            ),
+        )
+        val explore = canonicalExploreShelves(home, "Lançamentos", "Em alta")
+        assertEquals(listOf("Escolha a dedo"), explore.map { it.title })
+        assertFalse(explore.flatMap { it.items }.any { it.browseId == saved.browseId })
+        val onlySaved = canonicalExploreShelves(home.take(1), "Lançamentos", "Em alta")
+        assertTrue(onlySaved.isEmpty())
+    }
+
+    @Test fun exploreFiltersMixedReleaseShelfInsteadOfLeakingSavedCollections() {
+        val downloaded = ShelfItem("Saved", "Downloaded", null, null, "local:download:42")
+        val verified = ShelfItem("Official", "EP", null, null,
+            "catalog:RELEASE_GROUP:11111111-1111-4111-8111-111111111111")
+        val home = listOf(
+            com.music.bitchord.data.model.HomeShelf("Lançamentos", listOf(downloaded, verified)),
+        )
+        val explore = canonicalExploreShelves(home, "Lançamentos", "Em alta")
+        assertEquals(listOf(verified), explore.single().items)
+        assertEquals(listOf(downloaded, verified), home.single().items)
+    }
+
+    @Test fun exploreFallsBackToEvidenceBasedTrendingWhenNoReleaseIsKnown() {
+        val home = feed(listOf(playable), trending = listOf(playable.musicBrainzId))
+        val explore = canonicalExploreShelves(home, releasesHeading = "Lançamentos",
+            trendingHeading = "Em alta")
+        assertEquals(listOf("Em alta"), explore.map { it.title })
+    }
 
     @Test fun showsNativeReleasePickAndEvidenceBasedTrendingShelvesInEditorialOrder() {
         val shelves = feed(listOf(release, playable), listOf(local), listOf(playable.musicBrainzId))

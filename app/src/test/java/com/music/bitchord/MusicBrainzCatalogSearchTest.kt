@@ -12,6 +12,103 @@ import org.junit.Test
 
 class MusicBrainzCatalogSearchTest {
     @Test
+    fun worldwideReleasesAndGenreUseFieldedQueriesNotLocalIndex() = runBlocking {
+        val calls = mutableListOf<Pair<String, Map<String, String>>>()
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    calls.add(path to parameters)
+                    return """{"count":1,"offset":0,"release-groups":[
+                        {"id":"03f3f1f2-12a4-4e47-9d52-459ee4a4f0ce",
+                         "title":"Public release","primary-type":"Album",
+                         "first-release-date":"2026-11-01",
+                         "artist-credit":[{"name":"Artist"}]}
+                    ]}"""
+                }
+            },
+        ))
+        assertTrue(search.searchRecentReleaseGroups("2026-10-01", "2026-11-05")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchReleaseGroupsForTag("k-pop")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchReleaseGroupsForTag("hip-hop")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchReleaseGroupsForTag("rnb")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchRecentReleaseGroupsForTag(
+            "hip-hop", "2026-10-01", "2026-11-05",
+        ) is MusicBrainzCatalogSearchResult.Success)
+        assertEquals(5, calls.size)
+        assertTrue(calls.all { it.first == "release-group" &&
+            it.second["dismax"] == "false" })
+        assertTrue(calls[0].second["query"].orEmpty().contains(
+            "firstreleasedate:[2026-10-01 TO 2026-11-05]"))
+        assertTrue(calls[1].second["query"].orEmpty().contains("tag:\"k-pop\""))
+        assertTrue(calls[2].second["query"].orEmpty().contains("tag:\"hip hop\""))
+        assertTrue(calls[3].second["query"].orEmpty().contains("tag:\"r&b\""))
+        assertTrue(calls[4].second["query"].orEmpty().contains("tag:\"hip hop\""))
+        assertTrue(calls[4].second["query"].orEmpty().contains(
+            "firstreleasedate:[2026-10-01 TO 2026-11-05]"))
+    }
+
+    @Test fun genreAlbumQueryPinsOfficialTagAndAlbumType() = runBlocking {
+        val requests = mutableListOf<String>()
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    requests += parameters["query"].orEmpty()
+                    assertEquals("release-group", path)
+                    assertEquals("false", parameters["dismax"])
+                    return """{"count":1,"offset":0,"release-groups":[
+                      {"id":"03f3f1f2-12a4-4e47-9d52-459ee4a4f0ce",
+                       "title":"Metal album","primary-type":"Album",
+                       "artist-credit":[{"name":"Metal Band"}]}
+                    ]}"""
+                }
+            },
+        ))
+        assertTrue(search.searchAlbumReleaseGroupsForTag("metal")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(search.searchAlbumReleaseGroupsForTag("rnb")
+            is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(requests[0].contains("tag:\"metal\" AND primarytype:album"))
+        assertTrue(requests[1].contains("tag:\"r&b\" AND primarytype:album"))
+        assertTrue(search.searchAlbumReleaseGroupsForTag("metal OR artist:*")
+            is MusicBrainzCatalogSearchResult.Failure)
+        assertEquals(2, requests.size)
+    }
+
+    @Test
+    fun invalidWorldwideRangesAndUnsafeTagsFailWithoutNetwork() = runBlocking {
+        var calls = 0
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    calls++
+                    return "{}"
+                }
+            },
+        ))
+        assertTrue(search.searchRecentReleaseGroups("2026-12-01", "2026-11-05")
+            is com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult.Failure)
+        assertTrue(search.searchReleaseGroupsForTag("pop OR artist:whatever")
+            is com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult.Failure)
+        assertTrue(search.searchRecentReleaseGroupsForTag(
+            "rock", "2026-12-01", "2026-11-05",
+        ) is MusicBrainzCatalogSearchResult.Failure)
+        assertTrue(search.searchRecentReleaseGroupsForTag(
+            "rock OR arid:*", "2026-11-01", "2026-11-05",
+        ) is MusicBrainzCatalogSearchResult.Failure)
+        assertEquals(0, calls)
+    }
+
+    @Test
     fun paginationConsumesRawServerRowsEvenWhenSomeMbidsAreRejectedOrDuplicated() = runBlocking {
         val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
         val sped = "3e619ba2-34f0-4649-83d8-05483e2fabe5"

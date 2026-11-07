@@ -40,10 +40,17 @@ internal class KtorMusicBrainzTransport(
         path: String,
         parameters: Map<String, String>,
         userAgent: String,
-    ): String = client.get("${baseUrl.trimEnd('/')}/$path") {
-        header(HttpHeaders.UserAgent, userAgent)
-        parameters.forEach { (name, value) -> parameter(name, value) }
-    }.bodyAsText()
+    ): String = measureMetadataHttp(
+        provider = "musicbrainz",
+        endpoint = metadataEndpointLabel(path),
+        status = { response: Pair<Int, String> -> response.first },
+    ) {
+        val response = client.get("${baseUrl.trimEnd('/')}/$path") {
+            header(HttpHeaders.UserAgent, userAgent)
+            parameters.forEach { (name, value) -> parameter(name, value) }
+        }
+        response.status.value to response.bodyAsText()
+    }.second
 }
 
 /**

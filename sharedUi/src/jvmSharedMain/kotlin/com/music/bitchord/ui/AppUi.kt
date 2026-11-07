@@ -43,6 +43,10 @@ object AppUi {
 
     val host: AppUiHost
         get() = checkNotNull(installed) { "AppUi.install was not called" }
+
+    /** Optional read for source-independent row previews and isolated UI tests.
+     * Runtime still installs the real host before the Library is shown. */
+    val hostOrNull: AppUiHost? get() = installed
 }
 
 /**
