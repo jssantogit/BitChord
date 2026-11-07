@@ -400,6 +400,20 @@ fun DetailScreen(
         )
     }
     val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val catalogPinRepo = remember(localArtistContext) {
+        CatalogMetadataPinRepository.get(localArtistContext)
+    }
+    val catalogPins by catalogPinRepo.pins.collectAsStateWithLifecycle()
+    val catalogPin = remember(page.browseId, page.title, page.subtitle, page.thumbnailUrl) {
+        CatalogMetadataPin(
+            browseId = page.browseId,
+            title = page.title.trim().take(240),
+            subtitle = page.subtitle.orEmpty().take(240),
+            artworkUrl = trustedCatalogMetadataPinArtwork(page.thumbnailUrl),
+        )
+    }
+    val canPinCatalogRelease = catalogRatingTarget?.entityType in setOf("ALBUM", "RELEASE_GROUP") &&
+        validCatalogMetadataPin(catalogPin)
     // Prefetch one hero and the first visible cards from any metadata
     // provider. The same Coil memory/disk cache serves their eventual native
     // AsyncImage nodes, so this never creates another image pipeline.
@@ -667,6 +681,9 @@ fun DetailScreen(
                         rating = catalogRating,
                         onRate = if (catalogRatingTarget != null && !isArtist)
                             ({ editingCatalogRating = true }) else null,
+                        isCatalogPinned = catalogPins.any { it.browseId == page.browseId },
+                        onToggleCatalogPin = if (canPinCatalogRelease)
+                            ({ catalogPinRepo.toggle(catalogPin); Unit }) else null,
                         metaOverride = folderCategoryMeta,
                     )
                 }
@@ -1153,6 +1170,8 @@ private fun ReleaseHeader(
     onToggleLibrary: (() -> Unit)?,
     rating: Double? = null,
     onRate: (() -> Unit)? = null,
+    isCatalogPinned: Boolean = false,
+    onToggleCatalogPin: (() -> Unit)? = null,
     metaOverride: String? = null,
 ) {
     // Do not display a partial sum as if the album's total were complete.
@@ -1242,6 +1261,9 @@ private fun ReleaseHeader(
                     canShuffle = songs.isNotEmpty(),
                     isSaved = library?.saved,
                     onToggleLibrary = if (library == null) null else onToggleLibrary,
+                    reservePinAction = onToggleCatalogPin != null,
+                    isPinnedInLibrary = isCatalogPinned,
+                    onTogglePin = onToggleCatalogPin,
                 )
             }
         },
