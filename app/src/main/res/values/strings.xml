@@ -1289,6 +1289,8 @@
     <string name="visual_offline_artist_stills">Artist photos</string>
     <string name="visual_offline_album_stills">Album covers</string>
     <string name="visual_offline_player_stills">Now Playing covers</string>
+    <string name="visual_offline_images_group">Saved photos and covers</string>
+    <string name="visual_offline_motion_group">Saved animations</string>
     <string name="visual_offline_still_limit">Saved image storage limit</string>
     <string name="visual_offline_still_limit_subtitle">Maximum disk space for offline artist photos, album art and Now Playing covers</string>
     <string name="visual_offline_motion_limit">Saved animation storage limit</string>
