@@ -7,6 +7,10 @@ import androidx.compose.material.icons.rounded.Album
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtSize
 import kotlinx.coroutines.CancellationException
@@ -21,7 +25,16 @@ import com.music.bitchord.ui.canonicalEditorialReleaseType
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.theme.ArtworkPalette
 
-private val featuredCoverArchive by lazy { CoverArtArchive() }
+/**
+ * A verified Front-v5 is already stored in Room and may be shown offline.
+ * Only when it is absent do we try the ordinary CAA group endpoint.
+ */
+internal suspend fun nativeArtistFeaturedCoverFromCachedGroup(
+    groupMbid: String,
+    readVerified: suspend (String) -> String?,
+    onlineLookup: suspend (String) -> String?,
+): String? = readVerified(groupMbid) ?: onlineLookup(groupMbid)
+
 private val FEATURED_GROUP_ID = Regex(
     "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
 )
@@ -41,6 +54,12 @@ internal fun NativeArtistPublicFeaturedRelease(
     palette: ArtworkPalette,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
 ) {
+    val context = LocalContext.current.applicationContext
+    val featuredCoverArchive = remember(context) {
+        CoverArtArchive(store = RoomMusicBrainzCoverArtStore(
+            CanonicalCatalogDatabase.get(context).catalogDao(),
+        ))
+    }
     val resolvedCover by produceState(
         initialValue = release.artworkUri?.takeIf(String::isNotBlank),
         key1 = release.musicBrainzId,
@@ -51,8 +70,14 @@ internal fun NativeArtistPublicFeaturedRelease(
             ?: return@produceState
         val fetched = try {
             withContext(Dispatchers.IO) {
-                featuredCoverArchive.findCover(
-                    null, verifiedGroup, CoverArtSize.THUMBNAIL,
+                nativeArtistFeaturedCoverFromCachedGroup(
+                    verifiedGroup,
+                    readVerified = {
+                        featuredCoverArchive.cachedVerifiedGroupCover(it, CoverArtSize.THUMBNAIL)
+                    },
+                    onlineLookup = {
+                        featuredCoverArchive.findCover(null, it, CoverArtSize.THUMBNAIL)
+                    },
                 )
             }
         } catch (cancelled: CancellationException) { throw cancelled }
