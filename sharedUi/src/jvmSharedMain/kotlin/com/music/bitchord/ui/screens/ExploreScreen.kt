@@ -68,6 +68,9 @@ fun ExploreScreen(
     modifier: Modifier = Modifier,
     /** The big "Explore" heading; the desktop's pages carry none. */
     showTitle: Boolean = true,
+    /** Canonical MusicBrainz genres use the ORIGINAL native Explore grid. */
+    canonicalGenres: List<ShelfItem>? = null,
+    onCanonicalGenreClick: (ShelfItem) -> Unit = {},
 ) {
     PullToRefresh(
         refreshing = refreshing,
@@ -99,7 +102,29 @@ fun ExploreScreen(
                         )
                     }
                 }
-                when (state) {
+                if (canonicalGenres != null) {
+                    // Unlike a Home shelf, Explore shows only native genre tiles
+                    // in a two-column (or responsive multi-column) grid.
+                    val rows = canonicalGenres.distinctBy { it.browseId }.chunked(columns)
+                    items(rows, key = { "catalog-genre:" + it.first().browseId }) { row ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(MOOD_SPACING),
+                            modifier = Modifier.padding(horizontal = PAGE_GUTTER)
+                                .padding(bottom = MOOD_SPACING),
+                        ) {
+                            row.forEach { category ->
+                                CanonicalGenreSleeve(
+                                    item = category,
+                                    modifier = Modifier.weight(1f)
+                                        .aspectRatio(MOOD_CARD_ASPECT)
+                                        .clip(MOOD_CARD_SHAPE)
+                                        .clickable { onCanonicalGenreClick(category) },
+                                )
+                            }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                } else when (state) {
                     UiState.Loading -> item { ExploreSkeletonRows(columns) }
                     is UiState.Error -> item {
                         MessageState(state.message, actionLabel = stringResource(Res.string.retry), onAction = onRetry)
@@ -174,42 +199,66 @@ fun MoodGenreSleeve(
     titleStyle: TextStyle = MaterialTheme.typography.titleMedium,
 ) {
     val tone = remember(item.stripeColor, item.title) { moodTone(item) }
+    NativeExploreCategorySleeve(item.title, item.thumbnailUrl, tone, modifier, titleStyle)
+}
+
+/** Catalog categories reuse the same native genre sleeve, never a Home tile. */
+@Composable
+private fun CanonicalGenreSleeve(
+    item: ShelfItem,
+    modifier: Modifier = Modifier,
+) {
+    val tone = remember(item.title) { moodToneFor(item.title, null) }
+    NativeExploreCategorySleeve(
+        item.title, item.thumbnailUrl, tone, modifier, MaterialTheme.typography.titleMedium,
+    )
+}
+
+/** Shared renderer for legacy category entries and canonical genre navigation. */
+@Composable
+private fun NativeExploreCategorySleeve(
+    title: String,
+    thumbnailUrl: String?,
+    tone: MoodTone,
+    modifier: Modifier,
+    titleStyle: TextStyle,
+) {
     Box(modifier = modifier.background(tone.stripe)) {
         Box(
-            Modifier
-                .align(Alignment.CenterEnd)
-                .fillMaxHeight()
+            Modifier.align(Alignment.CenterEnd).fillMaxHeight()
                 .fillMaxWidth(1f - MOOD_STRIPE_FRACTION)
                 .background(tone.placeholder),
         ) {
-            item.thumbnailUrl?.let { artwork ->
+            thumbnailUrl?.let { artwork ->
                 AsyncImage(
-                    model = artwork,
-                    contentDescription = null,
+                    model = artwork, contentDescription = null,
                     contentScale = ContentScale.Crop,
                     colorFilter = tone.duotone,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
         }
-        // Pale stripes (Energize's cream, Feel good's mint) would swallow
-        // white type; a soft shade under the title keeps it legible.
         Box(
-            Modifier
-                .matchParentSize()
-                .background(Brush.verticalGradient(0f to Color.Black.copy(alpha = .24f), .62f to Color.Transparent)),
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = .24f),
+                    .62f to Color.Transparent,
+                ),
+            ),
         )
         Text(
-            text = item.title,
+            text = title,
             style = titleStyle.copy(
-                shadow = Shadow(Color.Black.copy(alpha = .35f), offset = Offset(0f, 1f), blurRadius = 6f),
+                shadow = Shadow(
+                    Color.Black.copy(alpha = .35f),
+                    offset = Offset(0f, 1f), blurRadius = 6f,
+                ),
             ),
             fontWeight = FontWeight.Bold,
             color = Color.White,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .align(Alignment.TopStart)
+            modifier = Modifier.align(Alignment.TopStart)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
     }
@@ -217,8 +266,11 @@ fun MoodGenreSleeve(
 
 private class MoodTone(val stripe: Color, val placeholder: Color, val duotone: ColorFilter)
 
-private fun moodTone(item: MoodGenre): MoodTone {
-    val base = item.stripeColor?.let { Color(it.toInt()) } ?: fallbackMoodColor(item.title)
+private fun moodTone(item: MoodGenre): MoodTone =
+    moodToneFor(item.title, item.stripeColor?.let { Color(it.toInt()) })
+
+private fun moodToneFor(title: String, stripeColor: Color?): MoodTone {
+    val base = stripeColor ?: fallbackMoodColor(title)
     // YouTube's palette is already pastel; a touch of black keeps it from
     // glowing against the black page.
     val stripe = lerp(base, Color.Black, .08f)

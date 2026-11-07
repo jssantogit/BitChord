@@ -125,10 +125,10 @@ class ScrobbleManager(
                     timestamp = songStartedAt,
                     album = song.albumName,
                 ).onSuccess {
-                    Log.d(TAG, "Scrobbled: ${song.title} by ${song.artist}")
+                    Log.d(TAG, "Last.fm scrobble submitted")
                 }.onFailure { throwable ->
                     if (throwable is CancellationException) throw throwable
-                    Log.e(TAG, "Failed to scrobble: ${song.title}", throwable)
+                    Log.e(TAG, "Last.fm scrobble failed", throwable)
                 }
         }
     }
@@ -143,10 +143,10 @@ class ScrobbleManager(
                     album = song.albumName,
                     duration = song.durationText?.let { parseDurationSeconds(it) },
                 ).onSuccess {
-                    Log.d(TAG, "Updated now playing: ${song.title}")
+                    Log.d(TAG, "Last.fm now playing updated")
                 }.onFailure { throwable ->
                     if (throwable is CancellationException) throw throwable
-                    Log.e(TAG, "Failed to update now playing: ${song.title}", throwable)
+                    Log.e(TAG, "Last.fm now playing failed", throwable)
                 }
         }
     }

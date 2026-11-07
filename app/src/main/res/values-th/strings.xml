@@ -24,6 +24,7 @@
     <string name="home">หน้าแรก</string>
     <string name="play">เล่น</string>
     <string name="explore">สำรวจ</string>
+    <string name="explore_genres">แนวเพลง</string>
     <string name="listen_now">ฟังตอนนี้</string>
     <string name="downloads">การดาวน์โหลด</string>
     <string name="downloaded_songs">เพลงที่ดาวน์โหลดไว้</string>
@@ -467,7 +468,7 @@
     <string name="signing_in">กำลังลงชื่อเข้าใช้…</string>
     <string name="sleep_timer">ตัวจับเวลาปิดเพลง</string>
     <string name="sources_no_lossless">ไม่มีแหล่งข้อมูลที่เปิดใช้งานสามารถให้เสียงแบบไม่สูญเสียคุณภาพได้ เพิ่มแอดออนเพื่อเล่นไฟล์ไม่สูญเสียคุณภาพโดยไม่ต้องแปลงไฟล์</string>
-    <string name="sources_order_footer">หากแหล่งข้อมูลหนึ่งไม่มีแทร็กหรือเชื่อมต่อไม่ได้ BitChord จะลองแหล่งถัดไป แหล่งข้อมูลที่อยู่เหนือ YouTube สามารถแทนที่การบันทึกของ YouTube ได้เมื่อให้เวอร์ชันที่ดีกว่า</string>
+    <string name="sources_order_footer">หากแหล่งข้อมูลหนึ่งไม่มีแทร็กหรือเชื่อมต่อไม่ได้ BitChord จะลองแหล่งถัดไป</string>
     <string name="sources_order_header">แหล่งข้อมูล เรียงตามลำดับที่ลอง</string>
     <string name="sources_quality_capped">การเชื่อมต่อนี้ตั้งไว้ต่ำกว่าคุณภาพสูง สตรีมจึงถูกแปลงให้พอดีกับขีดจำกัดนั้น การดาวน์โหลดไม่ได้รับผลกระทบ</string>
     <string name="jiosaavn_mismatch_warning">อาจจับคู่กับเพลงผิดเวอร์ชัน เปิดใช้โดยยอมรับความเสี่ยงเอง</string>
@@ -1213,6 +1214,7 @@
 
 
     <string name="shelf_trending">Trending</string>
+    <string name="shelf_listenbrainz_community">ยอดนิยมในชุมชน</string>
 
 
     <string name="shelf_recents">Recents</string>
@@ -1273,6 +1275,7 @@
     <string name="spotify_import_none">ไม่พบเพลงเหล่านั้นบน YouTube Music</string>
     <string name="spotify_import_title">นำเข้าเพลย์ลิสต์จาก Spotify</string>
     <string name="spotify_import_unmatched">ไม่พบเพลง %1$d เพลงบน YouTube Music</string>
+    <string name="spotify_import_metadata_only">บันทึกเพลย์ลิสต์แล้ว โดยมี %1$d เพลงเป็นข้อมูลเมตาเท่านั้น ไม่มีการเชื่อมโยงเสียงที่ยังไม่ได้ตรวจสอบการจับคู่</string>
     <string name="spotify_library_subtitle">เพลย์ลิสต์ Spotify ของคุณ</string>
     <string name="spotify_sign_in">ลงชื่อเข้าใช้ด้วย Spotify</string>
     <string name="spotify_use_spdc_token">ใช้โทเค็น sp_dc</string>
@@ -1371,4 +1374,26 @@
     <string name="search_origin_local">ในเครื่อง</string>
     <string name="pause_resume_fade">เฟดเมื่อหยุดชั่วคราวและเล่นต่อ</string>
     <string name="pause_resume_fade_subtitle">ค่อย ๆ ลดเสียงเมื่อหยุดชั่วคราวและเพิ่มเสียงเมื่อเล่นต่อ</string>
+    <string name="home_global_discovery">ค้นพบเพลงจากทั่วโลก</string>
+
+    <string name="visual_offline_title">Offline visuals</string>
+    <string name="visual_offline_stream">Stream normally with temporary cache; do not keep videos permanently</string>
+    <string name="visual_offline_wifi">Keep complete animations offline, over Wi-Fi only</string>
+    <string name="visual_offline_still">Replace animations with available still artwork and photos</string>
+    <string name="visual_offline_temporary">Temporary</string>
+    <string name="visual_offline_save_wifi">Save on Wi-Fi</string>
+    <string name="visual_offline_only_stills">Still images</string>
+    <string name="visual_offline_artist_motion">Artist animations</string>
+    <string name="visual_offline_album_motion">Album animations</string>
+    <string name="visual_offline_player_motion">Now Playing animations</string>
+    <string name="visual_offline_save_stills">Keep still images</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">Artist photos</string>
+    <string name="visual_offline_album_stills">Album covers</string>
+    <string name="visual_offline_player_stills">Now Playing covers</string>
+    <string name="visual_offline_clear_title">Clear saved visuals</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">Clear offline visuals?</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">Offline visuals cleared</string>
 </resources>

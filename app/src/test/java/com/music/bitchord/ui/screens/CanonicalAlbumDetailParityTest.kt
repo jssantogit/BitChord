@@ -9,6 +9,22 @@ import org.junit.Test
 
 /** A real album detail follows DetailScreen release grammar, not Library rows. */
 class CanonicalAlbumDetailParityTest {
+    @Test fun emptyNativeAlbumSearchUsesSameFeedbackInRootAndNestedRoutes() {
+        assertEquals(
+            "Nenhuma música corresponde à pesquisa.",
+            nativeAlbumEmptyMessage("missing", hasPlayableTracks = true),
+        )
+        assertEquals(
+            "Nenhuma música nesta seleção.",
+            nativeAlbumEmptyMessage("", hasPlayableTracks = false),
+        )
+        assertEquals(
+            "Nenhuma música nesta seleção.",
+            nativeAlbumEmptyMessage("missing", hasPlayableTracks = false),
+        )
+    }
+
+
     private fun track(id: String, title: String) = CanonicalBrowseTrack(
         recordingId = id,
         title = title,
@@ -89,4 +105,32 @@ class CanonicalAlbumDetailParityTest {
         assertEquals("ALLDAY PROJECT - EP", canonicalAlbumDisplayTitle("ALLDAY PROJECT - EP", "Album"))
         assertEquals("A - EP Collection", canonicalAlbumDisplayTitle("A - EP Collection", "EP"))
     }
+    @Test fun sharedNativeAlbumRowsKeepOriginalNumbersAfterSearchingOrSorting() {
+        val original = mapOf("song-c" to 3, "song-a" to 1, "song-b" to 2)
+        assertEquals(3, nativeCanonicalAlbumRowNumber("song-c", 0, original))
+        assertEquals(1, nativeCanonicalAlbumRowNumber("song-a", 1, original))
+        assertEquals(2, nativeCanonicalAlbumRowNumber("song-b", 2, original))
+        // Only truly missing evidence falls back to the visible position.
+        assertEquals(4, nativeCanonicalAlbumRowNumber("unknown", 3, original))
+    }
+
+    @Test fun nestedNativeAlbumSearchDoesNotChangeReleaseTrackOrderOrNumbers() {
+        val ordered = listOf(
+            track("recording-c", "Third"),
+            track("recording-a", "First"),
+            track("recording-b", "Second"),
+        )
+        val filtered = nativeCanonicalAlbumVisibleTracks(ordered, "first")
+        assertEquals(listOf("recording-a"), filtered.map { it.recordingId })
+        assertEquals(
+            2,
+            nativeCanonicalAlbumRowNumber(
+                filtered.single().recordingId,
+                0,
+                canonicalAlbumDetailTrackNumbers(ordered),
+            ),
+        )
+        assertEquals(ordered, nativeCanonicalAlbumVisibleTracks(ordered, ""))
+    }
+
 }

@@ -3,13 +3,14 @@ package com.music.bitchord.diagnostics
 import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 
 /**
- * Conservative export bridge. Counts describe ONLY Cover Art Archive metadata
- * requests, never completed Coil bitmap rendering or verified visual quality.
+ * Privacy-safe export bridge. CAA metadata HTTP outcomes and completed Coil
+ * image loads are counted separately. Neither proves GPU drawing or correct
+ * visual content.
  * No MBIDs, titles, URLs, device IDs, network peer names, or search queries.
  */
 internal object CatalogCoverDiagnostics {
     fun lines(s: CatalogCoverTelemetry.Snapshot): List<String> = buildList {
-        add("scope=caa_metadata_http_only")
+        add("scope=caa_metadata_and_coil_image_loads")
         add("window=since_last_capture_start_or_process_start")
         add("not_measured=gpu_draw_latency_wrong_cover_rate")
         add("image_scope=coil_load_caa_urls_only")
@@ -26,6 +27,7 @@ internal object CatalogCoverDiagnostics {
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
         add("coil_load_success=${s.imageRenderSuccesses} coil_load_errors=${s.imageRenderFailures}")
+        add("coil_load_started=${s.imageLoadStarts} coil_load_cancellations=${s.imageLoadCancels}")
         // Coil's actual result dataSource distinguishes bitmap cache reuse
         // from disk reads and network downloads, without recording URLs.
         add("coil_sources memory=${s.coilMemoryHits} disk=${s.coilDiskHits}" +

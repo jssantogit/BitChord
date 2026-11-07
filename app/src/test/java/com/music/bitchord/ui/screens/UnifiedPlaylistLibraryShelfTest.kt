@@ -67,6 +67,10 @@ class UnifiedPlaylistLibraryShelfTest {
         assertEquals(null, latestLibraryPlaylistCard(before, emptyList()))
     }
 
+    @Test fun historicalLocalPlaylistCanBeDeletedWithoutRemovingItsLegacyIdFromOtherRows() {
+        assertTrue(canDeleteLibraryPlaylist(normal("old")))
+    }
+
     @Test fun persistedNormalPlaylistKeepsCanonicalMemberOrderInItsCard() {
         val saved = SavedCanonicalStaticPlaylist(
             "p1", "Viagem", listOf("rec-3", "rec-1", "rec-2"),

@@ -82,7 +82,6 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.auth.GoogleAccountSession
-import com.music.bitchord.auth.WebSessionMode
 import com.music.bitchord.auth.YouTubeProfile
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.settings.AppSettings
@@ -91,10 +90,8 @@ import com.music.bitchord.data.settings.TvSettings
 import kotlin.math.ceil
 import kotlinx.coroutines.delay
 import com.music.bitchord.ui.MainViewModel
-import com.music.bitchord.ui.configureTvSignInWebView
 import com.music.bitchord.ui.onSignedIn
 import com.music.bitchord.ui.tv.TvAppMark
-import com.music.bitchord.ui.tv.auth.TvAuthServer
 import com.music.bitchord.ui.tv.auth.TvQrCodeView
 import com.music.bitchord.ui.tv.components.TvActivityIndicator
 import com.music.bitchord.ui.tv.components.TvArtwork
@@ -178,38 +175,14 @@ fun TvAccountDialog(
                 onDismiss = onDismiss,
             )
         }
-        AccountDialogMode.SignInChoose -> TvDialog(
-            title = "Sign In to YouTube Music",
-            message = "Your library, playlists and recommendations follow your account.",
-            onDismissRequest = backFromSignIn,
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                TvListRow(
-                    title = "Sign In on This TV",
-                    subtitle = "Use the remote to sign in to Google.",
-                    leadingIcon = Icons.Rounded.Tv,
-                    modifier = Modifier.tvInitialFocus(),
-                    onClick = { mode = AccountDialogMode.SignInTv },
-                )
-                TvListRow(
-                    title = "Sign In with Your Phone",
-                    subtitle = "Scan a code with a phone on the same Wi-Fi.",
-                    leadingIcon = Icons.Rounded.PhoneAndroid,
-                    onClick = { mode = AccountDialogMode.SignInPhone },
-                )
+        AccountDialogMode.SignInChoose, AccountDialogMode.SignInPhone, AccountDialogMode.SignInTv ->
+            TvDialog(
+                title = "YouTube Music sign-in retired",
+                message = "The YouTube Music backend is no longer available. Stored historical profiles remain readable, but new Google sign-in is disabled.",
+                onDismissRequest = backFromSignIn,
+            ) {
+                TvDialogButton(text = "Close", onClick = backFromSignIn, initialFocus = true)
             }
-            Spacer(modifier = Modifier.height(14.dp))
-            TvDialogButton(
-                text = if (googleAccounts.isNotEmpty() || signedIn) "Back" else "Not Now",
-                onClick = backFromSignIn,
-            )
-        }
-        AccountDialogMode.SignInPhone -> TvPhoneSignIn(viewModel = viewModel, onBack = backFromSignIn)
-        AccountDialogMode.SignInTv -> TvGoogleSignIn(
-            viewModel = viewModel,
-            onBack = backFromSignIn,
-            onSignedIn = onDismiss,
-        )
     }
 }
 
@@ -1024,126 +997,6 @@ private fun TvPinDialog(
 
 
 
-
-/** A code for the phone to open; the TV serves a page there that takes the session. */
-@Composable
-private fun TvPhoneSignIn(viewModel: MainViewModel, onBack: () -> Unit) {
-    var url by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
-    DisposableEffect(Unit) {
-        scope.launch {
-            TvAuthServer.start { cookie ->
-                scope.launch(Dispatchers.Main) { viewModel.onSignedIn(cookie) }
-            }?.let { (port, ip) -> url = "http://$ip:$port/" }
-        }
-        onDispose { TvAuthServer.stop() }
-    }
-
-    TvDialog(title = "Sign In with Your Phone", width = 576.dp, onDismissRequest = onBack) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(29.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(160.dp)
-                    .clip(RoundedCornerShape(13.dp))
-                    .background(Color.White),
-                contentAlignment = Alignment.Center,
-            ) {
-                val link = url
-                if (link != null) TvQrCodeView(content = link, size = 147.dp) else TvActivityIndicator(color = Color.Black)
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(11.dp)) {
-                TvStep(1, "Connect your phone to the same Wi-Fi as this TV.")
-                TvStep(2, "Scan the code, or open ${url ?: "the address shown here"}.")
-                TvStep(3, "Follow the steps on your phone. This TV signs in by itself.")
-            }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        TvDialogButton(text = "Back", onClick = onBack, initialFocus = true, modifier = Modifier.width(256.dp))
-    }
-}
-
-@Composable
-private fun TvStep(number: Int, text: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.Top) {
-        Box(
-            modifier = Modifier
-                .size(21.dp)
-                .clip(CircleShape)
-                .background(TvGlass.Fill),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = number.toString(), style = TvType.Caption, color = TvGlass.TextPrimary)
-        }
-        Text(text = text, style = TvType.Callout, color = TvGlass.TextSecondary, modifier = Modifier.weight(1f))
-    }
-}
-
-/** Google's own sign-in page, full screen, with the finish and cancel controls above it. */
-@Composable
-private fun TvGoogleSignIn(viewModel: MainViewModel, onBack: () -> Unit, onSignedIn: () -> Unit) {
-    var capture by remember { mutableIntStateOf(0) }
-    // Google's page owns the D-pad while one of its fields has focus, so Up can't
-    // be counted on to reach the buttons above it. Back does: the first press
-    // comes up to Done / Cancel, a second leaves sign-in.
-    val doneFocus = remember { FocusRequester() }
-    var headerHasFocus by remember { mutableStateOf(false) }
-    Dialog(
-        onDismissRequest = {
-            if (headerHasFocus) onBack() else runCatching { doneFocus.requestFocus() }
-        },
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF141416)),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp, vertical = 14.dp)
-                    .onFocusChanged { headerHasFocus = it.hasFocus },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Sign In to YouTube Music",
-                        style = TvType.Headline,
-                        color = TvGlass.TextPrimary,
-                    )
-                    Text(
-                        text = "Press Back for Done or Cancel",
-                        style = TvType.Caption,
-                        color = TvGlass.TextTertiary,
-                    )
-                }
-                TvButton(text = "Cancel", onClick = onBack)
-                Spacer(modifier = Modifier.width(10.dp))
-                TvButton(text = "Done", isPrimary = true, onClick = { capture++ }, modifier = Modifier.focusRequester(doneFocus))
-            }
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                com.music.bitchord.auth.YtMusicLoginScreen(
-                    mode = WebSessionMode.SIGN_IN,
-                    configureWebView = ::configureTvSignInWebView,
-                    captureRequest = capture,
-                    onPageReady = { ready -> if (ready) capture++ },
-                    onCaptured = { session ->
-                        viewModel.onWebSession(session, WebSessionMode.SIGN_IN) { success ->
-                            if (success) onSignedIn()
-                        }
-                    },
-                )
-            }
-        }
-    }
-}
 
 @Composable
 fun TvDiscordDialog(onDismiss: () -> Unit) {

@@ -158,6 +158,12 @@ import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.canvas.VisualRetentionMode
+import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.CanvasCache
+import com.music.bitchord.data.canvas.VisualStillMedia
+import com.music.bitchord.data.canvas.CanvasRepository
+import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import com.music.bitchord.data.settings.OutputPcmMode
 import com.music.bitchord.playback.AudioOutputStatus
 import com.music.bitchord.data.settings.AutomixPerformanceMode
@@ -227,6 +233,10 @@ internal fun SettingsScreen(
     val fullBleedArtwork by AppSettings.fullBleedArtwork.collectAsStateWithLifecycle()
     val animatedCanvas by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
     val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
+    val visualRetention by AppSettings.visualRetentionMode.collectAsStateWithLifecycle()
+    val visualMotionSurfaces by AppSettings.visualMotionSurfaces.collectAsStateWithLifecycle()
+    val visualStills by AppSettings.saveVisualStillImages.collectAsStateWithLifecycle()
+    val visualStillSurfaces by AppSettings.visualStillSurfaces.collectAsStateWithLifecycle()
     val legacyMeshGradient by AppSettings.legacyMeshGradient.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
@@ -279,8 +289,7 @@ internal fun SettingsScreen(
     val listenBrainzToken by AppSettings.listenBrainzToken.collectAsStateWithLifecycle()
 
     val replayGenres by AppSettings.replayGenres.collectAsStateWithLifecycle()
-    val canonicalDiscoveryEnabled by AppSettings.canonicalDiscoveryEnabled.collectAsStateWithLifecycle()
-
+    
     // Read here so the row can say "In a party · ABC123" rather than making
     // somebody open the screen to find out whether they are still in one.
     val party by ListenTogether.state.collectAsStateWithLifecycle()
@@ -299,6 +308,7 @@ internal fun SettingsScreen(
     var importStatus by remember { mutableStateOf<String?>(null) }
     var confirmImport by remember { mutableStateOf(false) }
     var confirmClearSongCache by remember { mutableStateOf(false) }
+    var confirmClearVisualMedia by remember { mutableStateOf(false) }
     var showPerformanceWarning by remember { mutableStateOf(false) }
     var showPerformanceConfirmation by remember { mutableStateOf(false) }
     val backupScope = rememberCoroutineScope()
@@ -514,44 +524,6 @@ internal fun SettingsScreen(
                     badge = stringResource(R.string.in_use).takeIf { metered == true },
                     value = cellularQuality.localizedLabel(),
                     onClick = { picking = QualityTarget.CELLULAR },
-                )
-            }
-        }
-        }
-
-        // Its own group rather than rows bolted onto the two above, because a
-        // download is not a third kind of connection. The ceilings answer "what
-        // does this minute cost"; these answer "what am I keeping, and when may
-        // it be fetched" — and those two questions only make sense read
-        // together, which is what puts them side by side here.
-        if (canonicalDiscoverySettingsVisible(selectedSection, searchQuery)) {
-        SearchableSettingsGroup(
-            search,
-            destination = SettingsSection.SOURCES,
-            onSearchNavigate = if (selectedSection == null) {
-                _: String -> onSelectSection(SettingsSection.SOURCES)
-            } else null,
-            header = stringResource(R.string.canonical_discovery_header),
-        ) {
-            val title = stringResource(R.string.canonical_discovery_setting_title)
-            row(title, "musicbrainz", "catalog", "home", "explore", "offline") {
-                SettingsRow(
-                    icon = Icons.Rounded.LibraryMusic,
-                    title = title,
-                    subtitle = stringResource(R.string.canonical_discovery_setting_subtitle),
-                    trailing = {
-                        Switch(
-                            checked = canonicalDiscoveryEnabled,
-                            onCheckedChange = AppSettings::setCanonicalDiscoveryEnabled,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        )
-                    },
-                    onClick = {
-                        AppSettings.setCanonicalDiscoveryEnabled(!canonicalDiscoveryEnabled)
-                    },
                 )
             }
         }
@@ -936,6 +908,72 @@ internal fun SettingsScreen(
                     }
                 }
             }
+            val offlineVisualTitle = stringResource(R.string.visual_offline_title)
+            row(offlineVisualTitle, "animação", "cache", "wifi", "vídeo", "imagem", "offline") {
+                SettingsRow(
+                    icon = Icons.Rounded.Cached,
+                    title = offlineVisualTitle,
+                    subtitle = when (visualRetention) {
+                        VisualRetentionMode.STREAM_ONLY ->
+                            stringResource(R.string.visual_offline_stream)
+                        VisualRetentionMode.SAVE_ON_WIFI ->
+                            stringResource(R.string.visual_offline_wifi)
+                        VisualRetentionMode.STILL_ONLY ->
+                            stringResource(R.string.visual_offline_still)
+                    },
+                )
+                SegmentedControl(
+                    options = listOf(stringResource(R.string.visual_offline_temporary),
+                        stringResource(R.string.visual_offline_save_wifi),
+                        stringResource(R.string.visual_offline_only_stills)),
+                    selectedIndex = VisualRetentionMode.entries.indexOf(visualRetention),
+                    onSelect = { index ->
+                        AppSettings.setVisualRetentionMode(VisualRetentionMode.entries[index])
+                    },
+                    modifier = Modifier.padding(
+                        start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp,
+                    ),
+                )
+            }
+            if (visualRetention == VisualRetentionMode.SAVE_ON_WIFI) {
+                val visualLabels = listOf(
+                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_motion),
+                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_motion),
+                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_motion),
+                )
+                visualLabels.forEach { (surface, title) ->
+                    row(title, "vídeo", "offline", "wifi", divided = false) {
+                        SettingsSubRow(
+                            title = title,
+                            checked = surface in visualMotionSurfaces,
+                            onCheckedChange = { AppSettings.setVisualMotionSurface(surface, it) },
+                        )
+                    }
+                }
+            }
+            row(stringResource(R.string.visual_offline_save_stills), "foto", "capa", "offline", divided = false) {
+                SettingsSubRow(
+                    title = stringResource(R.string.visual_offline_save_stills),
+                    checked = visualStills,
+                    onCheckedChange = AppSettings::setSaveVisualStillImages,
+                    subtitle = stringResource(R.string.visual_offline_stills_subtitle),
+                )
+            }
+            if (visualStills) {
+                listOf(
+                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_stills),
+                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_stills),
+                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_stills),
+                ).forEach { (surface, title) ->
+                    row(title, "imagem", "offline", "cache", divided = false) {
+                        SettingsSubRow(
+                            title = title,
+                            checked = surface in visualStillSurfaces,
+                            onCheckedChange = { AppSettings.setVisualStillSurface(surface, it) },
+                        )
+                    }
+                }
+            }
             val artistSignaturesTitle = stringResource(R.string.artist_signatures)
             row(artistSignaturesTitle, "signature", "artist", "logo") {
                 SettingsRow(
@@ -1294,6 +1332,14 @@ internal fun SettingsScreen(
                     onClick = { confirmClearSongCache = true },
                 )
             }
+            row(stringResource(R.string.visual_offline_clear_title), "offline", "cache", "vídeo", "animação", "capa") {
+                SettingsRow(
+                    icon = Icons.Rounded.DeleteSweep,
+                    title = stringResource(R.string.visual_offline_clear_title),
+                    subtitle = stringResource(R.string.visual_offline_clear_subtitle),
+                    onClick = { confirmClearVisualMedia = true },
+                )
+            }
             val clearImageCacheTitle = stringResource(R.string.clear_image_cache)
             row(clearImageCacheTitle, "cache", "artwork", "free space") {
                 SettingsRow(
@@ -1568,9 +1614,6 @@ internal fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(top = 24.dp, bottom = 8.dp),
         )
-        // Discogs requires an app-level non-affiliation notice in addition to
-        // the exact linked credit adjacent to each edition's metadata.
-        // Keep it in About, not as another block on every album page.
         if (com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess.ENABLED) {
             Text(
                 text = com.music.bitchord.data.catalog.metadata.discogs
@@ -1578,9 +1621,7 @@ internal fun SettingsScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
             )
         }
         }
@@ -1642,6 +1683,29 @@ internal fun SettingsScreen(
                     AppSettings.setAutomixPerformanceMode(mode)
                     pickingAutomixPerformance = false
                 },
+            )
+        }
+    }
+
+    if (confirmClearVisualMedia) {
+        NativeAlertHost(onDismiss = { confirmClearVisualMedia = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.visual_offline_confirm_title),
+                description = stringResource(R.string.visual_offline_confirm_description),
+                confirmLabel = stringResource(R.string.clear),
+                destructive = true,
+                onConfirm = {
+                    confirmClearVisualMedia = false
+                    backupScope.launch {
+                        VisualStillMedia.clear()
+                        CanvasCache.clearSaved()
+                        AppleArtistArtRepository.clearOfflineMetadata()
+                        CanvasRepository.clearOfflineMetadata()
+                        Toast.makeText(context, context.getString(R.string.visual_offline_cleared), Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDismiss = { confirmClearVisualMedia = false },
             )
         }
     }

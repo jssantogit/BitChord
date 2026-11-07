@@ -1,66 +1,184 @@
 package com.music.bitchord.data.canvas
 
 import android.content.Context
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.NoOpCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.offline.Downloader
+import androidx.media3.exoplayer.offline.ProgressiveDownloader
+import androidx.media3.exoplayer.hls.offline.HlsDownloader
+import androidx.media3.common.StreamKey
+import com.music.bitchord.data.Http
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Disk cache for canvas clips — the looping video some releases publish
- * alongside a track, played over the cover art by
- * [CanvasArtworkPlayer][com.music.bitchord.ui.player.CanvasArtworkPlayer].
+ * Provider-neutral Media3 clip store.
  *
- * Without this, that player fetched a clip straight off the network through
- * a bare OkHttp data source, repeating for as long as the track playing over
- * it does ([androidx.media3.common.Player.REPEAT_MODE_ONE]). ExoPlayer frees
- * a sample's buffer as soon as the renderer has consumed it — there is no
- * back buffer configured, nor should there be one sized for an entire clip —
- * so once a loop finishes, nothing of it is left in memory to loop back to,
- * and reaching position zero again means the data source is asked for those
- * bytes again. A five-second clip behind a four-minute track loops around
- * fifty times, which without this cache was fifty downloads of the same few
- * seconds of video rather than one: the "40MB for one song" and multi-
- * gigabyte-day reports trace to exactly this repeat, not to audio bitrate.
- *
- * Wrapping the upstream in [CacheDataSource] means only the first loop of a
- * clip ever reaches the network; every loop after it, and every replay of
- * the same track later in the session, is served from disk instead.
+ * The existing 150MB LRU absorbs streaming and repeated playback loops. When
+ * the listener explicitly opts in, complete HLS or MP4 clips are downloaded
+ * into a separate non-evictable Media3 cache (bounded by a hard global quota)
+ * under noBackupFilesDir. Both read paths share the same original URL cache
+ * keys; offline HLS manifests and segment requests therefore work unchanged.
+ * Never claim an incomplete/partially downloaded clip is available offline.
  */
 @UnstableApi
 object CanvasCache {
+    private const val STREAM_CACHE_BYTES = 150L * 1024 * 1024
+    private const val SAVED_CACHE_BYTES = 400L * 1024 * 1024
+    private const val MAX_CLIP_BYTES = 48L * 1024 * 1024
+    private const val PREFS = "visual_canvas_pins_v1"
 
-    /**
-     * Small on purpose — a clip is a few seconds of video, not a song, and
-     * this only needs to outlive one player screen's worth of looping, not
-     * a library. [SimpleCache]'s own evictor reclaims the rest.
-     */
-    private const val CACHE_LIMIT_BYTES = 150L * 1024 * 1024
+    private lateinit var streamingCache: SimpleCache
+    private lateinit var savedCache: SimpleCache
+    private lateinit var context: Context
+    private val locks = ConcurrentHashMap<String, Mutex>()
+    private val clearEpoch = AtomicLong(0L)
 
-    private lateinit var cache: SimpleCache
-
-    /** Opened once per process, alongside [com.music.bitchord.playback.AudioCache.init]. */
     fun init(context: Context) {
-        cache = SimpleCache(
+        this.context = context.applicationContext
+        val database = StandaloneDatabaseProvider(context)
+        streamingCache = SimpleCache(
             File(context.cacheDir, "canvas"),
-            LeastRecentlyUsedCacheEvictor(CACHE_LIMIT_BYTES),
-            StandaloneDatabaseProvider(context),
+            LeastRecentlyUsedCacheEvictor(STREAM_CACHE_BYTES), database,
+        )
+        savedCache = SimpleCache(
+            File(context.noBackupFilesDir, "visual_motion_saved_v1"),
+            NoOpCacheEvictor(), database,
         )
     }
 
+    private fun keyFor(url: String): String =
+        visualMediaCacheKey(VisualSurface.NOW_PLAYING, url)
+
+    fun isSaved(url: String): Boolean {
+        if (!::context.isInitialized || !isSafeVisualMediaUrl(url)) return false
+        val key = keyFor(url)
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(key, false)
+    }
+
+    /** A pinned HLS clip must play the same rendition downloaded offline.
+     * Otherwise the adaptive player may request an uncached higher rendition. */
+    fun playbackItem(url: String): MediaItem {
+        val builder = MediaItem.Builder().setUri(url)
+        if (isSaved(url) && url.substringBefore('?')
+                .endsWith(".m3u8", ignoreCase = true)
+        ) builder.setStreamKeys(listOf(StreamKey(0, 0)))
+        return builder.build()
+    }
+
     /**
-     * [upstream] wrapped so a clip already on disk never touches the
-     * network again — see the class doc for why that is the whole point.
-     * A cache write that fails (full disk, evicted mid-write) drops back to
-     * plain streaming rather than surfacing as a playback error, the same
-     * choice [com.music.bitchord.playback.AudioCache] makes for audio.
+     * A completed saved clip wins. An unknown clip still traverses the
+     * ordinary LRU and upstream, so default streaming behavior is unchanged.
+     * HLS resolves its manifest/variants/segments through this same chain.
      */
-    fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory =
-        CacheDataSource.Factory()
-            .setCache(cache)
+    fun dataSourceFactory(upstream: DataSource.Factory): DataSource.Factory {
+        val ordinary = CacheDataSource.Factory()
+            .setCache(streamingCache)
             .setUpstreamDataSourceFactory(upstream)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        return CacheDataSource.Factory()
+            .setCache(savedCache)
+            // This layer is READ-ONLY for normal playback. Only the explicit
+            // saveForOffline downloader may write to the protected store.
+            // Otherwise every streamed Canvas silently becomes a permanent
+            // non-evictable download, even with STREAM_ONLY selected.
+            .setCacheWriteDataSinkFactory(null)
+            .setUpstreamDataSourceFactory(ordinary)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+
+    /**
+     * Called only for visible/selected surfaces and only after user opt-in.
+     * Limits both per-item and global bytes, and never records completion
+     * before a downloader has finished all selected media segments.
+     */
+    suspend fun saveForOffline(url: String, surface: VisualSurface): Boolean {
+        if (!::context.isInitialized || !isSafeVisualMediaUrl(url)) return false
+        val settings = com.music.bitchord.data.settings.AppSettings
+        if (!shouldSaveVisualMotion(
+                settings.visualRetentionMode.value, surface,
+                settings.visualMotionSurfaces.value, settings.meteredConnection.value,
+            )) return false
+        if (isSaved(url)) return true
+        val key = keyFor(url)
+        val lock = locks.getOrPut(key) { Mutex() }
+        return lock.withLock {
+            if (isSaved(url)) return@withLock true
+            withContext(Dispatchers.IO) {
+                if (savedCache.cacheSpace >= SAVED_CACHE_BYTES) return@withContext false
+                // Do not use the streaming-LRU as a write target: its eviction
+                // must never invalidate a user's persistent offline choice.
+                val transport = CacheDataSource.Factory()
+                    .setCache(savedCache)
+                    .setUpstreamDataSourceFactory(OkHttpDataSource.Factory(Http.client))
+                val media = MediaItem.Builder().setUri(url)
+                    .apply {
+                        if (url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)) {
+                            // One rendition only, not every resolution advertised
+                            // by the provider's multivariant playlist.
+                            setStreamKeys(listOf(StreamKey(0, 0)))
+                        }
+                    }.build()
+                val isHls = url.substringBefore('?').endsWith(".m3u8", ignoreCase = true)
+                val downloader: Downloader = if (isHls)
+                    HlsDownloader.Factory(transport).create(media)
+                else ProgressiveDownloader(media, transport)
+                var oversized = false
+                val startEpoch = clearEpoch.get()
+                return@withContext try {
+                    downloader.download(Downloader.ProgressListener { _, bytes, _ ->
+                        if (bytes > MAX_CLIP_BYTES ||
+                            savedCache.cacheSpace > SAVED_CACHE_BYTES
+                        ) {
+                            oversized = true
+                            downloader.cancel()
+                        }
+                    })
+                    if (oversized ||
+                        savedCache.cacheSpace > SAVED_CACHE_BYTES ||
+                        settings.visualRetentionMode.value != VisualRetentionMode.SAVE_ON_WIFI ||
+                        startEpoch != clearEpoch.get()
+                    ) {
+                        downloader.remove()
+                        false
+                    } else {
+                        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                            .edit().putBoolean(key, true).commit()
+                    }
+                } catch (cancelled: CancellationException) {
+                    downloader.cancel()
+                    throw cancelled
+                } catch (_: Exception) {
+                    runCatching { downloader.remove() }
+                    false
+                }
+            }
+        }
+    }
+
+    /** Does not touch audio files or Coil's image cache. */
+    suspend fun clearSaved() = withContext(Dispatchers.IO) {
+        if (!::context.isInitialized) return@withContext
+        clearEpoch.incrementAndGet()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+        savedCache.keys.toList().forEach { key ->
+            runCatching { savedCache.removeResource(key) }
+        }
+    }
+
+    fun savedBytes(): Long = if (::savedCache.isInitialized) savedCache.cacheSpace else 0L
 }

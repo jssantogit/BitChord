@@ -169,6 +169,108 @@ internal class MusicBrainzCatalogSearch(
         return searchReleaseGroupsInternal("arid:$id", limit, offset, fieldedQuery = true)
     }
 
+    /**
+     * Public editorial discovery does not require a populated local index.
+     * Fielded Lucene queries must use dismax=false; date/type are server
+     * evidence, not inferred from a title or the app install date.
+     */
+    suspend fun searchRecentReleaseGroups(
+        fromIsoDate: String,
+        throughIsoDate: String,
+        limit: Int = 100,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val date = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        if (!date.matches(fromIsoDate) || !date.matches(throughIsoDate) ||
+            fromIsoDate > throughIsoDate
+        ) return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        return searchReleaseGroupsInternal(
+            "firstreleasedate:[$fromIsoDate TO $throughIsoDate] AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
+    /** Genre is a known MusicBrainz release-group tag, never arbitrary UI text. */
+    suspend fun searchReleaseGroupsForTag(
+        tag: String,
+        limit: Int = 40,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized)) {
+            return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        }
+        // Keep stable, URL-safe browse IDs separate from authoritative tag
+        // spelling in MusicBrainz's release-group search index.
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
+    /**
+     * Current genre releases need an independent date-scoped query. A plain
+     * tag search is relevance-ranked and can return sixty historical albums
+     * without a single genuinely recent record.
+     */
+    suspend fun searchRecentReleaseGroupsForTag(
+        tag: String,
+        fromIsoDate: String,
+        throughIsoDate: String,
+        limit: Int = 40,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        val date = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized) ||
+            !date.matches(fromIsoDate) || !date.matches(throughIsoDate) ||
+            fromIsoDate > throughIsoDate
+        ) return MusicBrainzCatalogSearchResult.Failure(
+            MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+        )
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND " +
+                "firstreleasedate:[$fromIsoDate TO $throughIsoDate] AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
+    /**
+     * Preserve genre album shelves even when the top relevance-ranked and
+     * recent pages contain only EPs and singles. The server still establishes
+     * both the tag association and the primary Album type.
+     */
+    suspend fun searchAlbumReleaseGroupsForTag(
+        tag: String,
+        limit: Int = 24,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized)) {
+            return MusicBrainzCatalogSearchResult.Failure(
+                MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+            )
+        }
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND primarytype:album",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
     private suspend fun searchReleaseGroupsInternal(
         query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =

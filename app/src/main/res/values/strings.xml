@@ -25,6 +25,7 @@
     <string name="home">Home</string>
     <string name="play">Play</string>
     <string name="explore">Explore</string>
+    <string name="explore_genres">Genres</string>
     <string name="listen_now">Listen Now</string>
     <string name="canonical_discovery_header">Catalog discovery</string>
     <string name="canonical_discovery_setting_title">Catalog-first Home and Explore</string>
@@ -677,7 +678,7 @@
     <string name="signing_in">Signing in…</string>
     <string name="sleep_timer">Sleep timer</string>
     <string name="sources_no_lossless">No enabled source can provide lossless audio. Add an addon to play lossless files without transcoding.</string>
-    <string name="sources_order_footer">If a source does not have a track or cannot be reached, BitChord tries the next one. Sources above YouTube can replace its recording when they return a better version.</string>
+    <string name="sources_order_footer">If a source does not have a track or cannot be reached, BitChord tries the next one.</string>
     <string name="sources_order_header">Sources, tried in this order</string>
     <string name="sources_quality_capped">This connection is set below High quality, so streams are transcoded to fit that limit. Downloads are unaffected.</string>
     <string name="jiosaavn_mismatch_warning">May match the wrong version of a song. Enable at your own risk.</string>
@@ -1136,6 +1137,7 @@
     <string name="shelf_youtube_charts">YouTube Charts</string>
 
     <string name="shelf_trending">Trending</string>
+    <string name="shelf_listenbrainz_community">Popular in the community</string>
 
     <string name="shelf_recents">Recents</string>
 
@@ -1180,6 +1182,7 @@
     <string name="spotify_import_local_fallback">Couldn\'t create it on YouTube Music, so \'%1$s\' was saved on this device instead.</string>
     <string name="spotify_import_done">Imported \'%1$s\'</string>
     <string name="spotify_import_unmatched">%1$d songs weren\'t found on YouTube Music</string>
+    <string name="spotify_import_metadata_only">Playlist saved with %1$d metadata-only tracks. No audio was linked without a verified match.</string>
     <string name="local_playlist_subtitle">%1$d songs · On this device</string>
     <string name="spotify_import_empty_playlist">No songs in this playlist</string>
     <string name="spotify_library_subtitle">Your Spotify playlists</string>
@@ -1269,4 +1272,26 @@
     <string name="settings_nav_desc_sources">Music source providers and extensions</string>
     <string name="settings_nav_diagnostics_title">Diagnostics</string>
     <string name="settings_nav_diagnostics_subtitle">Capture, inspect, and share diagnostic reports</string>
+    <string name="home_global_discovery">Discoveries from around the world</string>
+
+    <string name="visual_offline_title">Offline visuals</string>
+    <string name="visual_offline_stream">Stream normally with temporary cache; do not keep videos permanently</string>
+    <string name="visual_offline_wifi">Keep complete animations offline, over Wi-Fi only</string>
+    <string name="visual_offline_still">Replace animations with available still artwork and photos</string>
+    <string name="visual_offline_temporary">Temporary</string>
+    <string name="visual_offline_save_wifi">Save on Wi-Fi</string>
+    <string name="visual_offline_only_stills">Still images</string>
+    <string name="visual_offline_artist_motion">Artist animations</string>
+    <string name="visual_offline_album_motion">Album animations</string>
+    <string name="visual_offline_player_motion">Now Playing animations</string>
+    <string name="visual_offline_save_stills">Keep still images</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">Artist photos</string>
+    <string name="visual_offline_album_stills">Album covers</string>
+    <string name="visual_offline_player_stills">Now Playing covers</string>
+    <string name="visual_offline_clear_title">Clear saved visuals</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">Clear offline visuals?</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">Offline visuals cleared</string>
 </resources>

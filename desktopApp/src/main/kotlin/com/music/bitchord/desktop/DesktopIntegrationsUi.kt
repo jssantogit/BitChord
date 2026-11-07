@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.spotify.SpotifyImportTrack
 import com.music.bitchord.data.spotify.SpotifyImporter
+import com.music.bitchord.data.spotify.spotifyImportMetadataSong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -341,12 +342,13 @@ internal fun DesktopSpotifyImportDialog(
         scope.launch {
             try {
                 val (name, tracks) = SpotifyImporter.fetchPlaylistTracks(id)
-                val (songs, missed) = SpotifyImporter.resolveToSongs(tracks) { done, total ->
-                    status = DesktopStrings.format("spotify_import_matching", done, total, fallback = "Matching songs %1\$d of %2\$d")
+                // Spotify's public embed supplies metadata, not verified audio.
+                // Preserve every entry, including duplicate tracks and order,
+                // without contacting the retired YouTube matching backend.
+                val songs = tracks.mapIndexed { index, track ->
+                    spotifyImportMetadataSong(id, index, track)
                 }
-                if (songs.isEmpty()) {
-                    error(DesktopStrings["spotify_import_none", "None of those songs were found on YouTube Music."])
-                }
+                val missed = emptyList<SpotifyImportTrack>()
                 val note = onImported(name, songs)
                 if (missed.isEmpty() && note == null) {
                     onDismiss()
@@ -376,11 +378,11 @@ internal fun DesktopSpotifyImportDialog(
             DialogHeading(
                 title = title,
                 message = if (signedIn) {
-                    DesktopStrings["spotify_import_description", "Paste a public playlist link. Songs are matched on YouTube Music."]
+                    DesktopStrings["spotify_import_description", "Paste a public playlist link. Tracks are saved as metadata until audio is available."]
                 } else {
                     DesktopStrings[
                         "spotify_import_description_local",
-                        "Paste a public playlist link. Songs are matched on YouTube Music and saved on this device.",
+                        "Paste a public playlist link. Tracks are saved as metadata on this device, without audio matching.",
                     ]
                 },
             )
@@ -420,7 +422,7 @@ internal fun DesktopSpotifyImportDialog(
                     DesktopStrings.format(
                         "spotify_import_unmatched",
                         missed.size,
-                        fallback = "%1\$d songs weren't found on YouTube Music",
+                        fallback = "%1\$d tracks have no verified audio",
                     ).takeIf { missed.isNotEmpty() },
                 ).joinToString("\n"),
             )

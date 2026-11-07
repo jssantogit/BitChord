@@ -32,6 +32,19 @@ internal fun toggleLibraryPlaylistPin(
     else if (distinct.size >= 100) distinct else distinct + target
 }
 
+/** A title changes presentation only; a playlist pin never receives a new ID. */
+internal fun renameLibraryPlaylistPin(
+    current: List<LibraryPlaylistPin>,
+    id: String,
+    title: String,
+): List<LibraryPlaylistPin> {
+    val clean = title.trim()
+    if (clean.isBlank() || clean.length > 240) return current
+    return current.map { existing ->
+        if (existing.id == id) existing.copy(title = clean) else existing
+    }
+}
+
 internal fun encodeLibraryPlaylistPins(pins: List<LibraryPlaylistPin>): String =
     JSONArray().apply {
         pins.asSequence().filter(::validLibraryPlaylistPin)
@@ -66,6 +79,13 @@ internal class LibraryPlaylistPinRepository(private val preferences: SharedPrefe
         if (next != current && preferences.edit()
                 .putString(KEY, encodeLibraryPlaylistPins(next)).commit()) pins.value = next
         return pins.value.any { it.id == pin.id }
+    }
+
+    @Synchronized
+    fun rename(id: String, title: String) {
+        val next = renameLibraryPlaylistPin(pins.value, id, title)
+        if (next != pins.value && preferences.edit()
+                .putString(KEY, encodeLibraryPlaylistPins(next)).commit()) pins.value = next
     }
 
     @Synchronized

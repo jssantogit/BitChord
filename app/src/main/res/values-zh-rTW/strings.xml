@@ -24,6 +24,7 @@
     <string name="home">首頁</string>
     <string name="play">播放</string>
     <string name="explore">探索</string>
+    <string name="explore_genres">音樂類型</string>
     <string name="listen_now">立即收聽</string>
     <string name="downloads">下載內容</string>
     <string name="downloaded_songs">已下載的歌曲</string>
@@ -439,7 +440,7 @@
     <string name="signing_in">正在登入…</string>
     <string name="sleep_timer">睡眠定時器</string>
     <string name="sources_no_lossless">已啟用的來源均無法提供無損音訊。新增自定義模組即可播放可用的無損檔案，而無需轉碼。</string>
-    <string name="sources_order_footer">如果某個來源沒有該曲目或無法訪問，BitChord 會嘗試下一個來源。排在 YouTube 之前的來源如果返回更好的版本，可以替換其錄音。</string>
+    <string name="sources_order_footer">如果某個來源沒有該曲目或無法訪問，BitChord 會嘗試下一個來源。</string>
     <string name="sources_order_header">來源，按此順序嘗試</string>
     <string name="sources_quality_capped">此連線的設定低於高品質，因此串流會被轉碼以符合該限制，下載不受影響。</string>
     <string name="jiosaavn_mismatch_warning">可能匹配到歌曲的錯誤版本。啟用風險自負。</string>
@@ -951,6 +952,7 @@
     <string name="shelf_top_tunes_right_now">當前熱門金曲</string>
 
     <string name="shelf_trending">熱門趨勢</string>
+    <string name="shelf_listenbrainz_community">社群熱門</string>
 
     <string name="shelf_trending_community_playlists">熱門社群播放列表</string>
 
@@ -1267,6 +1269,7 @@
     <string name="spotify_import_none">這些歌曲都未在 YouTube Music 上找到。</string>
     <string name="spotify_import_title">匯入 Spotify 播放列表</string>
     <string name="spotify_import_unmatched">%1$d 首歌曲未在 YouTube Music 上找到</string>
+    <string name="spotify_import_metadata_only">已將 %1$d 首歌曲僅以中繼資料形式儲存至播放清單。未確認相符前不會連結音訊。</string>
     <string name="spotify_library_subtitle">你的 Spotify 播放列表</string>
     <string name="spotify_sign_in">使用 Spotify 登入</string>
     <string name="spotify_track_unavailable">在 YouTube Music 上找不到該歌曲</string>
@@ -1358,4 +1361,26 @@
     <string name="search_origin_local">本機</string>
     <string name="pause_resume_fade">暫停與繼續播放時淡入淡出</string>
     <string name="pause_resume_fade_subtitle">暫停時逐漸降低音量，繼續播放時逐漸提高音量</string>
+    <string name="home_global_discovery">全球音樂新發現</string>
+
+    <string name="visual_offline_title">离线视觉内容</string>
+    <string name="visual_offline_stream">使用临时缓存播放，不永久保存视频</string>
+    <string name="visual_offline_wifi">仅通过 Wi-Fi 保存动画以供离线使用</string>
+    <string name="visual_offline_still">使用已保存的静态图片替代动画</string>
+    <string name="visual_offline_temporary">临时缓存</string>
+    <string name="visual_offline_save_wifi">Wi-Fi 保存</string>
+    <string name="visual_offline_only_stills">仅静态图片</string>
+    <string name="visual_offline_artist_motion">艺人动画</string>
+    <string name="visual_offline_album_motion">专辑动画</string>
+    <string name="visual_offline_player_motion">播放界面动画</string>
+    <string name="visual_offline_save_stills">保存静态图片</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">艺人照片</string>
+    <string name="visual_offline_album_stills">专辑封面</string>
+    <string name="visual_offline_player_stills">播放界面封面</string>
+    <string name="visual_offline_clear_title">清除已保存的视觉内容</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">清除离线视觉内容？</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">已清除离线视觉内容</string>
 </resources>

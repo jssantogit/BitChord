@@ -1,5 +1,7 @@
 package com.music.bitchord.playback
 
+import com.music.bitchord.data.catalog.artistCreditFromSubtitle
+
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
@@ -105,8 +107,6 @@ import com.music.bitchord.data.listentogether.partyQueueIndexOf
 import com.music.bitchord.data.listentogether.partyUpcomingAfter
 import com.music.bitchord.R
 import com.music.bitchord.data.LocalMediaRepository
-import com.music.bitchord.data.innertube.InnertubeParser
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.lyrics.EmbeddedLyrics
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsRepository
@@ -131,15 +131,14 @@ import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.TrackLog
 import com.music.bitchord.data.discord.DiscordRPC
 import com.music.bitchord.data.discord.discordAudioQualityLine
-import com.music.bitchord.data.innertube.PlaybackTracker
 import com.music.bitchord.data.stats.ListeningRecorder
-import com.music.bitchord.data.innertube.PlayerClient
-import com.music.bitchord.data.innertube.StreamResolver
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.isUnresolvedSpotify
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.scrobbling.ListenBrainzManager
+import com.music.bitchord.data.scrobbling.ListenBrainzOutbox
+import com.music.bitchord.data.scrobbling.ListenBrainzPlaybackClock
 import com.music.bitchord.data.scrobbling.ScrobbleManager
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.OutputPcmMode
@@ -172,7 +171,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -288,6 +286,23 @@ private const val ALIGNMENT_HEAD_TIMEOUT_MS = 20_000L
  */
 private const val ALIGNMENT_MEASURE_TIMEOUT_MS = 30_000L
 
+/**
+ * A persisted locator with no authorized audio asset is permanently unavailable.
+ * The Media3 failure policy must not retry it against a retired provider.
+ */
+internal class HistoricalMediaAssetUnavailable(message: String) : java.io.IOException(message)
+
+/** Unwrap Media3 failures without retrying an archival identifier as a stream. */
+internal fun historicalMediaUnavailableCause(error: Throwable?): HistoricalMediaAssetUnavailable? {
+    var cause = error
+    repeat(8) {
+        val current = cause ?: return null
+        if (current is HistoricalMediaAssetUnavailable) return current
+        cause = current.cause?.takeIf { it !== current }
+    }
+    return null
+}
+
 private fun Song.canStartStation(): Boolean =
     videoId.isNotBlank() &&
         !videoId.startsWith("content://") &&
@@ -336,10 +351,17 @@ class PlaybackService : MediaLibraryService() {
         cachedRecents?.let { (at, songs) ->
             if (SystemClock.elapsedRealtime() - at < RECENTS_CACHE_TTL_MS && songs.isNotEmpty()) return songs
         }
+        // The restored queue is only a bounded recent-history window.
+        // Include entries up to its saved cursor, never upcoming tracks or
+        // bare historical YouTube video IDs without their downloaded audio.
         val songs = try {
-            withTimeoutOrNull(4000L) {
-                YtMusicRepository.recents().getOrNull()
-            } ?: emptyList()
+            LastPlayed.load()?.let { snapshot ->
+                canonicalAutoRecentSongs(snapshot.songs, snapshot.index) { id ->
+                    Downloads.verifiedSavedUri(id)
+                }
+            }.orEmpty()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             emptyList()
         }
@@ -363,13 +385,32 @@ class PlaybackService : MediaLibraryService() {
             if (SystemClock.elapsedRealtime() - at < QUICK_PICKS_CACHE_TTL_MS && songs.isNotEmpty()) return songs
         }
         val recentsIds = cachedRecents?.second?.mapTo(HashSet()) { it.videoId } ?: emptySet()
-        val songs = try {
-            withTimeoutOrNull(4000L) {
-                YtMusicRepository.quickPicks(excludeSongIds = recentsIds).getOrNull()
-            } ?: emptyList()
+        // Each provider is independent. A missing MediaStore permission must
+        // not hide accessible Navidrome recordings from Android Auto.
+        val local = try {
+            LocalMediaRepository.getLocalMusic(this@PlaybackService)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             emptyList()
         }
+        val downloads = try {
+            Downloads.getDownloadedSongs(this@PlaybackService)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val remote = try {
+            CanonicalCatalogDatabase.get(this@PlaybackService)
+                .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
+                .let(::canonicalAutoSongs)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val songs = canonicalAutoQuickPicks(local, downloads, remote, recentsIds)
         if (songs.isNotEmpty()) {
             cachedQuickPicks = SystemClock.elapsedRealtime() to songs
             songs.forEach { songCache[it.videoId] = it }
@@ -381,125 +422,47 @@ class PlaybackService : MediaLibraryService() {
      * [YtMusicRepository.browseSongs] for Liked Music cached for Android Auto's browse tree.
      */
     private var cachedLiked: Pair<Long, List<Song>>? = null
-    private var cachedLikedCookie: String? = null
     private val likedMutex = Mutex()
     private val LIKED_CACHE_TTL_MS = 60_000L
 
     private suspend fun cachedLikedSongs(): List<Song> = likedMutex.withLock {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        if (cookie == null) {
-            cachedLiked = null
-            cachedLikedCookie = null
-            return emptyList()
+        val songs = cachedQuickPicksSongs().filter { song ->
+            LikeState.overrides.value[song.videoId] == LikeStatus.LIKE
         }
-        if (cachedLikedCookie != null && cachedLikedCookie != cookie) {
-            cachedLiked = null
-        }
-        cachedLiked?.let { (at, songs) ->
-            if (SystemClock.elapsedRealtime() - at < LIKED_CACHE_TTL_MS && songs.isNotEmpty()) return songs
-        }
-        val songs = try {
-            withTimeoutOrNull(4000L) {
-                YtMusicRepository.browseSongs(YtMusicRepository.LIKED_MUSIC).getOrNull()?.songs?.ifEmpty { null }
-                    ?: YtMusicRepository.browseSongs("LM").getOrNull()?.songs?.ifEmpty { null }
-                    ?: run {
-                        val libPlaylists = YtMusicRepository.libraryPlaylists().getOrNull()
-                        val likedCard = libPlaylists?.firstOrNull {
-                            it.browseId == "VLLM" || it.title.contains("liked", ignoreCase = true)
-                        }
-                        val likedBrowseId = likedCard?.browseId
-                        if (likedBrowseId != null) {
-                            YtMusicRepository.browseSongs(likedBrowseId).getOrNull()?.songs
-                        } else null
-                    }
-                    ?: YtMusicRepository.browseSongs("FEmusic_liked_videos").getOrNull()?.songs
-            } ?: emptyList()
-        } catch (_: Exception) {
-            emptyList()
-        }
-        if (songs.isNotEmpty()) {
-            cachedLiked = SystemClock.elapsedRealtime() to songs
-            cachedLikedCookie = cookie
-            songs.forEach { songCache[it.videoId] = it }
-            LikeState.seedLiked(songs.mapTo(HashSet()) { it.videoId })
-        }
+        cachedLiked = SystemClock.elapsedRealtime() to songs
+        songs.forEach { songCache[it.videoId] = it }
         songs
     }
 
-    private var cachedHome: Pair<Long, com.music.bitchord.data.model.HomeFeed>? = null
-    private val homeMutex = Mutex()
-    private val HOME_CACHE_TTL_MS = 60_000L
-    private val HOME_NETWORK_TIMEOUT_MS = 2_500L
-
-    private suspend fun cachedHomeFeed(): com.music.bitchord.data.model.HomeFeed? = homeMutex.withLock {
-        cachedHome?.let { (at, feed) ->
-            if (SystemClock.elapsedRealtime() - at < HOME_CACHE_TTL_MS) return feed
-        }
-        val feed = try {
-            withTimeoutOrNull(HOME_NETWORK_TIMEOUT_MS) {
-                YtMusicRepository.home().getOrNull()
-            }
-        } catch (_: Exception) {
-            null
-        } ?: return null
-        cachedHome = SystemClock.elapsedRealtime() to feed
-        feed
-    }
-
     private var cachedPlaylistCards: Pair<Long, List<ShelfItem>>? = null
-    private var cachedPlaylistCookie: String? = null
     private val playlistsMutex = Mutex()
     private val PLAYLISTS_CACHE_TTL_MS = 60_000L
 
-    private suspend fun fetchPlaylistCards(): List<ShelfItem> = try {
-        withTimeoutOrNull(3_000L) {
-            YtMusicRepository.libraryPlaylists().getOrNull()
-                ?: YtMusicRepository.userPlaylists().getOrNull()?.map {
-                    ShelfItem(
-                        title = it.title,
-                        subtitle = it.subtitle,
-                        thumbnailUrl = it.thumbnailUrl,
-                        videoId = null,
-                        browseId = "VL${it.playlistId}",
-                    )
-                }
-        } ?: emptyList()
-    } catch (_: Exception) {
-        emptyList()
-    }
+    /** Android Auto playlists are user-owned local collections, not a Google
+     * account endpoint. Keep the existing shelf presentation and stable IDs. */
+    private suspend fun fetchPlaylistCards(): List<ShelfItem> =
+        com.music.bitchord.data.spotify.LocalPlaylistStore.playlists.value.map { playlist ->
+            ShelfItem(
+                title = playlist.title,
+                subtitle = "${playlist.songs.size} faixas",
+                thumbnailUrl = playlist.songs.firstOrNull {
+                    !it.thumbnailUrl.isNullOrBlank()
+                }?.thumbnailUrl,
+                videoId = null,
+                browseId = playlist.browseId,
+            )
+        }
 
     private suspend fun cachedPlaylistCards(): List<ShelfItem> = playlistsMutex.withLock {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        if (cookie == null) {
-            cachedPlaylistCards = null
-            cachedPlaylistCookie = null
-            return emptyList()
-        }
-        if (cachedPlaylistCookie != null && cachedPlaylistCookie != cookie) {
-            cachedPlaylistCards = null
-        }
-        cachedPlaylistCards?.let { (at, cards) ->
-            if (SystemClock.elapsedRealtime() - at < PLAYLISTS_CACHE_TTL_MS && cards.isNotEmpty()) return cards
-        }
         val cards = fetchPlaylistCards()
-        if (cards.isNotEmpty()) {
-            cachedPlaylistCards = SystemClock.elapsedRealtime() to cards
-            cachedPlaylistCookie = cookie
-        }
+        cachedPlaylistCards = SystemClock.elapsedRealtime() to cards
         cards
     }
 
     private fun snapshotRecents(): List<Song> = cachedRecents?.second.orEmpty()
     private fun snapshotQuickPicks(): List<Song> = cachedQuickPicks?.second.orEmpty()
-    private fun snapshotLiked(): List<Song> {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        return if (cookie != null && cookie == cachedLikedCookie) cachedLiked?.second.orEmpty() else emptyList()
-    }
-    private fun snapshotPlaylistCards(): List<ShelfItem> {
-        val cookie = com.music.bitchord.data.innertube.Innertube.cookie
-        return if (cookie != null && cookie == cachedPlaylistCookie) cachedPlaylistCards?.second.orEmpty() else emptyList()
-    }
-    private fun snapshotHome(): com.music.bitchord.data.model.HomeFeed? = cachedHome?.second
+    private fun snapshotLiked(): List<Song> = cachedLiked?.second.orEmpty()
+    private fun snapshotPlaylistCards(): List<ShelfItem> = cachedPlaylistCards?.second.orEmpty()
 
     private fun isFresh(at: Long, ttlMs: Long): Boolean =
         SystemClock.elapsedRealtime() - at < ttlMs
@@ -640,6 +603,10 @@ class PlaybackService : MediaLibraryService() {
     private var listenBrainzStartMs: Long = 0L
 
     private var listenBrainzDurationMs: Long? = null
+    private val listenBrainzPlaybackClock = ListenBrainzPlaybackClock()
+    private var listenBrainzOccurrenceId: String = UUID.randomUUID().toString()
+    private var listenBrainzOccurrenceQueued = false
+    private var listenBrainzThresholdJob: Job? = null
 
     /**
      * The gateway connection publishing what's playing to Discord, or null when
@@ -766,7 +733,6 @@ class PlaybackService : MediaLibraryService() {
     private val swapVersionCommand = SessionCommand(ACTION_SWAP_VERSION, Bundle.EMPTY)
     private val queueDragCommand = SessionCommand(ACTION_QUEUE_DRAG, Bundle.EMPTY)
 
-    private var favoriteActionJob: Job? = null
     private var stationActionJob: Job? = null
     private var autoplayLoadJob: Job? = null
     /** Rate limit for listener-requested retries; automatic upgrades do not touch it. */
@@ -902,7 +868,7 @@ class PlaybackService : MediaLibraryService() {
                 )
                 failureCascade.onPlaybackStarted()
             }
-            if (isPlaying) registerCurrentPlay()
+            
             // Nothing to read ahead for while paused, and a pause is often
             // the last thing that happens before the process goes idle.
             if (isPlaying) prefetchAround(exoPlayer) else cancelPrefetch()
@@ -928,13 +894,24 @@ class PlaybackService : MediaLibraryService() {
             // otherwise stays silent on the site.
             if (isPlaying && song != null) {
                 if (listenBrainzSong?.videoId != song.videoId || listenBrainzStartMs == 0L) {
+                    listenBrainzPlaybackClock.reset()
+                    listenBrainzOccurrenceId = UUID.randomUUID().toString()
+                    listenBrainzOccurrenceQueued = false
                     listenBrainzSong = song
                     listenBrainzStartMs = System.currentTimeMillis()
                     listenBrainzDurationMs = durationMs
                 } else if (listenBrainzDurationMs == null) {
                     listenBrainzDurationMs = durationMs
                 }
+                listenBrainzPlaybackClock.onPlay(SystemClock.elapsedRealtime())
                 submitListenBrainzPlayingNow(song, exoPlayer.currentPosition, durationMs)
+                startListenBrainzThresholdWatcher()
+            } else {
+                listenBrainzThresholdJob?.cancel()
+                listenBrainzThresholdJob = null
+                // Pause, buffering and loss of a playable item cannot count as
+                // active listening, even if the wall clock keeps advancing.
+                listenBrainzPlaybackClock.onPause(SystemClock.elapsedRealtime())
             }
 
             // Discord: a pause has to clear the presence, not just stop
@@ -1095,7 +1072,6 @@ class PlaybackService : MediaLibraryService() {
                 // watchtime the 30-second sampler happened to have reported and
                 // is never marked finished — so the one play most likely to be
                 // a full, deliberate listen is the one recorded as abandoned.
-                PlaybackTracker.onPlaybackFinished(lastPositionSeconds)
                 lastPositionSeconds = 0
                 // The last track finished with nothing after it, so no
                 // transition will ever close it out. Scrobble it now.
@@ -1104,11 +1080,17 @@ class PlaybackService : MediaLibraryService() {
                     val lastStart = listenBrainzStartMs
                     val lastDuration = listenBrainzDurationMs
                         ?: exoPlayer.duration.takeIf { it > 0 }
-                    submitListenBrainzFinished(lastSong, lastStart, lastDuration)
+                    submitListenBrainzFinished(
+                        lastSong, lastStart, lastDuration,
+                        listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime()),
+                    )
                 }
                 listenBrainzSong = null
                 listenBrainzStartMs = 0L
                 listenBrainzDurationMs = null
+                listenBrainzThresholdJob?.cancel()
+                listenBrainzThresholdJob = null
+                listenBrainzPlaybackClock.reset()
                 // A missed/empty AutoPlay response can let the last queued
                 // track finish before anything is appended. There will be no
                 // item transition to run the ordinary refill path, so give the
@@ -1303,9 +1285,10 @@ class PlaybackService : MediaLibraryService() {
     override fun onCreate() {
         super.onCreate()
 
-        if (com.music.bitchord.data.innertube.Innertube.cookie == null) {
-            com.music.bitchord.data.innertube.Innertube.cookie = com.music.bitchord.auth.AuthStore(this).cookie
-        }
+        // Android Auto can cold-start this service without MainActivity.
+        // Read the first-party playlist store directly; no YouTube cookie or
+        // authentication bootstrap belongs in Media3 startup.
+        com.music.bitchord.data.spotify.LocalPlaylistStore.init(this)
 
         // First, because everything below assumes it is standing up fresh and
         // one of the two ways this service starts does not give it that.
@@ -1407,31 +1390,23 @@ class PlaybackService : MediaLibraryService() {
             // because these carry no `v` parameter and would otherwise fall
             // straight through unresolved.
             if (dataSpec.uri.authority == "source") {
-                val directYouTube =
-                    dataSpec.uri.getQueryParameter(DIRECT_YOUTUBE_PARAMETER) == "1"
+                // Retired YouTube fallback markers must never re-enter a source
+                // resolution path. Source-backed playback still resolves through
+                // the user's configured providers without this legacy override.
+                if (dataSpec.uri.getQueryParameter(DIRECT_YOUTUBE_PARAMETER) == "1") {
+                    throw HistoricalMediaAssetUnavailable("Historical fallback has no authorized audio source")
+                }
                 val stream = runBlocking(about) {
                     withTimeout(RESOLVE_TIMEOUT_MS) {
-                        if (directYouTube) {
-                            SourceResolver.youtubeFallback(SourceResolver.targetIn(dataSpec.uri))
-                        } else {
-                            SourceResolver.resolve(dataSpec.uri)
-                        }
+                        SourceResolver.resolve(dataSpec.uri)
                     }
                 } ?: throw java.io.IOException(
-                    if (directYouTube) {
-                        "No YouTube audio fallback matched ${dataSpec.uri.getQueryParameter("n")}"
-                    } else {
-                        "No enabled source could serve ${dataSpec.uri.getQueryParameter("n")}"
-                    },
+                    "No enabled source could serve ${dataSpec.uri.getQueryParameter("n")}",
                 )
                 val configId = dataSpec.uri.getQueryParameter("s")
-                val sourceName = if (directYouTube) {
-                    "YouTube"
-                } else {
-                    stream.sourceConfigId?.let { SourceRegistry.config(it)?.displayName }
-                        ?: configId?.let { SourceRegistry.config(it)?.displayName }
-                        ?: "Source"
-                }
+                val sourceName = stream.sourceConfigId?.let { SourceRegistry.config(it)?.displayName }
+                    ?: configId?.let { SourceRegistry.config(it)?.displayName }
+                    ?: "Source"
                 val trackParam = dataSpec.uri.getQueryParameter("t")
                 val fullMediaId = mediaIdIn(dataSpec.uri)
                 NerdStats.onSourceStream(fullMediaId ?: trackParam, stream.format, sourceName)
@@ -1441,234 +1416,19 @@ class PlaybackService : MediaLibraryService() {
                 NerdStats.recordSource(trackParam, sourceName)
                 return@Resolver dataSpec.buildUpon()
                     .setUri(Uri.parse(stream.url))
-                    .setHttpRequestHeaders(
-                        if (directYouTube) StreamResolver.mediaHeadersFor(stream.url)
-                        else stream.headers,
-                    )
+                    .setHttpRequestHeaders(stream.headers)
                     .build()
             }
-            val videoId = dataSpec.uri.getQueryParameter("v")
-                ?: return@Resolver dataSpec
-            // SourceRegistry opt-out also governs the last mile of playback.
-            // Without this guard, a legacy playlist's opaque videoId could
-            // still call InnerTube directly even after Search/Home stopped.
-            // Source-backed and local/authorized remote MediaAssets are handled
-            // above or by DefaultDataSource, and are not blocked here.
-            if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
-                throw java.io.IOException(
-                    "YouTube source disabled: legacy video ID requires an authorized audio asset",
+            // Historical watch/video IDs are archival identity only. They no
+            // longer authorize any resolution through Innertube or the
+            // retired YouTube stream pipeline. MediaStore and canonical
+            // OpenSubsonic assets are handled by their own datasource paths.
+            if (dataSpec.uri.getQueryParameter("v") != null) {
+                throw HistoricalMediaAssetUnavailable(
+                    "Historical video ID has no authorized audio asset",
                 )
             }
-            // An explicit rollback is not a preference for a different
-            // candidate: it means this exact YouTube rendition, immediately.
-            // Answer it before StreamChoice, the module race and a pending
-            // upgrade can put another source back under the listener.
-            if (dataSpec.uri.getQueryParameter(DIRECT_YOUTUBE_PARAMETER) == "1") {
-                QualityUpgrade.forget(videoId)
-                StreamChoice.forget(videoId)
-                NerdStats.clearDeclared(videoId)
-                NerdStats.recordSource(videoId, "YouTube")
-                val streamUrl = try {
-                    runBlocking(about) {
-                        withTimeout(RESOLVE_TIMEOUT_MS) { StreamResolver.resolve(videoId) }
-                    }
-                } catch (e: TimeoutCancellationException) {
-                    throw java.io.IOException("Direct YouTube resolution timed out for $videoId", e)
-                }
-                val headers = StreamResolver.mediaHeadersFor(streamUrl)
-                TrackLog.d("BitChord", "serving original YouTube version for $videoId", about = videoId)
-                return@Resolver dataSpec.buildUpon()
-                    .setUri(Uri.parse(streamUrl))
-                    .setHttpRequestHeaders(headers)
-                    .build()
-            }
-            // Automix owns a base-cache Opus rendition. It must bypass the
-            // playback race winner (JioSaavn, a module, or a lossless upgrade)
-            // and resolve directly to YouTube for this analysis-only request.
-            if (AutomixAnalysisSource.requestsYouTubeOpus(
-                    dataSpec.uri.getQueryParameter(AutomixAnalysisSource.OPUS_QUERY_PARAMETER),
-                )
-            ) {
-                NerdStats.recordSource(videoId, "YouTube")
-                val streamUrl = try {
-                    runBlocking(about) {
-                        withTimeout(RESOLVE_TIMEOUT_MS) { StreamResolver.resolve(videoId) }
-                    }
-                } catch (e: TimeoutCancellationException) {
-                    throw java.io.IOException("Automix Opus resolution timed out for $videoId", e)
-                }
-                val headers = StreamResolver.mediaHeadersFor(streamUrl)
-                return@Resolver dataSpec.buildUpon()
-                    .setUri(Uri.parse(streamUrl))
-                    .setHttpRequestHeaders(headers)
-                    .build()
-            }
-            // An upgraded item carries a marker and its stream has already
-            // been found — see [QualityUpgrade]. Answered before anything
-            // else, and without re-resolving: this exact URL is what the
-            // player was told it was getting when it agreed to the swap.
-            QualityUpgrade.forcedStream(dataSpec.uri)?.let { upgraded ->
-                // An audition opens this same stream before a note of the one
-                // playing has been touched — see [auditionUpgrade] — so what it
-                // is about to be handed describes a swap that has not happened
-                // and may never. Recording it here would light "Lossless" over
-                // the lossy stream still coming out of the speaker. The real
-                // open, moments later, records it.
-                val proving = QualityUpgrade.isAuditioning(videoId)
-                val sourceName = upgraded.sourceConfigId?.let { SourceRegistry.config(it)?.displayName }
-                    ?: "Upgrade"
-                if (!proving) {
-                    NerdStats.onSourceStream(videoId, upgraded.format, sourceName)
-                    NerdStats.recordSource(videoId, sourceName)
-                }
-                // Logged because the alternative — a swap that silently never
-                // reached its stream — is indistinguishable in the logs from
-                // one that reached it and got nothing back, and the two have
-                // opposite fixes.
-                TrackLog.d(
-                    "BitChord",
-                    "${if (proving) "auditioning" else "serving"} upgraded $videoId " +
-                        "from ${Uri.parse(upgraded.url).host} " +
-                        "at ${dataSpec.position} (${upgraded.format.summary})",
-                    about = videoId,
-                )
-                return@Resolver dataSpec.buildUpon()
-                    .setUri(Uri.parse(upgraded.url))
-                    .setHttpRequestHeaders(upgraded.headers)
-                    .build()
-            }
-            // A downloaded copy is *not* substituted here, deliberately. This
-            // point is inside the HTTP-only half of the chain — below
-            // DefaultDataSource, which has already given up on dispatching by
-            // scheme, and below the cache bypass that keeps local files from
-            // being written to disk a second time. A content:// URI returned
-            // from here reaches OkHttp, which refuses it as a malformed URL.
-            // Which copy of a track to play is settled where the item is built
-            // instead: see [Song.toMediaItem].
-            // Whoever is already filling this track's cache entry keeps it.
-            // Everything below decides between servers holding *different
-            // files*, and this method is called again for every re-open of a
-            // track — including the continuation fetch when playback runs off
-            // the end of the cached bytes. Deciding afresh each time is how
-            // the middle of an MP4 ended up appended to a WebM. See
-            // [StreamChoice].
-            StreamChoice.of(videoId)?.let { serving ->
-                // What the stream claims to be, restated on every open rather
-                // than only on the one that chose it.
-                //
-                // The race below is what used to report this, and it was enough
-                // while the race was the only way a substitution could be made.
-                // Read-ahead now pins one before the track is reached, so a
-                // warmed track arrives *here* on its very first open and never
-                // reaches the race at all — leaving the player with a 320kbps
-                // stream and nothing on record saying so, and the quality badge
-                // reading blank until the decoder got far enough to measure it
-                // for itself.
-                //
-                // Only when the format states something. A plain YouTube choice
-                // is remembered with an empty one, and writing that over a
-                // claim some other path made would be worse than saying nothing.
-                val sourceName = serving.sourceConfigId?.let { SourceRegistry.config(it)?.displayName }
-                    ?: if (StreamChoice.isSubstitute(videoId)) "Module" else "YouTube"
-                if (serving.format != StreamFormat()) {
-                    NerdStats.onSourceStream(videoId, serving.format, sourceName)
-                }
-                NerdStats.recordSource(videoId, sourceName)
-                // Read-ahead can pin JioSaavn's quick 320kbps answer before
-                // this track becomes current.  It is the right answer for an
-                // immediate start, but it is not the final quality verdict:
-                // returning here used to bypass [resolveWithModulePriority],
-                // the only path which calls [QualityUpgrade.settledForLess].
-                // Consequently a warmed track displayed its high-quality
-                // source but never kept the upgrading state or asked the
-                // module for its lossless copy.
-                //
-                // Only substituted, non-lossless choices need this. A pinned
-                // YouTube URL has no source result to promote, and a lossless
-                // module result already satisfies the request.
-                if (StreamChoice.isSubstitute(videoId) &&
-                    serving.format.isLossless != true &&
-                    QualityUpgrade.couldStillUpgrade(videoId, dataSpec.uri)
-                ) {
-                    val pending = QualityUpgrade.settledForLess(
-                        mediaId = videoId,
-                        target = SourceResolver.targetIn(dataSpec.uri),
-                        playing = serving.format,
-                        servedBy = serving.sourceConfigId,
-                    )
-                    if (!pending) NerdStats.onLosslessRaceEnd(videoId)
-                }
-                return@Resolver dataSpec.buildUpon()
-                    .setUri(Uri.parse(serving.url))
-                    .setHttpRequestHeaders(serving.headers)
-                    .build()
-            }
-            // A track queued from YouTube may be held by a source the user
-            // ranked above it — see [SourceResolver.substituteForYouTube] and
-            // [raceYouTubeOrModule]. Only worth the extra lookup when
-            // something actually outranks YouTube; otherwise this is the
-            // plain resolve every build before this one made.
-            if (!SourceResolver.canSubstituteForYouTube()) {
-                val streamUrl = try {
-                    runBlocking(about) {
-                        withTimeout(RESOLVE_TIMEOUT_MS) { StreamResolver.resolve(videoId) }
-                    }
-                } catch (e: TimeoutCancellationException) {
-                    throw java.io.IOException("Stream resolution timed out for $videoId", e)
-                }
-                // googlevideo names the client that minted the URL inside the
-                // URL itself, and compares it against the request that comes
-                // back for the bytes. A mismatch is answered with a throttled
-                // trickle or a 403 rather than an error worth the name, so the
-                // fetch is dressed as whatever the URL says it should be.
-                val headers = StreamResolver.mediaHeadersFor(streamUrl)
-                // Recorded even though only one server can answer here: a
-                // source enabled from Settings mid-track flips the branch
-                // above under a half-filled cache entry, and the entry would
-                // then be finished by a different file.
-                NerdStats.recordSource(videoId, "YouTube")
-                StreamChoice.remember(videoId, SourceStream(streamUrl, headers = headers), substituted = false)
-                return@Resolver dataSpec.buildUpon()
-                    .setUri(Uri.parse(streamUrl))
-                    .setHttpRequestHeaders(headers)
-                    .build()
-            }
-            val won = runBlocking(about) {
-                resolveWithModulePriority(
-                    videoId = videoId,
-                    target = SourceResolver.targetIn(dataSpec.uri),
-                )
-            }
-            when (won) {
-                is Resolved.Module -> {
-                    val sourceName = won.stream.sourceConfigId?.let { SourceRegistry.config(it)?.displayName }
-                        ?: "Module"
-                    NerdStats.onSourceStream(videoId, won.stream.format, sourceName)
-                    NerdStats.recordSource(videoId, sourceName)
-                    StreamChoice.remember(videoId, won.stream, substituted = true)
-                    dataSpec.buildUpon()
-                        .setUri(Uri.parse(won.stream.url))
-                        .setHttpRequestHeaders(won.stream.headers)
-                        .build()
-                }
-                // A module could have served this and didn't — it missed, its
-                // server was slow, or the lookup ran out of budget. The last
-                // of those is worth chasing rather than accepting: measured
-                // here, a module's stream URL arrived 66ms after the live path
-                // gave up on it, and the difference between a FLAC and a
-                // YouTube Opus stream came down to that. The second look has
-                // no such deadline, so what was nearly in hand is asked for
-                // again while the fallback plays.
-                is Resolved.YouTube -> {
-                    NerdStats.recordSource(videoId, "YouTube")
-                    val headers = StreamResolver.mediaHeadersFor(won.url)
-                    StreamChoice.remember(videoId, SourceStream(won.url, headers = headers), substituted = false)
-                    dataSpec.buildUpon()
-                        .setUri(Uri.parse(won.url))
-                        .setHttpRequestHeaders(headers)
-                        .build()
-                }
-            }
+            return@Resolver dataSpec
         }
 
         this.streamResolver = streamResolver
@@ -1907,28 +1667,15 @@ class PlaybackService : MediaLibraryService() {
         )
 
     /**
-     * Whether Like is offered for [item] — the player's own rule, so no surface
-     * shows a heart the player doesn't: there has to be an account to record it
-     * against, and a local file or a download has no YouTube identity to rate.
+     * The old notification heart wrote YouTube thumbs-up, which is NOT the
+     * first-party 0–5 star rating. Until a verified RecordingId-to-editor
+     * action replaces it, hide the control rather than silently rewriting
+     * user ratings or contacting the retired YouTube account endpoint.
      */
-    private fun canLike(item: MediaItem?): Boolean =
-        item != null &&
-            !item.isCanonicalRemotePlayback() &&
-            SignedIn.state(this).value &&
-            item.toSong().localUri == null
+    private fun canLike(@Suppress("UNUSED_PARAMETER") item: MediaItem?): Boolean = false
 
-    /** Favorite and Shuffle: the only actions shown on the phone notification. */
+    /** Notification uses playback-native shuffle. Legacy YouTube Like is gone. */
     private fun notificationButtons(): List<CommandButton> {
-        val favorite = if (!canLike(player?.currentMediaItem)) null else CommandButton.Builder(
-            if (LikeState.overrides.value[player?.currentMediaItem?.mediaId] == LikeStatus.LIKE) {
-                CommandButton.ICON_HEART_FILLED
-            } else {
-                CommandButton.ICON_HEART_UNFILLED
-            },
-        )
-            .setSessionCommand(favoriteCommand)
-            .setDisplayName("Favorite")
-            .build()
         val shuffleEnabled = QueueShuffle.enabled.value
         val shuffle = CommandButton.Builder(
             if (shuffleEnabled) {
@@ -1940,11 +1687,15 @@ class PlaybackService : MediaLibraryService() {
             .setSessionCommand(shuffleCommand)
             .setDisplayName(if (shuffleEnabled) "Shuffle off" else "Shuffle on")
             .build()
-        return listOfNotNull(favorite, shuffle)
+        return listOf(shuffle)
     }
 
-    /** Adds Radio/Revert for controllers with room for them, e.g. Android Auto. */
+    /** Radio/Revert refer to YouTube video renditions, not native catalog
+     * recordings. Hide these until a genuinely canonical radio exists. */
     private fun carButtons(): List<CommandButton> {
+        if (!SourceRegistry.mayResolveLegacyYoutubeStream(SourceRegistry.configs.value)) {
+            return notificationButtons()
+        }
         val current = player?.currentMediaItem
             ?.takeUnless { it.isCanonicalRemotePlayback() }
             ?.toSong()
@@ -2702,46 +2453,15 @@ class PlaybackService : MediaLibraryService() {
         QueueShuffle.clearCanonicalContext()
     }
 
-    /** Follows the continuation independently of the detail-page lifecycle. */
-    private fun startBoundedContinuationLoading(contextToken: String) {
+    /**
+     * A persisted historical continuation token has no surviving provider.
+     * Release the handoff without contacting the retired YouTube endpoint.
+     * The queue entries already restored remain intact and in their order.
+     */
+    private fun startBoundedContinuationLoading(@Suppress("UNUSED_PARAMETER") contextToken: String) {
         boundedContinuationJob?.cancel()
-        boundedContinuationJob = scope.launch {
-            var failures = 0
-            while (isActive && boundedContextToken == contextToken) {
-                val request = boundedContextRegistry.claimContinuation(contextToken) ?: return@launch
-                val page = withContext(Dispatchers.IO) {
-                    YtMusicRepository.moreSongs(request.continuationToken).getOrNull()
-                }
-                if (page == null) {
-                    // fail() leaves the token claimable. A single dropped
-                    // request used to end loading for good, leaving both the
-                    // queue and the page cut short; retry with backoff, then
-                    // hand the walk back to the detail page.
-                    boundedContextRegistry.fail(request)
-                    if (++failures > BOUNDED_CONTINUATION_RETRIES_MS.size) {
-                        boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
-                        return@launch
-                    }
-                    delay(BOUNDED_CONTINUATION_RETRIES_MS[failures - 1])
-                    continue
-                }
-                failures = 0
-                val source = boundedContextSource
-                val songs = page.songs.map { song ->
-                    if (source == null) song else song.copy(
-                        queueTier = QueueTier.CONTEXT,
-                        playbackSource = source.title,
-                        playbackSourceType = source.type,
-                        playbackSourceId = source.id,
-                    )
-                }
-                val result = boundedContextRegistry.complete(
-                    request,
-                    ContinuationPage(songs = songs, continuationToken = page.continuation),
-                )
-                if (result.status != ContinuationResultStatus.COMPLETED) return@launch
-            }
-        }
+        boundedContinuationJob = null
+        boundedContextRequest?.handoffToken?.let(BoundedContextRequests::release)
     }
 
     private fun scheduleBoundedContextTopUp() {
@@ -3172,29 +2892,6 @@ class PlaybackService : MediaLibraryService() {
         exoPlayer.addMediaItems(restored)
     }
 
-    private fun toggleFavoriteFromNotification(videoId: String) {
-        favoriteActionJob?.cancel()
-        val previous = LikeState.overrides.value[videoId] ?: LikeStatus.INDIFFERENT
-        val target = if (previous == LikeStatus.LIKE) {
-            LikeStatus.INDIFFERENT
-        } else {
-            LikeStatus.LIKE
-        }
-
-        // Match the player UI: update both surfaces immediately, then reconcile
-        // the optimistic state with YouTube in the background.
-        LikeState.set(videoId, target)
-        refreshCustomLayouts()
-        favoriteActionJob = scope.launch {
-            YtMusicRepository.rate(videoId, target)
-                .onFailure {
-                    LikeState.set(videoId, previous)
-                    refreshCustomLayouts()
-                    TrackLog.w("BitChord", "notification favorite failed: ${it.message}", about = videoId)
-                }
-        }
-    }
-
     /**
      * Both players, built identically. Only [ownsSession] differs, and only at
      * construction — it moves at every handoff, see [setSessionOwner].
@@ -3302,10 +2999,6 @@ class PlaybackService : MediaLibraryService() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
-
-    private fun registerCurrentPlay() {
-        player?.currentMediaItem?.mediaId?.let(PlaybackTracker::onPlaying)
-    }
 
     /**
      * Everything that has to happen when a different song becomes the one
@@ -3446,7 +3139,6 @@ class PlaybackService : MediaLibraryService() {
 
         // currentPosition already belongs to the new item by now, so
         // the outgoing track is closed out on the last sampled value.
-        PlaybackTracker.onTrackChanged(lastPositionSeconds)
         lastPositionSeconds = 0
 
         // Scrobbling: stop old song, start new song
@@ -3462,22 +3154,32 @@ class PlaybackService : MediaLibraryService() {
             scrobbleManager?.onSongStart(newSong, durationMs)
         }
 
-        // ListenBrainz: submit finished for old song, playing_now for new song.
-        // The finished listen only counts when the track actually ended —
-        // an auto-advance, a repeat, or a crossfade at the very end. A
-        // manual skip (SEEK) means the song wasn't listened to, so it must
-        // not be scrobbled.
+        // The transition reason still controls end-of-song actions such as Sleep Timer.
         val ended = previousEnded
+        // Close the previous *playback occurrence* using time actually played,
+        // not the time since start or the seek/skip transition reason. A manual
+        // skip after half a song can count; seeking to the end after seconds
+        // cannot. Repeat-one gets a brand-new independent timer.
         val prevSong = listenBrainzSong
         val prevStart = listenBrainzStartMs
-        if (prevSong != null && ended && prevStart > 0L) {
-            submitListenBrainzFinished(prevSong, prevStart, listenBrainzDurationMs)
+        if (prevSong != null && prevStart > 0L) {
+            submitListenBrainzFinished(
+                prevSong, prevStart, listenBrainzDurationMs,
+                listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime()),
+            )
         }
+        listenBrainzThresholdJob?.cancel()
+        listenBrainzThresholdJob = null
+        listenBrainzPlaybackClock.reset()
+        listenBrainzOccurrenceId = UUID.randomUUID().toString()
+        listenBrainzOccurrenceQueued = false
         listenBrainzSong = newSong
         listenBrainzStartMs = if (exoPlayer.isPlaying) System.currentTimeMillis() else 0L
         listenBrainzDurationMs = durationMs
         if (newSong != null && exoPlayer.isPlaying) {
+            listenBrainzPlaybackClock.onPlay(SystemClock.elapsedRealtime())
             submitListenBrainzPlayingNow(newSong, 0L, durationMs)
+            startListenBrainzThresholdWatcher()
         }
 
         // The renderer is still configured for the track that just ended at
@@ -3499,7 +3201,7 @@ class PlaybackService : MediaLibraryService() {
             exoPlayer.pause()
             SleepTimer.cancel()
         }
-        if (exoPlayer.isPlaying) registerCurrentPlay()
+        
         savePlaybackState(exoPlayer)
         prefetchAround(exoPlayer)
         // The second look belongs to the track it was started for; the
@@ -3579,7 +3281,7 @@ class PlaybackService : MediaLibraryService() {
      * after the app had given up. Nothing in the log named it, because nothing
      * in the app had asked for it.
      *
-     * Only [StreamResolver.PermanentlyUnplayableException] is refused, and it is
+     * Only [HistoricalMediaAssetUnavailable] is refused, and it is
      * refused rather than delayed because the resolver has already established
      * the answer cannot change — it is the type it uses to say exactly that.
      * Everything else keeps the default behaviour, which is right: a shaped
@@ -3591,20 +3293,8 @@ class PlaybackService : MediaLibraryService() {
             return super.getRetryDelayMsFor(loadErrorInfo)
         }
 
-        private fun isPermanent(error: Throwable?): Boolean {
-            var cause = error
-            var depth = 0
-            while (cause != null && depth++ < CAUSE_DEPTH) {
-                if (cause is StreamResolver.PermanentlyUnplayableException) return true
-                cause = cause.cause?.takeIf { it !== cause }
-            }
-            return false
-        }
-
-        private companion object {
-            /** Media3 and the coroutine machinery both wrap; nothing nests deeper than this. */
-            const val CAUSE_DEPTH = 8
-        }
+        private fun isPermanent(error: Throwable?): Boolean =
+            historicalMediaUnavailableCause(error) != null
     }
 
     /** Counts every byte a player reads, cache or network, progressive or DASH. */
@@ -3738,12 +3428,8 @@ class PlaybackService : MediaLibraryService() {
         ) {
             return
         }
-        // An addon/JioSaavn stream gets one chance. If it fails after selection,
-        // retrying the ordinary item only lets the same deterministic lookup win
-        // again. Rebuild it as an explicit YouTube request instead. This also
-        // clears a DASH/HLS MIME left on an upgraded item, which otherwise makes
-        // Media3 parse YouTube's WebM bytes as a manifest forever.
-        if (fallbackFailedAlternativeToYouTube(item, uri, position)) return
+        // A failed source cannot be rerouted to retired YouTube audio. The
+        // normal bounded retry/skip budget handles unavailable assets.
         // Giving up on the *retry*, not on everything below it.
         //
         // A track that has exhausted its attempts is not finished with.
@@ -3765,7 +3451,7 @@ class PlaybackService : MediaLibraryService() {
         // seek-and-prepare at the end is skipped.
         //
         // A verdict counts as exhausting the attempts immediately. The resolver
-        // only throws [StreamResolver.PermanentlyUnplayableException] once it has
+        // only throws [HistoricalMediaAssetUnavailable] once it has
         // established that no client, no session and no extraction can serve the
         // track, so the two further attempts this would otherwise spend are two
         // more full walks for an answer already in hand — and in the report they
@@ -3877,55 +3563,6 @@ class PlaybackService : MediaLibraryService() {
                 player.prepare()
             }
         }
-    }
-
-    /**
-     * Replaces a failed addon/JioSaavn/quality-upgrade rendition with YouTube
-     * audio and never offers the failed source again during this playback.
-     */
-    private fun fallbackFailedAlternativeToYouTube(
-        item: MediaItem,
-        uri: Uri?,
-        position: Long,
-    ): Boolean {
-        val playbackUri = uri ?: return false
-        // A track the listener picked from an addon is that addon's or nothing:
-        // a YouTube Opus copy under it is a different, lesser recording they
-        // did not ask for. Let the ordinary retry/skip path deal with it.
-        if (playbackUri.authority == "source") return false
-        val videoId = playbackUri.getQueryParameter("v")
-        val substituted = videoId?.let(StreamChoice::isSubstitute) == true
-        if (!PlaybackFallback.isAlternative(playbackUri.toString(), substituted)) return false
-        val fallback = item.toYouTubeFallbackMediaItem() ?: return false
-        val mediaId = item.mediaId
-
-        QualityUpgrade.forget(mediaId)
-        QualityUpgrade.refuseUpgrades(mediaId)
-        videoId?.let {
-            StreamChoice.refuseSubstitutes(it)
-            StreamChoice.forget(it)
-        }
-        NerdStats.clearDeclared(mediaId)
-        recoveries.remove(mediaId)
-        TrackLog.w(
-            "BitChord",
-            "$mediaId failed on a higher-quality source; falling back to YouTube audio",
-            about = mediaId,
-        )
-
-        scope.launch(TrackLog.about(mediaId)) {
-            delay(RECOVERY_DELAY_MS)
-            withContext(Dispatchers.IO) { AudioCache.discard(playbackUri) }
-            withContext(Dispatchers.Main) {
-                val live = this@PlaybackService.player ?: return@withContext
-                if (live.currentMediaItem?.mediaId != mediaId) return@withContext
-                swappingMediaId = mediaId
-                live.replaceMediaItem(live.currentMediaItemIndex, fallback)
-                live.seekTo(live.currentMediaItemIndex, position)
-                live.prepare()
-            }
-        }
-        return true
     }
 
     /**
@@ -4171,17 +3808,8 @@ class PlaybackService : MediaLibraryService() {
      * what the resolver actually threw. A shallow `is` check sees only the
      * outermost of those three.
      */
-    private fun permanentReason(error: Throwable?): String? {
-        var cause = error
-        var depth = 0
-        while (cause != null && depth++ < PERMANENT_CAUSE_DEPTH) {
-            if (cause is StreamResolver.PermanentlyUnplayableException) {
-                return cause.message ?: "This track cannot be played"
-            }
-            cause = cause.cause?.takeIf { it !== cause }
-        }
-        return null
-    }
+    private fun permanentReason(error: Throwable?): String? =
+        historicalMediaUnavailableCause(error)?.message
 
     /**
      * The track whose item this service is about to replace under it, so that
@@ -5122,194 +4750,6 @@ class PlaybackService : MediaLibraryService() {
                 }
             }
         }
-    }
-
-    /** What [resolveWithModulePriority] settled on. */
-    private sealed interface Resolved {
-        data class Module(val stream: SourceStream) : Resolved
-        data class YouTube(val url: String) : Resolved
-    }
-
-    /**
-     * Resolves a YouTube-queued track by racing the higher-ranked modules
-     * against YouTube itself, and handing whatever the modules are still doing
-     * to [QualityUpgrade] if YouTube gets there first.
-     *
-     * Nobody gets a head start. An earlier version gave the modules six
-     * seconds of silence to answer in before the fallback was even *asked*
-     * for, on the reasoning that a module answering inside that window plays
-     * with no seam in it. What that actually bought, on every track the
-     * modules were slow on, was six seconds of nothing followed by a YouTube
-     * client walk starting from cold — the wait and the seam, rather than one
-     * or the other. Starting both at once removes the first of those: the
-     * track begins as soon as *anything* can serve it.
-     *
-     * The speculative resolve this reinstates was dropped once before, for a
-     * real reason — it is several round trips to `youtubei.googleapis.com`
-     * competing for the same radio and connection pool as the lookup beside
-     * it, and on a track the modules do have, that work is thrown away. What
-     * changed is that it is no longer speculative: YouTube is now the expected
-     * outcome for anything the modules don't answer quickly, so its walk is on
-     * the critical path rather than hedging one. It is also coalesced and
-     * cached — see [StreamResolver.resolve] — so even a discarded walk warms
-     * the URL this track will want if the upgrade later falls through.
-     *
-     * A module that wins the race outright still wins the track, which is the
-     * one thing worth keeping from the old head start: the lossless copy plays
-     * from the first note and there is no swap at all. That is a narrower
-     * window than it sounds, and deliberately so — read-ahead warms the
-     * YouTube URL for the queue (see [AudioCache.prefetchQueue]), so on a
-     * track that was read ahead the fallback answers in milliseconds and
-     * almost always wins. The swap is the ordinary path now; playing from the
-     * first note is the prize for a module quick enough to beat a cached URL.
-     *
-     * A lookup that loses is not cancelled. It is handed over still running,
-     * because it is not wrong, only late, and the thing it is about to return
-     * is exactly the stream that would have played seamlessly had it been
-     * quicker. It finishes on its own time and the track swaps up to it
-     * mid-song, which is the trade this whole path exists to make: a short
-     * break in the audio, in exchange for the listener hearing something now
-     * rather than waiting in silence for the good copy.
-     */
-    private suspend fun resolveWithModulePriority(
-        videoId: String,
-        target: TrackMatcher.Target,
-    ): Resolved {
-        // A substitute already broke this track once — see
-        // [StreamChoice.refuseSubstitutes]. Racing the modules again would find
-        // the same catalogue holding the same unplayable URL, so there is
-        // nothing to race: YouTube is the one answer here that hasn't failed.
-        // Skipped entirely rather than merely deprioritised, because a lookup
-        // that loses is handed to [QualityUpgrade] rather than dropped, and
-        // handing over the search that just cost three attempts would only
-        // schedule a fourth.
-        if (StreamChoice.substitutesRefused(videoId)) {
-            return Resolved.YouTube(StreamResolver.resolve(videoId))
-        }
-        NerdStats.onLosslessRaceStart(videoId)
-        // Both legs are parented to the service's scope rather than to the
-        // caller, so neither inherits whose track this is — see
-        // [TrackLog.about]. Without it the module walk and the client walk both
-        // log from a scope that knows nothing, which is most of what a resolve
-        // has to say about itself.
-        val lookup = scope.async(Dispatchers.IO + TrackLog.about(videoId)) {
-            withTimeoutOrNull(SUBSTITUTE_TIMEOUT_MS) { SourceResolver.substituteForYouTube(target) }
-        }
-        // Started now rather than after the modules have had their say, and
-        // wrapped rather than thrown from: it is awaited only on the paths
-        // that need it, and an async that fails without ever being awaited is
-        // an unhandled exception in this service's scope.
-        val fallback = scope.async(Dispatchers.IO + TrackLog.about(videoId)) {
-            runCatching { StreamResolver.resolve(videoId) }
-        }
-
-        // First past the post. A null because [lookup] won is a module miss; a
-        // null because [fallback] won means YouTube has a URL and the modules
-        // are still looking — [lookup.isActive] below is what tells those
-        // apart, which is the question the old head start answered by timing
-        // out rather than by asking.
-        val quick: SourceStream? = select {
-            lookup.onAwait { it }
-            // A fallback that finished without a URL has not won anything.
-            //
-            // This clause used to yield null unconditionally, which treats "the
-            // YouTube walk is over" as "YouTube has a URL" — true only while
-            // failing was the slow outcome. It no longer is: [StreamResolver]
-            // now answers a known-unplayable track immediately, so the losing
-            // leg crosses the line first and, before this, took the track down
-            // with it while a module lookup that was about to succeed was still
-            // running. Exactly the case in the report — an age-gated track that
-            // YouTube would never serve and a catalogue that had it all along.
-            fallback.onAwait { resolved -> if (resolved.isSuccess) null else lookup.await() }
-        }
-
-        // A manifest cannot be substituted here, however good it is. This
-        // function runs on the loader thread, *inside* the open of a media
-        // source that was built minutes ago from an extensionless
-        // `bitchord://` URI — so the source is already progressive and cannot
-        // be told otherwise, and handing it a manifest is a track that fails
-        // at 0ms rather than a track that plays lossless. See [StreamContainer]
-        // for the log of exactly that.
-        //
-        // Nothing is thrown away for it. What the modules found is passed to
-        // the second look already answered, which is the same handover a lookup
-        // that merely lost the race gets — and [QualityUpgrade]'s swap does
-        // declare the type, so the manifest plays there. The cost is a seam a
-        // few seconds in instead of a clean start, which is the trade this
-        // whole path is built to make.
-        if (quick != null && StreamContainer.isManifest(quick.url)) {
-            val url = runCatching { fallback.await().getOrThrow() }.getOrNull()
-            if (url != null) {
-                TrackLog.d(
-                    "BitChord",
-                    "'${target.title}' was offered ${quick.format.summary} as a manifest; " +
-                        "starting on YouTube and swapping to it under the music",
-                    about = videoId,
-                )
-                val handed = QualityUpgrade.settledForLess(
-                    mediaId = videoId,
-                    target = target,
-                    inFlight = CompletableDeferred(quick),
-                    playing = NerdStats.pickedBitrateKbps(videoId)?.let { StreamFormat(kbps = it) },
-                )
-                if (!handed) NerdStats.onLosslessRaceEnd(videoId)
-                return Resolved.YouTube(url)
-            }
-            // YouTube cannot serve it either, so there is nothing to start on
-            // and nothing to swap from. The manifest goes out as it is: it will
-            // fail its first read, and [replayAsManifest] rebuilds the item
-            // with the type declared and prepares it again. A cut before the
-            // first note beats a track that does not play at all.
-            TrackLog.w(
-                "BitChord",
-                "'${target.title}' has only a manifest and YouTube cannot serve it; " +
-                    "letting it fail once to declare its type",
-                about = videoId,
-            )
-            NerdStats.onLosslessRaceEnd(videoId)
-            return Resolved.Module(quick)
-        }
-
-        if (quick != null) {
-            // The modules got there first, so the YouTube walk is genuinely
-            // spare work now. Cancelling drops only this service's wait on it;
-            // [StreamResolver] parents the walk itself elsewhere and lets it
-            // finish into its own cache.
-            fallback.cancel()
-            // Everything that was asked for, ahead of the fallback: the
-            // ordinary good case, and the one with no seam in it.
-            if (!quick.belowRequest) {
-                NerdStats.onLosslessRaceEnd(videoId)
-                return Resolved.Module(quick)
-            }
-            // Less than was asked for — but a lossy copy from a module still
-            // beats going back to YouTube for one. Worth a second look, and
-            // with this lookup already finished that look starts from scratch.
-            val settled = QualityUpgrade.settledForLess(
-                mediaId = videoId,
-                target = target,
-                playing = quick.format,
-                servedBy = quick.sourceConfigId,
-            )
-            if (!settled) NerdStats.onLosslessRaceEnd(videoId)
-            return Resolved.Module(quick)
-        }
-
-        val url = fallback.await().getOrThrow()
-        // Marked pending only here, with the fallback's own bitrate in hand:
-        // that figure is the answer to "better than what?" the second look
-        // measures candidates against, and it isn't known until the client
-        // walk has picked a format. A lookup still running is handed over to
-        // be waited on rather than repeated; one that already finished with
-        // nothing leaves the second look to find its own candidates.
-        val pending = QualityUpgrade.settledForLess(
-            mediaId = videoId,
-            target = target,
-            inFlight = lookup.takeIf { lookup.isActive },
-            playing = NerdStats.pickedBitrateKbps(videoId)?.let { StreamFormat(kbps = it) },
-        )
-        if (!pending) NerdStats.onLosslessRaceEnd(videoId)
-        return Resolved.YouTube(url)
     }
 
     /**
@@ -6304,31 +5744,11 @@ class PlaybackService : MediaLibraryService() {
             )
         }
 
-        val next = upcomingSongs.firstOrNull()
-        if (!preferAudio || next?.isVideo != true) {
-            preferredPrefetchJob = null
-            warm(upcomingSongs)
-            return
-        }
-
-        // Do not warm the video's bytes while its catalogue lookup is in
-        // flight: if that lookup succeeds, playback will ask for a different
-        // media id and every byte spent on the video would be wasted. An
-        // unchanged result is the fallback and is warmed on the same path.
-        AudioCache.cancel()
-        preferredPrefetchJob = scope.launch {
-            val preferred = runCatching { YtMusicRepository.resolveAudio(next) }
-                .onFailure {
-                    TrackLog.d(
-                        "BitChord",
-                        "music-only queue warm-up fell back to video: ${it.message}",
-                        about = next.videoId,
-                    )
-                }
-                .getOrDefault(next)
-            if (preferredPrefetchRequest != request) return@launch
-            warm(listOf(preferred) + upcomingSongs.drop(1))
-        }
+        // The old music-only prefetch queried YouTube for a substitute video.
+        // It is retired: read-ahead may warm only already-resolved queue items.
+        // Historical video rows have no authorized asset and are not warmed.
+        preferredPrefetchJob = null
+        warm(upcomingSongs.filterNot { it.isVideo })
     }
 
     /** Stops both rendition selection and byte read-ahead, and makes resume retry. */
@@ -6339,12 +5759,7 @@ class PlaybackService : MediaLibraryService() {
         AudioCache.cancel()
     }
 
-    /**
-     * Feeds played-seconds to [PlaybackTracker]. The tracker can't read the
-     * player itself — ExoPlayer is confined to this thread — and a history
-     * entry with no watchtime behind it barely registers as a listen, so the
-     * sampling has to come from here.
-     */
+    /** Samples elapsed audio for the device-owned listening history. */
     private fun reportProgress() {
         scope.launch {
             while (isActive) {
@@ -6355,9 +5770,6 @@ class PlaybackService : MediaLibraryService() {
                 val player = this@PlaybackService.player
                 if (player != null && player.isPlaying) {
                     lastPositionSeconds = player.currentPosition / 1000
-                    player.currentMediaItem?.mediaId?.let {
-                        PlaybackTracker.onProgress(it, lastPositionSeconds)
-                    }
                     // The device's own listening record — see [ListeningRecorder],
                     // which counts wall-clock time between ticks rather than
                     // reading the position. This loop is the only place in the app
@@ -7249,13 +6661,64 @@ class PlaybackService : MediaLibraryService() {
      * actually scrobbling — the settings are read at call time so the helper
      * stays a no-op whenever ListenBrainz is switched off.
      */
-    private fun submitListenBrainzFinished(song: Song, startMs: Long, durationMs: Long?) {
-        val lbEnabled = AppSettings.scrobblingAvailable && AppSettings.listenBrainzEnabled.value
-        val lbToken = AppSettings.listenBrainzToken.value
-        if (!lbEnabled || lbToken.isBlank()) return
-        val endMs = System.currentTimeMillis()
-        scope.launch {
-            ListenBrainzManager.submitFinished(lbToken, song, startMs, endMs, durationMs, AppSettings.listenBrainzPrimaryArtistOnly.value)
+    /**
+     * Admit a listen exactly once per playback occurrence. Persist *before*
+     * making any HTTP attempt so a service stop or network failure cannot
+     * erase a qualified listen. The worker handles transport asynchronously.
+     */
+    private fun submitListenBrainzFinished(
+        song: Song, startMs: Long, durationMs: Long?, listenedMs: Long,
+    ) {
+        if (listenBrainzOccurrenceQueued ||
+            !AppSettings.scrobblingAvailable || !AppSettings.listenBrainzEnabled.value
+        ) return
+        val token = AppSettings.listenBrainzToken.value
+        if (token.isBlank()) return
+        val entry = ListenBrainzOutbox.capture(
+            token = token,
+            occurrenceId = listenBrainzOccurrenceId,
+            song = song,
+            startMs = startMs,
+            endMs = System.currentTimeMillis(),
+            listenedMs = listenedMs,
+            durationMs = durationMs,
+            primaryArtistOnly = AppSettings.listenBrainzPrimaryArtistOnly.value,
+        )
+        if (!entry.isQualified()) return
+        try {
+            listenBrainzOccurrenceQueued = ListenBrainzOutbox.enqueue(this, entry)
+            if (!listenBrainzOccurrenceQueued) {
+                Log.w("PlaybackService", "ListenBrainz outbox full; occurrence not yet persisted")
+            }
+        } catch (_: Exception) {
+            // Do not mark it queued: the next audible tick/transition may retry.
+            Log.w("PlaybackService", "ListenBrainz outbox persist/schedule failed")
+        }
+    }
+
+    /**
+     * Media3's isPlaying is the authority. A timer does not mark playback
+     * complete: it merely samples the monotonic clock and durably queues after
+     * the threshold, rather than waiting for a skip or service destruction.
+     */
+    private fun startListenBrainzThresholdWatcher() {
+        if (listenBrainzThresholdJob?.isActive == true ||
+            listenBrainzOccurrenceQueued ||
+            !AppSettings.scrobblingAvailable || !AppSettings.listenBrainzEnabled.value
+        ) return
+        listenBrainzThresholdJob = scope.launch {
+            while (isActive && !listenBrainzOccurrenceQueued) {
+                delay(2_000L)
+                val current = player ?: break
+                val song = listenBrainzSong ?: break
+                if (!current.isPlaying || current.currentMediaItem?.toSong()?.videoId != song.videoId) {
+                    break
+                }
+                val duration = listenBrainzDurationMs ?: current.duration.takeIf { it > 0L }
+                if (duration != null) listenBrainzDurationMs = duration
+                val played = listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime())
+                submitListenBrainzFinished(song, listenBrainzStartMs, duration, played)
+            }
         }
     }
 
@@ -7324,34 +6787,23 @@ class PlaybackService : MediaLibraryService() {
         serviceLyrics = null
         cancelPrefetch()
         trackAnalyzer.release()
-        // The YouTube Music history entry for whatever was playing, closed out
-        // on the same terms as the ListenBrainz submit below: a swipe-away never
-        // fires STATE_ENDED, and the tracker's own scope outlives this service,
-        // so the ping still goes out after the service scope is cancelled.
-        PlaybackTracker.onPlaybackFinished(
-            player?.currentPosition?.div(1000) ?: lastPositionSeconds,
-        )
         // Also the last chance to close out the track that was playing — a
         // swipe-away or stop never fires STATE_ENDED, so the session would
-        // otherwise end with an un-scrobbled song. This must not ride on the
-        // service scope: it is cancelled a few lines down, and the request
-        // should still reach ListenBrainz.
+        // otherwise end with an un-scrobbled song. Persist synchronously to
+        // the no-backup outbox before the service scope is cancelled. The
+        // WorkManager worker sends it later, including after process death.
+        listenBrainzThresholdJob?.cancel()
+        listenBrainzThresholdJob = null
         val lastSong = listenBrainzSong
         if (lastSong != null && listenBrainzStartMs > 0L) {
-            val lbEnabled =
-                AppSettings.scrobblingAvailable && AppSettings.listenBrainzEnabled.value
-            val lbToken = AppSettings.listenBrainzToken.value
-            if (lbEnabled && lbToken.isNotBlank()) {
-                val lastStart = listenBrainzStartMs
-                val lastDuration = player?.duration?.takeIf { it > 0 }
-                CoroutineScope(Dispatchers.IO).launch {
-                    ListenBrainzManager.submitFinished(
-                        lbToken, lastSong, lastStart, System.currentTimeMillis(), lastDuration,
-                        AppSettings.listenBrainzPrimaryArtistOnly.value,
-                    )
-                }
-            }
+            submitListenBrainzFinished(
+                lastSong,
+                listenBrainzStartMs,
+                listenBrainzDurationMs ?: player?.duration?.takeIf { it > 0L },
+                listenBrainzPlaybackClock.listenedMs(SystemClock.elapsedRealtime()),
+            )
         }
+        listenBrainzPlaybackClock.reset()
         scrobbleManager?.destroy()
         scrobbleManager = null
         // Last chance to get the current track's minutes onto disk: the scope is
@@ -8009,7 +7461,6 @@ class PlaybackService : MediaLibraryService() {
         ): MediaSession.ConnectionResult {
             val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                 .buildUpon()
-                .add(favoriteCommand)
                 .add(boundedContextCommand)
                 .add(clearBoundedContextCommand)
                 .add(canonicalRemotePlaybackCommand)
@@ -8075,8 +7526,10 @@ class PlaybackService : MediaLibraryService() {
                 ACTION_PLAY_CANONICAL_REMOTE -> startCanonicalRemotePlayback(args)
                 ACTION_TOGGLE_AUTOPLAY -> toggleAutoplayFromNotification()
                 ACTION_TOGGLE_SHUFFLE -> toggleShuffleFromSession()
-                ACTION_START_STATION -> startStationFromSession()
-                ACTION_REVERT_TO_ORIGINAL -> revertCurrentToOriginal()
+                ACTION_START_STATION, ACTION_REVERT_TO_ORIGINAL ->
+                    return Futures.immediateFuture(
+                        SessionResult(SessionError.ERROR_NOT_SUPPORTED),
+                    )
                 ACTION_SWAP_TO_VERSION -> swapCurrentToVersion(args)
                 ACTION_BEGIN_RADIO_QUEUE -> beginRadioQueue()
                 ACTION_COMMIT_RADIO_QUEUE -> player?.let(::saveQueueSnapshotImmediately)
@@ -8095,18 +7548,15 @@ class PlaybackService : MediaLibraryService() {
                         partySync?.endQueueDrag()
                     }
                 }
-                // A widget or watch drawn before the track changed can still
-                // send this for one the player offers no Like on.
-                ACTION_TOGGLE_FAVORITE -> session.player.currentMediaItem
-                    ?.takeIf(::canLike)
-                    ?.mediaId
-                    ?.let { toggleFavoriteFromNotification(it) }
+                // A stale widget/watch may still send the retired command.
+                // Reject it explicitly; it is not a native Recording rating.
+                ACTION_TOGGLE_FAVORITE -> return Futures.immediateFuture(
+                    SessionResult(SessionError.ERROR_NOT_SUPPORTED),
+                )
                 else -> return Futures.immediateFuture(
                     SessionResult(SessionError.ERROR_NOT_SUPPORTED),
                 )
             }
-            // The actual YouTube rating is asynchronous. The command itself has been accepted;
-            // the notification is refreshed when the network write completes.
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
@@ -8139,12 +7589,6 @@ class PlaybackService : MediaLibraryService() {
             val rootParams = LibraryParams.Builder()
                 .setExtras(rootExtras)
                 .build()
-            scope.launch(Dispatchers.IO) {
-                try {
-                    cachedHomeFeed()
-                } catch (_: Exception) {}
-            }
-
             return Futures.immediateFuture(LibraryResult.ofItem(rootItem, rootParams))
         }
 
@@ -8200,12 +7644,7 @@ class PlaybackService : MediaLibraryService() {
                         }
                         snapshot
                     } else {
-                        cachedQuickPicksSongs().ifEmpty {
-                            snapshotHome()?.shelves?.flatMap { it.items }
-                                ?.mapNotNull { it.toSongOrNull() }
-                                ?.distinctBy { it.videoId }
-                                .orEmpty()
-                        }
+                        cachedQuickPicksSongs()
                     }
                     songs.forEach { songCache[it.videoId] = it }
                     if (songs.isNotEmpty()) songs.map { it.toMediaItem() } else listOf(
@@ -8217,33 +7656,18 @@ class PlaybackService : MediaLibraryService() {
                     )
                 }
                 MEDIA_LIKED_ID -> {
-                    if (com.music.bitchord.data.innertube.Innertube.cookie == null) {
-                        listOf(createLoginPromptItem())
-                    } else {
-                        val snapshot = snapshotLiked()
-                        val songs = if (snapshot.isNotEmpty()) {
-                            if (!isLikedFresh()) {
-                                refreshFolderInBackground(session, browser, parentId, params) {
-                                    cachedLikedSongs().size
-                                }
-                            }
-                            snapshot
-                        } else {
-                            cachedLikedSongs()
-                        }
-                        songs.forEach { songCache[it.videoId] = it }
-                        if (songs.isNotEmpty()) {
-                            songs.map { it.toMediaItem() }
-                        } else {
-                            listOf(
-                                createInfoItem(
-                                    "msg:empty_liked",
-                                    getString(R.string.auto_empty_liked_title),
-                                    getString(R.string.auto_empty_liked_subtitle),
-                                ),
-                            )
-                        }
-                    }
+                    // Session-known ratings only until the persisted native
+                    // rating catalog is linked to Android Auto. No YouTube
+                    // login prompt, cookie or inferred like membership.
+                    val songs = cachedLikedSongs()
+                    songs.forEach { songCache[it.videoId] = it }
+                    if (songs.isNotEmpty()) songs.map { it.toMediaItem() } else listOf(
+                        createInfoItem(
+                            "msg:empty_liked",
+                            getString(R.string.auto_empty_liked_title),
+                            getString(R.string.auto_empty_liked_subtitle),
+                        ),
+                    )
                 }
                 MEDIA_DOWNLOADS_ID -> {
                     val downloaded = Downloads.getDownloadedSongs(this@PlaybackService)
@@ -8257,28 +7681,14 @@ class PlaybackService : MediaLibraryService() {
                     )
                 }
                 MEDIA_PLAYLISTS_ID -> {
-                    if (com.music.bitchord.data.innertube.Innertube.cookie == null) {
-                        listOf(createLoginPromptItem())
-                    } else {
-                        val snapshot = snapshotPlaylistCards()
-                        val playlists = if (snapshot.isNotEmpty()) {
-                            if (!isPlaylistsFresh()) {
-                                refreshFolderInBackground(session, browser, parentId, params) {
-                                    cachedPlaylistCards().size
-                                }
-                            }
-                            snapshot
-                        } else {
-                            cachedPlaylistCards()
-                        }
-                        if (playlists.isNotEmpty()) playlists.map(::shelfToGridPlaylistItem) else listOf(
-                            createInfoItem(
-                                "msg:empty_playlists",
-                                getString(R.string.auto_empty_playlists_title),
-                                getString(R.string.auto_empty_playlists_subtitle),
-                            ),
-                        )
-                    }
+                    val playlists = cachedPlaylistCards()
+                    if (playlists.isNotEmpty()) playlists.map(::shelfToGridPlaylistItem) else listOf(
+                        createInfoItem(
+                            "msg:empty_playlists",
+                            getString(R.string.auto_empty_playlists_title),
+                            getString(R.string.auto_empty_playlists_subtitle),
+                        ),
+                    )
                 }
                 MEDIA_LOCAL_MUSIC_ID -> {
                     val local = LocalMediaRepository.getLocalMusic(this@PlaybackService)
@@ -8294,29 +7704,31 @@ class PlaybackService : MediaLibraryService() {
                 else -> {
                     when {
                         parentId.startsWith("playlist:") -> {
-                            val playlistId = parentId.removePrefix("playlist:")
-                            val songs = try {
-                                withTimeoutOrNull(2500L) {
-                                    YtMusicRepository.browseSongs("VL$playlistId").getOrNull()?.songs
-                                        ?: YtMusicRepository.browseSongs(playlistId).getOrNull()?.songs
-                                } ?: emptyList()
-                            } catch (_: Exception) {
-                                emptyList()
-                            }
-                            songs.forEach { songCache[it.videoId] = it }
-                            songs.map { it.toMediaItem() }
+                            // Former YouTube collection IDs are archival, not
+                            // a provider-authorized browse target.
+                            listOf(createInfoItem(
+                                "msg:unavailable_playlist",
+                                getString(R.string.auto_unavailable_title),
+                                getString(R.string.auto_unavailable_subtitle),
+                            ))
                         }
                         parentId.startsWith("browse:") -> {
                             val browseId = parentId.removePrefix("browse:")
-                            val songs = try {
-                                withTimeoutOrNull(2500L) {
-                                    YtMusicRepository.browseSongs(browseId).getOrNull()?.songs
-                                } ?: emptyList()
-                            } catch (_: Exception) {
-                                emptyList()
-                            }
+                            val saved = com.music.bitchord.data.spotify.LocalPlaylistStore
+                                .getPlaylist(browseId)
+                            val songs = saved?.songs?.let { entries ->
+                                canonicalAutoPlaylistSongs(entries) { id ->
+                                    Downloads.verifiedSavedUri(id)
+                                }
+                            }.orEmpty()
                             songs.forEach { songCache[it.videoId] = it }
-                            songs.map { it.toMediaItem() }
+                            if (songs.isNotEmpty()) songs.map { it.toMediaItem() } else listOf(
+                                createInfoItem(
+                                    "msg:unavailable_playlist",
+                                    getString(R.string.auto_unavailable_title),
+                                    getString(R.string.auto_unavailable_subtitle),
+                                ),
+                            )
                         }
                         else -> {
                             val cachedSong = songCache[parentId]
@@ -8431,21 +7843,20 @@ class PlaybackService : MediaLibraryService() {
                 )
             }
 
-            // 5. Fallback to Quick Picks / Home shelves
-            val fallbackSongs = try {
-                withTimeoutOrNull(2500L) {
-                    val home = YtMusicRepository.home().getOrNull()
-                    home?.shelves?.flatMap { shelf ->
-                        shelf.items.mapNotNull { it.toMediaItemOrNull() }
-                    }?.distinctBy { it.mediaId }
-                } ?: emptyList()
+            // 4. When there is no on-device audio, resume with verified
+            // personal-server assets instead of contacting YouTube Home.
+            val remoteSongs = try {
+                CanonicalCatalogDatabase.get(this@PlaybackService)
+                    .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
+                    .let(::canonicalAutoSongs)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (_: Exception) {
                 emptyList()
             }
-
-            if (fallbackSongs.isNotEmpty()) {
+            if (remoteSongs.isNotEmpty()) {
                 return@future MediaSession.MediaItemsWithStartPosition(
-                    ImmutableList.copyOf(fallbackSongs),
+                    ImmutableList.copyOf(remoteSongs.map(Song::toMediaItem)),
                     0,
                     0L,
                 )
@@ -8527,10 +7938,7 @@ class PlaybackService : MediaLibraryService() {
                             cached
                         } else {
                             try {
-                                withTimeoutOrNull(3000L) {
-                                    YtMusicRepository.search(searchQuery, SearchFilter.SONGS).getOrNull()
-                                        ?.mapNotNull { if (it is SearchResult.Track) it.song else null }
-                                } ?: emptyList()
+                                searchAll(searchQuery).first
                             } catch (_: Exception) {
                                 emptyList()
                             }
@@ -8541,29 +7949,20 @@ class PlaybackService : MediaLibraryService() {
                         }
                     }
                     id.startsWith("playlist:") -> {
-                        val playlistId = id.removePrefix("playlist:")
-                        val songs = try {
-                            withTimeoutOrNull(3000L) {
-                                YtMusicRepository.browseSongs("VL$playlistId").getOrNull()?.songs
-                                    ?: YtMusicRepository.browseSongs(playlistId).getOrNull()?.songs
-                            } ?: emptyList()
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
-                        songs.forEach { songCache[it.videoId] = it }
-                        resolved.addAll(songs.map { it.toMediaItem() })
+                        // Historical YouTube playlist IDs are not authorized
+                        // sources, even when MediaBrowser restores them.
                     }
                     id.startsWith("browse:") -> {
                         val browseId = id.removePrefix("browse:")
-                        val songs = try {
-                            withTimeoutOrNull(3000L) {
-                                YtMusicRepository.browseSongs(browseId).getOrNull()?.songs
-                            } ?: emptyList()
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
+                        val stored = com.music.bitchord.data.spotify.LocalPlaylistStore
+                            .getPlaylist(browseId)
+                        val songs = stored?.songs?.let { entries ->
+                            canonicalAutoPlaylistSongs(entries) { legacyId ->
+                                Downloads.verifiedSavedUri(legacyId)
+                            }
+                        }.orEmpty()
                         songs.forEach { songCache[it.videoId] = it }
-                        resolved.addAll(songs.map { it.toMediaItem() })
+                        resolved.addAll(songs.map(Song::toMediaItem))
                     }
                     id == MEDIA_ROOT_ID || id == MEDIA_RECENTS_ID -> {
                         val songs = cachedRecentsSongs()
@@ -8585,20 +7984,15 @@ class PlaybackService : MediaLibraryService() {
                         resolved.addAll(downloaded.map { it.toMediaItem() })
                     }
                     id == MEDIA_PLAYLISTS_ID -> {
-                        val songs = try {
-                            withTimeoutOrNull(2500L) {
-                                val playlists = YtMusicRepository.userPlaylists().getOrNull() ?: emptyList()
-                                val first = playlists.firstOrNull()
-                                if (first != null) {
-                                    YtMusicRepository.browseSongs("VL${first.playlistId}").getOrNull()?.songs
-                                        ?: YtMusicRepository.browseSongs(first.playlistId).getOrNull()?.songs
-                                } else null
-                            } ?: emptyList()
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
+                        val first = com.music.bitchord.data.spotify.LocalPlaylistStore
+                            .playlists.value.firstOrNull()
+                        val songs = first?.songs?.let { entries ->
+                            canonicalAutoPlaylistSongs(entries) { legacyId ->
+                                Downloads.verifiedSavedUri(legacyId)
+                            }
+                        }.orEmpty()
                         songs.forEach { songCache[it.videoId] = it }
-                        resolved.addAll(songs.map { it.toMediaItem() })
+                        resolved.addAll(songs.map(Song::toMediaItem))
                     }
                     id == MEDIA_LOCAL_MUSIC_ID -> {
                         val local = LocalMediaRepository.getLocalMusic(this@PlaybackService)
@@ -8612,31 +8006,31 @@ class PlaybackService : MediaLibraryService() {
                         resolved.add(item)
                     }
                     item.requestMetadata.mediaUri != null -> {
-                        val uri = item.requestMetadata.mediaUri!!
-                        val videoId = uri.getQueryParameter("v") ?: uri.lastPathSegment.orEmpty()
-                        if (videoId.isNotEmpty() && !videoId.startsWith("http")) {
-                            val cached = songCache[videoId]
-                            if (cached != null) {
-                                resolved.add(cached.toMediaItem())
-                            } else {
-                                resolved.add(Song(videoId = videoId, title = item.mediaMetadata.title?.toString() ?: "Track", artist = item.mediaMetadata.artist?.toString() ?: "Artist", thumbnailUrl = null).toMediaItem())
-                            }
-                        } else {
-                            resolved.add(item.buildUpon().setUri(uri).build())
+                        val rawUri = item.requestMetadata.mediaUri!!.toString()
+                        val approved = canonicalAutoExternalUri(rawUri)
+                        if (approved != null) {
+                            val song = Song(
+                                videoId = approved,
+                                title = item.mediaMetadata.title?.toString() ?: "Track",
+                                artist = item.mediaMetadata.artist?.toString() ?: "Artist",
+                                thumbnailUrl = null,
+                                localUri = approved,
+                            )
+                            resolved.add(song.toMediaItem())
                         }
                     }
                     else -> {
                         val cached = songCache[id]
-                        if (cached != null) {
-                            resolved.add(cached.toMediaItem())
-                        } else {
-                            val song = item.toSong()
-                            resolved.add(song.toMediaItem())
-                        }
+                        val song = cached ?: item.toSong()
+                        canonicalAutoPlaylistSongs(listOf(song)) { legacyId ->
+                            Downloads.verifiedSavedUri(legacyId)
+                        }.firstOrNull()?.let { resolved.add(it.toMediaItem()) }
                     }
                 }
             }
-            return if (resolved.isEmpty()) mediaItems else resolved
+            // Never return unvalidated original MediaItems: that previously
+            // reintroduced the very videoId we rejected above.
+            return resolved
         }
     }
 
@@ -8701,23 +8095,38 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun searchAll(query: String): Pair<List<Song>, List<BrowseItem>> {
         val safeQuery = query.trim().take(MAX_AUTO_SEARCH_QUERY_CHARS)
         if (safeQuery.isEmpty()) return emptyList<Song>() to emptyList()
-        val results = try {
-            withTimeoutOrNull(3_500L) {
-                YtMusicRepository.search(safeQuery, SearchFilter.ALL).getOrNull()
-            } ?: emptyList()
+
+        // Search only assets that this device or an authenticated personal
+        // server can actually play. A public metadata match is not audio.
+        // Each origin fails independently: missing MediaStore permission must
+        // not hide the server or downloaded results.
+        val local = try {
+            canonicalAutoSearch(LocalMediaRepository.getLocalMusic(this), safeQuery)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             emptyList()
         }
-        val songs = results.mapNotNull {
-            when (it) {
-                is SearchResult.Track -> it.song
-                is SearchResult.TopTrack -> it.song
-                else -> null
-            }
-        }.distinctBy { it.videoId }
-        val browses = results.mapNotNull { (it as? SearchResult.Browse)?.item }
-            .distinctBy { it.browseId }
-        return songs to browses
+        val downloads = try {
+            canonicalAutoSearch(Downloads.getDownloadedSongs(this), safeQuery)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        val remote = try {
+            CanonicalCatalogDatabase.get(this).catalogDao()
+                .searchCanonicalRemoteServerAssets(safeQuery, limit = 200)
+                .let(::canonicalAutoSongs)
+                .let { canonicalAutoSearch(it, safeQuery) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return (local + downloads + remote)
+            .distinctBy(Song::videoId)
+            .take(150) to emptyList()
     }
 
     private fun storeSearchResults(query: String, songs: List<Song>, browses: List<BrowseItem>) {
@@ -8797,7 +8206,7 @@ class PlaybackService : MediaLibraryService() {
             val song = Song(
                 videoId = vid,
                 title = title,
-                artist = InnertubeParser.artistFromSubtitle(subtitle),
+                artist = artistCreditFromSubtitle(subtitle),
                 thumbnailUrl = thumbnailUrl,
             )
             songCache[vid] = song
@@ -8827,7 +8236,7 @@ class PlaybackService : MediaLibraryService() {
         return Song(
             videoId = id,
             title = title,
-            artist = InnertubeParser.artistFromSubtitle(subtitle),
+            artist = artistCreditFromSubtitle(subtitle),
             thumbnailUrl = thumbnailUrl,
         )
     }
@@ -8930,7 +8339,7 @@ class PlaybackService : MediaLibraryService() {
          */
         const val DISCORD_TEARDOWN_TIMEOUT_MS = 3_000L
 
-        /** Upper bound per range; [PlayerClient.rangeBytesFor] narrows it per client. */
+        /** Upper bound per HTTP range for verified provider streams. */
         const val STREAM_CHUNK_BYTES = 1L * 1024 * 1024
 
         /** Shortest gap "skip silence" is allowed to touch. */
@@ -9148,7 +8557,6 @@ class PlaybackService : MediaLibraryService() {
          * Media3 wraps twice on this path and the coroutine machinery may add
          * one; nothing nests deeper. See [permanentReason].
          */
-        const val PERMANENT_CAUSE_DEPTH = 8
 
         /**
          * The pause before a retry. Media3 refuses to remove a cache entry a

@@ -26,6 +26,7 @@
     <string name="home">Inicio</string>
     <string name="play">Reproducir</string>
     <string name="explore">Explorar</string>
+    <string name="explore_genres">Géneros</string>
     <string name="listen_now">Escuchar ahora</string>
     <string name="downloads">Descargas</string>
     <string name="downloaded_songs">Canciones descargadas</string>
@@ -466,7 +467,7 @@
     <string name="signing_in">Iniciando sesión…</string>
     <string name="sleep_timer">Temporizador</string>
     <string name="sources_no_lossless">Ninguna fuente activa ofrece audio sin pérdida. Agrega un módulo personalizado para reproducir archivos sin pérdida disponibles sin transcodificarlos.</string>
-    <string name="sources_order_footer">Si una fuente no tiene una canción o no responde, BitChord prueba la siguiente. Las fuentes situadas antes de YouTube pueden reemplazar su grabación si devuelven una versión mejor.</string>
+    <string name="sources_order_footer">Si una fuente no tiene una canción o no responde, BitChord prueba la siguiente.</string>
     <string name="sources_order_header">Fuentes, en orden de prioridad</string>
     <string name="sources_quality_capped">Esta conexión está configurada por debajo de calidad Alta, así que el audio se transcodifica para respetar ese límite. Las descargas no cambian.</string>
     <string name="jiosaavn_mismatch_warning">Puede elegir la versión equivocada de una canción. Actívalo bajo tu propio riesgo.</string>
@@ -925,6 +926,7 @@
     <string name="shelf_top_tunes_right_now">Temas del momento</string>
 
     <string name="shelf_trending">Tendencias</string>
+    <string name="shelf_listenbrainz_community">Popular en la comunidad</string>
 
     <string name="shelf_trending_community_playlists">Listas populares de la comunidad</string>
 
@@ -1262,6 +1264,7 @@
     <string name="spotify_import_none">No se encontró ninguna de esas canciones en YouTube Music.</string>
     <string name="spotify_import_title">Importar playlist de Spotify</string>
     <string name="spotify_import_unmatched">%1$d canciones no se encontraron en YouTube Music</string>
+    <string name="spotify_import_metadata_only">Lista guardada con %1$d canciones solo como metadatos. No se vinculó audio sin una coincidencia verificada.</string>
     <string name="spotify_library_subtitle">Tus playlists de Spotify</string>
     <string name="spotify_sign_in">Iniciar sesión con Spotify</string>
     <string name="spotify_use_spdc_token">Usar token sp_dc</string>
@@ -1360,4 +1363,26 @@
     <string name="search_origin_local">Local</string>
     <string name="pause_resume_fade">Fundido al pausar y reanudar</string>
     <string name="pause_resume_fade_subtitle">Reduce suavemente el volumen al pausar y lo aumenta al reanudar</string>
+    <string name="home_global_discovery">Descubrimientos del mundo</string>
+
+    <string name="visual_offline_title">Elementos visuales sin conexión</string>
+    <string name="visual_offline_stream">Reproducir normalmente usando una caché temporal, sin guardar vídeos permanentemente</string>
+    <string name="visual_offline_wifi">Guardar animaciones completas para verlas sin conexión, solo con Wi-Fi</string>
+    <string name="visual_offline_still">Sustituir animaciones por imágenes y fotos disponibles</string>
+    <string name="visual_offline_temporary">Temporal</string>
+    <string name="visual_offline_save_wifi">Guardar con Wi-Fi</string>
+    <string name="visual_offline_only_stills">Solo imágenes</string>
+    <string name="visual_offline_artist_motion">Animaciones de artistas</string>
+    <string name="visual_offline_album_motion">Animaciones de álbumes</string>
+    <string name="visual_offline_player_motion">Animaciones del reproductor</string>
+    <string name="visual_offline_save_stills">Guardar imágenes estáticas</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">Fotos de artistas</string>
+    <string name="visual_offline_album_stills">Portadas de álbumes</string>
+    <string name="visual_offline_player_stills">Portadas del reproductor</string>
+    <string name="visual_offline_clear_title">Borrar elementos visuales guardados</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">¿Borrar elementos visuales sin conexión?</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">Elementos visuales sin conexión borrados</string>
 </resources>

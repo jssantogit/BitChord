@@ -4,7 +4,10 @@ import com.music.bitchord.data.sources.SourceConfig
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.effectiveSearchSource
+import com.music.bitchord.ui.isYouTubeSourceEnabled
+import com.music.bitchord.ui.shouldHandleExplicitLegacyYoutubeLink
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class DisabledYoutubeCanonicalSearchGateTest {
@@ -16,10 +19,19 @@ class DisabledYoutubeCanonicalSearchGateTest {
         assertEquals(SearchSource.ADDONS, effectiveSearchSource(SearchSource.ADDONS, disabled))
     }
 
-    @Test fun enabledOrNotYetInitializedYoutubeKeepsBackwardCompatibleDefault() {
-        assertEquals(SearchSource.YOUTUBE, effectiveSearchSource(SearchSource.YOUTUBE, emptyList()))
-        assertEquals(SearchSource.YOUTUBE, effectiveSearchSource(
+    @Test fun enabledOrUninitializedYoutubeStillRoutesToCanonicalCatalog() {
+        assertEquals(SearchSource.CANONICAL, effectiveSearchSource(SearchSource.YOUTUBE, emptyList()))
+        assertEquals(SearchSource.CANONICAL, effectiveSearchSource(
             SearchSource.YOUTUBE, listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)),
         ))
     }
+    @Test fun historicalEnabledAndMissingYoutubeSourceNeverAuthorizeNetworkRequests() {
+        val enabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = true))
+        val disabled = listOf(SourceConfig(kind = SourceKind.YOUTUBE, enabled = false))
+        for (configs in listOf(emptyList(), enabled, disabled)) {
+            assertFalse(isYouTubeSourceEnabled(configs))
+            assertFalse(shouldHandleExplicitLegacyYoutubeLink(configs))
+        }
+    }
+
 }

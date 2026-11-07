@@ -21,7 +21,6 @@ import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.replay.ReplayCreditCard
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.model.EntityType
 import com.music.bitchord.data.model.SearchHistoryEntity
 import com.music.bitchord.ui.LocalPullToRefreshEnabled
@@ -907,34 +906,17 @@ fun BitChordDesktopApp() {
         }
     }
 
-    /** Takes a captured cookie all the way to a saved account. */
-    suspend fun signIn(cookie: String, label: String, sourceProfile: String? = null) {
-        signInError = null
-        signInBusy = label
-        try {
-            val scope = withContext(Dispatchers.IO) { DesktopYouTubeSession.adoptSessionScope(cookie) }
-            if (scope == null) {
-                signInError = "$label is not signed in to YouTube Music."
-                return
-            }
-            DesktopYouTubeAuth.adopt(scope)
-            // Asked with the session in force, so they describe the account that was just captured
-            // rather than nobody in particular.
-            val details = DesktopSearchClient.accountMenu().getOrNull()?.let(DesktopAccountParser::account)
-            val channels = DesktopSearchClient.accountsList().getOrNull()
-                ?.let(DesktopAccountParser::channels)
-                .orEmpty()
-            // Off the UI thread: saving reaches the platform keyring over D-Bus, and a blocking
-            // call to another process is not something to do on the thread that is drawing.
-            withContext(Dispatchers.IO) { DesktopAccounts.save(cookie, scope, details, channels, sourceProfile) }
-            accounts = withContext(Dispatchers.IO) { DesktopAccounts.accounts() }
-            activeAccountId = DesktopAccounts.activeAccountId()
-            activeProfileId = DesktopAccounts.activeProfileId()
-            overlays.signIn = false
-            overlays.accounts = false
-        } finally {
-            signInBusy = null
-        }
+    /**
+     * Historical Google-cookie sign-in is retired. Never collect or validate
+     * new YouTube credentials; stored accounts are preserved for migration.
+     */
+    suspend fun signIn(
+        @Suppress("UNUSED_PARAMETER") cookie: String,
+        @Suppress("UNUSED_PARAMETER") label: String,
+        @Suppress("UNUSED_PARAMETER") sourceProfile: String? = null,
+    ) {
+        signInError = "YouTube Music sign-in is no longer supported."
+        signInBusy = null
     }
 
     fun playSongs(songs: List<Song>, startIndex: Int = 0, source: DesktopQueueSource? = null) {
@@ -1164,10 +1146,14 @@ fun BitChordDesktopApp() {
 
     fun openAlbum(browseId: String) = openCollection(browseId)
 
-    /** Copies the track's YouTube Music link. */
+    /** Only historical YouTube identities can be shared as YouTube links. */
     fun shareSong(song: Song) {
+        if (!DesktopSearchClient.isVideoId(song.videoId)) {
+            DesktopTrackLog.log("share skipped for '${song.title}': no verified YouTube identity")
+            return
+        }
         DesktopExternalLinks.copy("https://music.youtube.com/watch?v=${song.videoId}")
-        DesktopTrackLog.log("copied a link to '${song.title}'")
+        DesktopTrackLog.log("copied a historical link to '${song.title}'")
     }
 
     /**
@@ -2019,22 +2005,6 @@ fun BitChordDesktopApp() {
     LaunchedEffect(playback.song?.videoId, playback.isPlaying, playback.durationMs, playbackSpeed, playback.streamFormat) {
         DesktopDiscordRpc.onPlaybackStateChanged(playback, playbackSpeed)
     }
-    // The account's own history on YouTube Music, which is what the home feed is built out of.
-    DisposableEffect(playback.song?.videoId) {
-        val previous = playbackEngine.state.value.positionMs / 1_000
-        onDispose { DesktopPlaybackTracker.onTrackChanged(previous) }
-    }
-    LaunchedEffect(playback.song?.videoId, playback.isPlaying) {
-        val songId = playback.song?.videoId ?: return@LaunchedEffect
-        if (!playback.isPlaying) return@LaunchedEffect
-        DesktopPlaybackTracker.onPlaying(songId)
-        while (currentCoroutineContext().isActive) {
-            delay(HISTORY_SAMPLE_MS)
-            val snapshot = playbackEngine.state.value
-            if (snapshot.song?.videoId != songId) break
-            DesktopPlaybackTracker.onProgress(songId, snapshot.positionMs / 1_000)
-        }
-    }
     LaunchedEffect(playback.song?.videoId, playback.isPlaying) {
         val songId = playback.song?.videoId ?: return@LaunchedEffect
         if (!playback.isPlaying) return@LaunchedEffect
@@ -2489,17 +2459,9 @@ fun BitChordDesktopApp() {
                     },
                 )
             }
-            if (signedIn) {
-                launch {
-                    YtMusicRepository.homeRecentlyPlayed()
-                        .onSuccess { shelf ->
-                            if (generation != homeGeneration) return@onSuccess
-                            homeRecentsLoading = false
-                            shelf?.let { publishHomeShelves(listOf(it), prepend = true) }
-                        }
-                        .onFailure { if (generation == homeGeneration) homeRecentsLoading = false }
-                }
-            }
+            // Retired YouTube account recents are not queried. Historical
+            // listening state remains in local playback and listening stores.
+            homeRecentsLoading = false
             DesktopSearchClient.HOME_SUPPLEMENT_BROWSE_IDS.forEach { browseId ->
                 launch {
                     DesktopSearchClient.homeSupplement(browseId).onSuccess { shelves ->
@@ -3433,10 +3395,12 @@ fun BitChordDesktopApp() {
                                 if (id != null) {
                                     openArtist(id, name)
                                 } else {
-                                    scope.launch {
-                                        YtMusicRepository.findArtistPageId(name).getOrNull()
-                                            ?.let { found -> openArtist(found, name) }
-                                    }
+                                    // A text credit is not a verified artist id.
+                                    // Route to provider-neutral search instead
+                                    // of asking the retired YouTube browse API.
+                                    query = name
+                                    searchFilter = SearchFilter.ARTISTS
+                                    search()
                                 }
                             },
                             onOpenPlaybackSource = {
@@ -3596,54 +3560,13 @@ fun BitChordDesktopApp() {
 
                     if (overlays.signIn) {
                         DesktopSignInDialog(
-                            busy = signInBusy,
-                            error = signInError,
-                            webSignIn = DesktopWebSignIn.available,
-                            onWebSignIn = {
-                                webSignInJob?.cancel()
-                                webSignInJob = scope.launch {
-                                    signInError = null
-                                    signInBusy = WEB_SIGN_IN
-                                    try {
-                                        val cookie = DesktopWebSignIn.captureYouTube()
-                                        signIn(cookie, WEB_SIGN_IN)
-                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                                        throw cancelled
-                                    } catch (failure: Exception) {
-                                        DesktopTrackLog.log("sign-in: YouTube Music failed: ${failure.message}")
-                                        signInError = failure.message ?: "Could not complete the sign-in."
-                                    } finally {
-                                        signInBusy = null
-                                        webSignInJob = null
-                                    }
-                                }
-                            },
-                            onImport = { profile ->
-                                scope.launch {
-                                    when (val found = withContext(Dispatchers.IO) { DesktopBrowserCookies.read(profile) }) {
-                                        is DesktopBrowserCookies.Result.Session ->
-                            signIn(found.cookie, profile.label, profile.database.toString())
-                                        DesktopBrowserCookies.Result.SignedOut ->
-                                            signInError = "${profile.label} is not signed in."
-                                        is DesktopBrowserCookies.Result.Unavailable ->
-                                            signInError = "${profile.label}: ${found.reason}."
-                                    }
-                                }
-                            },
-                            onPaste = { pasted ->
-                                scope.launch {
-                                    if (!DesktopBrowserCookies.hasSigningSecret(pasted)) {
-                                        signInError = "That cookie has no signing secret in it — copy the whole header."
-                                    } else {
-                                        signIn(pasted, "the cookie you pasted")
-                                    }
-                                }
-                            },
-                            onDismiss = {
-                                webSignInJob?.cancel()
-                                overlays.signIn = false
-                                signInError = null
-                            },
+                            busy = null,
+                            error = null,
+                            webSignIn = false,
+                            onWebSignIn = {},
+                            onImport = {},
+                            onPaste = {},
+                            onDismiss = { overlays.signIn = false },
                         )
                     }
                     if (overlays.playlistDialog || playlistTarget != null) {

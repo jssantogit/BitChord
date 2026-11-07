@@ -42,6 +42,13 @@ internal data class RecordingMetadataEnrichment(
     val artistDisplay: String? = null,
     /** null means the provider response omitted the credit field entirely. */
     val artistCredits: List<MusicBrainzArtistCredit>? = null,
+    /** Positive exact Recording -> Official audio Release membership, for public artist charts.
+     * Null means unverified. Never convert this external MBID to a playback asset. */
+    val officialAudioReleaseMbid: String? = null,
+    /** ReleaseGroup is known only through this exact verified edition edge. */
+    val officialAudioReleaseGroupMbid: String? = null,
+    /** Resolved CoverArtArchive image of that exact edition, if available. */
+    val officialAudioArtworkUri: String? = null,
 )
 
 internal data class ReleaseMetadataEnrichment(

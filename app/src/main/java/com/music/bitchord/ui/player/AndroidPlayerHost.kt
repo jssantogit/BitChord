@@ -12,6 +12,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -19,6 +20,10 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
+import com.music.bitchord.data.canvas.VisualStillMedia
+import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.VisualRetentionMode
+import com.music.bitchord.data.canvas.isSafeVisualMediaUrl
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsTranslation
@@ -56,11 +61,22 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val main = Handler(Looper.getMainLooper())
+    // The shared Now Playing screen listens only to PlayerSettings.animatedCanvas.
+    // Combining the two settings here ensures STILL_ONLY removes the video
+    // entirely (including the Spotify full-screen layout, not merely its pixels).
+    private val effectiveAnimatedCanvas = combine(
+        AppSettings.animatedCanvas, AppSettings.visualRetentionMode,
+    ) { animated, mode ->
+        animated && mode != VisualRetentionMode.STILL_ONLY
+    }.stateIn(scope, SharingStarted.Eagerly,
+        AppSettings.animatedCanvas.value &&
+            AppSettings.visualRetentionMode.value != VisualRetentionMode.STILL_ONLY)
+
     // One provider-owned loader/cache/client instance shared by Mini and Now Playing.
     private val canonicalArtworkLoader by lazy { androidOpenSubsonicArtworkLoader(app) }
 
     override val settings: PlayerSettingsSource = object : PlayerSettingsSource {
-        override val animatedCanvas get() = AppSettings.animatedCanvas
+        override val animatedCanvas get() = effectiveAnimatedCanvas
         override val audioQualityCellular get() = AppSettings.audioQualityCellular
         override val audioQualityWifi get() = AppSettings.audioQualityWifi
         override val canvasOverCellular get() = AppSettings.canvasOverCellular
@@ -102,8 +118,25 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     override fun CanvasVideo(spec: CanvasVideoSpec, modifier: Modifier) = AndroidCanvasVideo(spec, modifier)
 
     @Composable
-    override fun rememberRemoteArtworkUrl(song: Song?): String? =
-        com.music.bitchord.ui.components.rememberRemoteArtworkUrl(song)
+    override fun rememberRemoteArtworkUrl(song: Song?): String? {
+        // The same painter and color pipeline receives a local File URI on
+        // restart, without introducing an Android-only fork of Now Playing.
+        val online = com.music.bitchord.ui.components.rememberRemoteArtworkUrl(song)
+        val identity = song?.let { it.videoId.ifBlank { it.artist + "|" + it.title } }
+        val saveStills by AppSettings.saveVisualStillImages.collectAsStateWithLifecycle()
+        // This belongs to the artwork host, not canvas lookup: turning
+        // animation off must never prevent a plain cover being saved offline.
+        LaunchedEffect(identity, online, saveStills) {
+            val safe = online?.takeIf(::isSafeVisualMediaUrl)
+            if (saveStills && identity != null && safe != null) {
+                VisualStillMedia.save(VisualSurface.NOW_PLAYING, identity, safe)
+            }
+        }
+        val persisted = identity?.let {
+            VisualStillMedia.cached(VisualSurface.NOW_PLAYING, it)
+        }
+        return persisted?.toURI()?.toString() ?: online
+    }
 
     @Composable
     override fun rememberCanonicalPlaybackArtworkModel(song: Song?): Any? {

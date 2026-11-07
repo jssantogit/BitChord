@@ -92,14 +92,16 @@ enum class LyricsSource(
         wordSynced = true,
     ),
     YOUTUBE_TRANSCRIPT(
-        label = "YouTube captions",
-        detail = "Timed captions matched to the exact playing video",
+        label = "YouTube captions (retired)",
+        detail = "Historical preference; provider no longer available",
         wordSynced = false,
+        hidden = true,
     ),
     YOUTUBE_MUSIC(
-        label = "YouTube Music",
-        detail = "Plain lyrics from the playing video's Lyrics tab",
+        label = "YouTube Music (retired)",
+        detail = "Historical preference; provider no longer available",
         wordSynced = false,
+        hidden = true,
     ),
     MEGALOBIZ(
         label = "Megalobiz",

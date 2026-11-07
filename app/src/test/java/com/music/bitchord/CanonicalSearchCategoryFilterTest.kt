@@ -2,17 +2,16 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.CanonicalMusicBrainzLocalAssetClaim
 import com.music.bitchord.ui.canonicalVerifiedLocalBadgeMbids
-import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.ui.canonicalNativeBrowseId
+import com.music.bitchord.ui.canonicalNativePageType
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.ui.screens.CanonicalServerSearchRow
-import com.music.bitchord.ui.screens.canonicalServerRowAsBrowseItem
 import com.music.bitchord.ui.screens.canonicalRowsForFilter
 import com.music.bitchord.ui.screens.canonicalRowsForQuery
 import com.music.bitchord.ui.screens.canonicalDisplaySubtitle
 import com.music.bitchord.ui.screens.canonicalSearchDisplaySections
-import com.music.bitchord.ui.screens.canonicalRowAsBrowseItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,29 +54,30 @@ class CanonicalSearchCategoryFilterTest {
         assertTrue(canonicalRowsForFilter(rows, SearchFilter.VIDEOS).isEmpty())
         assertTrue(canonicalRowsForFilter(rows, SearchFilter.PLAYLISTS).isEmpty())
     }
-    @Test fun serverTracksReuseNativeBrowseRowsWithArtworkAndOpaqueMediaIdentity() {
-        val row = CanonicalServerSearchRow(
+    @Test fun serverSearchPreservesDistinctAssetsForOneRecordingWithoutNavigationAliases() {
+        val one = CanonicalServerSearchRow(
             recordingId = "recording-1", mediaAssetId = "asset-1",
-            providerKey = "opensubsonic:demo", title = "Magnetic", artistDisplay = "ILLIT",
+            providerKey = "opensubsonic:primary", title = "Magnetic", artistDisplay = "ILLIT",
             artworkUri = "https://example.com/art.jpg",
         )
-        val item = canonicalServerRowAsBrowseItem(row)
-        assertEquals(BrowseType.OTHER, item.type)
-        assertEquals(row.title, item.title)
-        assertEquals(row.artistDisplay, item.subtitle)
-        assertEquals(row.artworkUri, item.thumbnailUrl)
-        assertTrue(item.browseId.contains("asset-1"))
-        assertTrue(!item.browseId.contains("https://"))
+        val another = one.copy(mediaAssetId = "asset-2", providerKey = "opensubsonic:secondary")
+        // Search retains both provider-scoped assets; no fake browseId or
+        // private stream URL enters its visual presentation contract.
+        assertEquals(listOf("asset-1", "asset-2"),
+            listOf(one, another).map { it.mediaAssetId })
+        assertEquals(one.recordingId, another.recordingId)
+        assertTrue(one.providerKey != another.providerKey)
     }
 
-    @Test fun metadataRowsReuseNativeBrowseIdentityAndLayoutWithoutVideoIds() {
-        val artist = canonicalRowAsBrowseItem(rows.last())
-        val album = canonicalRowAsBrowseItem(rows[1])
-        assertEquals(BrowseType.ARTIST, artist.type)
-        assertEquals(BrowseType.ALBUM, album.type)
-        assertEquals("catalog:ARTIST:artist", artist.browseId)
-        assertEquals("catalog:RELEASE_GROUP:group", album.browseId)
-        assertEquals("ILLIT", artist.title)
+    @Test fun catalogIdentityRoutesAreTypedAndNeverMusicPlaybackIds() {
+        val artist = rows.last()
+        val album = rows[1]
+        assertEquals(CanonicalSearchKind.ARTIST, artist.kind)
+        assertEquals(CanonicalSearchKind.RELEASE_GROUP, album.kind)
+        assertEquals("catalog:ARTIST:artist", canonicalNativeBrowseId(artist))
+        assertEquals("catalog:RELEASE_GROUP:group", canonicalNativeBrowseId(album))
+        assertEquals(com.music.bitchord.data.model.BrowseType.ARTIST, canonicalNativePageType(artist.kind))
+        assertEquals(com.music.bitchord.data.model.BrowseType.ALBUM, canonicalNativePageType(album.kind))
     }
 
     @Test fun exactArtistQueryPlacesIdentityBeforeTextualRecordingMatches() {

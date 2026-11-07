@@ -8,29 +8,19 @@ import kotlin.test.assertTrue
 class DesktopQualityTest {
 
     @Test
-    fun aRungDecidesWhichKindsOfSourceMayAnswer() {
-        // Everything, including the sources that can serve bit-exact audio.
-        DesktopSourceKind.entries.forEach {
-            assertTrue(DesktopAudioQuality.LOSSLESS.permits(it), it.name)
-        }
-        // No lossless answer is wanted, and a source that can serve one is the slow half of the
-        // list.
-        assertFalse(DesktopAudioQuality.HIGH.permits(DesktopSourceKind.ADDON))
-        assertFalse(DesktopAudioQuality.HIGH.permits(DesktopSourceKind.CUSTOM_MODULE))
-        assertTrue(DesktopAudioQuality.HIGH.permits(DesktopSourceKind.JIOSAAVN))
-        // The lower rungs are YouTube's own ladder and nothing else.
-        listOf(DesktopAudioQuality.MEDIUM, DesktopAudioQuality.LOW).forEach { rung ->
-            assertFalse(rung.permits(DesktopSourceKind.ADDON), rung.name)
-            assertFalse(rung.permits(DesktopSourceKind.JIOSAAVN), rung.name)
+    fun everyNonRetiredProviderRemainsEligibleForQualityRungs() {
+        val active = DesktopSourceKind.entries.filterNot { it == DesktopSourceKind.YOUTUBE }
+        DesktopAudioQuality.entries.forEach { rung ->
+            active.forEach { kind ->
+                assertTrue(rung.permits(kind), "$rung / $kind")
+            }
         }
     }
 
     @Test
-    fun youtubeAnswersOnEveryRung() {
-        // It is what the cap applies to, and the only source that can answer at all when the ones
-        // above it are skipped.
-        DesktopAudioQuality.entries.forEach {
-            assertTrue(it.permits(DesktopSourceKind.YOUTUBE), it.name)
+    fun retiredYouTubeIsNeverEligibleEvenForHistoricalQualitySettings() {
+        DesktopAudioQuality.entries.forEach { rung ->
+            assertFalse(rung.permits(DesktopSourceKind.YOUTUBE), rung.name)
         }
     }
 
