@@ -123,6 +123,23 @@ class CatalogCoverTelemetryTest {
         assertEquals(0, telemetry.snapshot().recoveredCoalescedOwnerCancellations)
     }
 
+    @Test fun coilRequestStartsAndOffscreenCancellationsAreDistinctFromErrors() {
+        val meter = CatalogCoverTelemetry()
+        meter.recordImageStart()
+        meter.recordImageStart()
+        meter.recordImageStart()
+        meter.recordImageCancellation()
+        meter.recordImageResult(true, 40L, "DISK")
+        val snapshot = meter.snapshot()
+        assertEquals(3, snapshot.imageLoadStarts)
+        assertEquals(1, snapshot.imageLoadCancels)
+        assertEquals(1, snapshot.imageRenderSuccesses)
+        assertEquals(0, snapshot.imageRenderFailures)
+        meter.reset()
+        assertEquals(0, meter.snapshot().imageLoadStarts)
+        assertEquals(0, meter.snapshot().imageLoadCancels)
+    }
+
     @Test fun diskCacheBaselineSurvivesCaptureResetAndExplainsUpgradeEvictionRisk() {
         val meter = CatalogCoverTelemetry()
         assertNull(meter.snapshot().coilDiskBytesAtInitialization)
