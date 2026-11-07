@@ -109,6 +109,10 @@ internal class DiscogsCanonicalEditionCoordinator(
             MusicBrainzCatalogReleaseDetail>)?.value ?: return DiscogsEditionEnrichment.Unavailable
         if (!detail.hasCompleteTracklist || detail.tracks.isEmpty() ||
             detail.artistDisplay.isNullOrBlank() ||
+            // A missing or partially invalid structured credit can silently
+            // drop a second artist in the human-readable display string.
+            // Never corroborate an incomplete list as an exact edition.
+            detail.artistCreditNames.isEmpty() ||
             !detail.status.equals("Official", ignoreCase = true)
         ) return DiscogsEditionEnrichment.Candidate
 
