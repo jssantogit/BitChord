@@ -51,6 +51,18 @@ class DiscogsTransportSafetyTest {
         }
     }
 
+    @Test fun chunkedUtf8PayloadIsDecodedAfterFullByteAssembly() = runBlocking {
+        MockWebServer().use { server ->
+            val payload = """{"id":17,"title":"日本語 한국어 中文"}"""
+            // Individual chunks may split multi-byte Unicode code points.
+            server.enqueue(MockResponse().setChunkedBody(payload, 1))
+            val transport = KtorDiscogsTransport(baseUrl = server.url("/").toString())
+            val response = transport.get("releases/17", "BitChord/Test")
+            assertEquals(200, response.status)
+            assertEquals(payload, response.body)
+        }
+    }
+
     @Test fun acceptsBoundedNumericRetryAfterWithoutRetryLoop() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(429)
