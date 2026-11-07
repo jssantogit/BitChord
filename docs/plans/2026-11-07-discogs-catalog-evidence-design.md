@@ -1,6 +1,6 @@
 # BitChord Android — Discogs as canonical edition evidence (#210)
 
-Status: DESIGN / NO RUNTIME IMPLEMENTATION. Date: 2026-11-07. One independent draft PR, one branch, no merge approval. Applies to Android only. Maintainer-facing design; requirements not proof of completed functionality.
+Status: IMPLEMENTATION IN PROGRESS — parser, MB relation adapter, edition matcher, Release/Master HTTP client, cache and tests implemented behind default-off gates. Not wired to Android UI, no live API permission or physical verification. Date: 2026-11-07. One independent draft PR, one branch, no merge approval. Applies to Android only. Maintainer-facing design; requirements not proof of completed functionality.
 
 ## 0. Baseline, ownership, and integration strategy
 
