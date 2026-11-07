@@ -45,6 +45,7 @@ internal class DiscogsEditionRepository(
         val observation = if (cached != null) cached else {
             val record = when (val lookup = discogs.fetchRelease(link.id)) {
                 is DiscogsLookupResult.Found -> lookup.record
+                is DiscogsLookupResult.FoundMaster -> return DiscogsEditionEnrichment.Invalid
                 DiscogsLookupResult.Disabled -> return DiscogsEditionEnrichment.Disabled
                 DiscogsLookupResult.Missing -> return DiscogsEditionEnrichment.NoLink
                 DiscogsLookupResult.InvalidId,
