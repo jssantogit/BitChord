@@ -25,6 +25,12 @@ internal data class MusicBrainzArtistAppearance(
 private val ARTIST_APPEARANCE_MBID =
     Regex("""^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$""")
 
+// "Official" in MusicBrainz is an edition status, not editorial approval of a
+// third-party rework. The guest shelf intentionally favors precision over recall.
+private val NON_EDITORIAL_GUEST_TITLE = Regex(
+    """(?i)\\b(?:remix|rework|bootleg|edit|fan[- ]?made|mashup|nightcore|karaoke|jersey|sped\\s+up|slowed|flip|remake)\\b|\\(\\s*dj\\s+\\S+"""
+)
+
 private fun JsonObject.appearanceText(name: String): String? =
     (this[name] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
 
@@ -72,7 +78,10 @@ internal fun parseMusicBrainzTrackArtistAppearances(
             } == true
         if (!hasTargetTrack) return@mapNotNull null
         // An album with the selected artist as primary belongs in discography.
-        if (artists.isEmpty() || artists.any { it.first == target })
+        // Anonymous Various Artists compilations also cannot establish an
+        // independently curated guest appearance without label-level evidence.
+        if (artists.isEmpty() || artists.any { it.first == target } ||
+            artists.any { it.second.equals("Various Artists", ignoreCase = true) })
             return@mapNotNull null
         val mainArtist = artists.mapNotNull { it.second }.firstOrNull()
             ?: return@mapNotNull null
@@ -82,7 +91,9 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         if (!ARTIST_APPEARANCE_MBID.matches(groupId)) return@mapNotNull null
         val title = group.appearanceText("title")?.takeIf { it.length <= 180 }
             ?: return@mapNotNull null
-        if (!canonicalStreamingTitleIsSafe(title)) return@mapNotNull null
+        if (!canonicalStreamingTitleIsSafe(title) ||
+            NON_EDITORIAL_GUEST_TITLE.containsMatchIn(title)
+        ) return@mapNotNull null
         // A MusicBrainz "Official" edition is not necessarily an official
         // artist release: community-created remix/mixtape compilations can
         // carry that status. Only an actual credited guest appearance on a
