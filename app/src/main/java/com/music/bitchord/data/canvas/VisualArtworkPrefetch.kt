@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withPermit
 
 /**
@@ -43,7 +44,11 @@ object VisualArtworkPrefetch {
     suspend fun warm(context: Context, candidates: List<VisualArtworkCandidate>) {
         val planned = planVisualArtworkPrefetch(candidates)
         if (planned.isEmpty()) return
-        val loader = SingletonImageLoader.get(context)
+        // Coil's first ImageLoader get can open its disk journal; never do
+        // that synchronously during artist page composition on the main thread.
+        val loader = withContext(Dispatchers.IO) {
+            SingletonImageLoader.get(context)
+        }
         val limit = Semaphore(3)
         coroutineScope {
             planned.forEach { candidate ->
