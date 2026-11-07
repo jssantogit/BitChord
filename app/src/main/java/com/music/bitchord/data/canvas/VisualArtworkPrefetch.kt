@@ -76,6 +76,44 @@ internal class VisualArtworkFetchGate(maxConcurrent: Int = 3) {
     }
 }
 
+/**
+ * Native Home/Explore shelves are lists of artwork URLs regardless of source.
+ * Prefer the shelf the listener is viewing, then the one immediately ahead.
+ * Keep a strict cap: speculative thumbnails must never saturate the network.
+ */
+fun planVisualShelfArtwork(
+    shelfUrls: List<List<String?>>,
+    visibleShelfIndex: Int,
+    targetPx: Int,
+    maxCandidates: Int = 12,
+): List<VisualArtworkCandidate> {
+    if (shelfUrls.isEmpty()) return emptyList()
+    val visible = visibleShelfIndex.coerceIn(0, shelfUrls.lastIndex)
+    val priorityOrder = shelfUrls.indices.sortedWith(
+        compareBy<Int> { index ->
+            when (index) {
+                visible -> 0
+                visible + 1 -> 1
+                visible - 1 -> 2
+                else -> 3
+            }
+        }.thenBy { kotlin.math.abs(it - visible) },
+    )
+    return planVisualArtworkPrefetch(
+        priorityOrder.asSequence().flatMap { index ->
+            shelfUrls[index].asSequence().take(6).map { url ->
+                VisualArtworkCandidate(
+                    url = url,
+                    priority = if (index == visible) VisualArtworkPriority.VISIBLE
+                        else VisualArtworkPriority.NEARBY,
+                    targetPx = targetPx,
+                )
+            }
+        }.toList(),
+        maxRequests = maxCandidates,
+    )
+}
+
 /** At most three speculative decodes; requests use the global Coil loader,
  * its exact disk cache and network client. No extra decoder or second cache. */
 object VisualArtworkPrefetch {
