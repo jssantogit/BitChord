@@ -46,6 +46,23 @@ class VisualStillFileStoreTest {
             "file:///data/data/private.jpg"))
     }
 
+    @Test fun configurableQuotaRemovesOldestImagesWithoutLosingRecentOnes() = runBlocking {
+        val dir = temp.newFolder("limited")
+        var now = 100L
+        val store = VisualStillFileStore(dir, downloader = { _, file ->
+            file.writeBytes(ByteArray(1024) { 7 })
+            file.setLastModified(now++)
+            true
+        }, maxBytes = { 2048L })
+        store.ensure(VisualSurface.ARTIST, "a", "https://images.example/a.jpg")
+        store.ensure(VisualSurface.ARTIST, "b", "https://images.example/b.jpg")
+        store.ensure(VisualSurface.ARTIST, "c", "https://images.example/c.jpg")
+        assertNull(store.cached(VisualSurface.ARTIST, "a"))
+        assertTrue(store.cached(VisualSurface.ARTIST, "b") != null)
+        assertTrue(store.cached(VisualSurface.ARTIST, "c") != null)
+        assertTrue(store.bytesOnDisk() <= 2048L)
+    }
+
     @Test fun cacheKeysCannotCollideAcrossArtistAlbumAndPlayback() = runBlocking {
         val folder = temp.newFolder("independent")
         val save = VisualStillFileStore(folder, downloader = { _, f ->
