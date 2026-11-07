@@ -212,6 +212,39 @@ class MusicBrainzArtistAppearancesTest {
     }
 
 
+    @Test fun weakFanReleaseOnFirstPageCannotPreventLaterCommercialFeature() = runBlocking {
+        val offsets = mutableListOf<Int>()
+        val fan = (1..25).joinToString(",") { i ->
+            val group = i.toString(16).padStart(8, '0') + "-3333-4333-8333-333333333333"
+            """{"status":"Official",
+                "artist-credit":[{"artist":{"id":"$other","name":"2AT"}}],
+                "release-group":{"id":"$group","title":"Fan song $i","primary-type":"Single"},
+                "media":[{"tracks":[{"recording":{
+                    "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "title":"Fan song $i",
+                    "artist-credit":[{"artist":{"id":"$target"}}]}}]}]}"""
+        }
+        val official = """{"id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Jon Batiste"}}],
+            "release-group":{"id":"$releaseGroup","title":"World Music Radio",
+                "primary-type":"Album"},
+            "media":[{"tracks":[{"recording":{
+                "id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "title":"Genuine Guest Track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            pagedFetch = { _, offset ->
+                offsets += offset
+                if (offset == 0) """{"release-count":26,"releases":[$fan]}"""
+                else """{"release-count":26,"releases":[$official]}"""
+            },
+        )
+        val found = client.browse(target)
+        assertEquals(listOf("Genuine Guest Track"), found.map { it.trackTitle })
+        assertEquals(listOf(0, 25), offsets)
+    }
+
     @Test fun popularArtistsScanNextOfficialPageWhenFirstIsOnlyUnrelatedEditions() = runBlocking {
         val requestedOffsets = mutableListOf<Int>()
         val rejected = (1..25).joinToString(",") { n ->
@@ -219,10 +252,13 @@ class MusicBrainzArtistAppearancesTest {
                 "status":"Bootleg"}"""
         }
         val valid = """{"id":"55555555-5555-4555-8555-555555555555",
-            "status":"Official",
+            "status":"Official","barcode":"0123456789012",
             "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
             "release-group":{"id":"$releaseGroup","title":"Real guest track","primary-type":"Single"},
-            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]}"""
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Real guest track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]}"""
         val client = MusicBrainzArtistAppearancesClient(
             pagedFetch = { _, offset ->
                 requestedOffsets += offset
