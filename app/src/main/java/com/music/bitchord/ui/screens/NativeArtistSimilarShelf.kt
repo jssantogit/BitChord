@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.runtime.Composable
@@ -24,6 +25,9 @@ import java.net.URI
 import java.util.Locale
 
 private val similarArtistClient by lazy { ListenBrainzSimilarArtistsClient() }
+
+/** Artist identity art is round; release/track sleeves remain square. */
+internal val nativeArtistSimilarArtworkShape = CircleShape
 
 /** Verified MBIDs are the identity and page target; name-only Apple art is
  * optional decoration, never evidence for merging artist identities. */
@@ -98,6 +102,7 @@ internal fun NativeArtistSimilarShelf(
             subtitle = "Artista",
             palette = palette,
             onClick = { onOpen(page) },
+            artworkShape = nativeArtistSimilarArtworkShape,
             artwork = {
                 Box(Modifier.fillMaxSize()) {
                     CoverPlaceholder(Icons.Rounded.Person, Modifier.fillMaxSize())
