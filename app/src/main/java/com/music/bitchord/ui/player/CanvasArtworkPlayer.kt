@@ -53,6 +53,12 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.music.bitchord.data.Http
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasCache
+import com.music.bitchord.data.canvas.VisualRetentionMode
+import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.shouldSaveVisualMotion
+import com.music.bitchord.data.canvas.shouldShowVisualMotion
+import com.music.bitchord.data.settings.AppSettings
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlin.math.ceil
@@ -163,6 +169,26 @@ internal fun AndroidCanvasArtworkPlayer(
     pausedForTransition: Boolean = false,
 ) {
     val context = LocalContext.current
+    val retention by AppSettings.visualRetentionMode.collectAsStateWithLifecycle()
+    val metered by AppSettings.meteredConnection.collectAsStateWithLifecycle()
+    val animatedAllowed by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
+    val cellularAllowed by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
+    val saveOn by AppSettings.visualMotionSurfaces.collectAsStateWithLifecycle()
+    val surface = remember(canvas.surface) { VisualSurface.valueOf(canvas.surface.name) }
+    var savedOffline by remember(canvas.url) { mutableStateOf(CanvasCache.isSaved(canvas.url)) }
+
+    // Download only on user-selected unmetered surfaces. This coroutine is
+    // cancelled when the clip changes; the Media3 downloader never marks
+    // partially saved HLS segments as a complete offline animation.
+    LaunchedEffect(canvas.url, retention, saveOn, metered) {
+        if (shouldSaveVisualMotion(retention, surface, saveOn, metered)) {
+            savedOffline = CanvasCache.saveForOffline(canvas.url, surface) || savedOffline
+        }
+    }
+    val canShow = shouldShowVisualMotion(
+        retention, animatedAllowed, metered, savedOffline, cellularAllowed,
+    )
+    if (!canShow) return
 
     var url by remember(canvas) { mutableStateOf(canvas.url) }
     var rendered by remember(canvas) { mutableStateOf(false) }
