@@ -154,4 +154,23 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals("2026", canonicalArtistReleaseDateLabel("2026"))
         assertEquals(null, canonicalArtistReleaseDateLabel("20xx-09-18"))
     }
+
+    @Test fun trustedEditionDateEnablesLibraryHeroWithoutGroupClassification() {
+        val release = release("exact-release")
+        val proof = canonicalArtistReleaseEvidenceWithTrustedDate(
+            release.id, null, "2026-09-18")
+        assertEquals("2026-09-18", proof.firstReleaseDate)
+        assertNull(proof.primaryType)
+        assertEquals("exact-release", canonicalArtistReleaseSections(
+            listOf(release), mapOf(release.id to proof)).recentRelease?.id)
+    }
+
+    @Test fun groupFirstDateOutranksEditionDateAndEmptyMetadataStaysUnknown() {
+        val group = CanonicalArtistReleaseEvidence("release", "Single", "2025-04-20")
+        val proof = canonicalArtistReleaseEvidenceWithTrustedDate(
+            "release", group, "2026-01-31")
+        assertEquals("2025-04-20", proof.firstReleaseDate)
+        assertNull(canonicalArtistReleaseEvidenceWithTrustedDate(
+            "release", null, null).firstReleaseDate)
+    }
 }
