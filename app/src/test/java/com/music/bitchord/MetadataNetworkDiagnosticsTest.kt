@@ -1,6 +1,7 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.metadataEndpointLabel
+import com.music.bitchord.data.catalog.metadata.metadataHttpStatusLabel
 import com.music.bitchord.data.catalog.metadata.metadataHttpOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -22,5 +23,15 @@ class MetadataNetworkDiagnosticsTest {
         assertEquals("server_error", metadataHttpOutcome(503))
         assertEquals("request_error", metadataHttpOutcome(400))
         assertEquals("network_error", metadataHttpOutcome(null))
+    }
+    @Test fun httpCodesRevealActionablePublicApiFailuresWithoutUrls() {
+        assertEquals("400", metadataHttpStatusLabel(400))
+        assertEquals("401", metadataHttpStatusLabel(401))
+        assertEquals("403", metadataHttpStatusLabel(403))
+        assertEquals("429", metadataHttpStatusLabel(429))
+        assertEquals("503", metadataHttpStatusLabel(503))
+        assertEquals("unknown", metadataHttpStatusLabel(null))
+        assertEquals("unknown", metadataHttpStatusLabel(0))
+        assertEquals("unknown", metadataHttpStatusLabel(999))
     }
 }
