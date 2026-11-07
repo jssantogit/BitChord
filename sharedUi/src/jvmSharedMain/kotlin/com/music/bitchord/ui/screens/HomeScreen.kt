@@ -872,6 +872,34 @@ private fun HeroShelf(
     }
 }
 
+/**
+ * Native background is always present underneath catalog artwork. Some CAA
+ * URLs resolve metadata successfully but the actual image fails or takes
+ * longer to decode; the old null-only branch left a completely black tile
+ * despite a real release title. A valid image simply paints over this glyph.
+ * This is a visual fallback only, never a substituted album cover.
+ */
+@Composable
+private fun CatalogArtworkFallback(hero: Boolean, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(
+                Brush.linearGradient(
+                    if (hero) listOf(Color(0xFF25304E), Color(0xFF485573))
+                    else listOf(Color(0xFF222433), Color(0xFF374153)),
+                ),
+            )
+            .testTag("catalog-art-fallback"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Rounded.LibraryMusic, contentDescription = null,
+            tint = Color.White.copy(alpha = if (hero) 0.60f else 0.72f),
+            modifier = Modifier.size(if (hero) 68.dp else 46.dp),
+        )
+    }
+}
+
 /** Big card: artwork with the caption laid over a scrim, as on Listen Now. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -892,24 +920,11 @@ private fun HeroCard(
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
             .contextClick(onLongPress),
     ) {
-        if (item.thumbnailUrl.isNullOrBlank() &&
-            item.browseId?.startsWith("catalog:") == true
-        ) {
-            // A public MBID does not guarantee release artwork. Keep the
-            // native hero layout legible until a genuine CAA image arrives.
-            Box(
-                modifier = Modifier.fillMaxSize().background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFF25304E), Color(0xFF485573)),
-                    ),
-                ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.LibraryMusic, contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.60f),
-                    modifier = Modifier.size(68.dp))
-            }
-        } else {
+        val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
+        if (hasCatalogIdentity) CatalogArtworkFallback(
+            hero = true, modifier = Modifier.fillMaxSize(),
+        )
+        if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
             AsyncImage(
                 model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
                 contentDescription = null,
@@ -1182,24 +1197,11 @@ internal fun ShelfCard(
                         .thumbnailBorder(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
-                    if (item.thumbnailUrl.isNullOrBlank() &&
-                        item.browseId?.startsWith("catalog:") == true
-                    ) {
-                        // Rankings may have no release association. Display a
-                        // recognisable metadata glyph rather than a blank tile
-                        // or an inferred album cover.
-                        Box(
-                            modifier = Modifier.fillMaxSize()
-                                .background(Brush.linearGradient(
-                                    listOf(Color(0xFF222433), Color(0xFF374153)),
-                                )),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.Rounded.LibraryMusic, contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.72f),
-                                modifier = Modifier.size(46.dp))
-                        }
-                    } else {
+                    val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
+                    if (hasCatalogIdentity) CatalogArtworkFallback(
+                        hero = false, modifier = Modifier.fillMaxSize(),
+                    )
+                    if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
                         AsyncImage(
                             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
                             contentDescription = null,

@@ -69,6 +69,26 @@ class HomeHeaderTest {
         compose.runOnIdle { assertEquals(1, backs) }
     }
 
+    @Test fun catalogCardKeepsTheNativeFallbackUnderAnUnresolvedArtUrl() {
+        compose.setContent {
+            MaterialTheme {
+                ShelfCard(
+                    item = ShelfItem(
+                        title = "K-pop album",
+                        subtitle = "Artist",
+                        thumbnailUrl = "file:///nonexistent/album-front.jpg",
+                        videoId = null,
+                        browseId = "catalog:RELEASE_GROUP:11111111-1111-4111-8111-111111111111",
+                    ),
+                    onClick = {},
+                )
+            }
+        }
+        // The image model exists but can fail loading. Neither loading nor an
+        // error may leave a catalog card as a featureless black rectangle.
+        compose.onNodeWithTag("catalog-art-fallback").assertExists()
+    }
+
     @Test fun genreTitleStartsOnSameHorizontalLineAsHome() {
         compose.setContent {
             MaterialTheme {
