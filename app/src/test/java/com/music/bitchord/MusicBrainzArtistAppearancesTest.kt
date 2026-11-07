@@ -210,4 +210,23 @@ class MusicBrainzArtistAppearancesTest {
         ).isEmpty())
     }
 
+
+    @Test fun realGuestRecordingCreditSurvivesTrackCreditWithOnlyLeadArtist() {
+        val body = """{"releases":[{
+          "id":"55555555-5555-4555-8555-555555555555",
+          "status":"Official",
+          "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+          "release-group":{"id":"$releaseGroup","title":"Label collaboration",
+              "primary-type":"Single"},
+          "media":[{"tracks":[{
+             "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+             "recording":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+               "artist-credit":[{"artist":{"id":"$other"}},
+                                 {"artist":{"id":"$target"}}]}
+          }]}]
+        }]}"""
+        assertEquals(listOf("Label collaboration"),
+            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+    }
+
 }
