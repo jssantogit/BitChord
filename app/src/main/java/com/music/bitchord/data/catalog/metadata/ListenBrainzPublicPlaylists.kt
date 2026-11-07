@@ -369,7 +369,12 @@ internal class ListenBrainzPublicPlaylistClient(
     }
 
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
-        search(listOf("music", "essentials", "favorites"), null)
+        // Physical smoke showed the generic "music" query taking 16–33 s
+        // and yielding no descriptive cards, while the next query returned
+        // valid curated titles. Start with that better public candidate set.
+        // Keep the generic query as a bounded last resort, not the first
+        // synchronous barrier before Home can render a playlist shelf.
+        search(listOf("essentials", "favorites", "music"), null)
 
 
     /**
