@@ -44,3 +44,20 @@ O estado `Candidate` também ocorre antes de consultar Discogs se o MusicBrainz 
 ### Correção do gate após mensagem de indisponibilidade
 
 O smoke de `82df4d8287` bloqueou corretamente o APK por uma asserção desatualizada: o teste de estados não verificados ainda exigia prefixo `Discogs ·` inclusive para `Unavailable`, mesmo após o texto deliberadamente tornar a causa independente de provedor. A implementação permaneceu compilando; o teste foi atualizado para validar a nova afirmação sem reduzir a cobertura, e todas as provas devem rodar novamente antes do upload.
+
+
+## Reteste A54 — apresentação editorial e tipagem Discogs (07/11/2026)
+
+Observação do usuário no APK anterior: a seção agora aparece, inclusive em `BREAK EVEN` (ILLIT) e no álbum BTS pelas rotas de Pesquisa/Biblioteca, mas estava excessivamente técnica, com `XW`, data ISO e repetidas mensagens de ausência de vínculo. O diagnóstico `bitchord-diagnostics-20261107-195615.txt` contém três `result=no_link` e nenhuma evidência de enriquecimento confirmado nesta janela. Isso não prova inexistência dessas edições no Discogs.
+
+**Mudanças deste corte:**
+
+- Rótulos legíveis separados por `:`: `Gravadora`, `Data`, `Estado da publicação`, `País` e, quando comprovado, `Tipo segundo Discogs`. País `XW` vira `Mundial`, `KR` vira `Coreia do Sul`; nomes ingleses de países Discogs são localizados. Datas completas viram `26 de outubro de 2026`; `Digital Media` vira `Mídia digital`. Data precisa substitui ano genérico, sem duplicação.
+- `NoLink` continua observado em diagnósticos mas não cria um aviso longo no rodapé. Metadados já comprovados por MusicBrainz permanecem; Discogs não ganha falsa atribuição.
+- Configurações → Avançado → `Exibir metadados dos álbuns` (ativado inicialmente) controla somente a visibilidade da seção editorial em todos os contextos, preservando a data/contagem básicas, downloads, biblioteca, ratings, pins e o provedor de dados. Verificar a preferência após fechar/reabrir o aplicativo. Testar pesquisa nas configurações e tradução das chaves nos idiomas Android.
+- Apenas quando houver uma edição Discogs VERIFIED, descrições explícitas `Album`, `EP`, `Single`, `Mini-Album`, `Maxi-Single` ou `Mixtape` podem gerar `Tipo segundo Discogs`, com link de atribuição na mesma seção. `LP` isolado não é prova de álbum; classificações contraditórias permanecem desconhecidas. Este fato não substitui a classificação canônica do MusicBrainz.
+- Validar álbum online, Biblioteca local e álbum aninhado dentro de artista, com e sem rede; rolar até o rodapé, alternar o switch com a tela aberta, navegar rapidamente e conferir ausência de sobreposição de edição/estado. Não esperar fonte Discogs onde só existe `NoLink`.
+
+**Próxima investigação, não incluída neste APK:** ampliar descoberta quando falta relação MusicBrainz→Discogs, pois pesquisa na base Discogs exige autenticação. Qualquer modo opcional deve armazenar credencial localmente de modo seguro, não embutir token no APK, limitar requisições e validar os candidatos da edição antes de exibir informações. Nem título coincidente nem número de faixas são critérios suficientes.
+
+**Critério:** workflow de smoke e Android CI em SUCCESS no mesmo SHA; depois teste físico Galaxy A54. Não mesclar a #211 ou a #209.
