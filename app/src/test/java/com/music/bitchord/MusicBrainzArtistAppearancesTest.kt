@@ -15,10 +15,12 @@ class MusicBrainzArtistAppearancesTest {
            {"id":"55555555-5555-4555-8555-555555555555","status":"Official",
             "title":"Featured song edition","date":"2026-05-03",
             "artist-credit":[{"artist":{"id":"$other","name":"Other artist"},"name":"Other artist"}],
-            "release-group":{"id":"$releaseGroup","title":"Featured collection","primary-type":"Album","first-release-date":"2026-05-01"}},
+            "release-group":{"id":"$releaseGroup","title":"Featured collection","primary-type":"Album","first-release-date":"2026-05-01"},
+            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}]}]}]},
            {"id":"66666666-6666-4666-8666-666666666666","status":"Official",
             "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
-            "release-group":{"id":"$releaseGroup","title":"Featured collection","primary-type":"Album","first-release-date":"2026-05-01"}},
+            "release-group":{"id":"$releaseGroup","title":"Featured collection","primary-type":"Album","first-release-date":"2026-05-01"},
+            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}]}]}]},
            {"id":"77777777-7777-4777-8777-777777777777","status":"Official",
             "artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}],
             "release-group":{"id":"99999999-9999-4999-8999-999999999999","title":"Own album","primary-type":"Album"}},
@@ -42,6 +44,22 @@ class MusicBrainzArtistAppearancesTest {
             """{"releases":[{"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
                 "release-group":{"id":"../../invalid","title":"Wrong"}}]}""",
             target,
+        ).isEmpty())
+    }
+
+    @Test fun doesNotConfuseOtherArtistsCoversWithRealTrackCredits() {
+        val body = """{"releases":[
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"$releaseGroup","title":"NewJeans Karaoke Remix","primary-type":"Single"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$other","name":"Other"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"44444444-4444-4444-8444-444444444444","title":"Verified featuring","primary-type":"Album"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Selected"}}]}]}]}
+        ]}"""
+        val rows = parseMusicBrainzTrackArtistAppearances(body, target)
+        assertEquals(listOf("Verified featuring"), rows.map { it.title })
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+           body.replace("\"media\"", "\"unsupported-media\""), target,
         ).isEmpty())
     }
 }
