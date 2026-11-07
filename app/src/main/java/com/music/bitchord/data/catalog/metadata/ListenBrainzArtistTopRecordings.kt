@@ -15,6 +15,8 @@ internal data class ListenBrainzArtistTopRecording(
     val recordingMbid: String,
     val listens: Long,
     val listeners: Long,
+    /** Source-provided Cover Art Archive identity; never a guessed edition. */
+    val artworkUri: String? = null,
 )
 
 internal sealed interface ListenBrainzArtistTopParseResult {
@@ -29,6 +31,8 @@ private data class ListenBrainzArtistTopRow(
     @SerialName("artist_mbids") val artistMbids: List<String>? = null,
     @SerialName("total_listen_count") val listens: Long? = null,
     @SerialName("total_user_count") val listeners: Long? = null,
+    @SerialName("caa_release_mbid") val caaReleaseMbid: String? = null,
+    @SerialName("caa_id") val caaId: Long? = null,
 )
 
 private val TOP_ARTIST_MBID =
@@ -72,7 +76,15 @@ internal fun parseListenBrainzArtistTopRecordings(
             return ListenBrainzArtistTopParseResult.Invalid
         }
         if (listens > 0 && listeners > 0) {
-            accepted += ListenBrainzArtistTopRecording(recording, listens, listeners)
+            val coverRelease = row.caaReleaseMbid?.lowercase(Locale.ROOT)
+                ?.takeIf(TOP_ARTIST_MBID::matches)
+            val coverId = row.caaId?.takeIf { it > 0L }
+            val artwork = if (coverRelease != null && coverId != null)
+                "https://coverartarchive.org/release/$coverRelease/$coverId-250.jpg"
+            else null
+            accepted += ListenBrainzArtistTopRecording(
+                recording, listens, listeners, artworkUri = artwork,
+            )
         }
     }
     return ListenBrainzArtistTopParseResult.Success(accepted.sortedWith(
