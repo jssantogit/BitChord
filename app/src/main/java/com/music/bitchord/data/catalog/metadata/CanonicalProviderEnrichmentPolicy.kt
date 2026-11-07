@@ -7,6 +7,8 @@ package com.music.bitchord.data.catalog.metadata
  */
 internal enum class CanonicalEnrichmentField {
     ARTIST_BIO, GENRE_TAG, LISTEN_COUNT, ARTWORK,
+    /** Provider-scoped supplementary data about an exact edition, not ReleaseGroup truth. */
+    EDITION_LABEL, EDITION_CATALOG_NUMBER, EDITION_FORMAT, EDITION_COUNTRY, EDITION_YEAR,
     /** Intentionally rejected from enrichment: canonical MusicBrainz truth. */
     RELEASE_PRIMARY_TYPE,
 }
@@ -47,6 +49,19 @@ internal fun selectCanonicalProviderFacts(
                     fact.evidence.provider == CatalogExternalProvider.APPLE_MUSIC &&
                         fact.evidence.canSupplyArtwork() &&
                         fact.value.startsWith("https://", ignoreCase = true)
+                CanonicalEnrichmentField.EDITION_LABEL,
+                CanonicalEnrichmentField.EDITION_CATALOG_NUMBER,
+                CanonicalEnrichmentField.EDITION_FORMAT,
+                CanonicalEnrichmentField.EDITION_COUNTRY ->
+                    fact.evidence.targetKind == CatalogTargetKind.RELEASE &&
+                        fact.evidence.provider == CatalogExternalProvider.DISCOGS &&
+                        fact.expiresAtEpochMs != null &&
+                        fact.value.length <= 250
+                CanonicalEnrichmentField.EDITION_YEAR ->
+                    fact.evidence.targetKind == CatalogTargetKind.RELEASE &&
+                        fact.evidence.provider == CatalogExternalProvider.DISCOGS &&
+                        fact.expiresAtEpochMs != null &&
+                        fact.value.toIntOrNull()?.let { it in 1800..2200 } == true
                 CanonicalEnrichmentField.RELEASE_PRIMARY_TYPE -> false
             }
     }
