@@ -22,6 +22,18 @@ class LibraryPlaylistPinStateTest {
         assertEquals(b, decodeLibraryPlaylistPins(encodeLibraryPlaylistPins(b)))
     }
 
+    @Test fun publicPlaylistPinIsTypedAndRestoresCreatorWithoutPretendingItIsLocal() {
+        val pin = LibraryPlaylistPin(
+            "public:6d7ab661-6449-46f3-89ec-efb53a9e9d3b", "BREAK EVEN",
+            creator = "Playlist author",
+        )
+        assertTrue(validLibraryPlaylistPin(pin))
+        assertEquals(listOf(pin), decodeLibraryPlaylistPins(encodeLibraryPlaylistPins(listOf(pin))))
+        assertEquals(emptyList<LibraryPlaylistPin>(), toggleLibraryPlaylistPin(
+            emptyList(), pin.copy(id = "public:not-a-uuid"),
+        ))
+    }
+
     @Test fun renamingPinnedHistoricalPlaylistPreservesItsStableIdentity() {
         val old = LibraryPlaylistPin("local:local:playlist:old-id", "Old title")
         val smart = LibraryPlaylistPin("v2:other", "Smart")
