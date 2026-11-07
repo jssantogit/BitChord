@@ -5,6 +5,12 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
+import java.security.MessageDigest
+import java.time.LocalDate
+import java.time.ZoneOffset
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
@@ -87,6 +93,83 @@ private object LocalArtistRecentMusicBrainzLookup {
     }
 }
 
+/**
+ * A successful MusicBrainz artist + exact ReleaseGroup title/date match is
+ * presentation evidence, not a persisted MusicBrainz identity link. Keep it
+ * across process death and offline starts under a hashed artist/title key.
+ * Local scan IDs may change, but an unambiguous artist/title combination may
+ * reuse the same previously verified release date without a new network call.
+ * A duplicate local title may not borrow a date (no edition disambiguation).
+ */
+internal fun canonicalRecentArtistProofCacheKey(artistName: String, releaseTitle: String): String {
+    fun normalize(s: String) = s.trim().lowercase(Locale.ROOT)
+        .replace(Regex("""\\s+"""), " ")
+    val identity = "v1\\u001f" + normalize(artistName) + "\\u001f" + normalize(releaseTitle)
+    return MessageDigest.getInstance("SHA-256")
+        .digest(identity.toByteArray(Charsets.UTF_8))
+        .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+}
+
+private fun recentProofPayload(proof: CanonicalArtistReleaseEvidence): String? {
+    val type = proof.primaryType?.trim()?.lowercase(Locale.ROOT)
+        ?.takeIf { it in setOf("album", "single", "ep") } ?: return null
+    val date = proof.firstReleaseDate?.takeIf {
+        Regex("""\\d{4}-\\d{2}-\\d{2}""").matches(it)
+    } ?: return null
+    val verified = runCatching { LocalDate.parse(date) }.getOrNull() ?: return null
+    if (verified.isAfter(LocalDate.now(ZoneOffset.UTC))) return null
+    return type + "|" + date
+}
+
+internal fun canonicalCachedRecentArtistProofs(
+    artistName: String,
+    local: List<ReleaseEntity>,
+    read: (String) -> String?,
+): Map<String, CanonicalArtistReleaseEvidence> {
+    if (artistName.isBlank()) return emptyMap()
+    val groups = local.groupBy { it.title.trim().lowercase(Locale.ROOT) }
+    return groups.values.mapNotNull { releases ->
+        if (releases.size != 1) return@mapNotNull null
+        val release = releases.single()
+        val raw = read(canonicalRecentArtistProofCacheKey(artistName, release.title))
+            ?: return@mapNotNull null
+        val split = raw.split('|')
+        if (split.size != 2) return@mapNotNull null
+        val candidate = CanonicalArtistReleaseEvidence(release.id, split[0], split[1])
+        if (recentProofPayload(candidate) == null) return@mapNotNull null
+        release.id to candidate
+    }.toMap()
+}
+
+/** Tiny positive-only preference store, independent of local Room identity.
+ * We never store artist names, MBIDs, file paths or unverified release dates.
+ * Commit on IO to ensure a confirmed date survives process termination. */
+private class LocalArtistRecentProofDiskStore(context: Context) {
+    private val prefs = context.getSharedPreferences("canonical_recent_artist_evidence_v1",
+        Context.MODE_PRIVATE)
+
+    fun read(artistName: String, local: List<ReleaseEntity>) =
+        canonicalCachedRecentArtistProofs(artistName, local) { prefs.getString(it, null) }
+
+    fun persist(artistName: String, local: List<ReleaseEntity>,
+                verified: Map<String, CanonicalArtistReleaseEvidence>) {
+        if (verified.isEmpty()) return
+        val editor = prefs.edit()
+        var hasValue = false
+        local.groupBy { it.title.trim().lowercase(Locale.ROOT) }.values
+            .filter { it.size == 1 }.map { it.single() }.forEach { release ->
+                val payload = verified[release.id]?.let(::recentProofPayload)
+                if (payload != null) {
+                    editor.putString(canonicalRecentArtistProofCacheKey(
+                        artistName, release.title,
+                    ), payload)
+                    hasValue = true
+                }
+            }
+        if (hasValue) editor.commit()
+    }
+}
+
 /** A release set—not an artwork map or transient Room emission—owns the
  * expensive external MusicBrainz date request. Changing the artist, a release
  * ID or a release title starts fresh work, but cover/state refreshes do not. */
@@ -109,6 +192,8 @@ internal fun rememberLocalArtistExternallyDatedReleases(
     artistName: String,
     native: CanonicalArtistNativeReleases,
 ): State<CanonicalArtistNativeReleases> {
+    val context = LocalContext.current.applicationContext
+    val diskStore = remember(context) { LocalArtistRecentProofDiskStore(context) }
     val sections = native.sections
     val local = (sections.albums + sections.singlesAndEps + sections.unclassified)
         .distinctBy { it.id }
@@ -118,7 +203,14 @@ internal fun rememberLocalArtistExternallyDatedReleases(
         key1 = lookupKey,
     ) {
         if (local.isEmpty() || sections.recentRelease != null) return@produceState
-        value = try {
+        // Publish disk-backed evidence immediately, before any 15s online
+        // lookup. This works on airplane mode after a prior successful visit.
+        val saved = withContext(Dispatchers.IO) {
+            diskStore.read(artistName, local)
+        }
+        if (saved.isNotEmpty()) value = saved
+        if (saved.size == local.size) return@produceState
+        val fetched = try {
             withContext(Dispatchers.IO) {
                 withTimeoutOrNull(15_000L) {
                     LocalArtistRecentMusicBrainzLookup.query(artistName, local)
@@ -126,6 +218,12 @@ internal fun rememberLocalArtistExternallyDatedReleases(
             }.orEmpty()
         } catch (cancelled: CancellationException) { throw cancelled }
           catch (_: Exception) { emptyMap() }
+        if (fetched.isNotEmpty()) {
+            withContext(Dispatchers.IO) {
+                diskStore.persist(artistName, local, fetched)
+            }
+            value = saved + fetched
+        }
     }
     if (matches.isEmpty() || sections.recentRelease != null) {
         return rememberUpdatedState(native)
