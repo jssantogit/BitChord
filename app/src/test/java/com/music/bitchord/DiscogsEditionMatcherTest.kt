@@ -67,6 +67,24 @@ class DiscogsEditionMatcherTest {
                 record.copy(unofficial = true)))
     }
 
+    @Test fun editionCountryContradictionRejectsIdenticalTracklistFromAnotherPressing() {
+        val exact = canon.copy(country = "KR", releaseYear = 2024)
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(exact, linked, record.copy(country = "South Korea")))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(exact.copy(country = "JP"), linked, record))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(exact.copy(country = "XW"), linked, record))
+    }
+
+    @Test fun incompatibleEditionYearCanOnlyBeCandidateEvenWhenTracklistMatches() {
+        val exact = canon.copy(country = "KR", releaseYear = 2024)
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(exact.copy(releaseYear = 2020), linked, record))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(exact.copy(releaseYear = null), linked, record))
+    }
+
     @Test fun separateMastersOrNameOnlyMatchesNeverCreateAnEdition() {
         assertEquals(DiscogsEditionVerdict.CONFLICT,
             DiscogsEditionMatcher.assess(canon, DiscogsLink(DiscogsKind.MASTER,12001),record))
