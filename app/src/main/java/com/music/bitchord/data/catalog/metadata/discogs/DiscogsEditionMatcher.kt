@@ -16,6 +16,8 @@ internal data class CanonicalEditionEvidence(
     /** Exact edition country and year when asserted by MusicBrainz. */
     val country: String? = null,
     val releaseYear: Int? = null,
+    /** Verbatim MB release artist-credit entries, never a split display string. */
+    val creditedArtistNames: List<String> = emptyList(),
 )
 
 /** A Discogs link is an identity *anchor*. Matching fields are separate evidence. */
@@ -50,16 +52,26 @@ internal object DiscogsEditionMatcher {
     ): DiscogsEditionVerdict {
         if (!mbid.matches(canonical.musicBrainzReleaseId) ||
             linked.kind != DiscogsKind.RELEASE ||
-            record.link != linked ||
-            !sameEditionTitle(canonical.title, record.title, canonical.creditedArtist)
+            record.link != linked
         ) return DiscogsEditionVerdict.CONFLICT
 
         val artist = canonical.creditedArtist?.takeIf(String::isNotBlank)
             ?: return DiscogsEditionVerdict.CANDIDATE
         if (record.artistNames.isEmpty()) return DiscogsEditionVerdict.CANDIDATE
-        if (record.artistNames.none { normalized(it) == normalized(artist) }) {
-            return DiscogsEditionVerdict.CONFLICT
+        // A displayed credit such as "A & B" is not an individual Discogs
+        // artist. Compare every structured MusicBrainz credit when available;
+        // never heuristically split names on &, feat., commas or CJK text.
+        val expected = canonical.creditedArtistNames.map(::normalized)
+        val actual = record.artistNames.map(::normalized)
+        val artistMatches = if (expected.isNotEmpty()) {
+            expected.size == actual.size && expected.sorted() == actual.sorted()
+        } else {
+            actual.any { it == normalized(artist) }
         }
+        if (!artistMatches ||
+            !sameEditionTitle(canonical.title, record.title, artist,
+                canonical.creditedArtistNames)
+        ) return DiscogsEditionVerdict.CONFLICT
 
         // The same recording sequence can be issued in several countries.
         // Compare only recognized country codes/names; "Worldwide", "Europe"
@@ -122,12 +134,25 @@ internal object DiscogsEditionMatcher {
      * prefix; creditedArtist is checked against Discogs artistNames above.
      * This is comparison-only; it never rewrites either source title.
      */
-    private fun sameEditionTitle(album: String, discogsTitle: String, artistCredit: String?): Boolean {
+    private fun sameEditionTitle(
+        album: String,
+        discogsTitle: String,
+        artistCredit: String?,
+        creditedArtistNames: List<String>,
+    ): Boolean {
         val title = normalized(album)
         val observed = normalized(discogsTitle)
         if (observed == title) return true
         val artist = artistCredit?.takeIf(String::isNotBlank) ?: return false
-        return observed == normalized(artist) + " - " + title
+        val prefixes = mutableListOf(normalized(artist))
+        if (creditedArtistNames.size > 1) {
+            // Discogs titles often render the same structured credits with a
+            // comma instead of MusicBrainz's joinphrase. This is safe only
+            // after the full artist list was independently checked above.
+            prefixes += normalized(creditedArtistNames.joinToString(", "))
+            prefixes += normalized(creditedArtistNames.joinToString(" & "))
+        }
+        return prefixes.any { observed == "${it} - ${title}" }
     }
 
     private fun normalized(s: String): String =

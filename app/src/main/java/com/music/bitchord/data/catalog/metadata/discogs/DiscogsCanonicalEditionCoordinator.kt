@@ -124,6 +124,7 @@ internal class DiscogsCanonicalEditionCoordinator(
             country = detail.country,
             releaseYear = detail.releaseDate?.take(4)
                 ?.toIntOrNull()?.takeIf { it in 1800..2200 },
+            creditedArtistNames = detail.artistCreditNames,
         )
         return editions.observe(canonical)
     }

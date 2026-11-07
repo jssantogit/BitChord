@@ -72,6 +72,33 @@ class DiscogsEditionMatcherTest {
             DiscogsEditionMatcher.assess(canon.copy(status = "official"), linked, record))
     }
 
+    @Test fun multipleArtistsRequireExactStructuredCreditsRatherThanGuessingFromDisplayText() {
+        val joint = canon.copy(
+            title = "Joint EP",
+            creditedArtist = "Artist A & Artist B",
+            creditedArtistNames = listOf("Artist A", "Artist B"),
+        )
+        val discogs = record.copy(
+            title = "Artist A, Artist B - Joint EP",
+            artistNames = listOf("Artist A", "Artist B"),
+        )
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(joint, linked, discogs))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(joint, linked,
+                discogs.copy(artistNames = listOf("Artist B", "Artist A"))))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(joint, linked,
+                discogs.copy(artistNames = listOf("Artist A"))))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(joint, linked,
+                discogs.copy(artistNames = listOf("Artist A", "Artist C"))))
+        // Do not infer a multiple-artist identity from display string alone.
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(joint.copy(creditedArtistNames = emptyList()),
+                linked, discogs))
+    }
+
     @Test fun anUnofficialPressingMustNotVerifyAnOfficialMusicBrainzRelease() {
         assertEquals(DiscogsEditionVerdict.CONFLICT,
             DiscogsEditionMatcher.assess(canon, linked, record.copy(unofficial = true)))

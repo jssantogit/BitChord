@@ -46,6 +46,8 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val hasCompleteTracklist: Boolean = false,
     val status: String? = null,
     val barcode: String? = null,
+    /** Structured MusicBrainz credited names, never inferred by splitting joinphrases. */
+    val artistCreditNames: List<String> = emptyList(),
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -239,6 +241,7 @@ internal class MusicBrainzCatalogGraph(
                 hasCompleteTracklist = completeTracklist,
                 status = data.string("status"),
                 barcode = data.string("barcode"),
+                artistCreditNames = data.artistCreditNames(),
             ))
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
@@ -304,6 +307,18 @@ internal class MusicBrainzCatalogGraph(
                 runCatching { credit["joinphrase"]?.jsonPrimitive?.contentOrNull }
                     .getOrNull().orEmpty()
         }.trim().takeIf(String::isNotEmpty)
+
+    /** Preserve individual release credits; the visible joinphrase is not an ID separator. */
+    private fun JsonObject.artistCreditNames(): List<String> {
+        val credits = array("artist-credit")
+        if (credits.isEmpty()) return emptyList()
+        return credits.map { entry ->
+            val credit = entry as? JsonObject ?: return emptyList()
+            credit.string("name")
+                ?: (credit["artist"] as? JsonObject)?.string("name")
+                ?: return emptyList()
+        }
+    }
 
     private fun String?.validMbid(): String? =
         this?.trim()?.lowercase(Locale.ROOT)?.takeIf(MBID::matches)

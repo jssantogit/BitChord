@@ -176,6 +176,29 @@ class MusicBrainzCatalogGraphTest {
     }
 
 
+    @Test fun graphKeepsStructuredMultiArtistCreditsWithoutSplittingJoinphrases() = runBlocking {
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Joint EP","status":"Official",
+                    "artist-credit":[
+                        {"name":"Artist A","joinphrase":" & ","artist":{"name":"Artist A"}},
+                        {"name":"Artist B","artist":{"name":"Artist B"}}
+                    ],
+                    "media":[{"position":1,"track-count":1,"tracks":[{
+                        "id":"14f273b6-813b-4239-b0f8-c4b839b902c6",
+                        "title":"Duet","recording":{"id":"$original"}
+                    }]}]}"""
+            },
+        ))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals("Artist A & Artist B", detail.artistDisplay)
+        assertEquals(listOf("Artist A", "Artist B"), detail.artistCreditNames)
+        assertTrue(detail.hasCompleteTracklist)
+    }
+
     @Test fun browseDeduplicatesByEditionMbidWithoutChangingServerCursor() = runBlocking {
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
             transport = object : MusicBrainzTransport {
