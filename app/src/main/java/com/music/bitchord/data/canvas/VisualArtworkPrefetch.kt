@@ -7,6 +7,8 @@ import com.music.bitchord.data.model.artworkAt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -43,9 +45,37 @@ fun planVisualArtworkPrefetch(
     .take(maxRequests.coerceIn(0, 24))
     .toList()
 
+/**
+ * Coil already owns decoded-image memory/disk caching. This gate handles the
+ * other expensive part: simultaneous Home/Explore/artist warmups can request
+ * the very same HTTPS artwork while it's still in flight. Coalesce only
+ * ongoing work and cap *global* speculative concurrency, regardless of which
+ * source (MusicBrainz, Apple, Navidrome or a future provider) supplied it.
+ *
+ * A cancelled page releases its key in finally; a later page may try again.
+ * Actual visible AsyncImage loads always remain independent and prioritized.
+ */
+internal class VisualArtworkFetchGate(maxConcurrent: Int = 3) {
+    private val inflight = mutableSetOf<String>()
+    private val lock = Mutex()
+    private val permits = Semaphore(maxConcurrent)
+
+    suspend fun fetchOnce(key: String, fetch: suspend () -> Unit): Boolean {
+        if (!lock.withLock { inflight.add(key) }) return false
+        try {
+            permits.withPermit { fetch() }
+            return true
+        } finally {
+            lock.withLock { inflight.remove(key) }
+        }
+    }
+}
+
 /** At most three speculative decodes; requests use the global Coil loader,
  * its exact disk cache and network client. No extra decoder or second cache. */
 object VisualArtworkPrefetch {
+    private val gate = VisualArtworkFetchGate(maxConcurrent = 3)
+
     suspend fun warm(context: Context, candidates: List<VisualArtworkCandidate>) {
         val planned = planVisualArtworkPrefetch(candidates)
         if (planned.isEmpty()) return
@@ -54,13 +84,13 @@ object VisualArtworkPrefetch {
         val loader = withContext(Dispatchers.IO) {
             SingletonImageLoader.get(context)
         }
-        val limit = Semaphore(3)
         coroutineScope {
             planned.forEach { candidate ->
                 launch(Dispatchers.IO) {
-                    limit.withPermit {
+                    val url = candidate.url ?: return@launch
+                    gate.fetchOnce(url) {
                         val request = ImageRequest.Builder(context)
-                            .data(candidate.url)
+                            .data(url)
                             .size(candidate.targetPx, candidate.targetPx)
                             .build()
                         try {
