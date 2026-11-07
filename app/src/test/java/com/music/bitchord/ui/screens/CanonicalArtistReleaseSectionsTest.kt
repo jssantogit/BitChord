@@ -254,4 +254,23 @@ class CanonicalArtistReleaseSectionsTest {
                 listOf(artistA), listOf(match.copy(firstReleaseDate = "2025"))))
     }
 
+
+    @Test fun recentLibraryExternalDateLookupDoesNotRestartForArtworkOnlyChanges() {
+        val releases = listOf(
+            ReleaseEntity("local-1", "Plot Twist", "AtHeart", null),
+            ReleaseEntity("local-2", "Butterfly Doors", "AtHeart", null),
+        )
+        val key = canonicalLocalArtistRecentLookupKey("AtHeart", releases)
+        // A Coil/Room artwork refresh may emit an updated artist state while
+        // MusicBrainz is still paging. It must not cancel the date lookup.
+        assertEquals(key, canonicalLocalArtistRecentLookupKey("AtHeart",
+            releases.map { it.copy(artworkUri = "content://media/cover") }))
+        assertEquals(key, canonicalLocalArtistRecentLookupKey("AtHeart", releases.reversed()))
+        assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
+            releases + ReleaseEntity("local-3", "Say It", "AtHeart", null)))
+        assertEquals(false, key == canonicalLocalArtistRecentLookupKey("Other Artist", releases))
+        assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
+            releases.map { if (it.id == "local-1") it.copy(title = "Another release") else it }))
+    }
+
 }
