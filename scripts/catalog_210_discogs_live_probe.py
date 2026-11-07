@@ -107,6 +107,7 @@ def main(argv: list[str]) -> int:
         "matching_tracks": False,
         "matching_country": False,
         "matching_year": False,
+        "barcode_compatible": False,
         "result": "unavailable",
     }
     try:
@@ -148,10 +149,22 @@ def main(argv: list[str]) -> int:
             (mb_country, discogs_country) in {("GB", "UK"), ("KR", "SOUTH KOREA")})
         result["matching_year"] = bool(mb.get("date") and discogs.get("year") and
             mb["date"][:4] == str(discogs["year"]))
+        mb_barcode = re.sub(r"[ -]", "", mb.get("barcode") or "")
+        discogs_barcodes = {
+            re.sub(r"[ -]", "", item.get("value", ""))
+            for item in discogs.get("identifiers", [])
+            if isinstance(item, dict) and item.get("type") == "Barcode"
+                and isinstance(item.get("value"), str)
+        }
+        # The app treats absent barcode evidence as unknown, but rejects a
+        # contradiction when *both* databases contain validated barcodes.
+        result["barcode_compatible"] = (
+            not mb_barcode or not discogs_barcodes or mb_barcode in discogs_barcodes
+        )
         mandatory = [
             "source_ids_correct", "link_confirmed", "musicbrainz_tracklist_complete",
             "matching_artist", "matching_title", "matching_tracks",
-            "matching_country", "matching_year",
+            "matching_country", "matching_year", "barcode_compatible",
         ]
         result["result"] = "verified" if all(result[key] for key in mandatory) else "mismatch"
     except urllib.error.HTTPError as exc:
