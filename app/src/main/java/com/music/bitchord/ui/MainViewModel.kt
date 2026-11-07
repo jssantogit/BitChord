@@ -3150,7 +3150,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         val art = try {
                             withTimeoutOrNull(8_000L) {
                                 coverArtArchive.findCover(
-                                    record.officialAudioReleaseMbid, null,
+                                    record.officialAudioReleaseMbid,
+                                    record.officialAudioReleaseGroupMbid,
                                     CoverArtSize.THUMBNAIL,
                                 )
                             }
