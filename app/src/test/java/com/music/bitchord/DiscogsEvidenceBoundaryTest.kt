@@ -12,6 +12,16 @@ class DiscogsEvidenceBoundaryTest {
     private val releaseMbid = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
     private val groupMbid = "529f87a1-1081-48a4-8ee1-3c08de229858"
 
+    @Test fun legacyMusicBrainzHttpResourceIsNormalizedToSafeHttpsAttribution() {
+        // The release link in MusicBrainz may be historical HTTP. No HTTP
+        // request ever follows it; only the typed numeric Discogs ID is used.
+        val parsed = DiscogsLinkParser.parse("http://www.discogs.com/release/12345")
+        assertEquals(DiscogsLink(DiscogsKind.RELEASE, 12345L), parsed)
+        assertEquals("https://www.discogs.com/release/12345", parsed!!.attributionUrl)
+        assertNull(DiscogsLinkParser.parse("http://discogs.com.evil.org/release/12345"))
+        assertNull(DiscogsLinkParser.parse("http://discogs.com@evil.org/release/12345"))
+    }
+
     @Test fun untrustedUrlShapesCannotBecomeDiscogsApiRequests() {
         for (unsafe in listOf(
             "https://discogs.com.evil.org/release/12345",
