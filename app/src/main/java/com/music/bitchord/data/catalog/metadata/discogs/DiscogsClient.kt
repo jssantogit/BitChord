@@ -167,6 +167,7 @@ internal class DiscogsClient(
         } catch (_: Exception) {
             return DiscogsLookupResult.Unavailable
         }
+        DiscogsDiagnosticStatus.httpResult(DiscogsKind.MASTER, response.status)
         return when (response.status) {
             200 -> {
                 val link = DiscogsLink(DiscogsKind.MASTER, id)
@@ -191,6 +192,7 @@ internal class DiscogsClient(
         } catch (_: Exception) {
             return DiscogsLookupResult.Unavailable
         }
+        DiscogsDiagnosticStatus.httpResult(DiscogsKind.RELEASE, response.status)
         return when (response.status) {
             200 -> {
                 val link = DiscogsLink(DiscogsKind.RELEASE, id)
