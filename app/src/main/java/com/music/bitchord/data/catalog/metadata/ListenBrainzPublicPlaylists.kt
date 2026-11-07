@@ -360,7 +360,7 @@ internal class ListenBrainzPublicPlaylistClient(
      */
     suspend fun searchPublicQuery(query: String): List<ListenBrainzPublicPlaylist> {
         val trimmed = query.trim()
-        if (trimmed.length !in 3..80 || trimmed.any(Char::isISOControl))
+        if (trimmed.length !in 2..80 || trimmed.any(Char::isISOControl))
             return emptyList()
         // The upstream fuzzy search can put an exact title/annotation match
         // below its first twelve hits. Apply the evidence filter before the
