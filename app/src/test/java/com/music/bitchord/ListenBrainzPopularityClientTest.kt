@@ -79,6 +79,36 @@ class ListenBrainzPopularityClientTest {
         assertEquals(2, transport.calls)
     }
 
+    @Test fun slowPublicHttpCannotBlockASecondListenBrainzRequest() = runBlocking {
+        val requestEntered = CompletableDeferred<Unit>()
+        val releaseResponse = CompletableDeferred<Unit>()
+        var clock = 0L
+        val starts = mutableListOf<Long>()
+        val limiter = ListenBrainzRateLimiter(
+            nowMillis = { clock },
+            waitMillis = { clock += it },
+        )
+        val slow = async(start = CoroutineStart.UNDISPATCHED) {
+            limiter.run {
+                starts += clock
+                requestEntered.complete(Unit)
+                releaseResponse.await()
+            }
+        }
+        requestEntered.await()
+        val fast = async(start = CoroutineStart.UNDISPATCHED) {
+            limiter.run {
+                starts += clock
+                "chart"
+            }
+        }
+        // A global playlist search must not hold up Em alta for up to 90s.
+        assertEquals("chart", kotlinx.coroutines.withTimeout(2_000L) { fast.await() })
+        assertEquals(listOf(0L, 1_000L), starts)
+        releaseResponse.complete(Unit)
+        slow.await()
+    }
+
     @Test fun separateCallersShareOneSecondRequestSpacing() = runBlocking {
         var clock = 0L
         val starts = mutableListOf<Long>()

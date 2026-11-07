@@ -119,6 +119,9 @@ internal class ListenBrainzRateLimiter(
     private var serverResetNotBeforeMs: Long? = null
 
     suspend fun <T> run(block: suspend () -> T): T {
+        // Serialize request START times, not response latency. The global
+        // playlist search can take 30-90 seconds: holding this mutex for the
+        // whole HTTP call would stall sitewide charts, scrobbles and Home.
         mutex.lock()
         try {
             val now = nowMillis()
@@ -127,10 +130,10 @@ internal class ListenBrainzRateLimiter(
             val wait = maxOf(spacing, reset)
             if (wait > 0L) waitMillis(wait)
             lastStart = nowMillis()
-            return block()
         } finally {
             mutex.unlock()
         }
+        return block()
     }
 
     /** Follow the server's reset budget for both public reads and scrobbles. */
