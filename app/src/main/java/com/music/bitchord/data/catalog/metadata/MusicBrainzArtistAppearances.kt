@@ -77,11 +77,16 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                     val linkedRecordingCredit = if (recording?.appearanceText("id")
                         ?.lowercase(Locale.ROOT)?.let(ARTIST_APPEARANCE_MBID::matches) == true
                     ) recording["artist-credit"] as? JsonArray else null
-                    (credit ?: linkedRecordingCredit)?.any { part ->
-                        val credited = ((part as? JsonObject)?.get("artist")
-                            as? JsonObject)?.appearanceText("id")
-                        credited?.equals(target, ignoreCase = true) == true
-                    } == true
+                    // A track may credit only the lead act while the exact
+                    // linked MusicBrainz Recording includes a featured artist.
+                    // Either exact MBID credit is proof; never match a name.
+                    listOfNotNull(credit, linkedRecordingCredit).any { credits ->
+                        credits.any { part ->
+                            val credited = ((part as? JsonObject)?.get("artist")
+                                as? JsonObject)?.appearanceText("id")
+                            credited?.equals(target, ignoreCase = true) == true
+                        }
+                    }
                 } == true
             } == true
         if (!hasTargetTrack) return@mapNotNull null
