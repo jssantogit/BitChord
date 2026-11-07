@@ -402,6 +402,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val canonicalPublicPlaylistSearchStatus: StateFlow<
         Map<String, UiState<List<ListenBrainzPublicPlaylist>>>
     > = _canonicalPublicPlaylistSearchStatus.asStateFlow()
+    private val _canonicalPublicPlaylistQuery =
+        MutableStateFlow<Pair<String, UiState<List<ListenBrainzPublicPlaylist>>>?>(null)
+    internal val canonicalPublicPlaylistQuery:
+        StateFlow<Pair<String, UiState<List<ListenBrainzPublicPlaylist>>>?> =
+        _canonicalPublicPlaylistQuery.asStateFlow()
+    private var publicPlaylistFreeTextJob: Job? = null
+    private var publicPlaylistFreeTextFetchedAt: Long = 0L
     private val publicPlaylistQueryAt = ConcurrentHashMap<String, Long>()
     private val publicPlaylistQueryJobs = ConcurrentHashMap<String, Job>()
     private val _canonicalPublicPlaylistDetail =
@@ -3287,6 +3294,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _canonicalPublicPlaylistSearchStatus.update { old ->
                     old + (key to UiState.Error("Playlists públicas indisponíveis no momento."))
                 }
+            }
+        }
+    }
+
+
+    /**
+     * The General > Playlists filter is a separate public query. Search does
+     * not relabel MusicBrainz recordings as playlists or infer playback.
+     * Only one in-flight text search; results are keyed to the exact query.
+     */
+    internal fun searchCanonicalPublicPlaylists(query: String) {
+        val text = query.trim()
+        if (text.length !in 2..80 || text.any(Char::isISOControl)) {
+            publicPlaylistFreeTextJob?.cancel()
+            _canonicalPublicPlaylistQuery.value =
+                text to UiState.Success(emptyList())
+            return
+        }
+        val previous = _canonicalPublicPlaylistQuery.value
+        if (previous?.first == text &&
+            (publicPlaylistFreeTextJob?.isActive == true ||
+                (previous.second is UiState.Success &&
+                    System.currentTimeMillis() - publicPlaylistFreeTextFetchedAt < 900_000L))
+        ) return
+        publicPlaylistFreeTextJob?.cancel()
+        _canonicalPublicPlaylistQuery.value = text to UiState.Loading
+        publicPlaylistFreeTextJob = viewModelScope.launch(Dispatchers.IO) {
+            val rows = try { publicPlaylistClient.searchPublicQuery(text) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { emptyList() }
+            if (_canonicalPublicPlaylistQuery.value?.first == text) {
+                publicPlaylistFreeTextFetchedAt = System.currentTimeMillis()
+                _canonicalPublicPlaylistQuery.value = text to UiState.Success(rows)
             }
         }
     }
