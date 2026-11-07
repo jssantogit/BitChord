@@ -44,6 +44,8 @@ internal object DiscogsEditionFacts {
                 evidence = identity, field = field, value = v,
                 recordedAtEpochMs = observation.fetchedAtMillis,
                 expiresAtEpochMs = expiry,
+                attributionText = verified.attributionText,
+                attributionUrl = verified.attributionUrl,
             )
         }
         for ((name, catalog) in observation.record.labels.take(16)) {
