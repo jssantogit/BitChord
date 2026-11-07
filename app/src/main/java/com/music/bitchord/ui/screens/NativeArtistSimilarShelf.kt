@@ -20,6 +20,11 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.ArtworkPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.net.URI
 import java.util.Locale
@@ -47,6 +52,26 @@ internal fun nativeArtistSimilarPortraitUri(url: String?): String? {
     }
 }
 
+/** Only two optional Apple portrait lookups are in flight at once.
+ * Publish each verified cover independently, so a slow first result does not
+ * delay other artists. No name-based identity merge or persisted association. */
+internal suspend fun resolveNativeSimilarPortraits(
+    artists: List<ListenBrainzSimilarArtist>,
+    lookup: suspend (String) -> String?,
+    onResolved: (String, String) -> Unit,
+) = coroutineScope {
+    val permits = Semaphore(2)
+    artists.map { candidate ->
+        launch {
+            val url = try {
+                permits.withPermit { lookup(candidate.name) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { null }
+            nativeArtistSimilarPortraitUri(url)?.let { onResolved(candidate.mbid, it) }
+        }
+    }.joinAll()
+}
+
 /** Native artist shelf with actual ListenBrainz identity evidence and optional
  * exact-name Apple artist artwork, reusing the existing artist hero resolver. */
 @Composable
@@ -67,20 +92,18 @@ internal fun NativeArtistSimilarShelf(
     val artwork by produceState<Map<String, String>>(
         initialValue = emptyMap(), key1 = visible,
     ) {
-        // AppleArtistArtRepository verifies the returned artist name and caches
-        // successful/negative lookups; request only visible cards and publish
-        // individually, so slow network does not block the shelf.
-        for (candidate in visible) {
-            val url = try {
+        // AppleArtistArtRepository already validates exact-name responses.
+        // Resolve a bounded number in parallel, publishing each portrait as
+        // it arrives, even when a previous Apple request is slow.
+        resolveNativeSimilarPortraits(
+            artists = visible,
+            lookup = { name ->
                 withContext(Dispatchers.IO) {
-                    AppleArtistArtRepository.artFor(candidate.name)?.heroUrl
+                    AppleArtistArtRepository.artFor(name)?.heroUrl
                 }
-            } catch (cancelled: CancellationException) { throw cancelled }
-              catch (_: Exception) { null }
-            nativeArtistSimilarPortraitUri(url)?.let {
-                value = value + (candidate.mbid to it)
-            }
-        }
+            },
+            onResolved = { mbid, portrait -> value = value + (mbid to portrait) },
+        )
     }
     if (visible.isEmpty()) return
     NativeArtistReleaseShelf(
