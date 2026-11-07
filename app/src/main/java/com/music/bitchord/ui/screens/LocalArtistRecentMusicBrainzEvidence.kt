@@ -103,8 +103,8 @@ private object LocalArtistRecentMusicBrainzLookup {
  */
 internal fun canonicalRecentArtistProofCacheKey(artistName: String, releaseTitle: String): String {
     fun normalize(s: String) = s.trim().lowercase(Locale.ROOT)
-        .replace(Regex("""\\s+"""), " ")
-    val identity = "v1\\u001f" + normalize(artistName) + "\\u001f" + normalize(releaseTitle)
+        .replace(Regex("""\s+"""), " ")
+    val identity = "v1\u001f" + normalize(artistName) + "\u001f" + normalize(releaseTitle)
     return MessageDigest.getInstance("SHA-256")
         .digest(identity.toByteArray(Charsets.UTF_8))
         .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
@@ -114,7 +114,7 @@ private fun recentProofPayload(proof: CanonicalArtistReleaseEvidence): String? {
     val type = proof.primaryType?.trim()?.lowercase(Locale.ROOT)
         ?.takeIf { it in setOf("album", "single", "ep") } ?: return null
     val date = proof.firstReleaseDate?.takeIf {
-        Regex("""\\d{4}-\\d{2}-\\d{2}""").matches(it)
+        Regex("""\d{4}-\d{2}-\d{2}""").matches(it)
     } ?: return null
     val verified = runCatching { LocalDate.parse(date) }.getOrNull() ?: return null
     if (verified.isAfter(LocalDate.now(ZoneOffset.UTC))) return null
