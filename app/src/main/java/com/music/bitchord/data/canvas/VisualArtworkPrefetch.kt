@@ -5,11 +5,10 @@ import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Semaphore
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
-import kotlinx.coroutines.withContext
 
 /**
  * Artwork decoding warmup does not belong to MusicBrainz/Apple/Navidrome.
