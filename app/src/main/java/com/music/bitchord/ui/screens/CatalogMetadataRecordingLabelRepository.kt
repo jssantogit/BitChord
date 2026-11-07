@@ -33,7 +33,7 @@ internal fun encodeCatalogMetadataRecordingLabels(
     labels: List<CatalogMetadataRecordingLabel>,
 ): String = JSONArray().apply {
     labels.asSequence().filter(::validCatalogMetadataRecordingLabel)
-        .distinctBy(CatalogMetadataRecordingLabel::recordingId).takeLast(1200)
+        .distinctBy(CatalogMetadataRecordingLabel::recordingId).toList().takeLast(1200)
         .forEach { label ->
             put(JSONObject().apply {
                 put("id", label.recordingId)

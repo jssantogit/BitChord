@@ -92,6 +92,15 @@ internal fun CanonicalPublicPlaylistDetailScreen(
         )
     }
     var editingRecording by remember(playlist.mbid) { mutableStateOf<String?>(null) }
+    var addingRecording by remember(playlist.mbid) {
+        mutableStateOf<Triple<String, String, String>?>(null)
+    }
+    addingRecording?.let { (recording, title, artist) ->
+        CanonicalMetadataRecordingPlaylistPicker(
+            recordingId = recording, title = title, artist = artist,
+            onDismiss = { addingRecording = null },
+        )
+    }
     editingRecording?.let { recordingId ->
         CanonicalMetadataRecordingRatingDialog(
             recordingId = recordingId, onDismiss = { editingRecording = null },
@@ -288,11 +297,16 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                         actions = {
                             CanonicalMetadataTrackMore(
                                 recordingId = recordingId,
+                                title = entry.title,
+                                artist = entry.artist,
                                 palette = palette,
                                 expanded = menuExpanded,
                                 onOpen = { menuExpanded = true },
                                 onDismiss = { menuExpanded = false },
                                 onRate = { editingRecording = it },
+                                onAddToPlaylist = { id, title, artist ->
+                                    addingRecording = Triple(id, title, artist)
+                                },
                                 tag = "public-playlist-track-more-$originalIndex",
                             )
                         },

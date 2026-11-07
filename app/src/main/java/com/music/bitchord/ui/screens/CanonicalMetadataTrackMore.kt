@@ -18,11 +18,14 @@ import com.music.bitchord.ui.theme.ArtworkPalette
 @Composable
 internal fun CanonicalMetadataTrackMore(
     recordingId: String?,
+    title: String,
+    artist: String,
     palette: ArtworkPalette,
     expanded: Boolean,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
     onRate: (String) -> Unit,
+    onAddToPlaylist: (String, String, String) -> Unit,
     tag: String,
 ) {
     if (recordingId == null || !isVerifiedCatalogRecordingId(recordingId)) return
@@ -38,6 +41,10 @@ internal fun CanonicalMetadataTrackMore(
             DropdownMenuItem(text = { Text("Avaliar faixa") }, onClick = {
                 onDismiss()
                 onRate(recordingId)
+            })
+            DropdownMenuItem(text = { Text("Adicionar à playlist") }, onClick = {
+                onDismiss()
+                onAddToPlaylist(recordingId, title, artist)
             })
             DropdownMenuItem(text = { Text("Ver no MusicBrainz") }, onClick = {
                 onDismiss()
