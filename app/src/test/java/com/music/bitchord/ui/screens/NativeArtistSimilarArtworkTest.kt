@@ -38,6 +38,16 @@ class NativeArtistSimilarArtworkTest {
         assertNull(nativeArtistSimilarPortraitUri("https://example.com/artist.png"))
     }
 
+    @Test fun cachedArtistPhotoMayBeUsedOfflineOnlyWithExactTrustedDiskUri() {
+        val local = "file:/data/user/0/com.dev.bitchord/no_backup/visual_offline_stills_v1/abc.image"
+        assertNull(nativeArtistSimilarPortraitUri(local))
+        assertEquals(local, nativeArtistSimilarPortraitUri(local, trustedSavedUri = local))
+        assertNull(nativeArtistSimilarPortraitUri("file:/sdcard/Downloads/untrusted.jpg",
+            trustedSavedUri = local))
+        assertNull(nativeArtistSimilarPortraitUri("https://example.org/fake.jpg",
+            trustedSavedUri = local))
+    }
+
     @Test fun similarArtistPortraitUsesCircularShapeUnlikeReleaseSleeves() {
         assertEquals(CircleShape, nativeArtistSimilarArtworkShape)
     }
