@@ -119,6 +119,7 @@ internal object DiscogsRequestBudget {
 
 internal sealed interface DiscogsLookupResult {
     data class Found(val record: DiscogsRecord) : DiscogsLookupResult
+    data class FoundMaster(val record: DiscogsMasterRecord) : DiscogsLookupResult
     data object Disabled : DiscogsLookupResult
     data object InvalidId : DiscogsLookupResult
     data object Missing : DiscogsLookupResult
@@ -140,6 +141,31 @@ internal class DiscogsClient(
     private val userAgent: String =
         "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)",
 ) {
+    /** Discogs Master is advisory group context only; never a verified Release. */
+    suspend fun fetchMaster(id: Long): DiscogsLookupResult {
+        if (!enabled) return DiscogsLookupResult.Disabled
+        if (id !in 1..999_999_999_999L) return DiscogsLookupResult.InvalidId
+        val response = try {
+            limiter.runHttpLimited { transport.get("masters/$id", userAgent) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return DiscogsLookupResult.Unavailable
+        }
+        return when (response.status) {
+            200 -> {
+                val link = DiscogsLink(DiscogsKind.MASTER, id)
+                val record = DiscogsRecordParser.parseMaster(link, response.body)
+                    ?: return DiscogsLookupResult.Malformed
+                DiscogsLookupResult.FoundMaster(record)
+            }
+            401, 403 -> DiscogsLookupResult.Unauthorized
+            404 -> DiscogsLookupResult.Missing
+            429 -> DiscogsLookupResult.Throttled(response.retryAfterSeconds)
+            else -> DiscogsLookupResult.Unavailable
+        }
+    }
+
     suspend fun fetchRelease(id: Long): DiscogsLookupResult {
         if (!enabled) return DiscogsLookupResult.Disabled
         if (id !in 1..999_999_999_999L) return DiscogsLookupResult.InvalidId
