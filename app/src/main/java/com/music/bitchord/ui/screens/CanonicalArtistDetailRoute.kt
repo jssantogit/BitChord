@@ -61,6 +61,12 @@ internal fun CanonicalArtistDetailRoute(
     val nativeReleases by rememberCanonicalArtistReleases(
         tracks, sourceKeys, selectedSourceKey,
     )
+    // Library records frequently have no linked MusicBrainz release date;
+    // corroborate exact artist+group data for the recent-release presentation
+    // without mutating their local Recording/Release identity.
+    val datedNativeReleases by rememberLocalArtistExternallyDatedReleases(
+        artistName, nativeReleases,
+    )
     // Preserve the exact Recording→Release sleeve when opening the shared
     // action sheet from a nested artist detail; the root album map may be
     // scoped to Artists and therefore cannot resolve the release cover.
@@ -140,7 +146,7 @@ internal fun CanonicalArtistDetailRoute(
         artistName = artistName,
         tracks = tracks,
         heroArtworkTrack = heroArtworkTrack,
-        nativeReleases = nativeReleases,
+        nativeReleases = datedNativeReleases,
         artistRatingState = artistRatingState,
         appleArt = appleArt,
         palette = palette,
