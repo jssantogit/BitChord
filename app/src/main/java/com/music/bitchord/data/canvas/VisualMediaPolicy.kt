@@ -32,6 +32,23 @@ fun shouldShowVisualMotion(
 ): Boolean = animatedEnabled && mode != VisualRetentionMode.STILL_ONLY &&
     (savedOffline || metered == false || (metered == true && cellularAllowed))
 
+/** Saved offline quotas are distinct from the transient Coil and Media3
+ * caches. Defaults preserve the size used by existing installations. */
+const val DEFAULT_SAVED_STILLS_BYTES = 256L * 1024 * 1024
+const val DEFAULT_SAVED_MOTION_BYTES = 400L * 1024 * 1024
+const val MIN_SAVED_STILLS_BYTES = 64L * 1024 * 1024
+const val MAX_SAVED_STILLS_BYTES = 1024L * 1024 * 1024
+const val MIN_SAVED_MOTION_BYTES = 128L * 1024 * 1024
+const val MAX_SAVED_MOTION_BYTES = 2L * 1024 * 1024 * 1024
+
+fun normalizedVisualStillCacheBytes(requested: Long): Long =
+    if (requested == 0L) DEFAULT_SAVED_STILLS_BYTES
+    else requested.coerceIn(MIN_SAVED_STILLS_BYTES, MAX_SAVED_STILLS_BYTES)
+
+fun normalizedVisualMotionCacheBytes(requested: Long): Long =
+    if (requested == 0L) DEFAULT_SAVED_MOTION_BYTES
+    else requested.coerceIn(MIN_SAVED_MOTION_BYTES, MAX_SAVED_MOTION_BYTES)
+
 /** No hostname, query, token, user information or file path in the disk key. */
 fun visualMediaCacheKey(surface: VisualSurface, identity: String): String {
     val normalized = identity.trim().lowercase(Locale.ROOT)
