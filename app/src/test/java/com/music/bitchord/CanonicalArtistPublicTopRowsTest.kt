@@ -116,7 +116,7 @@ class CanonicalArtistPublicTopRowsTest {
             ),
         )
         assertEquals(listOf(sample[1], sample[0]), rows.map { it.recordingMbid })
-        assertTrue(rows.all { it.listeners > 0L && it.listens >= it.listeners })
+        assertTrue(rows.all { row -> row.listeners?.let { n -> n > 0L && row.listens >= n } == true })
         assertTrue(canonicalArtistSampledPopularityRanking(sample,
             listOf(ListenBrainzPopularityEvidence.Unknown(sample[0]))).isEmpty())
     }
