@@ -27,6 +27,7 @@ internal object CatalogCoverDiagnostics {
         add("network_requests=${s.networkRequests} success=${s.successfulNetworkRequests}" +
             " not_found=${s.networkNotFound} transient_failures=${s.transientFailures}")
         add("coil_load_success=${s.imageRenderSuccesses} coil_load_errors=${s.imageRenderFailures}")
+        add("coil_load_started=${s.imageLoadStarts} coil_load_cancellations=${s.imageLoadCancels}")
         // Coil's actual result dataSource distinguishes bitmap cache reuse
         // from disk reads and network downloads, without recording URLs.
         add("coil_sources memory=${s.coilMemoryHits} disk=${s.coilDiskHits}" +
