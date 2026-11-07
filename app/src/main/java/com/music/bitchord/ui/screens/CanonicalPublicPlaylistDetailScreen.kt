@@ -94,7 +94,7 @@ internal fun CanonicalPublicPlaylistDetailScreen(
         }
         item(key = "public-playlist-cover") {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
-                NativeReleaseHeaderLayout(
+                NativePlaylistDetailHeader(
                     title = playlist.title,
                     credit = playlist.creator,
                     meta = "Playlist · ${entries.size} " +
