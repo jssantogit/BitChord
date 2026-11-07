@@ -3593,9 +3593,15 @@ private fun BitChordApp(
                             ) artistPublicTop.rows else emptyList(),
                             canonicalPublicTopSampled = artistPublicTop.sampled,
                             onCanonicalPublicTopOpen = { recording ->
-                                // Public popularity is metadata, never stream
-                                // proof. Open the existing read-only detail.
-                                communityMetadataRecording = recording
+                                // A MusicBrainz Recording MBID is metadata, not
+                                // permission to play or open a blank detail.
+                                // The player action rechecks canonical assets.
+                                if (recording.hasCatalogedAsset ||
+                                    recording.hasVerifiedLocalAsset
+                                ) executeMusicBrainzCatalog(
+                                    recording.musicBrainzId,
+                                    CanonicalCollectionIntent.PLAY_NOW,
+                                )
                             },
                             canonicalFeaturedRelease = artistFeaturedRelease,
                             onCanonicalFeaturedReleaseOpen = { release ->
