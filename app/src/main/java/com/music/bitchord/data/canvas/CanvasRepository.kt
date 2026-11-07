@@ -152,7 +152,7 @@ object CanvasRepository {
                     { SpotifyCanvas.searchAlbum(name, credit) },
                 ) { it.matches(name, credit, name) }
             }
-        }
+        }?.copy(surface = CanvasSurface.ALBUM)
     }
 
     /** Priority is part of the question, so a toggle never reuses the other order's answer. */
