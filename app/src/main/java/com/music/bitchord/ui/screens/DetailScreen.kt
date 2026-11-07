@@ -1274,7 +1274,8 @@ private fun ReleaseHeader(
             }
         },
         actions = {
-            if (songs.isNotEmpty() || canonicalTracks.isNotEmpty()) {
+            if (songs.isNotEmpty() || canonicalTracks.isNotEmpty() ||
+                onToggleCatalogPin != null || onRate != null) {
                 val library = page.library?.takeIf { onToggleLibrary != null }
                 val canPlay = songs.isNotEmpty() ||
                     (canonicalTracks.any { it.hasCatalogedAsset } &&
