@@ -3,13 +3,14 @@ package com.music.bitchord.diagnostics
 import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 
 /**
- * Conservative export bridge. Counts describe ONLY Cover Art Archive metadata
- * requests, never completed Coil bitmap rendering or verified visual quality.
+ * Privacy-safe export bridge. CAA metadata HTTP outcomes and completed Coil
+ * image loads are counted separately. Neither proves GPU drawing or correct
+ * visual content.
  * No MBIDs, titles, URLs, device IDs, network peer names, or search queries.
  */
 internal object CatalogCoverDiagnostics {
     fun lines(s: CatalogCoverTelemetry.Snapshot): List<String> = buildList {
-        add("scope=caa_metadata_http_only")
+        add("scope=caa_metadata_and_coil_image_loads")
         add("window=since_last_capture_start_or_process_start")
         add("not_measured=gpu_draw_latency_wrong_cover_rate")
         add("image_scope=coil_load_caa_urls_only")
