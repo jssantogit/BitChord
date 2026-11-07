@@ -171,7 +171,7 @@ internal fun canonicalPublicPlaylistShelf(
     val curated = entries.asSequence()
         .filter { canonicalPublicPlaylistTitleIsDescriptive(it.title) }
         .distinctBy { it.title.trim().lowercase(java.util.Locale.ROOT) }
-        .take(12).toList()
+        .take(20).toList()
     if (curated.isEmpty()) return@let null
     HomeShelf(heading, curated.map { row ->
         ShelfItem(
