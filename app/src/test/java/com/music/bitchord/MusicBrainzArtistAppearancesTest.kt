@@ -30,6 +30,7 @@ class MusicBrainzArtistAppearancesTest {
         val rows = parseMusicBrainzTrackArtistAppearances(body, target)
         assertEquals(1, rows.size)
         assertEquals(releaseGroup, rows.single().releaseGroupMbid)
+        assertEquals("55555555-5555-4555-8555-555555555555", rows.single().releaseMbid)
         assertEquals("Featured collection", rows.single().title)
         assertEquals("Other artist", rows.single().artistCredit)
     }
