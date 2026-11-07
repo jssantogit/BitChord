@@ -19,6 +19,7 @@ class CanonicalArtistPublicTopRowsTest {
     private val otherArtist = "b7ffd2af-418f-4be2-bdd1-22f8b48613db"
     private val first = "13dd61c7-ce73-4e97-9f0c-9f0e53144411"
     private val second = "22ad712e-ce73-9f0c-4e97-9f0e53144411"
+    private val officialRelease = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 
     @Test fun artistPublicRankIsFreshOnlyWithinSameArtistAndSixHourWindow() {
         val row = com.music.bitchord.ui.screens.CanonicalCatalogSearchRow(
@@ -52,6 +53,7 @@ class CanonicalArtistPublicTopRowsTest {
         val metadata = mapOf(
             first to RecordingMetadataEnrichment(
                 musicBrainzId = first, title = "Closer", artistDisplay = "Nine Inch Nails",
+                officialAudioReleaseMbid = officialRelease,
                 artistCredits = listOf(
                     MusicBrainzArtistCredit(artist, "Nine Inch Nails"),
                     MusicBrainzArtistCredit(otherArtist, "Guest"),
@@ -59,6 +61,7 @@ class CanonicalArtistPublicTopRowsTest {
             ),
             second to RecordingMetadataEnrichment(
                 musicBrainzId = second, title = "Other artist track", artistDisplay = "Nine Inch Nails",
+                officialAudioReleaseMbid = officialRelease,
                 artistCredits = listOf(MusicBrainzArtistCredit(otherArtist, "Nine Inch Nails")),
             ),
         )
@@ -120,7 +123,7 @@ class CanonicalArtistPublicTopRowsTest {
         val verified = RecordingMetadataEnrichment(
             musicBrainzId = first,
             title = "Verified track",
-            artistDisplay = "Artist",
+            artistDisplay = "Artist", officialAudioReleaseMbid = officialRelease,
             artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
         )
         val rows = canonicalVerifiedArtistTopRows(
@@ -130,6 +133,33 @@ class CanonicalArtistPublicTopRowsTest {
         )
         assertEquals(artwork, rows.single().artworkUri)
         assertFalse(rows.single().hasCatalogedAsset)
+    }
+
+
+    @Test fun chartCannotDisplayUnknownEditionOrLiveVersionEvenWithRealListenerCounts() {
+        val ranked = listOf(
+            ListenBrainzArtistTopRecording(first, 400, 24),
+            ListenBrainzArtistTopRecording(second, 300, 20),
+        )
+        val notOfficial = RecordingMetadataEnrichment(
+            musicBrainzId = first,
+            title = "Official title, but no edition evidence",
+            artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
+        )
+        val live = RecordingMetadataEnrichment(
+            musicBrainzId = second,
+            title = "Burning Up (FIRE) - Live",
+            officialAudioReleaseMbid = officialRelease,
+            artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
+        )
+        assertTrue(canonicalVerifiedArtistTopRows(
+            artist, ranked, mapOf(first to notOfficial, second to live),
+        ).isEmpty())
+        assertEquals(listOf(first), canonicalVerifiedArtistTopRows(
+            artist, ranked, mapOf(first to notOfficial.copy(
+                officialAudioReleaseMbid = officialRelease,
+            ), second to live),
+        ).map { it.musicBrainzId })
     }
 
 }
