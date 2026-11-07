@@ -38,7 +38,12 @@ internal fun selectCanonicalProviderFacts(
             (fact.evidence.provider != CatalogExternalProvider.DISCOGS ||
                 (fact.attributionText == "Data provided by Discogs." &&
                     fact.attributionUrl ==
-                    "https://www.discogs.com/release/" + fact.evidence.externalId)) &&
+                    "https://www.discogs.com/release/" + fact.evidence.externalId &&
+                    // No external caller may make Discogs API facts permanently fresh.
+                    fact.expiresAtEpochMs?.let { expiry ->
+                        expiry > fact.recordedAtEpochMs &&
+                            expiry - fact.recordedAtEpochMs <= 5L * 60L * 60L * 1000L
+                    } == true)) &&
             when (fact.field) {
                 CanonicalEnrichmentField.ARTIST_BIO ->
                     fact.evidence.targetKind == CatalogTargetKind.ARTIST &&
