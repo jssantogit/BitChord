@@ -83,7 +83,58 @@ internal fun nativeAlbumMetadataFooterHasContent(
     editorial: NativeAlbumEditorialFooterData?,
 ): Boolean =
     metadata.date != null || metadata.summary != null ||
-        metadata.genre != null || editorial != null
+        metadata.genre != null || editorial != null || metadata.showAlbumAbout
+
+/**
+ * The MusicBrainz/Library overview remains useful when a Discogs URL
+ * relationship is absent. A missing link is not a network failure, and it is
+ * never proof that the album is missing from the Discogs database.
+ */
+internal data class NativeAlbumAboutOverview(
+    val title: String,
+    val facts: List<String>,
+    val status: String?,
+)
+
+internal fun nativeAlbumAboutOverview(
+    metadata: CanonicalAlbumFooterMetadata,
+    editorial: NativeAlbumEditorialFooterData?,
+    evidence: DiscogsEditionEnrichment?,
+): NativeAlbumAboutOverview? {
+    if (!metadata.showAlbumAbout) return null
+    val facts = buildList {
+        metadata.date?.takeIf(String::isNotBlank)?.let { add("Lançamento · $it") }
+        metadata.summary?.takeIf(String::isNotBlank)?.let { add(it) }
+        metadata.genre?.takeIf(String::isNotBlank)?.let { add("Gênero · $it") }
+        metadata.editionFacts.filter(String::isNotBlank).take(10).forEach {
+            add(it.take(320))
+        }
+        if (metadata.hasMusicBrainzEdition && metadata.editionFacts.isNotEmpty()) {
+            add("Fonte dos detalhes da edição · MusicBrainz")
+        }
+    }.distinct().take(14)
+    val status = when (evidence) {
+        is DiscogsEditionEnrichment.Verified ->
+            if (editorial != null) null else
+                "Discogs · não há informações complementares válidas para exibir."
+        DiscogsEditionEnrichment.NoLink ->
+            "Discogs · sem vínculo Discogs confirmado para esta edição no MusicBrainz."
+        DiscogsEditionEnrichment.Ambiguous ->
+            "Discogs · há mais de um vínculo; esta edição não foi confirmada."
+        DiscogsEditionEnrichment.Candidate ->
+            "Discogs · vínculo encontrado, mas os dados ainda não confirmam esta edição."
+        DiscogsEditionEnrichment.Conflict ->
+            "Discogs · os dados publicados divergem desta edição; nada foi incorporado."
+        DiscogsEditionEnrichment.Unavailable ->
+            "Discogs · serviço temporariamente indisponível; os dados do álbum continuam válidos."
+        DiscogsEditionEnrichment.Invalid ->
+            "Discogs · vínculo inválido, sem dados adicionais aplicados."
+        DiscogsEditionEnrichment.Disabled ->
+            "Discogs · provedor desativado."
+        null -> "Ainda não há informações complementares verificadas no Discogs para esta edição."
+    }
+    return NativeAlbumAboutOverview("Sobre esta edição", facts, status)
+}
 
 /**
  * The parent footer must observe the same expiration as the editorial child.
@@ -116,6 +167,7 @@ internal fun rememberNativeAlbumEditorialFooter(
 internal fun NativeAlbumEditorialFooter(
     footer: NativeAlbumEditorialFooterData?,
     palette: ArtworkPalette,
+    showTitle: Boolean = true,
 ) {
     if (footer == null) return
     var expanded by remember(footer.attributionUrl, footer.expiresAtMillis) {
@@ -128,11 +180,13 @@ internal fun NativeAlbumEditorialFooter(
         verticalArrangement = Arrangement.spacedBy(4.dp),
         modifier = Modifier.testTag("native-album-editorial-footer"),
     ) {
-        Text(
-            text = "Sobre esta edição",
-            color = palette.onBackground,
-            style = MaterialTheme.typography.titleSmall,
-        )
+        if (showTitle) {
+            Text(
+                text = "Sobre esta edição",
+                color = palette.onBackground,
+                style = MaterialTheme.typography.titleSmall,
+            )
+        }
         footer.lines.forEach { line ->
             Text(
                 text = line,

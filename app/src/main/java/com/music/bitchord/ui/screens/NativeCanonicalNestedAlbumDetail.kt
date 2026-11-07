@@ -60,7 +60,7 @@ internal fun NativeCanonicalNestedAlbumDetail(
     val albumQuality = canonicalAlbumSourceQuality(albumRunningOrder, selectedSourceKey)
     val albumFooter = canonicalAlbumFooterMetadata(
         evidence?.firstReleaseDate, albumRunningOrder,
-    ).copy(editorialEvidence = editorialEvidence)
+    ).copy(editorialEvidence = editorialEvidence, showAlbumAbout = true)
     val releasePalette = rememberArtworkPalette(
         imageUrl = canonicalNativeReleasePaletteUri(
             artworkTrack?.artworkUri, release.artworkUri,

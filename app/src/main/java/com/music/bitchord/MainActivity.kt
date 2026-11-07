@@ -3598,6 +3598,10 @@ private fun BitChordApp(
                             ) canonicalEditionPage.rows else emptyList(),
                             selectedReleaseMbid = canonicalEditionPage?.selectedReleaseMbid,
                             selectedReleaseGroupMbid = canonicalEditionPage?.selectedReleaseGroupMbid,
+                            selectedEditionFacts = if (
+                                displayedEditionMbid != null && canonicalEditionPage != null &&
+                                displayedEditionMbid == canonicalEditionPage.selectedReleaseMbid
+                            ) canonicalEditionPage.selectedEditionFacts else emptyList(),
                             onCanonicalTrackPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },

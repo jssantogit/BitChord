@@ -185,6 +185,10 @@ internal data class CanonicalAlbumFooterMetadata(
     val summary: String?,
     val genre: String? = null,
     val editorialEvidence: com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment? = null,
+    /** Always show honest, source-scoped album facts instead of a silent gap. */
+    val showAlbumAbout: Boolean = false,
+    val hasMusicBrainzEdition: Boolean = false,
+    val editionFacts: List<String> = emptyList(),
 )
 
 /** Only metadata backed by the release/track catalog is shown. */
@@ -1115,7 +1119,10 @@ internal fun CanonicalRemoteLibraryScreen(
                     },
                     albumFooter = canonicalAlbumFooterMetadata(
                         albumHeaderEvidence?.releaseDate, scopedDetailTracks,
-                    ).copy(editorialEvidence = libraryEditorialEvidence),
+                    ).copy(
+                        editorialEvidence = libraryEditorialEvidence,
+                        showAlbumAbout = true,
+                    ),
                     albumTrackNumbers = canonicalAlbumDetailTrackNumbers(
                         scopedDetailTracks,
                     ),
@@ -2512,25 +2519,41 @@ internal fun NativeAlbumMetadataFooter(
 ) {
     val editorialFooter = rememberNativeAlbumEditorialFooter(metadata.editorialEvidence)
     if (!nativeAlbumMetadataFooterHasContent(metadata, editorialFooter)) return
+    val about = nativeAlbumAboutOverview(metadata, editorialFooter, metadata.editorialEvidence)
     Column(
         modifier = Modifier.fillMaxWidth()
             .padding(horizontal = PAGE_GUTTER, vertical = 26.dp)
             .testTag("native-album-metadata-footer"),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        metadata.date?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium,
-                color = palette.onBackgroundVariant)
+        if (about != null) {
+            Text(about.title, style = MaterialTheme.typography.titleSmall,
+                color = palette.onBackground)
+            about.facts.forEach { line ->
+                Text(line, style = MaterialTheme.typography.bodySmall,
+                    color = palette.onBackgroundVariant)
+            }
+            about.status?.let { status ->
+                Text(status, style = MaterialTheme.typography.bodySmall,
+                    color = palette.onBackgroundVariant)
+            }
+        } else {
+            metadata.date?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium,
+                    color = palette.onBackgroundVariant)
+            }
+            metadata.summary?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium,
+                    color = palette.onBackgroundVariant)
+            }
+            metadata.genre?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium,
+                    color = palette.onBackgroundVariant)
+            }
         }
-        metadata.summary?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium,
-                color = palette.onBackgroundVariant)
-        }
-        metadata.genre?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium,
-                color = palette.onBackgroundVariant)
-        }
-        NativeAlbumEditorialFooter(footer = editorialFooter, palette = palette)
+        NativeAlbumEditorialFooter(
+            footer = editorialFooter, palette = palette, showTitle = about == null,
+        )
     }
 }
 

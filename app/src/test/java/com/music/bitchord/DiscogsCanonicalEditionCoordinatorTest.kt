@@ -82,7 +82,7 @@ class DiscogsCanonicalEditionCoordinatorTest {
             override suspend fun get(
                 path: String, parameters: Map<String, String>, userAgent: String,
             ): String = when (parameters["inc"]) {
-                "recordings+artist-credits+release-groups" ->
+                "recordings+artist-credits+release-groups+labels" ->
                     musicBrainzJson().replace(
                         "\"artist-credit\":[{\"name\":\"ILLIT\"}]",
                         "\"artist-credit\":[{\"name\":\"ILLIT\"}, {}]",
@@ -119,7 +119,7 @@ class DiscogsCanonicalEditionCoordinatorTest {
         val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
             override suspend fun get(path: String, parameters: Map<String, String>,
                 userAgent: String): String = when (parameters["inc"]) {
-                "recordings+artist-credits+release-groups" -> {
+                "recordings+artist-credits+release-groups+labels" -> {
                     graphCalls++
                     musicBrainzJson()
                 }
@@ -179,7 +179,7 @@ class DiscogsCanonicalEditionCoordinatorTest {
                 userAgent: String): String {
                 calls++
                 return when (parameters["inc"]) {
-                    "recordings+artist-credits+release-groups" -> musicBrainzJson()
+                    "recordings+artist-credits+release-groups+labels" -> musicBrainzJson()
                     "url-rels" -> """{"id":"$mbid","relations":[{
                         "type":"discogs",
                         "type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",

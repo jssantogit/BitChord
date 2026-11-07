@@ -338,6 +338,7 @@ fun DetailScreen(
     canonicalTracks: List<CanonicalCatalogSearchRow> = emptyList(),
     selectedReleaseMbid: String? = null,
     selectedReleaseGroupMbid: String? = null,
+    selectedEditionFacts: List<String> = emptyList(),
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
@@ -963,7 +964,11 @@ fun DetailScreen(
                     }
                     NativeAlbumMetadataFooter(
                         metadata = CanonicalAlbumFooterMetadata(
-                            date = year, summary = summary, editorialEvidence = editorialEvidence,
+                            date = year, summary = summary,
+                            editionFacts = selectedEditionFacts,
+                            hasMusicBrainzEdition = discogsEditionMbid != null,
+                            showAlbumAbout = true,
+                            editorialEvidence = editorialEvidence,
                         ),
                         palette = palette,
                     )

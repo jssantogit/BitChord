@@ -161,6 +161,8 @@ data class CanonicalCatalogDetailPage(
     val totalCount: Int? = null,
     val selectedReleaseMbid: String? = null,
     val selectedReleaseGroupMbid: String? = null,
+    /** Real edition-specific MusicBrainz facts for the native album about section. */
+    val selectedEditionFacts: List<String> = emptyList(),
 )
 
 /** A verified public playlist row is metadata, not a playable Song. */

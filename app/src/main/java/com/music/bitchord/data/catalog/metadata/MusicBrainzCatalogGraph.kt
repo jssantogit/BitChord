@@ -48,6 +48,10 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val barcode: String? = null,
     /** Structured MusicBrainz credited names, never inferred by splitting joinphrases. */
     val artistCreditNames: List<String> = emptyList(),
+    /** Verified MusicBrainz release label-info, never inferred by title. */
+    val editionLabels: List<String> = emptyList(),
+    /** Release-specific medium format names from MusicBrainz. */
+    val editionFormats: List<String> = emptyList(),
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -161,7 +165,7 @@ internal class MusicBrainzCatalogGraph(
             ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
         val raw = try {
             client.get("release/$normalized", mapOf(
-                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups",
+                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups+labels",
             ))
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -242,6 +246,19 @@ internal class MusicBrainzCatalogGraph(
                 status = data.string("status"),
                 barcode = data.string("barcode"),
                 artistCreditNames = data.artistCreditNames(),
+                editionLabels = data.array("label-info").take(12).mapNotNull { entry ->
+                    val info = entry as? JsonObject ?: return@mapNotNull null
+                    val label = (info["label"] as? JsonObject)?.string("name")
+                        ?.trim()?.takeIf { it.isNotEmpty() && it.length <= 180 }
+                        ?: return@mapNotNull null
+                    val catalogNumber = info.string("catalog-number")
+                        ?.trim()?.takeIf { it.isNotEmpty() && it.length <= 80 }
+                    if (catalogNumber != null) "$label ($catalogNumber)" else label
+                }.distinct().take(6),
+                editionFormats = media.mapNotNull { entry ->
+                    (entry as? JsonObject)?.string("format")?.trim()
+                        ?.takeIf { it.isNotEmpty() && it.length <= 80 }
+                }.distinct().take(4),
             ))
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
