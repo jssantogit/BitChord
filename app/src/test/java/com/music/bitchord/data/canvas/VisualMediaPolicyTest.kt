@@ -44,6 +44,15 @@ class VisualMediaPolicyTest {
         assertEquals(64, visualMediaCacheKey(VisualSurface.ALBUM, "Say It").length)
     }
 
+    @Test fun visualCacheLimitsAreConstrainedAndProviderIndependent() {
+        assertEquals(256L * 1024 * 1024, normalizedVisualStillCacheBytes(0))
+        assertEquals(1024L * 1024 * 1024, normalizedVisualStillCacheBytes(Long.MAX_VALUE))
+        assertEquals(64L * 1024 * 1024, normalizedVisualStillCacheBytes(64L * 1024 * 1024))
+        assertEquals(128L * 1024 * 1024, normalizedVisualMotionCacheBytes(-1L))
+        assertEquals(2L * 1024 * 1024 * 1024,
+            normalizedVisualMotionCacheBytes(Long.MAX_VALUE))
+    }
+
     @Test fun mediaUrlValidationRejectsLocalAndInsecureSourcesWithoutInvokingNetwork() {
         assertTrue(isSafeVisualMediaUrl("https://is1-ssl.mzstatic.com/image/thumb/image.jpg"))
         assertFalse(isSafeVisualMediaUrl("file:///data/user/0/private"))
