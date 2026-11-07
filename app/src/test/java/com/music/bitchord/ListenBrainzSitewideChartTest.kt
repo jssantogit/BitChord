@@ -62,4 +62,22 @@ class ListenBrainzSitewideChartTest {
         assertTrue(result is ListenBrainzSitewideParseResult.Success)
         assertTrue((result as ListenBrainzSitewideParseResult.Success).recordings.isEmpty())
     }
+
+    @Test fun allTimeSitewideRetainsVerifiedArtistIdsWithoutGuessingMissingCredit() {
+        val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
+        val raw = """{"payload":{"range":"all_time","offset":0,
+          "last_updated":1794000000,"recordings":[
+          {"recording_mbid":"$first","listen_count":4200,"artist_mbids":["$artist"]},
+          {"recording_mbid":"$second","listen_count":2600},
+          {"recording_mbid":"11111111-1111-4111-8111-111111111111","listen_count":300,
+           "artist_mbids":["invalid", "$artist"]}]}}"""
+        val parsed = parseListenBrainzSitewideRecordings(
+            raw, ListenBrainzSitewideRange.ALL_TIME,
+        ) as ListenBrainzSitewideParseResult.Success
+        assertEquals("all_time", parsed.range)
+        assertEquals(listOf(artist), parsed.recordings.first().artistMbids)
+        assertTrue(parsed.recordings[1].artistMbids.isEmpty())
+        assertEquals(listOf(artist), parsed.recordings[2].artistMbids)
+    }
+
 }
