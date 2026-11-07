@@ -1409,6 +1409,12 @@
     <string name="visual_offline_artist_stills">Photos des artistes</string>
     <string name="visual_offline_album_stills">Pochettes des albums</string>
     <string name="visual_offline_player_stills">Pochettes du lecteur</string>
+    <string name="visual_offline_images_group">Photos et pochettes enregistrées</string>
+    <string name="visual_offline_motion_group">Animations enregistrées</string>
+    <string name="visual_offline_still_limit">Limite des images enregistrées</string>
+    <string name="visual_offline_still_limit_subtitle">Espace maximal pour les photos d’artistes et les pochettes des albums et du lecteur</string>
+    <string name="visual_offline_motion_limit">Limite des animations enregistrées</string>
+    <string name="visual_offline_motion_limit_subtitle">Limite les nouveaux clips sans supprimer ceux déjà enregistrés ; effacez les visuels pour libérer de la place</string>
     <string name="visual_offline_clear_title">Effacer les visuels enregistrés</string>
     <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
     <string name="visual_offline_confirm_title">Effacer les visuels hors ligne ?</string>
