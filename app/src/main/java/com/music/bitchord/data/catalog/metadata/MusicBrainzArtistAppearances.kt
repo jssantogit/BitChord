@@ -98,18 +98,57 @@ internal fun parseMusicBrainzTrackArtistAppearances(
 
 internal class MusicBrainzArtistAppearancesClient(
     private val client: MusicBrainzClient = MusicBrainzClient(),
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val fetch: (suspend (String) -> String)? = null,
 ) {
-    /** One bounded official browse page. Shared MusicBrainz rate limit applies. */
+    private data class Cached(val atMs: Long, val appearances: List<MusicBrainzArtistAppearance>,
+        val healthy: Boolean)
+    private val mutex = kotlinx.coroutines.sync.Mutex()
+    private val cache = linkedMapOf<String, Cached>()
+
+    /**
+     * One bounded official browse page, shared rate limit and per-artist
+     * in-process cache. LazyColumn may dispose/recreate the shelf on scrolling:
+     * neither a positive match nor a transient offline failure should trigger
+     * another MusicBrainz request on every reappearance.
+     */
     suspend fun browse(artistMbid: String): List<MusicBrainzArtistAppearance> {
         val id = artistMbid.lowercase(Locale.ROOT)
         if (!ARTIST_APPEARANCE_MBID.matches(id)) return emptyList()
-        val response = client.get("release", mapOf(
-            "track_artist" to id,
-            "inc" to "release-groups+artist-credits+recordings",
-            "limit" to "25",
-            "offset" to "0",
-            "fmt" to "json",
-        ))
-        return parseMusicBrainzTrackArtistAppearances(response, id)
+        mutex.lock()
+        try {
+            val now = nowMillis()
+            val prior = cache[id]
+            if (prior != null && now >= prior.atMs &&
+                now - prior.atMs < when {
+                    !prior.healthy -> 90_000L
+                    prior.appearances.isEmpty() -> 10L * 60L * 1_000L
+                    else -> 6L * 60L * 60L * 1_000L
+                }
+            ) return prior.appearances
+            val response = try {
+                (fetch ?: { mbid: String ->
+                    client.get("release", mapOf(
+                        "track_artist" to mbid,
+                        "inc" to "release-groups+artist-credits+recordings",
+                        "limit" to "25",
+                        "offset" to "0",
+                        "fmt" to "json",
+                    ))
+                })(id)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (cache.size >= 64) cache.remove(cache.keys.first())
+                cache[id] = Cached(nowMillis(), emptyList(), healthy = false)
+                return emptyList()
+            }
+            val found = parseMusicBrainzTrackArtistAppearances(response, id)
+            if (cache.size >= 64) cache.remove(cache.keys.first())
+            cache[id] = Cached(nowMillis(), found, healthy = true)
+            return found
+        } finally {
+            mutex.unlock()
+        }
     }
 }
