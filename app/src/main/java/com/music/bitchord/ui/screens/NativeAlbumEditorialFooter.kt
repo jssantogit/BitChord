@@ -121,15 +121,24 @@ internal fun nativeEditionDisplayFormat(format: String): String = when (format.t
 internal fun nativeEditionDisplayCountry(raw: String): String? {
     val code = raw.trim().uppercase(Locale.ROOT)
     return when (code) {
-        "XW" -> "Mundial"
-        "XE" -> "Europa"
-        "KR" -> "Coreia do Sul"
-        "BR" -> "Brasil"
-        else -> if (code.matches(Regex("[A-Z]{2}"))) {
-            Locale("", code).getDisplayCountry(Locale.forLanguageTag("pt-BR"))
-                .takeIf { it.isNotBlank() && !it.equals(code, ignoreCase = true) }
-                ?.replaceFirstChar { it.titlecase(Locale.forLanguageTag("pt-BR")) }
-        } else raw.trim().takeIf(String::isNotBlank)?.take(80)
+        "XW", "WORLDWIDE" -> "Mundial"
+        "XE", "EUROPE" -> "Europa"
+        "KR", "SOUTH KOREA" -> "Coreia do Sul"
+        "BR", "BRAZIL" -> "Brasil"
+        else -> {
+            val countryCode = if (code.matches(Regex("[A-Z]{2}"))) code else {
+                Locale.getISOCountries().firstOrNull { iso ->
+                    Locale("", iso).getDisplayCountry(Locale.ENGLISH)
+                        .equals(raw.trim(), ignoreCase = true)
+                }
+            }
+            countryCode?.let { iso ->
+                Locale("", iso).getDisplayCountry(Locale.forLanguageTag("pt-BR"))
+                    .takeIf { it.isNotBlank() && !it.equals(iso, ignoreCase = true) }
+                    ?.replaceFirstChar { it.titlecase(Locale.forLanguageTag("pt-BR")) }
+            } ?: raw.trim().takeIf { it.isNotBlank() && !it.matches(Regex("[A-Z]{2}")) }
+                ?.take(80)
+        }
     }
 }
 

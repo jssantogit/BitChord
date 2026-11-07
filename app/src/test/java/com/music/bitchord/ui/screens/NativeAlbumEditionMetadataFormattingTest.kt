@@ -13,6 +13,9 @@ class NativeAlbumEditionMetadataFormattingTest {
         assertEquals("País: Coreia do Sul", nativeAlbumEditionDisplayFact("País da edição · KR"))
         assertEquals("País: Brasil", nativeAlbumEditionDisplayFact("País da edição · BR"))
         assertEquals("País: Europa", nativeAlbumEditionDisplayFact("País da edição · XE"))
+        assertEquals("País: Coreia do Sul", nativeAlbumEditionDisplayFact("País da edição · South Korea"))
+        assertEquals("País: Estados Unidos", nativeAlbumEditionDisplayFact("País da edição · United States"))
+        assertEquals("País: Mundial", nativeAlbumEditionDisplayFact("País da edição · Worldwide"))
         assertNull(nativeAlbumEditionDisplayFact("País da edição · ZZ"))
     }
 
