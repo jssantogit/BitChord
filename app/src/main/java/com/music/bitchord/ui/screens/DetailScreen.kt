@@ -689,7 +689,8 @@ fun DetailScreen(
 
             val description = page.description
 
-            if (isArtist && (songs.isNotEmpty() || publicTopRows.isNotEmpty())) {
+            if (isArtist && (songs.isNotEmpty() || publicTopRows.isNotEmpty() ||
+                catalogRatingTarget?.entityType == "ARTIST")) {
                 item(key = "actions") {
                     // The native artist action row does not disappear merely
                     // because MusicBrainz has rankings but no MediaAsset.
@@ -698,7 +699,8 @@ fun DetailScreen(
                         onShuffle = { if (songs.isNotEmpty()) onShuffle(songs) },
                         canPlay = songs.isNotEmpty(),
                         canShuffle = songs.isNotEmpty(),
-                        isSubscribed = page.subscription?.takeIf { onToggleSubscription != null }?.subscribed,
+                        isSubscribed = if (catalogRatingTarget?.entityType == "ARTIST") null else
+                            page.subscription?.takeIf { onToggleSubscription != null }?.subscribed,
                         onToggleSubscription = onToggleSubscription,
                         onRateArtist = if (catalogRatingTarget?.entityType == "ARTIST")
                             ({ editingCatalogRating = true }) else null,
