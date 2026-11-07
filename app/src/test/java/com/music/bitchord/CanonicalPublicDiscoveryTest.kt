@@ -524,4 +524,19 @@ class CanonicalPublicDiscoveryTest {
         assertEquals(listOf("Rock Anthems 2026"),
             canonicalPublicPlaylistShelf("Playlists", lists)!!.items.map { it.title })
     }
+
+    @Test fun recommendationShelfCanDisplayTwentyDistinctDescriptivePublicPlaylists() {
+        val playlists = (1..21).map { n ->
+            ListenBrainzPublicPlaylist(
+                n.toString(16).padStart(8, '0') + "-1111-4111-8111-111111111111",
+                "Playlist collection $n",
+                "Curator",
+                null,
+            )
+        }
+        val shelf = canonicalPublicPlaylistShelf("Playlists", playlists)!!
+        assertEquals(20, shelf.items.size)
+        assertEquals(20, shelf.items.map { it.browseId }.distinct().size)
+    }
+
 }
