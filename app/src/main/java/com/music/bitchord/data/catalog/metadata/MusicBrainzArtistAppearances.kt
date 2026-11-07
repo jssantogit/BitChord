@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import java.util.Locale
 
 /**
@@ -122,6 +123,8 @@ internal class MusicBrainzArtistAppearancesClient(
     private val client: MusicBrainzClient = MusicBrainzClient(),
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val fetch: (suspend (String) -> String)? = null,
+    /** Injectable offset-aware fetch for paging a crowded artist graph. */
+    private val pagedFetch: (suspend (String, Int) -> String)? = null,
 ) {
     private data class Cached(val atMs: Long, val appearances: List<MusicBrainzArtistAppearance>,
         val healthy: Boolean)
@@ -148,26 +151,56 @@ internal class MusicBrainzArtistAppearancesClient(
                     else -> 6L * 60L * 60L * 1_000L
                 }
             ) return prior.appearances
-            val response = try {
-                (fetch ?: { mbid: String ->
-                    client.get("release", mapOf(
-                        "track_artist" to mbid,
-                        "inc" to "release-groups+artist-credits+recordings",
-                        "limit" to "25",
-                        "offset" to "0",
-                        "fmt" to "json",
-                    ))
-                })(id)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                if (cache.size >= 64) cache.remove(cache.keys.first())
-                cache[id] = Cached(nowMillis(), emptyList(), healthy = false)
-                return emptyList()
+            // One page can be filled entirely by alternate editions of a
+            // popular act. Browse up to three pages, only when a page is
+            // complete and no verified guest release has been found yet.
+            // Do not make title-based guesses or sweep the whole catalog.
+            val foundByGroup = linkedMapOf<String, MusicBrainzArtistAppearance>()
+            var offset = 0
+            var healthy = true
+            repeat(3) {
+                val response = try {
+                    when {
+                        pagedFetch != null -> pagedFetch.invoke(id, offset)
+                        fetch != null -> fetch.invoke(id)
+                        else -> client.get("release", mapOf(
+                            "track_artist" to id,
+                            "inc" to "release-groups+artist-credits+recordings",
+                            "limit" to "25",
+                            "offset" to offset.toString(),
+                            "fmt" to "json",
+                        ))
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    healthy = false
+                    return@repeat
+                }
+                val root = runCatching {
+                    Json.parseToJsonElement(response) as? JsonObject
+                }.getOrNull()
+                val list = root?.get("releases") as? JsonArray
+                if (list == null || response.length > 500_000) {
+                    healthy = false
+                    return@repeat
+                }
+                parseMusicBrainzTrackArtistAppearances(response, id)
+                    .forEach { foundByGroup.putIfAbsent(it.releaseGroupMbid, it) }
+                val count = list.size
+                val total = (root["release-count"] as? JsonPrimitive)?.intOrNull
+                offset += count
+                // Captures use the old simple fetch callback and represent one
+                // page only. More pages require a real offset-aware transport.
+                if (foundByGroup.isNotEmpty() || count == 0 ||
+                    (total != null && offset >= total) ||
+                    (total == null && count < 25) ||
+                    (fetch != null && pagedFetch == null)
+                ) return@repeat
             }
-            val found = parseMusicBrainzTrackArtistAppearances(response, id)
+            val found = foundByGroup.values.take(12).toList()
             if (cache.size >= 64) cache.remove(cache.keys.first())
-            cache[id] = Cached(nowMillis(), found, healthy = true)
+            cache[id] = Cached(nowMillis(), found, healthy = healthy)
             return found
         } finally {
             mutex.unlock()
