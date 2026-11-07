@@ -133,6 +133,7 @@ class DiscogsCanonicalEditionCoordinatorTest {
         coordinator.clear()
         assertTrue(coordinator.observeRelease(mbid) is DiscogsEditionEnrichment.Verified)
         assertEquals(3, graphCalls)
+        assertEquals(2, discogsCalls) // rollback clears ONLY Discogs' in-memory evidence
     }
 
     @Test fun completeEditionCorroboratesDiscogsOnlyUsingRealMusicBrainzTracklist() = runBlocking {
