@@ -19,6 +19,9 @@ internal data class CanonicalProviderFact(
     val value: String,
     val recordedAtEpochMs: Long,
     val expiresAtEpochMs: Long? = null,
+    /** Immutable, source-specific attribution. Discogs facts require BOTH fields. */
+    val attributionText: String? = null,
+    val attributionUrl: String? = null,
 )
 
 internal fun selectCanonicalProviderFacts(
@@ -32,6 +35,10 @@ internal fun selectCanonicalProviderFacts(
             fact.value.isNotBlank() &&
             fact.recordedAtEpochMs in 0..nowEpochMs &&
             (fact.expiresAtEpochMs == null || fact.expiresAtEpochMs > nowEpochMs) &&
+            (fact.evidence.provider != CatalogExternalProvider.DISCOGS ||
+                (fact.attributionText == "Data provided by Discogs." &&
+                    fact.attributionUrl ==
+                    "https://www.discogs.com/release/" + fact.evidence.externalId)) &&
             when (fact.field) {
                 CanonicalEnrichmentField.ARTIST_BIO ->
                     fact.evidence.targetKind == CatalogTargetKind.ARTIST &&
