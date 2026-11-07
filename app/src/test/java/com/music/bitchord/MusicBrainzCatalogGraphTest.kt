@@ -235,6 +235,30 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(false, detail.hasCompleteTracklist)
     }
 
+    @Test fun fullMusicBrainzReleaseWithoutTopLevelMediaCountIsComplete() = runBlocking {
+        // Real MusicBrainz release lookup provides the list of media and the
+        // per-medium track-count, but can omit a top-level "media-count".
+        // A redundant missing summary field must not block all Discogs data.
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"SUPER REAL ME",
+                  "status":"Official","artist-credit":[{"name":"ILLIT"}],
+                  "media":[{"position":1,"track-count":2,"tracks":[
+                    {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6","title":"My World",
+                     "recording":{"id":"$original"}},
+                    {"id":"7d950448-969b-4d73-a00f-fec131238b5d","title":"Magnetic",
+                     "recording":{"id":"$sped"}}
+                  ]}]}"""
+            }))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(2, detail.tracks.size)
+        assertTrue("Per-medium count proves complete media even without media-count",
+            detail.hasCompleteTracklist)
+    }
+
     @Test fun exactReleaseGraphProvidesCompleteEvidenceForEditionMatching() = runBlocking {
         val client = MusicBrainzClient(transport = object : MusicBrainzTransport {
             override suspend fun get(
