@@ -1393,4 +1393,25 @@
     <string name="pause_resume_fade">Fondu à la pause et à la reprise</string>
     <string name="pause_resume_fade_subtitle">Diminue progressivement le volume à la pause et le rétablit à la reprise</string>
     <string name="home_global_discovery">Découvertes du monde</string>
+
+    <string name="visual_offline_title">Visuels hors ligne</string>
+    <string name="visual_offline_stream">Utiliser le cache temporaire sans conserver les vidéos</string>
+    <string name="visual_offline_wifi">Enregistrer les animations pour un usage hors ligne, via Wi-Fi seulement</string>
+    <string name="visual_offline_still">Remplacer les animations par les images enregistrées</string>
+    <string name="visual_offline_temporary">Temporaire</string>
+    <string name="visual_offline_save_wifi">Enregistrer en Wi-Fi</string>
+    <string name="visual_offline_only_stills">Images fixes</string>
+    <string name="visual_offline_artist_motion">Animations des artistes</string>
+    <string name="visual_offline_album_motion">Animations des albums</string>
+    <string name="visual_offline_player_motion">Animations du lecteur</string>
+    <string name="visual_offline_save_stills">Conserver les images fixes</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">Photos des artistes</string>
+    <string name="visual_offline_album_stills">Pochettes des albums</string>
+    <string name="visual_offline_player_stills">Pochettes du lecteur</string>
+    <string name="visual_offline_clear_title">Effacer les visuels enregistrés</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">Effacer les visuels hors ligne ?</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">Visuels hors ligne effacés</string>
 </resources>
