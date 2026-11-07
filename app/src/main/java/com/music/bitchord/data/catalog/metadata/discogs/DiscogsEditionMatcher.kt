@@ -34,7 +34,7 @@ internal object DiscogsEditionMatcher {
         if (!mbid.matches(canonical.musicBrainzReleaseId) ||
             linked.kind != DiscogsKind.RELEASE ||
             record.link != linked ||
-            normalized(canonical.title) != normalized(record.title)
+            !sameEditionTitle(canonical.title, record.title, canonical.creditedArtist)
         ) return DiscogsEditionVerdict.CONFLICT
 
         val artist = canonical.creditedArtist?.takeIf(String::isNotBlank)
@@ -72,6 +72,20 @@ internal object DiscogsEditionMatcher {
         } else {
             DiscogsEditionVerdict.CANDIDATE
         }
+    }
+
+    /**
+     * Discogs' release.title commonly contains a leading "Artist - " while
+     * MusicBrainz release.title does not. Strip only a *known credited artist*
+     * prefix; creditedArtist is checked against Discogs artistNames above.
+     * This is comparison-only; it never rewrites either source title.
+     */
+    private fun sameEditionTitle(album: String, discogsTitle: String, artistCredit: String?): Boolean {
+        val title = normalized(album)
+        val observed = normalized(discogsTitle)
+        if (observed == title) return true
+        val artist = artistCredit?.takeIf(String::isNotBlank) ?: return false
+        return observed == normalized(artist) + " - " + title
     }
 
     private fun normalized(s: String): String =
