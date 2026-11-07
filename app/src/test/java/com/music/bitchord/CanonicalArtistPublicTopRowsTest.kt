@@ -16,6 +16,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import com.music.bitchord.ui.canonicalProcessArtistTopInParallel
 
 class CanonicalArtistPublicTopRowsTest {
     private val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
@@ -186,6 +191,45 @@ class CanonicalArtistPublicTopRowsTest {
         ).single().hasCatalogedAsset)
     }
 
+
+    @Test fun sitewideDuplicateUsesHighestObservedListenCountBeforeRanking() {
+        val other = "33333333-3333-4333-8333-333333333333"
+        val ranked = canonicalArtistSitewideAllTimeRanking(
+            artist, listOf(
+                ListenBrainzSitewideRecording(first, 50, listOf(artist)),
+                ListenBrainzSitewideRecording(other, 400, listOf(artist)),
+                ListenBrainzSitewideRecording(first, 900, listOf(artist)),
+            ),
+        )
+        assertEquals(listOf(first, other), ranked.map { it.recordingMbid })
+        assertEquals(listOf(900L, 400L), ranked.map { it.listens })
+    }
+
+    @Test fun slowCoverFetchDoesNotDelayVerificationOfNextPopularRecording() = runBlocking {
+        val firstCoverMayFinish = CompletableDeferred<Unit>()
+        val secondVerified = CompletableDeferred<Unit>()
+        val seenCovers = mutableListOf<String>()
+        val work = async {
+            canonicalProcessArtistTopInParallel(
+                candidates = listOf("first", "second", "unverified"),
+                verifyAndPublish = { id ->
+                    if (id == "second") secondVerified.complete(Unit)
+                    id != "unverified"
+                },
+                enrichCoverAndPublish = { id ->
+                    if (id == "first") firstCoverMayFinish.await()
+                    synchronized(seenCovers) { seenCovers += id }
+                },
+            )
+        }
+        try {
+            withTimeout(3_000L) { secondVerified.await() }
+        } finally {
+            firstCoverMayFinish.complete(Unit)
+        }
+        work.await()
+        assertEquals(setOf("first", "second"), seenCovers.toSet())
+    }
 
     @Test fun sitewideAllTimeChartPrecedesArbitrarySearchSamplingAndChecksExactArtist() {
         val candidates = listOf(
