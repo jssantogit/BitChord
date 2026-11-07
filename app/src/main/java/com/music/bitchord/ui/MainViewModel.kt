@@ -1708,6 +1708,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     artworkUri = initialArtwork.takeIf {
                                         canonicalEditorialReleaseType(entry) != null
                                     },
+                                    selectedReleaseMbid = cached.musicBrainzId,
+                                    selectedReleaseGroupMbid = cached.groupMbid,
                                     rows = canonicalReleaseTracksWithArtwork(
                                         cached.tracks.map { track ->
                                             CanonicalCatalogSearchRow(
@@ -1838,6 +1840,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = initialArtwork.takeIf {
                                 canonicalEditorialReleaseType(entry) != null
                             },
+                            selectedReleaseMbid = detail.musicBrainzId,
+                            selectedReleaseGroupMbid = detail.groupMbid,
                             rows = canonicalReleaseTracksWithArtwork(detail.tracks.map { track ->
                                 CanonicalCatalogSearchRow(
                                     musicBrainzId = track.recordingMbid,
@@ -1875,6 +1879,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = entry.artworkUri,
                             summary = listOfNotNull(details.country, details.releaseDate)
                                 .joinToString(" · "),
+                            selectedReleaseMbid = details.musicBrainzId,
                             rows = canonicalReleaseTracksWithArtwork(details.tracks.map { track -> CanonicalCatalogSearchRow(
                                 musicBrainzId = track.recordingMbid,
                                 kind = CanonicalSearchKind.RECORDING,
@@ -1907,6 +1912,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             title = details.title,
                             summary = "Saved release · offline catalog",
                             artworkUri = entry.artworkUri,
+                            selectedReleaseMbid = details.musicBrainzId,
                             rows = canonicalReleaseTracksWithArtwork(details.tracks.map { track -> CanonicalCatalogSearchRow(
                                 musicBrainzId = track.recordingMbid,
                                 kind = CanonicalSearchKind.RECORDING,

@@ -3525,6 +3525,25 @@ private fun BitChordApp(
                                 continuationToken = latestPage?.continuation ?: page.continuation,
                             )
                         }
+                        // A canonical album can be browsed by ReleaseGroup,
+                        // while MusicBrainz supplies the actual Track rows from
+                        // one specific Release. Bind this exact selection to
+                        // the visible page: stale async detail from another
+                        // group must supply neither tracks nor Discogs metadata.
+                        val canonicalEditionPage = if (
+                            page.browseId.startsWith("catalog:RELEASE:") ||
+                            page.browseId.startsWith("catalog:RELEASE_GROUP:")
+                        ) {
+                            (viewModel.canonicalDetail.collectAsStateWithLifecycle().value
+                                as? UiState.Success)?.data
+                        } else null
+                        val displayedEditionMbid =
+                            com.music.bitchord.data.catalog.metadata.discogs
+                                .discogsOnlineAlbumEditionMbid(
+                                    page.browseId,
+                                    canonicalEditionPage?.selectedReleaseMbid,
+                                    canonicalEditionPage?.selectedReleaseGroupMbid,
+                                )
                         DetailScreen(
                             page = page,
                             currentSong = player.song,
@@ -3596,12 +3615,11 @@ private fun BitChordApp(
                             songSort = songSort,
                             folder = folder,
                             canonicalTracks = if (
-                                page.browseId.startsWith("catalog:RELEASE:") ||
-                                page.browseId.startsWith("catalog:RELEASE_GROUP:")
-                            ) {
-                                (viewModel.canonicalDetail.collectAsStateWithLifecycle().value
-                                    as? UiState.Success)?.data?.rows.orEmpty()
-                            } else emptyList(),
+                                displayedEditionMbid != null &&
+                                displayedEditionMbid == canonicalEditionPage?.selectedReleaseMbid
+                            ) canonicalEditionPage.rows else emptyList(),
+                            selectedReleaseMbid = canonicalEditionPage?.selectedReleaseMbid,
+                            selectedReleaseGroupMbid = canonicalEditionPage?.selectedReleaseGroupMbid,
                             onCanonicalTrackPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },

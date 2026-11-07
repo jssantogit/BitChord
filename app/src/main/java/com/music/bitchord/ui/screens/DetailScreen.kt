@@ -346,6 +346,10 @@ fun DetailScreen(
     folder: LocalFolder? = null,
     /** Public tracklist metadata; never manufactured as a playable Song. */
     canonicalTracks: List<CanonicalCatalogSearchRow> = emptyList(),
+    /** The actual MB Release selected to supply a ReleaseGroup's tracklist. */
+    selectedReleaseMbid: String? = null,
+    /** Independently verified MB ReleaseGroup membership of that Release. */
+    selectedReleaseGroupMbid: String? = null,
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
@@ -365,10 +369,13 @@ fun DetailScreen(
         rawSongs.withIndex().associate { (i, s) -> s.videoId to ((if (byTag) s.trackNumber else null) ?: (i + 1)) }
     }
     val isArtist = page.type == BrowseType.ARTIST
-    // Only an exact MusicBrainz Release route may receive edition-specific
-    // Discogs data. ReleaseGroups, local albums and playlists cannot qualify.
+    // Release pages have their own MBID; a ReleaseGroup may only borrow the
+    // specific edition whose verified Track list was selected by the catalog.
+    // Local releases, artists, playlists and stale group responses never qualify.
     val onlineEditionMbid = if (page.type == BrowseType.ALBUM) {
-        com.music.bitchord.data.catalog.metadata.discogs.discogsOnlineReleaseMbid(page.browseId)
+        com.music.bitchord.data.catalog.metadata.discogs.discogsOnlineAlbumEditionMbid(
+            page.browseId, selectedReleaseMbid, selectedReleaseGroupMbid,
+        )
     } else null
     val editorialEvidence = rememberDiscogsEditionForRelease(onlineEditionMbid)
     val isLocalArtist = isArtist && LocalGroups.isArtist(page.browseId)

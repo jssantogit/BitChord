@@ -25,6 +25,28 @@ internal fun discogsOnlineReleaseMbid(browseId: String): String? {
 }
 
 /**
+ * A ReleaseGroup is a work, not a Discogs edition. A chosen MusicBrainz
+ * Release may annotate it only when the native catalog explicitly supplies
+ * both the exact Release and its verified parent ReleaseGroup identities.
+ *
+ * This is a presentation routing gate, NOT a new identity resolution method:
+ * the coordinator will independently re-check Official status, complete
+ * Track graph and the exact Discogs relationship before any fields are shown.
+ */
+internal fun discogsOnlineAlbumEditionMbid(
+    browseId: String,
+    selectedReleaseMbid: String?,
+    selectedReleaseGroupMbid: String?,
+): String? {
+    discogsOnlineReleaseMbid(browseId)?.let { return it }
+    val prefix = "catalog:RELEASE_GROUP:"
+    if (!browseId.startsWith(prefix)) return null
+    val groupMbid = normalizedReleaseMbid(browseId.removePrefix(prefix)) ?: return null
+    if (normalizedReleaseMbid(selectedReleaseGroupMbid) != groupMbid) return null
+    return normalizedReleaseMbid(selectedReleaseMbid)
+}
+
+/**
  * Unified Library ReleaseEntity IDs are *not* MBIDs. Only a persisted,
  * matching MusicBrainz release-enrichment edge may resolve them.
  */

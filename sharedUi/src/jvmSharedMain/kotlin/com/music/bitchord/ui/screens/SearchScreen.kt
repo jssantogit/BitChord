@@ -159,6 +159,10 @@ data class CanonicalCatalogDetailPage(
     /** Next MusicBrainz browse offset, which must use returned row count. */
     val nextOffset: Int? = null,
     val totalCount: Int? = null,
+    /** Exact MusicBrainz Release whose own Track rows populate this detail. */
+    val selectedReleaseMbid: String? = null,
+    /** Required when that Release was selected for a ReleaseGroup album tile. */
+    val selectedReleaseGroupMbid: String? = null,
 )
 
 @Composable
