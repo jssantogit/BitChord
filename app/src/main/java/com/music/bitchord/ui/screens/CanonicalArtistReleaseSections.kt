@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 
 /** Catalog ReleaseGroup evidence, not a guess from titles or artist names. */
 internal data class CanonicalArtistReleaseEvidence(
@@ -25,6 +27,53 @@ internal fun canonicalArtistReleaseEvidenceWithTrustedDate(
         primaryType = groupEvidence?.primaryType,
         firstReleaseDate = groupEvidence?.firstReleaseDate ?: exactEditionDate,
     )
+
+/**
+ * Presentation-only external date corroboration for an undated local artist.
+ * The source artist must be unique by exact name; its MusicBrainz release
+ * group results must come from a fielded Artist MBID search. An exact local
+ * album title alone cannot create a canonical identity or persisted edge.
+ *
+ * Ignore ambiguous names, multi-edition collisions and non-editorial types.
+ * These dates are used only to decorate the current Library artist page.
+ */
+internal fun canonicalLocalArtistExactReleaseDateEvidence(
+    artistName: String,
+    localReleases: List<ReleaseEntity>,
+    matchingArtists: List<MusicBrainzArtistHit>,
+    scopedReleaseGroups: List<MusicBrainzReleaseGroupHit>,
+): Map<String, CanonicalArtistReleaseEvidence> {
+    fun key(value: String) = value.trim().lowercase(java.util.Locale.ROOT)
+        .replace(Regex("""\s+"""), " ")
+    val name = key(artistName)
+    if (name.length < 2 || localReleases.isEmpty() ||
+        matchingArtists.count { key(it.name) == name } != 1
+    ) return emptyMap()
+    val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+    val groupCandidates = scopedReleaseGroups.filter { group ->
+        val typed = group.primaryType?.lowercase(java.util.Locale.ROOT)
+        val banned = group.secondaryTypes.orEmpty().lowercase(java.util.Locale.ROOT)
+            .split('|')
+        typed in setOf("album", "single", "ep") &&
+            banned.none { it.trim() in setOf(
+                "remix", "compilation", "live", "demo", "bootleg", "mixtape/street",
+            ) } &&
+            group.artistDisplay?.let(::key) == name &&
+            group.firstReleaseDate?.let { raw ->
+                runCatching { java.time.LocalDate.parse(raw) }.getOrNull()
+                    ?.let { !it.isAfter(today) }
+            } == true
+    }.groupBy { key(it.title) }
+    return localReleases.mapNotNull { release ->
+        // One exact group per title; same-name competing groups must stay
+        // unknown rather than selecting an arbitrary release date.
+        val matches = groupCandidates[key(release.title)].orEmpty()
+        val matched = matches.singleOrNull() ?: return@mapNotNull null
+        release.id to CanonicalArtistReleaseEvidence(
+            release.id, matched.primaryType, matched.firstReleaseDate,
+        )
+    }.toMap()
+}
 
 internal data class CanonicalArtistReleaseSections(
     val albums: List<ReleaseEntity>,
