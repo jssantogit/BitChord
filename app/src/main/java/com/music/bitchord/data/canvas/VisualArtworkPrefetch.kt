@@ -3,6 +3,7 @@ package com.music.bitchord.data.canvas
 import android.content.Context
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import com.music.bitchord.data.model.artworkAt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
@@ -28,9 +29,13 @@ fun planVisualArtworkPrefetch(
     maxRequests: Int = 12,
 ): List<VisualArtworkCandidate> = candidates.asSequence()
     .mapNotNull { candidate ->
-        val url = candidate.url?.takeIf(::isSafeVisualMediaUrl)
-            ?: return@mapNotNull null
-        candidate.copy(url = url, targetPx = candidate.targetPx.coerceIn(96, 1200))
+        val target = candidate.targetPx.coerceIn(96, 1200)
+        // Use the same shared URL-size transformation as native AsyncImage
+        // rows. Prewarming w300-h300 while the UI requests w160-h160 wastes
+        // bandwidth and does not hit the exact CDN/disk key.
+        val url = candidate.url?.artworkAt(target)
+            ?.takeIf(::isSafeVisualMediaUrl) ?: return@mapNotNull null
+        candidate.copy(url = url, targetPx = target)
     }
     .sortedWith(compareBy<VisualArtworkCandidate> { it.priority.ordinal }
         .thenByDescending { it.targetPx })
