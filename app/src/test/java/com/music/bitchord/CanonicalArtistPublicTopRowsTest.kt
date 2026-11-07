@@ -4,6 +4,7 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopRecording
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistCredit
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.ui.canonicalVerifiedArtistTopRows
+import com.music.bitchord.ui.canonicalArtistTopPlaybackDecoration
 import com.music.bitchord.ui.canonicalArtistSampledPopularityRanking
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.ui.CanonicalArtistPublicTopState
@@ -160,6 +161,27 @@ class CanonicalArtistPublicTopRowsTest {
                 officialAudioReleaseMbid = officialRelease,
             ), second to live),
         ).map { it.musicBrainzId })
+    }
+
+
+    @Test fun artistChartGetsPlayableRowOnlyFromExactCanonicalAssetMbid() {
+        val metadata = RecordingMetadataEnrichment(
+            musicBrainzId = first,
+            title = "Real studio track",
+            officialAudioReleaseMbid = officialRelease,
+            artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
+        )
+        val ranked = canonicalVerifiedArtistTopRows(
+            artist, listOf(ListenBrainzArtistTopRecording(first, 100, 20)),
+            mapOf(first to metadata),
+        )
+        assertFalse(ranked.single().hasCatalogedAsset)
+        assertTrue(canonicalArtistTopPlaybackDecoration(
+            ranked, setOf(first),
+        ).single().hasCatalogedAsset)
+        assertFalse(canonicalArtistTopPlaybackDecoration(
+            ranked, setOf(second),
+        ).single().hasCatalogedAsset)
     }
 
 }
