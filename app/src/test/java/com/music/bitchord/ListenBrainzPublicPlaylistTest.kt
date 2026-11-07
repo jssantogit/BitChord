@@ -28,6 +28,74 @@ class ListenBrainzPublicPlaylistTest {
         {"playlist_mbid":"$rock","title":"Classic Rock Essentials","public":true}
     ]}"""
 
+    /** Matches upstream Playlist.serialize_jspf() and serialize_playlists(),
+     * not the flattened example used by old unit fixtures. */
+    private fun realJspfSearchResponse() = """{"playlist_count":5,"count":5,"offset":0,"playlists":[
+      {"playlist":{
+         "identifier":"https://listenbrainz.org/playlist/$rock",
+         "creator":"kpopfan","title":"Best K-pop songs",
+         "annotation":"K-pop mix for dancing",
+         "extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true,"creator":"kpopfan"}},
+         "track":[]}},
+      {"playlist":{
+         "identifier":"https://listenbrainz.org/playlist/$pop/",
+         "creator":"curator","title":"Pop essentials",
+         "extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true}}}},
+      {"playlist":{
+         "identifier":"https://listenbrainz.org/playlist/44444444-4444-4444-8444-444444444444",
+         "title":"Private K-pop","extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":false}}}},
+      {"playlist":{
+         "identifier":"https://example.invalid/playlist/55555555-5555-4555-8555-555555555555",
+         "title":"Fake K-pop","extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true}}}},
+      {"playlist":{
+         "identifier":"https://listenbrainz.org/playlist/$rock",
+         "creator":"kpopfan","title":"Best K-pop songs",
+         "extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true}}}}
+    ]}"""
+
+    @Test fun liveJspfSearchAcceptsPublicPlaylistIdentityWithoutFlattenedMbid() {
+        val global = parseListenBrainzPublicPlaylistSearch(realJspfSearchResponse())!!
+        assertEquals(listOf(rock, pop), global.map { it.mbid })
+        assertEquals("kpopfan", global.first().creator)
+        assertEquals("K-pop mix for dancing", global.first().description)
+        assertEquals("catalog:PUBLIC_PLAYLIST:$rock", global.first().browseId)
+        val kpop = parseListenBrainzPublicPlaylistSearch(realJspfSearchResponse(), "k-pop")!!
+        assertEquals(listOf(rock), kpop.map { it.mbid })
+        assertTrue(parseListenBrainzPublicPlaylistSearch(realJspfSearchResponse(), "metal")!!.isEmpty())
+    }
+
+    @Test fun liveJspfRejectsInvalidAndPrivateIdentifiers() {
+        val source = realJspfSearchResponse()
+        assertEquals(2, parseListenBrainzPublicPlaylistSearch(source)!!.size)
+        assertNull(parseListenBrainzPublicPlaylistSearch(
+            """{"playlists":{"playlist":{"title":"K-pop"}}}""", "k-pop"))
+        val malicious = """{"playlists":[{"playlist":{
+           "identifier":"https://listenbrainz.org/playlist/../../../anything",
+           "title":"K-pop",
+           "extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true}}
+        }}]}"""
+        assertTrue(parseListenBrainzPublicPlaylistSearch(malicious, "k-pop")!!.isEmpty())
+    }
+
+    @Test fun clientUsesJspfMatchesWithoutPayingForMultipleSlowSearches() = runBlocking {
+        val queries = mutableListOf<String>()
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    queries += query
+                    return ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+                }
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(listOf(rock, pop), client.searchHome()!!.map { it.mbid })
+        assertEquals(listOf("music"), queries)
+        queries.clear()
+        assertEquals(listOf(rock), client.searchGenre("k-pop")!!.map { it.mbid })
+        assertEquals(listOf("k-pop"), queries)
+    }
+
     @Test fun genreSearchFiltersFuzzyFalsePositivesAndPrivatePlaylists() {
         val found = parseListenBrainzPublicPlaylistSearch(response(), "rock")!!
         assertEquals(1, found.size)

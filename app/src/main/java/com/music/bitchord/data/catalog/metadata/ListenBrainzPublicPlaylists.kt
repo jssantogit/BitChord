@@ -173,19 +173,37 @@ internal fun parseListenBrainzPublicPlaylistSearch(
     // unlike Home, still needs exact descriptive evidence.
     val aliases = genreTag?.let(::publicGenreAliases)
     return incoming.asSequence().mapNotNull { node ->
-        val data = node as? JsonObject ?: return@mapNotNull null
-        // This endpoint returns only public playlists. Missing flag is
-        // acceptable on older versions, but explicit private is never shown.
-        if ((data["public"] as? JsonPrimitive)?.booleanOrNull == false)
-            return@mapNotNull null
-        val mbid = checkedPlaylistId(data.optionalText("playlist_mbid"))
-            ?: return@mapNotNull null
+        val envelope = node as? JsonObject ?: return@mapNotNull null
+        // ListenBrainz's live /1/playlist/search uses serialize_jspf(),
+        // yielding {"playlist":{"identifier":"https://listenbrainz.org/playlist/{uuid}",
+        // "title":..., "annotation":..., "extension":{...}}} for EACH row.
+        // Previous code only recognized a flat playlist_mbid field, silently
+        // rejecting 25/25 valid results per request in the physical smoke.
+        // Keep a flat adapter for earlier API representations, but never
+        // infer identity from arbitrary titles, track lists or fuzzy matches.
+        val jspf = envelope["playlist"] as? JsonObject
+        val data = jspf ?: envelope
+        val extension = (data["extension"] as? JsonObject)
+            ?.get("https://musicbrainz.org/doc/jspf#playlist") as? JsonObject
+        // The endpoint is public-only; reject any explicit private claim
+        // whether found in the JSPF extension or older flat schema.
+        if ((extension?.get("public") as? JsonPrimitive)?.booleanOrNull == false ||
+            (data["public"] as? JsonPrimitive)?.booleanOrNull == false ||
+            (envelope["public"] as? JsonPrimitive)?.booleanOrNull == false
+        ) return@mapNotNull null
+        val mbid = if (jspf != null) {
+            val id = data.optionalText("identifier") ?: return@mapNotNull null
+            if (!id.startsWith(LB_PLAYLIST_PREFIX)) return@mapNotNull null
+            checkedPlaylistId(id.removePrefix(LB_PLAYLIST_PREFIX).removeSuffix("/"))
+        } else checkedPlaylistId(data.optionalText("playlist_mbid"))
+        if (mbid == null) return@mapNotNull null
         val title = data.optionalText("title")?.takeIf { it.length <= 180 }
             ?: return@mapNotNull null
         if (title.any { it.isISOControl() }) return@mapNotNull null
         val creator = data.optionalText("creator")?.takeIf { it.length <= 100 }
             ?: "ListenBrainz"
-        val description = data.optionalText("description")?.takeIf { it.length <= 1_000 }
+        val description = (data.optionalText("annotation")
+            ?: data.optionalText("description"))?.takeIf { it.length <= 1_000 }
         ListenBrainzPublicPlaylist(mbid, title, creator, description)
     }.filter { aliases == null || matchesPlaylistWords(it, aliases) }
         .distinctBy { it.mbid }.take(12).toList()
