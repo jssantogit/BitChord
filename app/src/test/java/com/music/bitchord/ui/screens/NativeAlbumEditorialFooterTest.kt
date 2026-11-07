@@ -116,6 +116,62 @@ class NativeAlbumEditorialFooterTest {
         ))
     }
 
+    @Test fun everyAlbumHasUsefulEditionOverviewEvenWhenDiscogsHasNoLink() {
+        val local = CanonicalAlbumFooterMetadata(
+            date = "2024", summary = "4 músicas", showAlbumAbout = true,
+        )
+        val overview = nativeAlbumAboutOverview(local, null, null)!!
+        assertEquals("Sobre esta edição", overview.title)
+        assertTrue(overview.facts.contains("Lançamento · 2024"))
+        assertTrue(overview.facts.contains("4 músicas"))
+        assertTrue(overview.status!!.contains("informações complementares"))
+        val withoutLink = nativeAlbumAboutOverview(
+            local.copy(
+                editionFacts = listOf("Formato · CD", "Gravadora · Belift Lab"),
+                hasMusicBrainzEdition = true,
+                editorialEvidence = DiscogsEditionEnrichment.NoLink,
+            ),
+            null,
+            DiscogsEditionEnrichment.NoLink,
+        )!!
+        assertTrue(withoutLink.facts.contains("Formato · CD"))
+        assertTrue(withoutLink.facts.contains("Gravadora · Belift Lab"))
+        assertTrue(withoutLink.status!!.contains("sem vínculo Discogs"))
+        assertFalse(withoutLink.status.contains("indisponível"))
+    }
+
+    @Test fun unverifiableProviderFactsNeverAppearAsVerifiedEditionDetails() {
+        val metadata = CanonicalAlbumFooterMetadata(
+            date = null, summary = null, showAlbumAbout = true,
+            hasMusicBrainzEdition = true,
+        )
+        for (state in listOf(
+            DiscogsEditionEnrichment.Candidate,
+            DiscogsEditionEnrichment.Conflict,
+            DiscogsEditionEnrichment.Ambiguous,
+            DiscogsEditionEnrichment.Unavailable,
+        )) {
+            val overview = nativeAlbumAboutOverview(metadata, null, state)!!
+            assertTrue(overview.facts.isEmpty())
+            assertTrue(overview.status?.startsWith("Discogs ·") == true)
+            assertTrue(nativeAlbumMetadataFooterHasContent(metadata, null))
+        }
+    }
+
+    @Test fun verifiedDiscogsKeepsRealAttributesAndAttributionInTheSameOverview() {
+        val evidence = edition()
+        val metadata = CanonicalAlbumFooterMetadata(
+            date = null, summary = null, showAlbumAbout = true,
+            editorialEvidence = evidence,
+            hasMusicBrainzEdition = true,
+        )
+        val editorial = nativeAlbumEditorialFooter(evidence, 1_100L)
+        val about = nativeAlbumAboutOverview(metadata, editorial, evidence)!!
+        assertNull(about.status)
+        assertTrue(nativeAlbumMetadataFooterHasContent(metadata, editorial))
+        assertEquals("Data provided by Discogs.", editorial!!.attributionText)
+    }
+
     @Test fun noUsefulEditionMetadataMeansNoEditorialFooter() {
         val empty = DiscogsEditionEnrichment.Verified(
             DiscogsObservation(
