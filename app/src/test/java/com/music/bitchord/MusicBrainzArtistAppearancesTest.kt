@@ -186,4 +186,28 @@ class MusicBrainzArtistAppearancesTest {
         assertEquals(listOf(0, 25), requestedOffsets)
     }
 
+
+    @Test fun linkedRecordingArtistCreditCanProveGuestWhenTrackCreditIsAbsent() {
+        val body = """{"releases":[
+          {"id":"55555555-5555-4555-8555-555555555555",
+           "status":"Official",
+           "artist-credit":[{"artist":{"id":"$other","name":"Collaborator"}}],
+           "release-group":{"id":"$releaseGroup","title":"Official collaboration",
+               "primary-type":"Single"},
+           "media":[{"tracks":[{"recording":{
+             "id":"88888888-8888-4888-8888-888888888888",
+             "artist-credit":[{"artist":{"id":"$target","name":"BTS"}}]}}]}]}
+        ]}"""
+        assertEquals(listOf("Official collaboration"),
+            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+        // No Recording MBID means there is no proven ReleaseTrack ->
+        // Recording relationship; unscoped embedded credits cannot be used.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"id":"88888888-8888-4888-8888-888888888888",""",
+                """"id":"invalid",""",
+            ), target,
+        ).isEmpty())
+    }
+
 }
