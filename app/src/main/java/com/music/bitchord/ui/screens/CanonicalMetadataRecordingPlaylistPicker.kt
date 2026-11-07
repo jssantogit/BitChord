@@ -55,7 +55,7 @@ internal fun CanonicalMetadataRecordingPlaylistPicker(
         repository.observe().collectLatest { value = it }
     }
     var saving by remember(recordingId) { mutableStateOf(false) }
-    var error by remember(recordingId) { mutableStateOf<String?>(null) }
+    var errorMessage by remember(recordingId) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     PlaylistWizardSheetChrome(
@@ -84,7 +84,7 @@ internal fun CanonicalMetadataRecordingPlaylistPicker(
                     onClick = {
                         if (!saving) {
                             saving = true
-                            error = null
+                            errorMessage = null
                             scope.launch {
                                 try {
                                     val added = withContext(Dispatchers.IO) {
@@ -108,14 +108,14 @@ internal fun CanonicalMetadataRecordingPlaylistPicker(
                                         Toast.LENGTH_SHORT).show()
                                     onDismiss()
                                 } catch (cancelled: CancellationException) { throw cancelled }
-                                  catch (_: Exception) { error = "Não foi possível adicionar a faixa." }
+                                  catch (_: Exception) { errorMessage = "Não foi possível adicionar a faixa." }
                                 finally { saving = false }
                             }
                         }
                     },
                 )
             }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
 }
