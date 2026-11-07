@@ -3,6 +3,12 @@ package com.music.bitchord.ui
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import java.time.LocalDate
+import java.time.ZoneOffset
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.bitchord.data.model.UiState
 
 /**
  * Single native artist hero policy for an ONLINE MusicBrainz artist.
@@ -30,4 +36,21 @@ internal fun canonicalPublicArtistFeaturedRelease(
         .maxWithOrNull(compareBy<Pair<LocalDate, CanonicalCatalogSearchRow>> { it.first }
             .thenBy { it.second.musicBrainzId })
         ?.second
+}
+
+/**
+ * Keep flow collection OUTSIDE BitChordApp's already large Compose method.
+ * Library artist routes do not need a public release browse or network call.
+ */
+@Composable
+internal fun rememberCanonicalPublicArtistFeaturedRelease(
+    viewModel: MainViewModel,
+    publicArtistMbid: String?,
+): CanonicalCatalogSearchRow? {
+    val current by viewModel.canonicalDetail.collectAsStateWithLifecycle()
+    if (publicArtistMbid == null) return null
+    val rows = (current as? UiState.Success)?.data?.rows.orEmpty()
+    return remember(publicArtistMbid, rows) {
+        canonicalPublicArtistFeaturedRelease(rows, LocalDate.now(ZoneOffset.UTC).toString())
+    }
 }
