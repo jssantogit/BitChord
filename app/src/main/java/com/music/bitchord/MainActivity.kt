@@ -1325,6 +1325,26 @@ private fun BitChordApp(
     }
 
     val homeListState = rememberLazyListState()
+    // One speculative image pipeline for the existing native Home shelves.
+    // Follow the visible LazyColumn window, not the full catalog: preloading
+    // every public release would slow down metadata and drain data allowance.
+    LaunchedEffect(canonicalHomeDisplayShelves, selectedTab) {
+        if (selectedTab == TAB_HOME) {
+            androidx.compose.runtime.snapshotFlow {
+                homeListState.firstVisibleItemIndex
+            }.collect { firstVisible ->
+                val upcoming = com.music.bitchord.data.canvas.planVisualShelfArtwork(
+                    shelfUrls = canonicalHomeDisplayShelves.map { shelf ->
+                        shelf.items.map { item -> item.thumbnailUrl }
+                    },
+                    visibleShelfIndex = firstVisible,
+                    targetPx = com.music.bitchord.data.model.CARD_ART_PX,
+                )
+                com.music.bitchord.data.canvas.VisualArtworkPrefetch.warm(context, upcoming)
+            }
+        }
+    }
+
     val exploreListState = rememberLazyListState()
     // Preserve the native genre-grid scroll when visiting an editorial detail.
     val genreListState = rememberLazyListState()
