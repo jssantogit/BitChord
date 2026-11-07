@@ -83,7 +83,7 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                     // track proves a Recording MBID. Never credit another
                     // unrelated track of the host album.
                     val recordingCredit = if (recordingId != null)
-                        recording["artist-credit"] as? JsonArray else null
+                        recording?.get("artist-credit") as? JsonArray else null
                     val hasArtist = listOfNotNull(trackCredit, recordingCredit).any { parts ->
                         parts.any { part ->
                             val id = ((part as? JsonObject)?.get("artist")
@@ -96,7 +96,7 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                         ?: entry.appearanceText("title")
                     val isrc = (recording?.get("isrcs") as? JsonArray).orEmpty().any {
                         val code = (it as? JsonPrimitive)?.contentOrNull
-                        code != null && Regex("""[A-Za-z]{2}[A-Za-z0-9]{3}\\d{7}""")
+                        code != null && Regex("""[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}""")
                             .matches(code)
                     }
                     Triple(recordingId, trackTitle, isrc)
@@ -144,7 +144,7 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         // from the editorial guest shelf (2AT-style false positives).
         val barcode = release.appearanceText("barcode")
         val commercialBarcode = barcode != null &&
-            Regex("""\\d{8,14}""").matches(barcode) && barcode.any { it != '0' }
+            Regex("""\d{8,14}""").matches(barcode) && barcode.any { it != '0' }
         val commercialLabel = (release["label-info"] as? JsonArray).orEmpty().any { info ->
             val label = (info as? JsonObject)?.get("label") as? JsonObject
             val labelId = label?.appearanceText("id")?.lowercase(Locale.ROOT)
