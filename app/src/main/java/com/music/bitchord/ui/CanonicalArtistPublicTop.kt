@@ -159,10 +159,13 @@ internal fun canonicalArtistSampledPopularityRanking(
     recordingMbids: List<String>,
     observations: List<ListenBrainzPopularityEvidence>,
 ): List<ListenBrainzArtistTopRecording> {
-    val eligible = recordingMbids.take(25).map { it.lowercase(Locale.ROOT) }.toSet()
-    return publicListenBrainzRecordingRanking(observations)
+    val eligible = recordingMbids.take(100).map { it.lowercase(Locale.ROOT) }.toSet()
+    return observations.filterIsInstance<ListenBrainzPopularityEvidence.Known>()
         .filter { it.recordingMbid.lowercase(Locale.ROOT) in eligible &&
             it.listeners > 0L && it.listens >= it.listeners }
+        // "Mais tocadas" means listen counts, not number of unique listeners.
+        .sortedWith(compareByDescending<ListenBrainzPopularityEvidence.Known> { it.listens }
+            .thenByDescending { it.listeners }.thenBy { it.recordingMbid })
         .map { ListenBrainzArtistTopRecording(it.recordingMbid, it.listens, it.listeners) }
         .take(8)
 }
