@@ -34,6 +34,13 @@ internal fun canonicalArtistPublicTopIsFresh(
 private val PUBLIC_ARTIST_MBID =
     Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
+/** The chart favors official studio recordings, not practice, live or fan
+ * versions, even when MusicBrainz has a separate Recording for them. */
+private val PUBLIC_ARTIST_CHART_NON_STUDIO = Regex(
+    """(?i)(?:\s[-–—]\s*(?:live|karaoke|demo|rehearsal|fan[- ]?edit|bootleg)(?:\b|$)|\((?:live|karaoke|demo|rehearsal|fan[- ]?edit|bootleg)(?:\W|$))"""
+)
+
+
 /**
  * ListenBrainz supplies popularity order and scope. MusicBrainz must
  * independently prove BOTH recording identity and exact artist credit.
@@ -60,20 +67,32 @@ internal fun canonicalVerifiedArtistTopRows(
             val id = rankedRecording.recordingMbid.lowercase(Locale.ROOT)
             if (!PUBLIC_ARTIST_MBID.matches(id)) return@mapNotNull null
             val verified = verifiedByMbid[id] ?: return@mapNotNull null
-            if (!verified.musicBrainzId.equals(id, ignoreCase = true)) return@mapNotNull null
+            if (!verified.musicBrainzId.equals(id, ignoreCase = true) ||
+                verified.officialAudioReleaseMbid == null
+            ) return@mapNotNull null
             if (verified.artistCredits.orEmpty().none {
                     it.musicBrainzArtistId.equals(artist, ignoreCase = true)
                 }
             ) return@mapNotNull null
             val title = verified.title?.trim()
-                ?.takeIf { canonicalStreamingTitleIsSafe(it) } ?: return@mapNotNull null
+                ?.takeIf { canonicalStreamingTitleIsSafe(it) &&
+                    !PUBLIC_ARTIST_CHART_NON_STUDIO.containsMatchIn(it) }
+                ?: return@mapNotNull null
+            // A ListenBrainz CAA hint may refer to another edition of the
+            // same recording. Prefer our independently proved Official sleeve;
+            // otherwise accept the hint only for the EXACT proved release.
+            val officialEdition = verified.officialAudioReleaseMbid
+            val cover = verified.officialAudioArtworkUri
+                ?: rankedRecording.artworkUri?.takeIf {
+                    it.startsWith("https://coverartarchive.org/release/$officialEdition/")
+                }
             CanonicalCatalogSearchRow(
                 musicBrainzId = id,
                 kind = CanonicalSearchKind.RECORDING,
                 title = title,
                 subtitle = verified.artistDisplay.orEmpty(),
                 artistScopeMbid = artist,
-                artworkUri = rankedRecording.artworkUri,
+                artworkUri = cover,
                 durationMs = verified.durationMs?.takeIf { it > 0L },
             )
         }
