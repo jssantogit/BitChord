@@ -134,10 +134,13 @@ class MusicBrainzArtistAppearancesTest {
         var now = 1_000L
         var requests = 0
         val valid = """{"releases":[
-            {"id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            {"id":"55555555-5555-4555-8555-555555555555","status":"Official","barcode":"0123456789012",
              "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
              "release-group":{"id":"$releaseGroup","title":"Real guest credit","primary-type":"Album"},
-             "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Guest"}}]}]}]}
+             "media":[{"tracks":[{"recording":{
+                 "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                 "title":"Featured song",
+                 "artist-credit":[{"artist":{"id":"$target","name":"Guest"}}]}}]}]}
         ]}"""
         val client = MusicBrainzArtistAppearancesClient(
             nowMillis = { now },
