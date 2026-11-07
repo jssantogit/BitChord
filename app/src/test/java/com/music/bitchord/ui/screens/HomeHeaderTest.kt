@@ -109,7 +109,9 @@ class HomeHeaderTest {
         }
         // Exercise sharedUi via the public native screen boundary; do not
         // access its internal ShelfCard from the app test module.
-        compose.onNodeWithTag("catalog-art-fallback").assertExists()
+        compose.onNodeWithTag(
+            "catalog-art-fallback", useUnmergedTree = true,
+        ).assertExists()
     }
 
     @Test fun genreTitleStartsOnSameHorizontalLineAsHome() {
