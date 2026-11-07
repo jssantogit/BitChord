@@ -404,10 +404,12 @@ object AppSettings {
     val visualMotionSurfaces = MutableStateFlow(VisualSurface.entries.toSet())
     /** Keep bounded artist, album and now-playing stills when encountered. */
     val saveVisualStillImages = MutableStateFlow(true)
+    val visualStillSurfaces = MutableStateFlow(VisualSurface.entries.toSet())
 
     private const val KEY_VISUAL_RETENTION_V1 = "visual_retention_v1"
     private const val KEY_VISUAL_SURFACES_V1 = "visual_motion_surfaces_v1"
     private const val KEY_VISUAL_STILLS_V1 = "visual_stills_v1"
+    private const val KEY_VISUAL_STILL_SURFACES_V1 = "visual_still_surfaces_v1"
 
 
     /** Automatically collapses the lower controls after Spotify Canvas settles. */
@@ -865,6 +867,10 @@ object AppSettings {
                 VisualSurface.entries.firstOrNull { it.name == name }
             }?.toSet() ?: VisualSurface.entries.toSet()
         saveVisualStillImages.value = prefs.getBoolean(KEY_VISUAL_STILLS_V1, true)
+        visualStillSurfaces.value = prefs.getString(KEY_VISUAL_STILL_SURFACES_V1, null)
+            ?.split(",")?.mapNotNull { value ->
+                VisualSurface.entries.firstOrNull { it.name == value }
+            }?.toSet() ?: VisualSurface.entries.toSet()
 
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
@@ -1438,6 +1444,15 @@ object AppSettings {
         visualMotionSurfaces.value = next
         prefs.edit().putString(
             KEY_VISUAL_SURFACES_V1, next.joinToString(",") { it.name }
+        ).apply()
+    }
+
+    fun setVisualStillSurface(surface: VisualSurface, enabled: Boolean) {
+        val next = if (enabled) visualStillSurfaces.value + surface
+            else visualStillSurfaces.value - surface
+        visualStillSurfaces.value = next
+        prefs.edit().putString(
+            KEY_VISUAL_STILL_SURFACES_V1, next.joinToString(",") { it.name }
         ).apply()
     }
 
