@@ -151,6 +151,8 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                     val entry = entries[index]
                     val recordingId = entry.recordingMbid
                     val playable = recordingId != null && recordingId in availableIds
+                    val coverUri = entry.artworkUrl
+                        ?: catalogRows.firstOrNull { it.id == recordingId }?.localArtworkUri
                     NativeDetailTrackRowLayout(
                         onClick = if (playable && recordingId != null)
                             ({ onVerifiedRecordingPlay(recordingId) }) else null,
@@ -167,6 +169,14 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                                     Icon(Icons.Rounded.MusicNote, contentDescription = null,
                                         modifier = Modifier.size(22.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (!coverUri.isNullOrBlank()) {
+                                        AsyncImage(
+                                            model = coverUri,
+                                            contentDescription = null,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize(),
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -178,7 +188,7 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                         },
                         subtitle = {
                             Text(
-                                entry.artist + if (playable) "" else " · Apenas metadados",
+                                entry.artist,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 color = palette.onBackgroundVariant,
                                 style = MaterialTheme.typography.bodyMedium,
