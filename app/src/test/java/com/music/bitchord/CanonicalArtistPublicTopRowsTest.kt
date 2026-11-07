@@ -4,6 +4,8 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopRecording
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistCredit
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.ui.canonicalVerifiedArtistTopRows
+import com.music.bitchord.ui.canonicalArtistSampledPopularityRanking
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.ui.CanonicalArtistPublicTopState
 import com.music.bitchord.ui.canonicalArtistPublicTopIsFresh
 import com.music.bitchord.ui.screens.CanonicalSearchKind
@@ -90,5 +92,26 @@ class CanonicalArtistPublicTopRowsTest {
         )
         assertTrue(canonicalVerifiedArtistTopRows(artist, ranking, unproven).isEmpty())
         assertTrue(canonicalVerifiedArtistTopRows("invalid", ranking, unproven).isEmpty())
+    }
+
+    @Test fun rankedSampleUsesRealListenerCountsAndOnlyRequestedMbids() {
+        val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
+        val sample = listOf(
+            "11111111-1111-4111-8111-111111111111",
+            "22222222-2222-4222-8222-222222222222",
+        )
+        val rows = canonicalArtistSampledPopularityRanking(
+            sample,
+            listOf(
+                ListenBrainzPopularityEvidence.Known(sample[0], 50, 5),
+                ListenBrainzPopularityEvidence.Known(sample[1], 300, 30),
+                ListenBrainzPopularityEvidence.Known(
+                    "33333333-3333-4333-8333-333333333333", 999, 100),
+            ),
+        )
+        assertEquals(listOf(sample[1], sample[0]), rows.map { it.recordingMbid })
+        assertTrue(rows.all { it.listeners > 0L && it.listens >= it.listeners })
+        assertTrue(canonicalArtistSampledPopularityRanking(sample,
+            listOf(ListenBrainzPopularityEvidence.Unknown(sample[0]))).isEmpty())
     }
 }
