@@ -120,6 +120,9 @@ internal class DiscogsCanonicalEditionCoordinator(
             trackTitles = detail.tracks.sortedWith(
                 compareBy({ it.mediumNumber }, { it.trackNumber }),
             ).map { it.title },
+            country = detail.country,
+            releaseYear = detail.releaseDate?.take(4)
+                ?.toIntOrNull()?.takeIf { it in 1800..2200 },
         )
         return editions.observe(canonical)
     }
