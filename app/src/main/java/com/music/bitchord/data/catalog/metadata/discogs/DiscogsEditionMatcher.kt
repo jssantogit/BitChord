@@ -13,6 +13,9 @@ internal data class CanonicalEditionEvidence(
     val status: String?,
     val barcodes: List<String>,
     val trackTitles: List<String>,
+    /** Exact edition country and year when asserted by MusicBrainz. */
+    val country: String? = null,
+    val releaseYear: Int? = null,
 )
 
 /** A Discogs link is an identity *anchor*. Matching fields are separate evidence. */
@@ -25,6 +28,20 @@ internal enum class DiscogsEditionVerdict {
 internal object DiscogsEditionMatcher {
     private val mbid = Regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
     private val spaces = Regex("\\s+")
+    private val recognizedIsoCountries = Locale.getISOCountries().mapTo(HashSet()) {
+        it.lowercase(Locale.ROOT)
+    }
+    private val isoCountryByEnglishName = Locale.getISOCountries().associate { iso ->
+        normalized(Locale.Builder().setRegion(iso).build()
+            .getDisplayCountry(Locale.ENGLISH)) to iso.lowercase(Locale.ROOT)
+    }
+    private val countryAliases = mapOf(
+        "uk" to "gb", "great britain" to "gb",
+        "usa" to "us", "u.s.a." to "us", "united states of america" to "us",
+        "republic of korea" to "kr", "korea, republic of" to "kr",
+        "south korea" to "kr", "north korea" to "kp",
+    )
+
 
     fun assess(
         canonical: CanonicalEditionEvidence,
@@ -43,6 +60,15 @@ internal object DiscogsEditionMatcher {
         if (record.artistNames.none { normalized(it) == normalized(artist) }) {
             return DiscogsEditionVerdict.CONFLICT
         }
+
+        // The same recording sequence can be issued in several countries.
+        // Compare only recognized country codes/names; "Worldwide", "Europe"
+        // and other aggregate regions are not edition-country proofs.
+        val mbCountry = comparableCountry(canonical.country)
+        val discogsCountry = comparableCountry(record.country)
+        if (mbCountry != null && discogsCountry != null &&
+            mbCountry != discogsCountry
+        ) return DiscogsEditionVerdict.CONFLICT
 
         // Unofficial *edition* observations are not claims about the entire RG.
         // Never validate an officially classified MB edition against one.
@@ -66,6 +92,12 @@ internal object DiscogsEditionMatcher {
         val trackMatches = bothHaveTracks && mbTracks == externalTracks
         // A conflicting tracklist can signal a different pressing, remix or bonus edition.
         if (bothHaveTracks && !trackMatches) return DiscogsEditionVerdict.CANDIDATE
+
+        // A contradictory edition year prevents VERIFIED status even if
+        // the tracklist matches; a different pressing may carry the same songs.
+        if (canonical.releaseYear != null && record.year != null &&
+            canonical.releaseYear != record.year
+        ) return DiscogsEditionVerdict.CANDIDATE
 
         // Barcodes are shared by variants or entered incorrectly. A curated
         // MusicBrainz URL association plus artist/title and matching barcode
@@ -93,6 +125,17 @@ internal object DiscogsEditionMatcher {
 
     private fun normalized(s: String): String =
         s.trim().replace(spaces, " ").lowercase(Locale.ROOT)
+
+    private fun comparableCountry(raw: String?): String? {
+        val country = raw?.let(::normalized)?.takeIf(String::isNotBlank) ?: return null
+        if (country in setOf("xw", "xe", "worldwide", "europe", "unknown",
+                "not known", "[worldwide]")) return null
+        return when {
+            country in recognizedIsoCountries -> country
+            country in countryAliases -> countryAliases[country]
+            else -> isoCountryByEnglishName[country]
+        }
+    }
 
     /** Keep leading zeroes. A barcode only corroborates a track- and artist-scoped link. */
     private fun barcode(raw: String): String? {
