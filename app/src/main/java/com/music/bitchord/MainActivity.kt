@@ -3616,7 +3616,8 @@ private fun BitChordApp(
                             folder = folder,
                             canonicalTracks = if (
                                 displayedEditionMbid != null &&
-                                displayedEditionMbid == canonicalEditionPage?.selectedReleaseMbid
+                                canonicalEditionPage != null &&
+                                displayedEditionMbid == canonicalEditionPage.selectedReleaseMbid
                             ) canonicalEditionPage.rows else emptyList(),
                             selectedReleaseMbid = canonicalEditionPage?.selectedReleaseMbid,
                             selectedReleaseGroupMbid = canonicalEditionPage?.selectedReleaseGroupMbid,
