@@ -50,6 +50,25 @@ internal fun parseMusicBrainzTrackArtistAppearances(
             if (!ARTIST_APPEARANCE_MBID.matches(id)) return@mapNotNull null
             id to (item.appearanceText("name") ?: artist.appearanceText("name"))
         }
+        // A track_artist browse may include tribute, cover, remix or
+        // miscellaneous credit links. Verify the exact MBID in a real
+        // release medium's TRACK artist-credit before displaying a guest
+        // appearance. An album title mentioning the selected artist is
+        // never sufficient.
+        val hasTargetTrack = (release["media"] as? JsonArray)
+            ?.any { medium ->
+                val tracks = (medium as? JsonObject)?.get("tracks") as? JsonArray
+                tracks?.any { track ->
+                    val trackCredit = (track as? JsonObject)?.get("artist-credit")
+                        as? JsonArray
+                    trackCredit?.any { part ->
+                        val credited = ((part as? JsonObject)?.get("artist")
+                            as? JsonObject)?.appearanceText("id")
+                        credited?.equals(target, ignoreCase = true) == true
+                    } == true
+                } == true
+            } == true
+        if (!hasTargetTrack) return@mapNotNull null
         // An album with the selected artist as primary belongs in discography.
         if (artists.isEmpty() || artists.any { it.first == target })
             return@mapNotNull null
@@ -82,7 +101,7 @@ internal class MusicBrainzArtistAppearancesClient(
         if (!ARTIST_APPEARANCE_MBID.matches(id)) return emptyList()
         val response = client.get("release", mapOf(
             "track_artist" to id,
-            "inc" to "release-groups+artist-credits",
+            "inc" to "release-groups+artist-credits+recordings",
             "limit" to "25",
             "offset" to "0",
             "fmt" to "json",
