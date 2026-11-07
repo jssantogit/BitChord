@@ -15,6 +15,18 @@ class NativeArtistIncludedInArtworkTest {
     private val firstEdition = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     private val secondEdition = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 
+    @Test fun verifiedGroupCoverIsReusedWithoutReopeningTheReleaseFront() = runBlocking {
+        var releaseFrontRequests = 0
+        val art = nativeArtistIncludedInCoverFromVerifiedCache(
+            releaseMbid = firstEdition,
+            groupMbid = firstGroup,
+            cache = { "https://archive.org/verified-sleeve.jpg" },
+            fetch = { _, _ -> releaseFrontRequests++; null },
+        )
+        assertEquals("https://archive.org/verified-sleeve.jpg", art)
+        assertEquals(0, releaseFrontRequests)
+    }
+
     @Test fun slowFirstAppearanceCoverDoesNotBlockSecondVerifiedGroup() = runBlocking {
         val slowCover = CompletableDeferred<Unit>()
         val secondCoverVisible = CompletableDeferred<Unit>()
