@@ -3114,7 +3114,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ?.equals("catalog:ARTIST:$id", ignoreCase = true) != true
                 ) break
                 val mbid = candidate.recordingMbid
-                val known = artistTopMetadataCache[mbid]
+                val known = artistTopMetadataCache[mbid]?.takeIf { it.officialAudioReleaseMbid != null }
                 val record = if (known != null) known else try {
                     val result = withTimeoutOrNull(16_000L) {
                         artistTopMetadataProvider.lookupOfficialAudioRecording(mbid)
