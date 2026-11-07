@@ -173,4 +173,37 @@ class CanonicalArtistReleaseSectionsTest {
         assertNull(canonicalArtistReleaseEvidenceWithTrustedDate(
             "release", null, null).firstReleaseDate)
     }
+
+    @Test fun albumsAndSinglesOrderByVerifiedReleaseDateDescendingWithUnknownLast() {
+        val rows = listOf(release("old-single"), release("unknown-album"),
+            release("new-single"), release("old-album"), release("new-album"),
+            release("unknown-single"))
+        val evidence = mapOf(
+            "old-single" to CanonicalArtistReleaseEvidence("old-single", "EP", "2022-06-14"),
+            "new-single" to CanonicalArtistReleaseEvidence("new-single", "Single", "2026-08-19"),
+            "unknown-single" to CanonicalArtistReleaseEvidence("unknown-single", "EP", null),
+            "old-album" to CanonicalArtistReleaseEvidence("old-album", "Album", "2024-02-18"),
+            "new-album" to CanonicalArtistReleaseEvidence("new-album", "Album", "2026-07-30"),
+        )
+        val result = canonicalArtistReleaseSections(rows, evidence,
+            recordingCountsByRelease = mapOf("unknown-album" to 6))
+        assertEquals(listOf("new-album", "old-album", "unknown-album"),
+            result.albums.map { it.id })
+        assertEquals(listOf("new-single", "old-single", "unknown-single"),
+            result.singlesAndEps.map { it.id })
+        assertEquals("new-single", result.recentRelease?.id)
+    }
+
+    @Test fun malformedReleaseDateIsNotPromotedAheadOfVerifiedDay() {
+        val result = canonicalArtistReleaseSections(
+            listOf(release("bad-date"), release("genuine"), release("future")),
+            mapOf(
+                "bad-date" to CanonicalArtistReleaseEvidence("bad-date", "Album", "2026-99-99"),
+                "genuine" to CanonicalArtistReleaseEvidence("genuine", "Album", "2025-05-10"),
+                "future" to CanonicalArtistReleaseEvidence("future", "Album", "2999-01-01"),
+            ))
+        assertEquals(listOf("future", "genuine", "bad-date"), result.albums.map { it.id })
+        assertEquals("genuine", result.recentRelease?.id)
+    }
+
 }
