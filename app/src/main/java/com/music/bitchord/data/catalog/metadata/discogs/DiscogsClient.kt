@@ -71,6 +71,8 @@ internal class DiscogsRateLimiter(
 ) {
     private val mutex = Mutex()
     private var lastRequestAt: Long? = null
+    /** Monotonic deadline recorded under the same mutex as dispatch. */
+    private var throttledUntilMs: Long? = null
 
     init { require(minimumIntervalMs >= 0L) }
 
@@ -79,7 +81,12 @@ internal class DiscogsRateLimiter(
         try {
             lastRequestAt?.let {
                 val remaining = minimumIntervalMs - (nowMillis() - it)
-                if (remaining > 0) delayMillis(remaining)
+                val cooldown = throttledUntilMs?.minus(nowMillis()) ?: 0L
+                val pause = maxOf(remaining, cooldown)
+                if (pause > 0L) delayMillis(pause)
+            } ?: run {
+                val cooldown = throttledUntilMs?.minus(nowMillis()) ?: 0L
+                if (cooldown > 0L) delayMillis(cooldown)
             }
             lastRequestAt = nowMillis()
             return block()
@@ -87,6 +94,23 @@ internal class DiscogsRateLimiter(
             mutex.unlock()
         }
     }
+
+    /**
+     * Record a 429 cooldown before releasing the process-wide dispatch mutex,
+     * so a concurrent caller cannot race past Retry-After.
+     * A missing header uses a conservative 30s pause; an explicit longer
+     * retry period is honored up to 24 hours rather than retrying prematurely.
+     */
+    suspend fun runHttpLimited(block: suspend () -> DiscogsHttpResponse): DiscogsHttpResponse =
+        runLimited {
+            val response = block()
+            if (response.status == 429) {
+                val seconds = (response.retryAfterSeconds ?: 30L).coerceIn(3L, 86_400L)
+                val target = nowMillis() + seconds * 1_000L
+                throttledUntilMs = maxOf(throttledUntilMs ?: Long.MIN_VALUE, target)
+            }
+            response
+        }
 }
 
 internal object DiscogsRequestBudget {
@@ -120,7 +144,7 @@ internal class DiscogsClient(
         if (!enabled) return DiscogsLookupResult.Disabled
         if (id !in 1..999_999_999_999L) return DiscogsLookupResult.InvalidId
         val response = try {
-            limiter.runLimited { transport.get("releases/$id", userAgent) }
+            limiter.runHttpLimited { transport.get("releases/$id", userAgent) }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
