@@ -143,7 +143,7 @@ object CanvasRepository {
                 val identity = song.videoId.ifBlank { song.artist + "|" + song.title }
                 warmScope.launch {
                     VisualStillMedia.save(VisualSurface.NOW_PLAYING,
-                        identity, url.artworkAt(900))
+                        identity, url.artworkAt(900) ?: url)
                 }
             }
         }
