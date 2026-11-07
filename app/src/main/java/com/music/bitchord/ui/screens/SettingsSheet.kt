@@ -158,6 +158,12 @@ import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.data.canvas.VisualRetentionMode
+import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.CanvasCache
+import com.music.bitchord.data.canvas.VisualStillMedia
+import com.music.bitchord.data.canvas.CanvasRepository
+import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import com.music.bitchord.data.settings.OutputPcmMode
 import com.music.bitchord.playback.AudioOutputStatus
 import com.music.bitchord.data.settings.AutomixPerformanceMode
@@ -227,6 +233,9 @@ internal fun SettingsScreen(
     val fullBleedArtwork by AppSettings.fullBleedArtwork.collectAsStateWithLifecycle()
     val animatedCanvas by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
     val canvasOverCellular by AppSettings.canvasOverCellular.collectAsStateWithLifecycle()
+    val visualRetention by AppSettings.visualRetentionMode.collectAsStateWithLifecycle()
+    val visualMotionSurfaces by AppSettings.visualMotionSurfaces.collectAsStateWithLifecycle()
+    val visualStills by AppSettings.saveVisualStillImages.collectAsStateWithLifecycle()
     val legacyMeshGradient by AppSettings.legacyMeshGradient.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
@@ -298,6 +307,7 @@ internal fun SettingsScreen(
     var importStatus by remember { mutableStateOf<String?>(null) }
     var confirmImport by remember { mutableStateOf(false) }
     var confirmClearSongCache by remember { mutableStateOf(false) }
+    var confirmClearVisualMedia by remember { mutableStateOf(false) }
     var showPerformanceWarning by remember { mutableStateOf(false) }
     var showPerformanceConfirmation by remember { mutableStateOf(false) }
     val backupScope = rememberCoroutineScope()
@@ -897,6 +907,55 @@ internal fun SettingsScreen(
                     }
                 }
             }
+            val offlineVisualTitle = "Visuais offline"
+            row(offlineVisualTitle, "animação", "cache", "wifi", "vídeo", "imagem", "offline") {
+                SettingsRow(
+                    icon = Icons.Rounded.Cached,
+                    title = offlineVisualTitle,
+                    subtitle = when (visualRetention) {
+                        VisualRetentionMode.STREAM_ONLY ->
+                            "Transmissão normal com cache temporário; sem guardar vídeos permanentemente"
+                        VisualRetentionMode.SAVE_ON_WIFI ->
+                            "Guardar animações completas para funcionar sem Internet, apenas no Wi-Fi"
+                        VisualRetentionMode.STILL_ONLY ->
+                            "Substituir vídeos por capas e fotos estáticas já disponíveis"
+                    },
+                )
+                SegmentedControl(
+                    options = listOf("Temporário", "Salvar Wi-Fi", "Só imagens"),
+                    selectedIndex = VisualRetentionMode.entries.indexOf(visualRetention),
+                    onSelect = { index ->
+                        AppSettings.setVisualRetentionMode(VisualRetentionMode.entries[index])
+                    },
+                    modifier = Modifier.padding(
+                        start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp,
+                    ),
+                )
+            }
+            if (visualRetention == VisualRetentionMode.SAVE_ON_WIFI) {
+                val visualLabels = listOf(
+                    VisualSurface.ARTIST to "Animações de artistas",
+                    VisualSurface.ALBUM to "Animações de álbuns",
+                    VisualSurface.NOW_PLAYING to "Animações do Now Playing",
+                )
+                visualLabels.forEach { (surface, title) ->
+                    row(title, "vídeo", "offline", "wifi", divided = false) {
+                        SettingsSubRow(
+                            title = title,
+                            checked = surface in visualMotionSurfaces,
+                            onCheckedChange = { AppSettings.setVisualMotionSurface(surface, it) },
+                        )
+                    }
+                }
+            }
+            row("Guardar imagens estáticas", "foto", "capa", "offline", divided = false) {
+                SettingsSubRow(
+                    title = "Guardar imagens estáticas",
+                    checked = visualStills,
+                    onCheckedChange = AppSettings::setSaveVisualStillImages,
+                    subtitle = "Artistas, álbuns e Now Playing; espaço limitado e sem backup",
+                )
+            }
             val artistSignaturesTitle = stringResource(R.string.artist_signatures)
             row(artistSignaturesTitle, "signature", "artist", "logo") {
                 SettingsRow(
@@ -1255,6 +1314,14 @@ internal fun SettingsScreen(
                     onClick = { confirmClearSongCache = true },
                 )
             }
+            row("Limpar visuais salvos", "offline", "cache", "vídeo", "animação", "capa") {
+                SettingsRow(
+                    icon = Icons.Rounded.DeleteSweep,
+                    title = "Limpar visuais salvos",
+                    subtitle = "Imagens e animações mantidas offline (sem apagar músicas)",
+                    onClick = { confirmClearVisualMedia = true },
+                )
+            }
             val clearImageCacheTitle = stringResource(R.string.clear_image_cache)
             row(clearImageCacheTitle, "cache", "artwork", "free space") {
                 SettingsRow(
@@ -1588,6 +1655,29 @@ internal fun SettingsScreen(
                     AppSettings.setAutomixPerformanceMode(mode)
                     pickingAutomixPerformance = false
                 },
+            )
+        }
+    }
+
+    if (confirmClearVisualMedia) {
+        NativeAlertHost(onDismiss = { confirmClearVisualMedia = false }) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = "Limpar visuais offline?",
+                description = "As imagens e animações salvas serão apagadas. Músicas, playlists e avaliações serão preservadas. Os visuais poderão ser baixados novamente quando houver conexão.",
+                confirmLabel = stringResource(R.string.clear),
+                destructive = true,
+                onConfirm = {
+                    confirmClearVisualMedia = false
+                    backupScope.launch {
+                        VisualStillMedia.clear()
+                        CanvasCache.clearSaved()
+                        AppleArtistArtRepository.clearOfflineMetadata()
+                        CanvasRepository.clearOfflineMetadata()
+                        Toast.makeText(context, "Visuais offline apagados", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onDismiss = { confirmClearVisualMedia = false },
             )
         }
     }
