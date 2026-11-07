@@ -3093,6 +3093,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             val verified = mutableMapOf<String, RecordingMetadataEnrichment>()
+            fun publishVerified() {
+                if (artistPublicTopEpoch.isCurrent(generation) &&
+                    _detailStack.value.lastOrNull()?.browseId
+                        ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
+                ) {
+                    _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
+                        artistMbid = id,
+                        rows = canonicalVerifiedArtistTopRows(id, ranked, verified),
+                        sampled = sampled,
+                    )
+                }
+            }
             for (candidate in ranked) {
                 currentCoroutineContext().ensureActive()
                 // Do not spend eight MusicBrainz requests on a page that has
@@ -3105,7 +3117,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val known = artistTopMetadataCache[mbid]
                 val record = if (known != null) known else try {
                     val result = withTimeoutOrNull(16_000L) {
-                        artistTopMetadataProvider.lookupRecording(mbid)
+                        artistTopMetadataProvider.lookupOfficialAudioRecording(mbid)
                     }
                     (result as? MetadataLookupResult.Success)?.value
                 } catch (cancelled: CancellationException) {
@@ -3115,22 +3127,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (artistTopMetadataCache.size >= 64) artistTopMetadataCache.clear()
                     artistTopMetadataCache[mbid] = record
                     verified[mbid] = record
+                    // Show already-proved rows before requesting artwork:
+                    // CAA is optional and must not block visible chart titles.
+                    publishVerified()
+                    if (record.officialAudioReleaseMbid != null &&
+                        record.officialAudioArtworkUri == null &&
+                        canonicalVerifiedArtistTopRows(id, ranked, verified)
+                            .any { it.musicBrainzId.equals(mbid, ignoreCase = true) }
+                    ) {
+                        val art = try {
+                            withTimeoutOrNull(8_000L) {
+                                coverArtArchive.findCover(
+                                    record.officialAudioReleaseMbid, null,
+                                    CoverArtSize.THUMBNAIL,
+                                )
+                            }
+                        } catch (cancelled: CancellationException) { throw cancelled }
+                          catch (_: Exception) { null }
+                        if (art != null && artistPublicTopEpoch.isCurrent(generation)) {
+                            val enriched = record.copy(officialAudioArtworkUri = art)
+                            verified[mbid] = enriched
+                            artistTopMetadataCache[mbid] = enriched
+                        }
+                    }
                 }
-                // Progressively publish only independently verified rows. Old
-                // requests cannot repaint another artist after navigation.
-                if (artistPublicTopEpoch.isCurrent(generation) &&
-                    _detailStack.value.lastOrNull()?.browseId
-                        ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
-                ) {
-                    val rows = canonicalVerifiedArtistTopRows(id, ranked, verified)
-                    _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
-                        artistMbid = id,
-                        rows = rows,
-                        sampled = sampled,
-                        // Progressive rows are provisional until the bounded
-                        // MusicBrainz verification pass has completed.
-                    )
-                }
+                publishVerified()
             }
             if (artistPublicTopEpoch.isCurrent(generation) &&
                 _detailStack.value.lastOrNull()?.browseId
