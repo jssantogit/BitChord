@@ -2,6 +2,13 @@ package com.music.bitchord.data.canvas
 
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.artworkAt
+import android.content.Context
+import android.content.SharedPreferences
+import org.json.JSONObject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.music.bitchord.data.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -40,6 +47,63 @@ object CanvasRepository {
     private const val TAG = "CanvasRepository"
     private const val CACHE_SIZE = 64
 
+    private val warmScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    @Volatile private var savedMetadata: SharedPreferences? = null
+
+    fun init(context: Context) {
+        savedMetadata = context.getSharedPreferences(
+            "visual_canvas_identity_v1", Context.MODE_PRIVATE,
+        )
+    }
+
+    private fun metadataKey(key: String) =
+        visualMediaCacheKey(VisualSurface.NOW_PLAYING, "canvas-identity|$key")
+
+    private fun readOffline(key: String): CanvasArtwork? {
+        val raw = savedMetadata?.getString(metadataKey(key), null) ?: return null
+        val json = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        val url = json.optString("url")
+        if (!isSafeVisualMediaUrl(url) || !CanvasCache.isSaved(url)) return null
+        val type = runCatching {
+            CanvasSurface.valueOf(json.optString("surface"))
+        }.getOrDefault(CanvasSurface.NOW_PLAYING)
+        return CanvasArtwork(
+            url = url,
+            fallbackUrl = json.optString("fallback").takeIf(::isSafeVisualMediaUrl),
+            title = json.optString("title").takeIf(String::isNotBlank),
+            artist = json.optString("artist").takeIf(String::isNotBlank),
+            album = json.optString("album").takeIf(String::isNotBlank),
+            source = runCatching { CanvasSource.valueOf(json.optString("source")) }
+                .getOrDefault(CanvasSource.OTHER),
+            surface = type,
+        )
+    }
+
+    private fun keepDescriptor(key: String, artwork: CanvasArtwork) {
+        if (!isSafeVisualMediaUrl(artwork.url) ||
+            AppSettings.visualRetentionMode.value != VisualRetentionMode.SAVE_ON_WIFI
+        ) return
+        val surface = VisualSurface.valueOf(artwork.surface.name)
+        if (surface !in AppSettings.visualMotionSurfaces.value) return
+        val json = JSONObject().apply {
+            put("url", artwork.url)
+            put("fallback", artwork.fallbackUrl.orEmpty())
+            put("title", artwork.title.orEmpty())
+            put("artist", artwork.artist.orEmpty())
+            put("album", artwork.album.orEmpty())
+            put("source", artwork.source.name)
+            put("surface", artwork.surface.name)
+        }
+        savedMetadata?.edit()?.putString(metadataKey(key), json.toString())?.apply()
+    }
+
+    /** Clearing clips must also clear the identity-to-URL descriptor. */
+    fun clearOfflineMetadata() {
+        savedMetadata?.edit()?.clear()?.apply()
+        synchronized(cache) { cache.clear() }
+    }
+
+
     /**
      * A settled answer for one track or release.
      *
@@ -72,6 +136,18 @@ object CanvasRepository {
      * ([NowPlayingScreen], which checks [AppSettings.canvasOverCellular]).
      */
     suspend fun canvasFor(song: Song): CanvasArtwork? {
+        // Persist the already-known still while the player is visible;
+        // independent of whether any provider has a matching animation.
+        if (AppSettings.saveVisualStillImages.value) {
+            song.thumbnailUrl?.takeIf(::isSafeVisualMediaUrl)?.let { url ->
+                val identity = song.videoId.ifBlank { song.artist + "|" + song.title }
+                warmScope.launch {
+                    VisualStillMedia.save(VisualSurface.NOW_PLAYING,
+                        identity, url.artworkAt(900))
+                }
+            }
+        }
+        if (AppSettings.visualRetentionMode.value == VisualRetentionMode.STILL_ONLY) return null
         // Only skip when there is no catalogue identity to search on.
         if (song.videoId.isBlank() && (song.localUri != null || song.localPath != null)) return null
 
@@ -88,7 +164,7 @@ object CanvasRepository {
         val spotifyFirst = AppSettings.prioritizeSpotifyCanvas.value
         val key = cacheKey("song|${song.videoId}", spotifyFirst)
 
-        return resolve(key, album != null) {
+        return resolve(key, album != null, CanvasSurface.NOW_PLAYING) {
             if (spotifyFirst) {
                 firstHit(
                     { SpotifyCanvas.search(title, artist, album) },
@@ -119,7 +195,7 @@ object CanvasRepository {
             base = "song|${song.videoId}",
             spotifyFirst = AppSettings.prioritizeSpotifyCanvas.value,
         )
-        return synchronized(cache) { cache[key]?.artwork }
+        return synchronized(cache) { cache[key]?.artwork } ?: readOffline(key)
     }
 
     /**
@@ -136,7 +212,8 @@ object CanvasRepository {
         if (name.isBlank() || credit.isBlank()) return null
 
         val spotifyFirst = AppSettings.prioritizeSpotifyCanvas.value
-        return resolve(cacheKey("album|$name|$credit", spotifyFirst), withAlbum = true) {
+        return resolve(cacheKey("album|$name|$credit", spotifyFirst),
+            withAlbum = true, surface = CanvasSurface.ALBUM) {
             if (spotifyFirst) {
                 firstHit(
                     { SpotifyCanvas.searchAlbum(name, credit) },
@@ -162,13 +239,20 @@ object CanvasRepository {
     private suspend fun resolve(
         key: String,
         withAlbum: Boolean,
+        surface: CanvasSurface,
         lookUp: suspend () -> CanvasArtwork?,
     ): CanvasArtwork? = lock.withLock {
         synchronized(cache) {
             cache[key]?.let { if (it.reusable(withAlbum)) return@withLock it.artwork }
         }
+        readOffline(key)?.let {
+            synchronized(cache) { cache[key] = Entry(it, withAlbum) }
+            return@withLock it
+        }
         val found = withContext(Dispatchers.IO) { lookUp() }
+            ?.copy(surface = surface)
         synchronized(cache) { cache[key] = Entry(found, withAlbum) }
+        if (found != null) keepDescriptor(key, found)
         found
     }
 
