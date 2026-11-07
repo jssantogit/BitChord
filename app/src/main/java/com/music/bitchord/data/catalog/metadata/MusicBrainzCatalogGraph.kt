@@ -212,8 +212,12 @@ internal class MusicBrainzCatalogGraph(
             // Discogs *edition proof* must never interpret a partial list as
             // the full edition. Count checks are from MusicBrainz itself,
             // not from local playable-asset availability.
+            val mediaCount = data.integer("media-count")
             val completeTracklist = media.isNotEmpty() &&
-                data.integer("media-count") == media.size &&
+                // Real release lookups may omit this redundant top-level
+                // summary; the actual per-medium track counts are present.
+                // When provided, still reject a mismatched media count.
+                (mediaCount == null || mediaCount == media.size) &&
                 media.all { rawMedium ->
                     val medium = rawMedium as? JsonObject ?: return@all false
                     val sourceTracks = medium["tracks"] as? JsonArray ?: return@all false
