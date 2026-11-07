@@ -873,7 +873,7 @@ internal fun CanonicalRemoteLibraryScreen(
     val openTrackMenu: (CanonicalBrowseTrack) -> Unit = { track ->
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, track.recordingId),
-            track.title, track.artistDisplay,
+            track.title, track.artistDisplay, track.artworkUri,
         )
     }
     val openAlbumMenu: (ReleaseEntity) -> Unit = { album ->
