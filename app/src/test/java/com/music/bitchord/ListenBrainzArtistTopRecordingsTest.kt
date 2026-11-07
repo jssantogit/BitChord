@@ -84,4 +84,25 @@ class ListenBrainzArtistTopRecordingsTest {
         assertEquals(null, rows.last().artworkUri)
     }
 
+    @Test fun knownListenCountsRemainRankableWhenListenerCountsAreOmitted() {
+        val response = """[
+          {"recording_mbid":"$another","artist_mbids":["$artist"],
+           "total_listen_count":42},
+          {"recording_mbid":"$recording","artist_mbids":["$artist"],
+           "total_listen_count":125,"total_user_count":null}
+        ]"""
+        val parsed = parseListenBrainzArtistTopRecordings(response, artist)
+            as ListenBrainzArtistTopParseResult.Success
+        assertEquals(listOf(recording, another), parsed.recordings.map { it.recordingMbid })
+        assertEquals(listOf(125L, 42L), parsed.recordings.map { it.listens })
+        assertEquals(listOf(null, null), parsed.recordings.map { it.listeners })
+    }
+
+    @Test fun invalidExplicitListenerCountsNeverBecomeValidByOmissionFallback() {
+        val invalid = """[{"recording_mbid":"$recording",
+          "artist_mbids":["$artist"], "total_listen_count":15, "total_user_count":-1}]"""
+        assertEquals(ListenBrainzArtistTopParseResult.Invalid,
+            parseListenBrainzArtistTopRecordings(invalid, artist))
+    }
+
 }
