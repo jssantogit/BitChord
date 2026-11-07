@@ -31,6 +31,20 @@ class DiscogsEditionPresentationTest {
             1_000 + DiscogsObservation.TTL_MILLIS))
     }
 
+    @Test fun explicitDiscogsReleaseKindDoesNotInferAlbumFromLpOrTrackCount() {
+        assertEquals(DiscogsEditorialKind.ALBUM,
+            discogsEditorialKind(listOf("CD", "Album")))
+        assertEquals(DiscogsEditorialKind.EP,
+            discogsEditorialKind(listOf("Digital Media", "EP")))
+        assertEquals(DiscogsEditorialKind.SINGLE,
+            discogsEditorialKind(listOf("File", "Single")))
+        assertEquals(DiscogsEditorialKind.MINI_ALBUM,
+            discogsEditorialKind(listOf("CD", "Mini-Album")))
+        assertNull(discogsEditorialKind(listOf("Vinyl", "LP")))
+        assertNull(discogsEditorialKind(listOf("Digital Media", "Album", "EP")))
+        assertNull(discogsEditorialKind(emptyList()))
+    }
+
     @Test fun candidateConflictAndUnavailableNeverSurfaceDetailsOrAttribution() {
         assertNull(DiscogsEditionPresentation.from(DiscogsEditionEnrichment.Candidate, 1))
         assertNull(DiscogsEditionPresentation.from(DiscogsEditionEnrichment.Conflict, 1))
