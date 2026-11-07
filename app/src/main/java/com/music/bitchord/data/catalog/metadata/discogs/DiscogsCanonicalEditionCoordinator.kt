@@ -81,6 +81,7 @@ internal class DiscogsCanonicalEditionCoordinator(
 
             entries.remove(mbid)
             val resolved = resolve(mbid)
+            DiscogsDiagnosticStatus.releaseResult(resolved)
             val lifetime = when (resolved) {
                 is DiscogsEditionEnrichment.Verified ->
                     minOf(20L * 60_000L,
