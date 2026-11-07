@@ -1,6 +1,8 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopRecording
+import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
+import com.music.bitchord.ui.canonicalArtistSitewideAllTimeRanking
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistCredit
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.ui.canonicalVerifiedArtistTopRows
@@ -182,6 +184,33 @@ class CanonicalArtistPublicTopRowsTest {
         assertFalse(canonicalArtistTopPlaybackDecoration(
             ranked, setOf(second),
         ).single().hasCatalogedAsset)
+    }
+
+
+    @Test fun sitewideAllTimeChartPrecedesArbitrarySearchSamplingAndChecksExactArtist() {
+        val candidates = listOf(
+            ListenBrainzSitewideRecording(first, 220, listOf(artist)),
+            ListenBrainzSitewideRecording(second, 550, listOf(otherArtist)),
+            ListenBrainzSitewideRecording(
+                "33333333-3333-4333-8333-333333333333", 320, listOf(artist)),
+            ListenBrainzSitewideRecording(
+                "44444444-4444-4444-8444-444444444444", 9000),
+        )
+        val ranked = canonicalArtistSitewideAllTimeRanking(artist, candidates)
+        assertEquals(listOf("33333333-3333-4333-8333-333333333333", first),
+            ranked.map { it.recordingMbid })
+        assertEquals(listOf(320L, 220L), ranked.map { it.listens })
+        assertTrue(ranked.all { it.listeners == null })
+        val studio = RecordingMetadataEnrichment(
+            musicBrainzId = first, title = "Famous studio song",
+            officialAudioReleaseMbid = officialRelease,
+            artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
+        )
+        assertEquals(listOf(first), canonicalVerifiedArtistTopRows(
+            artist, ranked, mapOf(first to studio),
+        ).map { it.musicBrainzId })
+        assertTrue(canonicalArtistSitewideAllTimeRanking(otherArtist,
+            candidates.filter { it.artistMbids.isEmpty() }).isEmpty())
     }
 
 }
