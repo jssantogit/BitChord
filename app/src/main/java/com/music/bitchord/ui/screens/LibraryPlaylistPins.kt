@@ -13,14 +13,23 @@ import org.json.JSONObject
 internal data class LibraryPlaylistPin(
     val id: String,
     val title: String,
+    /** Optional public playlist creator, persisted for offline navigation. */
+    val creator: String = "",
 )
+
+private val PUBLIC_PLAYLIST_PIN_ID =
+    Regex("""^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$""")
 
 internal fun validLibraryPlaylistPin(pin: LibraryPlaylistPin): Boolean =
     (pin.id.startsWith("normal:") || pin.id.startsWith("v2:") ||
-        pin.id.startsWith("local:local:playlist:")) &&
+        pin.id.startsWith("local:local:playlist:") ||
+        pin.id.removePrefix("public:").let { candidate ->
+            pin.id.startsWith("public:") && PUBLIC_PLAYLIST_PIN_ID.matches(candidate)
+        }) &&
         pin.id.substringAfter(':').isNotBlank() &&
         pin.id.length <= 512 && pin.id == pin.id.trim() &&
-        pin.title.isNotBlank() && pin.title.length <= 240
+        pin.title.isNotBlank() && pin.title.length <= 240 &&
+        pin.creator.length <= 240
 
 internal fun toggleLibraryPlaylistPin(
     current: List<LibraryPlaylistPin>,
@@ -52,6 +61,7 @@ internal fun encodeLibraryPlaylistPins(pins: List<LibraryPlaylistPin>): String =
                 put(JSONObject().apply {
                     put("id", pin.id)
                     put("title", pin.title)
+                    if (pin.creator.isNotBlank()) put("creator", pin.creator)
                 })
             }
     }.toString()
@@ -62,7 +72,10 @@ internal fun decodeLibraryPlaylistPins(raw: String?): List<LibraryPlaylistPin> {
     val ids = HashSet<String>()
     for (i in 0 until minOf(list.length(), 300)) {
         val value = list.optJSONObject(i) ?: continue
-        val pin = LibraryPlaylistPin(value.optString("id"), value.optString("title"))
+        val pin = LibraryPlaylistPin(
+            value.optString("id"), value.optString("title"),
+            value.optString("creator"),
+        )
         if (validLibraryPlaylistPin(pin) && ids.add(pin.id)) output += pin
         if (output.size == 100) break
     }
