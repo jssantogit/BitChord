@@ -213,4 +213,21 @@ class CanonicalArtistPublicTopRowsTest {
             candidates.filter { it.artistMbids.isEmpty() }).isEmpty())
     }
 
+
+    @Test fun sampledPopularityScansWiderArtistCorpusAndOrdersByActualListenCounts() {
+        val candidates = (1..75).map { n ->
+            n.toString(16).padStart(8, '0') + "-1111-4111-8111-111111111111"
+        }
+        val popularity = candidates.mapIndexed { index, id ->
+            ListenBrainzPopularityEvidence.Known(
+                id, listens = if (index == 60) 10_000L else (index + 100).toLong(),
+                listeners = if (index == 60) 1L else (index + 10).toLong(),
+            )
+        }
+        val ranked = canonicalArtistSampledPopularityRanking(candidates, popularity)
+        assertEquals(candidates[60], ranked.first().recordingMbid)
+        assertEquals(10_000L, ranked.first().listens)
+        assertEquals(8, ranked.size)
+    }
+
 }
