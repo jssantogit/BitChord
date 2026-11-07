@@ -163,4 +163,27 @@ class MusicBrainzArtistAppearancesTest {
         assertEquals(entries[1].releaseMbid, targets[1].first)
     }
 
+
+    @Test fun popularArtistsScanNextOfficialPageWhenFirstIsOnlyUnrelatedEditions() = runBlocking {
+        val requestedOffsets = mutableListOf<Int>()
+        val rejected = (1..25).joinToString(",") { n ->
+            """{"id":"${n.toString(16).padStart(8, '0')}-3333-4333-8333-333333333333",
+                "status":"Bootleg"}"""
+        }
+        val valid = """{"id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official",
+            "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Real guest track","primary-type":"Single"},
+            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            pagedFetch = { _, offset ->
+                requestedOffsets += offset
+                if (offset == 0) """{"release-count":26,"releases":[$rejected]}"""
+                else """{"release-count":26,"releases":[$valid]}"""
+            },
+        )
+        assertEquals(listOf("Real guest track"), client.browse(target).map { it.title })
+        assertEquals(listOf(0, 25), requestedOffsets)
+    }
+
 }
