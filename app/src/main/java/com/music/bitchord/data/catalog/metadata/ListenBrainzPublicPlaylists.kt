@@ -60,6 +60,9 @@ internal data class ListenBrainzPublicPlaylistHttp(val status: Int, val body: St
 
 internal interface ListenBrainzPublicPlaylistTransport {
     suspend fun search(query: String): ListenBrainzPublicPlaylistHttp
+    /** Text search needs a larger trigram candidate window than discovery.
+     * The default preserves existing injected transport mocks. */
+    suspend fun searchWide(query: String): ListenBrainzPublicPlaylistHttp = search(query)
     suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp
     suspend fun recordingArtwork(recordingMbids: List<String>): ListenBrainzPublicPlaylistHttp? = null
 }
@@ -77,13 +80,21 @@ internal class KtorListenBrainzPublicPlaylistTransport(
     },
 ) : ListenBrainzPublicPlaylistTransport {
     override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp =
+        getPublicPlaylists(query, count = 25)
+
+    override suspend fun searchWide(query: String): ListenBrainzPublicPlaylistHttp =
+        getPublicPlaylists(query, count = 75)
+
+    private suspend fun getPublicPlaylists(
+        query: String, count: Int,
+    ): ListenBrainzPublicPlaylistHttp =
         measureMetadataHttp(
             provider = "listenbrainz", endpoint = "public_playlist_search",
             status = { r: ListenBrainzPublicPlaylistHttp -> r.status },
         ) {
             val response = client.get("https://api.listenbrainz.org/1/playlist/search") {
                 parameter("query", query)
-                parameter("count", 25)
+                parameter("count", count)
                 parameter("offset", 0)
                 header(HttpHeaders.UserAgent, "BitChord/${BuildConfig.VERSION_NAME}")
             }
@@ -216,6 +227,14 @@ private fun publicGenreAliases(tag: String): List<String> = when (tag) {
     else -> listOf(tag)
 }
 
+/** Editorial shelf quality belongs to playlist metadata, not the UI.
+ * Search and detail still allow legitimate one-word titles. */
+internal fun isDescriptivePublicPlaylistTitle(title: String): Boolean {
+    val clean = title.trim()
+    return clean.length >= 5 && clean.split(Regex("""\\s+"""))
+        .count { it.any(Char::isLetterOrDigit) } >= 2
+}
+
 /** Only validated public playlist identities appear in genre discovery. */
 internal fun parseListenBrainzPublicPlaylistSearch(
     body: String, genreTag: String? = null,
@@ -341,7 +360,7 @@ internal class ListenBrainzPublicPlaylistClient(
      */
     suspend fun searchPublicQuery(query: String): List<ListenBrainzPublicPlaylist> {
         val trimmed = query.trim()
-        if (trimmed.length !in 2..80 || trimmed.any(Char::isISOControl))
+        if (trimmed.length !in 3..80 || trimmed.any(Char::isISOControl))
             return emptyList()
         // The upstream fuzzy search can put an exact title/annotation match
         // below its first twelve hits. Apply the evidence filter before the
@@ -350,7 +369,7 @@ internal class ListenBrainzPublicPlaylistClient(
     }
 
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
-        search(listOf("music", "mix", "playlist"), null)
+        search(listOf("music", "essentials", "favorites"), null)
 
 
     /**
@@ -408,11 +427,22 @@ internal class ListenBrainzPublicPlaylistClient(
     ): List<ListenBrainzPublicPlaylist>? {
         var completed = false
         for ((attemptIndex, query) in queries.distinct().withIndex()) {
-            val response = try { limiter.run { transport.search(query) } }
+            val response = try {
+                limiter.run {
+                    if (surface == "search") transport.searchWide(query)
+                    else transport.search(query)
+                }
+            }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { null }
-            val matches = if (response?.status == 200)
+            val parsed = if (response?.status == 200)
                 parseListenBrainzPublicPlaylistSearch(response.body, tag) else null
+            // Upstream public search ranks by trigram similarity, so "music"
+            // frequently yields only one-word placeholders. Skip that batch
+            // and try a bounded descriptive query before declaring Home empty.
+            val matches = if (surface == "home")
+                parsed?.filter { isDescriptivePublicPlaylistTitle(it.title) }
+            else parsed
             // The physical smoke previously showed HTTP 200 and an empty
             // shelf, but offered no proof whether the response contained zero
             // candidates or our safety filters had rejected them. Record only
