@@ -1568,6 +1568,21 @@ internal fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(top = 24.dp, bottom = 8.dp),
         )
+        // Discogs requires an app-level non-affiliation notice in addition to
+        // the exact linked credit adjacent to each edition's metadata.
+        // Keep it in About, not as another block on every album page.
+        if (com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess.ENABLED) {
+            Text(
+                text = com.music.bitchord.data.catalog.metadata.discogs
+                    .DiscogsEditionAccess.NON_AFFILIATION_NOTICE,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+            )
+        }
         }
     }
 
