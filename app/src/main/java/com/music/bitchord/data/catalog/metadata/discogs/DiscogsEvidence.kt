@@ -156,7 +156,12 @@ internal object DiscogsRecordParser {
                 val descriptions = format.stringArray("descriptions", 24) ?: return null
                 listOfNotNull(name) + descriptions
             }
-            val positions = tracks.map { track ->
+            // Discogs tracklists may contain disc headings and index markers,
+            // neither of which is a MusicBrainz audio Track. Comparing them as
+            // tracks would reject valid editions or validate wrong track counts.
+            val positions = tracks.filter { track ->
+                track.clean("type_", 32)?.lowercase(Locale.ROOT) in setOf(null, "track")
+            }.map { track ->
                 (track.clean("position", 40) ?: "") to
                     (track.clean("title", 240) ?: return null)
             }
