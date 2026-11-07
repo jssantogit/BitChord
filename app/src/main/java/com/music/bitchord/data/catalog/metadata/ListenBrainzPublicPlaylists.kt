@@ -343,8 +343,10 @@ internal class ListenBrainzPublicPlaylistClient(
         val trimmed = query.trim()
         if (trimmed.length !in 2..80 || trimmed.any(Char::isISOControl))
             return emptyList()
-        return search(listOf(trimmed), null, surface = "search").orEmpty()
-            .filter { matchesPlaylistWords(it, listOf(trimmed)) }
+        // The upstream fuzzy search can put an exact title/annotation match
+        // below its first twelve hits. Apply the evidence filter before the
+        // shared 12-item display cap, or valid matches silently disappear.
+        return search(listOf(trimmed), trimmed, surface = "search").orEmpty()
     }
 
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
