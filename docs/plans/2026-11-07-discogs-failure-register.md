@@ -1,6 +1,6 @@
 # BitChord #210 — Discogs failure register, threat model and validation gates
 
-Date: 2026-11-07. State: IMPLEMENTATION IN PROGRESS, first adapter and tests checked in; no UI or live API enablement. CI/device/license gates remain open. Branch `catalog/210-discogs-provider-evidence-20261107`; single PR, no merge until acceptance. Pair with [architecture design](2026-11-07-discogs-catalog-evidence-design.md).
+Date: 2026-11-07. Current state: personal-use metadata-only Discogs API access ENABLED in DRAFT PR #211; no merge or physical Galaxy smoke yet. Official API reachability and a real MusicBrainz ↔ Discogs linked release were verified by CI API probes; Android CI remains a separate gate. The user deferred potential **public distribution** reviews until such distribution is actually planned. Discogs API terms still apply during private use. Branch `catalog/210-discogs-provider-evidence-20261107`; single PR #211; no merge before approval. Pair with [architecture design](2026-11-07-discogs-catalog-evidence-design.md).
 
 Classification: **BLOCKER** means do not enable the provider; **HIGH** means required regression coverage; **MEDIUM** means defensive tests and diagnostic treatment. This is a comprehensive *risk inventory*, not a claim that all imaginable external failures are known.
 
@@ -8,7 +8,7 @@ Classification: **BLOCKER** means do not enable the provider; **HIGH** means req
 
 | ID | Severity | Failure or attack | Guard + automated or manual evidence |
 | --- | --- | --- | --- |
-| A01 | BLOCKER | API permission incompatible with GPLv3 fork/distribution or acquisition workflows | legal/terms review before network feature enabled; no scraping/workaround; kill switch |
+| A01 | DEFERRED (publication) | Future public distribution may require a separate license/API compatibility review | Revisit if the user decides to distribute; personal access still respects current Discogs API terms, no scraping or bypass |
 | A02 | BLOCKER | Discogs images shown without permission; restricted content copied as CC0 | artwork and image endpoints off; fixtures assert URLs never become artwork candidates |
 | A03 | BLOCKER | API facts outlast permitted freshness; cached metadata shown offline after expiry | source-only TTL/expiry at read/render; fake clock, airplane mode and clock-change tests |
 | A04 | BLOCKER | Required notice or per-fact link omitted on one Android surface | rendering contract and Compose tests on every consumer; About notice screenshot |
