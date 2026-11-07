@@ -61,6 +61,43 @@ internal fun parseListenBrainzSimilarArtists(
     return rows.values.toList()
 }
 
+
+/**
+ * Experimental Labs similarity is a fallback only; every result must carry
+ * the requested reference Artist MBID AND a positive algorithmic score.
+ * Never derive a link from shared genres or artist names.
+ */
+internal fun parseListenBrainzLabsSimilarArtists(
+    body: String, seedArtistMbid: String,
+): List<ListenBrainzSimilarArtist> {
+    val seed = seedArtistMbid.lowercase(Locale.ROOT)
+    if (!SIMILAR_ARTIST_MBID.matches(seed) || body.length > 300_000) return emptyList()
+    val parsed = runCatching { Json.parseToJsonElement(body) }.getOrNull()
+    val rows = when (parsed) {
+        is JsonArray -> parsed
+        is JsonObject -> (parsed["results"] ?: parsed["data"]) as? JsonArray
+        else -> null
+    } ?: return emptyList()
+    return rows.asSequence().take(150).mapNotNull { value ->
+        val item = value as? JsonObject ?: return@mapNotNull null
+        val reference = (item["reference_mbid"] as? JsonPrimitive)
+            ?.contentOrNull?.lowercase(Locale.ROOT)
+        val id = (item["artist_mbid"] as? JsonPrimitive)
+            ?.contentOrNull?.lowercase(Locale.ROOT)
+        val name = (item["name"] as? JsonPrimitive)?.contentOrNull?.trim()
+        val score = (item["score"] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()
+        if (reference != seed || id == null || !SIMILAR_ARTIST_MBID.matches(id) ||
+            id == seed || name.isNullOrBlank() || name.length > 120 ||
+            name.any(Char::isISOControl) || score == null || !score.isFinite() ||
+            score <= 0.0
+        ) return@mapNotNull null
+        ListenBrainzSimilarArtist(id, name)
+    }.distinctBy { it.mbid }.take(12).toList()
+}
+
+private const val LB_LABS_SIMILAR_ALGORITHM =
+    "session_based_days_7500_session_300_contribution_5_threshold_10_limit_100_filter_True_skip_30"
+
 internal class ListenBrainzSimilarArtistsClient(
     private val client: HttpClient = HttpClient(OkHttp) {
         install(HttpTimeout) {
@@ -72,6 +109,7 @@ internal class ListenBrainzSimilarArtistsClient(
     private val limiter: ListenBrainzRateLimiter = ListenBrainzRequestBudget.limiter,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val fetch: (suspend (String) -> Pair<Int, String>)? = null,
+    private val labsFetch: (suspend (String) -> Pair<Int, String>)? = null,
 ) {
     private data class Entry(val at: Long, val value: List<ListenBrainzSimilarArtist>,
         val healthy: Boolean)
@@ -108,10 +146,38 @@ internal class ListenBrainzSimilarArtistsClient(
             }
         } catch (cancelled: CancellationException) { throw cancelled }
           catch (_: Exception) { null }
-        val healthy = response?.first == 200
-        val resolved = if (healthy)
+        var healthy = response?.first == 200
+        var resolved = if (healthy)
             parseListenBrainzSimilarArtists(response?.second.orEmpty(), id)
         else emptyList()
+        // LB Radio often fails independently of Labs. Use a separate
+        // experimental, read-only MBID graph, never a title-based suggestion.
+        if (resolved.isEmpty()) {
+            val labsResponse = try {
+                limiter.run {
+                    if (labsFetch != null) labsFetch(id) else measureMetadataHttp(
+                        provider = "listenbrainz", endpoint = "artist_similar_labs",
+                        status = { value: Pair<Int, String> -> value.first },
+                    ) {
+                        val http = client.get(
+                            "https://labs.api.listenbrainz.org/similar-artists/json",
+                        ) {
+                            parameter("artist_mbids", id)
+                            parameter("algorithm", LB_LABS_SIMILAR_ALGORITHM)
+                            header(HttpHeaders.UserAgent, "BitChord/" + BuildConfig.VERSION_NAME)
+                        }
+                        http.status.value to if (http.status.value == 200)
+                            http.bodyAsText() else ""
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { null }
+            if (labsResponse?.first == 200) {
+                val fromLabs = parseListenBrainzLabsSimilarArtists(labsResponse.second, id)
+                if (fromLabs.isNotEmpty()) resolved = fromLabs
+                healthy = true
+            }
+        }
         if (cache.size >= 64) cache.remove(cache.keys.first())
         cache[id] = Entry(nowMillis(), resolved, healthy)
         return resolved
