@@ -127,9 +127,51 @@ internal data class DiscogsRecord(
     val attributionUrl: String get() = link.attributionUrl
 }
 
+/** A Discogs Master groups versions and must not be converted to an MB Release. */
+internal data class DiscogsMasterRecord(
+    val link: DiscogsLink,
+    val title: String,
+    val artistNames: List<String>,
+    val year: Int?,
+    /** A Discogs release candidate, not a MusicBrainz Release ID. */
+    val mainReleaseId: Long?,
+    val genres: List<String>,
+    val styles: List<String>,
+) {
+    val attributionUrl: String get() = link.attributionUrl
+    fun canSupplyAudio(): Boolean = false
+    fun canSupplyArtwork(): Boolean = false
+}
+
 internal object DiscogsRecordParser {
     private val json = Json { ignoreUnknownKeys = true; isLenient = false }
     private const val MAX_BYTES = 131_072
+
+    /** Safely parse group-level context; never import images, release tracks or user data. */
+    fun parseMaster(expected: DiscogsLink, raw: String): DiscogsMasterRecord? {
+        if (expected.kind != DiscogsKind.MASTER || raw.length > MAX_BYTES) return null
+        return try {
+            val obj = json.parseToJsonElement(raw) as? JsonObject ?: return null
+            if ((obj["id"] as? JsonPrimitive)?.longOrNull != expected.id) return null
+            val title = obj.clean("title", 240) ?: return null
+            val artists = obj.objects("artists", 32) ?: return null
+            val genres = obj.stringArray("genres", 64) ?: return null
+            val styles = obj.stringArray("styles", 64) ?: return null
+            val release = (obj["main_release"] as? JsonPrimitive)?.longOrNull
+                ?.takeIf { it in 1..999_999_999_999L }
+            DiscogsMasterRecord(
+                link = expected,
+                title = title,
+                artistNames = artists.mapNotNull { it.clean("name", 180) },
+                year = (obj["year"] as? JsonPrimitive)?.intOrNull?.takeIf { it in 1800..2200 },
+                mainReleaseId = release,
+                genres = genres,
+                styles = styles,
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     fun parse(expected: DiscogsLink, raw: String): DiscogsRecord? {
         if (expected.kind != DiscogsKind.RELEASE || raw.length > MAX_BYTES) return null
