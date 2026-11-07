@@ -15,6 +15,33 @@ class NativeArtistIncludedInArtworkTest {
     private val firstEdition = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
     private val secondEdition = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 
+    @Test fun guestShelfCombinesMultipleEditionIdsIntoOneVisibleSong() {
+        val original = MusicBrainzArtistAppearance(
+            releaseGroupMbid = firstGroup, title = "World Music Radio",
+            artistCredit = "Jon Batiste", releaseDate = "2023-08-18",
+            primaryType = "Album", recordingMbid = firstEdition,
+            trackTitle = "Be Who You Are", commerciallyVerified = true,
+        )
+        val alternate = original.copy(recordingMbid = secondEdition,
+            trackTitle = "be who you are  ", releaseDate = "2023-08-17")
+        val otherSong = original.copy(recordingMbid = "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            trackTitle = "Different Song")
+        val rows = nativeArtistEditorialGuestTracks(listOf(original, alternate, otherSong))
+        assertEquals(listOf("Be Who You Are", "Different Song"), rows.map { it.trackTitle })
+    }
+
+    @Test fun identicalTrackTitlesOnDifferentHostArtistsRemainSeparate() {
+        val original = MusicBrainzArtistAppearance(
+            releaseGroupMbid = firstGroup, title = "Album A",
+            artistCredit = "Host A", releaseDate = null, primaryType = "Album",
+            recordingMbid = firstEdition, trackTitle = "Together",
+            commerciallyVerified = true,
+        )
+        val other = original.copy(releaseGroupMbid = secondGroup,
+            recordingMbid = secondEdition, artistCredit = "Host B")
+        assertEquals(2, nativeArtistEditorialGuestTracks(listOf(original, other)).size)
+    }
+
     @Test fun verifiedGroupCoverIsReusedWithoutReopeningTheReleaseFront() = runBlocking {
         var releaseFrontRequests = 0
         val art = nativeArtistIncludedInCoverFromVerifiedCache(
