@@ -154,12 +154,26 @@ internal fun canonicalExploreGenreShelf(
         )
     })
 
+/** A valid public playlist can have a one-word title, but these are too
+ * generic to fill a recommendation shelf. Keep them searchable by name.
+ */
+internal fun canonicalPublicPlaylistTitleIsDescriptive(title: String): Boolean {
+    val clean = title.trim()
+    return clean.length >= 5 && clean.split(Regex("""\s+"""))
+        .count { it.any(Char::isLetterOrDigit) } >= 2
+}
+
 /** Public playlists use their own ListenBrainz MBID, never ReleaseGroup identity. */
 internal fun canonicalPublicPlaylistShelf(
     heading: String,
     playlists: List<ListenBrainzPublicPlaylist>,
 ): HomeShelf? = playlists.takeIf { it.isNotEmpty() }?.let { entries ->
-    HomeShelf(heading, entries.distinctBy { it.mbid }.take(12).map { row ->
+    val curated = entries.asSequence()
+        .filter { canonicalPublicPlaylistTitleIsDescriptive(it.title) }
+        .distinctBy { it.title.trim().lowercase(java.util.Locale.ROOT) }
+        .take(12).toList()
+    if (curated.isEmpty()) return@let null
+    HomeShelf(heading, curated.map { row ->
         ShelfItem(
             title = row.title,
             subtitle = row.creator,
