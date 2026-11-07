@@ -217,7 +217,7 @@ internal class MusicBrainzArtistAppearancesClient(
                         fetch != null -> fetch.invoke(id)
                         else -> client.get("release", mapOf(
                             "track_artist" to id,
-                            "inc" to "release-groups+artist-credits+recordings+labels",
+                            "inc" to "release-groups+artist-credits+recordings+labels+isrcs",
                             "limit" to "25",
                             "offset" to offset.toString(),
                             "fmt" to "json",
