@@ -1,6 +1,7 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopRecording
+import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
@@ -42,6 +43,39 @@ private val PUBLIC_ARTIST_CHART_NON_STUDIO = Regex(
 
 
 /**
+ * When the per-artist popularity endpoint is temporarily unavailable (401),
+ * use the public all-time sitewide ranking *only* for recordings whose source
+ * row explicitly credits the exact MusicBrainz artist ID. The candidate
+ * set is globally bounded: it is stronger than arbitrary first-page search,
+ * but it is not equivalent to Spotify's full all-time artist chart.
+ *
+ * Sitewide provides listens, not unique listeners. Preserve that unknown.
+ * Official studio edition proof is still required independently by
+ * canonicalVerifiedArtistTopRows before any card becomes visible.
+ */
+internal fun canonicalArtistSitewideAllTimeRanking(
+    artistMbid: String,
+    observations: List<ListenBrainzSitewideRecording>,
+    limit: Int = 20,
+): List<ListenBrainzArtistTopRecording> {
+    val artist = artistMbid.lowercase(Locale.ROOT)
+    if (!PUBLIC_ARTIST_MBID.matches(artist) || limit <= 0) return emptyList()
+    return observations.asSequence()
+        .filter { it.listenCount > 0L && it.artistMbids.any { id ->
+            id.equals(artist, ignoreCase = true)
+        } }
+        .filter { PUBLIC_ARTIST_MBID.matches(it.recordingMbid.lowercase(Locale.ROOT)) }
+        .distinctBy { it.recordingMbid.lowercase(Locale.ROOT) }
+        .sortedWith(compareByDescending<ListenBrainzSitewideRecording> { it.listenCount }
+            .thenBy { it.recordingMbid })
+        .take(limit.coerceAtMost(20))
+        .map { ListenBrainzArtistTopRecording(
+            it.recordingMbid.lowercase(Locale.ROOT), it.listenCount, listeners = null,
+        ) }
+        .toList()
+}
+
+/**
  * ListenBrainz supplies popularity order and scope. MusicBrainz must
  * independently prove BOTH recording identity and exact artist credit.
  *
@@ -61,7 +95,7 @@ internal fun canonicalVerifiedArtistTopRows(
         id.lowercase(Locale.ROOT) to data
     }
     return ranked.asSequence()
-        .filter { it.listeners > 0L && it.listens >= it.listeners }
+        .filter { it.listens > 0L && (it.listeners?.let { n -> n > 0L && it.listens >= n } ?: true) }
         .distinctBy { it.recordingMbid.lowercase(Locale.ROOT) }
         .mapNotNull { rankedRecording ->
             val id = rankedRecording.recordingMbid.lowercase(Locale.ROOT)
