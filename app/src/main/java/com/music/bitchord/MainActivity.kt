@@ -3600,6 +3600,10 @@ private fun BitChordApp(
                             onCanonicalFeaturedReleaseOpen = { release ->
                                 viewModel.openCanonicalNativeDetail(release)
                             },
+                            onCanonicalArtistPlaylistOpen = { playlist ->
+                                openedPublicPlaylist = playlist
+                                viewModel.loadCanonicalPublicPlaylistDetail(playlist)
+                            },
                             contentPadding = listPadding,
                         )
                     } else when (key.removePrefix(TAB_KEY).toIntOrNull() ?: selectedTab) {
