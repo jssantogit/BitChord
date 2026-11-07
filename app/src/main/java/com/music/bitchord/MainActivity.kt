@@ -3591,6 +3591,7 @@ private fun BitChordApp(
                             canonicalPublicTopTracks = if (publicArtistMbid != null &&
                                 artistPublicTop.artistMbid?.equals(publicArtistMbid, ignoreCase = true) == true
                             ) artistPublicTop.rows else emptyList(),
+                            canonicalPublicTopSampled = artistPublicTop.sampled,
                             onCanonicalPublicTopOpen = { recording ->
                                 // Public popularity is metadata, never stream
                                 // proof. Open the existing read-only detail.
