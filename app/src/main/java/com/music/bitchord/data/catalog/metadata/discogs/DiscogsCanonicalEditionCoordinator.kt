@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import java.util.Locale
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private val EXACT_RELEASE_MBID =
     Regex("^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
@@ -31,7 +33,7 @@ internal fun discogsLibraryReleaseMbid(
     enrichment: MusicBrainzReleaseEnrichmentEntity?,
 ): String? {
     if (enrichment?.releaseId != localReleaseId ||
-        !enrichment.status.equals("Official", ignoreCase = true)
+        !enrichment?.status.equals("Official", ignoreCase = true)
     ) return null
     return normalizedReleaseMbid(enrichment.mbid)
 }
@@ -46,11 +48,57 @@ internal class DiscogsCanonicalEditionCoordinator(
     private val graph: MusicBrainzCatalogGraph = MusicBrainzCatalogGraph(),
     private val editions: DiscogsEditionRepository = DiscogsEditionRepository(),
     private val enabled: Boolean = false,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
+    private data class Cached(
+        val result: DiscogsEditionEnrichment,
+        val expiresAtMillis: Long,
+    )
+
+    // Coalesce concurrent navigation into one read and keep a bounded
+    // nonpersistent result cache. A source observation NEVER gains additional
+    // freshness from the coordinator; the five-hour Discogs TTL is absolute.
+    private val lock = Mutex()
+    private val entries = linkedMapOf<String, Cached>()
+
+    suspend fun clear() = lock.withLock { entries.clear() }
+
     suspend fun observeRelease(musicBrainzReleaseMbid: String): DiscogsEditionEnrichment {
         if (!enabled) return DiscogsEditionEnrichment.Disabled
         val mbid = normalizedReleaseMbid(musicBrainzReleaseMbid)
             ?: return DiscogsEditionEnrichment.Invalid
+        return lock.withLock {
+            val now = nowMillis()
+            val cached = entries[mbid]
+            if (cached != null && now < cached.expiresAtMillis &&
+                (cached.result !is DiscogsEditionEnrichment.Verified ||
+                    cached.result.observation.isDisplayableAt(now))
+            ) return@withLock cached.result
+
+            entries.remove(mbid)
+            val resolved = resolve(mbid)
+            val lifetime = when (resolved) {
+                is DiscogsEditionEnrichment.Verified ->
+                    minOf(20L * 60_000L,
+                        (resolved.observation.fetchedAtMillis +
+                            DiscogsObservation.TTL_MILLIS - now).coerceAtLeast(0L))
+                DiscogsEditionEnrichment.NoLink -> 5L * 60_000L
+                DiscogsEditionEnrichment.Candidate,
+                DiscogsEditionEnrichment.Conflict,
+                DiscogsEditionEnrichment.Ambiguous,
+                DiscogsEditionEnrichment.Invalid -> 60_000L
+                DiscogsEditionEnrichment.Unavailable -> 15_000L
+                DiscogsEditionEnrichment.Disabled -> 0L
+            }
+            if (lifetime > 0L) {
+                entries[mbid] = Cached(resolved, now + lifetime)
+                while (entries.size > 64) entries.remove(entries.keys.first())
+            }
+            resolved
+        }
+    }
+
+    private suspend fun resolve(mbid: String): DiscogsEditionEnrichment {
         val graphResult = graph.lookupRelease(mbid)
         val detail = (graphResult as? MusicBrainzCatalogGraphResult.Success<
             MusicBrainzCatalogReleaseDetail>)?.value ?: return DiscogsEditionEnrichment.Unavailable
