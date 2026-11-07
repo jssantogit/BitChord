@@ -138,4 +138,20 @@ class CanonicalArtistReleaseSectionsTest {
         assertNull(canonicalArtistReleaseSections(listOf(ep), emptyMap(),
             recordingCountsByRelease = mapOf(ep.id to 1)).recentRelease)
     }
+
+    @Test fun nativeHeroCanUseARealReleaseDateEvenWithoutReleaseGroupType() {
+        val dated = release("verified-edition")
+        val undated = release("untagged")
+        val result = canonicalArtistReleaseSections(listOf(undated, dated),
+            mapOf(dated.id to CanonicalArtistReleaseEvidence(dated.id, null, "2026-08-18")),
+            recordingCountsByRelease = mapOf(undated.id to 3, dated.id to 1))
+        assertEquals("verified-edition", result.recentRelease?.id)
+        assertNull(result.recentAlbum)
+    }
+
+    @Test fun artistReleaseDateShowsLocalizedReadableDay() {
+        assertEquals("18 de set. de 2026", canonicalArtistReleaseDateLabel("2026-09-18"))
+        assertEquals("2026", canonicalArtistReleaseDateLabel("2026"))
+        assertEquals(null, canonicalArtistReleaseDateLabel("20xx-09-18"))
+    }
 }
