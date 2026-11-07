@@ -39,7 +39,9 @@ class DiscogsEditionMatcherTest {
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(canon.copy(barcodes = emptyList(),
                 trackTitles = emptyList()), linked, record))
-        assertEquals(DiscogsEditionVerdict.VERIFIED,
+        // The same barcode can belong to multiple repressings or variants.
+        // Without an independently comparable tracklist it stays a candidate.
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(canon, linked, noTracklist))
         assertEquals(DiscogsEditionVerdict.VERIFIED,
             DiscogsEditionMatcher.assess(canon, linked, noBarcodes))
