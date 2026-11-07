@@ -48,7 +48,10 @@ def mb_track_titles(payload: dict) -> tuple[list[str], bool]:
     if not isinstance(media, list) or not media:
         return [], False
     all_titles = []
-    complete = payload.get("media-count") == len(media)
+    top_level_media_count = payload.get("media-count")
+    # Real MusicBrainz lookups omit this optional summary; the per-medium
+    # track-count is authoritative for a complete release tracklist.
+    complete = top_level_media_count is None or top_level_media_count == len(media)
     for medium in media:
         if not isinstance(medium, dict):
             return [], False
