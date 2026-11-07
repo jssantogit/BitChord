@@ -7,10 +7,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -23,6 +33,7 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /**
@@ -48,11 +59,14 @@ internal fun NativeArtistPublicTopSection(
         palette = palette,
         horizontalPadding = PAGE_GUTTER,
         itemKey = { it.musicBrainzId },
-        supportingText = if (sampled)
-            "Amostra de gravações com contagens verificadas" else null,
     ) { recording ->
+        val context = LocalContext.current
+        var menuExpanded by remember(recording.musicBrainzId) { mutableStateOf(false) }
         NativeDetailTrackRowLayout(
-            onClick = { onRecordingOpen(recording) },
+            // A public Recording MBID is not a playable RecordingId. Unlike
+            // the old metadata-only navigation there is no tap destination.
+            onClick = if (recording.hasCatalogedAsset || recording.hasVerifiedLocalAsset)
+                ({ onRecordingOpen(recording) }) else null,
             horizontalInset = 0.dp,
             leading = {
                 val shape = RoundedCornerShape(8.dp)
@@ -91,6 +105,31 @@ internal fun NativeArtistPublicTopSection(
             },
             rating = {},
             showRatingSlot = false,
+            actions = {
+                Box {
+                    RowMoreButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.testTag("artist-top-more-${recording.musicBrainzId}"),
+                        tint = palette.onBackgroundVariant,
+                    )
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Ver no MusicBrainz") },
+                            onClick = {
+                                menuExpanded = false
+                                val intent = Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("https://musicbrainz.org/recording/${recording.musicBrainzId}"),
+                                )
+                                runCatching { context.startActivity(intent) }
+                            },
+                        )
+                    }
+                }
+            },
         )
     }
 }
