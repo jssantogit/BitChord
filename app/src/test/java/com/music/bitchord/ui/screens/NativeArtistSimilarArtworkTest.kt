@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSimilarArtist
+import androidx.compose.foundation.shape.CircleShape
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -30,4 +31,9 @@ class NativeArtistSimilarArtworkTest {
         assertNull(nativeArtistSimilarPortraitUri("https://mzstatic.com.evil.example/image.png"))
         assertNull(nativeArtistSimilarPortraitUri("https://example.com/artist.png"))
     }
+
+    @Test fun similarArtistPortraitUsesCircularShapeUnlikeReleaseSleeves() {
+        assertEquals(CircleShape, nativeArtistSimilarArtworkShape)
+    }
+
 }
