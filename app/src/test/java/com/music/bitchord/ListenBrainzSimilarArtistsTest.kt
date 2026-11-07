@@ -1,6 +1,9 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.parseListenBrainzSimilarArtists
+import com.music.bitchord.data.catalog.metadata.ListenBrainzSimilarArtistsClient
+import com.music.bitchord.data.catalog.metadata.ListenBrainzRateLimiter
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,5 +34,28 @@ class ListenBrainzSimilarArtistsTest {
           {"similar_artist_mbid":"$related","similar_artist_name":""},
           {"similar_artist_mbid":"$related","similar_artist_name":"Valid"}]}""",
           "invalid-seed").isEmpty())
+    }
+
+    @Test fun similarArtistServiceFailureDoesNotRequeryOnEveryScrollOrHideRecovery() = runBlocking {
+        var clock = 5_000L
+        var calls = 0
+        val client = ListenBrainzSimilarArtistsClient(
+            limiter = ListenBrainzRateLimiter(nowMillis = { clock }, waitMillis = { clock += it }),
+            nowMillis = { clock },
+            fetch = {
+                calls++
+                if (calls == 1) 503 to ""
+                else 200 to """{"$related":[{"similar_artist_mbid":"$related",
+                    "similar_artist_name":"Real related"}]}"""
+            },
+        )
+        assertTrue(client.load(seed).isEmpty())
+        clock += 30_000
+        assertTrue(client.load(seed).isEmpty())
+        assertEquals(1, calls)
+        clock += 91_000
+        assertEquals(listOf(related), client.load(seed).map { it.mbid })
+        assertEquals(listOf(related), client.load(seed).map { it.mbid })
+        assertEquals(2, calls)
     }
 }
