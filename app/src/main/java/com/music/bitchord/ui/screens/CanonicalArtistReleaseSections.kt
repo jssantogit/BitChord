@@ -9,6 +9,23 @@ internal data class CanonicalArtistReleaseEvidence(
     val firstReleaseDate: String?,
 )
 
+/**
+ * MusicBrainz edition chronology is direct, validated ReleaseId evidence.
+ * Prefer the linked ReleaseGroup first date; use its own trusted Official
+ * edition date only when no group date exists. Never derive a date from a
+ * provider's upload/scan timestamp or a release title.
+ */
+internal fun canonicalArtistReleaseEvidenceWithTrustedDate(
+    releaseId: String,
+    groupEvidence: CanonicalArtistReleaseEvidence?,
+    exactEditionDate: String?,
+): CanonicalArtistReleaseEvidence =
+    CanonicalArtistReleaseEvidence(
+        releaseId = releaseId,
+        primaryType = groupEvidence?.primaryType,
+        firstReleaseDate = groupEvidence?.firstReleaseDate ?: exactEditionDate,
+    )
+
 internal data class CanonicalArtistReleaseSections(
     val albums: List<ReleaseEntity>,
     val singlesAndEps: List<ReleaseEntity>,
