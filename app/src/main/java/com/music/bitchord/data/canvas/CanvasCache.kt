@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Provider-neutral Media3 clip store.
@@ -44,6 +45,7 @@ object CanvasCache {
     private lateinit var savedCache: SimpleCache
     private lateinit var context: Context
     private val locks = ConcurrentHashMap<String, Mutex>()
+    private val clearEpoch = AtomicLong(0L)
 
     fun init(context: Context) {
         this.context = context.applicationContext
@@ -66,6 +68,16 @@ object CanvasCache {
         val key = keyFor(url)
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(key, false)
+    }
+
+    /** A pinned HLS clip must play the same rendition downloaded offline.
+     * Otherwise the adaptive player may request an uncached higher rendition. */
+    fun playbackItem(url: String): MediaItem {
+        val builder = MediaItem.Builder().setUri(url)
+        if (isSaved(url) && url.substringBefore('?')
+                .endsWith(".m3u8", ignoreCase = true)
+        ) builder.setStreamKeys(listOf(StreamKey(0, 0)))
+        return builder.build()
     }
 
     /**
@@ -121,6 +133,7 @@ object CanvasCache {
                     HlsDownloader.Factory(transport).create(media)
                 else ProgressiveDownloader(media, transport)
                 var oversized = false
+                val startEpoch = clearEpoch.get()
                 return@withContext try {
                     downloader.download(Downloader.ProgressListener { _, bytes, _ ->
                         if (bytes > MAX_CLIP_BYTES ||
@@ -132,7 +145,8 @@ object CanvasCache {
                     })
                     if (oversized ||
                         savedCache.cacheSpace > SAVED_CACHE_BYTES ||
-                        settings.visualRetentionMode.value != VisualRetentionMode.SAVE_ON_WIFI
+                        settings.visualRetentionMode.value != VisualRetentionMode.SAVE_ON_WIFI ||
+                        startEpoch != clearEpoch.get()
                     ) {
                         downloader.remove()
                         false
@@ -154,6 +168,7 @@ object CanvasCache {
     /** Does not touch audio files or Coil's image cache. */
     suspend fun clearSaved() = withContext(Dispatchers.IO) {
         if (!::context.isInitialized) return@withContext
+        clearEpoch.incrementAndGet()
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
         savedCache.keys.toList().forEach { key ->
             runCatching { savedCache.removeResource(key) }
