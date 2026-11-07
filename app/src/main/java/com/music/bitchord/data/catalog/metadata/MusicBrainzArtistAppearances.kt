@@ -68,9 +68,16 @@ internal fun parseMusicBrainzTrackArtistAppearances(
             ?.any { medium ->
                 val tracks = (medium as? JsonObject)?.get("tracks") as? JsonArray
                 tracks?.any { track ->
-                    val trackCredit = (track as? JsonObject)?.get("artist-credit")
-                        as? JsonArray
-                    trackCredit?.any { part ->
+                    val entry = track as? JsonObject ?: return@any false
+                    val credit = entry["artist-credit"] as? JsonArray
+                    val recording = entry["recording"] as? JsonObject
+                    // MusicBrainz may omit the Track artist-credit and expose
+                    // the original Recording credit instead. A real Recording
+                    // ID inside this exact ReleaseTrack is equally valid.
+                    val linkedRecordingCredit = if (recording?.appearanceText("id")
+                        ?.lowercase(Locale.ROOT)?.let(ARTIST_APPEARANCE_MBID::matches) == true
+                    ) recording["artist-credit"] as? JsonArray else null
+                    (credit ?: linkedRecordingCredit)?.any { part ->
                         val credited = ((part as? JsonObject)?.get("artist")
                             as? JsonObject)?.appearanceText("id")
                         credited?.equals(target, ignoreCase = true) == true
