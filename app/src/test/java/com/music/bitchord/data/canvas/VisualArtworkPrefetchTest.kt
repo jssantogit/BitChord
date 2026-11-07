@@ -44,6 +44,25 @@ class VisualArtworkPrefetchTest {
         assertEquals(900, planned.single().targetPx)
     }
 
+    @Test fun visibleHomeShelvesWarmCurrentCardsBeforeDistantShelves() {
+        val groups = listOf(
+            listOf("https://cdn.example/a.jpg"),
+            listOf("https://cdn.example/b.jpg"),
+            listOf("https://cdn.example/c.jpg"),
+            listOf("https://cdn.example/d.jpg"),
+        )
+        val targets = planVisualShelfArtwork(
+            shelfUrls = groups, visibleShelfIndex = 2,
+            targetPx = 300, maxCandidates = 4,
+        )
+        assertEquals(
+            listOf("c.jpg", "d.jpg", "b.jpg", "a.jpg"),
+            targets.map { requireNotNull(it.url).substringAfterLast('/') },
+        )
+        assertEquals(VisualArtworkPriority.VISIBLE, targets.first().priority)
+        assertEquals(VisualArtworkPriority.NEARBY, targets.last().priority)
+    }
+
     @Test fun prefetchCoalescesSameImageAcrossSimultaneousSurfaces() = runBlocking {
         val gate = VisualArtworkFetchGate(maxConcurrent = 3)
         val started = CompletableDeferred<Unit>()
