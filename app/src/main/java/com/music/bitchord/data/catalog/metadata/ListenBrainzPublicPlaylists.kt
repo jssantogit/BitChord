@@ -1,6 +1,8 @@
 package com.music.bitchord.data.catalog.metadata
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.Diagnostics
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -244,13 +246,37 @@ internal class ListenBrainzPublicPlaylistClient(
         queries: List<String>, tag: String?,
     ): List<ListenBrainzPublicPlaylist>? {
         var completed = false
-        for (query in queries.distinct()) {
+        for ((attemptIndex, query) in queries.distinct().withIndex()) {
             val response = try { limiter.run { transport.search(query) } }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { null }
-            if (response?.status != 200) continue
-            val matches = parseListenBrainzPublicPlaylistSearch(response.body, tag)
-                ?: continue
+            val matches = if (response?.status == 200)
+                parseListenBrainzPublicPlaylistSearch(response.body, tag) else null
+            // The physical smoke previously showed HTTP 200 and an empty
+            // shelf, but offered no proof whether the response contained zero
+            // candidates or our safety filters had rejected them. Record only
+            // low-cardinality counts and surface, never public playlist titles,
+            // user names, identifiers, query text or response bodies.
+            val candidateCount = response?.body?.let { body ->
+                (parsedJson(body, 300_000)?.get("playlists") as? JsonArray)?.size
+            } ?: -1
+            Diagnostics.event(
+                category = DiagnosticCategory.APP,
+                name = "public_playlist_discovery",
+                metadata = mapOf(
+                    "surface" to if (tag == null) "home" else "genre",
+                    "attempt" to (attemptIndex + 1).toString(),
+                    "http" to when (response?.status) {
+                        200 -> "ok"
+                        null -> "unavailable"
+                        else -> "error"
+                    },
+                    "candidates" to candidateCount.toString(),
+                    "accepted" to (matches?.size ?: 0).toString(),
+                    "parse" to if (matches == null) "invalid" else "ok",
+                ),
+            )
+            if (matches == null) continue
             completed = true
             if (matches.isNotEmpty()) return matches
         }
