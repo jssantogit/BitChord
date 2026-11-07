@@ -17,6 +17,7 @@ internal fun NativeArtistPublicTopSection(
     artistMbid: String,
     rows: List<CanonicalCatalogSearchRow>,
     palette: ArtworkPalette,
+    sampled: Boolean = false,
     onRecordingOpen: (CanonicalCatalogSearchRow) -> Unit,
 ) {
     val exact = rows.filter {
@@ -24,7 +25,7 @@ internal fun NativeArtistPublicTopSection(
             it.artistScopeMbid?.equals(artistMbid, ignoreCase = true) == true
     }
     NativeArtistTracksShelf(
-        title = stringResource(R.string.top_songs),
+        title = if (sampled) "Populares no catálogo" else stringResource(R.string.top_songs),
         tracks = exact,
         palette = palette,
         horizontalPadding = PAGE_GUTTER,
