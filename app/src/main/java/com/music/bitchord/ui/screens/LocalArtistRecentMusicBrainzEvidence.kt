@@ -3,6 +3,8 @@ package com.music.bitchord.ui.screens
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
@@ -85,20 +87,38 @@ private object LocalArtistRecentMusicBrainzLookup {
     }
 }
 
-/** Keep the existing native Library compositor; only supply corroborated dates. */
+/** A release set—not an artwork map or transient Room emission—owns the
+ * expensive external MusicBrainz date request. Changing the artist, a release
+ * ID or a release title starts fresh work, but cover/state refreshes do not. */
+internal fun canonicalLocalArtistRecentLookupKey(
+    artistName: String,
+    releases: List<ReleaseEntity>,
+): String {
+    val artist = artistName.trim().lowercase(Locale.ROOT)
+    val members = releases.distinctBy { it.id }
+        .map { it.id + "\u001f" + it.title.trim().lowercase(Locale.ROOT) }
+        .sorted()
+    return artist + "\u001e" + members.joinToString("\u001e")
+}
+
+/** Keep the existing native Library compositor; only supply corroborated dates.
+ * The remote lookup has a stable release-membership key; applying its results
+ * always uses the latest native artwork/evidence snapshot. */
 @Composable
 internal fun rememberLocalArtistExternallyDatedReleases(
     artistName: String,
     native: CanonicalArtistNativeReleases,
-): State<CanonicalArtistNativeReleases> =
-    produceState(initialValue = native, key1 = artistName, key2 = native) {
-        value = native
-        if (native.sections.recentRelease != null) return@produceState
-        val sections = native.sections
-        val local = (sections.albums + sections.singlesAndEps + sections.unclassified)
-            .distinctBy { it.id }
-        if (local.isEmpty()) return@produceState
-        val matches = try {
+): State<CanonicalArtistNativeReleases> {
+    val sections = native.sections
+    val local = (sections.albums + sections.singlesAndEps + sections.unclassified)
+        .distinctBy { it.id }
+    val lookupKey = canonicalLocalArtistRecentLookupKey(artistName, local)
+    val matches by produceState(
+        initialValue = emptyMap<String, CanonicalArtistReleaseEvidence>(),
+        key1 = lookupKey,
+    ) {
+        if (local.isEmpty() || sections.recentRelease != null) return@produceState
+        value = try {
             withContext(Dispatchers.IO) {
                 withTimeoutOrNull(15_000L) {
                     LocalArtistRecentMusicBrainzLookup.query(artistName, local)
@@ -106,16 +126,22 @@ internal fun rememberLocalArtistExternallyDatedReleases(
             }.orEmpty()
         } catch (cancelled: CancellationException) { throw cancelled }
           catch (_: Exception) { emptyMap() }
-        if (matches.isEmpty()) return@produceState
-        // Existing Room evidence always wins; online corroboration decorates
-        // only undated releases and never promotes a guessed identity to Room.
-        val newEvidence = native.evidence + matches.filter { (id, _) ->
-            native.evidence[id]?.firstReleaseDate.isNullOrBlank()
-        }
-        val counts = sections.albums.associate { it.id to 2 } +
-            sections.singlesAndEps.associate { it.id to 1 }
-        val updated = canonicalArtistReleaseSections(local, newEvidence, counts)
-        if (updated.recentRelease != null) {
-            value = native.copy(sections = updated, evidence = newEvidence)
-        }
     }
+    if (matches.isEmpty() || sections.recentRelease != null) {
+        return rememberUpdatedState(native)
+    }
+    // Native state may update repeatedly as album art, source membership and
+    // edition evidence hydrate. Never restore the stale state captured at
+    // the beginning of a slow MusicBrainz request.
+    val newEvidence = native.evidence + matches.filter { (id, _) ->
+        native.evidence[id]?.firstReleaseDate.isNullOrBlank()
+    }
+    val counts = sections.albums.associate { it.id to 2 } +
+        sections.singlesAndEps.associate { it.id to 1 }
+    val updated = canonicalArtistReleaseSections(local, newEvidence, counts)
+    return rememberUpdatedState(
+        if (updated.recentRelease != null)
+            native.copy(sections = updated, evidence = newEvidence)
+        else native,
+    )
+}
