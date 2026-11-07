@@ -236,6 +236,7 @@ internal fun SettingsScreen(
     val visualRetention by AppSettings.visualRetentionMode.collectAsStateWithLifecycle()
     val visualMotionSurfaces by AppSettings.visualMotionSurfaces.collectAsStateWithLifecycle()
     val visualStills by AppSettings.saveVisualStillImages.collectAsStateWithLifecycle()
+    val visualStillSurfaces by AppSettings.visualStillSurfaces.collectAsStateWithLifecycle()
     val legacyMeshGradient by AppSettings.legacyMeshGradient.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
@@ -955,6 +956,21 @@ internal fun SettingsScreen(
                     onCheckedChange = AppSettings::setSaveVisualStillImages,
                     subtitle = "Artistas, álbuns e Now Playing; espaço limitado e sem backup",
                 )
+            }
+            if (visualStills) {
+                listOf(
+                    VisualSurface.ARTIST to "Fotos de artistas",
+                    VisualSurface.ALBUM to "Capas de álbuns",
+                    VisualSurface.NOW_PLAYING to "Capas do Now Playing",
+                ).forEach { (surface, title) ->
+                    row(title, "imagem", "offline", "cache", divided = false) {
+                        SettingsSubRow(
+                            title = title,
+                            checked = surface in visualStillSurfaces,
+                            onCheckedChange = { AppSettings.setVisualStillSurface(surface, it) },
+                        )
+                    }
+                }
             }
             val artistSignaturesTitle = stringResource(R.string.artist_signatures)
             row(artistSignaturesTitle, "signature", "artist", "logo") {
