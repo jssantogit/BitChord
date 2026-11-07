@@ -107,6 +107,16 @@ internal fun parseListenBrainzLabsSimilarArtists(
     }.distinctBy { it.mbid }.take(12).toList()
 }
 
+/** Required LB Radio artist parameters. Include the complete popularity
+ * window: missing pop_begin/pop_end returns HTTP 400 on current servers. */
+internal fun listenBrainzArtistRadioParameters(): Map<String, String> = mapOf(
+    "mode" to "easy",
+    "max_similar_artists" to "12",
+    "max_recordings_per_artist" to "1",
+    "pop_begin" to "0",
+    "pop_end" to "100",
+)
+
 private const val LB_LABS_SIMILAR_ALGORITHM =
     "session_based_days_7500_session_300_contribution_5_threshold_10_limit_100_filter_True_skip_30"
 
@@ -138,7 +148,7 @@ internal class ListenBrainzSimilarArtistsClient(
         val now = nowMillis()
         if (cached != null && now >= cached.at &&
             now - cached.at < if (cached.healthy)
-                if (cached.value.isEmpty()) 900_000L else 21_600_000L
+                if (cached.value.isEmpty()) 90_000L else 21_600_000L
             else 90_000L
         ) return cached.value
         val response = try {
@@ -148,9 +158,9 @@ internal class ListenBrainzSimilarArtistsClient(
                     status = { result: Pair<Int, String> -> result.first },
                 ) {
                     val http = client.get("https://api.listenbrainz.org/1/lb-radio/artist/$id") {
-                        parameter("mode", "easy")
-                        parameter("max_similar_artists", 12)
-                        parameter("max_recordings_per_artist", 1)
+                        listenBrainzArtistRadioParameters().forEach { (key, value) ->
+                            parameter(key, value)
+                        }
                         header(HttpHeaders.UserAgent, "BitChord/" + BuildConfig.VERSION_NAME)
                     }
                     http.status.value to if (http.status.value == 200) http.bodyAsText() else ""
@@ -199,6 +209,10 @@ internal class ListenBrainzSimilarArtistsClient(
                 }
             }
         }
+        // Empty similarity results are not a stable statement about the
+        // artist when Radio returned an error and Labs is an experimental
+        // snapshot. Retry after a short bounded window, even if Labs was 200.
+        if (resolved.isEmpty() && response?.first != 200) healthy = false
         // Keep data-quality telemetry low-cardinality. Never record names,
         // MBIDs, search terms, response bodies, paths, or provider URLs.
         runCatching {
