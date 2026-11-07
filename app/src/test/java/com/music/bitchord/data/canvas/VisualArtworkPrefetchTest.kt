@@ -1,5 +1,10 @@
 package com.music.bitchord.data.canvas
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,6 +40,28 @@ class VisualArtworkPrefetchTest {
         assertEquals(1, planned.size)
         assertEquals(VisualArtworkPriority.HERO, planned.single().priority)
         assertEquals(900, planned.single().targetPx)
+    }
+
+    @Test fun prefetchCoalescesSameImageAcrossSimultaneousSurfaces() = runBlocking {
+        val gate = VisualArtworkFetchGate(maxConcurrent = 3)
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var requests = 0
+        val first = async {
+            gate.fetchOnce("https://cdn.example/artist.jpg") {
+                requests++
+                started.complete(Unit)
+                release.await()
+            }
+        }
+        withTimeout(2_000) { started.await() }
+        val second = async {
+            gate.fetchOnce("https://cdn.example/artist.jpg") { requests++ }
+        }
+        assertFalse(withTimeout(2_000) { second.await() })
+        release.complete(Unit)
+        withTimeout(2_000) { first.await() }
+        assertEquals(1, requests)
     }
 
     @Test fun invalidOrLocalImageDoesNotJoinSpeculativeHttpQueue() {
