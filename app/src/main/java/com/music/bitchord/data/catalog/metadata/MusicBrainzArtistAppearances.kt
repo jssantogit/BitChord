@@ -28,7 +28,7 @@ private val ARTIST_APPEARANCE_MBID =
 // "Official" in MusicBrainz is an edition status, not editorial approval of a
 // third-party rework. The guest shelf intentionally favors precision over recall.
 private val NON_EDITORIAL_GUEST_TITLE = Regex(
-    """(?i)\\b(?:remix|rework|bootleg|edit|fan[- ]?made|mashup|nightcore|karaoke|jersey|sped\\s+up|slowed|flip|remake)\\b|\\(\\s*dj\\s+\\S+"""
+    """(?i)\b(?:remix|rework|bootleg|edit|fan[- ]?made|mashup|nightcore|karaoke|jersey|sped\s+up|slowed|flip|remake)\b|\(\s*dj\s+\S+"""
 )
 
 private fun JsonObject.appearanceText(name: String): String? =
