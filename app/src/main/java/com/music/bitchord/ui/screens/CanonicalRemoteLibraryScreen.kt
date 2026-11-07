@@ -829,6 +829,34 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
+    // Library IDs are canonical internal ReleaseEntity IDs, not MusicBrainz
+    // MBIDs. Resolve the exact persisted release identity before considering
+    // editorial enrichment. Do no DB/network work while the Discogs gate is off.
+    val libraryEditionMbid by produceState<String?>(
+        initialValue = null,
+        key1 = selectedEntity?.id,
+        key2 = selectedContext,
+        key3 = catalogDao,
+    ) {
+        value = null
+        if (!com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess.ENABLED ||
+            selectedContext != CanonicalSmartFilterContext.ALBUMS
+        ) return@produceState
+        val releaseId = selectedEntity?.id ?: return@produceState
+        value = try {
+            withContext(Dispatchers.IO) {
+                com.music.bitchord.data.catalog.metadata.discogs.discogsLibraryReleaseMbid(
+                    releaseId, catalogDao.musicBrainzReleaseEnrichment(releaseId),
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
+    val libraryEditorialEvidence = rememberDiscogsEditionForRelease(libraryEditionMbid)
+
     BackHandler(enabled = selectedEntity != null) {
         if (pinnedDetail != null && !artistNestedReleaseOpen) onClose()
         else if (artistNestedReleaseOpen) artistNestedBackToken++
@@ -1145,7 +1173,10 @@ internal fun CanonicalRemoteLibraryScreen(
                 },
                 albumFooter = if (detail != null &&
                     selectedContext == CanonicalSmartFilterContext.ALBUMS
-                ) canonicalAlbumFooterMetadata(albumHeaderEvidence?.releaseDate, scopedDetailTracks)
+                ) canonicalAlbumFooterMetadata(
+                    albumHeaderEvidence?.releaseDate,
+                    scopedDetailTracks,
+                ).copy(editorialEvidence = libraryEditorialEvidence)
                     else null,
                 albumMeta = if (detail != null &&
                     selectedContext == CanonicalSmartFilterContext.ALBUMS
