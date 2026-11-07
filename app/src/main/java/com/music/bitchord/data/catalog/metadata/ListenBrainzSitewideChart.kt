@@ -13,6 +13,7 @@ import java.util.Locale
 internal enum class ListenBrainzSitewideRange(val apiValue: String) {
     WEEK("week"),
     MONTH("month"),
+    ALL_TIME("all_time"),
 }
 
 /**
@@ -33,6 +34,7 @@ internal fun listenBrainzSitewideSnapshotIsCurrent(
     val maxAge = when (range) {
         ListenBrainzSitewideRange.WEEK -> 14L * dayMs
         ListenBrainzSitewideRange.MONTH -> 45L * dayMs
+        ListenBrainzSitewideRange.ALL_TIME -> 60L * dayMs
     }
     return age in (-dayMs)..maxAge
 }
@@ -40,6 +42,8 @@ internal fun listenBrainzSitewideSnapshotIsCurrent(
 internal data class ListenBrainzSitewideRecording(
     val recordingMbid: String,
     val listenCount: Long,
+    /** Credit evidence comes from ListenBrainz, not artist-name matching. */
+    val artistMbids: List<String> = emptyList(),
 )
 
 internal sealed interface ListenBrainzSitewideParseResult {
@@ -68,6 +72,7 @@ private data class ListenBrainzSitewidePayload(
 private data class ListenBrainzSitewideRawRecording(
     @SerialName("recording_mbid") val recordingMbid: String? = null,
     @SerialName("listen_count") val listens: Long? = null,
+    @SerialName("artist_mbids") val artistMbids: List<String>? = null,
 )
 
 private val SITEWIDE_MUSICBRAINZ_RECORDING_ID =
@@ -100,7 +105,12 @@ internal fun parseListenBrainzSitewideRecordings(
         if (!seen.add(id)) return ListenBrainzSitewideParseResult.Invalid
         val listens = item.listens ?: continue
         if (listens < 0L) return ListenBrainzSitewideParseResult.Invalid
-        if (listens > 0L) accepted += ListenBrainzSitewideRecording(id, listens)
+        if (listens > 0L) accepted += ListenBrainzSitewideRecording(
+            id, listens, item.artistMbids.orEmpty()
+                .map { it.lowercase(Locale.ROOT) }
+                .filter(SITEWIDE_MUSICBRAINZ_RECORDING_ID::matches)
+                .distinct(),
+        )
     }
     return ListenBrainzSitewideParseResult.Success(
         recordings = accepted.sortedWith(
