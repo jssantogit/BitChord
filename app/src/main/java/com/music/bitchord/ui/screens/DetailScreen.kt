@@ -964,6 +964,13 @@ fun DetailScreen(
                         onOpen = onCanonicalFeaturedReleaseOpen,
                     )
                 }
+                item(key = "artist-similar") {
+                    NativeArtistSimilarShelf(
+                        artistMbid = publicArtistMbid,
+                        palette = palette,
+                        onOpen = onCanonicalFeaturedReleaseOpen,
+                    )
+                }
             }
             if (isArtist) aboutItem()
         }
