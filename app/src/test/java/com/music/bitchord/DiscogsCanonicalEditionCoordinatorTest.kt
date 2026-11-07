@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
 import com.music.bitchord.data.catalog.metadata.discogs.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -112,8 +114,8 @@ class DiscogsCanonicalEditionCoordinatorTest {
             ),
             enabled = true, nowMillis = { now },
         )
-        kotlinx.coroutines.coroutineScope {
-            val first = kotlinx.coroutines.async { coordinator.observeRelease(mbid) }
+        coroutineScope {
+            val first = async { coordinator.observeRelease(mbid) }
             val second = kotlinx.coroutines.async { coordinator.observeRelease(mbid) }
             assertTrue(first.await() is DiscogsEditionEnrichment.Verified)
             assertTrue(second.await() is DiscogsEditionEnrichment.Verified)
