@@ -70,8 +70,12 @@ internal fun canonicalArtistReleaseSections(
     val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
     val latest = releases.mapNotNull { release ->
         val proof = evidence[release.id] ?: return@mapNotNull null
-        if (proof.primaryType?.trim()?.lowercase(java.util.Locale.ROOT) !in
-            setOf("album", "single", "ep")) return@mapNotNull null
+        // A proven edition date is enough for a generic "recent release"
+        // even when its ReleaseGroup type has not been indexed yet. Do not
+        // invent "Album", "Single" or "EP" from a track count.
+        val type = proof.primaryType?.trim()?.lowercase(java.util.Locale.ROOT)
+        if (type != null && type.isNotBlank() &&
+            type !in setOf("album", "single", "ep")) return@mapNotNull null
         val date = proof.firstReleaseDate?.takeIf { validDate.matches(it) }
             ?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
             ?.takeIf { !it.isAfter(today) } ?: return@mapNotNull null
@@ -101,3 +105,15 @@ internal fun shouldShowNativeArtistSearch(searching: Boolean, query: String): Bo
 /** Artist photo is optional; leave no 60%-height empty canvas when it is missing. */
 internal fun shouldCompactNativeArtistHero(artistPhotoUrl: String?): Boolean =
     artistPhotoUrl.isNullOrBlank()
+
+
+/** Canonical release chronology is a display date, never MediaStore DATE_ADDED. */
+internal fun canonicalArtistReleaseDateLabel(value: String?): String? {
+    val date = value?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    if (Regex("""\d{4}""").matches(date)) return date
+    val parsed = date.takeIf { Regex("""\d{4}-\d{2}-\d{2}""").matches(it) }
+        ?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() } ?: return null
+    return parsed.format(java.time.format.DateTimeFormatter.ofPattern(
+        "d 'de' MMM 'de' yyyy", java.util.Locale.forLanguageTag("pt-BR"),
+    ))
+}
