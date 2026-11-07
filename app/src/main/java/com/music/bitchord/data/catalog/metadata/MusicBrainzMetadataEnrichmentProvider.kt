@@ -183,12 +183,26 @@ internal class MusicBrainzMetadataEnrichmentProvider(
         )
     }
 
-    override suspend fun lookupRecording(externalId: String): MetadataLookupResult<RecordingMetadataEnrichment> {
+    override suspend fun lookupRecording(externalId: String): MetadataLookupResult<RecordingMetadataEnrichment> =
+        lookupRecordingInternal(externalId, requireOfficialAudio = false)
+
+    /** Chart-only lookup: do not infer Official from a recording title, artist
+     * credit or external popularity. Requires an exact linked audio edition. */
+    internal suspend fun lookupOfficialAudioRecording(
+        externalId: String,
+    ): MetadataLookupResult<RecordingMetadataEnrichment> =
+        lookupRecordingInternal(externalId, requireOfficialAudio = true)
+
+    private suspend fun lookupRecordingInternal(
+        externalId: String, requireOfficialAudio: Boolean,
+    ): MetadataLookupResult<RecordingMetadataEnrichment> {
         val mbid = externalId.validMbidOrNull()
             ?: return MetadataLookupResult.Failure(MetadataLookupFailure.INVALID_EXTERNAL_ID)
         val raw = request(
             path = "recording/$mbid",
-            parameters = mapOf("fmt" to "json", "inc" to "artist-credits"),
+            parameters = mapOf("fmt" to "json", "inc" to
+                if (requireOfficialAudio) "artist-credits+releases+release-groups"
+                else "artist-credits"),
         ) ?: return MetadataLookupResult.Failure(MetadataLookupFailure.UNAVAILABLE)
         val dto = decode<MusicBrainzRecordingDto>(raw)
             ?: return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
@@ -202,8 +216,34 @@ internal class MusicBrainzMetadataEnrichmentProvider(
                 durationMs = dto.length?.takeIf { it >= 0L },
                 artistDisplay = renderArtistCredit(dto.artistCredit),
                 artistCredits = dto.artistCredit?.toEvidence(),
+                officialAudioReleaseMbid = if (requireOfficialAudio)
+                    dto.verifiedOfficialAudioReleaseMbid() else null,
             ),
         )
+    }
+
+    /** No bootlegs, video recordings, fan compilations, live-only versions,
+     * DJ mixes or Other/video releases are eligible for the public chart. */
+    private fun MusicBrainzRecordingDto.verifiedOfficialAudioReleaseMbid(): String? {
+        if (video == true) return null
+        val disallowed = setOf(
+            "live", "compilation", "remix", "dj-mix", "mixtape/street",
+            "demo", "interview", "spokenword", "audiobook", "audio drama",
+        )
+        return releases.orEmpty()
+            .filter { release ->
+                release.status.equals("Official", ignoreCase = true) &&
+                    release.id.validMbidOrNull() != null &&
+                    release.group?.primaryType?.lowercase(java.util.Locale.ROOT) in
+                        setOf("album", "single", "ep") &&
+                    release.group.secondaryTypes.orEmpty().none {
+                        it.lowercase(java.util.Locale.ROOT) in disallowed
+                    }
+            }
+            .sortedWith(compareBy<MusicBrainzRecordingReleaseDto> {
+                it.date.orEmpty().ifBlank { "9999-12-31" }
+            }.thenBy { it.id.orEmpty() })
+            .firstOrNull()?.id.validMbidOrNull()
     }
 
     override suspend fun lookupRelease(externalId: String): MetadataLookupResult<ReleaseMetadataEnrichment> {
@@ -316,7 +356,23 @@ private data class MusicBrainzRecordingDto(
     val id: String? = null,
     val title: String? = null,
     val length: Long? = null,
+    val video: Boolean? = null,
+    val releases: List<MusicBrainzRecordingReleaseDto>? = null,
     @SerialName("artist-credit") val artistCredit: List<MusicBrainzArtistCreditDto>? = null,
+)
+
+@Serializable
+private data class MusicBrainzRecordingReleaseDto(
+    val id: String? = null,
+    val date: String? = null,
+    val status: String? = null,
+    @SerialName("release-group") val group: MusicBrainzRecordingGroupDto? = null,
+)
+
+@Serializable
+private data class MusicBrainzRecordingGroupDto(
+    @SerialName("primary-type") val primaryType: String? = null,
+    @SerialName("secondary-types") val secondaryTypes: List<String>? = null,
 )
 
 @Serializable
