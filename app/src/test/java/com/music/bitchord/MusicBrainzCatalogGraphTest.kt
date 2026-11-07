@@ -215,6 +215,47 @@ class MusicBrainzCatalogGraphTest {
         )
     }
 
+    @Test fun discogsCorroborationRequiresCompleteMusicBrainzReleaseTracks() = runBlocking {
+        val client = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                "barcode":"8800000000000","artist-credit":[{"name":"ILLIT"}],
+                "media-count":1,"media":[{"position":1,"track-count":2,"tracks":[
+                  {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6","title":"Magnetic",
+                   "recording":{"id":"$original"}},
+                  {"id":"bad-track","title":"Other","recording":{"id":"$sped"}}
+                ]}]}"""
+        })
+        val detail = (MusicBrainzCatalogGraph(client).lookupRelease(worldwide)
+            as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals("Official", detail.status)
+        assertEquals("8800000000000", detail.barcode)
+        assertEquals(1, detail.tracks.size)
+        assertEquals(false, detail.hasCompleteTracklist)
+    }
+
+    @Test fun exactReleaseGraphProvidesCompleteEvidenceForEditionMatching() = runBlocking {
+        val client = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                "barcode":"036000291452","artist-credit":[{"name":"ILLIT"}],
+                "media-count":1,"media":[{"position":1,"track-count":2,"tracks":[
+                  {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6","title":"My World",
+                   "recording":{"id":"$original"}},
+                  {"id":"7d950448-969b-4d73-a00f-fec131238b5d","title":"Magnetic",
+                   "recording":{"id":"$sped"}}
+                ]}]}"""
+        })
+        val detail = (MusicBrainzCatalogGraph(client).lookupRelease(worldwide)
+            as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(true, detail.hasCompleteTracklist)
+        assertEquals(listOf("My World", "Magnetic"), detail.tracks.map { it.title })
+        assertEquals("Official", detail.status)
+        assertEquals("036000291452", detail.barcode)
+    }
+
     @Test fun recordingCoverRequiresExplicitReleaseRelation() = runBlocking {
         val requests = mutableListOf<String>()
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
