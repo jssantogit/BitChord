@@ -321,7 +321,15 @@ internal class ListenBrainzPublicPlaylistClient(
     private val transport: ListenBrainzPublicPlaylistTransport =
         KtorListenBrainzPublicPlaylistTransport(),
     private val limiter: ListenBrainzRateLimiter = ListenBrainzRequestBudget.limiter,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
+    /** Bounded cache; key includes exact verified Recording MBIDs, not titles alone. */
+    private data class ArtistPlaylistCache(
+        val atMs: Long, val playlists: List<ListenBrainzPublicPlaylist>, val healthy: Boolean,
+    )
+    private val artistCacheMutex = kotlinx.coroutines.sync.Mutex()
+    private val artistCache = linkedMapOf<Pair<String, List<String>>, ArtistPlaylistCache>()
+
     suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? {
         if (tag !in setOf("pop", "rock", "hip-hop", "electronic", "k-pop", "rnb",
                 "jazz", "metal", "classical", "folk", "ambient", "punk")) return null
@@ -358,14 +366,38 @@ internal class ListenBrainzPublicPlaylistClient(
         val approved = verifiedRecordingMbids.mapNotNull(::checkedPlaylistId).toSet()
         if (name.length !in 3..100 || name.any(Char::isISOControl) || approved.isEmpty())
             return emptyList()
-        val candidates = search(listOf(name), null, surface = "artist").orEmpty()
-        val confirmed = mutableListOf<ListenBrainzPublicPlaylist>()
-        for (candidate in candidates.take(4)) {
-            val tracks = detail(candidate)?.tracks.orEmpty()
-            if (tracks.any { it.recordingMbid in approved }) confirmed += candidate
-            if (confirmed.size >= 3) break
+        val key = name.lowercase(Locale.ROOT) to approved.sorted()
+        // The artist shelf is inside a LazyColumn. Its re-entry must reuse
+        // verified membership instead of repeating a 15-90-second fuzzy search.
+        // A different Recording MBID set is a different query and must recheck.
+        artistCacheMutex.lock()
+        try {
+            val prior = artistCache[key]
+            val now = nowMillis()
+            if (prior != null && now >= prior.atMs &&
+                now - prior.atMs < when {
+                    !prior.healthy -> 90_000L
+                    prior.playlists.isEmpty() -> 5L * 60L * 1_000L
+                    else -> 30L * 60L * 1_000L
+                }
+            ) return prior.playlists
+            val candidates = search(listOf(name), null, surface = "artist")
+            val confirmed = mutableListOf<ListenBrainzPublicPlaylist>()
+            var detailsHealthy = candidates != null
+            for (candidate in candidates.orEmpty().take(4)) {
+                val details = detail(candidate)
+                if (details == null) detailsHealthy = false
+                else if (details.tracks.any { it.recordingMbid in approved }) confirmed += candidate
+                if (confirmed.size >= 3) break
+            }
+            if (artistCache.size >= 32) artistCache.remove(artistCache.keys.first())
+            artistCache[key] = ArtistPlaylistCache(
+                atMs = nowMillis(), playlists = confirmed, healthy = detailsHealthy,
+            )
+            return confirmed
+        } finally {
+            artistCacheMutex.unlock()
         }
-        return confirmed
     }
 
     private suspend fun search(
