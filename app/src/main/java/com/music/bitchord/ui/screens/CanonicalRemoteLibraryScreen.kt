@@ -829,39 +829,14 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
-    // Library IDs are canonical internal ReleaseEntity IDs, not MusicBrainz
-    // MBIDs. Resolve the exact persisted release identity before considering
-    // editorial enrichment. Do no DB/network work while the Discogs gate is off.
-    val libraryEditionMbid by produceState<String?>(
-        initialValue = null,
-        key1 = selectedEntity?.id,
-        key2 = selectedContext,
-        key3 = catalogDao,
-    ) {
-        value = null
-        if (!com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess.ENABLED ||
-            selectedContext != CanonicalSmartFilterContext.ALBUMS
-        ) return@produceState
-        val releaseId = selectedEntity?.id ?: return@produceState
-        // Release metadata may arrive after the album screen is opened. Keep
-        // only this source identity fresh rather than re-running the whole
-        // browse flow or requiring a navigation round trip.
-        catalogDb.invalidationTracker.createFlow(
-            "musicbrainz_release_enrichment",
-        ).collectLatest {
-            value = try {
-                withContext(Dispatchers.IO) {
-                    com.music.bitchord.data.catalog.metadata.discogs.discogsLibraryReleaseMbid(
-                        releaseId, catalogDao.musicBrainzReleaseEnrichment(releaseId),
-                    )
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                null
-            }
-        }
-    }
+    // Reuse the same exact ReleaseId-to-MBID observer as artist-nested albums.
+    val libraryEditionMbid = rememberDiscogsLibraryEditionMbid(
+        selectedEntity?.id?.takeIf {
+            selectedContext == CanonicalSmartFilterContext.ALBUMS
+        },
+        catalogDb = catalogDb,
+        catalogDao = catalogDao,
+    )
     val libraryEditorialEvidence = rememberDiscogsEditionForRelease(libraryEditionMbid)
 
     BackHandler(enabled = selectedEntity != null) {
