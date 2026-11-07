@@ -294,4 +294,68 @@ class ListenBrainzPublicPlaylistTest {
         assertTrue(client.searchPublicQuery("  ").isEmpty())
         assertEquals(listOf("K-pop"), requested)
     }
+
+    @Test fun artistPlaylistSearchCacheFollowsExactRecordingEvidence() = runBlocking {
+        var now = 1_000L
+        var searches = 0
+        var details = 0
+        val transport = object : ListenBrainzPublicPlaylistTransport {
+            override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                searches++
+                return ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+            }
+            override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp {
+                details++
+                val recording = if (mbid == rock) song else pop
+                return ListenBrainzPublicPlaylistHttp(200,
+                    """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$mbid",
+                      "track":[{"identifier":"https://musicbrainz.org/recording/$recording",
+                        "title":"Credited song","creator":"Artist"}]}}""")
+            }
+        }
+        val client = ListenBrainzPublicPlaylistClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = {}),
+            nowMillis = { now },
+        )
+        assertEquals(listOf(rock), client.searchArtistVerified("Artist", setOf(song)).map { it.mbid })
+        now += 60_000
+        assertEquals(listOf(rock), client.searchArtistVerified("Artist", setOf(song)).map { it.mbid })
+        assertEquals(1, searches)
+        assertEquals(2, details)
+        // A new set of verified top recordings must not inherit another
+        // artist-specific membership result from the previous view.
+        assertEquals(listOf(pop), client.searchArtistVerified("Artist", setOf(pop)).map { it.mbid })
+        assertEquals(2, searches)
+        now += 60L * 60L * 1_000L + 1
+        assertEquals(listOf(rock), client.searchArtistVerified("Artist", setOf(song)).map { it.mbid })
+        assertEquals(3, searches)
+    }
+
+    @Test fun artistPlaylistServiceFailureIsCachedOnlyBriefly() = runBlocking {
+        var now = 10_000L
+        var requests = 0
+        val transport = object : ListenBrainzPublicPlaylistTransport {
+            override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                requests++
+                return if (requests == 1) ListenBrainzPublicPlaylistHttp(503, "")
+                    else ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+            }
+            override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp =
+                ListenBrainzPublicPlaylistHttp(200,
+                    """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$mbid",
+                      "track":[{"identifier":"https://musicbrainz.org/recording/$song"}]}}""")
+        }
+        val client = ListenBrainzPublicPlaylistClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = {}),
+            nowMillis = { now },
+        )
+        assertTrue(client.searchArtistVerified("Artist", setOf(song)).isEmpty())
+        now += 20_000L
+        assertTrue(client.searchArtistVerified("Artist", setOf(song)).isEmpty())
+        assertEquals(1, requests)
+        now += 91_000L
+        assertEquals(listOf(rock, pop), client.searchArtistVerified("Artist", setOf(song))
+            .map { it.mbid })
+        assertEquals(2, requests)
+    }
 }
