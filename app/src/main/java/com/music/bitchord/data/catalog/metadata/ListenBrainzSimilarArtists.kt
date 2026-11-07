@@ -10,6 +10,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -69,14 +70,30 @@ internal class ListenBrainzSimilarArtistsClient(
         }
     },
     private val limiter: ListenBrainzRateLimiter = ListenBrainzRequestBudget.limiter,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val fetch: (suspend (String) -> Pair<Int, String>)? = null,
 ) {
+    private data class Entry(val at: Long, val value: List<ListenBrainzSimilarArtist>,
+        val healthy: Boolean)
+    private val cache = linkedMapOf<String, Entry>()
+    private val lock = Mutex()
+
     /** Public, read-only LB radio similarities; no account or inferred names. */
     suspend fun load(seedArtistMbid: String): List<ListenBrainzSimilarArtist> {
         val id = seedArtistMbid.lowercase(Locale.ROOT)
         if (!SIMILAR_ARTIST_MBID.matches(id)) return emptyList()
+        lock.lock()
+        try {
+        val cached = cache[id]
+        val now = nowMillis()
+        if (cached != null && now >= cached.at &&
+            now - cached.at < if (cached.healthy)
+                if (cached.value.isEmpty()) 900_000L else 21_600_000L
+            else 90_000L
+        ) return cached.value
         val response = try {
             limiter.run {
-                measureMetadataHttp(
+                if (fetch != null) fetch(id) else measureMetadataHttp(
                     provider = "listenbrainz", endpoint = "artist_similar",
                     status = { result: Pair<Int, String> -> result.first },
                 ) {
@@ -90,9 +107,16 @@ internal class ListenBrainzSimilarArtistsClient(
                 }
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-          catch (_: Exception) { return emptyList() }
-        return if (response.first == 200)
-            parseListenBrainzSimilarArtists(response.second, id)
+          catch (_: Exception) { null }
+        val healthy = response?.first == 200
+        val resolved = if (healthy)
+            parseListenBrainzSimilarArtists(response?.second.orEmpty(), id)
         else emptyList()
+        if (cache.size >= 64) cache.remove(cache.keys.first())
+        cache[id] = Entry(nowMillis(), resolved, healthy)
+        return resolved
+        } finally {
+            lock.unlock()
+        }
     }
 }
