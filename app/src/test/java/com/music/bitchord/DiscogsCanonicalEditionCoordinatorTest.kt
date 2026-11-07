@@ -116,7 +116,7 @@ class DiscogsCanonicalEditionCoordinatorTest {
         )
         coroutineScope {
             val first = async { coordinator.observeRelease(mbid) }
-            val second = kotlinx.coroutines.async { coordinator.observeRelease(mbid) }
+            val second = async { coordinator.observeRelease(mbid) }
             assertTrue(first.await() is DiscogsEditionEnrichment.Verified)
             assertTrue(second.await() is DiscogsEditionEnrichment.Verified)
         }
