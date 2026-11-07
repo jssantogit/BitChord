@@ -3065,12 +3065,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _detailStack.value.lastOrNull()?.browseId
                     ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
             ) try {
-                val page = withTimeoutOrNull(18_000L) {
+                val result = withTimeoutOrNull(18_000L) {
                     musicBrainzSearch.searchRecordingsForArtistMbid(id, limit = 25)
-                } as? MusicBrainzCatalogSearchResult.Success
-                val candidates = page?.page?.items.orEmpty()
-                    .filter(::isCuratedMusicBrainzRecording)
-                    .map { it.musicBrainzId }.distinct().take(25)
+                }
+                val candidates = if (result is MusicBrainzCatalogSearchResult.Success)
+                    result.page.items.filter(::isCuratedMusicBrainzRecording)
+                        .map { it.musicBrainzId }.distinct().take(25)
+                else emptyList()
                 val popularityBatch = if (candidates.isNotEmpty())
                     listenBrainzPopularityClient.recordingPopularity(candidates)
                 else null
