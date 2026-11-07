@@ -62,6 +62,23 @@ class MusicBrainzArtistAppearancesTest {
             )).size)
     }
 
+    @Test fun genuineDigitalGuestCanBeCorroboratedByRecordingIsrcWithoutBarcode() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val raw = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "artist-credit":[{"artist":{"id":"$other","name":"Official artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Digital single","primary-type":"Single"},
+            "media":[{"tracks":[{"recording":{
+                "id":"$recording","title":"Featured recording",
+                "isrcs":["USAAA2600123"],
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        assertEquals(listOf(recording),
+            com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+                parseMusicBrainzTrackArtistAppearances(raw, target),
+            ).map { it.recordingMbid })
+    }
+
     @Test fun onlyVerifiedOfficialGuestAppearancesInOtherArtistsReleases() {
         val body = """{"release-count":4,"releases":[
            {"id":"55555555-5555-4555-8555-555555555555","status":"Official",
