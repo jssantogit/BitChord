@@ -2,6 +2,8 @@ package com.music.bitchord.data.canvas
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertFalse
@@ -62,6 +64,25 @@ class VisualArtworkPrefetchTest {
         release.complete(Unit)
         withTimeout(2_000) { first.await() }
         assertEquals(1, requests)
+    }
+
+    @Test fun cancelledPrefetchReleasesTheKeyForARealRetry() = runBlocking {
+        val gate = VisualArtworkFetchGate(maxConcurrent = 2)
+        val entered = CompletableDeferred<Unit>()
+        val never = CompletableDeferred<Unit>()
+        val cancelled = async {
+            gate.fetchOnce("https://cdn.example/a.jpg") {
+                entered.complete(Unit)
+                never.await()
+            }
+        }
+        withTimeout(2_000) { entered.await() }
+        cancelled.cancelAndJoin()
+        var secondAttempts = 0
+        assertTrue(withTimeout(2_000) {
+            gate.fetchOnce("https://cdn.example/a.jpg") { secondAttempts++ }
+        })
+        assertEquals(1, secondAttempts)
     }
 
     @Test fun invalidOrLocalImageDoesNotJoinSpeculativeHttpQueue() {
