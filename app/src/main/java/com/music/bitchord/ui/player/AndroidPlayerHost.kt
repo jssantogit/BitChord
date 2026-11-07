@@ -22,6 +22,7 @@ import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
 import com.music.bitchord.data.canvas.VisualStillMedia
 import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.VisualRetentionMode
 import com.music.bitchord.data.canvas.isSafeVisualMediaUrl
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.lyrics.LyricLine
@@ -60,11 +61,22 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val main = Handler(Looper.getMainLooper())
+    // The shared Now Playing screen listens only to PlayerSettings.animatedCanvas.
+    // Combining the two settings here ensures STILL_ONLY removes the video
+    // entirely (including the Spotify full-screen layout, not merely its pixels).
+    private val effectiveAnimatedCanvas = combine(
+        AppSettings.animatedCanvas, AppSettings.visualRetentionMode,
+    ) { animated, mode ->
+        animated && mode != VisualRetentionMode.STILL_ONLY
+    }.stateIn(scope, SharingStarted.Eagerly,
+        AppSettings.animatedCanvas.value &&
+            AppSettings.visualRetentionMode.value != VisualRetentionMode.STILL_ONLY)
+
     // One provider-owned loader/cache/client instance shared by Mini and Now Playing.
     private val canonicalArtworkLoader by lazy { androidOpenSubsonicArtworkLoader(app) }
 
     override val settings: PlayerSettingsSource = object : PlayerSettingsSource {
-        override val animatedCanvas get() = AppSettings.animatedCanvas
+        override val animatedCanvas get() = effectiveAnimatedCanvas
         override val audioQualityCellular get() = AppSettings.audioQualityCellular
         override val audioQualityWifi get() = AppSettings.audioQualityWifi
         override val canvasOverCellular get() = AppSettings.canvasOverCellular
