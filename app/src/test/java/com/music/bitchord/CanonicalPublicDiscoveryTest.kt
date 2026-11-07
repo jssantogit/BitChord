@@ -3,6 +3,8 @@ package com.music.bitchord
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
 import com.music.bitchord.ui.canonicalPublicPlaylistShelf
+import com.music.bitchord.ui.canonicalGenreDisplayState
+import com.music.bitchord.data.model.UiState
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.ui.canonicalExploreDiscoveryShelves
@@ -294,6 +296,13 @@ class CanonicalPublicDiscoveryTest {
             canonicalExploreGenres.first { it.tag == "pop" }, emptyList(),
             "2026-11-06", playlists = listOf(playlist),
         ).map { it.title })
+        val offline = canonicalGenreDisplayState(
+            canonicalExploreGenres.first { it.tag == "pop" },
+            UiState.Error("MusicBrainz unavailable"),
+            listOf(playlist), "2026-11-06",
+        )
+        assertTrue(offline is UiState.Success)
+        assertEquals("Playlists", (offline as UiState.Success).data.single().title)
         assertTrue(genre.any { it.title == "Singles e EPs" })
         val home = canonicalHomeWithWorldwideEditorial(
             emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",

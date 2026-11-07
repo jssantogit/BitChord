@@ -1209,31 +1209,11 @@ private fun BitChordApp(
     val activeGenrePlaylists = activeCanonicalGenre?.tag?.let { tag ->
         canonicalPublicPlaylists[tag].orEmpty()
     }.orEmpty()
-    val canonicalGenreState: UiState<List<HomeShelf>> = when (val genreState = canonicalGenreResults) {
-        is UiState.Loading -> {
-            val playlist = com.music.bitchord.ui.canonicalPublicPlaylistShelf(
-                "Playlists", activeGenrePlaylists,
-            )
-            if (playlist != null) UiState.Success(listOf(playlist)) else UiState.Loading
-        }
-        is UiState.Error -> {
-            val playlist = com.music.bitchord.ui.canonicalPublicPlaylistShelf(
-                "Playlists", activeGenrePlaylists,
-            )
-            if (playlist != null) UiState.Success(listOf(playlist))
-            else UiState.Error(genreState.message)
-        }
-        is UiState.Success -> {
-            val shelves = activeCanonicalGenre?.let { genre ->
-                com.music.bitchord.ui.canonicalGenreEditorialShelves(
-                    genre, genreState.data, canonicalFeedDate,
-                    playlists = activeGenrePlaylists,
-                )
-            }.orEmpty()
-            if (shelves.isNotEmpty()) UiState.Success(shelves)
-            else UiState.Error("Não encontramos lançamentos verificados para este gênero.")
-        }
-    }
+    val canonicalGenreState: UiState<List<HomeShelf>> =
+        com.music.bitchord.ui.canonicalGenreDisplayState(
+            activeCanonicalGenre, canonicalGenreResults, activeGenrePlaylists,
+            canonicalFeedDate,
+        )
     // What a browse id is recorded under in Downloads.collections, when it names
     // a release downloaded whole — see BrowseTarget.downloadId. A downloaded
     // playlist's own page and its card both carry the id under the
@@ -3190,27 +3170,20 @@ private fun BitChordApp(
                             },
                         )
                     } else if (key.startsWith("public_playlist:")) {
-                        // Retain the previous destination through the exit animation.
-                        val heldPlaylist = remember(key) { mutableStateOf(openedPublicPlaylist) }
-                        openedPublicPlaylist?.takeIf {
-                            key == "public_playlist:" + it.mbid
-                        }?.let { heldPlaylist.value = it }
-                        heldPlaylist.value?.let { selected ->
-                            com.music.bitchord.ui.screens.CanonicalPublicPlaylistDetailScreen(
-                                playlist = selected,
-                                state = if (openedPublicPlaylist?.mbid == selected.mbid)
-                                    canonicalPublicPlaylistDetail else UiState.Loading,
-                                listState = pageDetailListState,
-                                contentPadding = listPadding,
-                                onBack = { openedPublicPlaylist = null },
-                                onRetry = { viewModel.loadCanonicalPublicPlaylistDetail(selected) },
-                                onVerifiedRecordingPlay = { recordingId ->
-                                    executeMusicBrainzCatalog(
-                                        recordingId, CanonicalCollectionIntent.PLAY_NOW,
-                                    )
-                                },
-                            )
-                        }
+                        com.music.bitchord.ui.screens.CanonicalPublicPlaylistRoute(
+                            routeKey = key,
+                            selected = openedPublicPlaylist,
+                            state = canonicalPublicPlaylistDetail,
+                            listState = pageDetailListState,
+                            contentPadding = listPadding,
+                            onBack = { openedPublicPlaylist = null },
+                            onRetry = viewModel::loadCanonicalPublicPlaylistDetail,
+                            onVerifiedRecordingPlay = { recordingId ->
+                                executeMusicBrainzCatalog(
+                                    recordingId, CanonicalCollectionIntent.PLAY_NOW,
+                                )
+                            },
+                        )
                     } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(
                             recordingId = key.removePrefix("rediscovery:"),

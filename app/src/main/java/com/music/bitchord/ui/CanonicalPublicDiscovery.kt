@@ -244,6 +244,38 @@ internal fun canonicalGenreEditorialShelves(
     )
 }
 
+/**
+ * Keep the historical MusicBrainz shelves and independent ListenBrainz
+ * playlists together without inflating BitChordApp's Compose method.
+ * Failure of one remote source cannot blank verified rows from the other.
+ */
+internal fun canonicalGenreDisplayState(
+    genre: CanonicalExploreGenre?,
+    current: com.music.bitchord.data.model.UiState<List<CanonicalCatalogSearchRow>>,
+    playlists: List<ListenBrainzPublicPlaylist>,
+    todayIsoDate: String,
+): com.music.bitchord.data.model.UiState<List<HomeShelf>> {
+    val playlist = canonicalPublicPlaylistShelf("Playlists", playlists)
+    return when (current) {
+        com.music.bitchord.data.model.UiState.Loading ->
+            if (playlist != null) com.music.bitchord.data.model.UiState.Success(listOf(playlist))
+            else com.music.bitchord.data.model.UiState.Loading
+        is com.music.bitchord.data.model.UiState.Error ->
+            if (playlist != null) com.music.bitchord.data.model.UiState.Success(listOf(playlist))
+            else current
+        is com.music.bitchord.data.model.UiState.Success -> {
+            val shelves = genre?.let {
+                canonicalGenreEditorialShelves(it, current.data, todayIsoDate, playlists)
+            }.orEmpty()
+            if (shelves.isEmpty()) {
+                com.music.bitchord.data.model.UiState.Error(
+                    "Não encontramos lançamentos verificados para este gênero.",
+                )
+            } else com.music.bitchord.data.model.UiState.Success(shelves)
+        }
+    }
+}
+
 /** One small release page is not enough to populate a diverse public Home.
  * Prefer broadening the real MusicBrainz query before claiming the feed is complete. */
 internal fun canonicalPublicNeedsMoreEditorialRows(
