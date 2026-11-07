@@ -114,6 +114,17 @@ def main(argv: list[str]) -> int:
         result["source_ids_correct"] = (discogs.get("id") == DISCOGS_ID and mb.get("id") == MBID)
         result["link_confirmed"] = relation_id(mb)
         titles, complete = mb_track_titles(mb)
+        media = mb.get("media")
+        result["mb_media_count_field"] = mb.get("media-count")
+        result["mb_media_items"] = len(media) if isinstance(media, list) else None
+        result["mb_medium_track_count_fields"] = [
+            m.get("track-count") for m in media if isinstance(m, dict)
+        ] if isinstance(media, list) else []
+        result["mb_medium_track_items"] = [
+            len(m["tracks"]) if isinstance(m.get("tracks"), list) else None
+            for m in media if isinstance(m, dict)
+        ] if isinstance(media, list) else []
+        result["mb_parsed_track_count"] = len(titles)
         result["musicbrainz_tracklist_complete"] = complete
         result["matching_title"] = (isinstance(mb.get("title"), str) and
             isinstance(discogs.get("title"), str) and
