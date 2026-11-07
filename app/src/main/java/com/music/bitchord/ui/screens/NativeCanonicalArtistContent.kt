@@ -69,7 +69,7 @@ internal fun NativeCanonicalArtistContent(
         NativeArtistSectionEvidence(
             context = NativeArtistContext.LIBRARY,
             hasTracks = shownTracks.isNotEmpty(),
-            hasRecentAlbum = sections.recentAlbum != null,
+            hasRecentAlbum = sections.recentRelease != null,
             hasAlbums = sections.albums.isNotEmpty(),
             hasSinglesAndEps = sections.singlesAndEps.isNotEmpty(),
             hasUnclassifiedReleases = sections.unclassified.isNotEmpty(),
@@ -156,17 +156,18 @@ internal fun NativeCanonicalArtistContent(
                 }
             }
 
-            sections.recentAlbum?.takeIf {
+            sections.recentRelease?.takeIf {
                 NativeArtistSection.RECENT_ALBUM in visibleSections
             }?.let { release ->
-                item(key = "artist-recent-album") {
+                item(key = "artist-recent-release") {
                     val target = CanonicalLibrarySelection(
                         CanonicalLibraryEntityType.ALBUM, release.id,
                     )
                     NativeArtistTopReleaseCard(
                         title = release.title,
                         subtitle = release.artistDisplay.orEmpty(),
-                        label = stringResource(R.string.recent_album),
+                        label = if (release.id == sections.recentAlbum?.id)
+                            stringResource(R.string.recent_album) else "Lançamento recente",
                         palette = palette,
                         onClick = {
                             if (selectedItems.isNotEmpty()) {
