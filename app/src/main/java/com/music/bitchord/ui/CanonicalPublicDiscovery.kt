@@ -18,10 +18,10 @@ internal fun canonicalPublicReleaseRows(
     hits: List<MusicBrainzReleaseGroupHit>,
     fromIsoDate: String,
     throughIsoDate: String,
-): List<CanonicalCatalogSearchRow> = canonicalPublicTypedReleaseRows(hits) { date ->
+): List<CanonicalCatalogSearchRow> = canonicalPublicTypedReleaseRows(hits, { date ->
     date != null && date.length == 10 && date >= fromIsoDate &&
         date <= throughIsoDate && runCatching { LocalDate.parse(date) }.isSuccess
-}
+})
 
 /**
  * A genre is a historical browse category, NOT a world new-release chart.
