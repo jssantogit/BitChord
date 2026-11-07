@@ -908,22 +908,24 @@ internal fun SettingsScreen(
                     }
                 }
             }
-            val offlineVisualTitle = "Visuais offline"
+            val offlineVisualTitle = stringResource(R.string.visual_offline_title)
             row(offlineVisualTitle, "animação", "cache", "wifi", "vídeo", "imagem", "offline") {
                 SettingsRow(
                     icon = Icons.Rounded.Cached,
                     title = offlineVisualTitle,
                     subtitle = when (visualRetention) {
                         VisualRetentionMode.STREAM_ONLY ->
-                            "Transmissão normal com cache temporário; sem guardar vídeos permanentemente"
+                            stringResource(R.string.visual_offline_stream)
                         VisualRetentionMode.SAVE_ON_WIFI ->
-                            "Guardar animações completas para funcionar sem Internet, apenas no Wi-Fi"
+                            stringResource(R.string.visual_offline_wifi)
                         VisualRetentionMode.STILL_ONLY ->
-                            "Substituir vídeos por capas e fotos estáticas já disponíveis"
+                            stringResource(R.string.visual_offline_still)
                     },
                 )
                 SegmentedControl(
-                    options = listOf("Temporário", "Salvar Wi-Fi", "Só imagens"),
+                    options = listOf(stringResource(R.string.visual_offline_temporary),
+                        stringResource(R.string.visual_offline_save_wifi),
+                        stringResource(R.string.visual_offline_only_stills)),
                     selectedIndex = VisualRetentionMode.entries.indexOf(visualRetention),
                     onSelect = { index ->
                         AppSettings.setVisualRetentionMode(VisualRetentionMode.entries[index])
@@ -935,9 +937,9 @@ internal fun SettingsScreen(
             }
             if (visualRetention == VisualRetentionMode.SAVE_ON_WIFI) {
                 val visualLabels = listOf(
-                    VisualSurface.ARTIST to "Animações de artistas",
-                    VisualSurface.ALBUM to "Animações de álbuns",
-                    VisualSurface.NOW_PLAYING to "Animações do Now Playing",
+                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_motion),
+                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_motion),
+                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_motion),
                 )
                 visualLabels.forEach { (surface, title) ->
                     row(title, "vídeo", "offline", "wifi", divided = false) {
@@ -949,19 +951,19 @@ internal fun SettingsScreen(
                     }
                 }
             }
-            row("Guardar imagens estáticas", "foto", "capa", "offline", divided = false) {
+            row(stringResource(R.string.visual_offline_save_stills), "foto", "capa", "offline", divided = false) {
                 SettingsSubRow(
-                    title = "Guardar imagens estáticas",
+                    title = stringResource(R.string.visual_offline_save_stills),
                     checked = visualStills,
                     onCheckedChange = AppSettings::setSaveVisualStillImages,
-                    subtitle = "Artistas, álbuns e Now Playing; espaço limitado e sem backup",
+                    subtitle = stringResource(R.string.visual_offline_stills_subtitle),
                 )
             }
             if (visualStills) {
                 listOf(
-                    VisualSurface.ARTIST to "Fotos de artistas",
-                    VisualSurface.ALBUM to "Capas de álbuns",
-                    VisualSurface.NOW_PLAYING to "Capas do Now Playing",
+                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_stills),
+                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_stills),
+                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_stills),
                 ).forEach { (surface, title) ->
                     row(title, "imagem", "offline", "cache", divided = false) {
                         SettingsSubRow(
@@ -1330,11 +1332,11 @@ internal fun SettingsScreen(
                     onClick = { confirmClearSongCache = true },
                 )
             }
-            row("Limpar visuais salvos", "offline", "cache", "vídeo", "animação", "capa") {
+            row(stringResource(R.string.visual_offline_clear_title), "offline", "cache", "vídeo", "animação", "capa") {
                 SettingsRow(
                     icon = Icons.Rounded.DeleteSweep,
-                    title = "Limpar visuais salvos",
-                    subtitle = "Imagens e animações mantidas offline (sem apagar músicas)",
+                    title = stringResource(R.string.visual_offline_clear_title),
+                    subtitle = stringResource(R.string.visual_offline_clear_subtitle),
                     onClick = { confirmClearVisualMedia = true },
                 )
             }
@@ -1679,8 +1681,8 @@ internal fun SettingsScreen(
         NativeAlertHost(onDismiss = { confirmClearVisualMedia = false }) {
             ConfirmationAlert(
                 hazeState = null,
-                title = "Limpar visuais offline?",
-                description = "As imagens e animações salvas serão apagadas. Músicas, playlists e avaliações serão preservadas. Os visuais poderão ser baixados novamente quando houver conexão.",
+                title = stringResource(R.string.visual_offline_confirm_title),
+                description = stringResource(R.string.visual_offline_confirm_description),
                 confirmLabel = stringResource(R.string.clear),
                 destructive = true,
                 onConfirm = {
@@ -1690,7 +1692,7 @@ internal fun SettingsScreen(
                         CanvasCache.clearSaved()
                         AppleArtistArtRepository.clearOfflineMetadata()
                         CanvasRepository.clearOfflineMetadata()
-                        Toast.makeText(context, "Visuais offline apagados", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.visual_offline_cleared), Toast.LENGTH_SHORT).show()
                     }
                 },
                 onDismiss = { confirmClearVisualMedia = false },

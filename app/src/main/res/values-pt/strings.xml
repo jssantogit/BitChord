@@ -1398,4 +1398,25 @@
     <string name="search_origin_server">Servidor</string>
     <string name="search_origin_local">Local</string>
     <string name="home_global_discovery">Descobertas do mundo</string>
+
+    <string name="visual_offline_title">Visuais offline</string>
+    <string name="visual_offline_stream">Transmissão normal com cache temporário; sem guardar vídeos permanentemente</string>
+    <string name="visual_offline_wifi">Guardar animações completas para funcionar sem Internet, apenas no Wi-Fi</string>
+    <string name="visual_offline_still">Substituir vídeos por capas e fotos estáticas já disponíveis</string>
+    <string name="visual_offline_temporary">Temporário</string>
+    <string name="visual_offline_save_wifi">Salvar Wi-Fi</string>
+    <string name="visual_offline_only_stills">Só imagens</string>
+    <string name="visual_offline_artist_motion">Animações de artistas</string>
+    <string name="visual_offline_album_motion">Animações de álbuns</string>
+    <string name="visual_offline_player_motion">Animações do Now Playing</string>
+    <string name="visual_offline_save_stills">Guardar imagens estáticas</string>
+    <string name="visual_offline_stills_subtitle">Artistas, álbuns e Now Playing; espaço limitado e sem backup</string>
+    <string name="visual_offline_artist_stills">Fotos de artistas</string>
+    <string name="visual_offline_album_stills">Capas de álbuns</string>
+    <string name="visual_offline_player_stills">Capas do Now Playing</string>
+    <string name="visual_offline_clear_title">Limpar visuais salvos</string>
+    <string name="visual_offline_clear_subtitle">Imagens e animações mantidas offline (sem apagar músicas)</string>
+    <string name="visual_offline_confirm_title">Limpar visuais offline?</string>
+    <string name="visual_offline_confirm_description">As imagens e animações salvas serão apagadas. Músicas, playlists e avaliações serão preservadas. Os visuais poderão ser baixados novamente quando houver conexão.</string>
+    <string name="visual_offline_cleared">Visuais offline apagados</string>
 </resources>
