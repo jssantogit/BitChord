@@ -61,7 +61,11 @@ internal class DiscogsCanonicalEditionCoordinator(
     private val lock = Mutex()
     private val entries = linkedMapOf<String, Cached>()
 
-    suspend fun clear() = lock.withLock { entries.clear() }
+    /** Rollback clears all source-scoped caches, never MusicBrainz or Room. */
+    suspend fun clear() = lock.withLock {
+        entries.clear()
+        editions.clearCachedEvidence()
+    }
 
     suspend fun observeRelease(musicBrainzReleaseMbid: String): DiscogsEditionEnrichment {
         if (!enabled) return DiscogsEditionEnrichment.Disabled
