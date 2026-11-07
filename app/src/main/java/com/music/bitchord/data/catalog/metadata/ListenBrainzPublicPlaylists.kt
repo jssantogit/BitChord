@@ -23,6 +23,7 @@ import java.util.Locale
 private val PUBLIC_PLAYLIST_MbID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 private const val PUBLIC_PLAYLIST_PREFIX = "catalog:PUBLIC_PLAYLIST:"
 private const val MB_RECORDING_PREFIX = "https://musicbrainz.org/recording/"
+private const val MB_RELEASE_PREFIX = "https://musicbrainz.org/release/"
 private const val LB_PLAYLIST_PREFIX = "https://listenbrainz.org/playlist/"
 
 /** Public ListenBrainz playlist identity, never a Song or a local playlist. */
@@ -47,6 +48,7 @@ internal data class ListenBrainzPublicPlaylistTrack(
     val recordingMbid: String?,
     val title: String,
     val artist: String,
+    val artworkUrl: String? = null,
 )
 
 internal data class ListenBrainzPublicPlaylistDetail(
@@ -59,6 +61,7 @@ internal data class ListenBrainzPublicPlaylistHttp(val status: Int, val body: St
 internal interface ListenBrainzPublicPlaylistTransport {
     suspend fun search(query: String): ListenBrainzPublicPlaylistHttp
     suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp
+    suspend fun recordingArtwork(recordingMbids: List<String>): ListenBrainzPublicPlaylistHttp? = null
 }
 
 /** Anonymous GET only; deliberately no token, scrobble, legacy backend or write. */
@@ -99,6 +102,20 @@ internal class KtorListenBrainzPublicPlaylistTransport(
             ListenBrainzPublicPlaylistHttp(response.status.value,
                 if (response.status.value == 200) response.bodyAsText() else "")
         }
+
+    override suspend fun recordingArtwork(recordingMbids: List<String>): ListenBrainzPublicPlaylistHttp =
+        measureMetadataHttp(
+            provider = "listenbrainz", endpoint = "public_playlist_recording_art",
+            status = { r: ListenBrainzPublicPlaylistHttp -> r.status },
+        ) {
+            val response = client.get("https://api.listenbrainz.org/1/metadata/recording/") {
+                parameter("recording_mbids", recordingMbids.joinToString(","))
+                parameter("inc", "release")
+                header(HttpHeaders.UserAgent, "BitChord/" + BuildConfig.VERSION_NAME)
+            }
+            ListenBrainzPublicPlaylistHttp(response.status.value,
+                if (response.status.value == 200) response.bodyAsText() else "")
+        }
 }
 
 private fun JsonObject.optionalText(name: String): String? =
@@ -112,6 +129,45 @@ private fun parsedJson(raw: String, maxLength: Int): JsonObject? =
         try { Json.parseToJsonElement(it) as? JsonObject }
         catch (_: Exception) { null }
     }
+
+/** JSPF annotations are plain text: decode common HTML entities, never render markup. */
+private fun publicPlaylistPlainText(value: String): String =
+    Regex("&(?:amp|quot|apos|lt|gt|nbsp|#39|#34);").replace(value) { entity ->
+        when (entity.value) {
+            "&amp;" -> "&"
+            "&quot;", "&#34;" -> "\""
+            "&apos;", "&#39;" -> "'"
+            "&lt;" -> "<"
+            "&gt;" -> ">"
+            "&nbsp;" -> " "
+            else -> entity.value
+        }
+    }
+
+/** Build artwork URLs only from known CAA/MusicBrainz identities, not remote URLs. */
+private fun verifiedPublicRecordingArtwork(releaseId: String?, caaId: String? = null): String? {
+    val release = checkedPlaylistId(releaseId) ?: return null
+    val base = "https://coverartarchive.org/release/$release"
+    if (caaId == null) return "$base/front-250.jpg"
+    val imageId = caaId.toLongOrNull()?.takeIf { it > 0L } ?: return null
+    return "$base/$imageId-250.jpg"
+}
+
+/** ListenBrainz recording metadata returns an object keyed by exact requested MBIDs. */
+internal fun parseListenBrainzPublicRecordingArtwork(
+    body: String, requestedRecordingMbids: List<String>,
+): Map<String, String> {
+    val requested = requestedRecordingMbids.mapNotNull(::checkedPlaylistId).take(25).toSet()
+    val root = parsedJson(body, 300_000) ?: return emptyMap()
+    return requested.mapNotNull { recording ->
+        val node = root[recording] as? JsonObject ?: return@mapNotNull null
+        val release = node["release"] as? JsonObject ?: return@mapNotNull null
+        val cover = verifiedPublicRecordingArtwork(
+            release.optionalText("caa_release_mbid"), release.optionalText("caa_id"),
+        ) ?: return@mapNotNull null
+        recording to cover
+    }.toMap()
+}
 
 /** Fuzzy search itself never proves a genre: require a whole term in public text. */
 private fun matchesPlaylistWords(
@@ -198,12 +254,13 @@ internal fun parseListenBrainzPublicPlaylistSearch(
         } else checkedPlaylistId(data.optionalText("playlist_mbid"))
         if (mbid == null) return@mapNotNull null
         val title = data.optionalText("title")?.takeIf { it.length <= 180 }
-            ?: return@mapNotNull null
+            ?.let(::publicPlaylistPlainText) ?: return@mapNotNull null
         if (title.any { it.isISOControl() }) return@mapNotNull null
         val creator = data.optionalText("creator")?.takeIf { it.length <= 100 }
-            ?: "ListenBrainz"
+            ?.let(::publicPlaylistPlainText) ?: "ListenBrainz"
         val description = (data.optionalText("annotation")
             ?: data.optionalText("description"))?.takeIf { it.length <= 1_000 }
+            ?.let(::publicPlaylistPlainText)
         ListenBrainzPublicPlaylist(mbid, title, creator, description)
     }.filter { aliases == null || matchesPlaylistWords(it, aliases) }
         .distinctBy { it.mbid }.take(12).toList()
@@ -237,11 +294,24 @@ internal fun parseListenBrainzPublicPlaylistDetail(
                 ?.removePrefix(MB_RECORDING_PREFIX)?.removeSuffix("/")
                 ?.let(::checkedPlaylistId)
         }.firstOrNull()
+
+        val extension = (obj["extension"] as? JsonObject)
+            ?.get("https://musicbrainz.org/doc/jspf#track") as? JsonObject
+        val metadata = extension?.get("additional_metadata") as? JsonObject
+        val releaseId = extension?.optionalText("release_identifier")
+            ?.takeIf { it.startsWith(MB_RELEASE_PREFIX) }
+            ?.removePrefix(MB_RELEASE_PREFIX)?.removeSuffix("/")
+            ?.let(::checkedPlaylistId)
+        val caa = metadata?.optionalText("caa_release_mbid")?.let { release ->
+            verifiedPublicRecordingArtwork(release, metadata?.optionalText("caa_id"))
+        }
+        val artwork = caa ?: releaseId?.let { verifiedPublicRecordingArtwork(it) }
         ListenBrainzPublicPlaylistTrack(
             mbid, obj.optionalText("title")?.takeIf { it.length <= 200 }
-                ?: "Gravação sem título",
+                ?.let(::publicPlaylistPlainText) ?: "Gravação sem título",
             obj.optionalText("creator")?.takeIf { it.length <= 200 }
-                ?: "Crédito não informado",
+                ?.let(::publicPlaylistPlainText) ?: "Crédito não informado",
+            artworkUrl = artwork,
         )
     }
     return ListenBrainzPublicPlaylistDetail(selected, rows)
@@ -306,6 +376,19 @@ internal class ListenBrainzPublicPlaylistClient(
         // A valid empty upstream response differs from an unavailable API.
         // Never manufacture playlist IDs when every verified query is empty.
         return if (completed) emptyList() else null
+    }
+
+
+    /** Up to 25 IDs per call, strictly scoped to real Recording MBIDs. */
+    suspend fun artworkForRecordings(recordingMbids: List<String>): Map<String, String> {
+        val validated = recordingMbids.mapNotNull(::checkedPlaylistId).distinct().take(25)
+        if (validated.isEmpty()) return emptyMap()
+        val response = try { limiter.run { transport.recordingArtwork(validated) } }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { null }
+        return if (response?.status == 200)
+            parseListenBrainzPublicRecordingArtwork(response.body, validated)
+        else emptyMap()
     }
 
     suspend fun detail(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? {
