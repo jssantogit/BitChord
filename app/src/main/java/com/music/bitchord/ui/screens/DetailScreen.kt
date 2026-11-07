@@ -332,6 +332,7 @@ fun DetailScreen(
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
+    canonicalPublicTopSampled: Boolean = false,
     onCanonicalPublicTopOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** Verified current MusicBrainz ReleaseGroup, never an inferred local Song. */
     canonicalFeaturedRelease: CanonicalCatalogSearchRow? = null,
@@ -792,6 +793,7 @@ fun DetailScreen(
                             artistMbid = publicArtistMbid,
                             rows = publicTopRows,
                             palette = palette,
+                            sampled = canonicalPublicTopSampled,
                             onRecordingOpen = onCanonicalPublicTopOpen,
                         )
                     }
