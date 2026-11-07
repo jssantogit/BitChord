@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import org.junit.Assert.assertEquals
@@ -20,7 +22,7 @@ import org.robolectric.annotation.ConscryptMode
 class NativeArtistPublicTopSectionTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun onlyExactArtistRecordingOpensMetadataThroughNativeTrackShelf() {
+    @Test fun metadataOnlyArtistRecordingIsNotClickableAndOffersMetadataMenu() {
         val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
         val correct = CanonicalCatalogSearchRow(
             musicBrainzId = "13dd61c7-ce73-4e97-9f0c-9f0e53144411",
@@ -48,11 +50,13 @@ class NativeArtistPublicTopSectionTest {
         }
         compose.onNodeWithText("Canonical recording").assertExists()
         compose.onNodeWithText("Other identity").assertDoesNotExist()
-        compose.onNodeWithText("Canonical recording").performClick()
-        compose.runOnIdle { assertEquals(listOf(correct.musicBrainzId), opened) }
+        compose.onNodeWithText("Canonical recording").assertHasNoClickAction()
+        compose.onNodeWithTag("artist-top-more-${correct.musicBrainzId}").performClick()
+        compose.onNodeWithText("Ver no MusicBrainz").assertExists()
+        compose.runOnIdle { assertEquals(emptyList<String>(), opened) }
     }
 
-    @Test fun sampledPopularityUsesTopTracksTitleAndDisclosesPartialRanking() {
+    @Test fun sampledPopularityUsesTopTracksTitleWithoutTechnicalCaption() {
         val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
         val row = CanonicalCatalogSearchRow(
             musicBrainzId = "13dd61c7-ce73-4e97-9f0c-9f0e53144411",
@@ -73,7 +77,7 @@ class NativeArtistPublicTopSectionTest {
             }
         }
         compose.onNodeWithText("Populares no catálogo").assertDoesNotExist()
-        compose.onNodeWithText("Amostra de gravações com contagens verificadas").assertExists()
+        compose.onNodeWithText("Amostra de gravações com contagens verificadas").assertDoesNotExist()
         compose.onNodeWithText("Sample recording").assertExists()
     }
 
