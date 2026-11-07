@@ -255,6 +255,35 @@ class CanonicalArtistReleaseSectionsTest {
     }
 
 
+    @Test fun verifiedRecentLibraryReleaseSurvivesRestartAndChangedLocalIdsWithoutInternet() {
+        val online = ReleaseEntity("old-scan-id", "Say It", "AtHeart", null)
+        val offline = online.copy(id = "new-scan-id")
+        val key = canonicalRecentArtistProofCacheKey("AtHeart", online.title)
+        val stored = mapOf(key to "Single|2026-06-25")
+        val proof = canonicalCachedRecentArtistProofs("AtHeart", listOf(offline), stored::get)
+        assertEquals("2026-06-25", proof[offline.id]?.firstReleaseDate)
+        assertEquals("Single", proof[offline.id]?.primaryType)
+        assertEquals(offline.id, canonicalArtistReleaseSections(
+            listOf(offline), proof, mapOf(offline.id to 1),
+        ).recentRelease?.id)
+    }
+
+    @Test fun cachedRecentProofRejectsAmbiguousTitlesWrongArtistMalformedAndFutureDates() {
+        val release = ReleaseEntity("local", "Say It", "AtHeart", null)
+        val valid = canonicalRecentArtistProofCacheKey("AtHeart", release.title)
+        val storage = mapOf(valid to "Single|2026-06-25")
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalCachedRecentArtistProofs("Other Artist", listOf(release), storage::get))
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalCachedRecentArtistProofs("AtHeart", listOf(
+                release, release.copy(id = "ambiguous"),
+            ), storage::get))
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalCachedRecentArtistProofs("AtHeart", listOf(release)) { "Album|2999-01-01" })
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalCachedRecentArtistProofs("AtHeart", listOf(release)) { "Other|2026-06-25" })
+    }
+
     @Test fun recentLibraryExternalDateLookupDoesNotRestartForArtworkOnlyChanges() {
         val releases = listOf(
             ReleaseEntity("local-1", "Plot Twist", "AtHeart", null),
