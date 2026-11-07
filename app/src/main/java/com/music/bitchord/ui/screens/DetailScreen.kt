@@ -523,7 +523,7 @@ fun DetailScreen(
     // An artist's clip comes with the same Apple lookup as its photograph.
     val artistVideo = appleArt?.videoUrl
     LaunchedEffect(artistVideo, canvasEnabled) {
-        if (isArtist) canvas = artistVideo?.takeIf { canvasEnabled }?.let { CanvasArtwork(url = it) }
+        if (isArtist) canvas = artistVideo?.takeIf { canvasEnabled }?.let { CanvasArtwork(url = it, surface = com.music.bitchord.data.canvas.CanvasSurface.ARTIST) }
     }
 
     // Opening the search carries the page up to it, so the field lands just
