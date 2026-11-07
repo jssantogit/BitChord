@@ -1345,9 +1345,17 @@ internal fun CanonicalRemoteLibraryScreen(
                         fromCard = false,
                     ),
                     isPinned = menu.selection in pinnedIdentities,
-                    onTogglePin = {
-                        togglePin(menu)
-                        libraryMenu = null
+                    // The album's hero + is already the pin control.
+                    // Root collection-card menus retain pin where no + exists.
+                    onTogglePin = if (menu.selection.type == CanonicalLibraryEntityType.ALBUM &&
+                        selectedEntity != null &&
+                        (selectedContext == CanonicalSmartFilterContext.ALBUMS ||
+                            artistNestedReleaseOpen)
+                    ) null else {
+                        {
+                            togglePin(menu)
+                            libraryMenu = null
+                        }
                     },
                     onPlayNext = { queue(CanonicalCollectionIntent.ADD_NEXT) },
                     onAddToQueue = { queue(CanonicalCollectionIntent.ADD_TO_QUEUE) },
@@ -1372,13 +1380,23 @@ internal fun CanonicalRemoteLibraryScreen(
                         }
                     } else null,
                     headerArtwork = {
-                        if (art != null) {
-                            CanonicalUnifiedArtwork(art, artworkLoader, Modifier.fillMaxSize())
-                        } else CoverPlaceholder(
-                            if (menu.selection.type == CanonicalLibraryEntityType.ARTIST)
-                                Icons.Rounded.MusicNote else Icons.Rounded.Album,
-                            Modifier.fillMaxSize(),
-                        )
+                        Box(Modifier.fillMaxSize()) {
+                            CoverPlaceholder(
+                                if (menu.selection.type == CanonicalLibraryEntityType.ARTIST)
+                                    Icons.Rounded.MusicNote else Icons.Rounded.Album,
+                                Modifier.fillMaxSize(),
+                            )
+                            if (art != null) {
+                                CanonicalUnifiedArtwork(art, artworkLoader, Modifier.fillMaxSize())
+                            } else menu.imageUrl?.takeIf { it.isNotBlank() }?.let { uri ->
+                                AsyncImage(
+                                    model = uri,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                        }
                     },
                 )
             }
