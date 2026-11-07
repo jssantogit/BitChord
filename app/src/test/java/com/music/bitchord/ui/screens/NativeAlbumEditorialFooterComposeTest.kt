@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsKind
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsLink
@@ -137,6 +138,35 @@ class NativeAlbumEditorialFooterComposeTest {
         compose.onNodeWithText("Sobre esta edição").assertExists()
         compose.onNodeWithText("Gravadora: Belift Lab (BEL-001)").assertExists()
         compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
+    }
+
+    @Test fun advancedVisibilityPreferenceHidesOnlySupplementaryDetails() {
+        val previous = AppSettings.showAlbumEditionMetadata.value
+        try {
+            AppSettings.showAlbumEditionMetadata.value = false
+            compose.setContent {
+                MaterialTheme {
+                    NativeAlbumMetadataFooter(
+                        metadata = CanonicalAlbumFooterMetadata(
+                            date = "2024",
+                            summary = "5 músicas, 15 minutos",
+                            showAlbumAbout = true,
+                            hasMusicBrainzEdition = true,
+                            editionFacts = listOf("Gravadora · Belift Lab"),
+                            editorialEvidence = evidence(),
+                        ),
+                        palette = themeArtworkPalette(),
+                    )
+                }
+            }
+            compose.onNodeWithText("2024").assertExists()
+            compose.onNodeWithText("5 músicas, 15 minutos").assertExists()
+            compose.onNodeWithText("Sobre esta edição").assertDoesNotExist()
+            compose.onNodeWithTag("native-album-editorial-footer").assertDoesNotExist()
+            compose.onNodeWithTag("native-album-editorial-attribution").assertDoesNotExist()
+        } finally {
+            AppSettings.showAlbumEditionMetadata.value = previous
+        }
     }
 
     @Test fun nonVerifiedAlbumKeepsExistingMetadataButNeverShowsDiscogsPlaceholder() {
