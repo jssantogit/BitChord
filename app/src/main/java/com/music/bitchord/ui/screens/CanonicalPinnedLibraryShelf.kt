@@ -366,12 +366,19 @@ internal fun CanonicalPinnedLibraryShelf(
                             val static = staticById[playlist.id]
                             val smartDefinition = smartById[playlist.id]
                             val legacy = localById[playlist.id]
-                            val accessible = static != null || smartDefinition != null || legacy != null
+                            val publicMbid = playlist.id.takeIf { it.startsWith("public:") }
+                                ?.removePrefix("public:")
+                            val publicArtwork = publicMbid?.let {
+                                "https://api.listenbrainz.org/1/art/playlist/$it/opengraph/"
+                            }
+                            val accessible = static != null || smartDefinition != null ||
+                                legacy != null || publicMbid != null
                             NativeLibraryEntityCard(
                                 title = static?.name ?: smartDefinition?.name
                                     ?: legacy?.title ?: playlist.title,
-                                subtitle = if (accessible) "Playlist" else "Indisponível",
-                                imageUrl = legacy?.thumbnailUrl,
+                                subtitle = if (accessible) playlist.creator.ifBlank { "Playlist" }
+                                    else "Indisponível",
+                                imageUrl = legacy?.thumbnailUrl ?: publicArtwork,
                                 isArtist = false,
                                 onClick = {
                                     if (accessible) onOpenPlaylist(playlist.id)
@@ -394,7 +401,7 @@ internal fun CanonicalPinnedLibraryShelf(
                                             customCoverUri = smartDefinition.coverUri,
                                         )
                                     })
-                                    legacy?.thumbnailUrl != null -> null
+                                    (legacy?.thumbnailUrl != null || publicArtwork != null) -> null
                                     else -> ({
                                         com.music.bitchord.ui.components.CoverPlaceholder(
                                             Icons.Rounded.Album, Modifier.fillMaxSize(),
