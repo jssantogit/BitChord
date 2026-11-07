@@ -20,6 +20,7 @@ class CatalogMetadataRecordingLabelTest {
         val unavailable = metadataOnlyUnavailablePlaylistRow(id, label)
         assertEquals("UFO (ATTENTION)", unavailable.title)
         assertFalse(unavailable.isAvailablePlaylistMember())
+        assertTrue(V2DisplayRow(id, "Local recording", "Artist").isAvailablePlaylistMember())
     }
 
     @Test fun fabricatedIdsOrIncorrectLabelKeyCannotImpersonateVerifiedCatalog() {

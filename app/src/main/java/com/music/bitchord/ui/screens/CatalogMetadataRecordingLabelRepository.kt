@@ -8,6 +8,8 @@ import org.json.JSONObject
 
 /** A trusted online Recording label may be preserved for a user's playlist,
  * but it never establishes a MediaAsset, download, playability or local artist. */
+internal const val CATALOG_METADATA_NO_AUDIO_SUFFIX = " · Sem áudio"
+
 internal data class CatalogMetadataRecordingLabel(
     val recordingId: String,
     val title: String,
@@ -26,7 +28,7 @@ internal fun metadataOnlyUnavailablePlaylistRow(
 ): V2DisplayRow =
     if (label != null && label.recordingId == recordingId &&
         validCatalogMetadataRecordingLabel(label)) {
-        V2DisplayRow(recordingId, label.title, label.artist + " · Sem áudio")
+        V2DisplayRow(recordingId, label.title, label.artist + CATALOG_METADATA_NO_AUDIO_SUFFIX)
     } else V2DisplayRow(recordingId, "Gravação indisponível", "Fonte não disponível")
 
 internal fun encodeCatalogMetadataRecordingLabels(

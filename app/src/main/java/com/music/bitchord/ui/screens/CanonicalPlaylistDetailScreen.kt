@@ -224,7 +224,9 @@ internal fun canonicalPlaylistDetailMeta(
 
 /** A saved RecordingId without eligible MediaAsset remains visible but is not clickable. */
 internal fun V2DisplayRow.isAvailablePlaylistMember(): Boolean =
-    title != "Gravação indisponível" || artist != "Fonte não disponível"
+    (title != "Gravação indisponível" || artist != "Fonte não disponível") &&
+        // Metadata-only labels are useful offline but NEVER a playback proof.
+        !artist.endsWith(CATALOG_METADATA_NO_AUDIO_SUFFIX)
 
 /** The same native Library row used everywhere, wired to canonical playback. */
 /** Native SongRow's proven dimensions and controls, but canonical RecordingIds. */
