@@ -138,8 +138,10 @@ class ListenBrainzPublicPlaylistTest {
         assertEquals(1, client.searchGenre("rock")!!.size)
         assertEquals(0, client.searchGenre("hip-hop")!!.size)
         assertNull(client.searchGenre("lucene:inject"))
-        assertEquals(listOf("rock", "hip hop"), requests)
+        // Hip-hop has no matching words in the mock response, so the second
+        // bounded genre phrase must also be checked before reporting empty.
+        assertEquals(listOf("rock", "hip hop", "hip hop music"), requests)
         assertNull(client.detail(ListenBrainzPublicPlaylist(rock, "Test", "Curator", null)))
-        assertEquals(listOf("rock", "hip hop", rock), requests)
+        assertEquals(listOf("rock", "hip hop", "hip hop music", rock), requests)
     }
 }
