@@ -40,9 +40,26 @@ internal fun nativeArtistEditorialGuestTracks(
             !it.trackTitle.isNullOrBlank() &&
             canonicalStreamingTitleIsSafe(it.trackTitle)
     }
+    // One editorial song can be represented by several MusicBrainz
+    // Recordings and alternate editions of the SAME host release.
+    // Prefer the first verified official row, but never duplicate the card.
+    // The host credit is part of the key: another artist recording a song
+    // with the same title is still a different collaboration.
+    .distinctBy { appearance ->
+        val host = appearance.artistCredit.normalizeGuestDisplayKey()
+        val song = requireNotNull(appearance.trackTitle).normalizeGuestDisplayKey()
+        "$host|$song"
+    }
     .distinctBy { it.recordingMbid }
     .take(12)
     .toList()
+
+private fun String.normalizeGuestDisplayKey(): String =
+    java.text.Normalizer.normalize(trim().lowercase(java.util.Locale.ROOT),
+        java.text.Normalizer.Form.NFKC)
+        .replace(Regex("""[\p{P}\p{S}]+"""), " ")
+        .replace(Regex("""\s+"""), " ")
+        .trim()
 
 /**
  * A previously verified Front-v5 for this exact ReleaseGroup is enough to
