@@ -3,6 +3,9 @@ package com.music.bitchord.data.canvas
 import android.content.Context
 import com.music.bitchord.data.Http
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
@@ -22,6 +25,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 internal class VisualStillFileStore(
     private val directory: File,
+    private val maxBytes: () -> Long = { MAX_STILL_CACHE_BYTES },
     private val downloader: suspend (String, File) -> Boolean,
 ) {
     private val keys = ConcurrentHashMap<String, Mutex>()
@@ -74,6 +78,8 @@ internal class VisualStillFileStore(
         directory.listFiles().orEmpty().forEach { it.delete() }
     }
 
+    fun trimToQuota() { prune() }
+
     fun bytesOnDisk(): Long = directory.listFiles().orEmpty()
         .filter { it.isFile }.sumOf { it.length() }
 
@@ -84,7 +90,7 @@ internal class VisualStillFileStore(
             .sortedBy { it.lastModified() }
         var total = files.sumOf { it.length() }
         for (file in files) {
-            if (total <= MAX_STILL_CACHE_BYTES) break
+            if (total <= maxBytes().coerceIn(0L, MAX_SAVED_STILLS_BYTES)) break
             val size = file.length()
             if (file.delete()) total -= size
         }
@@ -103,10 +109,19 @@ internal class VisualStillFileStore(
  */
 object VisualStillMedia {
     @Volatile private var store: VisualStillFileStore? = null
+    private val cleanupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Respect a newly lowered quota without blocking the settings UI. */
+    fun requestTrim() {
+        cleanupScope.launch { store?.trimToQuota() }
+    }
 
     fun init(context: Context) {
         val root = File(context.noBackupFilesDir, "visual_offline_stills_v1")
-        store = VisualStillFileStore(root) { url, output ->
+        store = VisualStillFileStore(
+            directory = root,
+            maxBytes = { com.music.bitchord.data.settings.AppSettings.visualStillCacheLimitBytes.value },
+        ) { url, output ->
             withContext(Dispatchers.IO) {
                 val request = Request.Builder().url(url).get().build()
                 Http.client.newCall(request).execute().use { response ->

@@ -1414,6 +1414,12 @@
     <string name="visual_offline_artist_stills">Fotos de artistas</string>
     <string name="visual_offline_album_stills">Capas de álbuns</string>
     <string name="visual_offline_player_stills">Capas do Now Playing</string>
+    <string name="visual_offline_images_group">Fotos e capas salvas</string>
+    <string name="visual_offline_motion_group">Animações salvas</string>
+    <string name="visual_offline_still_limit">Limite de imagens salvas</string>
+    <string name="visual_offline_still_limit_subtitle">Espaço máximo para fotos de artistas, capas de álbuns e do Now Playing</string>
+    <string name="visual_offline_motion_limit">Limite de animações salvas</string>
+    <string name="visual_offline_motion_limit_subtitle">Limita novos vídeos offline. Vídeos já salvos são preservados ao reduzir o limite; limpe os visuais para liberar espaço</string>
     <string name="visual_offline_clear_title">Limpar visuais salvos</string>
     <string name="visual_offline_clear_subtitle">Imagens e animações mantidas offline (sem apagar músicas)</string>
     <string name="visual_offline_confirm_title">Limpar visuais offline?</string>

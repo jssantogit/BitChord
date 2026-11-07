@@ -37,7 +37,8 @@ import java.util.concurrent.atomic.AtomicLong
 @UnstableApi
 object CanvasCache {
     private const val STREAM_CACHE_BYTES = 150L * 1024 * 1024
-    private const val SAVED_CACHE_BYTES = 400L * 1024 * 1024
+    private val savedLimitBytes: Long
+        get() = com.music.bitchord.data.settings.AppSettings.visualMotionCacheLimitBytes.value
     private const val MAX_CLIP_BYTES = 48L * 1024 * 1024
     private const val PREFS = "visual_canvas_pins_v1"
 
@@ -119,7 +120,7 @@ object CanvasCache {
         return lock.withLock {
             if (isSaved(url)) return@withLock true
             withContext(Dispatchers.IO) {
-                if (savedCache.cacheSpace >= SAVED_CACHE_BYTES) return@withContext false
+                if (savedCache.cacheSpace >= savedLimitBytes) return@withContext false
                 // Do not use the streaming-LRU as a write target: its eviction
                 // must never invalidate a user's persistent offline choice.
                 val transport = CacheDataSource.Factory()
@@ -142,14 +143,14 @@ object CanvasCache {
                 return@withContext try {
                     downloader.download(Downloader.ProgressListener { _, bytes, _ ->
                         if (bytes > MAX_CLIP_BYTES ||
-                            savedCache.cacheSpace > SAVED_CACHE_BYTES
+                            savedCache.cacheSpace > savedLimitBytes
                         ) {
                             oversized = true
                             downloader.cancel()
                         }
                     })
                     if (oversized ||
-                        savedCache.cacheSpace > SAVED_CACHE_BYTES ||
+                        savedCache.cacheSpace > savedLimitBytes ||
                         settings.visualRetentionMode.value != VisualRetentionMode.SAVE_ON_WIFI ||
                         startEpoch != clearEpoch.get()
                     ) {

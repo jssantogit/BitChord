@@ -237,6 +237,8 @@ internal fun SettingsScreen(
     val visualMotionSurfaces by AppSettings.visualMotionSurfaces.collectAsStateWithLifecycle()
     val visualStills by AppSettings.saveVisualStillImages.collectAsStateWithLifecycle()
     val visualStillSurfaces by AppSettings.visualStillSurfaces.collectAsStateWithLifecycle()
+    val visualStillCacheLimitBytes by AppSettings.visualStillCacheLimitBytes.collectAsStateWithLifecycle()
+    val visualMotionCacheLimitBytes by AppSettings.visualMotionCacheLimitBytes.collectAsStateWithLifecycle()
     val legacyMeshGradient by AppSettings.legacyMeshGradient.collectAsStateWithLifecycle()
     val syncedLyrics by AppSettings.syncedLyrics.collectAsStateWithLifecycle()
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
@@ -908,72 +910,6 @@ internal fun SettingsScreen(
                     }
                 }
             }
-            val offlineVisualTitle = stringResource(R.string.visual_offline_title)
-            row(offlineVisualTitle, "animação", "cache", "wifi", "vídeo", "imagem", "offline") {
-                SettingsRow(
-                    icon = Icons.Rounded.Cached,
-                    title = offlineVisualTitle,
-                    subtitle = when (visualRetention) {
-                        VisualRetentionMode.STREAM_ONLY ->
-                            stringResource(R.string.visual_offline_stream)
-                        VisualRetentionMode.SAVE_ON_WIFI ->
-                            stringResource(R.string.visual_offline_wifi)
-                        VisualRetentionMode.STILL_ONLY ->
-                            stringResource(R.string.visual_offline_still)
-                    },
-                )
-                SegmentedControl(
-                    options = listOf(stringResource(R.string.visual_offline_temporary),
-                        stringResource(R.string.visual_offline_save_wifi),
-                        stringResource(R.string.visual_offline_only_stills)),
-                    selectedIndex = VisualRetentionMode.entries.indexOf(visualRetention),
-                    onSelect = { index ->
-                        AppSettings.setVisualRetentionMode(VisualRetentionMode.entries[index])
-                    },
-                    modifier = Modifier.padding(
-                        start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp,
-                    ),
-                )
-            }
-            if (visualRetention == VisualRetentionMode.SAVE_ON_WIFI) {
-                val visualLabels = listOf(
-                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_motion),
-                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_motion),
-                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_motion),
-                )
-                visualLabels.forEach { (surface, title) ->
-                    row(title, "vídeo", "offline", "wifi", divided = false) {
-                        SettingsSubRow(
-                            title = title,
-                            checked = surface in visualMotionSurfaces,
-                            onCheckedChange = { AppSettings.setVisualMotionSurface(surface, it) },
-                        )
-                    }
-                }
-            }
-            row(stringResource(R.string.visual_offline_save_stills), "foto", "capa", "offline", divided = false) {
-                SettingsSubRow(
-                    title = stringResource(R.string.visual_offline_save_stills),
-                    checked = visualStills,
-                    onCheckedChange = AppSettings::setSaveVisualStillImages,
-                    subtitle = stringResource(R.string.visual_offline_stills_subtitle),
-                )
-            }
-            if (visualStills) {
-                listOf(
-                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_stills),
-                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_stills),
-                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_stills),
-                ).forEach { (surface, title) ->
-                    row(title, "imagem", "offline", "cache", divided = false) {
-                        SettingsSubRow(
-                            title = title,
-                            checked = surface in visualStillSurfaces,
-                            onCheckedChange = { AppSettings.setVisualStillSurface(surface, it) },
-                        )
-                    }
-                }
-            }
             val artistSignaturesTitle = stringResource(R.string.artist_signatures)
             row(artistSignaturesTitle, "signature", "artist", "logo") {
                 SettingsRow(
@@ -1332,6 +1268,133 @@ internal fun SettingsScreen(
                     onClick = { confirmClearSongCache = true },
                 )
             }
+            // Storage owns retention, quotas and cleanup. Appearance remains
+            // responsible for *rendering* animated covers and its cellular
+            // playback preference; these are not disk-management settings.
+            val offlineVisualTitle = stringResource(R.string.visual_offline_title)
+            row(offlineVisualTitle, "animação", "cache", "wifi", "vídeo", "imagem", "offline") {
+                SettingsRow(
+                    icon = Icons.Rounded.Cached,
+                    title = offlineVisualTitle,
+                    subtitle = when (visualRetention) {
+                        VisualRetentionMode.STREAM_ONLY ->
+                            stringResource(R.string.visual_offline_stream)
+                        VisualRetentionMode.SAVE_ON_WIFI ->
+                            stringResource(R.string.visual_offline_wifi)
+                        VisualRetentionMode.STILL_ONLY ->
+                            stringResource(R.string.visual_offline_still)
+                    },
+                )
+                SegmentedControl(
+                    options = listOf(stringResource(R.string.visual_offline_temporary),
+                        stringResource(R.string.visual_offline_save_wifi),
+                        stringResource(R.string.visual_offline_only_stills)),
+                    selectedIndex = VisualRetentionMode.entries.indexOf(visualRetention),
+                    onSelect = { index ->
+                        AppSettings.setVisualRetentionMode(VisualRetentionMode.entries[index])
+                    },
+                    modifier = Modifier.padding(
+                        start = TEXT_INSET, end = ROW_INSET, bottom = 14.dp,
+                    ),
+                )
+            }
+            row(stringResource(R.string.visual_offline_images_group),
+                "imagens", "offline", "fotos", divided = false,
+            ) {
+                Text(
+                    text = stringResource(R.string.visual_offline_images_group),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        start = TEXT_INSET, end = ROW_INSET,
+                        top = 14.dp, bottom = 6.dp,
+                    ),
+                )
+            }
+            row(stringResource(R.string.visual_offline_save_stills), "foto", "capa", "offline", divided = false) {
+                SettingsSubRow(
+                    title = stringResource(R.string.visual_offline_save_stills),
+                    checked = visualStills,
+                    onCheckedChange = AppSettings::setSaveVisualStillImages,
+                    subtitle = stringResource(R.string.visual_offline_stills_subtitle),
+                )
+            }
+            if (visualStills) {
+                listOf(
+                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_stills),
+                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_stills),
+                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_stills),
+                ).forEach { (surface, title) ->
+                    row(title, "imagem", "offline", "cache", divided = false) {
+                        SettingsSubRow(
+                            title = title,
+                            checked = surface in visualStillSurfaces,
+                            onCheckedChange = { AppSettings.setVisualStillSurface(surface, it) },
+                        )
+                    }
+                }
+            }
+            val stillLimitTitle = stringResource(R.string.visual_offline_still_limit)
+            row(stillLimitTitle, "cache", "imagens", "offline", "espaço", "limite") {
+                SliderRow(
+                    icon = Icons.Rounded.Storage,
+                    title = stillLimitTitle,
+                    subtitle = stringResource(R.string.visual_offline_still_limit_subtitle),
+                    value = formatCacheSize((visualStillCacheLimitBytes / (1024 * 1024)).toInt()),
+                    sliderValue = (visualStillCacheLimitBytes / (1024 * 1024)).toFloat(),
+                    onSliderValue = { requestedMb ->
+                        val mb = ((requestedMb / 32f).roundToInt() * 32).toLong()
+                        AppSettings.setVisualStillCacheLimitBytes(mb * 1024 * 1024)
+                    },
+                    valueRange = 64f..1024f,
+                    steps = 0,
+                )
+            }
+            if (visualRetention == VisualRetentionMode.SAVE_ON_WIFI) {
+                row(stringResource(R.string.visual_offline_motion_group),
+                    "vídeo", "animação", "offline", divided = false,
+                ) {
+                    Text(
+                        text = stringResource(R.string.visual_offline_motion_group),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(
+                            start = TEXT_INSET, end = ROW_INSET,
+                            top = 14.dp, bottom = 6.dp,
+                        ),
+                    )
+                }
+                val visualLabels = listOf(
+                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_motion),
+                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_motion),
+                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_motion),
+                )
+                visualLabels.forEach { (surface, title) ->
+                    row(title, "vídeo", "offline", "wifi", divided = false) {
+                        SettingsSubRow(
+                            title = title,
+                            checked = surface in visualMotionSurfaces,
+                            onCheckedChange = { AppSettings.setVisualMotionSurface(surface, it) },
+                        )
+                    }
+                }
+                val motionLimitTitle = stringResource(R.string.visual_offline_motion_limit)
+                row(motionLimitTitle, "cache", "vídeos", "animação", "limite", "espaço") {
+                    SliderRow(
+                        icon = Icons.Rounded.Storage,
+                        title = motionLimitTitle,
+                        subtitle = stringResource(R.string.visual_offline_motion_limit_subtitle),
+                        value = formatCacheSize((visualMotionCacheLimitBytes / (1024 * 1024)).toInt()),
+                        sliderValue = (visualMotionCacheLimitBytes / (1024 * 1024)).toFloat(),
+                        onSliderValue = { requestedMb ->
+                            val mb = ((requestedMb / 64f).roundToInt() * 64).toLong()
+                            AppSettings.setVisualMotionCacheLimitBytes(mb * 1024 * 1024)
+                        },
+                        valueRange = 128f..2048f,
+                        steps = 0,
+                    )
+                }
+            }
             row(stringResource(R.string.visual_offline_clear_title), "offline", "cache", "vídeo", "animação", "capa") {
                 SettingsRow(
                     icon = Icons.Rounded.DeleteSweep,
@@ -1614,6 +1677,8 @@ internal fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(top = 24.dp, bottom = 8.dp),
         )
+        // Discogs is independent of BitChord; source attribution remains
+        // adjacent to verified edition facts on every album detail page.
         if (com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess.ENABLED) {
             Text(
                 text = com.music.bitchord.data.catalog.metadata.discogs
@@ -1621,7 +1686,8 @@ internal fun SettingsScreen(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
             )
         }
         }
