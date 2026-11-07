@@ -21,6 +21,11 @@ internal data class MusicBrainzArtistAppearance(
     val primaryType: String?,
     /** Exact Official MusicBrainz Release, not a guessed group sleeve. */
     val releaseMbid: String? = null,
+    /** A guest credit belongs to this exact Recording, never the whole group. */
+    val recordingMbid: String? = null,
+    val trackTitle: String? = null,
+    /** Official edition plus independent barcode/label/ISRC provenance. */
+    val commerciallyVerified: Boolean = false,
 )
 
 private val ARTIST_APPEARANCE_MBID =
@@ -64,32 +69,40 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         // release medium's TRACK artist-credit before displaying a guest
         // appearance. An album title mentioning the selected artist is
         // never sufficient.
-        val hasTargetTrack = (release["media"] as? JsonArray)
-            ?.any { medium ->
+        val creditedTracks = (release["media"] as? JsonArray).orEmpty()
+            .flatMap { medium ->
                 val tracks = (medium as? JsonObject)?.get("tracks") as? JsonArray
-                tracks?.any { track ->
-                    val entry = track as? JsonObject ?: return@any false
-                    val credit = entry["artist-credit"] as? JsonArray
+                    ?: return@flatMap emptyList()
+                tracks.mapNotNull track@{ value ->
+                    val entry = value as? JsonObject ?: return@track null
                     val recording = entry["recording"] as? JsonObject
-                    // MusicBrainz may omit the Track artist-credit and expose
-                    // the original Recording credit instead. A real Recording
-                    // ID inside this exact ReleaseTrack is equally valid.
-                    val linkedRecordingCredit = if (recording?.appearanceText("id")
-                        ?.lowercase(Locale.ROOT)?.let(ARTIST_APPEARANCE_MBID::matches) == true
-                    ) recording["artist-credit"] as? JsonArray else null
-                    // A track may credit only the lead act while the exact
-                    // linked MusicBrainz Recording includes a featured artist.
-                    // Either exact MBID credit is proof; never match a name.
-                    listOfNotNull(credit, linkedRecordingCredit).any { credits ->
-                        credits.any { part ->
-                            val credited = ((part as? JsonObject)?.get("artist")
+                    val recordingId = recording?.appearanceText("id")
+                        ?.lowercase(Locale.ROOT)?.takeIf(ARTIST_APPEARANCE_MBID::matches)
+                    val trackCredit = entry["artist-credit"] as? JsonArray
+                    // Recording credit is valid only when this exact media
+                    // track proves a Recording MBID. Never credit another
+                    // unrelated track of the host album.
+                    val recordingCredit = if (recordingId != null)
+                        recording["artist-credit"] as? JsonArray else null
+                    val hasArtist = listOfNotNull(trackCredit, recordingCredit).any { parts ->
+                        parts.any { part ->
+                            val id = ((part as? JsonObject)?.get("artist")
                                 as? JsonObject)?.appearanceText("id")
-                            credited?.equals(target, ignoreCase = true) == true
+                            id?.equals(target, ignoreCase = true) == true
                         }
                     }
-                } == true
-            } == true
-        if (!hasTargetTrack) return@mapNotNull null
+                    if (!hasArtist) return@track null
+                    val trackTitle = recording?.appearanceText("title")
+                        ?: entry.appearanceText("title")
+                    val isrc = (recording?.get("isrcs") as? JsonArray).orEmpty().any {
+                        val code = (it as? JsonPrimitive)?.contentOrNull
+                        code != null && Regex("""[A-Za-z]{2}[A-Za-z0-9]{3}\\d{7}""")
+                            .matches(code)
+                    }
+                    Triple(recordingId, trackTitle, isrc)
+                }
+            }
+        if (creditedTracks.isEmpty()) return@mapNotNull null
         // An album with the selected artist as primary belongs in discography.
         // Anonymous Various Artists compilations also cannot establish an
         // independently curated guest appearance without label-level evidence.
@@ -125,8 +138,35 @@ internal fun parseMusicBrainzTrackArtistAppearances(
             ?.takeIf { Regex("""\d{4}(-\d{2}){0,2}""").matches(it) }
         val editionId = release.appearanceText("id")?.lowercase(Locale.ROOT)
             ?.takeIf(ARTIST_APPEARANCE_MBID::matches)
-        MusicBrainzArtistAppearance(groupId, title, mainArtist, date, kind, editionId)
-    }.distinctBy { it.releaseGroupMbid }
+        // "Official" alone is editable MusicBrainz data. A conventional
+        // commercial edition generally carries a barcode, a named label or a
+        // recording ISRC; exclude self-published mashup records lacking them
+        // from the editorial guest shelf (2AT-style false positives).
+        val barcode = release.appearanceText("barcode")
+        val commercialBarcode = barcode != null &&
+            Regex("""\\d{8,14}""").matches(barcode) && barcode.any { it != '0' }
+        val commercialLabel = (release["label-info"] as? JsonArray).orEmpty().any { info ->
+            val label = (info as? JsonObject)?.get("label") as? JsonObject
+            val labelId = label?.appearanceText("id")?.lowercase(Locale.ROOT)
+            val labelName = label?.appearanceText("name")
+            labelId != null && ARTIST_APPEARANCE_MBID.matches(labelId) &&
+                !labelName.isNullOrBlank() &&
+                labelName.lowercase(Locale.ROOT) !in setOf("[no label]", "no label", "none")
+        }
+        creditedTracks.map { (recordingId, trackTitle, hasIsrc) ->
+            MusicBrainzArtistAppearance(
+                groupId, title, mainArtist, date, kind, editionId,
+                recordingMbid = recordingId,
+                trackTitle = trackTitle,
+                commerciallyVerified = commercialBarcode || commercialLabel || hasIsrc,
+            )
+        }
+    }.flatMap { it.asSequence() }
+        // Retain the most convincing Official edition of an exact Recording.
+        .sortedWith(compareByDescending<MusicBrainzArtistAppearance> {
+            it.commerciallyVerified
+        }.thenByDescending { it.releaseDate.orEmpty() })
+        .distinctBy { it.recordingMbid ?: it.releaseGroupMbid }
         .take(limit.coerceIn(0, 20))
         .toList()
 }
@@ -177,7 +217,7 @@ internal class MusicBrainzArtistAppearancesClient(
                         fetch != null -> fetch.invoke(id)
                         else -> client.get("release", mapOf(
                             "track_artist" to id,
-                            "inc" to "release-groups+artist-credits+recordings",
+                            "inc" to "release-groups+artist-credits+recordings+labels",
                             "limit" to "25",
                             "offset" to offset.toString(),
                             "fmt" to "json",
