@@ -127,6 +127,7 @@ internal fun rememberCanonicalArtistReleases(
         catalogDb.invalidationTracker.createFlow(
             "catalog_release", "catalog_release_track", "catalog_media_asset",
             "catalog_release_group", "catalog_release_group_edition",
+            "musicbrainz_release_enrichment", "catalog_external_identity",
         ).collectLatest {
             value = try {
                 withContext(Dispatchers.IO) {
@@ -138,11 +139,23 @@ internal fun rememberCanonicalArtistReleases(
                     keys.flatMap { dao.providerScopedReleases(it) },
                     releaseIds,
                 )
-                val proofs = releases.map { it.id }.chunked(300).flatMap {
+                val releaseKeys = releases.map { it.id }
+                val groupProofs = releaseKeys.chunked(300).flatMap {
                     dao.canonicalArtistReleaseEvidence(it)
                 }.associate { proof ->
                     proof.releaseId to CanonicalArtistReleaseEvidence(
                         proof.releaseId, proof.primaryType, proof.firstReleaseDate,
+                    )
+                }
+                // A MusicBrainz-linked edition can have a trustworthy full
+                // date even before its ReleaseGroup type has been hydrated.
+                // DAO requires exactly one matching current MB release identity.
+                val editionDates = releaseKeys.chunked(300).flatMap {
+                    dao.trustedReleaseDatesByIds(it)
+                }.associate { it.releaseId to it.releaseDate }
+                val proofs = releaseKeys.associateWith { key ->
+                    canonicalArtistReleaseEvidenceWithTrustedDate(
+                        key, groupProofs[key], editionDates[key],
                     )
                 }
                 val coverLinks = releases.map { it.id }.chunked(300).flatMap { ids ->
@@ -162,6 +175,9 @@ internal fun rememberCanonicalArtistReleases(
                             "sources" to keys.size.toString(),
                             "releases" to releases.size.toString(),
                             "typed" to proofs.values.count { !it.primaryType.isNullOrBlank() }.toString(),
+                            "dated" to proofs.values.count {
+                                it.firstReleaseDate?.matches(Regex("""\\d{4}-\\d{2}-\\d{2}""")) == true
+                            }.toString(),
                             "counted" to counts.size.toString(),
                             "albums" to sections.albums.size.toString(),
                             "singlesEps" to sections.singlesAndEps.size.toString(),
