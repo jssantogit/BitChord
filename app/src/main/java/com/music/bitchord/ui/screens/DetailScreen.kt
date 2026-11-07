@@ -144,6 +144,10 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
+import com.music.bitchord.data.canvas.VisualStillMedia
+import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.isSafeVisualMediaUrl
+import com.music.bitchord.data.canvas.VisualRetentionMode
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.DetailPage
 import com.music.bitchord.data.model.CARD_ART_PX
@@ -501,6 +505,21 @@ fun DetailScreen(
     // Animated cover art on the header, the same feature the player has.
     // Albums only: a playlist's artwork is a collage and an artist page's is a
     // photograph, and neither is something a label publishes a canvas for.
+    val saveVisualStills by AppSettings.saveVisualStillImages.collectAsStateWithLifecycle()
+    var offlineAlbumPoster by remember(page.browseId) {
+        mutableStateOf(VisualStillMedia.cached(
+            VisualSurface.ALBUM, page.browseId,
+        )?.toURI()?.toString())
+    }
+    LaunchedEffect(page.browseId, page.thumbnailUrl, saveVisualStills) {
+        if (isArtist || page.type != BrowseType.ALBUM || !saveVisualStills) {
+            return@LaunchedEffect
+        }
+        val url = page.thumbnailUrl?.takeIf(::isSafeVisualMediaUrl) ?: return@LaunchedEffect
+        VisualStillMedia.save(VisualSurface.ALBUM, page.browseId,
+            url.artworkAt(900) ?: url,
+        )?.let { offlineAlbumPoster = it.toURI().toString() }
+    }
     val canvasEnabled by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
     val prioritizeSpotifyCanvas by AppSettings.prioritizeSpotifyCanvas.collectAsStateWithLifecycle()
     // The credit line the header shows is the artist as far as the catalogue
@@ -586,6 +605,7 @@ fun DetailScreen(
                         palette = palette,
                         sleeveSize = sleeveSize,
                         canvas = canvas,
+                        offlinePoster = offlineAlbumPoster,
                         songs = songs,
                         canonicalTracks = canonicalTracks,
                         onPlay = {
@@ -1065,6 +1085,7 @@ private fun ReleaseHeader(
     palette: ArtworkPalette,
     sleeveSize: Dp,
     canvas: CanvasArtwork?,
+    offlinePoster: String?,
     songs: List<Song>,
     canonicalTracks: List<CanonicalCatalogSearchRow>,
     onPlay: () -> Unit,
@@ -1127,7 +1148,7 @@ private fun ReleaseHeader(
                 )
             }
             AsyncImage(
-                model = page.thumbnailUrl.artworkAt(HEADER_ART_PX),
+                model = (offlinePoster ?: page.thumbnailUrl).artworkAt(HEADER_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 onState = { artFailed = it is AsyncImagePainter.State.Error },
