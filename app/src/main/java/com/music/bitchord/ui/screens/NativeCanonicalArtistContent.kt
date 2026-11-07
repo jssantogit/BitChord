@@ -124,38 +124,6 @@ internal fun NativeCanonicalArtistContent(
                     )
                 }
             }
-            if (NativeArtistSection.TRACKS in visibleSections) {
-                // The same native artist section now serves Library tracks,
-                // while its rows keep RecordingId, selection and native rating.
-                item(key = "artist-tracks-shelf") {
-                    NativeArtistTracksShelf(
-                        title = "Faixas",
-                        tracks = shownTracks,
-                        palette = palette,
-                        horizontalPadding = PAGE_GUTTER,
-                        itemKey = { it.recordingId },
-                    ) { track ->
-                        CanonicalTrackRow(
-                            track, artworkLoader,
-                            onClick = { onTrackPlay(track) },
-                            onEditRating = { onTrackEditRating(track) },
-                            onOptions = { onTrackOptions(track) },
-                            selectionMode = selectedItems.isNotEmpty(),
-                            selected = CanonicalLibrarySelection(
-                                CanonicalLibraryEntityType.TRACK, track.recordingId,
-                            ) in selectedItems,
-                            onToggleSelection = {
-                                onToggleSelection(CanonicalLibrarySelection(
-                                    CanonicalLibraryEntityType.TRACK, track.recordingId,
-                                ))
-                            },
-                            compactForArtist = true,
-                            palette = palette,
-                        )
-                    }
-                }
-            }
-
             sections.recentRelease?.takeIf {
                 NativeArtistSection.RECENT_ALBUM in visibleSections
             }?.let { release ->
@@ -196,6 +164,38 @@ internal fun NativeCanonicalArtistContent(
                     )
                 }
             }
+            if (NativeArtistSection.TRACKS in visibleSections) {
+                // The same native artist section now serves Library tracks,
+                // while its rows keep RecordingId, selection and native rating.
+                item(key = "artist-tracks-shelf") {
+                    NativeArtistTracksShelf(
+                        title = "Faixas",
+                        tracks = shownTracks,
+                        palette = palette,
+                        horizontalPadding = PAGE_GUTTER,
+                        itemKey = { it.recordingId },
+                    ) { track ->
+                        CanonicalTrackRow(
+                            track, artworkLoader,
+                            onClick = { onTrackPlay(track) },
+                            onEditRating = { onTrackEditRating(track) },
+                            onOptions = { onTrackOptions(track) },
+                            selectionMode = selectedItems.isNotEmpty(),
+                            selected = CanonicalLibrarySelection(
+                                CanonicalLibraryEntityType.TRACK, track.recordingId,
+                            ) in selectedItems,
+                            onToggleSelection = {
+                                onToggleSelection(CanonicalLibrarySelection(
+                                    CanonicalLibraryEntityType.TRACK, track.recordingId,
+                                ))
+                            },
+                            compactForArtist = true,
+                            palette = palette,
+                        )
+                    }
+                }
+            }
+
             fun section(label: String, releases: List<ReleaseEntity>) {
                 if (releases.isEmpty()) return
                 item(key = "artist-section-$label") {
