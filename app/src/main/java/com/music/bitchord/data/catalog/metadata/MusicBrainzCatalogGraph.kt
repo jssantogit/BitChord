@@ -42,6 +42,10 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val country: String?,
     val releaseDate: String?,
     val tracks: List<MusicBrainzCatalogTrack>,
+    /** Metadata-only safety proof: every reported medium and track was parsed. */
+    val hasCompleteTracklist: Boolean = false,
+    val status: String? = null,
+    val barcode: String? = null,
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -204,6 +208,22 @@ internal class MusicBrainzCatalogGraph(
                 )
             }
             val tracks = parsedTracks.distinctBy(MusicBrainzCatalogTrack::trackMbid)
+            // Other features may display partial MusicBrainz listings, but
+            // Discogs *edition proof* must never interpret a partial list as
+            // the full edition. Count checks are from MusicBrainz itself,
+            // not from local playable-asset availability.
+            val completeTracklist = media.isNotEmpty() &&
+                data.integer("media-count") == media.size &&
+                media.all { rawMedium ->
+                    val medium = rawMedium as? JsonObject ?: return@all false
+                    val sourceTracks = medium["tracks"] as? JsonArray ?: return@all false
+                    medium.integer("track-count") == sourceTracks.size
+                } &&
+                tracks.isNotEmpty() &&
+                parsedTracks.size == media.sumOf {
+                    ((it as? JsonObject)?.get("tracks") as? JsonArray)?.size ?: 0
+                } &&
+                tracks.size == parsedTracks.size
             MusicBrainzCatalogGraphResult.Success(MusicBrainzCatalogReleaseDetail(
                 musicBrainzId = normalized,
                 groupMbid = (data["release-group"] as? JsonObject)?.string("id").validMbid(),
@@ -212,6 +232,9 @@ internal class MusicBrainzCatalogGraph(
                 country = data.string("country"),
                 releaseDate = data.string("date"),
                 tracks = tracks,
+                hasCompleteTracklist = completeTracklist,
+                status = data.string("status"),
+                barcode = data.string("barcode"),
             ))
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
