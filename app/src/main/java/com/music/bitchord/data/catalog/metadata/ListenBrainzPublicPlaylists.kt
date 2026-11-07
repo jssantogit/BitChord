@@ -330,8 +330,35 @@ internal class ListenBrainzPublicPlaylistClient(
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
         search(listOf("music", "mix", "playlist"), null)
 
+
+    /**
+     * Candidate titles are only search hints. The displayed playlists must
+     * also contain a Recording MBID whose MusicBrainz artist credit the caller
+     * has already verified for this exact artist. Limit to four remote details.
+     * When ranking/credit evidence is absent, hide the section rather than
+     * confusing a same-name playlist with an artist's own collection.
+     */
+    suspend fun searchArtistVerified(
+        artistName: String,
+        verifiedRecordingMbids: Set<String>,
+    ): List<ListenBrainzPublicPlaylist> {
+        val name = artistName.trim()
+        val approved = verifiedRecordingMbids.mapNotNull(::checkedPlaylistId).toSet()
+        if (name.length !in 3..100 || name.any(Char::isISOControl) || approved.isEmpty())
+            return emptyList()
+        val candidates = search(listOf(name), null, surface = "artist").orEmpty()
+        val confirmed = mutableListOf<ListenBrainzPublicPlaylist>()
+        for (candidate in candidates.take(4)) {
+            val tracks = detail(candidate)?.tracks.orEmpty()
+            if (tracks.any { it.recordingMbid in approved }) confirmed += candidate
+            if (confirmed.size >= 3) break
+        }
+        return confirmed
+    }
+
     private suspend fun search(
         queries: List<String>, tag: String?,
+        surface: String = if (tag == null) "home" else "genre",
     ): List<ListenBrainzPublicPlaylist>? {
         var completed = false
         for ((attemptIndex, query) in queries.distinct().withIndex()) {
@@ -356,7 +383,7 @@ internal class ListenBrainzPublicPlaylistClient(
                     category = DiagnosticCategory.APP,
                     name = "public_playlist_discovery",
                     metadata = mapOf(
-                        "surface" to if (tag == null) "home" else "genre",
+                        "surface" to surface,
                         "attempt" to (attemptIndex + 1).toString(),
                         "http" to when (response?.status) {
                             200 -> "ok"
