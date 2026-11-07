@@ -34,14 +34,7 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] ||
-             git diff --name-only HEAD^ HEAD | grep -Eq '^(scripts/catalog_210_discogs_live_probe\.py|\.github/workflows/catalog-210-discogs-live-probe\.yml)
-        uses: actions/upload-artifact@v4
-        with:
-          name: catalog-210-discogs-api-evidence
-          path: discogs-api-evidence.json
-          if-no-files-found: warn
-          retention-days: 7
-; then
+             git diff --name-only HEAD^ HEAD | grep -Eq '^(scripts/catalog_210_discogs_live_probe\.py|\.github/workflows/catalog-210-discogs-live-probe\.yml)$'; then
             echo 'probe=true' >> "$GITHUB_OUTPUT"
           else
             echo 'probe=false' >> "$GITHUB_OUTPUT"
