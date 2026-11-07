@@ -133,7 +133,9 @@ internal fun NativeCanonicalArtistContent(
                     )
                     NativeArtistTopReleaseCard(
                         title = release.title,
-                        subtitle = release.artistDisplay.orEmpty(),
+                        subtitle = canonicalArtistReleaseDateLabel(
+                            nativeReleases.evidence[release.id]?.firstReleaseDate,
+                        ) ?: release.artistDisplay.orEmpty(),
                         label = if (release.id == sections.recentAlbum?.id)
                             stringResource(R.string.recent_album) else "Lançamento recente",
                         palette = palette,
@@ -159,7 +161,7 @@ internal fun NativeCanonicalArtistContent(
                                         contentDescription = "Selecionar álbum",
                                     )
                                 }
-                            } else RowMoreButton(onClick = { onReleaseOptions(release) })
+                            }
                         },
                     )
                 }
@@ -219,7 +221,8 @@ internal fun NativeCanonicalArtistContent(
                                     )
                                 ) else onOpenRelease(release)
                             },
-                            onMore = { onReleaseOptions(release) },
+                            // Artist shelf cards navigate directly. Their
+                            // contextual controls belong on the release page.
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.ALBUM, release.id,
