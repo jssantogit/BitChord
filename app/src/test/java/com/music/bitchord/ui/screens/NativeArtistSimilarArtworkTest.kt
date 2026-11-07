@@ -54,6 +54,7 @@ class NativeArtistSimilarArtworkTest {
             "Artist C" to CompletableDeferred<Unit>(),
         )
         val observed = mutableListOf<String>()
+        val resolved = Channel<String>(Channel.UNLIMITED)
         val job = launch {
             resolveNativeSimilarPortraits(
                 artists = listOf(a, b, c),
@@ -62,7 +63,10 @@ class NativeArtistSimilarArtworkTest {
                     releases.getValue(name).await()
                     "https://is1-ssl.mzstatic.com/image/thumb/${name.last()}.jpg"
                 },
-                onResolved = { mbid, _ -> observed += mbid },
+                onResolved = { mbid, _ ->
+                    observed += mbid
+                    resolved.trySend(mbid)
+                },
             )
         }
         // A slow first artist must not serially block the next portrait.
@@ -70,7 +74,7 @@ class NativeArtistSimilarArtworkTest {
         assertEquals("Artist B", withTimeout(1_000) { entered.receive() })
         releases.getValue("Artist B").complete(Unit)
         assertEquals("Artist C", withTimeout(1_000) { entered.receive() })
-        assertTrue(b.mbid in observed)
+        assertEquals(b.mbid, withTimeout(1_000) { resolved.receive() })
         assertTrue(a.mbid !in observed)
         releases.getValue("Artist A").complete(Unit)
         releases.getValue("Artist C").complete(Unit)
