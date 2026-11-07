@@ -67,7 +67,10 @@ internal object DiscogsEditionMatcher {
         // A conflicting tracklist can signal a different pressing, remix or bonus edition.
         if (bothHaveTracks && !trackMatches) return DiscogsEditionVerdict.CANDIDATE
 
-        return if (barcodeMatches || trackMatches) {
+        // Barcodes are shared by variants or entered incorrectly. A curated
+        // MusicBrainz URL association plus artist/title and matching barcode
+        // is not enough to prove the exact edition without track evidence.
+        return if (trackMatches) {
             DiscogsEditionVerdict.VERIFIED
         } else {
             DiscogsEditionVerdict.CANDIDATE
