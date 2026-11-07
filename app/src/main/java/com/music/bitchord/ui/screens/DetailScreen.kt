@@ -147,7 +147,9 @@ import com.music.bitchord.data.canvas.CanvasRepository
 import com.music.bitchord.data.canvas.VisualStillMedia
 import com.music.bitchord.data.canvas.VisualSurface
 import com.music.bitchord.data.canvas.isSafeVisualMediaUrl
-import com.music.bitchord.data.canvas.VisualRetentionMode
+import com.music.bitchord.data.canvas.VisualArtworkCandidate
+import com.music.bitchord.data.canvas.VisualArtworkPriority
+import com.music.bitchord.data.canvas.VisualArtworkPrefetch
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.DetailPage
 import com.music.bitchord.data.model.CARD_ART_PX
@@ -385,6 +387,35 @@ fun DetailScreen(
         ),
     )
     val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    // Prefetch one hero and the first visible cards from any metadata
+    // provider. The same Coil memory/disk cache serves their eventual native
+    // AsyncImage nodes, so this never creates another image pipeline.
+    val warmupTargets = remember(page.browseId, page.thumbnailUrl,
+        publicTopRows, canonicalTracks, page.sections,
+    ) {
+        buildList {
+            add(VisualArtworkCandidate(page.thumbnailUrl,
+                VisualArtworkPriority.HERO, 900))
+            publicTopRows.take(4).forEach { row ->
+                add(VisualArtworkCandidate(row.artworkUri,
+                    VisualArtworkPriority.VISIBLE, 320))
+            }
+            canonicalTracks.take(5).forEach { row ->
+                add(VisualArtworkCandidate(row.artworkUri,
+                    VisualArtworkPriority.VISIBLE, 320))
+            }
+            page.sections.take(3).forEach { section ->
+                section.items.take(3).forEach { item ->
+                    add(VisualArtworkCandidate(item.thumbnailUrl,
+                        VisualArtworkPriority.NEARBY, 320))
+                }
+            }
+        }
+    }
+    LaunchedEffect(warmupTargets) {
+        VisualArtworkPrefetch.warm(localArtistContext, warmupTargets)
+    }
+
     var localArtistRecent by remember(page.browseId) { mutableStateOf<ShelfItem?>(null) }
     LaunchedEffect(page.browseId, rawSongs, page.sections) {
         localArtistRecent = if (isLocalArtist && page.sections.isNotEmpty()) {
