@@ -39,6 +39,14 @@ internal class CatalogCoverCoilEventListenerFactory(
 
             override fun onStart(request: ImageRequest) {
                 startedAt = elapsedMs()
+                telemetry.recordImageStart()
+            }
+
+            override fun onCancel(request: ImageRequest) {
+                if (startedAt != null) {
+                    startedAt = null
+                    telemetry.recordImageCancellation()
+                }
             }
 
             override fun onSuccess(request: ImageRequest, result: SuccessResult) {
