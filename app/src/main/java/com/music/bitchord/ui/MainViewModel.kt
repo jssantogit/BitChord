@@ -3057,7 +3057,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ListenBrainzArtistTopFetchResult.Unavailable
             }
             val success = popularity as? ListenBrainzArtistTopFetchResult.Success
-            val ranked = success?.recordings?.take(8).orEmpty()
+            // The per-artist chart can be unavailable while exact Recording
+            // popularity works. A sampled candidate ranking is presented as
+            // partial, not as a worldwide top chart.
+            val original = success?.recordings?.take(8).orEmpty()
+            val sampledRanking = if (original.isEmpty() &&
+                _detailStack.value.lastOrNull()?.browseId
+                    ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
+            ) try {
+                val page = withTimeoutOrNull(18_000L) {
+                    musicBrainzSearch.searchRecordingsForArtistMbid(id, limit = 25)
+                } as? MusicBrainzCatalogSearchResult.Success
+                val candidates = page?.page?.items.orEmpty()
+                    .filter(::isCuratedMusicBrainzRecording)
+                    .map { it.musicBrainzId }.distinct().take(25)
+                val popularityBatch = if (candidates.isNotEmpty())
+                    listenBrainzPopularityClient.recordingPopularity(candidates)
+                else null
+                if (popularityBatch is ListenBrainzPopularityFetchResult.Success) {
+                    canonicalArtistSampledPopularityRanking(candidates,
+                        popularityBatch.observations)
+                } else emptyList()
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { emptyList() }
+            else emptyList()
+            val ranked = original.ifEmpty { sampledRanking }
+            val sampled = original.isEmpty() && sampledRanking.isNotEmpty()
             if (success != null && ranked.isEmpty() && artistPublicTopEpoch.isCurrent(generation) &&
                 _detailStack.value.lastOrNull()?.browseId
                     ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
@@ -3100,6 +3125,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
                         artistMbid = id,
                         rows = rows,
+                        sampled = sampled,
                         // Progressive rows are provisional until the bounded
                         // MusicBrainz verification pass has completed.
                     )
@@ -3113,9 +3139,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
                     artistMbid = id,
                     rows = rows,
+                    sampled = sampled,
                     // Empty metadata after a nonempty public chart can reflect
                     // a transient MusicBrainz outage, so allow a later retry.
-                    fetchedAtMs = success?.fetchedAtMs?.takeIf { rows.isNotEmpty() },
+                    fetchedAtMs = if (rows.isNotEmpty() && sampled)
+                        System.currentTimeMillis()
+                    else success?.fetchedAtMs?.takeIf { rows.isNotEmpty() },
                 )
             }
         }
