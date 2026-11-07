@@ -6,11 +6,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class CatalogCoverDiagnosticsTest {
-    @Test fun exportNamesNetworkOnlyEvidenceAndShowsUnknownForNoSamples() {
+    @Test fun exportSeparatesCaaMetadataFromCoilImageEvidenceWithoutSamples() {
         val telemetry = CatalogCoverTelemetry()
         val lines = CatalogCoverDiagnostics.lines(telemetry.snapshot())
-        assertEquals("scope=caa_metadata_http_only", lines.first())
+        assertEquals("scope=caa_metadata_and_coil_image_loads", lines.first())
         assertEquals("percentiles=insufficient_samples", lines.last())
+        assertEquals(true, lines.contains("image_scope=coil_load_caa_urls_only"))
         assertFalse(lines.joinToString().contains("null"))
     }
 
