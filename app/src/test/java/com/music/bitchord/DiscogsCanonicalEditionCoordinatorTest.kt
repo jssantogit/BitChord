@@ -74,6 +74,65 @@ class DiscogsCanonicalEditionCoordinatorTest {
         assertEquals(0, discogsCalls)
     }
 
+    @Test fun concurrentSameEditionReadersShareOneBoundedEvidenceFetch() = runBlocking {
+        var graphCalls = 0
+        var relationCalls = 0
+        var discogsCalls = 0
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String = when (parameters["inc"]) {
+                "recordings+artist-credits+release-groups" -> {
+                    graphCalls++
+                    musicBrainzJson()
+                }
+                "url-rels" -> {
+                    relationCalls++
+                    """{"id":"$mbid","relations":[{"type":"discogs",
+                       "type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                       "url":{"resource":"https://discogs.com/release/12345"}}]}"""
+                }
+                else -> error("Unexpected MusicBrainz query")
+            }
+        })
+        val discogsClient = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                discogsCalls++
+                return DiscogsHttpResponse(200, """{"id":12345,
+                  "title":"ILLIT - SUPER REAL ME","artists":[{"name":"ILLIT"}],
+                  "tracklist":[{"position":"1","title":"My World"},
+                               {"position":"2","title":"Magnetic"}]}""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0))
+        var now = 1000L
+        val coordinator = DiscogsCanonicalEditionCoordinator(
+            graph = MusicBrainzCatalogGraph(mb),
+            editions = DiscogsEditionRepository(
+                links = DiscogsMusicBrainzLinks(mb),
+                discogs = discogsClient, enabled = true, nowMillis = { now },
+            ),
+            enabled = true, nowMillis = { now },
+        )
+        kotlinx.coroutines.coroutineScope {
+            val first = kotlinx.coroutines.async { coordinator.observeRelease(mbid) }
+            val second = kotlinx.coroutines.async { coordinator.observeRelease(mbid) }
+            assertTrue(first.await() is DiscogsEditionEnrichment.Verified)
+            assertTrue(second.await() is DiscogsEditionEnrichment.Verified)
+        }
+        assertEquals(1, graphCalls)
+        assertEquals(1, relationCalls)
+        assertEquals(1, discogsCalls)
+        now += 20L * 60_000L
+        // Re-check canonical evidence later, while source-specific Discogs
+        // record may remain fresh in its own shorter cache.
+        assertTrue(coordinator.observeRelease(mbid) is DiscogsEditionEnrichment.Verified)
+        assertEquals(2, graphCalls)
+        assertEquals(2, relationCalls)
+        assertEquals(1, discogsCalls)
+        coordinator.clear()
+        assertTrue(coordinator.observeRelease(mbid) is DiscogsEditionEnrichment.Verified)
+        assertEquals(3, graphCalls)
+    }
+
     @Test fun completeEditionCorroboratesDiscogsOnlyUsingRealMusicBrainzTracklist() = runBlocking {
         var calls = 0
         val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
