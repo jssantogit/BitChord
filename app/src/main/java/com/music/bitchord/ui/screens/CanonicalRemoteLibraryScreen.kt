@@ -830,14 +830,13 @@ internal fun CanonicalRemoteLibraryScreen(
     }
 
     // Reuse the same exact ReleaseId-to-MBID observer as artist-nested albums.
-    val libraryEditionMbid = rememberDiscogsLibraryEditionMbid(
-        selectedEntity?.id?.takeIf {
+    val libraryEditorialEvidence = rememberDiscogsLibraryEditionForRelease(
+        releaseId = selectedEntity?.id?.takeIf {
             selectedContext == CanonicalSmartFilterContext.ALBUMS
         },
         catalogDb = catalogDb,
         catalogDao = catalogDao,
     )
-    val libraryEditorialEvidence = rememberDiscogsEditionForRelease(libraryEditionMbid)
 
     BackHandler(enabled = selectedEntity != null) {
         if (pinnedDetail != null && !artistNestedReleaseOpen) onClose()

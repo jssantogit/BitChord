@@ -2,6 +2,8 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.produceState
 import com.music.bitchord.data.catalog.CanonicalCatalogDao
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
@@ -122,4 +124,35 @@ internal fun rememberDiscogsLibraryEditionMbid(
         }
     }
     return discogsMbidForVisibleLibraryRelease(releaseId, identity)
+}
+
+/**
+ * One edition-scoped observation for every Library album context. Existing
+ * artist-nested and root-album routes share this boundary; the newer native
+ * album compositor can use it without owning a provider-specific controller.
+ */
+@Composable
+internal fun rememberDiscogsLibraryEditionForRelease(
+    releaseId: String?,
+    catalogDb: CanonicalCatalogDatabase,
+    catalogDao: CanonicalCatalogDao,
+): DiscogsEditionEnrichment? {
+    val mbid = rememberDiscogsLibraryEditionMbid(
+        releaseId = releaseId,
+        catalogDb = catalogDb,
+        catalogDao = catalogDao,
+    )
+    return rememberDiscogsEditionForRelease(mbid)
+}
+
+/** Convenience for native subroutes that do not own the catalog database. */
+@Composable
+internal fun rememberDiscogsLibraryEditionForRelease(
+    releaseId: String?,
+): DiscogsEditionEnrichment? {
+    if (releaseId.isNullOrBlank()) return null
+    val context = LocalContext.current.applicationContext
+    val catalogDb = remember(context) { CanonicalCatalogDatabase.get(context) }
+    val catalogDao = remember(catalogDb) { catalogDb.catalogDao() }
+    return rememberDiscogsLibraryEditionForRelease(releaseId, catalogDb, catalogDao)
 }

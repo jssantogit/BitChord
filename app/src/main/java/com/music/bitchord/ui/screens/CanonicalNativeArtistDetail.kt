@@ -253,12 +253,11 @@ internal fun CanonicalNativeArtistDetail(
     val selectedAlbum = openedRelease
     // Nested artist albums use the same MusicBrainz identity gate and footer as
     // a direct Library album; neither artist name nor cover becomes identity.
-    val nestedEditionMbid = rememberDiscogsLibraryEditionMbid(
+    val nestedEditorialEvidence = rememberDiscogsLibraryEditionForRelease(
         releaseId = selectedAlbum?.id,
         catalogDb = catalogDb,
         catalogDao = dao,
     )
-    val nestedEditorialEvidence = rememberDiscogsEditionForRelease(nestedEditionMbid)
     if (selectedAlbum != null) {
         val albumIds = canonicalArtistReleaseTrackIds(
             availableLibraryTracks.map { it.recordingId }, releaseRecordingIds.toSet(),
