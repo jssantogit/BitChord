@@ -269,7 +269,7 @@ internal fun AndroidCanvasArtworkPlayer(
         rendered = false
         clipAspect = 0f
         reportAspect(0f)
-        val item = MediaItem.Builder().setUri(url)
+        val item = CanvasCache.playbackItem(url).buildUpon()
         mimeTypeOf(url)?.let { item.setMimeType(it) }
         player.setMediaItem(item.build())
         player.prepare()
