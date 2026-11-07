@@ -122,6 +122,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import com.music.bitchord.data.sources.AddonSource
 import com.music.bitchord.data.sources.SourceConfig
@@ -3139,6 +3141,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             val verified = mutableMapOf<String, RecordingMetadataEnrichment>()
+            // Cover requests are optional. Never serialize an eight-second
+            // CAA timeout ahead of the following Recording metadata checks.
+            // Background workers run on IO and must synchronize publication.
+            val verifiedMutex = Mutex()
             fun publishVerified() {
                 if (artistPublicTopEpoch.isCurrent(generation) &&
                     _detailStack.value.lastOrNull()?.browseId
@@ -3153,55 +3159,84 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
-            for (candidate in ranked) {
-                currentCoroutineContext().ensureActive()
-                // Do not spend eight MusicBrainz requests on a page that has
-                // already been closed. A partial result is not marked fresh,
-                // so returning to the artist can resume from warm metadata.
-                if (_detailStack.value.lastOrNull()?.browseId
-                        ?.equals("catalog:ARTIST:$id", ignoreCase = true) != true
-                ) break
-                val mbid = candidate.recordingMbid
-                val known = artistTopMetadataCache[mbid]?.takeIf { it.officialAudioReleaseMbid != null }
-                val record = if (known != null) known else try {
-                    val result = withTimeoutOrNull(16_000L) {
-                        artistTopMetadataProvider.lookupOfficialAudioRecording(mbid)
+            canonicalProcessArtistTopInParallel(
+                candidates = ranked,
+                maxConcurrentCovers = 3,
+                verifyAndPublish = { candidate ->
+                    currentCoroutineContext().ensureActive()
+                    if (_detailStack.value.lastOrNull()?.browseId
+                            ?.equals("catalog:ARTIST:$id", ignoreCase = true) != true
+                    ) false
+                    else {
+                        val mbid = candidate.recordingMbid
+                        val known = verifiedMutex.withLock {
+                            artistTopMetadataCache[mbid]
+                                ?.takeIf { it.officialAudioReleaseMbid != null }
+                        }
+                        val record = if (known != null) known else try {
+                            val result = withTimeoutOrNull(16_000L) {
+                                artistTopMetadataProvider.lookupOfficialAudioRecording(mbid)
+                            }
+                            (result as? MetadataLookupResult.Success)?.value
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { null }
+                        if (record == null || !record.musicBrainzId.equals(
+                                mbid, ignoreCase = true,
+                            )
+                        ) false
+                        else {
+                            verifiedMutex.withLock {
+                                if (artistTopMetadataCache.size >= 64) artistTopMetadataCache.clear()
+                                artistTopMetadataCache[mbid] = record
+                                verified[mbid] = record
+                                publishVerified()
+                            }
+                            // Upstream CAA art is already sufficient when the
+                            // source URL names this exact proved release.
+                            verifiedMutex.withLock {
+                                val eligible = canonicalVerifiedArtistTopRows(id, ranked, verified)
+                                    .firstOrNull {
+                                        it.musicBrainzId.equals(mbid, ignoreCase = true)
+                                    }
+                                record.officialAudioReleaseMbid != null &&
+                                    eligible != null && eligible.artworkUri.isNullOrBlank()
+                            }
+                        }
                     }
-                    (result as? MetadataLookupResult.Success)?.value
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { null }
-                if (record != null && record.musicBrainzId.equals(mbid, ignoreCase = true)) {
-                    if (artistTopMetadataCache.size >= 64) artistTopMetadataCache.clear()
-                    artistTopMetadataCache[mbid] = record
-                    verified[mbid] = record
-                    // Show already-proved rows before requesting artwork:
-                    // CAA is optional and must not block visible chart titles.
-                    publishVerified()
-                    if (record.officialAudioReleaseMbid != null &&
-                        record.officialAudioArtworkUri == null &&
-                        canonicalVerifiedArtistTopRows(id, ranked, verified)
-                            .any { it.musicBrainzId.equals(mbid, ignoreCase = true) }
+                },
+                enrichCoverAndPublish = { candidate ->
+                    val mbid = candidate.recordingMbid
+                    val record = verifiedMutex.withLock { verified[mbid] }
+                    val releaseId = record?.officialAudioReleaseMbid
+                    if (releaseId != null && artistPublicTopEpoch.isCurrent(generation) &&
+                        _detailStack.value.lastOrNull()?.browseId
+                            ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
                     ) {
                         val art = try {
                             withTimeoutOrNull(8_000L) {
                                 coverArtArchive.findCover(
-                                    record.officialAudioReleaseMbid,
-                                    record.officialAudioReleaseGroupMbid,
+                                    releaseId, record.officialAudioReleaseGroupMbid,
                                     CoverArtSize.THUMBNAIL,
                                 )
                             }
                         } catch (cancelled: CancellationException) { throw cancelled }
                           catch (_: Exception) { null }
-                        if (art != null && artistPublicTopEpoch.isCurrent(generation)) {
-                            val enriched = record.copy(officialAudioArtworkUri = art)
-                            verified[mbid] = enriched
-                            artistTopMetadataCache[mbid] = enriched
+                        if (!art.isNullOrBlank() && artistPublicTopEpoch.isCurrent(generation)) {
+                            verifiedMutex.withLock {
+                                val current = verified[mbid]
+                                if (current?.officialAudioReleaseMbid == releaseId) {
+                                    val enriched = current.copy(officialAudioArtworkUri = art)
+                                    verified[mbid] = enriched
+                                    artistTopMetadataCache[mbid] = enriched
+                                    // Publish each cover immediately on arrival.
+                                    publishVerified()
+                                }
+                            }
                         }
                     }
-                }
-                publishVerified()
-            }
+                },
+            )
             if (artistPublicTopEpoch.isCurrent(generation) &&
                 _detailStack.value.lastOrNull()?.browseId
                     ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
