@@ -843,16 +843,23 @@ internal fun CanonicalRemoteLibraryScreen(
             selectedContext != CanonicalSmartFilterContext.ALBUMS
         ) return@produceState
         val releaseId = selectedEntity?.id ?: return@produceState
-        value = try {
-            withContext(Dispatchers.IO) {
-                com.music.bitchord.data.catalog.metadata.discogs.discogsLibraryReleaseMbid(
-                    releaseId, catalogDao.musicBrainzReleaseEnrichment(releaseId),
-                )
+        // Release metadata may arrive after the album screen is opened. Keep
+        // only this source identity fresh rather than re-running the whole
+        // browse flow or requiring a navigation round trip.
+        catalogDb.invalidationTracker.createFlow(
+            "musicbrainz_release_enrichment",
+        ).collectLatest {
+            value = try {
+                withContext(Dispatchers.IO) {
+                    com.music.bitchord.data.catalog.metadata.discogs.discogsLibraryReleaseMbid(
+                        releaseId, catalogDao.musicBrainzReleaseEnrichment(releaseId),
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            null
         }
     }
     val libraryEditorialEvidence = rememberDiscogsEditionForRelease(libraryEditionMbid)
