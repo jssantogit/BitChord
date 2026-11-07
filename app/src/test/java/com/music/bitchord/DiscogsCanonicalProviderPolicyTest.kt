@@ -22,6 +22,8 @@ class DiscogsCanonicalProviderPolicyTest {
             value = "Belift Lab",
             recordedAtEpochMs = 100,
             expiresAtEpochMs = 200,
+            attributionText = "Data provided by Discogs.",
+            attributionUrl = "https://www.discogs.com/release/12345",
         )
         assertEquals(listOf(label), selectCanonicalProviderFacts(listOf(label), releaseMbid, 150))
         assertTrue(selectCanonicalProviderFacts(listOf(label.copy(
@@ -37,21 +39,40 @@ class DiscogsCanonicalProviderPolicyTest {
         assertFalse(discogsEdition.canSupplyArtwork())
         val facts = listOf(
             CanonicalProviderFact(discogsEdition, CanonicalEnrichmentField.ARTWORK,
-                "https://img.discogs.com/art.jpg", 100L, 200L),
+                "https://img.discogs.com/art.jpg", 100L, 200L,
+                "Data provided by Discogs.", "https://www.discogs.com/release/12345"),
             CanonicalProviderFact(discogsEdition, CanonicalEnrichmentField.RELEASE_PRIMARY_TYPE,
-                "Album", 100L, 200L),
+                "Album", 100L, 200L,
+                "Data provided by Discogs.", "https://www.discogs.com/release/12345"),
             CanonicalProviderFact(discogsEdition, CanonicalEnrichmentField.LISTEN_COUNT,
-                "99999", 100L, 200L),
+                "99999", 100L, 200L,
+                "Data provided by Discogs.", "https://www.discogs.com/release/12345"),
             CanonicalProviderFact(discogsEdition, CanonicalEnrichmentField.EDITION_FORMAT,
-                "CD", 100L, 200L),
+                "CD", 100L, 200L,
+                "Data provided by Discogs.", "https://www.discogs.com/release/12345"),
         )
         assertEquals(listOf(CanonicalEnrichmentField.EDITION_FORMAT),
             selectCanonicalProviderFacts(facts, releaseMbid, 150L).map { it.field })
     }
 
+    @Test fun discogsEditionFactWithoutAdjacentAttributionIsNeverSelected() {
+        val full = CanonicalProviderFact(
+            discogsEdition, CanonicalEnrichmentField.EDITION_FORMAT, "CD", 100L, 200L,
+            "Data provided by Discogs.", "https://www.discogs.com/release/12345")
+        assertTrue(selectCanonicalProviderFacts(listOf(
+            full.copy(attributionText = null),
+            full.copy(attributionUrl = null),
+            full.copy(attributionUrl = "https://discogs.com.evil.test/release/12345"),
+            full.copy(attributionUrl = "https://www.discogs.com/release/54321"),
+        ), releaseMbid, 150L).isEmpty())
+        assertEquals(listOf(full),
+            selectCanonicalProviderFacts(listOf(full), releaseMbid, 150L))
+    }
+
     @Test fun invalidOrCrossProviderEditionClaimsDoNotBecomeValidDiscogsFacts() {
         val fact = CanonicalProviderFact(
-            discogsEdition, CanonicalEnrichmentField.EDITION_YEAR, "2024", 100L, 200L)
+            discogsEdition, CanonicalEnrichmentField.EDITION_YEAR, "2024", 100L, 200L,
+            "Data provided by Discogs.", "https://www.discogs.com/release/12345")
         val invalid = listOf(
             fact.copy(evidence = discogsEdition.copy(canonicalMbid = "n/a")),
             fact.copy(evidence = discogsEdition.copy(provider = CatalogExternalProvider.LISTENBRAINZ)),
