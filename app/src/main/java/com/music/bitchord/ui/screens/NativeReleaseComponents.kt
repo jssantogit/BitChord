@@ -59,6 +59,7 @@ internal fun NativeReleaseActionRow(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
     isLocal: Boolean,
+    canPlay: Boolean = true,
     canShuffle: Boolean = true,
     isSaved: Boolean? = null,
     onToggleLibrary: (() -> Unit)? = null,
@@ -85,6 +86,7 @@ internal fun NativeReleaseActionRow(
                 label = stringResource(R.string.play),
                 onClick = onPlay,
                 filled = true,
+                enabled = canPlay,
                 size = RELEASE_SIDE_BUTTON,
                 modifier = Modifier.weight(1f),
             )
@@ -93,6 +95,7 @@ internal fun NativeReleaseActionRow(
                 label = stringResource(R.string.shuffle),
                 onClick = onShuffle,
                 filled = false,
+                enabled = canShuffle,
                 size = RELEASE_SIDE_BUTTON,
                 modifier = Modifier.weight(1f),
             )
@@ -110,6 +113,7 @@ internal fun NativeReleaseActionRow(
                 label = stringResource(R.string.play),
                 onClick = onPlay,
                 filled = true,
+                enabled = canPlay,
                 size = RELEASE_SIDE_BUTTON,
                 modifier = Modifier.weight(1f),
             )
