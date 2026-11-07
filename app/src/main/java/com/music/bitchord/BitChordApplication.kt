@@ -22,6 +22,7 @@ import com.music.bitchord.ui.player.AndroidPlayerHost
 import com.music.bitchord.ui.player.PlayerPlatform
 import com.music.bitchord.data.canvas.CanvasCache
 import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
+import com.music.bitchord.data.catalog.metadata.CatalogCoverCoilEventListenerFactory
 import com.music.bitchord.data.smb.SmbCoverFetcher
 import com.music.bitchord.data.webdav.WebDavCoilAuth
 import com.music.bitchord.data.canvas.SpotifyToken
@@ -279,6 +280,10 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
      */
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
+            // Metadata HTTP 200 only means CAA published a candidate URL.
+            // Track Coil's own bitmap outcomes across Home/Explore/artist rows
+            // without recording image URLs, artist IDs or listening history.
+            .eventListenerFactory(CatalogCoverCoilEventListenerFactory())
             // Covers on the WebDAV server need the credential or every one
             // of them 401s — which reads as "this track has no artwork".
             // Coil's own transport never sees Http.client's interceptor, so
