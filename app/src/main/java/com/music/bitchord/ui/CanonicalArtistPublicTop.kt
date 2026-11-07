@@ -9,6 +9,12 @@ import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import java.util.Locale
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /** UI may only render a rank for the exact currently opened artist identity. */
 internal data class CanonicalArtistPublicTopState(
@@ -65,14 +71,44 @@ internal fun canonicalArtistSitewideAllTimeRanking(
             id.equals(artist, ignoreCase = true)
         } }
         .filter { PUBLIC_ARTIST_MBID.matches(it.recordingMbid.lowercase(Locale.ROOT)) }
-        .distinctBy { it.recordingMbid.lowercase(Locale.ROOT) }
+        // A duplicated MBID must retain its strongest observed count rather
+        // than whichever page arrived first. Otherwise the rank is incorrect.
         .sortedWith(compareByDescending<ListenBrainzSitewideRecording> { it.listenCount }
             .thenBy { it.recordingMbid })
+        .distinctBy { it.recordingMbid.lowercase(Locale.ROOT) }
         .take(limit.coerceAtMost(20))
         .map { ListenBrainzArtistTopRecording(
             it.recordingMbid.lowercase(Locale.ROOT), it.listenCount, listeners = null,
         ) }
         .toList()
+}
+
+/**
+ * MusicBrainz recording verification remains sequential and bounded by the
+ * existing request limiter. Once a row is independently verified, its cover
+ * may load in the background while the next row is checked. Slow CAA lookups
+ * must not hold up the titles of subsequent popular recordings.
+ *
+ * Cover workers are structured children of the artist request. Cancellation
+ * propagates to them, and no more than three covers load concurrently.
+ * Callers own the identity checks and synchronized state publication.
+ */
+internal suspend fun <T> canonicalProcessArtistTopInParallel(
+    candidates: List<T>,
+    maxConcurrentCovers: Int = 3,
+    verifyAndPublish: suspend (T) -> Boolean,
+    enrichCoverAndPublish: suspend (T) -> Unit,
+) = coroutineScope {
+    require(maxConcurrentCovers in 1..8)
+    val slots = Semaphore(maxConcurrentCovers)
+    for (candidate in candidates) {
+        currentCoroutineContext().ensureActive()
+        if (verifyAndPublish(candidate)) {
+            launch {
+                slots.withPermit { enrichCoverAndPublish(candidate) }
+            }
+        }
+    }
 }
 
 /**
