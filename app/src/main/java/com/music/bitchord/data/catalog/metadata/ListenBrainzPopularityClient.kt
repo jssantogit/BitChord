@@ -222,6 +222,10 @@ internal class ListenBrainzPopularityClient(
         val atMs: Long,
     )
     private val artistCache = mutableMapOf<String, ArtistCacheValue>()
+    // Avoid hammering an unavailable /popularity/top-recordings endpoint
+    // while a user reopens or scrolls around the same artist.
+    private val unavailableArtistAt = mutableMapOf<String, Long>()
+    private val artistUnavailableCooldownMs = 90_000L
 
     /**
      * Negative, undated or already-outdated charts may recover upstream long
@@ -310,6 +314,11 @@ internal class ListenBrainzPopularityClient(
         if (!MBID.matches(id)) return ListenBrainzArtistTopFetchResult.InvalidRequest
         artistFetchMutex.lock()
         try {
+        unavailableArtistAt[id]?.let { at ->
+            if (nowMillis() >= at && nowMillis() - at < artistUnavailableCooldownMs) {
+                return ListenBrainzArtistTopFetchResult.Unavailable
+            }
+        }
         cacheMutex.lock()
         try {
             val saved = artistCache[id]
@@ -328,6 +337,7 @@ internal class ListenBrainzPopularityClient(
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
+                unavailableArtistAt[id] = nowMillis()
                 return ListenBrainzArtistTopFetchResult.Unavailable
             }
             limiter.observeRateLimit(response.rateLimitRemaining, response.rateLimitResetInSeconds)
@@ -337,6 +347,7 @@ internal class ListenBrainzPopularityClient(
                     return ListenBrainzArtistTopFetchResult.Malformed
                 }
                 val time = nowMillis()
+                unavailableArtistAt.remove(id)
                 cacheMutex.lock()
                 try {
                     if (artistCache.size >= MAX_CACHED_BATCHES) artistCache.clear()
@@ -350,8 +361,10 @@ internal class ListenBrainzPopularityClient(
                 retryDelay((response.retryAfterSeconds ?: 1L).coerceIn(1L, 30L) * 1_000L)
                 continue
             }
+            unavailableArtistAt[id] = nowMillis()
             return ListenBrainzArtistTopFetchResult.Unavailable
         }
+        unavailableArtistAt[id] = nowMillis()
         return ListenBrainzArtistTopFetchResult.Unavailable
         } finally {
             artistFetchMutex.unlock()
