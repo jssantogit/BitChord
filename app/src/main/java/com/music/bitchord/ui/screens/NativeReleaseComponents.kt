@@ -67,6 +67,7 @@ internal fun NativeReleaseActionRow(
     // Reserved for a future pin on the unified Library landing page.
     // Never attach playlist membership to the hero +.
     reservePinAction: Boolean = false,
+    pinTargetLabel: String = "álbum",
     isPinnedInLibrary: Boolean = false,
     onTogglePin: (() -> Unit)? = null,
 ) {
@@ -119,9 +120,9 @@ internal fun NativeReleaseActionRow(
                 contentDescription = if (onAddToQueue != null) {
                     "Adicionar à fila"
                 } else if (reservePinAction) {
-                    if (isPinnedInLibrary) "Desafixar álbum da Biblioteca"
-                    else if (onTogglePin == null) "Fixar álbum na Biblioteca (em breve)"
-                    else "Fixar álbum na Biblioteca"
+                    if (isPinnedInLibrary) "Desafixar $pinTargetLabel da Biblioteca"
+                    else if (onTogglePin == null) "Fixar $pinTargetLabel na Biblioteca (em breve)"
+                    else "Fixar $pinTargetLabel na Biblioteca"
                 } else stringResource(
                     if (isSaved == true) R.string.remove_from_library
                     else R.string.add_to_library,
