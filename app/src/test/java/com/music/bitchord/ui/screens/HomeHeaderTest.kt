@@ -69,23 +69,46 @@ class HomeHeaderTest {
         compose.runOnIdle { assertEquals(1, backs) }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     @Test fun catalogCardKeepsTheNativeFallbackUnderAnUnresolvedArtUrl() {
+        AppUi.install(object : AppUiHost {
+            override val swipeToPlayNext = MutableStateFlow(false)
+            override val homeRecentsViewType = MutableStateFlow(LibraryViewType.GRID)
+            override fun setHomeRecentsViewType(value: LibraryViewType) {
+                homeRecentsViewType.value = value
+            }
+            override val pinnedPlaylists = MutableStateFlow(emptyList<String>())
+            override val librarySort = MutableStateFlow(LibrarySort.DEFAULT)
+            @Composable override fun downloadedIds(): Set<String> = emptySet()
+        })
         compose.setContent {
             MaterialTheme {
-                ShelfCard(
-                    item = ShelfItem(
-                        title = "K-pop album",
-                        subtitle = "Artist",
-                        thumbnailUrl = "file:///nonexistent/album-front.jpg",
-                        videoId = null,
-                        browseId = "catalog:RELEASE_GROUP:11111111-1111-4111-8111-111111111111",
-                    ),
-                    onClick = {},
+                HomeScreen(
+                    state = UiState.Success(listOf(HomeShelf(
+                        title = "Álbuns",
+                        items = listOf(ShelfItem(
+                            title = "K-pop album",
+                            subtitle = "Artist",
+                            thumbnailUrl = "file:///nonexistent/album-front.jpg",
+                            videoId = null,
+                            browseId = "catalog:RELEASE_GROUP:11111111-1111-4111-8111-111111111111",
+                        )),
+                    ))),
+                    listState = rememberLazyListState(),
+                    onItemClick = { _, _ -> },
+                    onRetry = {},
+                    refreshing = false,
+                    onRefresh = {},
+                    pullState = rememberPullToRefreshState(),
+                    contentPadding = PaddingValues(),
+                    title = "Explorar",
+                    signedIn = true,
+                    leadHero = false,
                 )
             }
         }
-        // The image model exists but can fail loading. Neither loading nor an
-        // error may leave a catalog card as a featureless black rectangle.
+        // Exercise sharedUi via the public native screen boundary; do not
+        // access its internal ShelfCard from the app test module.
         compose.onNodeWithTag("catalog-art-fallback").assertExists()
     }
 
