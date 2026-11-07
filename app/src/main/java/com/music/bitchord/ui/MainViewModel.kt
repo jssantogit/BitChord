@@ -3088,18 +3088,31 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _detailStack.value.lastOrNull()?.browseId
                     ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
             ) try {
-                val result = withTimeoutOrNull(18_000L) {
-                    musicBrainzSearch.searchRecordingsForArtistMbid(id, limit = 25)
+                // MusicBrainz relevance order is not play-count order. Search
+                // up to four pages before asking ListenBrainz to sort the
+                // independently verified Recording MBIDs by actual listens.
+                // A one-page sample produced obscure BTS titles on the smoke.
+                val candidates = mutableListOf<String>()
+                withTimeoutOrNull(18_000L) {
+                    var offset = 0
+                    for (pageIndex in 0 until 4) {
+                        val result = musicBrainzSearch.searchRecordingsForArtistMbid(
+                            id, limit = 25, offset = offset,
+                        )
+                        val page = (result as? MusicBrainzCatalogSearchResult.Success)?.page
+                            ?: break
+                        candidates += page.items.filter(::isCuratedMusicBrainzRecording)
+                            .map { it.musicBrainzId }
+                        if (candidates.distinct().size >= 100) break
+                        offset = page.nextOffset ?: break
+                    }
                 }
-                val candidates = if (result is MusicBrainzCatalogSearchResult.Success)
-                    result.page.items.filter(::isCuratedMusicBrainzRecording)
-                        .map { it.musicBrainzId }.distinct().take(25)
-                else emptyList()
-                val popularityBatch = if (candidates.isNotEmpty())
-                    listenBrainzPopularityClient.recordingPopularity(candidates)
+                val distinctCandidates = candidates.distinct().take(100)
+                val popularityBatch = if (distinctCandidates.isNotEmpty())
+                    listenBrainzPopularityClient.recordingPopularity(distinctCandidates)
                 else null
                 if (popularityBatch is ListenBrainzPopularityFetchResult.Success) {
-                    canonicalArtistSampledPopularityRanking(candidates,
+                    canonicalArtistSampledPopularityRanking(distinctCandidates,
                         popularityBatch.observations)
                 } else emptyList()
             } catch (cancelled: CancellationException) { throw cancelled }
