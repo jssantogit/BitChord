@@ -98,6 +98,24 @@ class NativeAlbumEditorialFooterTest {
         assertTrue(nativeAlbumEditorialFooter(edition(), 1_100L)!!.additionalLines.isEmpty())
     }
 
+    @Test fun expiringOnlyEditorialContentMustRemoveItsEntireAlbumFooterContainer() {
+        val source = edition()
+        val metadata = CanonicalAlbumFooterMetadata(
+            date = null, summary = null, editorialEvidence = source,
+        )
+        val valid = nativeAlbumEditorialFooter(source, nowMillis = 1_100L)
+        assertTrue(nativeAlbumMetadataFooterHasContent(metadata, valid))
+        // When the observation expires on an already-open screen, nothing
+        // (including empty wrapper padding) may remain.
+        assertFalse(nativeAlbumMetadataFooterHasContent(metadata, null))
+        assertTrue(nativeAlbumMetadataFooterHasContent(
+            metadata.copy(date = "2024"), null,
+        ))
+        assertTrue(nativeAlbumMetadataFooterHasContent(
+            metadata.copy(summary = "5 músicas"), null,
+        ))
+    }
+
     @Test fun noUsefulEditionMetadataMeansNoEditorialFooter() {
         val empty = DiscogsEditionEnrichment.Verified(
             DiscogsObservation(
