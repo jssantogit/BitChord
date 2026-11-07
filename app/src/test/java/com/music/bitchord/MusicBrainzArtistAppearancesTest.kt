@@ -120,4 +120,24 @@ class MusicBrainzArtistAppearancesTest {
         assertTrue(client.browse(target).isEmpty())
         assertEquals(2, calls)
     }
+
+    @Test fun userEditsAndAnonymousVariousArtistsMustNotBecomeEditorialGuestCredits() {
+        val body = """{"releases":[
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Remixer"}}],
+           "release-group":{"id":"$releaseGroup",
+             "title":"Magnetic (Judah UKG Edit)","primary-type":"Single"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Various Artists"}}],
+           "release-group":{"id":"44444444-4444-4444-8444-444444444444",
+             "title":"TV anime compilation","primary-type":"Album"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Label artist"}}],
+           "release-group":{"id":"66666666-6666-4666-8666-666666666666",
+             "title":"Verified original collaboration","primary-type":"Single"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]}
+        ]}"""
+        assertEquals(listOf("Verified original collaboration"),
+            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+    }
+
 }
