@@ -1,6 +1,8 @@
 package com.music.bitchord.data.catalog.metadata
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.diagnostics.DiagnosticCategory
+import com.music.bitchord.diagnostics.Diagnostics
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -63,6 +65,21 @@ internal fun parseListenBrainzSimilarArtists(
 
 
 /**
+ * An HTTP 200 can contain a malformed Labs payload. A valid empty array is
+ * negative evidence; an unrecognized envelope is an upstream failure that
+ * should be retried promptly rather than cached as an empty artist graph.
+ */
+private fun listenBrainzLabsRows(body: String): JsonArray? {
+    if (body.length > 300_000) return null
+    val parsed = runCatching { Json.parseToJsonElement(body) }.getOrNull()
+    return when (parsed) {
+        is JsonArray -> parsed
+        is JsonObject -> (parsed["results"] ?: parsed["data"]) as? JsonArray
+        else -> null
+    }
+}
+
+/**
  * Experimental Labs similarity is a fallback only; every result must carry
  * the requested reference Artist MBID AND a positive algorithmic score.
  * Never derive a link from shared genres or artist names.
@@ -72,12 +89,7 @@ internal fun parseListenBrainzLabsSimilarArtists(
 ): List<ListenBrainzSimilarArtist> {
     val seed = seedArtistMbid.lowercase(Locale.ROOT)
     if (!SIMILAR_ARTIST_MBID.matches(seed) || body.length > 300_000) return emptyList()
-    val parsed = runCatching { Json.parseToJsonElement(body) }.getOrNull()
-    val rows = when (parsed) {
-        is JsonArray -> parsed
-        is JsonObject -> (parsed["results"] ?: parsed["data"]) as? JsonArray
-        else -> null
-    } ?: return emptyList()
+    val rows = listenBrainzLabsRows(body) ?: return emptyList()
     return rows.asSequence().take(150).mapNotNull { value ->
         val item = value as? JsonObject ?: return@mapNotNull null
         val reference = (item["reference_mbid"] as? JsonPrimitive)
@@ -150,6 +162,10 @@ internal class ListenBrainzSimilarArtistsClient(
         var resolved = if (healthy)
             parseListenBrainzSimilarArtists(response?.second.orEmpty(), id)
         else emptyList()
+        val radioAccepted = resolved.size
+        var labsHttpStatus: Int? = null
+        var labsCandidates: Int? = null
+        var labsAccepted = 0
         // LB Radio often fails independently of Labs. Use a separate
         // experimental, read-only MBID graph, never a title-based suggestion.
         if (resolved.isEmpty()) {
@@ -172,11 +188,33 @@ internal class ListenBrainzSimilarArtistsClient(
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { null }
+            labsHttpStatus = labsResponse?.first
             if (labsResponse?.first == 200) {
-                val fromLabs = parseListenBrainzLabsSimilarArtists(labsResponse.second, id)
-                if (fromLabs.isNotEmpty()) resolved = fromLabs
-                healthy = true
+                labsCandidates = listenBrainzLabsRows(labsResponse.second)?.size
+                if (labsCandidates != null) {
+                    val fromLabs = parseListenBrainzLabsSimilarArtists(labsResponse.second, id)
+                    labsAccepted = fromLabs.size
+                    if (fromLabs.isNotEmpty()) resolved = fromLabs
+                    healthy = true
+                }
             }
+        }
+        // Keep data-quality telemetry low-cardinality. Never record names,
+        // MBIDs, search terms, response bodies, paths, or provider URLs.
+        runCatching {
+            Diagnostics.event(
+                category = DiagnosticCategory.APP,
+                name = "artist_similar_resolution",
+                metadata = mapOf(
+                    "radioHttp" to (response?.first?.toString() ?: "none"),
+                    "radioAccepted" to radioAccepted.toString(),
+                    "labsHttp" to (labsHttpStatus?.toString() ?: "none"),
+                    "labsCandidates" to (labsCandidates?.toString() ?: "invalid"),
+                    "labsAccepted" to labsAccepted.toString(),
+                    "finalAccepted" to resolved.size.toString(),
+                    "healthy" to healthy.toString(),
+                ),
+            )
         }
         if (cache.size >= 64) cache.remove(cache.keys.first())
         cache[id] = Entry(nowMillis(), resolved, healthy)
