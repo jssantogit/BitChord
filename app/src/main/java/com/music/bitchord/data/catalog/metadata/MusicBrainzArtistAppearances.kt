@@ -83,6 +83,17 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         val title = group.appearanceText("title")?.takeIf { it.length <= 180 }
             ?: return@mapNotNull null
         if (!canonicalStreamingTitleIsSafe(title)) return@mapNotNull null
+        // A MusicBrainz "Official" edition is not necessarily an official
+        // artist release: community-created remix/mixtape compilations can
+        // carry that status. Only an actual credited guest appearance on a
+        // conventional release belongs in this editorial shelf.
+        val secondaryTypes = (group["secondary-types"] as? JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.lowercase(Locale.ROOT) }
+            .orEmpty()
+        if (secondaryTypes.any { it in setOf(
+                "remix", "dj-mix", "mixtape/street", "compilation", "live", "demo",
+                "interview", "spokenword",
+            ) }) return@mapNotNull null
         val kind = group.appearanceText("primary-type")
             ?.takeIf { it.lowercase(Locale.ROOT) in setOf("album", "single", "ep") }
             ?: return@mapNotNull null
