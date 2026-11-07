@@ -1588,8 +1588,9 @@ internal fun NativeArtistReleaseCard(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelection: (() -> Unit)? = null,
+    artworkShape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(10.dp),
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val shape = artworkShape
     Column(
         modifier = modifier.longPressMenuClickable(
             onClick = onClick, onLongClick = onLongPress,
