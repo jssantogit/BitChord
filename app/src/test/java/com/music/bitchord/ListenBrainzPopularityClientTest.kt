@@ -315,4 +315,28 @@ class ListenBrainzPopularityClientTest {
         assertEquals(ListenBrainzPopularityFetchResult.Unavailable, client.recordingPopularity(listOf(a)))
         assertEquals(3, transport.calls)
     }
+
+    @Test fun unavailableArtistTopBacksOffWithoutErasingLaterRecovery() = runBlocking {
+        val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
+        var now = 10_000L
+        val transport = FakeTransport(mutableListOf(), mutableListOf(
+            ListenBrainzPopularityHttpResponse(500, ""),
+            ListenBrainzPopularityHttpResponse(200,
+                """[{"recording_mbid":"$a","artist_mbids":["$artist"],
+                  "total_listen_count":18,"total_user_count":3}]"""),
+        ))
+        val client = ListenBrainzPopularityClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = { now += it }),
+            nowMillis = { now },
+        )
+        assertEquals(ListenBrainzArtistTopFetchResult.Unavailable,
+            client.topRecordingsForArtist(artist))
+        now += 15_000
+        assertEquals(ListenBrainzArtistTopFetchResult.Unavailable,
+            client.topRecordingsForArtist(artist))
+        assertEquals(1, transport.artistCalls)
+        now += 91_000
+        assertTrue(client.topRecordingsForArtist(artist) is ListenBrainzArtistTopFetchResult.Success)
+        assertEquals(2, transport.artistCalls)
+    }
 }
