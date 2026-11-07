@@ -73,6 +73,7 @@ internal fun canonicalVerifiedArtistTopRows(
                 title = title,
                 subtitle = verified.artistDisplay.orEmpty(),
                 artistScopeMbid = artist,
+                artworkUri = rankedRecording.artworkUri,
                 durationMs = verified.durationMs?.takeIf { it > 0L },
             )
         }
