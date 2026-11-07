@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -204,6 +206,52 @@ class CanonicalArtistReleaseSectionsTest {
             ))
         assertEquals(listOf("future", "genuine", "bad-date"), result.albums.map { it.id })
         assertEquals("genuine", result.recentRelease?.id)
+    }
+
+
+    @Test fun localArtistCanFeatureOnlyUnambiguousExactMusicBrainzReleaseDates() {
+        val local = listOf(release("Plot Twist"), release("Butterfly Doors"), release("Fan Remix"))
+        val artists = listOf(MusicBrainzArtistHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "AtHeart", null, "KR",
+        ))
+        val groups = listOf(
+            MusicBrainzReleaseGroupHit("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "Plot Twist", "Album", "2025-08-13", "AtHeart"),
+            MusicBrainzReleaseGroupHit("cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "Butterfly Doors", "Single", "2026-05-12", "AtHeart"),
+            MusicBrainzReleaseGroupHit("dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "Fan Remix", "Album", "2026-09-02", "Various Artists", secondaryTypes = "Compilation"),
+        )
+        val matched = canonicalLocalArtistExactReleaseDateEvidence(
+            "AtHeart", local, artists, groups,
+        )
+        assertEquals(2, matched.size)
+        assertEquals("2026-05-12", matched["Butterfly Doors"]?.firstReleaseDate)
+        assertEquals("Butterfly Doors", canonicalArtistReleaseSections(
+            local, matched, recordingCountsByRelease = mapOf("Plot Twist" to 4,
+                "Butterfly Doors" to 1, "Fan Remix" to 4)).recentRelease?.id)
+    }
+
+    @Test fun artistNameCollisionOrAmbiguousAlbumTitleNeverInventsRecentRelease() {
+        val artistA = MusicBrainzArtistHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "AtHeart", null, null)
+        val artistB = MusicBrainzArtistHit(
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "AtHeart", null, null)
+        val match = MusicBrainzReleaseGroupHit(
+            "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "Plot Twist", "Album", "2025-08-13", "AtHeart",
+        )
+        val local = listOf(release("Plot Twist"))
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalLocalArtistExactReleaseDateEvidence("AtHeart", local,
+                listOf(artistA, artistB), listOf(match)))
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalLocalArtistExactReleaseDateEvidence("AtHeart", local,
+                listOf(artistA), listOf(match, match.copy(
+                    musicBrainzId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"))))
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalLocalArtistExactReleaseDateEvidence("AtHeart", local,
+                listOf(artistA), listOf(match.copy(firstReleaseDate = "2025"))))
     }
 
 }
