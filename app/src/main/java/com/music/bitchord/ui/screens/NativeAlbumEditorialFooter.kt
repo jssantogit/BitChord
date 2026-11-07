@@ -58,8 +58,13 @@ internal fun nativeAlbumEditorialFooter(
     val lines = buildList {
         // Keep the summary short and leave the original album footer intact.
         labels.firstOrNull()?.let { add(("Gravadora: " + it).take(320)) }
-        formats.take(4).takeIf(List<String>::isNotEmpty)?.let {
-            add(("Formato: " + it.joinToString(" · ") { fmt -> nativeEditionDisplayFormat(fmt) }).take(320))
+        display.editorialKind?.let {
+            add("Tipo segundo Discogs: ${it.displayName}")
+        }
+        if (display.editorialKind == null) {
+            formats.take(4).takeIf(List<String>::isNotEmpty)?.let {
+                add(("Formato: " + it.joinToString(" · ") { fmt -> nativeEditionDisplayFormat(fmt) }).take(320))
+            }
         }
         display.country?.takeIf { it.isNotBlank() }?.let {
             nativeEditionDisplayCountry(it)?.let { country -> add(("País: " + country).take(320)) }
@@ -67,6 +72,13 @@ internal fun nativeAlbumEditorialFooter(
         display.editionYear?.let { add("Ano: " + it) }
     }
     val additionalLines = buildList {
+        // Preserve carrier/format details under Ver mais when a release kind is
+        // more useful to show in the compact summary.
+        if (display.editorialKind != null && formats.isNotEmpty()) {
+            add(("Formato: " + formats.take(4).joinToString(" · ") {
+                nativeEditionDisplayFormat(it)
+            }).take(320))
+        }
         labels.drop(1).forEach { add(("Gravadora: " + it).take(320)) }
         formats.drop(4).chunked(4).forEach {
             add(("Formato: " + it.joinToString(" · ") { fmt -> nativeEditionDisplayFormat(fmt) }).take(320))

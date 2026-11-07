@@ -37,7 +37,7 @@ class NativeAlbumEditorialFooterTest {
         assertEquals(
             listOf(
                 "Gravadora: Belift Lab (BEL-001)",
-                "Formato: CD · EP",
+                "Tipo segundo Discogs: EP",
                 "País: Coreia do Sul",
                 "Ano: 2024",
             ), footer!!.lines,
@@ -88,14 +88,17 @@ class NativeAlbumEditorialFooterTest {
         )!!
         assertEquals(4, footer.lines.size)
         assertEquals("Gravadora: Belift Lab (BEL-001)", footer.lines.first())
+        assertTrue(footer.lines.contains("Tipo segundo Discogs: EP"))
         assertEquals(
-            listOf("Gravadora: Second Label (CAT-02)",
+            listOf("Formato: CD · EP · Stereo · Limited",
+                "Gravadora: Second Label (CAT-02)",
                 "Gravadora: Third Label (CAT-03)",
                 "Formato: Reissue · Digipak"),
             footer.additionalLines,
         )
         assertEquals("https://www.discogs.com/release/12345", footer.attributionUrl)
-        assertTrue(nativeAlbumEditorialFooter(edition(), 1_100L)!!.additionalLines.isEmpty())
+        assertEquals(listOf("Formato: CD · EP"),
+            nativeAlbumEditorialFooter(edition(), 1_100L)!!.additionalLines)
     }
 
     @Test fun expiringOnlyEditorialContentMustRemoveItsEntireAlbumFooterContainer() {
