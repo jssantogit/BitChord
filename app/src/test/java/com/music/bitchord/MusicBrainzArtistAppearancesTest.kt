@@ -1,6 +1,8 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.parseMusicBrainzTrackArtistAppearances
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistAppearancesClient
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -62,5 +64,45 @@ class MusicBrainzArtistAppearancesTest {
         assertTrue(parseMusicBrainzTrackArtistAppearances(
            body.replace("\"media\"", "\"unsupported-media\""), target,
         ).isEmpty())
+    }
+    @Test fun scrolledArtistAppearanceShelfUsesCachedProofAndExpires() = runBlocking {
+        var now = 1_000L
+        var requests = 0
+        val valid = """{"releases":[
+            {"id":"55555555-5555-4555-8555-555555555555","status":"Official",
+             "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+             "release-group":{"id":"$releaseGroup","title":"Real guest credit","primary-type":"Album"},
+             "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Guest"}}]}]}]}
+        ]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            nowMillis = { now },
+            fetch = { requests++; valid },
+        )
+        assertEquals(1, client.browse(target).size)
+        assertEquals(1, client.browse(target).size)
+        now += 60_000L
+        assertEquals(1, client.browse(target).size)
+        assertEquals(1, requests)
+        now += 6L * 60L * 60L * 1_000L + 1L
+        assertEquals(1, client.browse(target).size)
+        assertEquals(2, requests)
+    }
+
+    @Test fun failedGuestLookupIsThrottledButMayRecoverWithoutRestart() = runBlocking {
+        var now = 10_000L
+        var calls = 0
+        val client = MusicBrainzArtistAppearancesClient(
+            nowMillis = { now },
+            fetch = { calls++; if (calls == 1) throw java.io.IOException("offline") else
+                """{"releases":[]}"""
+            },
+        )
+        assertTrue(client.browse(target).isEmpty())
+        now += 30_000
+        assertTrue(client.browse(target).isEmpty())
+        assertEquals(1, calls)
+        now += 91_000
+        assertTrue(client.browse(target).isEmpty())
+        assertEquals(2, calls)
     }
 }
