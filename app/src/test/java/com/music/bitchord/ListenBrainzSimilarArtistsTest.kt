@@ -1,6 +1,7 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.parseListenBrainzSimilarArtists
+import com.music.bitchord.data.catalog.metadata.parseListenBrainzLabsSimilarArtists
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSimilarArtistsClient
 import com.music.bitchord.data.catalog.metadata.ListenBrainzRateLimiter
 import kotlinx.coroutines.runBlocking
@@ -42,6 +43,7 @@ class ListenBrainzSimilarArtistsTest {
         val client = ListenBrainzSimilarArtistsClient(
             limiter = ListenBrainzRateLimiter(nowMillis = { clock }, waitMillis = { clock += it }),
             nowMillis = { clock },
+            labsFetch = { 503 to "" },
             fetch = {
                 calls++
                 if (calls == 1) 503 to ""
@@ -57,5 +59,42 @@ class ListenBrainzSimilarArtistsTest {
         assertEquals(listOf(related), client.load(seed).map { it.mbid })
         assertEquals(listOf(related), client.load(seed).map { it.mbid })
         assertEquals(2, calls)
+    }
+
+    @Test fun labsSimilarityRequiresPositiveScoreAndExactArtistReference() {
+        val body = """[
+          {"artist_mbid":"$related","name":"Related artist",
+             "reference_mbid":"$seed","score":107},
+          {"artist_mbid":"$other","name":"Unrelated reference",
+             "reference_mbid":"$related","score":200},
+          {"artist_mbid":"$seed","name":"The original",
+             "reference_mbid":"$seed","score":500},
+          {"artist_mbid":"44444444-4444-4444-8444-444444444444",
+             "name":"No score","reference_mbid":"$seed","score":0}
+        ]"""
+        assertEquals(listOf(related),
+            parseListenBrainzLabsSimilarArtists(body, seed).map { it.mbid })
+        assertTrue(parseListenBrainzLabsSimilarArtists(
+            """[{"artist_mbid":"$related","name":"No relation","score":100}]""", seed,
+        ).isEmpty())
+    }
+
+    @Test fun fallbackUsesExperimentalLabsWhenRadioTemporarilyFails() = runBlocking {
+        var radioCalls = 0
+        var labsCalls = 0
+        val client = ListenBrainzSimilarArtistsClient(
+            limiter = ListenBrainzRateLimiter(nowMillis = { 0L }, waitMillis = {}),
+            nowMillis = { 500L },
+            fetch = { radioCalls++; 503 to "" },
+            labsFetch = {
+                labsCalls++
+                200 to """[{"artist_mbid":"$related","name":"Related artist",
+                    "score":100,"reference_mbid":"$seed"}]"""
+            },
+        )
+        assertEquals(listOf(related), client.load(seed).map { it.mbid })
+        assertEquals(listOf(related), client.load(seed).map { it.mbid })
+        assertEquals(1, radioCalls)
+        assertEquals(1, labsCalls)
     }
 }
