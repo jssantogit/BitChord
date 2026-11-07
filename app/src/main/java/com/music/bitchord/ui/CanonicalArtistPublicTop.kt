@@ -96,6 +96,10 @@ internal fun canonicalVerifiedArtistTopRows(
     }
     return ranked.asSequence()
         .filter { it.listens > 0L && (it.listeners?.let { n -> n > 0L && it.listens >= n } ?: true) }
+        // Reassert numeric order at the UI boundary, even when the caller
+        // supplies paged or partially enriched candidates in search order.
+        .sortedWith(compareByDescending<ListenBrainzArtistTopRecording> { it.listens }
+            .thenByDescending { it.listeners ?: -1L }.thenBy { it.recordingMbid })
         .distinctBy { it.recordingMbid.lowercase(Locale.ROOT) }
         .mapNotNull { rankedRecording ->
             val id = rankedRecording.recordingMbid.lowercase(Locale.ROOT)
