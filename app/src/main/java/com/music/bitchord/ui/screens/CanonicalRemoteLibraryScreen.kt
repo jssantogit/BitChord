@@ -2617,9 +2617,8 @@ internal fun NativeAlbumMetadataFooter(
     metadata: CanonicalAlbumFooterMetadata,
     palette: ArtworkPalette,
 ) {
-    if (metadata.date == null && metadata.summary == null && metadata.genre == null &&
-        nativeAlbumEditorialFooter(metadata.editorialEvidence, System.currentTimeMillis()) == null
-    ) return
+    val editorialFooter = rememberNativeAlbumEditorialFooter(metadata.editorialEvidence)
+    if (!nativeAlbumMetadataFooterHasContent(metadata, editorialFooter)) return
     Column(
         modifier = Modifier.fillMaxWidth()
             .padding(horizontal = PAGE_GUTTER, vertical = 26.dp)
@@ -2639,7 +2638,7 @@ internal fun NativeAlbumMetadataFooter(
                 color = palette.onBackgroundVariant)
         }
         NativeAlbumEditorialFooter(
-            evidence = metadata.editorialEvidence,
+            footer = editorialFooter,
             palette = palette,
         )
     }

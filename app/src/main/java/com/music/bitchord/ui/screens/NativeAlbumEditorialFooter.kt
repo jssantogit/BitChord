@@ -77,18 +77,23 @@ internal fun nativeAlbumEditorialFooter(
     )
 }
 
+/** Decide whether the entire native metadata footer has useful visible content. */
+internal fun nativeAlbumMetadataFooterHasContent(
+    metadata: CanonicalAlbumFooterMetadata,
+    editorial: NativeAlbumEditorialFooterData?,
+): Boolean =
+    metadata.date != null || metadata.summary != null ||
+        metadata.genre != null || editorial != null
+
 /**
- * Must be placed inside NativeAlbumMetadataFooter, below the existing date,
- * duration and rights lines and before optional artist recommendations.
- *
- * Rechecks the validity deadline while the screen remains mounted, so a
- * long-lived detail screen cannot silently keep API content visible past TTL.
+ * The parent footer must observe the same expiration as the editorial child.
+ * Otherwise it retains an empty, padded wrapper after a Discogs-only edition
+ * observation expires while the detail screen stays mounted.
  */
 @Composable
-internal fun NativeAlbumEditorialFooter(
+internal fun rememberNativeAlbumEditorialFooter(
     evidence: DiscogsEditionEnrichment?,
-    palette: ArtworkPalette,
-) {
+): NativeAlbumEditorialFooterData? {
     val expiry = (evidence as? DiscogsEditionEnrichment.Verified)
         ?.observation?.fetchedAtMillis?.plus(DiscogsObservation.TTL_MILLIS)
     var checkedAtMillis by remember(evidence) {
@@ -100,8 +105,22 @@ internal fun NativeAlbumEditorialFooter(
         if (remaining > 0L) delay(remaining)
         checkedAtMillis = maxOf(System.currentTimeMillis(), expiry)
     }
-    val footer = nativeAlbumEditorialFooter(evidence, checkedAtMillis) ?: return
-    var expanded by remember(evidence) { mutableStateOf(false) }
+    return nativeAlbumEditorialFooter(evidence, checkedAtMillis)
+}
+
+/**
+ * Keep attribution beside verified content, below the album's own metadata.
+ * The caller owns expiry; this child never renders an empty placeholder.
+ */
+@Composable
+internal fun NativeAlbumEditorialFooter(
+    footer: NativeAlbumEditorialFooterData?,
+    palette: ArtworkPalette,
+) {
+    if (footer == null) return
+    var expanded by remember(footer.attributionUrl, footer.expiresAtMillis) {
+        mutableStateOf(false)
+    }
     val uriHandler = LocalUriHandler.current
 
     Spacer(Modifier.height(12.dp))
