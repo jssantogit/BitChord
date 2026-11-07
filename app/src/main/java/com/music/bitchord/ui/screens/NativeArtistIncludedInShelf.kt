@@ -44,6 +44,18 @@ internal fun nativeArtistEditorialGuestTracks(
     .take(12)
     .toList()
 
+/**
+ * A previously verified Front-v5 for this exact ReleaseGroup is enough to
+ * display its sleeve. Reusing it removes a slow CAA edition request when the
+ * artist discography already warmed that group in Room.
+ */
+internal suspend fun nativeArtistIncludedInCoverFromVerifiedCache(
+    releaseMbid: String?,
+    groupMbid: String,
+    cache: suspend (String) -> String?,
+    fetch: suspend (String?, String) -> String?,
+): String? = cache(groupMbid) ?: fetch(releaseMbid, groupMbid)
+
 /** Only exact MusicBrainz Release/ReleaseGroup identities enter CAA.
  * Cap network work while preserving group-only sleeves from valid editions. */
 internal fun nativeArtistIncludedInCoverTargets(
@@ -109,8 +121,19 @@ internal fun NativeArtistIncludedInShelf(
             lookup = { releaseId, groupId ->
                 withContext(Dispatchers.IO) {
                     try {
-                        appearanceCoverArt.findCover(
-                            releaseId, groupId, CoverArtSize.THUMBNAIL,
+                        nativeArtistIncludedInCoverFromVerifiedCache(
+                            releaseMbid = releaseId,
+                            groupMbid = groupId,
+                            cache = {
+                                appearanceCoverArt.cachedVerifiedGroupCover(
+                                    it, CoverArtSize.THUMBNAIL,
+                                )
+                            },
+                            fetch = { edition, group ->
+                                appearanceCoverArt.findCover(
+                                    edition, group, CoverArtSize.THUMBNAIL,
+                                )
+                            },
                         )
                     } catch (cancelled: CancellationException) { throw cancelled }
                       catch (_: Exception) { null }
