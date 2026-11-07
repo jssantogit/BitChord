@@ -276,4 +276,22 @@ class ListenBrainzPublicPlaylistTest {
             client.searchArtistVerified("Real artist", setOf(song)).map { it.mbid })
         assertEquals(listOf("search:Real artist", "detail:$rock", "detail:$pop"), requested)
     }
+    @Test fun freeTextPlaylistSearchChecksQueryWithoutFabricatingMatches() = runBlocking {
+        val requested = mutableListOf<String>()
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    requested += query
+                    return ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+                }
+                override suspend fun detail(mbid: String) =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(listOf(rock), client.searchPublicQuery("K-pop").map { it.mbid })
+        assertEquals(listOf("K-pop"), requested)
+        assertTrue(client.searchPublicQuery("  ").isEmpty())
+        assertEquals(listOf("K-pop"), requested)
+    }
 }
