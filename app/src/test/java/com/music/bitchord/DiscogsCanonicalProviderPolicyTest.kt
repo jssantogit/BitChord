@@ -33,6 +33,10 @@ class DiscogsCanonicalProviderPolicyTest {
             evidence = discogsEdition.copy(basis = CatalogEvidenceBasis.TITLE_ONLY),
         )), releaseMbid, 150).isEmpty())
         assertTrue(selectCanonicalProviderFacts(listOf(label), releaseMbid, 200).isEmpty())
+        // A distant expiry must never bypass Discogs' short-lived API policy.
+        assertTrue(selectCanonicalProviderFacts(listOf(label.copy(
+            expiresAtEpochMs = 100L + 24L * 60L * 60L * 1000L,
+        )), releaseMbid, 150).isEmpty())
     }
 
     @Test fun discogsCanNeverSupplyArtworkOrCanonicalTypeEvenIfRightsClaimed() {
