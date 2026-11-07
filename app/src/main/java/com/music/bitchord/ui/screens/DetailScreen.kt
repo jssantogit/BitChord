@@ -150,6 +150,7 @@ import com.music.bitchord.data.canvas.isSafeVisualMediaUrl
 import com.music.bitchord.data.canvas.VisualArtworkCandidate
 import com.music.bitchord.data.canvas.VisualArtworkPriority
 import com.music.bitchord.data.canvas.VisualArtworkPrefetch
+import com.music.bitchord.data.canvas.VisualRetentionMode
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.DetailPage
 import com.music.bitchord.data.model.CARD_ART_PX
@@ -551,7 +552,10 @@ fun DetailScreen(
             url.artworkAt(900) ?: url,
         )?.let { offlineAlbumPoster = it.toURI().toString() }
     }
-    val canvasEnabled by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
+    val animatedCanvasPreference by AppSettings.animatedCanvas.collectAsStateWithLifecycle()
+    val visualMode by AppSettings.visualRetentionMode.collectAsStateWithLifecycle()
+    val canvasEnabled = animatedCanvasPreference &&
+        visualMode != VisualRetentionMode.STILL_ONLY
     val prioritizeSpotifyCanvas by AppSettings.prioritizeSpotifyCanvas.collectAsStateWithLifecycle()
     // The credit line the header shows is the artist as far as the catalogue
     // services are concerned. A browse card's subtitle sometimes omits it, in
