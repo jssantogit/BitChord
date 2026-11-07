@@ -15,6 +15,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.data.model.ROW_ART_PX
+import com.music.bitchord.data.model.artworkAt
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -59,6 +73,10 @@ internal fun CanonicalPublicPlaylistDetailScreen(
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current.applicationContext
+    val pinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
+    val playlistPins by pinRepo.pins.collectAsStateWithLifecycle()
+    val pinnedId = "public:" + playlist.mbid
+    val pinned = playlistPins.any { it.id == pinnedId }
     val entries = (state as? UiState.Success)?.data?.tracks.orEmpty()
     val ids = entries.mapNotNull { it.recordingMbid }.distinct()
     val catalogRows by produceState<List<V2DisplayRow>>(
@@ -79,19 +97,6 @@ internal fun CanonicalPublicPlaylistDetailScreen(
         listState = listState,
         bottomPadding = contentPadding.calculateBottomPadding(),
     ) {
-        item(key = "public-playlist-back") {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-                    .padding(horizontal = PAGE_GUTTER, vertical = 8.dp),
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Voltar")
-                }
-                Text("Playlist pública", color = palette.onBackgroundVariant,
-                    style = MaterialTheme.typography.bodyMedium)
-            }
-        }
         item(key = "public-playlist-cover") {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 NativePlaylistDetailHeader(
@@ -114,8 +119,28 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                             )
                         }
                     },
-                    // Do not show Play/Shuffle for tracks without verified assets.
-                    actions = {},
+                    // The same release/playlist action row as Library. Public
+                    // membership has no queue asset as a collection; keep
+                    // playback controls visible but disabled. Pin is local.
+                    actions = {
+                        Spacer(Modifier.height(18.dp))
+                        NativeReleaseActionRow(
+                            onPlay = {},
+                            onShuffle = {},
+                            isLocal = false,
+                            canPlay = false,
+                            canShuffle = false,
+                            reservePinAction = true,
+                            pinTargetLabel = "playlist",
+                            isPinnedInLibrary = pinned,
+                            onTogglePin = {
+                                pinRepo.toggle(LibraryPlaylistPin(
+                                    id = pinnedId, title = playlist.title,
+                                    creator = playlist.creator,
+                                ))
+                            },
+                        )
+                    },
                 )
             }
         }
@@ -153,12 +178,15 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                     val playable = recordingId != null && recordingId in availableIds
                     val coverUri = entry.artworkUrl
                         ?: catalogRows.firstOrNull { it.id == recordingId }?.localArtworkUri
+                    var menuExpanded by remember(playlist.mbid, index) {
+                        mutableStateOf(false)
+                    }
                     NativeDetailTrackRowLayout(
                         onClick = if (playable && recordingId != null)
                             ({ onVerifiedRecordingPlay(recordingId) }) else null,
-                        onLongPress = null,
-                        onMore = null,
-                        opacity = if (playable) 1f else .65f,
+                        onLongPress = { menuExpanded = true },
+                        onMore = { menuExpanded = true },
+                        opacity = 1f,
                         leading = {
                             NativeDetailTrackArtwork(showPlayingBars = false) {
                                 Box(
@@ -171,7 +199,7 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     if (!coverUri.isNullOrBlank()) {
                                         AsyncImage(
-                                            model = coverUri,
+                                            model = coverUri.artworkAt(ROW_ART_PX),
                                             contentDescription = null,
                                             contentScale = ContentScale.Crop,
                                             modifier = Modifier.fillMaxSize(),
@@ -195,7 +223,35 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                             )
                         },
                         rating = {},
-                        actions = {},
+                        showRatingSlot = false,
+                        actions = {
+                            Box {
+                                RowMoreButton(
+                                    onClick = { menuExpanded = true },
+                                    tint = palette.onBackgroundVariant,
+                                    modifier = Modifier.testTag("public-playlist-track-more-$index"),
+                                )
+                                DropdownMenu(
+                                    expanded = menuExpanded,
+                                    onDismissRequest = { menuExpanded = false },
+                                ) {
+                                    if (recordingId != null) {
+                                        DropdownMenuItem(
+                                            text = { Text("Ver no MusicBrainz") },
+                                            onClick = {
+                                                menuExpanded = false
+                                                val url = "https://musicbrainz.org/recording/$recordingId"
+                                                runCatching {
+                                                    context.startActivity(Intent(
+                                                        Intent.ACTION_VIEW, Uri.parse(url),
+                                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        },
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 80.dp),
