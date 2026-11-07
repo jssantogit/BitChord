@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
@@ -55,6 +56,8 @@ private val ARTIST_ACTION_GAP = 24.dp
 internal fun ActionRow(
     onPlay: () -> Unit,
     onShuffle: () -> Unit,
+    canPlay: Boolean = true,
+    canShuffle: Boolean = true,
     bottomSpace: Dp = 22.dp,
     /** The artist header's subscribe state, or null where it isn't offered. */
     isSubscribed: Boolean? = null,
@@ -79,10 +82,12 @@ internal fun ActionRow(
             onClick = onShuffle,
             haptic = Haptic.Resume,
             size = ARTIST_SIDE_BUTTON,
+            enabled = canShuffle,
         )
 
         PlayCircle(
             onClick = onPlay,
+            enabled = canPlay,
             size = ARTIST_PLAY_BUTTON,
             iconScale = ARTIST_PLAY_ICON_SCALE,
             containerColor = playColor ?: Color.White,
@@ -126,6 +131,7 @@ internal fun ActionRow(
 @Composable
 private fun PlayCircle(
     onClick: () -> Unit,
+    enabled: Boolean = true,
     size: Dp,
     iconScale: Float,
     containerColor: Color,
@@ -135,8 +141,9 @@ private fun PlayCircle(
     Box(
         modifier = Modifier
             .size(size)
+            .alpha(if (enabled) 1f else DISABLED_ACTION_ALPHA)
             .clip(CircleShape)
-            .clickable {
+            .clickable(enabled = enabled) {
                 haptics.play(Haptic.Resume)
                 onClick()
             }
