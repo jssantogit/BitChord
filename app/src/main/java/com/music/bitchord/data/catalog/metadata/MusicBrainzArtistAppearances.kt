@@ -158,7 +158,7 @@ internal class MusicBrainzArtistAppearancesClient(
             val foundByGroup = linkedMapOf<String, MusicBrainzArtistAppearance>()
             var offset = 0
             var healthy = true
-            repeat(3) {
+            for (page in 0 until 3) {
                 val response = try {
                     when {
                         pagedFetch != null -> pagedFetch.invoke(id, offset)
@@ -175,20 +175,24 @@ internal class MusicBrainzArtistAppearancesClient(
                     throw cancelled
                 } catch (_: Exception) {
                     healthy = false
-                    return@repeat
+                    break
+                }
+                if (response.length > 500_000) {
+                    healthy = false
+                    break
                 }
                 val root = runCatching {
                     Json.parseToJsonElement(response) as? JsonObject
                 }.getOrNull()
                 val list = root?.get("releases") as? JsonArray
-                if (list == null || response.length > 500_000) {
+                if (list == null) {
                     healthy = false
-                    return@repeat
+                    break
                 }
                 parseMusicBrainzTrackArtistAppearances(response, id)
                     .forEach { foundByGroup.putIfAbsent(it.releaseGroupMbid, it) }
                 val count = list.size
-                val total = (root["release-count"] as? JsonPrimitive)?.intOrNull
+                val total = (root?.get("release-count") as? JsonPrimitive)?.intOrNull
                 offset += count
                 // Captures use the old simple fetch callback and represent one
                 // page only. More pages require a real offset-aware transport.
@@ -196,7 +200,7 @@ internal class MusicBrainzArtistAppearancesClient(
                     (total != null && offset >= total) ||
                     (total == null && count < 25) ||
                     (fetch != null && pagedFetch == null)
-                ) return@repeat
+                ) break
             }
             val found = foundByGroup.values.take(12).toList()
             if (cache.size >= 64) cache.remove(cache.keys.first())
