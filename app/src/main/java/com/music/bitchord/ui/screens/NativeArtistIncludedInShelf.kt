@@ -25,6 +25,14 @@ import kotlinx.coroutines.withContext
 private val appearancesClient by lazy { MusicBrainzArtistAppearancesClient() }
 private val appearanceCoverArt by lazy { CoverArtArchive() }
 
+/** Only exact MusicBrainz Release/ReleaseGroup identities enter CAA.
+ * Cap network work while preserving group-only sleeves from valid editions. */
+internal fun nativeArtistIncludedInCoverTargets(
+    appearances: List<MusicBrainzArtistAppearance>,
+): List<Pair<String?, String>> =
+    appearances.distinctBy { it.releaseGroupMbid }.take(10)
+        .map { it.releaseMbid to it.releaseGroupMbid }
+
 /**
  * An optional section in the SAME artist detail frame, not a parallel artist
  * page. No section is drawn until a MusicBrainz track_artist browse proves
@@ -47,18 +55,19 @@ internal fun NativeArtistIncludedInShelf(
     val covers by produceState(initialValue = emptyMap<String, String>(),
         key1 = appearances,
     ) {
-        val verified = appearances.filter { it.releaseMbid != null }.take(6)
-        value = withContext(Dispatchers.IO) {
-            buildMap {
-                for (entry in verified) {
-                    val art = try {
-                        appearanceCoverArt.findCover(entry.releaseMbid, null,
-                            CoverArtSize.THUMBNAIL)
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                      catch (_: Exception) { null }
-                    if (!art.isNullOrBlank()) put(entry.releaseGroupMbid, art)
-                }
+        // Publish each cover as soon as it arrives instead of waiting for the
+        // entire sequential CAA batch. A release-group identity is verified
+        // by the MusicBrainz release edge even if edition art is absent.
+        for ((releaseId, groupId) in nativeArtistIncludedInCoverTargets(appearances)) {
+            val art = withContext(Dispatchers.IO) {
+                try {
+                    appearanceCoverArt.findCover(
+                        releaseId, groupId, CoverArtSize.THUMBNAIL,
+                    )
+                } catch (cancelled: CancellationException) { throw cancelled }
+                  catch (_: Exception) { null }
             }
+            if (!art.isNullOrBlank()) value = value + (groupId to art)
         }
     }
     if (appearances.isEmpty()) return
