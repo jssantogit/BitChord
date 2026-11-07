@@ -4000,14 +4000,32 @@ private fun BitChordApp(
                                     },
                                     localPlaylists = localPlaylistItems,
                                     onOpenPlaylist = { playlistId ->
-                                        // Open the existing playlist destination, never
-                                        // attempt to encode it as a RecordingId.
-                                        openedCanonicalPlaylist = null
-                                        pinnedPlaylistRequest = playlistId
-                                        playlistLibraryQuery = ""
-                                        playlistLibraryFilter =
-                                            com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
-                                        showPlaylistLibrary = true
+                                        // Public ListenBrainz playlists keep their own
+                                        // identity and open the native online adapter.
+                                        // Never disguise them as local static playlists.
+                                        if (playlistId.startsWith("public:")) {
+                                            val pin = com.music.bitchord.ui.screens
+                                                .LibraryPlaylistPinRepository.get(context)
+                                                .pins.value.firstOrNull { it.id == playlistId }
+                                            if (pin != null) {
+                                                val public = com.music.bitchord.data.catalog.metadata
+                                                    .ListenBrainzPublicPlaylist(
+                                                        mbid = playlistId.removePrefix("public:"),
+                                                        title = pin.title,
+                                                        creator = pin.creator,
+                                                        description = null,
+                                                    )
+                                                openedPublicPlaylist = public
+                                                viewModel.loadCanonicalPublicPlaylistDetail(public)
+                                            }
+                                        } else {
+                                            openedCanonicalPlaylist = null
+                                            pinnedPlaylistRequest = playlistId
+                                            playlistLibraryQuery = ""
+                                            playlistLibraryFilter =
+                                                com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL
+                                            showPlaylistLibrary = true
+                                        }
                                     },
                                     onOpenEntity = { pin, category ->
                                         // Pins belong to the unified catalog, not
