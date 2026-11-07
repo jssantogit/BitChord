@@ -31,6 +31,10 @@ internal fun metadataHttpOutcome(status: Int?): String = when (status) {
     else -> "unexpected"
 }
 
+/** Retain only the numeric code, never a server body, URL, query or account. */
+internal fun metadataHttpStatusLabel(status: Int?): String =
+    status?.takeIf { it in 100..599 }?.toString() ?: "unknown"
+
 /**
  * Instrument only real Ktor HTTP transports, not cache hits or parsers. The
  * result and cancellation contracts are unaffected when diagnostics is off.
@@ -43,9 +47,11 @@ internal suspend fun <T> measureMetadataHttp(
 ): T {
     val started = System.nanoTime()
     var outcome = "network_error"
+    var httpStatus: Int? = null
     try {
         val result = call()
-        outcome = metadataHttpOutcome(status(result))
+        httpStatus = status(result)
+        outcome = metadataHttpOutcome(httpStatus)
         return result
     } catch (cancelled: CancellationException) {
         outcome = "cancelled"
@@ -60,6 +66,7 @@ internal suspend fun <T> measureMetadataHttp(
                     "provider" to provider,
                     "endpoint" to endpoint,
                     "outcome" to outcome,
+                    "httpStatus" to metadataHttpStatusLabel(httpStatus),
                 ),
                 durationNanos = elapsed,
             )
