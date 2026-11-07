@@ -21,6 +21,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import com.music.bitchord.ui.player.AndroidPlayerHost
 import com.music.bitchord.ui.player.PlayerPlatform
 import com.music.bitchord.data.canvas.CanvasCache
+import com.music.bitchord.data.canvas.VisualStillMedia
 import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 import com.music.bitchord.data.catalog.metadata.CatalogCoverCoilEventListenerFactory
 import com.music.bitchord.data.smb.SmbCoverFetcher
@@ -125,6 +126,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                 // seconds of video from the network on every loop.
                 Diagnostics.span(DiagnosticCategory.STARTUP, "canvas_cache_init") {
                     CanvasCache.init(this)
+                    VisualStillMedia.init(this)
                 }
             }
         }
@@ -307,7 +309,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(100L * 1024 * 1024)
+                    .maxSizeBytes(256L * 1024 * 1024)
                     .build().also { disk ->
                         // DiskCache.size can inspect its journal. Never read it
                         // on the image-loading UI thread. One process baseline,
@@ -323,7 +325,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
             }
             // Covers arriving with a hard cut read as the list flickering as
             // it scrolls; a short fade reads as them developing.
-            .crossfade(200)
+            .crossfade(90)
             .build()
 
     private fun initLastfm() {
