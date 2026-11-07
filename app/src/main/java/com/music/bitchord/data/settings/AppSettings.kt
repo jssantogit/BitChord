@@ -10,6 +10,8 @@ import androidx.media3.common.Player
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.auth.AuthStore
 import com.music.bitchord.data.canvas.SpotifyToken
+import com.music.bitchord.data.canvas.VisualRetentionMode
+import com.music.bitchord.data.canvas.VisualSurface
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.playback.EqLayout
@@ -392,6 +394,21 @@ object AppSettings {
      * here and stays up regardless of this setting.
      */
     val canvasOverCellular = MutableStateFlow(false)
+
+    /**
+     * User-controlled retention of animated artist/album/player backgrounds.
+     * Existing CanvasCache stays LRU; saved clips are a separate offline store.
+     * Never download videos automatically by default, or over metered networks.
+     */
+    val visualRetentionMode = MutableStateFlow(VisualRetentionMode.STREAM_ONLY)
+    val visualMotionSurfaces = MutableStateFlow(VisualSurface.entries.toSet())
+    /** Keep bounded artist, album and now-playing stills when encountered. */
+    val saveVisualStillImages = MutableStateFlow(true)
+
+    private const val KEY_VISUAL_RETENTION_V1 = "visual_retention_v1"
+    private const val KEY_VISUAL_SURFACES_V1 = "visual_motion_surfaces_v1"
+    private const val KEY_VISUAL_STILLS_V1 = "visual_stills_v1"
+
 
     /** Automatically collapses the lower controls after Spotify Canvas settles. */
     val spotifyCanvasAutoHide = MutableStateFlow(true)
@@ -838,6 +855,17 @@ object AppSettings {
         }
         animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, true)
         canvasOverCellular.value = prefs.getBoolean(KEY_CANVAS_OVER_CELLULAR, false)
+        visualRetentionMode.value = runCatching {
+            VisualRetentionMode.valueOf(prefs.getString(
+                KEY_VISUAL_RETENTION_V1, VisualRetentionMode.STREAM_ONLY.name
+            ) ?: VisualRetentionMode.STREAM_ONLY.name)
+        }.getOrDefault(VisualRetentionMode.STREAM_ONLY)
+        visualMotionSurfaces.value = prefs.getString(KEY_VISUAL_SURFACES_V1, null)
+            ?.split(",")?.mapNotNull { name ->
+                VisualSurface.entries.firstOrNull { it.name == name }
+            }?.toSet() ?: VisualSurface.entries.toSet()
+        saveVisualStillImages.value = prefs.getBoolean(KEY_VISUAL_STILLS_V1, true)
+
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
         signatureApiEnabled.value = prefs.getBoolean(KEY_SIGNATURE_API_ENABLED, false)
@@ -1397,6 +1425,25 @@ object AppSettings {
     fun setAnimatedCanvas(value: Boolean) {
         animatedCanvas.value = value
         prefs.edit().putBoolean(KEY_ANIMATED_CANVAS, value).apply()
+    }
+
+    fun setVisualRetentionMode(mode: VisualRetentionMode) {
+        visualRetentionMode.value = mode
+        prefs.edit().putString(KEY_VISUAL_RETENTION_V1, mode.name).apply()
+    }
+
+    fun setVisualMotionSurface(surface: VisualSurface, enabled: Boolean) {
+        val next = if (enabled) visualMotionSurfaces.value + surface
+            else visualMotionSurfaces.value - surface
+        visualMotionSurfaces.value = next
+        prefs.edit().putString(
+            KEY_VISUAL_SURFACES_V1, next.joinToString(",") { it.name }
+        ).apply()
+    }
+
+    fun setSaveVisualStillImages(value: Boolean) {
+        saveVisualStillImages.value = value
+        prefs.edit().putBoolean(KEY_VISUAL_STILLS_V1, value).apply()
     }
 
     fun setCanvasOverCellular(value: Boolean) {
