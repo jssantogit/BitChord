@@ -1,6 +1,6 @@
 # BitChord #210 — Discogs failure register, threat model and validation gates
 
-Date: 2026-11-07. State: PLANNED, no production code. Branch `catalog/210-discogs-provider-evidence-20261107`; single PR, no merge until acceptance. Pair with [architecture design](2026-11-07-discogs-catalog-evidence-design.md).
+Date: 2026-11-07. State: IMPLEMENTATION IN PROGRESS, first adapter and tests checked in; no UI or live API enablement. CI/device/license gates remain open. Branch `catalog/210-discogs-provider-evidence-20261107`; single PR, no merge until acceptance. Pair with [architecture design](2026-11-07-discogs-catalog-evidence-design.md).
 
 Classification: **BLOCKER** means do not enable the provider; **HIGH** means required regression coverage; **MEDIUM** means defensive tests and diagnostic treatment. This is a comprehensive *risk inventory*, not a claim that all imaginable external failures are known.
 
