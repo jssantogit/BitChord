@@ -1397,4 +1397,6 @@
     <string name="visual_offline_confirm_title">Clear offline visuals?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline visuals cleared</string>
+    <string name="show_album_edition_metadata">アルバムのメタデータを表示</string>
+    <string name="show_album_edition_metadata_subtitle">曲一覧の下にレーベル、日付、国、確認済みの詳細を表示します。</string>
 </resources>

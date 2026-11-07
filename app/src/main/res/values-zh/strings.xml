@@ -1389,4 +1389,6 @@
     <string name="visual_offline_confirm_title">清除离线视觉内容？</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">已清除离线视觉内容</string>
+    <string name="show_album_edition_metadata">显示专辑元数据</string>
+    <string name="show_album_edition_metadata_subtitle">在曲目下方显示厂牌、日期、国家及已验证的发行信息。</string>
 </resources>
