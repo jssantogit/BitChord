@@ -19,6 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
+import com.music.bitchord.data.canvas.VisualStillMedia
+import com.music.bitchord.data.canvas.VisualSurface
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsTranslation
@@ -102,8 +104,16 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
     override fun CanvasVideo(spec: CanvasVideoSpec, modifier: Modifier) = AndroidCanvasVideo(spec, modifier)
 
     @Composable
-    override fun rememberRemoteArtworkUrl(song: Song?): String? =
-        com.music.bitchord.ui.components.rememberRemoteArtworkUrl(song)
+    override fun rememberRemoteArtworkUrl(song: Song?): String? {
+        // The same painter and color pipeline receives a local File URI on
+        // restart, without introducing an Android-only fork of Now Playing.
+        val online = com.music.bitchord.ui.components.rememberRemoteArtworkUrl(song)
+        val identity = song?.let { it.videoId.ifBlank { it.artist + "|" + it.title } }
+        val persisted = identity?.let {
+            VisualStillMedia.cached(VisualSurface.NOW_PLAYING, it)
+        }
+        return persisted?.toURI()?.toString() ?: online
+    }
 
     @Composable
     override fun rememberCanonicalPlaybackArtworkModel(song: Song?): Any? {
