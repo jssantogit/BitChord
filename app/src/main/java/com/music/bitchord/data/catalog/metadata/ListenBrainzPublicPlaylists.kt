@@ -327,6 +327,18 @@ internal class ListenBrainzPublicPlaylistClient(
                 "jazz", "metal", "classical", "folk", "ambient", "punk")) return null
         return search(publicPlaylistGenreQueries(tag), tag)
     }
+    /** A typed query is separate from genre discovery and Home curation.
+     * Title/annotation must actually include the requested words; fuzzy
+     * ListenBrainz results are not enough to claim a user-requested match.
+     */
+    suspend fun searchPublicQuery(query: String): List<ListenBrainzPublicPlaylist> {
+        val trimmed = query.trim()
+        if (trimmed.length !in 2..80 || trimmed.any(Char::isISOControl))
+            return emptyList()
+        return search(listOf(trimmed), null, surface = "search").orEmpty()
+            .filter { matchesPlaylistWords(it, listOf(trimmed)) }
+    }
+
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
         search(listOf("music", "mix", "playlist"), null)
 
