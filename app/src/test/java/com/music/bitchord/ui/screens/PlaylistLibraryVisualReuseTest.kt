@@ -151,6 +151,35 @@ class PlaylistLibraryVisualReuseTest {
         }
     }
 
+    @Test fun onlineMetadataKeepsNativePlaybackControlsDisabledButPinEnabled() {
+        var played = 0
+        var shuffled = 0
+        var pinned = 0
+        compose.setContent {
+            NativeReleaseActionRow(
+                onPlay = { played++ },
+                onShuffle = { shuffled++ },
+                isLocal = false,
+                canPlay = false,
+                canShuffle = false,
+                reservePinAction = true,
+                onTogglePin = { pinned++ },
+            )
+        }
+        val app = org.robolectric.RuntimeEnvironment.getApplication()
+        compose.onNodeWithText(app.getString(com.music.bitchord.R.string.play))
+            .assertHasNoClickAction()
+        compose.onNodeWithContentDescription(
+            app.getString(com.music.bitchord.R.string.shuffle),
+        ).assertHasNoClickAction()
+        compose.onNodeWithContentDescription("Fixar álbum na Biblioteca").performClick()
+        compose.runOnIdle {
+            assertEquals(0, played)
+            assertEquals(0, shuffled)
+            assertEquals(1, pinned)
+        }
+    }
+
     @Test fun discardPromptUsesNativeAlertAndPreservesBothActions() {
         var discarded = 0
         var continued = 0
