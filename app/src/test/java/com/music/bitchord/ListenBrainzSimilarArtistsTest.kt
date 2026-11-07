@@ -14,6 +14,35 @@ class ListenBrainzSimilarArtistsTest {
     private val related = "22222222-2222-4222-8222-222222222222"
     private val other = "33333333-3333-4333-8333-333333333333"
 
+    @Test fun artistRadioRequestsValidFullPopularityWindow() {
+        val parameters = com.music.bitchord.data.catalog.metadata.listenBrainzArtistRadioParameters()
+        assertEquals("easy", parameters["mode"])
+        assertEquals("12", parameters["max_similar_artists"])
+        assertEquals("1", parameters["max_recordings_per_artist"])
+        assertEquals("0", parameters["pop_begin"])
+        assertEquals("100", parameters["pop_end"])
+    }
+
+    @Test fun emptyLabsAfterBadRadioRequestDoesNotHideLaterRecoveryForFifteenMinutes() = runBlocking {
+        var now = 1_000L
+        var calls = 0
+        val client = ListenBrainzSimilarArtistsClient(
+            limiter = ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = { now += it }),
+            nowMillis = { now },
+            fetch = { 400 to "" },
+            labsFetch = {
+                calls++
+                if (calls == 1) 200 to "[]"
+                else 200 to """[{"artist_mbid":"$related","name":"Recovery",
+                    "reference_mbid":"$seed","score":20}]"""
+            },
+        )
+        assertTrue(client.load(seed).isEmpty())
+        now += 91_000L
+        assertEquals(listOf(related), client.load(seed).map { it.mbid })
+        assertEquals(2, calls)
+    }
+
     @Test fun radioEvidenceExcludesSeedAndDeduplicatesSimilarArtistIds() {
         val response = """{"$seed":[
           {"recording_mbid":"44444444-4444-4444-8444-444444444444",
