@@ -91,6 +91,12 @@ internal fun CanonicalPublicPlaylistDetailScreen(
             onDismiss = { editingRating = false },
         )
     }
+    var editingRecording by remember(playlist.mbid) { mutableStateOf<String?>(null) }
+    editingRecording?.let { recordingId ->
+        CanonicalMetadataRecordingRatingDialog(
+            recordingId = recordingId, onDismiss = { editingRecording = null },
+        )
+    }
     val entries = (state as? UiState.Success)?.data?.tracks.orEmpty()
     // Keep original public order and unique row identity even after sorting.
     val visibleEntries = remember(entries, query, sort) {
@@ -288,7 +294,14 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                                     expanded = menuExpanded,
                                     onDismissRequest = { menuExpanded = false },
                                 ) {
-                                    if (recordingId != null) {
+                                    if (recordingId != null && isVerifiedCatalogRecordingId(recordingId)) {
+                                        DropdownMenuItem(
+                                            text = { Text("Avaliar faixa") },
+                                            onClick = {
+                                                menuExpanded = false
+                                                editingRecording = recordingId
+                                            },
+                                        )
                                         DropdownMenuItem(
                                             text = { Text("Ver no MusicBrainz") },
                                             onClick = {
