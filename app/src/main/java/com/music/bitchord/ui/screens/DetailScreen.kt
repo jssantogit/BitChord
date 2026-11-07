@@ -333,6 +333,9 @@ fun DetailScreen(
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
     onCanonicalPublicTopOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
+    /** Verified current MusicBrainz ReleaseGroup, never an inferred local Song. */
+    canonicalFeaturedRelease: CanonicalCatalogSearchRow? = null,
+    onCanonicalFeaturedReleaseOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -628,7 +631,19 @@ fun DetailScreen(
 
             // The first release on the shelves below, pulled out as a card of its own.
             val topRelease = if (isLocalArtist) localArtistRecent
-                else if (isArtist) page.sections.topRelease() else null
+                else if (isArtist && publicArtistMbid == null) page.sections.topRelease()
+                else null
+            if (isArtist && publicArtistMbid != null && canonicalFeaturedRelease != null &&
+                onCanonicalFeaturedReleaseOpen != null
+            ) {
+                item(key = "canonical-public-artist-recent-release") {
+                    NativeArtistPublicFeaturedRelease(
+                        release = canonicalFeaturedRelease,
+                        palette = palette,
+                        onOpen = onCanonicalFeaturedReleaseOpen,
+                    )
+                }
+            }
             if (topRelease != null) {
                 item(key = "top-release") {
                     TopReleaseCard(
