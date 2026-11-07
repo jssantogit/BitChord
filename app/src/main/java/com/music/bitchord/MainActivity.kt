@@ -3600,7 +3600,9 @@ private fun BitChordApp(
                             onCanonicalFeaturedReleaseOpen = { release ->
                                 viewModel.openCanonicalNativeDetail(release)
                             },
-                            onCanonicalArtistPlaylistOpen = { playlist ->
+                            onCanonicalArtistPlaylistOpen = { mbid, title, creator, description ->
+                                val playlist = com.music.bitchord.data.catalog.metadata
+                                    .ListenBrainzPublicPlaylist(mbid, title, creator, description)
                                 openedPublicPlaylist = playlist
                                 viewModel.loadCanonicalPublicPlaylistDetail(playlist)
                             },
