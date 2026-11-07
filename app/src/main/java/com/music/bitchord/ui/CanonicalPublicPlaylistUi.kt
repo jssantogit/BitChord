@@ -5,6 +5,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
+import com.music.bitchord.ui.screens.CanonicalPublicPlaylistSearchRow
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistDetail
 import com.music.bitchord.data.model.HomeShelf
@@ -57,4 +59,37 @@ internal fun rememberCanonicalPublicPlaylistUi(
         }
     }
     return CanonicalPublicPlaylistUi(playlists, detail, homeShelf, homeNotice, genreNotice)
+}
+
+
+/** Keep the public playlist search boundary outside the large main Compose method. */
+@Composable
+internal fun rememberCanonicalPublicPlaylistSearchUi(
+    viewModel: MainViewModel,
+    query: String,
+    active: Boolean,
+): UiState<List<CanonicalPublicPlaylistSearchRow>>? {
+    val state by viewModel.canonicalPublicPlaylistQuery.collectAsStateWithLifecycle()
+    val typed = query.trim()
+    LaunchedEffect(active, typed) {
+        if (active && typed.length in 2..80) {
+            delay(650L)
+            viewModel.searchCanonicalPublicPlaylists(typed)
+        }
+    }
+    if (!active || typed.isEmpty()) return null
+    if (typed.length < 2) return UiState.Success(emptyList())
+    val queryState = state?.takeIf { it.first == typed }?.second ?: return UiState.Loading
+    return when (queryState) {
+        UiState.Loading -> UiState.Loading
+        is UiState.Error -> UiState.Error(queryState.message)
+        is UiState.Success -> UiState.Success(queryState.data.map { item ->
+            CanonicalPublicPlaylistSearchRow(
+                mbid = item.mbid,
+                title = item.title,
+                creator = item.creator,
+                artworkUri = item.artworkUrl,
+            )
+        })
+    }
 }
