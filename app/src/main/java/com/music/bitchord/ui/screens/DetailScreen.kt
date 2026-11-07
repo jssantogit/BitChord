@@ -365,6 +365,12 @@ fun DetailScreen(
         rawSongs.withIndex().associate { (i, s) -> s.videoId to ((if (byTag) s.trackNumber else null) ?: (i + 1)) }
     }
     val isArtist = page.type == BrowseType.ARTIST
+    // Only an exact MusicBrainz Release route may receive edition-specific
+    // Discogs data. ReleaseGroups, local albums and playlists cannot qualify.
+    val onlineEditionMbid = if (page.type == BrowseType.ALBUM) {
+        com.music.bitchord.data.catalog.metadata.discogs.discogsOnlineReleaseMbid(page.browseId)
+    } else null
+    val editorialEvidence = rememberDiscogsEditionForRelease(onlineEditionMbid)
     val isLocalArtist = isArtist && LocalGroups.isArtist(page.browseId)
     val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     var localArtistRecent by remember(page.browseId) { mutableStateOf<ShelfItem?>(null) }
@@ -889,7 +895,11 @@ fun DetailScreen(
                             } ?: "")
                     }
                     NativeAlbumMetadataFooter(
-                        metadata = CanonicalAlbumFooterMetadata(year, summary),
+                        metadata = CanonicalAlbumFooterMetadata(
+                            date = year,
+                            summary = summary,
+                            editorialEvidence = editorialEvidence,
+                        ),
                         palette = palette,
                     )
                 }
