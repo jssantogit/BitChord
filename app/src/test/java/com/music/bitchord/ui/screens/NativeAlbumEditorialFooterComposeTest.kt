@@ -92,6 +92,53 @@ class NativeAlbumEditorialFooterComposeTest {
         compose.onNodeWithText("Gravadora · Second Label (CAT-02)").assertDoesNotExist()
     }
 
+    @Test fun albumWithoutDiscogsLinkHasVisibleAboutSectionAndClearProvenance() {
+        compose.setContent {
+            MaterialTheme {
+                NativeAlbumMetadataFooter(
+                    metadata = CanonicalAlbumFooterMetadata(
+                        date = "2024",
+                        summary = "5 músicas, 15 minutos",
+                        showAlbumAbout = true,
+                        hasMusicBrainzEdition = true,
+                        editionFacts = listOf("Gravadora · Belift Lab (BEL-001)",
+                            "Formato · CD"),
+                        editorialEvidence = DiscogsEditionEnrichment.NoLink,
+                    ),
+                    palette = themeArtworkPalette(),
+                )
+            }
+        }
+        compose.onNodeWithText("Sobre esta edição").assertExists()
+        compose.onNodeWithText("Gravadora · Belift Lab (BEL-001)").assertExists()
+        compose.onNodeWithText("Formato · CD").assertExists()
+        compose.onNodeWithText(
+            "Discogs · sem vínculo Discogs confirmado para esta edição no MusicBrainz.",
+        ).assertExists()
+        compose.onNodeWithTag("native-album-editorial-attribution").assertDoesNotExist()
+    }
+
+    @Test fun verifiedEditionShowsOneSharedAboutHeadingAndClickableAttribution() {
+        val source = evidence()
+        compose.setContent {
+            MaterialTheme {
+                NativeAlbumMetadataFooter(
+                    metadata = CanonicalAlbumFooterMetadata(
+                        date = "2024",
+                        summary = "5 músicas",
+                        showAlbumAbout = true,
+                        editorialEvidence = source,
+                        hasMusicBrainzEdition = true,
+                    ),
+                    palette = themeArtworkPalette(),
+                )
+            }
+        }
+        compose.onNodeWithText("Sobre esta edição").assertExists()
+        compose.onNodeWithText("Gravadora · Belift Lab (BEL-001)").assertExists()
+        compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
+    }
+
     @Test fun nonVerifiedAlbumKeepsExistingMetadataButNeverShowsDiscogsPlaceholder() {
         compose.setContent {
             MaterialTheme {
