@@ -18,6 +18,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistAppearancesClie
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.ArtworkPalette
+import com.music.bitchord.ui.loadCanonicalCoversProgressively
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,6 +33,27 @@ internal fun nativeArtistIncludedInCoverTargets(
 ): List<Pair<String?, String>> =
     appearances.distinctBy { it.releaseGroupMbid }.take(10)
         .map { it.releaseMbid to it.releaseGroupMbid }
+
+/**
+ * Two independently verified guest releases can resolve their covers without
+ * the first CAA timeout hiding all later thumbnails. As with the artist
+ * discography, use the bounded progressive loader instead of one HTTP call
+ * per row on the UI producer. The actual group MBID owns each result.
+ */
+internal suspend fun resolveNativeIncludedInCovers(
+    appearances: List<MusicBrainzArtistAppearance>,
+    lookup: suspend (String?, String) -> String?,
+    onResolved: (Map<String, String>) -> Unit,
+) {
+    loadCanonicalCoversProgressively(
+        keys = nativeArtistIncludedInCoverTargets(appearances),
+        maxConcurrent = 3,
+        fetch = { (releaseId, groupId) -> lookup(releaseId, groupId) },
+        publish = { batch ->
+            onResolved(batch.mapKeys { (target, _) -> target.second })
+        },
+    )
+}
 
 /**
  * An optional section in the SAME artist detail frame, not a parallel artist
@@ -55,20 +77,22 @@ internal fun NativeArtistIncludedInShelf(
     val covers by produceState(initialValue = emptyMap<String, String>(),
         key1 = appearances,
     ) {
-        // Publish each cover as soon as it arrives instead of waiting for the
-        // entire sequential CAA batch. A release-group identity is verified
-        // by the MusicBrainz release edge even if edition art is absent.
-        for ((releaseId, groupId) in nativeArtistIncludedInCoverTargets(appearances)) {
-            val art = withContext(Dispatchers.IO) {
-                try {
-                    appearanceCoverArt.findCover(
-                        releaseId, groupId, CoverArtSize.THUMBNAIL,
-                    )
-                } catch (cancelled: CancellationException) { throw cancelled }
-                  catch (_: Exception) { null }
-            }
-            if (!art.isNullOrBlank()) value = value + (groupId to art)
-        }
+        // Verified edition/group identity survives the concurrent fetch.
+        // Fast CAA images appear independently of a slower first response.
+        resolveNativeIncludedInCovers(
+            appearances = appearances,
+            lookup = { releaseId, groupId ->
+                withContext(Dispatchers.IO) {
+                    try {
+                        appearanceCoverArt.findCover(
+                            releaseId, groupId, CoverArtSize.THUMBNAIL,
+                        )
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                      catch (_: Exception) { null }
+                }
+            },
+            onResolved = { batch -> value = value + batch },
+        )
     }
     if (appearances.isEmpty()) return
     NativeArtistReleaseShelf(
