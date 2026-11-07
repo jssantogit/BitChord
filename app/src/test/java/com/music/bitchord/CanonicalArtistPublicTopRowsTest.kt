@@ -114,4 +114,22 @@ class CanonicalArtistPublicTopRowsTest {
         assertTrue(canonicalArtistSampledPopularityRanking(sample,
             listOf(ListenBrainzPopularityEvidence.Unknown(sample[0]))).isEmpty())
     }
+
+    @Test fun verifiedRankedRecordingRetainsUpstreamCaaCoverWithoutPlayableAsset() {
+        val artwork = "https://coverartarchive.org/release/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/123-250.jpg"
+        val verified = RecordingMetadataEnrichment(
+            musicBrainzId = first,
+            title = "Verified track",
+            artistDisplay = "Artist",
+            artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
+        )
+        val rows = canonicalVerifiedArtistTopRows(
+            artist,
+            listOf(ListenBrainzArtistTopRecording(first, 120, 15, artworkUri = artwork)),
+            mapOf(first to verified),
+        )
+        assertEquals(artwork, rows.single().artworkUri)
+        assertFalse(rows.single().hasCatalogedAsset)
+    }
+
 }
