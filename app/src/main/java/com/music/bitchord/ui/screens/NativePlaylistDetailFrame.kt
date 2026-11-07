@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
@@ -34,5 +35,32 @@ internal fun NativePlaylistDetailFrame(
             .testTag("native-playlist-detail-frame"),
         contentPadding = PaddingValues(bottom = bottomPadding),
         content = content,
+    )
+}
+
+/**
+ * One native playlist header irrespective of whether membership originates
+ * in the unified Library, a device folder, or ListenBrainz public discovery.
+ * Provider adapters supply only data and available actions; no second page
+ * layout or source-specific toolbar should be introduced.
+ */
+@Composable
+internal fun NativePlaylistDetailHeader(
+    title: String,
+    credit: String,
+    meta: String,
+    palette: ArtworkPalette,
+    sleeveSize: Dp,
+    artwork: @Composable BoxScope.() -> Unit,
+    actions: @Composable () -> Unit,
+) {
+    NativeReleaseHeaderLayout(
+        title = title,
+        credit = credit,
+        meta = meta,
+        palette = palette,
+        sleeveSize = sleeveSize,
+        artwork = artwork,
+        actions = actions,
     )
 }
