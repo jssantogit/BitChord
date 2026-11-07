@@ -86,6 +86,28 @@ class CatalogCoverTelemetryTest {
     }
 
 
+    @Test fun coilImageObserverSelectsExactCaaHostAndExcludesOtherArtwork() {
+        val eligible = com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://coverartarchive.org/release/aaaa/front-250.jpg",
+        )
+        assertEquals(true, eligible)
+        assertEquals(true, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://ia800123.us.archive.org/12/items/album/front.jpg",
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://example.org/album/cover.jpg",
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://coverartarchive.org.evil.example/release/image.jpg",
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            Any(),
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            null,
+        ))
+    }
+
     @Test fun cacheFirstBatchAndOwnerCancellationRetriesAreMeasuredWithoutIds() {
         val telemetry = CatalogCoverTelemetry()
         telemetry.recordVerifiedGroupCachedBatch(12)
