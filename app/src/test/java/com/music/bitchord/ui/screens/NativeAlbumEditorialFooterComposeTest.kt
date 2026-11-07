@@ -74,6 +74,7 @@ class NativeAlbumEditorialFooterComposeTest {
             MaterialTheme {
                 NativeAlbumMetadataFooter(
                     metadata = CanonicalAlbumFooterMetadata(
+                        date = null,
                         summary = "5 músicas, 15 minutos",
                         editorialEvidence = snapshot,
                     ),
