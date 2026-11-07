@@ -160,6 +160,14 @@ object AppleArtistArtRepository {
         return art?.let { offlineStills(key, it) }
     }
 
+    /** A file from the app-managed verified still store, not a remote
+     * file URL. Similar artists can safely reuse this after losing network. */
+    fun savedHeroFile(artistName: String): java.io.File? {
+        val key = artistName.normalized()
+        if (key.isBlank()) return null
+        return VisualStillMedia.cached(VisualSurface.ARTIST, "apple-hero|$key")
+    }
+
     /** The header art for [artistName], or null when Apple has none. Never throws. */
     suspend fun artFor(artistName: String): AppleArtistArt? {
         val key = artistName.normalized()
