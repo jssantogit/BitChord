@@ -134,7 +134,39 @@ class MusicBrainzCatalogGraphTest {
         assertEquals("ILLIT feat. Guest", detail.value.tracks.first().artistDisplay)
         assertEquals("ILLIT", detail.value.tracks.first().recordingArtistDisplay)
         assertEquals(2, detail.value.tracks.map { it.trackMbid }.distinct().size)
-        assertEquals("recordings+artist-credits+release-groups", requests.last().second["inc"])
+        assertEquals("recordings+artist-credits+release-groups+labels", requests.last().second["inc"])
+    }
+
+    @Test fun editionLabelsAndPhysicalFormatsAreCanonicalMusicBrainzFacts() = runBlocking {
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    assertEquals("release/$worldwide", path)
+                    assertTrue(parameters["inc"].orEmpty().split("+").contains("labels"))
+                    return """{"id":"$worldwide","title":"SUPER REAL ME",
+                        "status":"Official","country":"KR","date":"2024-03-25",
+                        "artist-credit":[{"name":"ILLIT"}],
+                        "label-info":[
+                            {"catalog-number":"BEL-001","label":{"name":"Belift Lab"}},
+                            {"catalog-number":"BEL-001","label":{"name":"Belift Lab"}},
+                            {"catalog-number":"CAT-2","label":{"name":"Second Label"}}
+                        ],
+                        "media":[{"position":1,"format":"CD","track-count":1,"tracks":[
+                            {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6",
+                             "title":"Magnetic","recording":{"id":"$original"}}
+                        ]}]}"""
+                }
+            }
+        ))
+        val data = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(listOf("Belift Lab (BEL-001)", "Second Label (CAT-2)"),
+            data.editionLabels)
+        assertEquals(listOf("CD"), data.editionFormats)
+        assertEquals("KR", data.country)
+        assertTrue(data.hasCompleteTracklist)
     }
 
     @Test fun invalidMbidRejectsBeforeNetworkAndFailedResponseDoesNotInventTracks() = runBlocking {
