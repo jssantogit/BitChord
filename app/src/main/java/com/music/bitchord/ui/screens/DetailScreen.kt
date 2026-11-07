@@ -395,19 +395,19 @@ fun DetailScreen(
     ) {
         buildList {
             add(VisualArtworkCandidate(page.thumbnailUrl,
-                VisualArtworkPriority.HERO, 900))
+                VisualArtworkPriority.HERO, HEADER_ART_PX))
             publicTopRows.take(4).forEach { row ->
                 add(VisualArtworkCandidate(row.artworkUri,
-                    VisualArtworkPriority.VISIBLE, 320))
+                    VisualArtworkPriority.VISIBLE, ROW_ART_PX))
             }
             canonicalTracks.take(5).forEach { row ->
                 add(VisualArtworkCandidate(row.artworkUri,
-                    VisualArtworkPriority.VISIBLE, 320))
+                    VisualArtworkPriority.VISIBLE, ROW_ART_PX))
             }
             page.sections.take(3).forEach { section ->
                 section.items.take(3).forEach { item ->
                     add(VisualArtworkCandidate(item.thumbnailUrl,
-                        VisualArtworkPriority.NEARBY, 320))
+                        VisualArtworkPriority.NEARBY, CARD_ART_PX))
                 }
             }
         }
