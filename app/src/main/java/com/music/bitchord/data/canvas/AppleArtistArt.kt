@@ -2,6 +2,14 @@ package com.music.bitchord.data.canvas
 
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.Http
+import android.content.Context
+import android.content.SharedPreferences
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import com.music.bitchord.data.settings.AppSettings
 import androidx.compose.ui.graphics.Color
 import com.music.bitchord.ui.theme.ArtworkKeyColors
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +34,7 @@ import java.util.Locale
  * [background] and [accent] are Apple's own colours for the photograph (as
  * ARGB), so the page can be tinted without decoding the image to find them.
  */
+@Serializable
 data class AppleArtistArt(
     val heroUrl: String,
     val logoUrl: String?,
@@ -56,6 +65,63 @@ fun AppleArtistArt.keyColors() = ArtworkKeyColors(Color(background), Color(accen
 object AppleArtistArtRepository {
 
     private const val TAG = "AppleArtistArt"
+    private val offlineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var offlinePrefs: SharedPreferences? = null
+    private val offlineJson = Json { ignoreUnknownKeys = true }
+    private const val OFFLINE_PREFS_NAME = "visual_artist_metadata_v1"
+
+    fun init(context: Context) {
+        offlinePrefs = context.getSharedPreferences(OFFLINE_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    private fun offlineKey(key: String) =
+        visualMediaCacheKey(VisualSurface.ARTIST, "apple-artist|$key")
+
+    private fun fromDisk(key: String): AppleArtistArt? {
+        val raw = offlinePrefs?.getString(offlineKey(key), null) ?: return null
+        val art = runCatching { offlineJson.decodeFromString<AppleArtistArt>(raw) }
+            .getOrNull() ?: return null
+        if (!isSafeVisualMediaUrl(art.heroUrl) ||
+            (art.logoUrl != null && !isSafeVisualMediaUrl(art.logoUrl)) ||
+            (art.videoUrl != null && !isSafeVisualMediaUrl(art.videoUrl))
+        ) return null
+        return art
+    }
+
+    private fun offlineStills(key: String, art: AppleArtistArt): AppleArtistArt =
+        art.copy(
+            heroUrl = VisualStillMedia.cached(VisualSurface.ARTIST, "apple-hero|$key")
+                ?.toURI()?.toString() ?: art.heroUrl,
+            logoUrl = VisualStillMedia.cached(VisualSurface.ARTIST, "apple-logo|$key")
+                ?.toURI()?.toString() ?: art.logoUrl,
+        )
+
+    /** Persist only metadata backed by an exact artist-name lookup. Save actual
+     * still bytes separately so process death / offline DNS does not hide them. */
+    private fun keepOffline(key: String, art: AppleArtistArt) {
+        offlinePrefs?.edit()?.putString(
+            offlineKey(key), offlineJson.encodeToString(AppleArtistArt.serializer(), art),
+        )?.apply()
+        warmStills(key, art)
+    }
+
+    private fun warmStills(key: String, art: AppleArtistArt) {
+        if (!AppSettings.saveVisualStillImages.value) return
+        offlineScope.launch {
+            VisualStillMedia.save(VisualSurface.ARTIST, "apple-hero|$key", art.heroUrl)
+            art.logoUrl?.let { VisualStillMedia.save(
+                VisualSurface.ARTIST, "apple-logo|$key", it,
+            ) }
+            _updates.value++
+        }
+    }
+
+    fun clearOfflineMetadata() {
+        offlinePrefs?.edit()?.clear()?.apply()
+        synchronized(cache) { cache.clear() }
+        _updates.value++
+    }
+
     private const val CACHE_SIZE = 64
     private const val HERO_WIDTH = 1200
     private const val LOGO_WIDTH = 1000
@@ -86,14 +152,27 @@ object AppleArtistArtRepository {
      */
     fun cached(artistName: String): AppleArtistArt? {
         val key = artistName.normalized()
-        return synchronized(cache) { cache[key] }?.art
+        if (key.isBlank()) return null
+        val known = synchronized(cache) { cache[key] }
+        val art = if (known != null) known.art else fromDisk(key)?.also {
+            synchronized(cache) { cache[key] = Entry(it) }
+        }
+        return art?.let { offlineStills(key, it) }
     }
 
     /** The header art for [artistName], or null when Apple has none. Never throws. */
     suspend fun artFor(artistName: String): AppleArtistArt? {
         val key = artistName.normalized()
         if (key.isEmpty()) return null
-        synchronized(cache) { cache[key] }?.let { return it.art }
+        synchronized(cache) { cache[key] }?.let {
+            it.art?.let { art -> warmStills(key, art) }
+            return it.art?.let { art -> offlineStills(key, art) }
+        }
+        fromDisk(key)?.let { persisted ->
+            synchronized(cache) { cache[key] = Entry(persisted) }
+            warmStills(key, persisted)
+            return offlineStills(key, persisted)
+        }
 
         // Null here is a network hiccup, not an answer — only a settled result
         // (including a genuine "no logo") is worth remembering.
@@ -103,8 +182,9 @@ object AppleArtistArtRepository {
                 .getOrNull()
         } ?: return null
         synchronized(cache) { cache[key] = entry }
+        entry.art?.let { keepOffline(key, it) }
         _updates.value++
-        return entry.art
+        return entry.art?.let { offlineStills(key, it) }
     }
 
     private fun lookup(artistName: String, key: String): Entry? {
