@@ -249,4 +249,31 @@ class ListenBrainzPublicPlaylistTest {
         assertEquals("K-pop & rock", playlist.title)
         assertEquals("The new & hottest 'K-pop' is here!", playlist.description)
     }
+
+    @Test fun artistPlaylistMustContainARecordingCreditedToTheExactArtist() = runBlocking {
+        val requested = mutableListOf<String>()
+        val transport = object : ListenBrainzPublicPlaylistTransport {
+            override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                requested += "search:$query"
+                return ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+            }
+            override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp {
+                requested += "detail:$mbid"
+                val recording = if (mbid == rock) song else pop
+                return ListenBrainzPublicPlaylistHttp(200,
+                    """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$mbid",
+                       "track":[{"title":"Credited","creator":"Artist",
+                         "identifier":"https://musicbrainz.org/recording/$recording"}]}}""")
+            }
+        }
+        val client = ListenBrainzPublicPlaylistClient(
+            transport, ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(emptyList<ListenBrainzPublicPlaylist>(),
+            client.searchArtistVerified("Real artist", emptySet()))
+        assertTrue(requested.isEmpty())
+        assertEquals(listOf(rock),
+            client.searchArtistVerified("Real artist", setOf(song)).map { it.mbid })
+        assertEquals(listOf("search:Real artist", "detail:$rock", "detail:$pop"), requested)
+    }
 }
