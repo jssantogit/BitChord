@@ -36,10 +36,10 @@ class NativeAlbumEditorialFooterTest {
         val footer = nativeAlbumEditorialFooter(edition(), nowMillis = 1_100L)
         assertEquals(
             listOf(
-                "Gravadora · Belift Lab (BEL-001)",
-                "Formato · CD · EP",
-                "País da edição · KR",
-                "Ano da edição · 2024",
+                "Gravadora: Belift Lab (BEL-001)",
+                "Formato: CD · EP",
+                "País: Coreia do Sul",
+                "Ano: 2024",
             ), footer!!.lines,
         )
         assertEquals("Data provided by Discogs.", footer.attributionText)
@@ -63,7 +63,7 @@ class NativeAlbumEditorialFooterTest {
             edition(country = " ", labels = emptyList(), formats = emptyList()),
             nowMillis = 1_100L,
         )
-        assertEquals(listOf("Ano da edição · 2024"), footer!!.lines)
+        assertEquals(listOf("Ano: 2024"), footer!!.lines)
 
         val overflowing = nativeAlbumEditorialFooter(
             edition(
@@ -87,11 +87,11 @@ class NativeAlbumEditorialFooterTest {
             nowMillis = 1_100L,
         )!!
         assertEquals(4, footer.lines.size)
-        assertEquals("Gravadora · Belift Lab (BEL-001)", footer.lines.first())
+        assertEquals("Gravadora: Belift Lab (BEL-001)", footer.lines.first())
         assertEquals(
-            listOf("Gravadora · Second Label (CAT-02)",
-                "Gravadora · Third Label (CAT-03)",
-                "Formato · Reissue · Digipak"),
+            listOf("Gravadora: Second Label (CAT-02)",
+                "Gravadora: Third Label (CAT-03)",
+                "Formato: Reissue · Digipak"),
             footer.additionalLines,
         )
         assertEquals("https://www.discogs.com/release/12345", footer.attributionUrl)
@@ -122,22 +122,21 @@ class NativeAlbumEditorialFooterTest {
         )
         val overview = nativeAlbumAboutOverview(local, null, null)!!
         assertEquals("Sobre esta edição", overview.title)
-        assertTrue(overview.facts.contains("Lançamento · 2024"))
+        assertTrue(overview.facts.contains("Data: 2024"))
         assertTrue(overview.facts.contains("4 músicas"))
-        assertTrue(overview.status!!.contains("informações complementares"))
+        assertNull(overview.status)
         val withoutLink = nativeAlbumAboutOverview(
             local.copy(
-                editionFacts = listOf("Formato · CD", "Gravadora · Belift Lab"),
+                editionFacts = listOf("Formato: CD", "Gravadora: Belift Lab"),
                 hasMusicBrainzEdition = true,
                 editorialEvidence = DiscogsEditionEnrichment.NoLink,
             ),
             null,
             DiscogsEditionEnrichment.NoLink,
         )!!
-        assertTrue(withoutLink.facts.contains("Formato · CD"))
-        assertTrue(withoutLink.facts.contains("Gravadora · Belift Lab"))
-        assertTrue(withoutLink.status!!.contains("sem vínculo Discogs"))
-        assertFalse(withoutLink.status.contains("indisponível"))
+        assertTrue(withoutLink.facts.contains("Formato: CD"))
+        assertTrue(withoutLink.facts.contains("Gravadora: Belift Lab"))
+        assertNull(withoutLink.status)
         val candidate = nativeAlbumAboutOverview(
             local, null, DiscogsEditionEnrichment.Candidate,
         )!!

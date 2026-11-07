@@ -26,6 +26,11 @@ import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionPresentati
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsObservation
 import com.music.bitchord.ui.theme.ArtworkPalette
 import kotlinx.coroutines.delay
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
+import java.util.Locale
 
 /** Small native typography footer, never an independent Discogs detail screen. */
 internal data class NativeAlbumEditorialFooterData(
@@ -52,19 +57,19 @@ internal fun nativeAlbumEditorialFooter(
     val formats = display.formats.filter(String::isNotBlank).take(12)
     val lines = buildList {
         // Keep the summary short and leave the original album footer intact.
-        labels.firstOrNull()?.let { add(("Gravadora · " + it).take(320)) }
+        labels.firstOrNull()?.let { add(("Gravadora: " + it).take(320)) }
         formats.take(4).takeIf(List<String>::isNotEmpty)?.let {
-            add(("Formato · " + it.joinToString(" · ")).take(320))
+            add(("Formato: " + it.joinToString(" · ") { fmt -> nativeEditionDisplayFormat(fmt) }).take(320))
         }
         display.country?.takeIf { it.isNotBlank() }?.let {
-            add(("País da edição · " + it).take(320))
+            nativeEditionDisplayCountry(it)?.let { country -> add(("País: " + country).take(320)) }
         }
-        display.editionYear?.let { add("Ano da edição · " + it) }
+        display.editionYear?.let { add("Ano: " + it) }
     }
     val additionalLines = buildList {
-        labels.drop(1).forEach { add(("Gravadora · " + it).take(320)) }
+        labels.drop(1).forEach { add(("Gravadora: " + it).take(320)) }
         formats.drop(4).chunked(4).forEach {
-            add(("Formato · " + it.joinToString(" · ")).take(320))
+            add(("Formato: " + it.joinToString(" · ") { fmt -> nativeEditionDisplayFormat(fmt) }).take(320))
         }
     }
     if (lines.isEmpty()) return null
@@ -77,13 +82,69 @@ internal fun nativeAlbumEditorialFooter(
     )
 }
 
+
+/** Human-readable descriptions of edition facts, leaving source provenance intact. */
+internal fun nativeAlbumEditionDisplayFact(raw: String): String? {
+    val parts = raw.split(" · ", limit = 2)
+    if (parts.size != 2) return raw.trim().takeIf(String::isNotBlank)?.take(320)
+    val value = parts[1].trim().takeIf(String::isNotBlank) ?: return null
+    return when (parts[0]) {
+        "Gravadora" -> "Gravadora: ${value.take(250)}"
+        "Formato" -> "Formato: ${value.split(" · ").joinToString(" · ") { nativeEditionDisplayFormat(it) }.take(260)}"
+        "País da edição" -> nativeEditionDisplayCountry(value)?.let { "País: $it" }
+        "Data da edição", "Lançamento" -> "Data: ${nativeEditionDisplayDate(value)}"
+        "Estado da publicação" -> "Estado da publicação: ${value.take(100)}"
+        "Gênero" -> "Gênero: ${value.take(160)}"
+        else -> "${parts[0].trim()}: ${value.take(250)}"
+    }
+}
+
+internal fun nativeEditionDisplayFormat(format: String): String = when (format.trim()) {
+    "Digital Media" -> "Mídia digital"
+    "Vinyl" -> "Vinil"
+    "Cassette" -> "Fita cassete"
+    else -> format.trim()
+}
+
+internal fun nativeEditionDisplayCountry(raw: String): String? {
+    val code = raw.trim().uppercase(Locale.ROOT)
+    return when (code) {
+        "XW" -> "Mundial"
+        "XE" -> "Europa"
+        "KR" -> "Coreia do Sul"
+        "BR" -> "Brasil"
+        else -> if (code.matches(Regex("[A-Z]{2}"))) {
+            Locale("", code).getDisplayCountry(Locale.forLanguageTag("pt-BR"))
+                .takeIf { it.isNotBlank() && !it.equals(code, ignoreCase = true) }
+                ?.replaceFirstChar { it.titlecase(Locale.forLanguageTag("pt-BR")) }
+        } else raw.trim().takeIf(String::isNotBlank)?.take(80)
+    }
+}
+
+internal fun nativeEditionDisplayDate(raw: String): String {
+    val ptBr = Locale.forLanguageTag("pt-BR")
+    return try {
+        when {
+            Regex("\\d{4}-\\d{2}-\\d{2}").matches(raw) ->
+                LocalDate.parse(raw).format(DateTimeFormatter.ofPattern("d 'de' MMMM 'de' uuuu", ptBr))
+            Regex("\\d{4}-\\d{2}").matches(raw) ->
+                YearMonth.parse(raw).format(DateTimeFormatter.ofPattern("MMMM 'de' uuuu", ptBr))
+            else -> raw.take(64)
+        }
+    } catch (_: DateTimeParseException) {
+        raw.take(64)
+    }
+}
+
 /** Decide whether the entire native metadata footer has useful visible content. */
 internal fun nativeAlbumMetadataFooterHasContent(
     metadata: CanonicalAlbumFooterMetadata,
     editorial: NativeAlbumEditorialFooterData?,
+    showAlbumEditionMetadata: Boolean = true,
 ): Boolean =
     metadata.date != null || metadata.summary != null ||
-        metadata.genre != null || editorial != null || metadata.showAlbumAbout
+        metadata.genre != null ||
+        (showAlbumEditionMetadata && (editorial != null || metadata.showAlbumAbout))
 
 /**
  * The MusicBrainz/Library overview remains useful when a Discogs URL
@@ -103,22 +164,24 @@ internal fun nativeAlbumAboutOverview(
 ): NativeAlbumAboutOverview? {
     if (!metadata.showAlbumAbout) return null
     val facts = buildList {
-        metadata.date?.takeIf(String::isNotBlank)?.let { add("Lançamento · $it") }
         metadata.summary?.takeIf(String::isNotBlank)?.let { add(it) }
-        metadata.genre?.takeIf(String::isNotBlank)?.let { add("Gênero · $it") }
+        // The edition-specific date replaces the generic release year.
+        if (metadata.editionFacts.none { it.startsWith("Data da edição · ") }) {
+            metadata.date?.takeIf(String::isNotBlank)?.let { add("Data: ${nativeEditionDisplayDate(it)}") }
+        }
+        metadata.genre?.takeIf(String::isNotBlank)?.let { add("Gênero: $it") }
         metadata.editionFacts.filter(String::isNotBlank).take(10).forEach {
-            add(it.take(320))
+            nativeAlbumEditionDisplayFact(it)?.let(::add)
         }
         if (metadata.hasMusicBrainzEdition && metadata.editionFacts.isNotEmpty()) {
-            add("Fonte dos detalhes da edição · MusicBrainz")
+            add("Fonte: MusicBrainz")
         }
     }.distinct().take(14)
     val status = when (evidence) {
         is DiscogsEditionEnrichment.Verified ->
             if (editorial != null) null else
                 "Discogs · não há informações complementares válidas para exibir."
-        DiscogsEditionEnrichment.NoLink ->
-            "Discogs · sem vínculo Discogs confirmado para esta edição no MusicBrainz."
+        DiscogsEditionEnrichment.NoLink -> null
         DiscogsEditionEnrichment.Ambiguous ->
             "Discogs · há mais de um vínculo; esta edição não foi confirmada."
         DiscogsEditionEnrichment.Candidate ->
@@ -131,7 +194,7 @@ internal fun nativeAlbumAboutOverview(
             "Discogs · dados ou identificador inválidos; nenhuma informação foi incorporada."
         DiscogsEditionEnrichment.Disabled ->
             "Discogs · provedor desativado."
-        null -> "Ainda não há informações complementares verificadas no Discogs para esta edição."
+        null -> null
     }
     return NativeAlbumAboutOverview("Sobre esta edição", facts, status)
 }

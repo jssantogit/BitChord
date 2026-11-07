@@ -259,6 +259,7 @@ internal fun SettingsScreen(
     val swipeToPlayNext by AppSettings.swipeToPlayNext.collectAsStateWithLifecycle()
     val dontRepeatSuggestions by AppSettings.dontRepeatSuggestions.collectAsStateWithLifecycle()
     val smartVersionAlignment by AppSettings.smartVersionAlignment.collectAsStateWithLifecycle()
+    val showAlbumEditionMetadata by AppSettings.showAlbumEditionMetadata.collectAsStateWithLifecycle()
     val upgradeLengthSlackSeconds by AppSettings.upgradeLengthSlackSeconds.collectAsStateWithLifecycle()
     val filterNonMusicAudio by AppSettings.filterNonMusicAudio.collectAsStateWithLifecycle()
     val localMusicFolderUri by AppSettings.localMusicFolderUri.collectAsStateWithLifecycle()
@@ -1611,6 +1612,25 @@ internal fun SettingsScreen(
 
         if (selectedSection == SettingsSection.ADVANCED || (selectedSection == null && searchQuery.isNotBlank())) {
         SearchableSettingsGroup(search, destination = SettingsSection.ADVANCED, onSearchNavigate = if (selectedSection == null) { _: String -> onSelectSection(SettingsSection.ADVANCED) } else null, header = stringResource(R.string.advanced_options)) {
+            val editionMetadataTitle = stringResource(R.string.show_album_edition_metadata)
+            row(editionMetadataTitle, "album", "metadata", "edition", "discogs", "musicbrainz") {
+                SettingsRow(
+                    icon = Icons.Rounded.LibraryMusic,
+                    title = editionMetadataTitle,
+                    subtitle = stringResource(R.string.show_album_edition_metadata_subtitle),
+                    trailing = {
+                        Switch(
+                            checked = showAlbumEditionMetadata,
+                            onCheckedChange = AppSettings::setShowAlbumEditionMetadata,
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                                checkedBorderColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
+                    },
+                    onClick = { AppSettings.setShowAlbumEditionMetadata(!showAlbumEditionMetadata) },
+                )
+            }
             if (DiagnosticsUiEntry.isAvailable(context)) {
                 val diagnosticsTitle = stringResource(R.string.settings_nav_diagnostics_title)
                 row(diagnosticsTitle, "debug", "logs", "report", "capture") {

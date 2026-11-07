@@ -64,7 +64,7 @@ class NativeAlbumEditorialFooterComposeTest {
         compose.onNodeWithText("13 músicas, 63 minutos").assertExists()
         compose.onNodeWithTag("native-album-metadata-footer").assertExists()
         compose.onNodeWithTag("native-album-editorial-footer").assertExists()
-        compose.onNodeWithText("Gravadora · Belift Lab (BEL-001)").assertExists()
+        compose.onNodeWithText("Gravadora: Belift Lab (BEL-001)").assertExists()
         compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
     }
 
@@ -82,14 +82,14 @@ class NativeAlbumEditorialFooterComposeTest {
                 )
             }
         }
-        compose.onNodeWithText("Gravadora · Second Label (CAT-02)").assertDoesNotExist()
+        compose.onNodeWithText("Gravadora: Second Label (CAT-02)").assertDoesNotExist()
         compose.onNodeWithText("Formato · Reissue").assertDoesNotExist()
         compose.onNodeWithText("Ver mais").performClick()
-        compose.onNodeWithText("Gravadora · Second Label (CAT-02)").assertExists()
+        compose.onNodeWithText("Gravadora: Second Label (CAT-02)").assertExists()
         compose.onNodeWithText("Formato · Reissue").assertExists()
         compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
         compose.onNodeWithText("Ver menos").performClick()
-        compose.onNodeWithText("Gravadora · Second Label (CAT-02)").assertDoesNotExist()
+        compose.onNodeWithText("Gravadora: Second Label (CAT-02)").assertDoesNotExist()
     }
 
     @Test fun albumWithoutDiscogsLinkHasVisibleAboutSectionAndClearProvenance() {
@@ -101,8 +101,8 @@ class NativeAlbumEditorialFooterComposeTest {
                         summary = "5 músicas, 15 minutos",
                         showAlbumAbout = true,
                         hasMusicBrainzEdition = true,
-                        editionFacts = listOf("Gravadora · Belift Lab (BEL-001)",
-                            "Formato · CD"),
+                        editionFacts = listOf("Gravadora: Belift Lab (BEL-001)",
+                            "Formato: CD"),
                         editorialEvidence = DiscogsEditionEnrichment.NoLink,
                     ),
                     palette = themeArtworkPalette(),
@@ -110,11 +110,11 @@ class NativeAlbumEditorialFooterComposeTest {
             }
         }
         compose.onNodeWithText("Sobre esta edição").assertExists()
-        compose.onNodeWithText("Gravadora · Belift Lab (BEL-001)").assertExists()
-        compose.onNodeWithText("Formato · CD").assertExists()
+        compose.onNodeWithText("Gravadora: Belift Lab (BEL-001)").assertExists()
+        compose.onNodeWithText("Formato: CD").assertExists()
         compose.onNodeWithText(
             "Discogs · sem vínculo Discogs confirmado para esta edição no MusicBrainz.",
-        ).assertExists()
+        ).assertDoesNotExist()
         compose.onNodeWithTag("native-album-editorial-attribution").assertDoesNotExist()
     }
 
@@ -135,7 +135,7 @@ class NativeAlbumEditorialFooterComposeTest {
             }
         }
         compose.onNodeWithText("Sobre esta edição").assertExists()
-        compose.onNodeWithText("Gravadora · Belift Lab (BEL-001)").assertExists()
+        compose.onNodeWithText("Gravadora: Belift Lab (BEL-001)").assertExists()
         compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
     }
 

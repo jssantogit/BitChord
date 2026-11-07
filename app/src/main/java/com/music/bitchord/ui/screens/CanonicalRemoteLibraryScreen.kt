@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.data.settings.AppSettings
+
 import android.graphics.BitmapFactory
 import coil3.compose.AsyncImage
 import androidx.activity.compose.BackHandler
@@ -2517,9 +2519,14 @@ internal fun NativeAlbumMetadataFooter(
     metadata: CanonicalAlbumFooterMetadata,
     palette: ArtworkPalette,
 ) {
-    val editorialFooter = rememberNativeAlbumEditorialFooter(metadata.editorialEvidence)
-    if (!nativeAlbumMetadataFooterHasContent(metadata, editorialFooter)) return
-    val about = nativeAlbumAboutOverview(metadata, editorialFooter, metadata.editorialEvidence)
+    val showEditionMetadata by AppSettings.showAlbumEditionMetadata.collectAsStateWithLifecycle()
+    val editorialFooter = if (showEditionMetadata) {
+        rememberNativeAlbumEditorialFooter(metadata.editorialEvidence)
+    } else null
+    if (!nativeAlbumMetadataFooterHasContent(metadata, editorialFooter, showEditionMetadata)) return
+    val about = if (showEditionMetadata) {
+        nativeAlbumAboutOverview(metadata, editorialFooter, metadata.editorialEvidence)
+    } else null
     Column(
         modifier = Modifier.fillMaxWidth()
             .padding(horizontal = PAGE_GUTTER, vertical = 26.dp)
