@@ -31,6 +31,9 @@ internal class DiscogsEditionRepository(
     private val enabled: Boolean = false,
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
+    /** On provider rollback, purge only volatile Discogs observations. */
+    fun clearCachedEvidence() = cache.clear()
+
     suspend fun observe(canonical: CanonicalEditionEvidence): DiscogsEditionEnrichment {
         if (!enabled) return DiscogsEditionEnrichment.Disabled
         val link = when (val result = links.findRelease(canonical.musicBrainzReleaseId)) {
