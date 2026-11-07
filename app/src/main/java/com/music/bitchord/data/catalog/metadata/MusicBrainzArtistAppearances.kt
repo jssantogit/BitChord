@@ -18,6 +18,8 @@ internal data class MusicBrainzArtistAppearance(
     val artistCredit: String,
     val releaseDate: String?,
     val primaryType: String?,
+    /** Exact Official MusicBrainz Release, not a guessed group sleeve. */
+    val releaseMbid: String? = null,
 )
 
 private val ARTIST_APPEARANCE_MBID =
@@ -86,7 +88,9 @@ internal fun parseMusicBrainzTrackArtistAppearances(
             ?: return@mapNotNull null
         val date = group.appearanceText("first-release-date")
             ?.takeIf { Regex("""\d{4}(-\d{2}){0,2}""").matches(it) }
-        MusicBrainzArtistAppearance(groupId, title, mainArtist, date, kind)
+        val editionId = release.appearanceText("id")?.lowercase(Locale.ROOT)
+            ?.takeIf(ARTIST_APPEARANCE_MBID::matches)
+        MusicBrainzArtistAppearance(groupId, title, mainArtist, date, kind, editionId)
     }.distinctBy { it.releaseGroupMbid }
         .take(limit.coerceIn(0, 20))
         .toList()
