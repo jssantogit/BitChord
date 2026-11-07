@@ -1,6 +1,8 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.ListenBrainzArtistTopRecording
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
+import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -13,6 +15,8 @@ internal data class CanonicalArtistPublicTopState(
     val rows: List<CanonicalCatalogSearchRow> = emptyList(),
     /** Successful public fetch time, including a verified empty upstream chart. */
     val fetchedAtMs: Long? = null,
+    /** True for a limited MusicBrainz candidate sample, not a complete chart. */
+    val sampled: Boolean = false,
 )
 
 /** A visible artist rank cannot outlive the shared public popularity TTL. */
@@ -74,4 +78,22 @@ internal fun canonicalVerifiedArtistTopRows(
         }
         .take(limit.coerceAtMost(20))
         .toList()
+}
+
+/**
+ * When artist-top is unavailable, a bounded MusicBrainz sample can be
+ * ordered by ACTUAL ListenBrainz counts from /popularity/recording.
+ * It is not a comprehensive artist chart and the UI must label it as such.
+ * Exact MusicBrainz credit checks still run before any candidate is visible.
+ */
+internal fun canonicalArtistSampledPopularityRanking(
+    recordingMbids: List<String>,
+    observations: List<ListenBrainzPopularityEvidence>,
+): List<ListenBrainzArtistTopRecording> {
+    val eligible = recordingMbids.take(25).map { it.lowercase(Locale.ROOT) }.toSet()
+    return publicListenBrainzRecordingRanking(observations)
+        .filter { it.recordingMbid.lowercase(Locale.ROOT) in eligible &&
+            it.listeners > 0L && it.listens >= it.listeners }
+        .map { ListenBrainzArtistTopRecording(it.recordingMbid, it.listens, it.listeners) }
+        .take(8)
 }
