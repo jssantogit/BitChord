@@ -162,6 +162,7 @@ import com.music.bitchord.data.settings.LibrarySort
 import com.music.bitchord.data.settings.ThemeMode
 import com.music.bitchord.ui.components.AccountProfileSelector
 import com.music.bitchord.ui.components.SpotifyImportAlert
+import com.music.bitchord.ui.rememberCanonicalPublicArtistFeaturedRelease
 import com.music.bitchord.ui.screens.WearOsScreen
 import com.music.bitchord.ui.screens.AccountAndScrobblingScreen
 import com.music.bitchord.ui.screens.DiscordDialog
@@ -3504,6 +3505,9 @@ private fun BitChordApp(
                         }
                         val artistPublicTop by viewModel.canonicalArtistPublicTop
                             .collectAsStateWithLifecycle()
+                        val artistFeaturedRelease = rememberCanonicalPublicArtistFeaturedRelease(
+                            viewModel, publicArtistMbid,
+                        )
                         DetailScreen(
                             page = page,
                             currentSong = player.song,
@@ -3591,6 +3595,10 @@ private fun BitChordApp(
                                 // Public popularity is metadata, never stream
                                 // proof. Open the existing read-only detail.
                                 communityMetadataRecording = recording
+                            },
+                            canonicalFeaturedRelease = artistFeaturedRelease,
+                            onCanonicalFeaturedReleaseOpen = { release ->
+                                viewModel.openCanonicalNativeDetail(release)
                             },
                             contentPadding = listPadding,
                         )
