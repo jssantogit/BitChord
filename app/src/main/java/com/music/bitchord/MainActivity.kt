@@ -2088,6 +2088,20 @@ private fun BitChordApp(
     var openedPublicPlaylist by remember {
         mutableStateOf<com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist?>(null)
     }
+    var publicPlaylistSearching by remember { mutableStateOf(false) }
+    var publicPlaylistQuery by rememberSaveable { mutableStateOf("") }
+    var publicPlaylistSort by rememberSaveable {
+        mutableStateOf(com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT)
+    }
+    var publicPlaylistSortOpen by remember { mutableStateOf(false) }
+    var publicPlaylistOptionsOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(openedPublicPlaylist?.mbid) {
+        publicPlaylistSearching = false
+        publicPlaylistQuery = ""
+        publicPlaylistSort = com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT
+        publicPlaylistSortOpen = false
+        publicPlaylistOptionsOpen = false
+    }
     // Public recording metadata is a detail-only destination, not a local
     // RecordingId or a synthetic media item. Reuse the native recording shell.
     var communityMetadataRecording by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
@@ -3180,6 +3194,11 @@ private fun BitChordApp(
                                     recordingId, CanonicalCollectionIntent.PLAY_NOW,
                                 )
                             },
+                            searching = publicPlaylistSearching,
+                            onSearchingChange = { publicPlaylistSearching = it },
+                            query = publicPlaylistQuery,
+                            onQueryChange = { publicPlaylistQuery = it },
+                            sort = publicPlaylistSort,
                         )
                     } else if (key.startsWith("rediscovery:")) {
                         CanonicalRediscoveryRecordingDetailsScreen(
@@ -4310,7 +4329,8 @@ private fun BitChordApp(
                     libraryShowAll == null && !showSettings &&
                     !showAccountScrobbling && !showSources && !showListenTogether &&
                     !showWearOs && !showEqualizer && !showDiscord &&
-                    !showHistory && !showSpotify && !showReplay
+                    !showHistory && !showSpotify && !showReplay &&
+                    openedPublicPlaylist == null
 
                 FrostedTopBar(
                     title = when {
@@ -4336,6 +4356,7 @@ private fun BitChordApp(
                         showSettings -> settingsSection?.let { stringResource(it.titleRes) }
                             ?: stringResource(R.string.settings)
                         showReplay -> stringResource(R.string.replay)
+                        openedPublicPlaylist != null -> openedPublicPlaylist?.title.orEmpty()
                         detail != null && detailActiveShelf != null -> detailActiveShelf?.title.orEmpty()
                         detail != null -> detail.title
 
@@ -4377,6 +4398,8 @@ private fun BitChordApp(
                         // The page leads with its own large "Replay", so the bar
                         // stays out of the way until that has been scrolled off.
                         showReplay -> replayScrolled
+                        openedPublicPlaylist != null ->
+                            pageDetailListState.firstVisibleItemIndex > 0
                         detail != null -> detailScrolled
                         else -> scrolled || selectedTab == TAB_SEARCH
                     },
@@ -4427,6 +4450,7 @@ private fun BitChordApp(
                             else showSettings = false
                         })
                         showReplay -> ({ showReplay = false })
+                        openedPublicPlaylist != null -> ({ openedPublicPlaylist = null })
                         detailActiveShelf != null -> ({ detailActiveShelf = null })
                         detail != null -> ({ viewModel.closeDetail(); Unit })
 
@@ -4488,7 +4512,31 @@ private fun BitChordApp(
                             unifiedControls = unifiedControls,
                             albumUi = unifiedAlbumUi,
                         )
+                        if (openedPublicPlaylist != null && !showSettings && !showAccountScrobbling) {
+                            CanonicalPlaylistToolbarActions(
+                                hasDetail = true,
+                                showCreate = false,
+                                searching = publicPlaylistSearching,
+                                onCreate = {},
+                                onSearch = {
+                                    publicPlaylistSearching = !publicPlaylistSearching
+                                    if (!publicPlaylistSearching) publicPlaylistQuery = ""
+                                },
+                                onSortOrFilter = { publicPlaylistSortOpen = true },
+                                onOverflow = { publicPlaylistOptionsOpen = true },
+                            )
+                            com.music.bitchord.ui.screens.CanonicalPublicPlaylistToolbarMenus(
+                                playlist = openedPublicPlaylist!!,
+                                sortOpen = publicPlaylistSortOpen,
+                                optionsOpen = publicPlaylistOptionsOpen,
+                                onSortDismiss = { publicPlaylistSortOpen = false },
+                                onOptionsDismiss = { publicPlaylistOptionsOpen = false },
+                                sort = publicPlaylistSort,
+                                onSort = { publicPlaylistSort = it },
+                            )
+                        }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
+                            openedPublicPlaylist == null &&
                             !showSettings && !showAccountScrobbling) {
                             CanonicalPlaylistToolbarActions(
                                 hasDetail = openedCanonicalPlaylist != null,
@@ -4532,7 +4580,8 @@ private fun BitChordApp(
                         // Only worth surfacing where there's room for it and it won't
                         // be mistaken for a per-page action — Home, at rest.
                         if (!showSettings && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs && !showEqualizer &&
-                            detail == null && selectedTab == TAB_HOME
+                            detail == null && openedPublicPlaylist == null &&
+                            selectedTab == TAB_HOME
                         ) {
                             updateNotice?.let { update ->
                                 IconButton(onClick = { showUpdateDialog = true }) {
@@ -4554,7 +4603,8 @@ private fun BitChordApp(
                             // a history is a record of what was played, which reads
                             // as that tab's business rather than every tab's.
                             if (!showHistory && !showReplay && !showDiscord && libraryShowAll == null &&
-                                detail == null && selectedTab == TAB_LIBRARY &&
+                                detail == null && openedPublicPlaylist == null &&
+                                selectedTab == TAB_LIBRARY &&
                                 unifiedLibraryCategory == null
                             ) {
                                 IconButton(
@@ -4697,7 +4747,7 @@ private fun BitChordApp(
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail &&
+                            if (!isReleaseDetail && openedPublicPlaylist == null &&
                                 !shouldUseUnifiedAlbumDetailToolbar(
                                     unifiedLibraryCategory, unifiedLibraryDetailOpen,
                                     unifiedLibraryNestedAlbumOpen,

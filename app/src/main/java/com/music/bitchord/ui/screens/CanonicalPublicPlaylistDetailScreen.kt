@@ -70,6 +70,11 @@ internal fun CanonicalPublicPlaylistDetailScreen(
     onBack: () -> Unit,
     onRetry: () -> Unit,
     onVerifiedRecordingPlay: (String) -> Unit,
+    searching: Boolean = false,
+    onSearchingChange: (Boolean) -> Unit = {},
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current.applicationContext
@@ -87,6 +92,26 @@ internal fun CanonicalPublicPlaylistDetailScreen(
         )
     }
     val entries = (state as? UiState.Success)?.data?.tracks.orEmpty()
+    // Keep original public order and unique row identity even after sorting.
+    val visibleEntries = remember(entries, query, sort) {
+        val filtered = entries.withIndex().filter { (_, track) ->
+            track.title.contains(query, ignoreCase = true) ||
+                track.artist.contains(query, ignoreCase = true)
+        }
+        when (sort) {
+            PlaylistLibrarySort.TITLE_ASC -> filtered.sortedWith(
+                compareBy<IndexedValue<com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistTrack>> {
+                    it.value.title.lowercase()
+                }.thenBy { it.index },
+            )
+            PlaylistLibrarySort.TITLE_DESC -> filtered.sortedWith(
+                compareByDescending<IndexedValue<com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistTrack>> {
+                    it.value.title.lowercase()
+                }.thenBy { it.index },
+            )
+            PlaylistLibrarySort.DEFAULT -> filtered
+        }
+    }
     val ids = entries.mapNotNull { it.recordingMbid }.distinct()
     val catalogRows by produceState<List<V2DisplayRow>>(
         initialValue = emptyList(), key1 = playlist.mbid, key2 = ids,
@@ -155,6 +180,21 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                 )
             }
         }
+        if (searching || query.isNotBlank()) {
+            item(key = "public-playlist-search") {
+                NativeDetailSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onClose = {
+                        onQueryChange("")
+                        onSearchingChange(false)
+                    },
+                    autoFocus = searching,
+                    onFocused = {},
+                    palette = palette,
+                )
+            }
+        }
         playlist.description?.takeIf { it.isNotBlank() }?.let { description ->
             item(key = "public-playlist-description") {
                 AboutSection(
@@ -183,13 +223,15 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                         modifier = Modifier.padding(PAGE_GUTTER),
                         color = palette.onBackgroundVariant)
                 }
-                items(entries.size, key = { "public-playlist-track:$it" }) { index ->
-                    val entry = entries[index]
+                items(visibleEntries.size, key = { "public-playlist-track:" + visibleEntries[it].index }) { index ->
+                    val indexed = visibleEntries[index]
+                    val originalIndex = indexed.index
+                    val entry = indexed.value
                     val recordingId = entry.recordingMbid
                     val playable = recordingId != null && recordingId in availableIds
                     val coverUri = entry.artworkUrl
                         ?: catalogRows.firstOrNull { it.id == recordingId }?.localArtworkUri
-                    var menuExpanded by remember(playlist.mbid, index) {
+                    var menuExpanded by remember(playlist.mbid, originalIndex) {
                         mutableStateOf(false)
                     }
                     NativeDetailTrackRowLayout(
@@ -240,7 +282,7 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                                 RowMoreButton(
                                     onClick = { menuExpanded = true },
                                     tint = palette.onBackgroundVariant,
-                                    modifier = Modifier.testTag("public-playlist-track-more-$index"),
+                                    modifier = Modifier.testTag("public-playlist-track-more-$originalIndex"),
                                 )
                                 DropdownMenu(
                                     expanded = menuExpanded,

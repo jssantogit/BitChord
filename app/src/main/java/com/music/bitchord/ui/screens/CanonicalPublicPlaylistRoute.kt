@@ -26,6 +26,11 @@ internal fun CanonicalPublicPlaylistRoute(
     onBack: () -> Unit,
     onRetry: (ListenBrainzPublicPlaylist) -> Unit,
     onVerifiedRecordingPlay: (String) -> Unit,
+    searching: Boolean = false,
+    onSearchingChange: (Boolean) -> Unit = {},
+    query: String = "",
+    onQueryChange: (String) -> Unit = {},
+    sort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
 ) {
     var held by remember(routeKey) { mutableStateOf(selected) }
     if (selected != null && routeKey == "public_playlist:${selected.mbid}") {
@@ -40,6 +45,11 @@ internal fun CanonicalPublicPlaylistRoute(
             onBack = onBack,
             onRetry = { onRetry(playlist) },
             onVerifiedRecordingPlay = onVerifiedRecordingPlay,
+            searching = searching,
+            onSearchingChange = onSearchingChange,
+            query = query,
+            onQueryChange = onQueryChange,
+            sort = sort,
         )
     }
 }
