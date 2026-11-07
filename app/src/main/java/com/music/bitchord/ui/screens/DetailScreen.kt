@@ -674,11 +674,15 @@ fun DetailScreen(
 
             val description = page.description
 
-            if (songs.isNotEmpty() && isArtist) {
+            if (isArtist && (songs.isNotEmpty() || publicTopRows.isNotEmpty())) {
                 item(key = "actions") {
+                    // The native artist action row does not disappear merely
+                    // because MusicBrainz has rankings but no MediaAsset.
                     ActionRow(
-                        onPlay = { onSongClick(songs, 0) },
-                        onShuffle = { onShuffle(songs) },
+                        onPlay = { if (songs.isNotEmpty()) onSongClick(songs, 0) },
+                        onShuffle = { if (songs.isNotEmpty()) onShuffle(songs) },
+                        canPlay = songs.isNotEmpty(),
+                        canShuffle = songs.isNotEmpty(),
                         isSubscribed = page.subscription?.takeIf { onToggleSubscription != null }?.subscribed,
                         onToggleSubscription = onToggleSubscription,
                         bottomSpace = 22.dp,
@@ -1198,12 +1202,16 @@ private fun ReleaseHeader(
             }
         },
         actions = {
-            if (songs.isNotEmpty() || canonicalTracks.any { it.hasCatalogedAsset }) {
+            if (songs.isNotEmpty() || canonicalTracks.isNotEmpty()) {
                 val library = page.library?.takeIf { onToggleLibrary != null }
+                val canPlay = songs.isNotEmpty() ||
+                    (canonicalTracks.any { it.hasCatalogedAsset } &&
+                        page.browseId.startsWith("catalog:"))
                 Spacer(Modifier.height(18.dp))
                 NativeReleaseActionRow(
                     onPlay = onPlay,
                     onShuffle = onShuffle,
+                    canPlay = canPlay,
                     // Playlists keep identical header controls across sources.
                     isLocal = page.type != BrowseType.PLAYLIST &&
                         page.browseId.startsWith("local:"),
