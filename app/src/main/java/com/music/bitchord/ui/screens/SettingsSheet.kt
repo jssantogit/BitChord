@@ -1298,21 +1298,18 @@ internal fun SettingsScreen(
                     ),
                 )
             }
-            if (visualRetention == VisualRetentionMode.SAVE_ON_WIFI) {
-                val visualLabels = listOf(
-                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_motion),
-                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_motion),
-                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_motion),
+            row(stringResource(R.string.visual_offline_images_group),
+                "imagens", "offline", "fotos", divided = false,
+            ) {
+                Text(
+                    text = stringResource(R.string.visual_offline_images_group),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(
+                        start = TEXT_INSET, end = ROW_INSET,
+                        top = 14.dp, bottom = 6.dp,
+                    ),
                 )
-                visualLabels.forEach { (surface, title) ->
-                    row(title, "vídeo", "offline", "wifi", divided = false) {
-                        SettingsSubRow(
-                            title = title,
-                            checked = surface in visualMotionSurfaces,
-                            onCheckedChange = { AppSettings.setVisualMotionSurface(surface, it) },
-                        )
-                    }
-                }
             }
             row(stringResource(R.string.visual_offline_save_stills), "foto", "capa", "offline", divided = false) {
                 SettingsSubRow(
@@ -1354,6 +1351,33 @@ internal fun SettingsScreen(
                 )
             }
             if (visualRetention == VisualRetentionMode.SAVE_ON_WIFI) {
+                row(stringResource(R.string.visual_offline_motion_group),
+                    "vídeo", "animação", "offline", divided = false,
+                ) {
+                    Text(
+                        text = stringResource(R.string.visual_offline_motion_group),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(
+                            start = TEXT_INSET, end = ROW_INSET,
+                            top = 14.dp, bottom = 6.dp,
+                        ),
+                    )
+                }
+                val visualLabels = listOf(
+                    VisualSurface.ARTIST to stringResource(R.string.visual_offline_artist_motion),
+                    VisualSurface.ALBUM to stringResource(R.string.visual_offline_album_motion),
+                    VisualSurface.NOW_PLAYING to stringResource(R.string.visual_offline_player_motion),
+                )
+                visualLabels.forEach { (surface, title) ->
+                    row(title, "vídeo", "offline", "wifi", divided = false) {
+                        SettingsSubRow(
+                            title = title,
+                            checked = surface in visualMotionSurfaces,
+                            onCheckedChange = { AppSettings.setVisualMotionSurface(surface, it) },
+                        )
+                    }
+                }
                 val motionLimitTitle = stringResource(R.string.visual_offline_motion_limit)
                 row(motionLimitTitle, "cache", "vídeos", "animação", "limite", "espaço") {
                     SliderRow(
