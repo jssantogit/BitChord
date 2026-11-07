@@ -81,4 +81,29 @@ class NativeArtistPublicTopSectionTest {
         compose.onNodeWithText("Sample recording").assertExists()
     }
 
+
+    @Test fun exactCatalogedAssetRowStartsPlaybackCallbackWithoutOpeningMetadataScreen() {
+        val artist = "b7ffd2af-418f-4be2-bdd1-22f8b48613da"
+        val playable = CanonicalCatalogSearchRow(
+            musicBrainzId = "13dd61c7-ce73-4e97-9f0c-9f0e53144411",
+            kind = CanonicalSearchKind.RECORDING,
+            title = "Playable official song", subtitle = "Artist",
+            artistScopeMbid = artist,
+            hasCatalogedAsset = true,
+        )
+        val played = mutableListOf<String>()
+        compose.setContent {
+            MaterialTheme {
+                NativeArtistPublicTopSection(
+                    artistMbid = artist,
+                    rows = listOf(playable),
+                    palette = themeArtworkPalette(),
+                    onRecordingOpen = { played += it.musicBrainzId },
+                )
+            }
+        }
+        compose.onNodeWithText("Playable official song").performClick()
+        compose.runOnIdle { assertEquals(listOf(playable.musicBrainzId), played) }
+    }
+
 }
