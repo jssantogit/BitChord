@@ -260,22 +260,27 @@ internal class ListenBrainzPublicPlaylistClient(
             val candidateCount = response?.body?.let { body ->
                 (parsedJson(body, 300_000)?.get("playlists") as? JsonArray)?.size
             } ?: -1
-            Diagnostics.event(
-                category = DiagnosticCategory.APP,
-                name = "public_playlist_discovery",
-                metadata = mapOf(
-                    "surface" to if (tag == null) "home" else "genre",
-                    "attempt" to (attemptIndex + 1).toString(),
-                    "http" to when (response?.status) {
-                        200 -> "ok"
-                        null -> "unavailable"
-                        else -> "error"
-                    },
-                    "candidates" to candidateCount.toString(),
-                    "accepted" to (matches?.size ?: 0).toString(),
-                    "parse" to if (matches == null) "invalid" else "ok",
-                ),
-            )
+            // Diagnostics are best-effort. Unit tests use a lightweight JVM
+            // client without Android's SystemClock; telemetry must never turn
+            // a valid upstream playlist into a failed browse request.
+            runCatching {
+                Diagnostics.event(
+                    category = DiagnosticCategory.APP,
+                    name = "public_playlist_discovery",
+                    metadata = mapOf(
+                        "surface" to if (tag == null) "home" else "genre",
+                        "attempt" to (attemptIndex + 1).toString(),
+                        "http" to when (response?.status) {
+                            200 -> "ok"
+                            null -> "unavailable"
+                            else -> "error"
+                        },
+                        "candidates" to candidateCount.toString(),
+                        "accepted" to (matches?.size ?: 0).toString(),
+                        "parse" to if (matches == null) "invalid" else "ok",
+                    ),
+                )
+            }
             if (matches == null) continue
             completed = true
             if (matches.isNotEmpty()) return matches
