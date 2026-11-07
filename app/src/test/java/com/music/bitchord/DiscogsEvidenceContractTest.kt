@@ -17,8 +17,12 @@ class DiscogsEvidenceContractTest {
             DiscogsLinkParser.parse("https://www.discogs.com/release/12345-Example-Album"))
         assertEquals(DiscogsLink(DiscogsKind.MASTER, 42L),
             DiscogsLinkParser.parse("https://discogs.com/master/42"))
+        // Historical MusicBrainz HTTP resources are parsed as IDs only;
+        // we never fetch the source URL over HTTP.
+        assertEquals(DiscogsLink(DiscogsKind.RELEASE, 12345L),
+            DiscogsLinkParser.parse("http://www.discogs.com/release/12345"))
         for (unsafe in listOf(
-            "http://www.discogs.com/release/12345", "https://discogs.com.evil.test/release/12345",
+            "https://discogs.com.evil.test/release/12345",
             "https://user@discogs.com/release/12345", "https://discogs.com:443/release/12345",
             "https://discogs.com/release/12345?key=secret", "https://discogs.com/release/0",
             "https://discogs.com/release/12345/versions", "https://discogs.com/master/abc",
