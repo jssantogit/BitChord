@@ -65,6 +65,21 @@ class MusicBrainzArtistAppearancesTest {
            body.replace("\"media\"", "\"unsupported-media\""), target,
         ).isEmpty())
     }
+    @Test fun officialStatusDoesNotAdmitRemixCompilationsOrMixtapes() {
+        val body = """{"releases":[
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"$releaseGroup","title":"User remixes","primary-type":"Album",
+             "secondary-types":["Compilation","Remix"]},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"44444444-4444-4444-8444-444444444444",
+             "title":"Genuine studio feature","primary-type":"Album"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]}
+        ]}"""
+        assertEquals(listOf("Genuine studio feature"),
+            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+    }
+
     @Test fun scrolledArtistAppearanceShelfUsesCachedProofAndExpires() = runBlocking {
         var now = 1_000L
         var requests = 0
