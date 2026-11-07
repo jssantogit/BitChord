@@ -39,6 +39,7 @@ internal fun ActionPill(
     label: String,
     onClick: () -> Unit,
     filled: Boolean,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier,
     size: Dp = 50.dp,
 ) {
@@ -48,6 +49,7 @@ internal fun ActionPill(
     val content = if (filled) Color.Black else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = modifier
+            .alpha(if (enabled) 1f else DISABLED_ACTION_ALPHA)
             .height(size)
             .clip(CircleShape)
             .then(
@@ -60,7 +62,7 @@ internal fun ActionPill(
                         .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
                 },
             )
-            .clickable {
+            .clickable(enabled = enabled) {
                 haptics.play(Haptic.Resume)
                 onClick()
             }
