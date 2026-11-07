@@ -1362,4 +1362,25 @@
     <string name="pause_resume_fade">暫停與繼續播放時淡入淡出</string>
     <string name="pause_resume_fade_subtitle">暫停時逐漸降低音量，繼續播放時逐漸提高音量</string>
     <string name="home_global_discovery">全球音樂新發現</string>
+
+    <string name="visual_offline_title">离线视觉内容</string>
+    <string name="visual_offline_stream">使用临时缓存播放，不永久保存视频</string>
+    <string name="visual_offline_wifi">仅通过 Wi-Fi 保存动画以供离线使用</string>
+    <string name="visual_offline_still">使用已保存的静态图片替代动画</string>
+    <string name="visual_offline_temporary">临时缓存</string>
+    <string name="visual_offline_save_wifi">Wi-Fi 保存</string>
+    <string name="visual_offline_only_stills">仅静态图片</string>
+    <string name="visual_offline_artist_motion">艺人动画</string>
+    <string name="visual_offline_album_motion">专辑动画</string>
+    <string name="visual_offline_player_motion">播放界面动画</string>
+    <string name="visual_offline_save_stills">保存静态图片</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">艺人照片</string>
+    <string name="visual_offline_album_stills">专辑封面</string>
+    <string name="visual_offline_player_stills">播放界面封面</string>
+    <string name="visual_offline_clear_title">清除已保存的视觉内容</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">清除离线视觉内容？</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">已清除离线视觉内容</string>
 </resources>
