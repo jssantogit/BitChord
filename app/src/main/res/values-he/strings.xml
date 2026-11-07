@@ -1424,4 +1424,6 @@
     <string name="visual_offline_confirm_title">Clear offline visuals?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline visuals cleared</string>
+    <string name="show_album_edition_metadata">הצגת מטא־נתונים של אלבומים</string>
+    <string name="show_album_edition_metadata_subtitle">מציג חברת תקליטים, תאריך, מדינה ופרטים מאומתים מתחת לרצועות.</string>
 </resources>
