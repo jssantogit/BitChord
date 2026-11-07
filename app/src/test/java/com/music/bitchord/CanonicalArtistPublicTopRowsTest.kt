@@ -230,4 +230,23 @@ class CanonicalArtistPublicTopRowsTest {
         assertEquals(8, ranked.size)
     }
 
+
+    @Test fun publicTopPresentationAlwaysRanksByListenCountEvenIfProviderRowsArriveOutOfOrder() {
+        val actual = listOf(
+            ListenBrainzArtistTopRecording(first, listens = 120, listeners = 110),
+            ListenBrainzArtistTopRecording(second, listens = 480, listeners = 10),
+        )
+        val metadata = listOf(first to "Lesser track", second to "Popular track").associate {
+            (mbid, title) -> mbid to RecordingMetadataEnrichment(
+                musicBrainzId = mbid, title = title,
+                artistDisplay = "Artist",
+                officialAudioReleaseMbid = officialRelease,
+                artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
+            )
+        }
+        val visible = canonicalVerifiedArtistTopRows(artist, actual, metadata)
+        // Plays, not unique listeners or search relevance, determine placement.
+        assertEquals(listOf(second, first), visible.map { it.musicBrainzId })
+    }
+
 }
