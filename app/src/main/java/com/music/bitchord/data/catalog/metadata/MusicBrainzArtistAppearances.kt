@@ -207,7 +207,7 @@ internal class MusicBrainzArtistAppearancesClient(
             // popular act. Browse up to three pages, only when a page is
             // complete and no verified guest release has been found yet.
             // Do not make title-based guesses or sweep the whole catalog.
-            val foundByGroup = linkedMapOf<String, MusicBrainzArtistAppearance>()
+            val foundByRecording = linkedMapOf<String, MusicBrainzArtistAppearance>()
             var offset = 0
             var healthy = true
             for (page in 0 until 3) {
@@ -241,20 +241,31 @@ internal class MusicBrainzArtistAppearancesClient(
                     healthy = false
                     break
                 }
+                // Partial track-credit evidence does not prove this is a
+                // genuine commercially released feature. Do not stop paging
+                // because a fan edit happened to be indexed first.
                 parseMusicBrainzTrackArtistAppearances(response, id)
-                    .forEach { foundByGroup.putIfAbsent(it.releaseGroupMbid, it) }
+                    .filter {
+                        it.commerciallyVerified && !it.recordingMbid.isNullOrBlank() &&
+                            !it.trackTitle.isNullOrBlank()
+                    }
+                    .forEach { appearance ->
+                        foundByRecording.putIfAbsent(
+                            requireNotNull(appearance.recordingMbid), appearance,
+                        )
+                    }
                 val count = list.size
                 val total = (root?.get("release-count") as? JsonPrimitive)?.intOrNull
                 offset += count
                 // Captures use the old simple fetch callback and represent one
                 // page only. More pages require a real offset-aware transport.
-                if (foundByGroup.isNotEmpty() || count == 0 ||
+                if (foundByRecording.isNotEmpty() || count == 0 ||
                     (total != null && offset >= total) ||
                     (total == null && count < 25) ||
                     (fetch != null && pagedFetch == null)
                 ) break
             }
-            val found = foundByGroup.values.take(12).toList()
+            val found = foundByRecording.values.take(12).toList()
             if (cache.size >= 64) cache.remove(cache.keys.first())
             cache[id] = Cached(nowMillis(), found, healthy = healthy)
             return found
