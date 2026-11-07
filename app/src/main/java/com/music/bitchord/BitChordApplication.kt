@@ -23,6 +23,7 @@ import com.music.bitchord.ui.player.PlayerPlatform
 import com.music.bitchord.data.canvas.CanvasCache
 import com.music.bitchord.data.canvas.VisualStillMedia
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
+import com.music.bitchord.data.canvas.CanvasRepository
 import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
 import com.music.bitchord.data.catalog.metadata.CatalogCoverCoilEventListenerFactory
 import com.music.bitchord.data.smb.SmbCoverFetcher
@@ -129,6 +130,7 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
                     CanvasCache.init(this)
                     VisualStillMedia.init(this)
                     AppleArtistArtRepository.init(this)
+                    CanvasRepository.init(this)
                 }
             }
         }
