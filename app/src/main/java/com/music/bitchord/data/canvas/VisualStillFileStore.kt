@@ -144,8 +144,13 @@ object VisualStillMedia {
     fun cached(surface: VisualSurface, identity: String): File? =
         store?.cached(surface, identity)
 
-    suspend fun save(surface: VisualSurface, identity: String, url: String): File? =
-        store?.ensure(surface, identity, url)
+    suspend fun save(surface: VisualSurface, identity: String, url: String): File? {
+        val settings = com.music.bitchord.data.settings.AppSettings
+        if (!settings.saveVisualStillImages.value ||
+            surface !in settings.visualStillSurfaces.value
+        ) return cached(surface, identity)
+        return store?.ensure(surface, identity, url)
+    }
 
     suspend fun clear() { store?.clear() }
     fun bytesOnDisk() = store?.bytesOnDisk() ?: 0L
