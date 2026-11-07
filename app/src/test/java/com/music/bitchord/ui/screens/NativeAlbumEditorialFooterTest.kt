@@ -163,7 +163,13 @@ class NativeAlbumEditorialFooterTest {
         )) {
             val overview = nativeAlbumAboutOverview(metadata, null, state)!!
             assertTrue(overview.facts.isEmpty())
-            assertTrue(overview.status?.startsWith("Discogs ·") == true)
+            if (state == DiscogsEditionEnrichment.Unavailable) {
+                assertTrue(overview.status?.startsWith(
+                    "Informações complementares temporariamente indisponíveis",
+                ) == true)
+            } else {
+                assertTrue(overview.status?.startsWith("Discogs ·") == true)
+            }
             assertTrue(nativeAlbumMetadataFooterHasContent(metadata, null))
         }
     }

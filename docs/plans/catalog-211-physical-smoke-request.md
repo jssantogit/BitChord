@@ -40,3 +40,7 @@ No primeiro smoke físico de `25a9b6a860`, o usuário não identificou nenhuma d
 ### Precisão das mensagens de disponibilidade
 
 O estado `Candidate` também ocorre antes de consultar Discogs se o MusicBrainz não fornece uma tracklist ou crédito completo: **não significa** que uma relação Discogs tenha sido encontrada. `Unavailable` também pode vir de falha MusicBrainz, e `Invalid` pode ser o MBID. As mensagens da seção agora distinguem indisponibilidade/insuficiência/identificador sem atribuir falsamente a causa ao provedor. Testes unitários verificam essas distinções.
+
+### Correção do gate após mensagem de indisponibilidade
+
+O smoke de `82df4d8287` bloqueou corretamente o APK por uma asserção desatualizada: o teste de estados não verificados ainda exigia prefixo `Discogs ·` inclusive para `Unavailable`, mesmo após o texto deliberadamente tornar a causa independente de provedor. A implementação permaneceu compilando; o teste foi atualizado para validar a nova afirmação sem reduzir a cobertura, e todas as provas devem rodar novamente antes do upload.
