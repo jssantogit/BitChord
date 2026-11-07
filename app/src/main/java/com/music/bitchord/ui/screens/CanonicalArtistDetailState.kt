@@ -176,7 +176,7 @@ internal fun rememberCanonicalArtistReleases(
                             "releases" to releases.size.toString(),
                             "typed" to proofs.values.count { !it.primaryType.isNullOrBlank() }.toString(),
                             "dated" to proofs.values.count {
-                                it.firstReleaseDate?.matches(Regex("""\\d{4}-\\d{2}-\\d{2}""")) == true
+                                it.firstReleaseDate?.matches(Regex("""\d{4}-\d{2}-\d{2}""")) == true
                             }.toString(),
                             "counted" to counts.size.toString(),
                             "albums" to sections.albums.size.toString(),
