@@ -4,6 +4,12 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzSimilarArtist
 import androidx.compose.foundation.shape.CircleShape
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Test
 
 class NativeArtistSimilarArtworkTest {
@@ -34,6 +40,42 @@ class NativeArtistSimilarArtworkTest {
 
     @Test fun similarArtistPortraitUsesCircularShapeUnlikeReleaseSleeves() {
         assertEquals(CircleShape, nativeArtistSimilarArtworkShape)
+    }
+
+
+    @Test fun photoLookupsRunInBoundedParallelAndPublishTheFastResultFirst() = runBlocking {
+        val a = ListenBrainzSimilarArtist("aaaaaaaa-1111-4111-8111-111111111111", "Artist A")
+        val b = ListenBrainzSimilarArtist("bbbbbbbb-1111-4111-8111-111111111111", "Artist B")
+        val c = ListenBrainzSimilarArtist("cccccccc-1111-4111-8111-111111111111", "Artist C")
+        val entered = Channel<String>(Channel.UNLIMITED)
+        val releases = mapOf(
+            "Artist A" to CompletableDeferred<Unit>(),
+            "Artist B" to CompletableDeferred<Unit>(),
+            "Artist C" to CompletableDeferred<Unit>(),
+        )
+        val observed = mutableListOf<String>()
+        val job = launch {
+            resolveNativeSimilarPortraits(
+                artists = listOf(a, b, c),
+                lookup = { name ->
+                    entered.send(name)
+                    releases.getValue(name).await()
+                    "https://is1-ssl.mzstatic.com/image/thumb/${name.last()}.jpg"
+                },
+                onResolved = { mbid, _ -> observed += mbid },
+            )
+        }
+        // A slow first artist must not serially block the next portrait.
+        assertEquals("Artist A", withTimeout(1_000) { entered.receive() })
+        assertEquals("Artist B", withTimeout(1_000) { entered.receive() })
+        releases.getValue("Artist B").complete(Unit)
+        assertEquals("Artist C", withTimeout(1_000) { entered.receive() })
+        assertTrue(b.mbid in observed)
+        assertTrue(a.mbid !in observed)
+        releases.getValue("Artist A").complete(Unit)
+        releases.getValue("Artist C").complete(Unit)
+        withTimeout(1_000) { job.join() }
+        assertEquals(setOf(a.mbid, b.mbid, c.mbid), observed.toSet())
     }
 
 }
