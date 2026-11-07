@@ -59,6 +59,19 @@ class DiscogsEditionMatcherTest {
                 record.copy(artistNames = listOf("Another Artist"))))
     }
 
+    @Test fun onlyOfficialMusicBrainzEditionsCanBeVerifiedEvenThroughDirectRepositoryCalls() {
+        // The coordinator guards Official, but the matcher is also a public
+        // internal boundary used by the provider repository and future callers.
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canon.copy(status = null), linked, record))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canon.copy(status = "Bootleg"), linked, record))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canon.copy(status = "Promotion"), linked, record))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(canon.copy(status = "official"), linked, record))
+    }
+
     @Test fun anUnofficialPressingMustNotVerifyAnOfficialMusicBrainzRelease() {
         assertEquals(DiscogsEditionVerdict.CONFLICT,
             DiscogsEditionMatcher.assess(canon, linked, record.copy(unofficial = true)))
