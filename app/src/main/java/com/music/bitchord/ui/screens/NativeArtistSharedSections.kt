@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
@@ -130,10 +132,19 @@ internal fun <T> NativeArtistTracksShelf(
     palette: ArtworkPalette,
     horizontalPadding: Dp = PAGE_GUTTER,
     itemKey: ((T) -> Any)? = null,
+    supportingText: String? = null,
     row: @Composable (T) -> Unit,
 ) {
     if (tracks.isEmpty()) return
     SectionHeading(title, palette, horizontalPadding = horizontalPadding)
+    if (!supportingText.isNullOrBlank()) {
+        Text(
+            text = supportingText,
+            style = MaterialTheme.typography.labelSmall,
+            color = palette.onBackgroundVariant,
+            modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 4.dp),
+        )
+    }
     NativeArtistTracksCarousel(
         tracks = tracks,
         horizontalPadding = horizontalPadding,
