@@ -28,8 +28,8 @@ internal fun NativeArtistPublicFeaturedRelease(
     }
     NativeArtistTopReleaseCard(
         title = release.title,
-        subtitle = listOfNotNull(release.subtitle, release.releaseDate)
-            .filter(String::isNotBlank).joinToString(" · "),
+        subtitle = canonicalArtistReleaseDateLabel(release.releaseDate)
+            ?: release.subtitle.orEmpty(),
         label = label,
         palette = palette,
         onClick = { onOpen(release) },
