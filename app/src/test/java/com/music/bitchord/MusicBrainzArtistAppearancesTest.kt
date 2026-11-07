@@ -14,6 +14,54 @@ class MusicBrainzArtistAppearancesTest {
     private val other = "22222222-2222-4222-8222-222222222222"
     private val releaseGroup = "33333333-3333-4333-8333-333333333333"
 
+    @Test fun albumGuestAppearancePublishesOnlyTheCreditedRecordingNotWholeAlbum() {
+        val wantedRecording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val unrelatedRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Jon Batiste"}}],
+            "release-group":{"id":"$releaseGroup",
+                "title":"World Music Radio","primary-type":"Album"},
+            "media":[{"tracks":[
+                {"title":"Unrelated album track","recording":{
+                    "id":"$unrelatedRecording","title":"Unrelated album track",
+                    "artist-credit":[{"artist":{"id":"$other"}}]}},
+                {"title":"Guest-feature song","recording":{
+                    "id":"$wantedRecording","title":"Guest-feature song",
+                    "artist-credit":[{"artist":{"id":"$other"}},
+                        {"artist":{"id":"$target","name":"NewJeans"}}]}}
+            ]}
+        ]}]}"""
+        val appearances = parseMusicBrainzTrackArtistAppearances(body, target)
+        val visible = com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(appearances)
+        assertEquals(1, visible.size)
+        assertEquals("Guest-feature song", visible.single().trackTitle)
+        assertEquals(wantedRecording, visible.single().recordingMbid)
+        assertEquals("World Music Radio", visible.single().title)
+    }
+
+    @Test fun fakeOfficialStatusWithoutCommercialProofCannotEnterGuestShelf() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val raw = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "artist-credit":[{"artist":{"id":"$other","name":"2AT"}}],
+            "release-group":{"id":"$releaseGroup",
+                "title":"SUPER ARRUNSHAI","primary-type":"Single"},
+            "media":[{"tracks":[{"recording":{"id":"$recording",
+                "title":"SUPER ARRUNSHAI",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        assertTrue(com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            parseMusicBrainzTrackArtistAppearances(raw, target)).isEmpty())
+        assertEquals(1, com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            parseMusicBrainzTrackArtistAppearances(
+                raw.replace("\"status\":\"Official\",",
+                    "\"status\":\"Official\",\"barcode\":\"1234567890123\","),
+                target,
+            )).size)
+    }
+
     @Test fun onlyVerifiedOfficialGuestAppearancesInOtherArtistsReleases() {
         val body = """{"release-count":4,"releases":[
            {"id":"55555555-5555-4555-8555-555555555555","status":"Official",
