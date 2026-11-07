@@ -3877,6 +3877,20 @@ private fun BitChordApp(
                             searchingAddons = searchSource == SearchSource.ADDONS,
                             searchingCanonical = searchSource == SearchSource.CANONICAL,
                             canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
+                            canonicalPublicPlaylists = com.music.bitchord.ui.rememberCanonicalPublicPlaylistSearchUi(
+                                viewModel = viewModel,
+                                query = query,
+                                active = searchSource == SearchSource.CANONICAL &&
+                                    filter == SearchFilter.PLAYLISTS,
+                            ),
+                            onCanonicalPlaylistOpen = { row ->
+                                val playlist = com.music.bitchord.data.catalog.metadata
+                                    .ListenBrainzPublicPlaylist(
+                                        row.mbid, row.title, row.creator, null,
+                                    )
+                                openedPublicPlaylist = playlist
+                                viewModel.loadCanonicalPublicPlaylistDetail(playlist)
+                            },
                             canonicalDetail = viewModel.canonicalDetail.collectAsStateWithLifecycle().value,
                             onCanonicalOpen = viewModel::openCanonicalNativeDetail,
                             onCanonicalBack = viewModel::backCanonicalCatalogEntry,
