@@ -1408,6 +1408,12 @@
     <string name="visual_offline_artist_stills">Artist photos</string>
     <string name="visual_offline_album_stills">Album covers</string>
     <string name="visual_offline_player_stills">Now Playing covers</string>
+    <string name="visual_offline_images_group">सहेजे गए फ़ोटो और कवर</string>
+    <string name="visual_offline_motion_group">सहेजे गए एनिमेशन</string>
+    <string name="visual_offline_still_limit">सहेजी गई छवियों की सीमा</string>
+    <string name="visual_offline_still_limit_subtitle">कलाकारों की फ़ोटो, एल्बम और प्लेयर कवर के लिए अधिकतम स्थान</string>
+    <string name="visual_offline_motion_limit">सहेजे गए एनिमेशन की सीमा</string>
+    <string name="visual_offline_motion_limit_subtitle">नए वीडियो सीमित करता है, पुराने नहीं हटाता; स्थान खाली करने के लिए सहेजे गए विज़ुअल साफ़ करें</string>
     <string name="visual_offline_clear_title">Clear saved visuals</string>
     <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
     <string name="visual_offline_confirm_title">Clear offline visuals?</string>

@@ -1440,6 +1440,12 @@
     <string name="visual_offline_artist_stills">Фото исполнителей</string>
     <string name="visual_offline_album_stills">Обложки альбомов</string>
     <string name="visual_offline_player_stills">Обложки проигрывателя</string>
+    <string name="visual_offline_images_group">Сохранённые фото и обложки</string>
+    <string name="visual_offline_motion_group">Сохранённые анимации</string>
+    <string name="visual_offline_still_limit">Лимит сохранённых изображений</string>
+    <string name="visual_offline_still_limit_subtitle">Максимальный объём для фото исполнителей и обложек альбомов и плеера</string>
+    <string name="visual_offline_motion_limit">Лимит сохранённых анимаций</string>
+    <string name="visual_offline_motion_limit_subtitle">Ограничивает новые ролики, не удаляя старые; для освобождения места очистите сохранённые изображения и видео</string>
     <string name="visual_offline_clear_title">Очистить сохранённые изображения</string>
     <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
     <string name="visual_offline_confirm_title">Очистить офлайн-изображения?</string>

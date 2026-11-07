@@ -24,3 +24,7 @@
 ## Critérios de saída
 
 CI Android e gates relevantes aprovados no **mesmo SHA**; workflow de APK aprovado com checksum; navegação de três rotas sem regressões; evidência Discogs somente quando VERIFIED, com atribuição; sem tela legada restaurada. **APK gerado não equivale a smoke físico aprovado**: este último depende da observação no Galaxy A54.
+
+## Revalidação após correção de idiomas da #209
+
+O primeiro workflow de APK da #211 interrompeu na etapa Android com 15 casos de `LocaleStringsTest`, por seis chaves de limite de cache visual ausentes em traduções. A #209 corrigiu essas chaves nos idiomas oferecidos pelo app. Esta revisão da #211 incorpora o HEAD correspondente da #209 e repete todos os gates antes de publicar o APK. Aprovação de CI/APK não equivale a smoke físico no Galaxy A54.
