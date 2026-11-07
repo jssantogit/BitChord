@@ -5,6 +5,7 @@ import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import com.music.bitchord.data.model.artworkAt
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.Mutex
@@ -66,7 +67,11 @@ internal class VisualArtworkFetchGate(maxConcurrent: Int = 3) {
             permits.withPermit { fetch() }
             return true
         } finally {
-            lock.withLock { inflight.remove(key) }
+            // Cancellation should stop the decode, not permanently leave
+            // an in-flight marker that blocks every future screen visit.
+            withContext(NonCancellable) {
+                lock.withLock { inflight.remove(key) }
+            }
         }
     }
 }
@@ -88,7 +93,7 @@ object VisualArtworkPrefetch {
             planned.forEach { candidate ->
                 launch(Dispatchers.IO) {
                     val url = candidate.url ?: return@launch
-                    gate.fetchOnce(url) {
+                    gate.fetchOnce(url + "@" + candidate.targetPx) {
                         val request = ImageRequest.Builder(context)
                             .data(url)
                             .size(candidate.targetPx, candidate.targetPx)
