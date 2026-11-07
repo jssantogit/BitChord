@@ -100,6 +100,21 @@ internal fun canonicalVerifiedArtistTopRows(
         .toList()
 }
 
+/** Only a MusicBrainz Recording MBID with an independently attached
+ * canonical MediaAsset may offer playback. This presentation evidence never
+ * creates an asset or bypasses the playback executor's authorization checks. */
+internal fun canonicalArtistTopPlaybackDecoration(
+    rows: List<CanonicalCatalogSearchRow>,
+    assetRecordingMbids: Set<String>,
+): List<CanonicalCatalogSearchRow> {
+    val available = assetRecordingMbids.map { it.lowercase(Locale.ROOT) }.toSet()
+    return rows.map { row ->
+        if (row.kind == CanonicalSearchKind.RECORDING &&
+            row.musicBrainzId.lowercase(Locale.ROOT) in available
+        ) row.copy(hasCatalogedAsset = true) else row
+    }
+}
+
 /**
  * When artist-top is unavailable, a bounded MusicBrainz sample can be
  * ordered by ACTUAL ListenBrainz counts from /popularity/recording.
