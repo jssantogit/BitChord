@@ -381,4 +381,17 @@ class ListenBrainzPublicPlaylistTest {
         assertEquals(listOf(rock), client.searchPublicQuery("illit").map { it.mbid })
     }
 
+
+    @Test fun globalDiscoveryRetainsMoreThanTwelveVerifiedPublicPlaylists() {
+        val rows = (1..22).joinToString(",") { n ->
+            val id = n.toString(16).padStart(8, '0') + "-1111-4111-8111-111111111111"
+            """{"playlist_mbid":"$id","title":"Collection number $n","public":true}"""
+        }
+        val parsed = parseListenBrainzPublicPlaylistSearch(
+            """{"playlists":[$rows]}""",
+        )!!
+        assertEquals(22, parsed.size)
+        assertEquals(22, parsed.map { it.mbid }.distinct().size)
+    }
+
 }
