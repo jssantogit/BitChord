@@ -14,7 +14,8 @@ import java.util.Locale
 internal data class ListenBrainzArtistTopRecording(
     val recordingMbid: String,
     val listens: Long,
-    val listeners: Long,
+    /** Null when a ranking provider publishes listens but no listener count. */
+    val listeners: Long?,
     /** Source-provided Cover Art Archive identity; never a guessed edition. */
     val artworkUri: String? = null,
 )
