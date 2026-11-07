@@ -61,24 +61,20 @@ private object LocalArtistRecentMusicBrainzLookup {
 
         val groups = mutableListOf<MusicBrainzReleaseGroupHit>()
         var offset = 0
-        repeat(3) {
+        for (pageIndex in 0 until 3) {
             val result = search.searchReleaseGroupsForArtistMbid(
                 exact.single().musicBrainzId, limit = 50, offset = offset,
             )
             val page = (result as? MusicBrainzCatalogSearchResult.Success)?.page
-                ?: return@repeat
+                ?: break
             groups += page.items
             // Stop when every local title has sufficient exact evidence, or
             // when MusicBrainz has no more release groups. Three pages max.
             val known = canonicalLocalArtistExactReleaseDateEvidence(
                 name, local, exact, groups,
             )
-            if (known.size == local.size || page.nextOffset == null) {
-                offset = -1
-                return@repeat
-            }
-            offset = page.nextOffset ?: -1
-            if (offset < 0) return@repeat
+            if (known.size == local.size) break
+            offset = page.nextOffset ?: break
         }
         val evidence = canonicalLocalArtistExactReleaseDateEvidence(
             name, local, exact, groups,
