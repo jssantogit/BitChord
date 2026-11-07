@@ -6,7 +6,8 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.request.header
-import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.utils.io.readAvailable
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -46,12 +47,25 @@ internal class KtorDiscogsTransport(
         }
         val size = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
         if (size != null && size > MAX_RESPONSE_BYTES) {
+            response.bodyAsChannel().cancel()
             return DiscogsHttpResponse(413, "")
         }
-        val body = response.bodyAsText()
-        if (body.toByteArray(Charsets.UTF_8).size > MAX_RESPONSE_BYTES) {
-            return DiscogsHttpResponse(413, "")
+        // Body size cannot rely on Content-Length: chunked/malicious responses
+        // must be rejected BEFORE Ktor builds a potentially unbounded String.
+        val channel = response.bodyAsChannel()
+        val buffer = ByteArray(8_192)
+        val output = java.io.ByteArrayOutputStream()
+        while (true) {
+            val count = channel.readAvailable(buffer)
+            if (count < 0) break
+            if (count == 0) continue
+            if (output.size().toLong() + count > MAX_RESPONSE_BYTES) {
+                channel.cancel()
+                return DiscogsHttpResponse(413, "")
+            }
+            output.write(buffer, 0, count)
         }
+        val body = output.toByteArray().toString(Charsets.UTF_8)
         val retry = response.headers[HttpHeaders.RetryAfter]
             ?.toLongOrNull()?.takeIf { it in 0..MAX_RETRY_AFTER }
         return DiscogsHttpResponse(response.status.value, body, retry)
