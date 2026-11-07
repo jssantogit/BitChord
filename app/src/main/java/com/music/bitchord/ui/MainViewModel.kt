@@ -3083,6 +3083,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
               catch (_: Exception) { emptyList() }
             else emptyList()
             val ranked = original.ifEmpty { sampledRanking }
+            // This exact MBID -> canonical Recording -> MediaAsset association
+            // is a presentation hint only. The playback executor still verifies
+            // source authorization and streamability before starting playback.
+            val playableMbids = try {
+                val ids = ranked.map { it.recordingMbid }.distinct()
+                if (ids.isEmpty()) emptySet<String>()
+                else CanonicalCatalogDatabase.get(getApplication<Application>())
+                    .catalogDao().musicBrainzRecordingMbidsWithAssets(ids).toSet()
+            } catch (cancelled: CancellationException) { throw cancelled }
+              catch (_: Exception) { emptySet() }
             val sampled = original.isEmpty() && sampledRanking.isNotEmpty()
             if (success != null && ranked.isEmpty() && artistPublicTopEpoch.isCurrent(generation) &&
                 _detailStack.value.lastOrNull()?.browseId
@@ -3100,7 +3110,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ) {
                     _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
                         artistMbid = id,
-                        rows = canonicalVerifiedArtistTopRows(id, ranked, verified),
+                        rows = canonicalArtistTopPlaybackDecoration(
+                            canonicalVerifiedArtistTopRows(id, ranked, verified), playableMbids,
+                        ),
                         sampled = sampled,
                     )
                 }
@@ -3157,7 +3169,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _detailStack.value.lastOrNull()?.browseId
                     ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
             ) {
-                val rows = canonicalVerifiedArtistTopRows(id, ranked, verified)
+                val rows = canonicalArtistTopPlaybackDecoration(
+                    canonicalVerifiedArtistTopRows(id, ranked, verified), playableMbids,
+                )
                 _canonicalArtistPublicTop.value = CanonicalArtistPublicTopState(
                     artistMbid = id,
                     rows = rows,
