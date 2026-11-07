@@ -30,7 +30,7 @@ class NativeArtistIncludedInArtworkTest {
                 appearances,
                 lookup = { edition, group ->
                     if (group == firstGroup) slowCover.await()
-                    "https://coverartarchive.org/release/$"+"edition/front-250"
+                    "https://coverartarchive.org/release/" + edition + "/front-250"
                 },
                 onResolved = { batch ->
                     seen.putAll(batch)
@@ -41,7 +41,7 @@ class NativeArtistIncludedInArtworkTest {
         try {
             withTimeout(3_000L) { secondCoverVisible.await() }
             assertTrue(firstGroup !in seen)
-            assertEquals("https://coverartarchive.org/release/$"+"secondEdition/front-250",
+            assertEquals("https://coverartarchive.org/release/" + secondEdition + "/front-250",
                 seen[secondGroup])
         } finally {
             slowCover.complete(Unit)
