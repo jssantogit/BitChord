@@ -28,3 +28,11 @@ CI Android e gates relevantes aprovados no **mesmo SHA**; workflow de APK aprova
 ## Revalidação após correção de idiomas da #209
 
 O primeiro workflow de APK da #211 interrompeu na etapa Android com 15 casos de `LocaleStringsTest`, por seis chaves de limite de cache visual ausentes em traduções. A #209 corrigiu essas chaves nos idiomas oferecidos pelo app. Esta revisão da #211 incorpora o HEAD correspondente da #209 e repete todos os gates antes de publicar o APK. Aprovação de CI/APK não equivale a smoke físico no Galaxy A54.
+
+## Reteste obrigatório — seção “Sobre esta edição” após relato no A54
+
+No primeiro smoke físico de `25a9b6a860`, o usuário não identificou nenhuma diferença nas páginas de álbuns. O diagnóstico de 07/11/2026 confirmou `discogs_edition_evidence_v1 result=no_link` em uma consulta, sem erro HTTP Discogs: a edição MusicBrainz não tinha associação Discogs direta e o rodapé anterior estava programado para desaparecer. O problema era de apresentação/cobertura, não de instalação do APK.
+
+**Mudança que este novo APK precisa demonstrar:** abaixo da lista de faixas de *todos* os álbuns (Release, ReleaseGroup, Biblioteca local e álbum aninhado dentro de artista), aparece **“Sobre esta edição”**. Data, contagem e, quando disponíveis, país, gravadora/número de catálogo, formato e estado vêm de dados reais do MusicBrainz/da Biblioteca. Um `no_link` mostra explicitamente que não existe associação Discogs confirmada *no MusicBrainz*, sem afirmar que o disco inexiste no Discogs. Somente um match Discogs VERIFIED adiciona campos Discogs e link de atribuição. Falhas de rede não devem apagar os fatos MusicBrainz.
+
+**Smoke obrigatório após a instalação:** abrir um álbum online com link Discogs e outro sem link, rolar até depois das faixas, verificar ambas as seções, abrir um álbum local sem MBID, abrir um álbum a partir do artista, testar `Ver mais` quando houver dados adicionais, e exportar diagnóstico se algo não aparecer. No terminal da CI, exigir `LocaleStringsTest`, `MusicBrainzCatalogGraphTest`, `NativeAlbumEditorialFooterTest` e `NativeAlbumEditorialFooterComposeTest` aprovados. APK `devDebug` deve incluir SHA e checksum. Não mesclar a PR por esse smoke; somente validação física do A54 confirma a correção.
