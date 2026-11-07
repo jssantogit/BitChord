@@ -513,4 +513,15 @@ class CanonicalPublicDiscoveryTest {
         assertEquals(fallback, preserved.single())
         assertTrue(canonicalDailyPublicPicks(emptyList(), "2026-11-05").isEmpty())
     }
+
+    @Test fun publicPlaylistShelvesAvoidOneWordGenericOrDuplicateTitles() {
+        val lists = listOf(
+            ListenBrainzPublicPlaylist("11111111-1111-4111-8111-111111111111", "Rock", "A", null),
+            ListenBrainzPublicPlaylist("22222222-2222-4222-8222-222222222222", "Music", "B", null),
+            ListenBrainzPublicPlaylist("33333333-3333-4333-8333-333333333333", "Rock Anthems 2026", "C", null),
+            ListenBrainzPublicPlaylist("44444444-4444-4444-8444-444444444444", "Rock Anthems 2026", "D", null),
+        )
+        assertEquals(listOf("Rock Anthems 2026"),
+            canonicalPublicPlaylistShelf("Playlists", lists)!!.items.map { it.title })
+    }
 }
