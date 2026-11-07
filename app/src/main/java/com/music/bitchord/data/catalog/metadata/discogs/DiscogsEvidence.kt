@@ -28,7 +28,11 @@ internal object DiscogsLinkParser {
     fun parse(raw: String): DiscogsLink? {
         if (raw.length !in 1..512) return null
         val uri = try { URI(raw) } catch (_: Exception) { return null }
-        if (uri.scheme != "https" || uri.rawUserInfo != null || uri.port != -1 ||
+        // Accept legacy HTTP *links* stored by MusicBrainz, but NEVER fetch
+        // them. We extract an exact-host numeric ID and call only our fixed
+        // HTTPS api.discogs.com endpoint; attribution is always HTTPS.
+        if (uri.scheme !in setOf("https", "http") ||
+            uri.rawUserInfo != null || uri.port != -1 ||
             uri.rawQuery != null || uri.rawFragment != null
         ) return null
         val host = uri.host?.lowercase(Locale.ROOT) ?: return null
