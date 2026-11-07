@@ -91,7 +91,7 @@ class ListenBrainzPublicPlaylistTest {
             ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
         )
         assertEquals(listOf(rock, pop), client.searchHome()!!.map { it.mbid })
-        assertEquals(listOf("music"), queries)
+        assertEquals(listOf("essentials"), queries)
         queries.clear()
         assertEquals(listOf(rock), client.searchGenre("k-pop")!!.map { it.mbid })
         assertEquals(listOf("k-pop"), queries)
@@ -186,7 +186,7 @@ class ListenBrainzPublicPlaylistTest {
             ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
         )
         assertEquals(2, client.searchHome()!!.size)
-        assertEquals(listOf("music"), queries)
+        assertEquals(listOf("essentials"), queries)
     }
 
     @Test fun publicSearchWorksWithoutTokensAndRestrictsGenreQueries() = runBlocking {
@@ -401,7 +401,7 @@ class ListenBrainzPublicPlaylistTest {
             object : ListenBrainzPublicPlaylistTransport {
                 override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
                     calls += query
-                    return ListenBrainzPublicPlaylistHttp(200, if (query == "music")
+                    return ListenBrainzPublicPlaylistHttp(200, if (query == "essentials")
                         """{"playlists":[{"playlist_mbid":"$rock","title":"Music","public":true},
                             {"playlist_mbid":"$pop","title":"Rock","public":true}]}"""
                     else """{"playlists":[{"playlist_mbid":"$rock",
@@ -414,7 +414,7 @@ class ListenBrainzPublicPlaylistTest {
         )
         assertEquals(listOf("Classic rock essentials"),
             client.searchHome()!!.map { it.title })
-        assertEquals(listOf("music", "essentials"), calls)
+        assertEquals(listOf("essentials", "favorites"), calls)
     }
 
     @Test fun publicTypedSearchUsesWiderCandidatePoolWithoutShowingFuzzyFalseMatches() = runBlocking {
