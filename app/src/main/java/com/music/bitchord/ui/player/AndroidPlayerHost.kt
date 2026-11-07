@@ -12,6 +12,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -21,6 +22,7 @@ import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.data.canvas.CanvasRepository
 import com.music.bitchord.data.canvas.VisualStillMedia
 import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.isSafeVisualMediaUrl
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.lyrics.LyricLine
 import com.music.bitchord.data.lyrics.LyricsTranslation
@@ -109,6 +111,15 @@ class AndroidPlayerHost(context: Context) : PlayerHost {
         // restart, without introducing an Android-only fork of Now Playing.
         val online = com.music.bitchord.ui.components.rememberRemoteArtworkUrl(song)
         val identity = song?.let { it.videoId.ifBlank { it.artist + "|" + it.title } }
+        val saveStills by AppSettings.saveVisualStillImages.collectAsStateWithLifecycle()
+        // This belongs to the artwork host, not canvas lookup: turning
+        // animation off must never prevent a plain cover being saved offline.
+        LaunchedEffect(identity, online, saveStills) {
+            val safe = online?.takeIf(::isSafeVisualMediaUrl)
+            if (saveStills && identity != null && safe != null) {
+                VisualStillMedia.save(VisualSurface.NOW_PLAYING, identity, safe)
+            }
+        }
         val persisted = identity?.let {
             VisualStillMedia.cached(VisualSurface.NOW_PLAYING, it)
         }
