@@ -132,6 +132,7 @@ import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.components.SourceQualityBadge
 import com.music.bitchord.ui.components.RatingDisplay
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
 import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
 import com.music.bitchord.data.canvas.AppleArtistArt
 import com.music.bitchord.data.DebugLog as Log
@@ -336,6 +337,7 @@ fun DetailScreen(
     /** Verified current MusicBrainz ReleaseGroup, never an inferred local Song. */
     canonicalFeaturedRelease: CanonicalCatalogSearchRow? = null,
     onCanonicalFeaturedReleaseOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
+    onCanonicalArtistPlaylistOpen: ((ListenBrainzPublicPlaylist) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -963,6 +965,18 @@ fun DetailScreen(
                         palette = palette,
                         onOpen = onCanonicalFeaturedReleaseOpen,
                     )
+                }
+                if (publicTopRows.isNotEmpty() && onCanonicalArtistPlaylistOpen != null) {
+                    item(key = "artist-public-playlists") {
+                        NativeArtistPublicPlaylistsShelf(
+                            artistMbid = publicArtistMbid,
+                            artistName = page.title,
+                            verifiedRecordingMbids = publicTopRows
+                                .map { it.musicBrainzId }.toSet(),
+                            palette = palette,
+                            onOpen = onCanonicalArtistPlaylistOpen,
+                        )
+                    }
                 }
                 item(key = "artist-similar") {
                     NativeArtistSimilarShelf(
