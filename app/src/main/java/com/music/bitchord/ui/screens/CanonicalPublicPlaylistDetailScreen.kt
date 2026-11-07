@@ -243,8 +243,10 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                     NativeDetailTrackRowLayout(
                         onClick = if (playable && recordingId != null)
                             ({ onVerifiedRecordingPlay(recordingId) }) else null,
-                        onLongPress = { menuExpanded = true },
-                        onMore = { menuExpanded = true },
+                        onLongPress = if (recordingId?.let(::isVerifiedCatalogRecordingId) == true)
+                            ({ menuExpanded = true }) else null,
+                        onMore = if (recordingId?.let(::isVerifiedCatalogRecordingId) == true)
+                            ({ menuExpanded = true }) else null,
                         opacity = 1f,
                         leading = {
                             NativeDetailTrackArtwork(showPlayingBars = false) {
@@ -284,39 +286,15 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                         rating = {},
                         showRatingSlot = false,
                         actions = {
-                            Box {
-                                RowMoreButton(
-                                    onClick = { menuExpanded = true },
-                                    tint = palette.onBackgroundVariant,
-                                    modifier = Modifier.testTag("public-playlist-track-more-$originalIndex"),
-                                )
-                                DropdownMenu(
-                                    expanded = menuExpanded,
-                                    onDismissRequest = { menuExpanded = false },
-                                ) {
-                                    if (recordingId != null && isVerifiedCatalogRecordingId(recordingId)) {
-                                        DropdownMenuItem(
-                                            text = { Text("Avaliar faixa") },
-                                            onClick = {
-                                                menuExpanded = false
-                                                editingRecording = recordingId
-                                            },
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Ver no MusicBrainz") },
-                                            onClick = {
-                                                menuExpanded = false
-                                                val url = "https://musicbrainz.org/recording/$recordingId"
-                                                runCatching {
-                                                    context.startActivity(Intent(
-                                                        Intent.ACTION_VIEW, Uri.parse(url),
-                                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                                                }
-                                            },
-                                        )
-                                    }
-                                }
-                            }
+                            CanonicalMetadataTrackMore(
+                                recordingId = recordingId,
+                                palette = palette,
+                                expanded = menuExpanded,
+                                onOpen = { menuExpanded = true },
+                                onDismiss = { menuExpanded = false },
+                                onRate = { editingRecording = it },
+                                tag = "public-playlist-track-more-$originalIndex",
+                            )
                         },
                     )
                     HorizontalDivider(
