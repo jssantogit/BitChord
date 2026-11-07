@@ -53,12 +53,16 @@ internal fun NativePlaylistDetailHeader(
     sleeveSize: Dp,
     artwork: @Composable BoxScope.() -> Unit,
     actions: @Composable () -> Unit,
+    rating: Double? = null,
+    onRate: (() -> Unit)? = null,
 ) {
     NativeReleaseHeaderLayout(
         title = title,
         credit = credit,
         meta = meta,
         palette = palette,
+        rating = rating,
+        onRate = onRate,
         sleeveSize = sleeveSize,
         artwork = artwork,
         actions = actions,

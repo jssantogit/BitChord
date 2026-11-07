@@ -427,6 +427,15 @@ internal fun CanonicalPlaylistDetailScreen(
     BackHandler(onBack = onClose)
     val context = LocalContext.current.applicationContext
     val playlistPinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
+    val ratingTarget = remember(card.id) { canonicalOwnedPlaylistRatingTarget(card.id) }
+    val rating by rememberCanonicalCatalogEntityRating(ratingTarget)
+    var editingRating by remember(card.id) { mutableStateOf(false) }
+    if (editingRating && ratingTarget != null) {
+        CanonicalCatalogEntityRatingDialog(
+            target = ratingTarget, title = "Avaliar playlist",
+            onDismiss = { editingRating = false },
+        )
+    }
     val pinnedPlaylists by playlistPinRepo.pins.collectAsStateWithLifecycle()
     val historicalPlaylists by LocalPlaylistStore.playlists.collectAsStateWithLifecycle()
     val historicalSongs = (card as? LibraryPlaylistCard.Normal)?.let { normal ->
@@ -579,6 +588,8 @@ internal fun CanonicalPlaylistDetailScreen(
                     smart = card is LibraryPlaylistCard.Smart, rows = rows,
                 ),
                 palette = palette,
+                rating = rating,
+                onRate = if (ratingTarget != null) ({ editingRating = true }) else null,
                 // Exactly the same 76% frame as DetailScreen's native release hero.
                 sleeveSize = maxWidth * 0.76f,
                 artwork = {

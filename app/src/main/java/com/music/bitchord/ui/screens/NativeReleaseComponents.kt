@@ -211,7 +211,7 @@ internal fun NativeReleaseHeaderLayout(
         // The original rating slot shows first-party stars when saved. With
         // no rating it uses the exact Now Playing source badge; never invent
         // "Hi-Res" from bitrate or claim provider evidence was played.
-        if (rating != null && onRate != null) {
+        if (onRate != null) {
             Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
@@ -219,12 +219,18 @@ internal fun NativeReleaseHeaderLayout(
                     .padding(horizontal = 12.dp, vertical = 6.dp)
                     .testTag("native-album-rating"),
             ) {
-                CanonicalRatingStars(
-                    rating = RatingDisplay(localValue = rating),
-                    color = palette.onBackground,
+                if (rating != null) {
+                    CanonicalRatingStars(
+                        rating = RatingDisplay(localValue = rating),
+                        color = palette.onBackground,
+                    )
+                } else Text(
+                    text = "☆ Avaliar",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = palette.onBackgroundVariant,
                 )
             }
-        } else if (rating == null && quality != null) {
+        } else if (quality != null) {
             Spacer(Modifier.height(8.dp))
             SourceQualityBadge(
                 quality = quality,

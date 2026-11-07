@@ -77,6 +77,15 @@ internal fun CanonicalPublicPlaylistDetailScreen(
     val playlistPins by pinRepo.pins.collectAsStateWithLifecycle()
     val pinnedId = "public:" + playlist.mbid
     val pinned = playlistPins.any { it.id == pinnedId }
+    val ratingTarget = remember(playlist.mbid) { canonicalPublicPlaylistRatingTarget(playlist.mbid) }
+    val rating by rememberCanonicalCatalogEntityRating(ratingTarget)
+    var editingRating by remember(playlist.mbid) { mutableStateOf(false) }
+    if (editingRating && ratingTarget != null) {
+        CanonicalCatalogEntityRatingDialog(
+            target = ratingTarget, title = "Avaliar playlist",
+            onDismiss = { editingRating = false },
+        )
+    }
     val entries = (state as? UiState.Success)?.data?.tracks.orEmpty()
     val ids = entries.mapNotNull { it.recordingMbid }.distinct()
     val catalogRows by produceState<List<V2DisplayRow>>(
@@ -105,6 +114,8 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                     meta = "Playlist · ${entries.size} " +
                         if (entries.size == 1) "faixa" else "faixas",
                     palette = palette,
+                    rating = rating,
+                    onRate = if (ratingTarget != null) ({ editingRating = true }) else null,
                     sleeveSize = maxWidth * .76f,
                     artwork = {
                         Box(Modifier.fillMaxSize()) {

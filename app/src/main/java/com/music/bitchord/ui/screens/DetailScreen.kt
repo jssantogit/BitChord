@@ -387,6 +387,18 @@ fun DetailScreen(
             hasVerifiedPopularity = legacyRankedArtistFeed || publicTopRows.isNotEmpty(),
         ),
     )
+    val catalogRatingTarget = remember(page.browseId) {
+        canonicalCatalogEntityRatingTarget(page.browseId)
+    }
+    val catalogRating by rememberCanonicalCatalogEntityRating(catalogRatingTarget)
+    var editingCatalogRating by remember(page.browseId) { mutableStateOf(false) }
+    if (editingCatalogRating && catalogRatingTarget != null) {
+        CanonicalCatalogEntityRatingDialog(
+            target = catalogRatingTarget,
+            title = if (isArtist) "Avaliar artista" else "Avaliar álbum",
+            onDismiss = { editingCatalogRating = false },
+        )
+    }
     val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
     // Prefetch one hero and the first visible cards from any metadata
     // provider. The same Coil memory/disk cache serves their eventual native
@@ -652,6 +664,9 @@ fun DetailScreen(
                         // A folder's credit says where its tracks live, not who made them.
                         onArtistClick = onArtistClick.takeIf { folder == null },
                         onToggleLibrary = onToggleLibrary,
+                        rating = catalogRating,
+                        onRate = if (catalogRatingTarget != null && !isArtist)
+                            ({ editingCatalogRating = true }) else null,
                         metaOverride = folderCategoryMeta,
                     )
                 }
@@ -685,6 +700,9 @@ fun DetailScreen(
                         canShuffle = songs.isNotEmpty(),
                         isSubscribed = page.subscription?.takeIf { onToggleSubscription != null }?.subscribed,
                         onToggleSubscription = onToggleSubscription,
+                        onRateArtist = if (catalogRatingTarget?.entityType == "ARTIST")
+                            ({ editingCatalogRating = true }) else null,
+                        artistRated = catalogRating != null,
                         bottomSpace = 22.dp,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )
@@ -1131,6 +1149,8 @@ private fun ReleaseHeader(
     onShuffle: () -> Unit,
     onArtistClick: ((String, String) -> Unit)?,
     onToggleLibrary: (() -> Unit)?,
+    rating: Double? = null,
+    onRate: (() -> Unit)? = null,
     metaOverride: String? = null,
 ) {
     // Do not display a partial sum as if the album's total were complete.
@@ -1175,6 +1195,8 @@ private fun ReleaseHeader(
         meta = meta,
         palette = palette,
         sleeveSize = sleeveSize,
+        rating = rating,
+        onRate = onRate,
         onCreditClick = onCreditClick,
         artwork = {
             var artFailed by remember(page.thumbnailUrl) { mutableStateOf(false) }
