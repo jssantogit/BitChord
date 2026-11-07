@@ -6,6 +6,7 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistHttp
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistTransport
 import com.music.bitchord.data.catalog.metadata.ListenBrainzRateLimiter
 import com.music.bitchord.data.catalog.metadata.parseListenBrainzPublicPlaylistSearch
+import com.music.bitchord.data.catalog.metadata.parseListenBrainzPublicRecordingArtwork
 import com.music.bitchord.data.catalog.metadata.parseListenBrainzPublicPlaylistDetail
 import com.music.bitchord.data.catalog.metadata.publicPlaylistMbid
 import kotlinx.coroutines.runBlocking
@@ -211,5 +212,41 @@ class ListenBrainzPublicPlaylistTest {
         assertEquals(listOf("rock", "hip hop", "hip hop music"), requests)
         assertNull(client.detail(ListenBrainzPublicPlaylist(rock, "Test", "Curator", null)))
         assertEquals(listOf("rock", "hip hop", "hip hop music", rock), requests)
+    }
+
+    @Test fun jspfTrackUsesOnlyVerifiedReleaseArtworkReferences() {
+        val selected = ListenBrainzPublicPlaylist(rock, "Rock", "Curator", null)
+        val body = """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$rock","track":[
+          {"title":"Official cover","creator":"Band","identifier":"https://musicbrainz.org/recording/$song",
+           "extension":{"https://musicbrainz.org/doc/jspf#track":{"release_identifier":"https://musicbrainz.org/release/$pop",
+             "additional_metadata":{"caa_release_mbid":"$pop","caa_id":12001}}}},
+          {"title":"Release cover","creator":"Band","identifier":"https://musicbrainz.org/recording/$pop",
+           "extension":{"https://musicbrainz.org/doc/jspf#track":{"release_identifier":"https://musicbrainz.org/release/$rock"}}},
+          {"title":"Malicious URL","creator":"Band",
+           "extension":{"https://musicbrainz.org/doc/jspf#track":{"release_identifier":"https://evil.example/release/$rock",
+             "additional_metadata":{"caa_release_mbid":"../../evil","caa_id":20}}}}
+        ]}}"""
+        val rows = parseListenBrainzPublicPlaylistDetail(body, selected)!!.tracks
+        assertEquals("https://coverartarchive.org/release/$pop/12001-250.jpg", rows[0].artworkUrl)
+        assertEquals("https://coverartarchive.org/release/$rock/front-250.jpg", rows[1].artworkUrl)
+        assertNull(rows[2].artworkUrl)
+    }
+
+    @Test fun recordingMetadataArtworkMustHaveAValidRequestedMbidAndCaaReference() {
+        val body = """{"$song":{"release":{"caa_release_mbid":"$pop","caa_id":987654321}},
+          "$rock":{"release":{"caa_release_mbid":"../../etc","caa_id":4}},
+          "invalid":{"release":{"caa_release_mbid":"$pop","caa_id":8}}}"""
+        val covers = parseListenBrainzPublicRecordingArtwork(body, listOf(song, rock))
+        assertEquals(mapOf(song to "https://coverartarchive.org/release/$pop/987654321-250.jpg"), covers)
+        assertTrue(parseListenBrainzPublicRecordingArtwork("""{"$song":{"release":{"mbid":"$pop"}}}""", listOf(song)).isEmpty())
+    }
+
+    @Test fun jspfDescriptionDecodesVisibleHtmlEntitiesWithoutHtmlRendering() {
+        val json = """{"playlists":[{"playlist":{"identifier":"https://listenbrainz.org/playlist/$rock",
+          "title":"K-pop &amp; rock","annotation":"The new &amp; hottest &#39;K-pop&#39; is here!",
+          "extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true}}}}]}"""
+        val playlist = parseListenBrainzPublicPlaylistSearch(json)!!.single()
+        assertEquals("K-pop & rock", playlist.title)
+        assertEquals("The new & hottest 'K-pop' is here!", playlist.description)
     }
 }
