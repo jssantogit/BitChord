@@ -288,6 +288,12 @@ class CanonicalPublicDiscoveryTest {
         )
         assertEquals("Para descobrir", genre.first().title)
         assertEquals(1, genre.count { it.title == "Playlists" })
+        // A public playlist stays discoverable without a MusicBrainz release
+        // batch; an upstream outage must not erase the independent result.
+        assertEquals(listOf("Playlists"), canonicalGenreEditorialShelves(
+            canonicalExploreGenres.first { it.tag == "pop" }, emptyList(),
+            "2026-11-06", playlists = listOf(playlist),
+        ).map { it.title })
         assertTrue(genre.any { it.title == "Singles e EPs" })
         val home = canonicalHomeWithWorldwideEditorial(
             emptyList(), rows, "Lançamentos", "Escolha a dedo", "Em alta",

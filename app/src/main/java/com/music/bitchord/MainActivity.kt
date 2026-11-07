@@ -1204,14 +1204,30 @@ private fun BitChordApp(
             else -> "Procurando playlists deste gênero..."
         }
     }
+    // The genre's public playlists are an independent ListenBrainz feed.
+    // MusicBrainz failure must not hide a real playlist that has already loaded.
+    val activeGenrePlaylists = activeCanonicalGenre?.tag?.let { tag ->
+        canonicalPublicPlaylists[tag].orEmpty()
+    }.orEmpty()
     val canonicalGenreState: UiState<List<HomeShelf>> = when (val genreState = canonicalGenreResults) {
-        is UiState.Loading -> UiState.Loading
-        is UiState.Error -> UiState.Error(genreState.message)
+        is UiState.Loading -> {
+            val playlist = com.music.bitchord.ui.canonicalPublicPlaylistShelf(
+                "Playlists", activeGenrePlaylists,
+            )
+            if (playlist != null) UiState.Success(listOf(playlist)) else UiState.Loading
+        }
+        is UiState.Error -> {
+            val playlist = com.music.bitchord.ui.canonicalPublicPlaylistShelf(
+                "Playlists", activeGenrePlaylists,
+            )
+            if (playlist != null) UiState.Success(listOf(playlist))
+            else UiState.Error(genreState.message)
+        }
         is UiState.Success -> {
             val shelves = activeCanonicalGenre?.let { genre ->
                 com.music.bitchord.ui.canonicalGenreEditorialShelves(
                     genre, genreState.data, canonicalFeedDate,
-                    playlists = canonicalPublicPlaylists[genre.tag].orEmpty(),
+                    playlists = activeGenrePlaylists,
                 )
             }.orEmpty()
             if (shelves.isNotEmpty()) UiState.Success(shelves)
