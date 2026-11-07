@@ -40,13 +40,15 @@ class NativeAlbumEditorialFooterComposeTest {
     }
 
     @Test fun albumRetainsExistingDateAndSummaryThenRendersInlineEditionAndAttribution() {
+        // Stable snapshot: re-composition must never extend the source validity.
+        val verifiedSnapshot = evidence()
         compose.setContent {
             MaterialTheme {
                 NativeAlbumMetadataFooter(
                     metadata = CanonicalAlbumFooterMetadata(
                         date = "24 de fevereiro de 2017",
                         summary = "13 músicas, 63 minutos",
-                        editorialEvidence = evidence(),
+                        editorialEvidence = verifiedSnapshot,
                     ),
                     palette = themeArtworkPalette(),
                 )
