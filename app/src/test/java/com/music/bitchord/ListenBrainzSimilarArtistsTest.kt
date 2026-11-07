@@ -97,4 +97,25 @@ class ListenBrainzSimilarArtistsTest {
         assertEquals(1, radioCalls)
         assertEquals(1, labsCalls)
     }
+
+    @Test fun malformedLabsOkResponseIsRetriedInsteadOfNegativeCachingForFifteenMinutes() = runBlocking {
+        var now = 1_000L
+        var labsCalls = 0
+        val client = ListenBrainzSimilarArtistsClient(
+            limiter = ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = { now += it }),
+            nowMillis = { now },
+            fetch = { 400 to "" },
+            labsFetch = {
+                labsCalls++
+                if (labsCalls == 1) 200 to """{"not_an_artist_result":[]}"""
+                else 200 to """[{"artist_mbid":"$related","name":"Related",
+                     "reference_mbid":"$seed","score":10}]"""
+            },
+        )
+        assertTrue(client.load(seed).isEmpty())
+        now += 91_000L
+        assertEquals(listOf(related), client.load(seed).map { it.mbid })
+        assertEquals(2, labsCalls)
+    }
+
 }
