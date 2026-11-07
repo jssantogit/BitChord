@@ -129,13 +129,20 @@ internal class DiscogsCanonicalEditionCoordinator(
 }
 
 /**
- * Deliberately closed pending definitive legal/API approval and Android smoke.
- * Both outer coordinator and inner network client must be opened together.
- * This is not a user-configurable preference and must not be implicitly
- * enabled by changing music-source options.
+ * Personal Android installation: active metadata-only requests to Discogs'
+ * documented public Release API. Distribution/publication is not currently a
+ * goal and would require a separate rights/API policy review.
+ *
+ * Even for private use, respect rate limits, the 5h freshness deadline, the
+ * linked attribution adjacent to metadata and this non-affiliation notice.
+ * No images, marketplace/user data, credentials or audio are fetched.
+ * This is not an audio-source setting or an invitation to scrape Discogs.
  */
 internal object DiscogsEditionAccess {
-    const val ENABLED = false
+    const val ENABLED = true
+    const val NON_AFFILIATION_NOTICE =
+        "This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. " +
+            "‘Discogs’ is a trademark of Zink Media, LLC."
 
     val coordinator: DiscogsCanonicalEditionCoordinator by lazy {
         DiscogsCanonicalEditionCoordinator(
