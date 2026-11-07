@@ -569,7 +569,7 @@ internal fun CanonicalPlaylistDetailScreen(
             // The same hero frame used by DetailScreen.ReleaseHeader; the
             // playlist still passes real RecordingIds to its playback handoff.
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            NativeReleaseHeaderLayout(
+            NativePlaylistDetailHeader(
                 title = card.title,
                 credit = "",
                 meta = if (card is LibraryPlaylistCard.Normal) {
