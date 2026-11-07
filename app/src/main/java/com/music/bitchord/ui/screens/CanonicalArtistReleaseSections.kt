@@ -67,24 +67,26 @@ internal fun canonicalArtistReleaseSections(
         }
     }
     val categorized = releases.groupBy(::browseKind)
-    val albums = categorized["album"].orEmpty()
-    val singles = categorized["single"].orEmpty()
-    val other = categorized["other"].orEmpty()
     val validDate = Regex("\\d{4}-\\d{2}-\\d{2}")
-    val recent = albums.mapNotNull { album ->
-        val proof = evidence[album.id]
-        if (proof?.primaryType?.trim()?.equals("Album", ignoreCase = true) != true) {
-            null
-        } else {
-            proof.firstReleaseDate?.takeIf { validDate.matches(it) }?.let { day ->
-                day to album
-            }
-        }
-    }.maxWithOrNull(compareBy<Pair<String, ReleaseEntity>> { it.first }
-        .thenBy { it.second.id })?.second
+    fun verifiedDay(release: ReleaseEntity): java.time.LocalDate? =
+        evidence[release.id]?.firstReleaseDate
+            ?.takeIf(validDate::matches)
+            ?.let { runCatching { java.time.LocalDate.parse(it) }.getOrNull() }
+    // Both Library shelves order by real MusicBrainz release dates, newest
+    // first. Undated local-only releases stay visible at the end instead of
+    // being silently ordered by scanner/MediaStore insertion time.
+    val latestFirst = compareByDescending<ReleaseEntity>(::verifiedDay)
+        .thenBy { it.title.lowercase(java.util.Locale.ROOT) }.thenBy { it.id }
+    val albums = categorized["album"].orEmpty().sortedWith(latestFirst)
+    val singles = categorized["single"].orEmpty().sortedWith(latestFirst)
+    val other = categorized["other"].orEmpty().sortedWith(latestFirst)
+    val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+    val recent = albums.firstOrNull { album ->
+        evidence[album.id]?.primaryType?.trim()?.equals("Album", ignoreCase = true) == true &&
+            verifiedDay(album)?.let { !it.isAfter(today) } == true
+    }
     // The latest genuinely dated release may be a Single or EP, not only an
     // Album. Do not infer dates or types from a local track count.
-    val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
     val latest = releases.mapNotNull { release ->
         val proof = evidence[release.id] ?: return@mapNotNull null
         // A proven edition date is enough for a generic "recent release"
