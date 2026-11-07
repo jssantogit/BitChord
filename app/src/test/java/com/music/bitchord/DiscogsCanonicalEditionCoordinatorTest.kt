@@ -76,6 +76,42 @@ class DiscogsCanonicalEditionCoordinatorTest {
         assertEquals(0, discogsCalls)
     }
 
+    @Test fun partiallyMalformedMultiArtistCreditsCannotBecomeVerifiedOrCallDiscogs() = runBlocking {
+        var relationCalls = 0
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = when (parameters["inc"]) {
+                "recordings+artist-credits+release-groups" ->
+                    musicBrainzJson().replace(
+                        "\"artist-credit\":[{\"name\":\"ILLIT\"}]",
+                        "\"artist-credit\":[{\"name\":\"ILLIT\"}, {}]",
+                    )
+                "url-rels" -> {
+                    relationCalls++
+                    error("Invalid artist-credit must block all Discogs relation lookups")
+                }
+                else -> error("Unexpected graph request")
+            }
+        })
+        val graph = MusicBrainzCatalogGraph(mb)
+        val edition = graph.lookupRelease(mbid) as
+            com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail>
+        assertEquals("ILLIT", edition.value.artistDisplay)
+        assertEquals(emptyList<String>(), edition.value.artistCreditNames)
+        val coordinator = DiscogsCanonicalEditionCoordinator(
+            graph = graph,
+            editions = DiscogsEditionRepository(
+                links = DiscogsMusicBrainzLinks(mb),
+                enabled = true,
+            ),
+            enabled = true,
+        )
+        assertEquals(DiscogsEditionEnrichment.Candidate, coordinator.observeRelease(mbid))
+        assertEquals(0, relationCalls)
+    }
+
     @Test fun concurrentSameEditionReadersShareOneBoundedEvidenceFetch() = runBlocking {
         var graphCalls = 0
         var relationCalls = 0
