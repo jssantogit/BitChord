@@ -138,6 +138,16 @@ class NativeAlbumEditorialFooterTest {
         assertTrue(withoutLink.facts.contains("Gravadora · Belift Lab"))
         assertTrue(withoutLink.status!!.contains("sem vínculo Discogs"))
         assertFalse(withoutLink.status.contains("indisponível"))
+        val candidate = nativeAlbumAboutOverview(
+            local, null, DiscogsEditionEnrichment.Candidate,
+        )!!
+        assertTrue(candidate.status!!.contains("evidências suficientes"))
+        assertFalse(candidate.status.contains("vínculo encontrado"))
+        val unavailable = nativeAlbumAboutOverview(
+            local, null, DiscogsEditionEnrichment.Unavailable,
+        )!!
+        assertFalse(unavailable.status!!.contains("serviço temporariamente"))
+
     }
 
     @Test fun unverifiableProviderFactsNeverAppearAsVerifiedEditionDetails() {

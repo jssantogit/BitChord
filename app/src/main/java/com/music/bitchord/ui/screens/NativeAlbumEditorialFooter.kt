@@ -122,13 +122,13 @@ internal fun nativeAlbumAboutOverview(
         DiscogsEditionEnrichment.Ambiguous ->
             "Discogs · há mais de um vínculo; esta edição não foi confirmada."
         DiscogsEditionEnrichment.Candidate ->
-            "Discogs · vínculo encontrado, mas os dados ainda não confirmam esta edição."
+            "Discogs · ainda não existem evidências suficientes para confirmar esta edição."
         DiscogsEditionEnrichment.Conflict ->
             "Discogs · os dados publicados divergem desta edição; nada foi incorporado."
         DiscogsEditionEnrichment.Unavailable ->
-            "Discogs · serviço temporariamente indisponível; os dados do álbum continuam válidos."
+            "Informações complementares temporariamente indisponíveis; os dados do álbum permanecem."
         DiscogsEditionEnrichment.Invalid ->
-            "Discogs · vínculo inválido, sem dados adicionais aplicados."
+            "Discogs · dados ou identificador inválidos; nenhuma informação foi incorporada."
         DiscogsEditionEnrichment.Disabled ->
             "Discogs · provedor desativado."
         null -> "Ainda não há informações complementares verificadas no Discogs para esta edição."
