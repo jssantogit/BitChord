@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsKind
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsLink
@@ -24,12 +25,17 @@ import org.robolectric.annotation.ConscryptMode
 class NativeAlbumEditorialFooterComposeTest {
     @get:Rule val compose = createComposeRule()
 
-    private fun evidence(): DiscogsEditionEnrichment.Verified {
+    private fun evidence(extended: Boolean = false): DiscogsEditionEnrichment.Verified {
         val link = DiscogsLink(DiscogsKind.RELEASE, 12345)
         val record = DiscogsRecord(
             link, "SUPER REAL ME", listOf("ILLIT"),
-            "KR", 2024, listOf("Belift Lab" to "BEL-001"),
-            emptyList(), listOf("CD", "EP"), emptyList(), unofficial = false,
+            "KR", 2024,
+            if (extended) listOf("Belift Lab" to "BEL-001",
+                "Second Label" to "CAT-02") else listOf("Belift Lab" to "BEL-001"),
+            emptyList(),
+            if (extended) listOf("CD", "EP", "Stereo", "Limited", "Reissue")
+            else listOf("CD", "EP"),
+            emptyList(), unofficial = false,
         )
         return DiscogsEditionEnrichment.Verified(
             DiscogsObservation(
@@ -60,6 +66,29 @@ class NativeAlbumEditorialFooterComposeTest {
         compose.onNodeWithTag("native-album-editorial-footer").assertExists()
         compose.onNodeWithText("Gravadora · Belift Lab (BEL-001)").assertExists()
         compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
+    }
+
+    @Test fun additionalVerifiedFactsExpandAndCollapseWithAttributionStillVisible() {
+        val snapshot = evidence(extended = true)
+        compose.setContent {
+            MaterialTheme {
+                NativeAlbumMetadataFooter(
+                    metadata = CanonicalAlbumFooterMetadata(
+                        summary = "5 músicas, 15 minutos",
+                        editorialEvidence = snapshot,
+                    ),
+                    palette = themeArtworkPalette(),
+                )
+            }
+        }
+        compose.onNodeWithText("Gravadora · Second Label (CAT-02)").assertDoesNotExist()
+        compose.onNodeWithText("Formato · Reissue").assertDoesNotExist()
+        compose.onNodeWithText("Ver mais").performClick()
+        compose.onNodeWithText("Gravadora · Second Label (CAT-02)").assertExists()
+        compose.onNodeWithText("Formato · Reissue").assertExists()
+        compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
+        compose.onNodeWithText("Ver menos").performClick()
+        compose.onNodeWithText("Gravadora · Second Label (CAT-02)").assertDoesNotExist()
     }
 
     @Test fun nonVerifiedAlbumKeepsExistingMetadataButNeverShowsDiscogsPlaceholder() {
