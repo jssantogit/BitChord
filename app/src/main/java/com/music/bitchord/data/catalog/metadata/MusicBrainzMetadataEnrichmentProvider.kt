@@ -209,6 +209,8 @@ internal class MusicBrainzMetadataEnrichmentProvider(
         if (!dto.id.equals(mbid, ignoreCase = true)) {
             return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
         }
+        val officialAudioEdition = if (requireOfficialAudio)
+            dto.verifiedOfficialAudioRelease() else null
         return MetadataLookupResult.Success(
             RecordingMetadataEnrichment(
                 musicBrainzId = mbid,
@@ -216,15 +218,15 @@ internal class MusicBrainzMetadataEnrichmentProvider(
                 durationMs = dto.length?.takeIf { it >= 0L },
                 artistDisplay = renderArtistCredit(dto.artistCredit),
                 artistCredits = dto.artistCredit?.toEvidence(),
-                officialAudioReleaseMbid = if (requireOfficialAudio)
-                    dto.verifiedOfficialAudioReleaseMbid() else null,
+                officialAudioReleaseMbid = officialAudioEdition?.first,
+                officialAudioReleaseGroupMbid = officialAudioEdition?.second,
             ),
         )
     }
 
     /** No bootlegs, video recordings, fan compilations, live-only versions,
      * DJ mixes or Other/video releases are eligible for the public chart. */
-    private fun MusicBrainzRecordingDto.verifiedOfficialAudioReleaseMbid(): String? {
+    private fun MusicBrainzRecordingDto.verifiedOfficialAudioRelease(): Pair<String, String?>? {
         if (video == true) return null
         val disallowed = setOf(
             "live", "compilation", "remix", "dj-mix", "mixtape/street",
@@ -243,7 +245,11 @@ internal class MusicBrainzMetadataEnrichmentProvider(
             .sortedWith(compareBy<MusicBrainzRecordingReleaseDto> {
                 it.date.orEmpty().ifBlank { "9999-12-31" }
             }.thenBy { it.id.orEmpty() })
-            .firstOrNull()?.id.validMbidOrNull()
+            .firstOrNull()?.let { release ->
+                release.id.validMbidOrNull()?.let { confirmedId ->
+                    confirmedId to release.group?.id.validMbidOrNull()
+                }
+            }
     }
 
     override suspend fun lookupRelease(externalId: String): MetadataLookupResult<ReleaseMetadataEnrichment> {
@@ -371,6 +377,7 @@ private data class MusicBrainzRecordingReleaseDto(
 
 @Serializable
 private data class MusicBrainzRecordingGroupDto(
+    val id: String? = null,
     @SerialName("primary-type") val primaryType: String? = null,
     @SerialName("secondary-types") val secondaryTypes: List<String>? = null,
 )
