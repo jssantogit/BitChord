@@ -2,6 +2,8 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.parseMusicBrainzTrackArtistAppearances
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistAppearancesClient
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistAppearance
+import com.music.bitchord.ui.screens.nativeArtistIncludedInCoverTargets
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -138,6 +140,27 @@ class MusicBrainzArtistAppearancesTest {
         ]}"""
         assertEquals(listOf("Verified original collaboration"),
             parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+    }
+
+
+    @Test fun includedInCoversCanUseExactVerifiedGroupWhenEditionMissing() {
+        val entries = (1..14).map { number ->
+            MusicBrainzArtistAppearance(
+                releaseGroupMbid = number.toString(16).padStart(8, '0') +
+                    "-3333-4333-8333-333333333333",
+                title = "Official feature $number",
+                artistCredit = "Other artist",
+                releaseDate = null,
+                primaryType = "Single",
+                releaseMbid = if (number == 1) null else
+                    number.toString(16).padStart(8, '0') + "-5555-4555-8555-555555555555",
+            )
+        }
+        val targets = nativeArtistIncludedInCoverTargets(entries)
+        assertEquals(10, targets.size)
+        assertEquals(null, targets.first().first)
+        assertEquals(entries.first().releaseGroupMbid, targets.first().second)
+        assertEquals(entries[1].releaseMbid, targets[1].first)
     }
 
 }
