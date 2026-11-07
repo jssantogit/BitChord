@@ -99,6 +99,13 @@ internal object DiscogsEditionMatcher {
             canonical.releaseYear != record.year
         ) return DiscogsEditionVerdict.CANDIDATE
 
+        // Other internal consumers can call this matcher directly, without
+        // passing through the coordinator's Official-only graph gate.
+        // Unknown, promo and bootleg MusicBrainz status must never be VERIFIED.
+        if (!canonical.status.equals("Official", ignoreCase = true)) {
+            return DiscogsEditionVerdict.CANDIDATE
+        }
+
         // Barcodes are shared by variants or entered incorrectly. A curated
         // MusicBrainz URL association plus artist/title and matching barcode
         // is not enough to prove the exact edition without track evidence.
