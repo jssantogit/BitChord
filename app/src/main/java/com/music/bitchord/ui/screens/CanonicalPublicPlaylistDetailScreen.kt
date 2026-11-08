@@ -1,5 +1,10 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.data.canvas.VisualArtworkCandidate
+import com.music.bitchord.data.canvas.VisualArtworkPriority
+import com.music.bitchord.data.canvas.VisualArtworkPrefetch
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistTrack
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -17,6 +22,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,6 +60,19 @@ import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/** Warm only the first visible public sleeves and the exact hero.
+ * The shared Coil planner enforces the same trusted-URL policy everywhere. */
+internal fun publicPlaylistWarmupCandidates(
+    cover: String?,
+    tracks: List<ListenBrainzPublicPlaylistTrack>,
+): List<VisualArtworkCandidate> = buildList {
+    add(VisualArtworkCandidate(cover, VisualArtworkPriority.HERO, 900))
+    tracks.take(8).forEach { track ->
+        add(VisualArtworkCandidate(track.artworkUrl,
+            VisualArtworkPriority.VISIBLE, ROW_ART_PX))
+    }
+}
 
 /**
  * The SAME native playlist detail frame and header used by Library playlists.
@@ -107,6 +126,12 @@ internal fun CanonicalPublicPlaylistDetailScreen(
         )
     }
     val entries = (state as? UiState.Success)?.data?.tracks.orEmpty()
+    val artworkWarmup = remember(playlist.mbid, playlist.artworkUrl, entries) {
+        publicPlaylistWarmupCandidates(playlist.artworkUrl, entries)
+    }
+    LaunchedEffect(artworkWarmup) {
+        VisualArtworkPrefetch.warm(context, artworkWarmup)
+    }
     // Keep original public order and unique row identity even after sorting.
     val visibleEntries = remember(entries, query, sort) {
         val filtered = entries.withIndex().filter { (_, track) ->
