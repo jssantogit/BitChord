@@ -2,6 +2,8 @@ package com.music.bitchord.ui.components
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.QueueTier
 import org.junit.Test
 
 class PlayerAlbumEvidenceTest {
@@ -49,5 +51,42 @@ class PlayerAlbumEvidenceTest {
                 ),
             ),
         )
+    }
+
+    private fun track(
+        title: String,
+        artist: String = "SAY MY NAME",
+        art: String? = "https://example.invalid/our-vibe.jpg",
+        tier: QueueTier = QueueTier.CONTEXT,
+        album: String? = null,
+        albumId: String? = null,
+    ) = Song(
+        videoId = title, title = title, artist = artist, thumbnailUrl = art,
+        queueTier = tier, albumName = album, albumId = albumId,
+    )
+
+    @Test fun albumProvenanceFromCurrentTrackSurvivesIncompleteUpcomingIdentifiers() {
+        val current = track("Bad Idea")
+        val future = listOf(track("UFO"), track("Delulu Solulu"))
+        assertEquals("&Our Vibe", contextualAlbumFromCurrent(current, future, "&Our Vibe"))
+    }
+
+    @Test fun autoplayOrManualQueueDoesNotInheritCurrentAlbum() {
+        val current = track("Bad Idea")
+        assertNull(contextualAlbumFromCurrent(current, listOf(track("Radio", tier = QueueTier.AUTOPLAY)), "&Our Vibe"))
+        assertNull(contextualAlbumFromCurrent(current, listOf(track("User choice", tier = QueueTier.USER_QUEUE)), "&Our Vibe"))
+    }
+
+    @Test fun unrelatedArtworkArtistOrExplicitAlbumBlocksFallback() {
+        val current = track("Bad Idea", albumId = "our-vibe")
+        assertNull(contextualAlbumFromCurrent(current, listOf(track("Different", art = "different")), "&Our Vibe"))
+        assertNull(contextualAlbumFromCurrent(current, listOf(track("Different", artist = "Different artist")), "&Our Vibe"))
+        assertNull(contextualAlbumFromCurrent(current, listOf(track("Different", albumId = "other-id")), "&Our Vibe"))
+        assertNull(contextualAlbumFromCurrent(current, listOf(track("Different", album = "Other release")), "&Our Vibe"))
+    }
+
+    @Test fun fallbackRequiresActualAlbumEvidence() {
+        assertNull(contextualAlbumFromCurrent(track("Bad Idea"), listOf(track("UFO")), null))
+        assertNull(contextualAlbumFromCurrent(track("Bad Idea", art = null), listOf(track("UFO", art = null)), "&Our Vibe"))
     }
 }
