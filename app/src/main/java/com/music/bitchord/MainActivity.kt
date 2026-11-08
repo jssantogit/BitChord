@@ -2310,6 +2310,12 @@ private fun BitChordApp(
         mutableStateOf<com.music.bitchord.ui.screens.CanonicalLibraryPin?>(null)
     }
     val unifiedControls = remember { UnifiedLibraryUiControls() }
+    // All entry points (category links, pinned album/artist) share one owner.
+    // Source, star and sorting filters remain untouched while the default
+    // display matches Apple: albums as covers, songs/artists as rows.
+    LaunchedEffect(unifiedLibraryCategory) {
+        unifiedLibraryCategory?.let { unifiedControls.selectCategory(it) }
+    }
     // "Ver todos" is local-only today; share the actual native Library filter
     // controls without pretending Navidrome additions were locally indexed.
     val recentControls = remember {
@@ -6635,7 +6641,17 @@ private fun FrostedFolderMenu(
  * The parent app was already near the JVM method-size ceiling; keeping menus
  * and their event state here prevents adding their Compose bytecode to it.
  */
-private class UnifiedLibraryUiControls {
+private internal fun appleLibraryDefaultViewType(
+    category: com.music.bitchord.data.listening.CanonicalSmartFilterContext,
+): LibraryViewType = when (category) {
+    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS -> LibraryViewType.GRID
+    com.music.bitchord.data.listening.CanonicalSmartFilterContext.SONGS,
+    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ARTISTS -> LibraryViewType.LIST
+}
+
+/** The existing filter/sort owner also remembers the user's preferred visual
+ * format per category. Apple defaults are applied only on the first visit. */
+internal class UnifiedLibraryUiControls {
     var sourceKey by mutableStateOf<String?>(null)
     var sourceKeys by mutableStateOf(listOf("local-mediastore"))
     var stars by mutableStateOf<Int?>(null)
@@ -6643,6 +6659,15 @@ private class UnifiedLibraryUiControls {
     var viewType by mutableStateOf(LibraryViewType.LIST)
     var sortMenuOpen by mutableStateOf(false)
     var sourceMenuOpen by mutableStateOf(false)
+    private var activeCategory: com.music.bitchord.data.listening.CanonicalSmartFilterContext? = null
+    private val categoryViews = mutableMapOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext, LibraryViewType>()
+
+    fun selectCategory(category: com.music.bitchord.data.listening.CanonicalSmartFilterContext) {
+        if (activeCategory == category) return
+        activeCategory?.let { categoryViews[it] = viewType }
+        viewType = categoryViews[category] ?: appleLibraryDefaultViewType(category)
+        activeCategory = category
+    }
 
     fun updateAvailableSources(keys: List<String>) {
         sourceKeys = keys
