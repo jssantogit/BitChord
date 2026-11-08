@@ -41,7 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
 import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
@@ -301,10 +303,24 @@ internal fun UnifiedPlaylistLibraryShelf(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Page title belongs to the native floating top bar, not a second
-        // scrollable header that may vanish or restore at a stale offset.
-        // Apple Music keeps library-category search discoverable even when
-        // the search keyboard is closed. Do not autofocus on normal entry.
+        // The Apple Library collection has a large scrollable heading,
+        // below the independent floating controls. The compact top-bar
+        // title is not rendered at rest on this route.
+        item(key = "playlist-category-title") {
+            Text(
+                "Playlists",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(
+                    start = PAGE_GUTTER + 16.dp,
+                    end = PAGE_GUTTER,
+                    top = 8.dp,
+                ),
+            )
+        }
+        // Apple keeps the search field visible without keyboard autofocus.
         item(key = "playlist-search") {
             PlaylistLibrarySearchField(
                 query = query,
