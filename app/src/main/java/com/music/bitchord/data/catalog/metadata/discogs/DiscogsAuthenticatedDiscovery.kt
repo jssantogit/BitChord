@@ -1,0 +1,261 @@
+package com.music.bitchord.data.catalog.metadata.discogs
+
+import com.music.bitchord.BuildConfig
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.parameter
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.HttpHeaders
+import io.ktor.utils.io.cancel
+import io.ktor.utils.io.readAvailable
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
+
+/**
+ * Read-only Discogs database search. It requires a USER-provided token;
+ * no fallback to search scraping or to client-embedded keys is allowed.
+ * Search thumbnails/titles are hints ONLY, never edition identity evidence.
+ */
+internal data class DiscogsSearchRequest(
+    val artist: String,
+    val title: String? = null,
+    val barcode: String? = null,
+    val catalogNumber: String? = null,
+    val year: Int? = null,
+    val page: Int = 1,
+    val limit: Int = 12,
+) {
+    fun isValid(): Boolean {
+        fun safe(value: String?) = value == null || (
+            value.length <= 120 && value.isNotBlank() &&
+                value.none { it.isISOControl() }
+        )
+        return safe(artist) && artist.isNotBlank() && safe(title) &&
+            safe(barcode) && safe(catalogNumber) &&
+            page in 1..3 && limit in 1..20 &&
+            (year == null || year in 1800..2200)
+    }
+}
+
+internal sealed interface DiscogsSearchResult {
+    data class Found(val ids: List<Long>) : DiscogsSearchResult
+    data object Empty : DiscogsSearchResult
+    data object AuthRequired : DiscogsSearchResult
+    data object Disabled : DiscogsSearchResult
+    data object InvalidQuery : DiscogsSearchResult
+    data object Malformed : DiscogsSearchResult
+    data object Unavailable : DiscogsSearchResult
+    data class Throttled(val retryAfterSeconds: Long?) : DiscogsSearchResult
+}
+
+internal interface DiscogsSearchTransport {
+    suspend fun search(
+        query: DiscogsSearchRequest,
+        token: String,
+        userAgent: String,
+    ): DiscogsHttpResponse
+}
+
+/**
+ * Separate transport from the anonymous Release API so a credential is never
+ * sent to a non-search endpoint, a redirect target or an untrusted host.
+ */
+internal class KtorDiscogsSearchTransport(
+    private val client: HttpClient = HttpClient(OkHttp) {
+        expectSuccess = false
+        followRedirects = false
+        install(HttpTimeout) {
+            requestTimeoutMillis = 12_000L
+            connectTimeoutMillis = 7_000L
+            socketTimeoutMillis = 12_000L
+        }
+    },
+) : DiscogsSearchTransport {
+    override suspend fun search(
+        query: DiscogsSearchRequest, token: String, userAgent: String,
+    ): DiscogsHttpResponse {
+        require(query.isValid())
+        val response = client.get("https://api.discogs.com/database/search") {
+            header(HttpHeaders.UserAgent, userAgent)
+            header(HttpHeaders.Accept, "application/vnd.discogs.v2.discogs+json")
+            header(HttpHeaders.Authorization, "Discogs token=$token")
+            parameter("type", "release")
+            parameter("artist", query.artist.trim())
+            query.title?.let { parameter("release_title", it.trim()) }
+            query.barcode?.let { parameter("barcode", it.trim()) }
+            query.catalogNumber?.let { parameter("catno", it.trim()) }
+            query.year?.let { parameter("year", it) }
+            parameter("per_page", query.limit)
+            parameter("page", query.page)
+        }
+        val length = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
+        if (length != null && length > MAX_RESPONSE_BYTES) {
+            response.bodyAsChannel().cancel()
+            return DiscogsHttpResponse(413, "")
+        }
+        val output = java.io.ByteArrayOutputStream()
+        val channel = response.bodyAsChannel()
+        val buffer = ByteArray(8_192)
+        while (true) {
+            val count = channel.readAvailable(buffer)
+            if (count < 0) break
+            if (count == 0) continue
+            if (output.size().toLong() + count > MAX_RESPONSE_BYTES) {
+                channel.cancel()
+                return DiscogsHttpResponse(413, "")
+            }
+            output.write(buffer, 0, count)
+        }
+        val retry = response.headers[HttpHeaders.RetryAfter]
+            ?.toLongOrNull()?.takeIf { it in 0..86_400L }
+        return DiscogsHttpResponse(response.status.value,
+            output.toByteArray().toString(Charsets.UTF_8), retry)
+    }
+
+    private companion object {
+        const val MAX_RESPONSE_BYTES = 131_072L
+    }
+}
+
+internal class DiscogsDatabaseSearchClient(
+    private val transport: DiscogsSearchTransport = KtorDiscogsSearchTransport(),
+    private val tokenProvider: () -> String? = { null },
+    private val enabled: Boolean = false,
+    private val limiter: DiscogsRateLimiter = DiscogsRequestBudget.limiter,
+    private val userAgent: String =
+        "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)",
+) {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    suspend fun search(query: DiscogsSearchRequest): DiscogsSearchResult {
+        if (!enabled) return DiscogsSearchResult.Disabled
+        if (!query.isValid()) return DiscogsSearchResult.InvalidQuery
+        // Authentication is opt-in and fail-closed, including if Keystore is
+        // unavailable. Never log or embed credentials in diagnostics/results.
+        val token = tokenProvider()?.trim()?.takeIf {
+            it.length in 24..128 && it.all { c ->
+                c.isLetterOrDigit() && c.code < 128 || c == '_' || c == '-'
+            }
+        } ?: return DiscogsSearchResult.AuthRequired
+        val response = try {
+            limiter.runHttpLimited { transport.search(query, token, userAgent) }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return DiscogsSearchResult.Unavailable
+        }
+        return when (response.status) {
+            200 -> parseResult(response.body)
+            401, 403 -> DiscogsSearchResult.AuthRequired
+            404 -> DiscogsSearchResult.Empty
+            429 -> DiscogsSearchResult.Throttled(response.retryAfterSeconds)
+            else -> DiscogsSearchResult.Unavailable
+        }
+    }
+
+    private fun parseResult(raw: String): DiscogsSearchResult {
+        if (raw.length > 131_072) return DiscogsSearchResult.Malformed
+        return try {
+            val obj = json.parseToJsonElement(raw) as? JsonObject
+                ?: return DiscogsSearchResult.Malformed
+            val results = obj["results"] as? JsonArray
+                ?: return DiscogsSearchResult.Malformed
+            if (results.size > 100) return DiscogsSearchResult.Malformed
+            val ids = results.mapNotNull { element ->
+                val row = element as? JsonObject ?: return@mapNotNull null
+                if ((row["type"] as? JsonPrimitive)?.contentOrNull != "release") {
+                    return@mapNotNull null
+                }
+                (row["id"] as? JsonPrimitive)?.longOrNull
+                    ?.takeIf { it in 1..999_999_999_999L }
+            }.distinct().take(20)
+            if (ids.isEmpty()) DiscogsSearchResult.Empty
+            else DiscogsSearchResult.Found(ids)
+        } catch (_: Exception) {
+            DiscogsSearchResult.Malformed
+        }
+    }
+}
+
+internal sealed interface DiscogsAuthenticatedMatch {
+    data class Verified(val record: DiscogsRecord) : DiscogsAuthenticatedMatch
+    data class Ambiguous(val count: Int) : DiscogsAuthenticatedMatch
+    data class Candidates(val count: Int) : DiscogsAuthenticatedMatch
+    data object NoMatch : DiscogsAuthenticatedMatch
+    data object AuthRequired : DiscogsAuthenticatedMatch
+    data object Unavailable : DiscogsAuthenticatedMatch
+}
+
+/**
+ * Discover IDs by Discogs search; hydrate Release details through the already
+ * budgeted public DiscogsClient before making identity or editorial claims.
+ */
+internal class DiscogsAuthenticatedDiscovery(
+    private val search: DiscogsDatabaseSearchClient,
+    private val editions: DiscogsClient,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+) {
+    suspend fun findForEdition(canonical: CanonicalEditionEvidence): DiscogsAuthenticatedMatch {
+        val artist = canonical.creditedArtist?.takeIf(String::isNotBlank)
+            ?: return DiscogsAuthenticatedMatch.NoMatch
+        val barcode = canonical.barcodes.firstOrNull()
+        val query = if (barcode != null)
+            DiscogsSearchRequest(artist = artist, barcode = barcode)
+        else DiscogsSearchRequest(artist = artist, title = canonical.title)
+        return when (val result = search.search(query)) {
+            is DiscogsSearchResult.Found -> {
+                val releases = hydrate(result.ids)
+                when (val match = DiscogsUnlinkedMatch.select(canonical, releases)) {
+                    is DiscogsUnlinkedMatch.Verified -> DiscogsAuthenticatedMatch.Verified(match.record)
+                    is DiscogsUnlinkedMatch.Ambiguous -> DiscogsAuthenticatedMatch.Ambiguous(match.records.size)
+                    is DiscogsUnlinkedMatch.Candidates -> DiscogsAuthenticatedMatch.Candidates(match.records.size)
+                    DiscogsUnlinkedMatch.NoMatch -> DiscogsAuthenticatedMatch.NoMatch
+                }
+            }
+            DiscogsSearchResult.Empty -> DiscogsAuthenticatedMatch.NoMatch
+            DiscogsSearchResult.AuthRequired -> DiscogsAuthenticatedMatch.AuthRequired
+            else -> DiscogsAuthenticatedMatch.Unavailable
+        }
+    }
+
+    /**
+     * For a known artist with a completed MusicBrainz catalog check, return
+     * source-only metadata entries. The caller must compare existing groups
+     * before declaring a release truly missing from MusicBrainz.
+     */
+    suspend fun findForArtist(
+        artistName: String,
+        mbCatalogChecked: Boolean,
+        knownDiscogsReleaseIds: Set<Long> = emptySet(),
+    ): List<DiscogsShadowRelease> {
+        if (!mbCatalogChecked) return emptyList()
+        val searchResult = search.search(DiscogsSearchRequest(artist = artistName))
+        val ids = (searchResult as? DiscogsSearchResult.Found)?.ids ?: return emptyList()
+        val fetchedAt = nowMillis()
+        val records = hydrate(ids).map { DiscogsPublicEditionSnapshot(it, fetchedAt) }
+        return DiscogsShadowCatalog.select(records, artistName, mbCatalogChecked,
+            nowMillis(), knownDiscogsReleaseIds)
+    }
+
+    private suspend fun hydrate(ids: List<Long>): List<DiscogsRecord> {
+        val found = ArrayList<DiscogsRecord>()
+        for (id in ids.distinct().take(8)) {
+            when (val result = editions.fetchRelease(id)) {
+                is DiscogsLookupResult.Found -> found += result.record
+                is DiscogsLookupResult.Throttled,
+                DiscogsLookupResult.Unauthorized,
+                DiscogsLookupResult.Disabled -> break
+                else -> Unit
+            }
+        }
+        return found
+    }
+}
