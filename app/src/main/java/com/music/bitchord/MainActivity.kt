@@ -1065,24 +1065,12 @@ private fun BitChordApp(
     // A remember block freezes time unless freshness is a state input. Wake
     // once at the earliest cache/upstream expiry to retire a weekly chart even
     // when Explore remains open without any unrelated recomposition.
-    var sitewideFreshnessNowMs by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(
-        selectedTab, canonicalExploreSitewide.fetchedAtMs,
-        canonicalExploreSitewide.upstreamUpdatedAtSeconds,
-    ) {
-        // Home's worldwide "Em alta" consumes this same verified weekly
-        // snapshot. Expire it on both tabs, not only while Explore is open.
-        if (selectedTab != TAB_EXPLORE && selectedTab != TAB_HOME) return@LaunchedEffect
-        val now = System.currentTimeMillis()
-        sitewideFreshnessNowMs = now
-        if (!canonicalSitewideDiscoveryIsFresh(canonicalExploreSitewide, now)) return@LaunchedEffect
-        val expiry = canonicalSitewideDiscoveryExpiresAtMs(canonicalExploreSitewide)
-            ?: return@LaunchedEffect
-        val remaining = expiry - now
-        if (remaining > 0L) delay(remaining + 1L)
-        sitewideFreshnessNowMs = System.currentTimeMillis()
-        viewModel.loadCanonicalExploreSitewide()
-    }
+    val sitewideFreshnessNowMs = rememberCatalogSitewideFreshness(
+        active = selectedTab == TAB_HOME || selectedTab == TAB_EXPLORE,
+        selectedTab = selectedTab,
+        snapshot = canonicalExploreSitewide,
+        onExpiry = viewModel::loadCanonicalExploreSitewide,
+    )
     val canonicalWeeklyCommunityShelf = remember(
         cachedCanonicalRows, canonicalExploreSitewide, canonicalCommunityHeading,
         sitewideFreshnessNowMs,
@@ -1109,29 +1097,15 @@ private fun BitChordApp(
     // The same HomeScreen shelf compositor displays private recommendations;
     // their MBIDs and per-user scores never contaminate public popularity.
     // Tick on expiration so the section disappears even if Explore stays open.
-    var personalRecommendationNowMs by remember {
-        mutableStateOf(System.currentTimeMillis())
-    }
-    LaunchedEffect(
-        selectedTab, canonicalPersonalRecommendations.fetchedAtMs,
-        canonicalPersonalRecommendations.upstreamUpdatedSeconds,
-        listenBrainzAccountEnabled, listenBrainzAccountToken,
-    ) {
-        if (selectedTab != TAB_HOME || !listenBrainzAccountEnabled ||
-            listenBrainzAccountToken.isBlank()
-        ) return@LaunchedEffect
-        val now = System.currentTimeMillis()
-        personalRecommendationNowMs = now
-        if (!canonicalPersonalRecommendationIsFresh(canonicalPersonalRecommendations, now)) {
-            return@LaunchedEffect
-        }
-        val expiry = canonicalPersonalRecommendationExpiresAtMs(canonicalPersonalRecommendations)
-            ?: return@LaunchedEffect
-        val remaining = expiry - now
-        if (remaining > 0L) delay(remaining + 1L)
-        personalRecommendationNowMs = System.currentTimeMillis()
-        viewModel.loadCanonicalPersonalRecommendations()
-    }
+    val personalRecommendationNowMs = rememberCatalogPersonalFreshness(
+        active = selectedTab == TAB_HOME && listenBrainzAccountEnabled &&
+            listenBrainzAccountToken.isNotBlank(),
+        selectedTab = selectedTab,
+        snapshot = canonicalPersonalRecommendations,
+        accountEnabled = listenBrainzAccountEnabled,
+        accountToken = listenBrainzAccountToken,
+        onExpiry = viewModel::loadCanonicalPersonalRecommendations,
+    )
     val canonicalPersonalShelf = remember(
         canonicalPersonalRecommendations, canonicalPersonalHeading,
         personalRecommendationNowMs, listenBrainzAccountEnabled, listenBrainzAccountToken,
@@ -1855,38 +1829,23 @@ private fun BitChordApp(
      * without spending the request is what lets the second run serve it.
      */
     val linkRequest by MusicLink.pending.collectAsStateWithLifecycle()
-    LaunchedEffect(linkRequest, controller) {
-        val request = linkRequest ?: return@LaunchedEffect
-        // Nothing here can be served without somewhere to play it — even the
-        // branches that only push a page are a beat away from a tap on one of
-        // its rows, and half-serving a request would spend it.
-        val session = controller ?: return@LaunchedEffect
-        // Keep recognizing old external links as archived references, but
-        // never resolve their opaque video/browse IDs through the retiring
-        // YouTube API. They are not MusicBrainz identities or local assets.
-        when (request) {
-            is LinkRequest.Track, is LinkRequest.Page -> {
-                Toast.makeText(
-                    context,
-                    context.getString(R.string.couldnt_open_link),
-                    Toast.LENGTH_SHORT,
-                ).show()
-            }
-            is LinkRequest.Search -> {
-                // Generic text requests always use canonical discovery.
-                // A voice/play intent must never silently restart YouTube search.
-                dismissPlayer()
-                selectedTab = TAB_SEARCH
-                viewModel.setSearchSource(SearchSource.CANONICAL)
-                viewModel.searchFor(request.query)
-            }
-            // "Play music", nothing named. The playback service restores its
-            // bounded queue before the controller connects, so this resumes
-            // both a live session and one recovered after process death.
-            LinkRequest.Resume -> if (session.mediaItemCount > 0) session.play()
-        }
-        MusicLink.handled()
-    }
+    NativeExternalMusicLinkEffect(
+        request = linkRequest,
+        controllerKey = controller,
+        onUnavailable = {
+            Toast.makeText(context, context.getString(R.string.couldnt_open_link),
+                Toast.LENGTH_SHORT).show()
+        },
+        onSearch = { text ->
+            dismissPlayer()
+            selectedTab = TAB_SEARCH
+            viewModel.setSearchSource(SearchSource.CANONICAL)
+            viewModel.searchFor(text)
+        },
+        onResume = {
+            if ((controller?.mediaItemCount ?: 0) > 0) controller?.play()
+        },
+    )
 
     // ---- Album / playlist menu ----
 
@@ -4513,26 +4472,21 @@ private fun BitChordApp(
                             albumUi = unifiedAlbumUi,
                         )
                         if (openedPublicPlaylist != null && !showSettings && !showAccountScrobbling) {
-                            CanonicalPlaylistToolbarActions(
-                                hasDetail = true,
-                                showCreate = false,
+                            NativePublicPlaylistTopBarActions(
+                                playlist = openedPublicPlaylist!!,
                                 searching = publicPlaylistSearching,
-                                onCreate = {},
-                                onSearch = {
+                                onToggleSearch = {
                                     publicPlaylistSearching = !publicPlaylistSearching
                                     if (!publicPlaylistSearching) publicPlaylistQuery = ""
                                 },
-                                onSortOrFilter = { publicPlaylistSortOpen = true },
-                                onOverflow = { publicPlaylistOptionsOpen = true },
-                            )
-                            com.music.bitchord.ui.screens.CanonicalPublicPlaylistToolbarMenus(
-                                playlist = openedPublicPlaylist!!,
-                                sortOpen = publicPlaylistSortOpen,
-                                optionsOpen = publicPlaylistOptionsOpen,
-                                onSortDismiss = { publicPlaylistSortOpen = false },
-                                onOptionsDismiss = { publicPlaylistOptionsOpen = false },
                                 sort = publicPlaylistSort,
                                 onSort = { publicPlaylistSort = it },
+                                sortOpen = publicPlaylistSortOpen,
+                                optionsOpen = publicPlaylistOptionsOpen,
+                                onShowSort = { publicPlaylistSortOpen = true },
+                                onShowOptions = { publicPlaylistOptionsOpen = true },
+                                onSortDismiss = { publicPlaylistSortOpen = false },
+                                onOptionsDismiss = { publicPlaylistOptionsOpen = false },
                             )
                         }
                         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null &&
@@ -7192,3 +7146,62 @@ private const val TAB_SEARCH = 3
  * prefix has to be the one thing both the writing and the reading agree on.
  */
 private const val TAB_KEY = "tab:"
+
+/**
+ * Source-aware link handling runs outside the BitChordApp Compose body.
+ * Historical YouTube links remain inert and plain text searches stay canonical.
+ */
+@Composable
+private fun NativeExternalMusicLinkEffect(
+    request: LinkRequest?,
+    controllerKey: Any?,
+    onUnavailable: () -> Unit,
+    onSearch: (String) -> Unit,
+    onResume: () -> Unit,
+) {
+    LaunchedEffect(request, controllerKey) {
+        val pending = request ?: return@LaunchedEffect
+        if (controllerKey == null) return@LaunchedEffect
+        when (pending) {
+            is LinkRequest.Track, is LinkRequest.Page -> onUnavailable()
+            is LinkRequest.Search -> onSearch(pending.query)
+            LinkRequest.Resume -> onResume()
+        }
+        MusicLink.handled()
+    }
+}
+
+/** One native public-playlist toolbar, not a second renderer in the root app. */
+@Composable
+private fun NativePublicPlaylistTopBarActions(
+    playlist: com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist,
+    searching: Boolean,
+    onToggleSearch: () -> Unit,
+    sort: com.music.bitchord.ui.screens.PlaylistLibrarySort,
+    onSort: (com.music.bitchord.ui.screens.PlaylistLibrarySort) -> Unit,
+    sortOpen: Boolean,
+    optionsOpen: Boolean,
+    onShowSort: () -> Unit,
+    onShowOptions: () -> Unit,
+    onSortDismiss: () -> Unit,
+    onOptionsDismiss: () -> Unit,
+) {
+    CanonicalPlaylistToolbarActions(
+        hasDetail = true,
+        showCreate = false,
+        searching = searching,
+        onCreate = {},
+        onSearch = onToggleSearch,
+        onSortOrFilter = onShowSort,
+        onOverflow = onShowOptions,
+    )
+    com.music.bitchord.ui.screens.CanonicalPublicPlaylistToolbarMenus(
+        playlist = playlist,
+        sortOpen = sortOpen,
+        optionsOpen = optionsOpen,
+        onSortDismiss = onSortDismiss,
+        onOptionsDismiss = onOptionsDismiss,
+        sort = sort,
+        onSort = onSort,
+    )
+}
