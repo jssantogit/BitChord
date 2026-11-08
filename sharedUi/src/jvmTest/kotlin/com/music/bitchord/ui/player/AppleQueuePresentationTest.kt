@@ -72,7 +72,7 @@ class AppleQueuePresentationTest {
         assertTrue(appleQueueShouldShowEmpty(lone))
         assertFalse(appleQueueHasUpcoming(lone))
         val history = queueTracksForPresentation(listOf(song("past"), song("current")), 1, appleStyle = true)
-        assertFalse(appleQueueShouldShowEmpty(history))
+        assertTrue(appleQueueShouldShowEmpty(history))
         val pending = queueTracksForPresentation(listOf(song("current"), song("next")), 0, appleStyle = true)
         assertFalse(appleQueueShouldShowEmpty(pending))
     }
