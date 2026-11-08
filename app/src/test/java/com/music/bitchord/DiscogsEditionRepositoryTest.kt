@@ -163,7 +163,13 @@ class DiscogsEditionRepositoryTest {
                 ): DiscogsHttpResponse {
                     searches++
                     assertEquals("Artist", query.artist)
-                    assertEquals("8809704427821", query.barcode)
+                    if (query.barcode != null) {
+                        assertEquals("8809704427821", query.barcode)
+                    } else {
+                        assertEquals("Album", query.title)
+                    }
+                    // Both independent indexes resolve to the SAME edition,
+                    // so dedupe must hydrate only one verified Release ID.
                     return DiscogsHttpResponse(200,
                         """{"results":[{"type":"release","id":12345}]}""")
                 }
@@ -201,7 +207,7 @@ class DiscogsEditionRepositoryTest {
         )
         val result = repository.observe(canonical)
         assertTrue(result is DiscogsEditionEnrichment.Verified)
-        assertEquals(1, searches)
+        assertEquals(2, searches)
     }
 
     @Test fun mismatchedEditionDoesNotShowDiscogsAsVerified() = runBlocking {
