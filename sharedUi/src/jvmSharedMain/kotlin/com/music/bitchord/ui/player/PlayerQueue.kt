@@ -923,7 +923,9 @@ private fun InlineQueueRow(
         Column(Modifier.weight(1f)) {
             ExplicitSongTitle(
                 song = song,
-                style = MaterialTheme.typography.titleMedium,
+                style = if (appleStyle) MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 17.sp, fontWeight = FontWeight.Normal,
+                ) else MaterialTheme.typography.titleMedium,
                 color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.92f),
             )
             Text(
