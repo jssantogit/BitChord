@@ -1391,4 +1391,7 @@
     <string name="visual_offline_cleared">已清除离线视觉内容</string>
     <string name="apple_music_tab_radio">廣播</string>
     <string name="apple_music_tab_radio_unavailable">廣播，即將推出</string>
+    <string name="apple_player_add_to_playlist">加入播放清單…</string>
+    <string name="apple_player_share_song">分享歌曲</string>
+    <string name="apple_player_share_lyrics">分享歌詞…</string>
 </resources>

@@ -1422,4 +1422,7 @@
     <string name="visual_offline_cleared">Visuels hors ligne effacés</string>
     <string name="apple_music_tab_radio">Radio</string>
     <string name="apple_music_tab_radio_unavailable">Radio, bientôt disponible</string>
+    <string name="apple_player_add_to_playlist">Ajouter à une playlist…</string>
+    <string name="apple_player_share_song">Partager la chanson</string>
+    <string name="apple_player_share_lyrics">Partager les paroles…</string>
 </resources>

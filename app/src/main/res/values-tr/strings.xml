@@ -1378,4 +1378,7 @@
     <string name="visual_offline_cleared">Offline visuals cleared</string>
     <string name="apple_music_tab_radio">Radyo</string>
     <string name="apple_music_tab_radio_unavailable">Radyo, yakında</string>
+    <string name="apple_player_add_to_playlist">Çalma listesine ekle…</string>
+    <string name="apple_player_share_song">Şarkıyı paylaş</string>
+    <string name="apple_player_share_lyrics">Şarkı sözlerini paylaş…</string>
 </resources>

@@ -1453,4 +1453,7 @@
     <string name="visual_offline_cleared">Офлайн-изображения очищены</string>
     <string name="apple_music_tab_radio">Радио</string>
     <string name="apple_music_tab_radio_unavailable">Радио, скоро</string>
+    <string name="apple_player_add_to_playlist">Добавить в плейлист…</string>
+    <string name="apple_player_share_song">Поделиться песней</string>
+    <string name="apple_player_share_lyrics">Поделиться текстом…</string>
 </resources>

@@ -1404,4 +1404,7 @@
     <string name="visual_offline_cleared">Offline visuals cleared</string>
     <string name="apple_music_tab_radio">วิทยุ</string>
     <string name="apple_music_tab_radio_unavailable">วิทยุ เร็ว ๆ นี้</string>
+    <string name="apple_player_add_to_playlist">เพิ่มลงในเพลย์ลิสต์…</string>
+    <string name="apple_player_share_song">แชร์เพลง</string>
+    <string name="apple_player_share_lyrics">แชร์เนื้อเพลง…</string>
 </resources>
