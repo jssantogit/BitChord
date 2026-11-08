@@ -4401,7 +4401,11 @@ private fun BitChordApp(
                         // stays out of the way until that has been scrolled off.
                         showReplay -> replayScrolled
                         openedPublicPlaylist != null ->
-                            pageDetailListState.firstVisibleItemIndex > 0
+                            // Reuse the same key-owned LazyListState as the
+                            // AnimatedContent public playlist slot. A slot-local
+                            // variable is not visible to the outer top bar.
+                            (detailListStates["public_playlist:${openedPublicPlaylist!!.mbid}"]
+                                ?.firstVisibleItemIndex ?: 0) > 0
                         detail != null -> detailScrolled
                         else -> scrolled || selectedTab == TAB_SEARCH
                     },
