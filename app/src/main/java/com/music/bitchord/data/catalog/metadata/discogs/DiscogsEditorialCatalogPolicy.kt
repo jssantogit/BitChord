@@ -158,6 +158,30 @@ internal object DiscogsShadowCatalog {
         return if (title.startsWith(prefix)) title.removePrefix(prefix) else title
     }
 
+    // A version/edition suffix identifies a physical variant of the same
+    // grouping title for absence checks only. Never use this relaxed check
+    // for exact Release identity, playback, or Discogs verification.
+    private val editionSuffix = Regex("""\\s*[\\(\\[]([^\\(\\)\\[\\]]{1,72})[\\)\\]]$""")
+    private val versionTag = Regex("""(?:\\bversion\\b|\\bedition\\b|\\bver\\.?(?=\\s|$))""")
+    private val distinctArrangement = Regex(
+        """\\b(?:remix|live|acoustic|instrumental|sped\\s+up|slowed)\\b""",
+    )
+
+    private fun isKnownGroupTitle(
+        title: String,
+        creditedArtist: String,
+        known: Set<String>,
+    ): Boolean {
+        val normalized = comparisonTitle(title, creditedArtist)
+        if (normalized in known) return true
+        val qualifier = editionSuffix.find(normalized) ?: return false
+        val suffix = qualifier.groupValues[1]
+        if (!versionTag.containsMatchIn(suffix) ||
+            distinctArrangement.containsMatchIn(suffix)
+        ) return false
+        return normalized.removeRange(qualifier.range).trim() in known
+    }
+
     fun select(
         observations: List<DiscogsPublicEditionSnapshot>,
         expectedArtist: String,
@@ -180,7 +204,7 @@ internal object DiscogsShadowCatalog {
                 release.unofficial || release.title.isBlank() ||
                 release.artistNames.size != 1 ||
                 normalizedTitle(release.artistNames.single()) != artist ||
-                comparisonTitle(release.title, expectedArtist) in knownTitles ||
+                isKnownGroupTitle(release.title, expectedArtist, knownTitles) ||
                 release.tracklist.isEmpty() ||
                 release.year == null ||
                 release.labels.isEmpty()
