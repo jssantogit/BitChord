@@ -211,7 +211,7 @@ internal fun NativeReleaseHeaderLayout(
         // The original rating slot shows first-party stars when saved. With
         // no rating it uses the exact Now Playing source badge; never invent
         // "Hi-Res" from bitrate or claim provider evidence was played.
-        if (onRate != null) {
+        if (onRate != null && (rating != null || quality == null)) {
             Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
