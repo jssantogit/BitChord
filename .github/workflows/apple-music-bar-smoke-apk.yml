@@ -1,8 +1,10 @@
 name: Apple Music Bottom Bar · Smoke APK
 
 on:
+  # No APK on every PR update. Explicitly apply the 'apple-music-smoke' label
+  # to this experiment's PR when a new smoke build is requested.
   pull_request:
-    types: [opened, reopened, synchronize]
+    types: [labeled]
 
 # This workflow exists only on the experimental PR branch.
 # It is not a release pipeline and does not publish a signed production app.
@@ -15,7 +17,7 @@ concurrency:
 
 jobs:
   dev-debug-apk:
-    if: github.event.pull_request.number == 212 && github.head_ref == 'experiment/apple-music-bottom-bar-pr209-20261108'
+    if: github.event.pull_request.number == 212 && github.head_ref == 'experiment/apple-music-bottom-bar-pr209-20261108' && github.event.label.name == 'apple-music-smoke'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:

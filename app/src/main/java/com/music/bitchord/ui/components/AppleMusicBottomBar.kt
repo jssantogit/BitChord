@@ -79,6 +79,9 @@ private val ApplePillShape = RoundedCornerShape(percent = 50)
  */
 internal object AppleMusicChromeMetrics {
     val navigationHeight = 62.dp
+    // Screenshot comparison: reference side gap is ~5.1% vs ~2.6% in our first smoke.
+    // 20dp is a visual calibration, not an AM-DECOMP XML measurement.
+    val pillHorizontalInset = 20.dp
     val navigationIconSize = 30.dp
     val navigationLabelSize = 13.sp
 
@@ -165,7 +168,7 @@ fun AppleMusicBottomBar(
     Row(
         modifier = modifier
             .windowInsetsPadding(floatingBarInsets)
-            .padding(horizontal = 10.dp)
+            .padding(horizontal = AppleMusicChromeMetrics.pillHorizontalInset)
             .padding(bottom = 2.dp)
             .fillMaxWidth()
             .height(AppleMusicChromeMetrics.navigationHeight)
@@ -253,7 +256,7 @@ fun AppleMusicMiniPlayer(
     val haptics = rememberHaptics()
     Box(
         modifier = modifier
-            .padding(horizontal = 10.dp)
+            .padding(horizontal = AppleMusicChromeMetrics.pillHorizontalInset)
             .miniPlayerGestures(
                 pull = pull,
                 onNext = {

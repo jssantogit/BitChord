@@ -22,6 +22,12 @@ class AppleMusicBottomBarVisualMetricsTest {
     }
 
     @Test
+    fun bothCapsulesKeepReferenceSideMargins() {
+        // The original 10dp margin occupied about half the reference gap.
+        assertEquals(20.dp, AppleMusicChromeMetrics.pillHorizontalInset)
+    }
+
+    @Test
     fun miniPlayerControlsGrowInsideDocumentedPill() {
         assertEquals(48.dp, AppleMusicChromeMetrics.miniPlayerHeight)
         assertEquals(34.dp, AppleMusicChromeMetrics.artworkSize)
