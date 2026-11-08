@@ -129,6 +129,39 @@ class DiscogsAuthenticatedDiscoveryTest {
         assertEquals(listOf("releases/321"), hydrated)
     }
 
+    @Test fun tooManyDistinctCandidateIdsCannotBeCalledAUniqueEdition() = runBlocking {
+        val search = DiscogsDatabaseSearchClient(
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse =
+                    DiscogsHttpResponse(200, """{"results":[
+                        {"id":101,"type":"release"},{"id":102,"type":"release"},
+                        {"id":103,"type":"release"},{"id":104,"type":"release"},
+                        {"id":105,"type":"release"},{"id":106,"type":"release"},
+                        {"id":107,"type":"release"},{"id":108,"type":"release"},
+                        {"id":109,"type":"release"}]}""")
+            },
+            tokenProvider = { token }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val releases = DiscogsClient(
+            transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse =
+                    error("Do not silently verify one edition from a truncated result set")
+            }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+            title = "SUPER REAL ME", creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"), status = "Official",
+            barcodes = listOf("8809704427821"), trackTitles = listOf("Magnetic"),
+            releaseYear = 2024, country = "KR",
+        )
+        assertTrue(DiscogsAuthenticatedDiscovery(search, releases)
+            .findForEdition(canonical) is DiscogsAuthenticatedMatch.Ambiguous)
+    }
+
     @Test fun twoIndependentSearchesMustNotSilentlyChooseTheFirstVerifiedEdition() = runBlocking {
         val search = DiscogsDatabaseSearchClient(
             transport = object : DiscogsSearchTransport {
