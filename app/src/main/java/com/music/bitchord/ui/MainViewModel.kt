@@ -1561,6 +1561,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
+        val startedNanos = System.nanoTime()
         canonicalDetailCoverJob?.cancel()
         canonicalBrowseJob?.cancel()
         canonicalPagingJob?.cancel()
@@ -2015,6 +2016,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (_searchSource.value == SearchSource.CANONICAL && canonicalPath.lastOrNull() == entry) {
                 _canonicalDetail.value = output
+                if (output is UiState.Success) {
+                    recordCanonicalLoadTiming(
+                        when (entry.kind) {
+                            CanonicalSearchKind.ARTIST -> "artist_detail_ready"
+                            CanonicalSearchKind.RELEASE -> "release_detail_ready"
+                            CanonicalSearchKind.RELEASE_GROUP -> "group_detail_ready"
+                            CanonicalSearchKind.RECORDING -> "recording_detail_ready"
+                        },
+                        startedNanos, output.data.rows.size,
+                    )
+                }
                 val nativeId = canonicalNativeBrowseId(entry)
                 _detailStack.value = _detailStack.value.map { page ->
                     if (page.browseId != nativeId) page else when (output) {
@@ -3469,6 +3481,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     internal fun loadCanonicalPublicPlaylistDetail(selected: ListenBrainzPublicPlaylist) {
+        val startedNanos = System.nanoTime()
         val generation = publicPlaylistDetailEpoch.next()
         publicPlaylistDetailJob?.cancel()
         _canonicalPublicPlaylistDetail.value = UiState.Loading
@@ -3478,6 +3491,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _canonicalPublicPlaylistDetail.value = if (details != null)
                 UiState.Success(details)
             else UiState.Error("Não foi possível carregar esta playlist pública.")
+            recordCanonicalLoadTiming("playlist_detail_ready", startedNanos,
+                details?.tracks?.size ?: 0)
             val loaded = details ?: return@launch
             // Display the JSPF immediately. Covers enrich asynchronously from
             // exact Recording MBIDs, never a title-based search or an audio source.
@@ -3586,6 +3601,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun loadCanonicalDiscoveryCatalog() {
         if (!isCanonicalDiscoverySelected()) return
+        val startedNanos = System.nanoTime()
         if (canonicalDiscoveryCatalogJob?.isActive == true) return
         val generation = canonicalDiscoveryCatalogEpoch.next()
         canonicalDiscoveryCatalogJob?.cancel()
@@ -3697,6 +3713,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ) {
                 _canonicalHomeRemotePicks.value = remotePicks
                 _canonicalDiscoveryCatalog.value = state
+                val count = (state as? UiState.Success)?.data?.size ?: 0
+                recordCanonicalLoadTiming("home_initial_sections", startedNanos,
+                    count + picks.size + remotePicks.size)
             }
 
             val popularMbids = try {
@@ -4303,6 +4322,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * A provider-owned MediaAsset lookup must be wired before enabling play.
      */
     private fun runCanonicalCatalogSearch(query: String) {
+        val startedNanos = System.nanoTime()
+        val firstPaintReported = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun reportFirstPaint(stage: String, count: Int) {
+            if (firstPaintReported.compareAndSet(false, true)) {
+                recordCanonicalLoadTiming(stage, startedNanos, count)
+            }
+        }
         canonicalSearchJob?.cancel()
         canonicalTypeaheadJob?.cancel()
         resetCanonicalSearchPagination()
@@ -4322,7 +4348,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (_searchSource.value == SearchSource.CANONICAL &&
                         _query.value.trim() == query &&
                         _canonicalResults.value is UiState.Loading
-                    ) _canonicalResults.value = UiState.Success(verified)
+                    ) {
+                        _canonicalResults.value = UiState.Success(verified)
+                        reportFirstPaint("search_cache", verified.size)
+                    }
                 }
             }
             // Resolve the artist identity FIRST. A query exactly naming an
@@ -4354,6 +4383,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _canonicalResults.value = UiState.Success(
                     canonicalProgressiveSearchPreview(current, fresh),
                 )
+                reportFirstPaint("search_artist", fresh.size)
             }
             val recordings = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchRecordingsForArtistMbid(artistScopeMbid, limit = 25)
@@ -4378,9 +4408,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         durationMs = hit.durationMs,
                     ) }
                 val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
-                if (fresh.isNotEmpty()) _canonicalResults.value = UiState.Success(
-                    canonicalProgressiveSearchPreview(current, fresh),
-                )
+                if (fresh.isNotEmpty()) {
+                    _canonicalResults.value = UiState.Success(
+                        canonicalProgressiveSearchPreview(current, fresh),
+                    )
+                    reportFirstPaint("search_recordings", fresh.size)
+                }
             }
             val groups = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchReleaseGroupsForArtistMbid(artistScopeMbid, limit = 15)
@@ -4400,9 +4433,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     artistScopeMbid = artistScopeMbid,
                 ) }
                 val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
-                if (fresh.isNotEmpty()) _canonicalResults.value = UiState.Success(
-                    canonicalProgressiveSearchPreview(current, fresh),
-                )
+                if (fresh.isNotEmpty()) {
+                    _canonicalResults.value = UiState.Success(
+                        canonicalProgressiveSearchPreview(current, fresh),
+                    )
+                    reportFirstPaint("search_groups", fresh.size)
+                }
             }
             val editions = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchReleasesForArtistMbid(artistScopeMbid, limit = 15)
@@ -4599,6 +4635,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (failedKinds.size == CanonicalSearchKind.entries.size && combined.isEmpty()) {
                     UiState.Error("MusicBrainz unavailable and no local matches")
                 } else UiState.Success(combined)
+            if (combined.isNotEmpty()) reportFirstPaint("search_complete_first", combined.size)
+            recordCanonicalLoadTiming("search_complete", startedNanos, combined.size)
             if (_canonicalResults.value is UiState.Success) enrichCanonicalSearchCovers(query)
         }
     }
