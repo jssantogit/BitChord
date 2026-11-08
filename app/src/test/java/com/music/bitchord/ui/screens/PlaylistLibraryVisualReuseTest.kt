@@ -18,6 +18,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
@@ -368,6 +369,7 @@ class PlaylistLibraryVisualReuseTest {
             )
         }
         compose.onNodeWithText("Buscar em Playlists").assertExists()
+        compose.onNodeWithTag("native-detail-search-field").assertHeightIsEqualTo(48.dp)
         compose.onNodeWithContentDescription("Buscar em Playlists").performTextInput("newjeans")
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
