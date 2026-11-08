@@ -382,6 +382,15 @@ internal class ListenBrainzPublicPlaylistClient(
     private val discoveryCache = linkedMapOf<String, CachedDiscovery>()
     private val discoveryInFlight = mutableMapOf<String,
         CompletableDeferred<List<ListenBrainzPublicPlaylist>?>>()
+    // Recording artwork enrichment is metadata-only; keep a small positive
+    // cache by the exact batch of MusicBrainz IDs, not by titles or artist.
+    private data class CachedRecordingArtwork(
+        val atMs: Long, val covers: Map<String, String>,
+    )
+    private val recordingArtworkMutex = kotlinx.coroutines.sync.Mutex()
+    private val recordingArtworkCache = linkedMapOf<List<String>, CachedRecordingArtwork>()
+    private val recordingArtworkInFlight = mutableMapOf<List<String>,
+        CompletableDeferred<Map<String, String>>>()
 
 
     private suspend fun cachedDiscovery(
@@ -692,16 +701,79 @@ internal class ListenBrainzPublicPlaylistClient(
     }
 
 
-    /** Up to 25 IDs per call, strictly scoped to real Recording MBIDs. */
+    /** Up to 25 verified Recording MBIDs per request. Many playlists reuse
+     * the same songs and may open concurrently: avoid paying repeated
+     * ListenBrainz rate-limit slots for the exact same metadata batch. */
     suspend fun artworkForRecordings(recordingMbids: List<String>): Map<String, String> {
-        val validated = recordingMbids.mapNotNull(::checkedPlaylistId).distinct().take(25)
-        if (validated.isEmpty()) return emptyMap()
-        val response = try { limiter.run { transport.recordingArtwork(validated) } }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { null }
-        return if (response?.status == 200)
-            parseListenBrainzPublicRecordingArtwork(response.body, validated)
-        else emptyMap()
+        val key = recordingMbids.mapNotNull(::checkedPlaylistId)
+            .distinct().take(25).sorted()
+        if (key.isEmpty()) return emptyMap()
+        var cached: Map<String, String>? = null
+        var pending: CompletableDeferred<Map<String, String>>? = null
+        var owner = false
+        recordingArtworkMutex.lock()
+        try {
+            val previous = recordingArtworkCache[key]
+            if (previous != null) {
+                val age = nowMillis() - previous.atMs
+                val ttl = if (previous.covers.isEmpty()) 60_000L else 10 * 60_000L
+                if (age >= 0 && age < ttl) cached = previous.covers
+                else recordingArtworkCache.remove(key)
+            }
+            if (cached == null) {
+                val running = recordingArtworkInFlight[key]
+                if (running != null) pending = running
+                else {
+                    pending = CompletableDeferred()
+                    recordingArtworkInFlight[key] = pending!!
+                    owner = true
+                }
+            }
+        } finally {
+            recordingArtworkMutex.unlock()
+        }
+        cached?.let { return it }
+        val request = pending ?: return emptyMap()
+        if (!owner) return request.await()
+        try {
+            val response = try { limiter.run { transport.recordingArtwork(key) } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            // A timeout/503 is NOT negative cover evidence. It must be retried
+            // on the next page opening instead of cached as permanent absence.
+            val verified = if (response?.status == 200)
+                parseListenBrainzPublicRecordingArtwork(response.body, key) else null
+            if (verified != null) {
+                recordingArtworkMutex.lock()
+                try {
+                    recordingArtworkCache.remove(key)
+                    recordingArtworkCache[key] = CachedRecordingArtwork(nowMillis(), verified)
+                    while (recordingArtworkCache.size > 32)
+                        recordingArtworkCache.remove(recordingArtworkCache.keys.first())
+                } finally {
+                    recordingArtworkMutex.unlock()
+                }
+            }
+            val result = verified.orEmpty()
+            request.complete(result)
+            return result
+        } catch (cancelled: CancellationException) {
+            request.completeExceptionally(cancelled)
+            throw cancelled
+        } catch (_: Exception) {
+            request.complete(emptyMap())
+            return emptyMap()
+        } finally {
+            withContext(NonCancellable) {
+                recordingArtworkMutex.lock()
+                try {
+                    if (recordingArtworkInFlight[key] === request)
+                        recordingArtworkInFlight.remove(key)
+                } finally {
+                    recordingArtworkMutex.unlock()
+                }
+            }
+        }
     }
 
     suspend fun detail(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? {
