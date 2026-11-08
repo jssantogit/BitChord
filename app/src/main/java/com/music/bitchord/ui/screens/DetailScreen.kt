@@ -339,6 +339,9 @@ fun DetailScreen(
     selectedReleaseMbid: String? = null,
     selectedReleaseGroupMbid: String? = null,
     selectedEditionFacts: List<String> = emptyList(),
+    /** Source-only catalog candidates; never musicbrainz/MediaAsset identifiers. */
+    discogsArtistCatalogComplete: Boolean = false,
+    discogsArtistKnownGroupTitles: Set<String> = emptySet(),
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
@@ -382,6 +385,12 @@ fun DetailScreen(
     val publicArtistMbid = page.browseId.takeIf {
         isArtist && it.startsWith("catalog:ARTIST:")
     }?.removePrefix("catalog:ARTIST:")
+    val discogsSupplementaryReleases = rememberDiscogsArtistSupplementaryReleases(
+        artistBrowseId = page.browseId,
+        artistName = page.title,
+        musicBrainzCatalogComplete = discogsArtistCatalogComplete,
+        knownMusicBrainzTitles = discogsArtistKnownGroupTitles,
+    )
     val publicTopRows = if (publicArtistMbid != null &&
         onCanonicalPublicTopOpen != null
     ) canonicalPublicTopTracks.filter {
@@ -1026,6 +1035,14 @@ fun DetailScreen(
                             onClick = { onSectionItemClick(item) },
                             onLongPress = onSectionItemLongPress?.let { { it(item) } },
                         )
+                }
+            }
+            if (isArtist && discogsSupplementaryReleases.isNotEmpty()) {
+                item(key = "artist-discogs-metadata-only-shelves") {
+                    DiscogsArtistSupplementaryShelves(
+                        releases = discogsSupplementaryReleases,
+                        palette = palette,
+                    )
                 }
             }
             if (isArtist && publicArtistMbid != null &&

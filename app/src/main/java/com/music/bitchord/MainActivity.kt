@@ -3510,13 +3510,31 @@ private fun BitChordApp(
                         val artistFeaturedRelease = rememberCanonicalPublicArtistFeaturedRelease(
                             viewModel, publicArtistMbid,
                         )
-                        val canonicalEditionPage = if (
-                            page.browseId.startsWith("catalog:RELEASE:") ||
-                            page.browseId.startsWith("catalog:RELEASE_GROUP:")
+                        val canonicalBrowsePage = if (
+                            page.browseId.startsWith("catalog:")
                         ) {
                             (viewModel.canonicalDetail.collectAsStateWithLifecycle().value
                                 as? UiState.Success)?.data
                         } else null
+                        val canonicalEditionPage = canonicalBrowsePage?.takeIf {
+                            page.browseId.startsWith("catalog:RELEASE:") ||
+                                page.browseId.startsWith("catalog:RELEASE_GROUP:")
+                        }
+                        val discogsArtistPage = canonicalBrowsePage?.takeIf {
+                            publicArtistMbid != null &&
+                                detail?.browseId == page.browseId &&
+                                it.rows.isNotEmpty() &&
+                                it.rows.all { row ->
+                                    row.kind == com.music.bitchord.ui.screens.CanonicalSearchKind.RELEASE_GROUP &&
+                                        !row.fromOfflineCache
+                                }
+                        }
+                        // A first page or a cached offline discography cannot
+                        // prove an item is absent from MusicBrainz.
+                        val discogsArtistCatalogComplete =
+                            discogsArtistPage?.nextOffset == null &&
+                                discogsArtistPage?.totalCount != null &&
+                                discogsArtistPage.rows.size >= discogsArtistPage.totalCount
                         val displayedEditionMbid =
                             com.music.bitchord.data.catalog.metadata.discogs
                                 .discogsOnlineAlbumEditionMbid(
@@ -3604,6 +3622,9 @@ private fun BitChordApp(
                                 displayedEditionMbid != null && canonicalEditionPage != null &&
                                 displayedEditionMbid == canonicalEditionPage.selectedReleaseMbid
                             ) canonicalEditionPage.selectedEditionFacts else emptyList(),
+                            discogsArtistCatalogComplete = discogsArtistCatalogComplete,
+                            discogsArtistKnownGroupTitles = discogsArtistPage?.rows
+                                ?.map { it.title }?.toSet().orEmpty(),
                             onCanonicalTrackPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },
