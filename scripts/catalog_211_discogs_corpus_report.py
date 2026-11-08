@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 import json
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -36,8 +37,24 @@ def report(document: dict) -> dict:
             continue
         if not isinstance(case.get("sources"), list) or not case["sources"] or not all(
             isinstance(src, str) and src in SOURCES for src in case["sources"]
+        ) or not any(src in {"artist", "label", "release_notes"} for src in case["sources"]):
+            errors.append(f"case {cid}: independent editorial adjudication is required")
+            continue
+        # A reviewed result must be reproducible from public release identities;
+        # a confident boolean without the underlying source is not evidence.
+        mbid = case.get("musicbrainz_group_mbid")
+        if cohort != "source_only" and (
+            not isinstance(mbid, str) or not re.fullmatch(
+                r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", mbid
+            )
         ):
-            errors.append(f"case {cid}: missing independent source labels")
+            errors.append(f"case {cid}: missing exact public MusicBrainz group MBID")
+            continue
+        release_id = case.get("discogs_release_id")
+        if (case.get("match_state") == "verified" or cohort == "source_only") and (
+            type(release_id) is not int or not 1 <= release_id <= 999_999_999_999
+        ):
+            errors.append(f"case {cid}: missing exact Discogs release ID")
             continue
         if any(case.get(k) not in KINDS for k in
                ("reference_type", "musicbrainz_type", "app_type")):
