@@ -191,48 +191,53 @@ fun SongActionsSheet(
 
     val rows: @Composable ColumnScope.() -> Unit = {
         if (appleQueuePlayerMenu) {
-            // Six deliberately selected actions. Reuse the native backend callbacks;
-            // unrelated actions (credits, station, timer, Favorite) do not appear.
-            ActionRow(
-                icon = Icons.Rounded.Add,
-                label = stringResource(if (alreadyPinned) R.string.remove_from_library else R.string.add_to_library),
-                accent = palette.accent,
-                enabled = onPinToLibrary != null,
-                onClick = { onPinToLibrary?.invoke() },
-            )
-            ActionRow(
-                icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
-                label = stringResource(R.string.apple_player_add_to_playlist),
-                accent = palette.accent,
-                onClick = onAddToPlaylist,
-            )
-            onShare?.let { share ->
-                ActionRow(
-                    icon = Icons.Rounded.Share,
-                    label = stringResource(R.string.apple_player_share_song),
-                    accent = palette.accent,
-                    onClick = share,
-                )
+            // Only approved actions; preserve order in the tested policy.
+            for (action in APPLE_PLAYER_MENU_ACTIONS) {
+                when (action) {
+                    ApplePlayerMenuAction.LIBRARY -> ActionRow(
+                        icon = Icons.Rounded.Add,
+                        label = stringResource(
+                            if (alreadyPinned) R.string.remove_from_library else R.string.add_to_library,
+                        ),
+                        accent = palette.accent,
+                        enabled = onPinToLibrary != null,
+                        onClick = { onPinToLibrary?.invoke() },
+                    )
+                    ApplePlayerMenuAction.PLAYLIST -> ActionRow(
+                        icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                        label = stringResource(R.string.apple_player_add_to_playlist),
+                        accent = palette.accent,
+                        onClick = onAddToPlaylist,
+                    )
+                    ApplePlayerMenuAction.SHARE_SONG -> onShare?.let { share ->
+                        ActionRow(
+                            icon = Icons.Rounded.Share,
+                            label = stringResource(R.string.apple_player_share_song),
+                            accent = palette.accent,
+                            onClick = share,
+                        )
+                    }
+                    ApplePlayerMenuAction.SHARE_LYRICS -> ActionRow(
+                        icon = Icons.Rounded.ChatBubbleOutline,
+                        label = stringResource(R.string.apple_player_share_lyrics),
+                        accent = palette.accent,
+                        enabled = onShareLyrics != null,
+                        onClick = { onShareLyrics?.invoke() },
+                    )
+                    ApplePlayerMenuAction.PLAY_NEXT -> ActionRow(
+                        icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                        label = stringResource(R.string.play_next),
+                        accent = palette.accent,
+                        onClick = onPlayNext,
+                    )
+                    ApplePlayerMenuAction.ADD_TO_QUEUE -> ActionRow(
+                        icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                        label = stringResource(R.string.add_to_queue),
+                        accent = palette.accent,
+                        onClick = onAddToQueue,
+                    )
+                }
             }
-            ActionRow(
-                icon = Icons.Rounded.ChatBubbleOutline,
-                label = stringResource(R.string.apple_player_share_lyrics),
-                accent = palette.accent,
-                enabled = onShareLyrics != null,
-                onClick = { onShareLyrics?.invoke() },
-            )
-            ActionRow(
-                icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
-                label = stringResource(R.string.play_next),
-                accent = palette.accent,
-                onClick = onPlayNext,
-            )
-            ActionRow(
-                icon = Icons.AutoMirrored.Rounded.QueueMusic,
-                label = stringResource(R.string.add_to_queue),
-                accent = palette.accent,
-                onClick = onAddToQueue,
-            )
         } else {
         // Native playlists work for local and canonical playback without login.
         if (appleQueuePlayerMenu || (signedIn && !isOffline)) {
