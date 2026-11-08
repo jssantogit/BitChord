@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsGroupEditorialEvidence
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsSourceOnlyDiscovery
+import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 
@@ -17,6 +19,7 @@ internal data class DiscogsEditorialFeeds(
     val cached: List<CanonicalCatalogSearchRow>,
     val worldwide: List<CanonicalCatalogSearchRow>,
     val genre: UiState<List<CanonicalCatalogSearchRow>>,
+    val sourceOnlyShelves: List<HomeShelf>,
 )
 
 @Composable
@@ -26,6 +29,14 @@ internal fun rememberDiscogsEditorialFeeds(
     genre: UiState<List<CanonicalCatalogSearchRow>>,
 ): DiscogsEditorialFeeds {
     val proofs by DiscogsGroupEditorialEvidence.store.proofs.collectAsStateWithLifecycle()
+    val sourceSnapshots by DiscogsSourceOnlyDiscovery.store.snapshots.collectAsStateWithLifecycle()
+    LaunchedEffect(sourceSnapshots) {
+        val now = System.currentTimeMillis()
+        DiscogsSourceOnlyDiscovery.store.nextExpiryMillis(now)?.let { expiry ->
+            kotlinx.coroutines.delay((expiry - now).coerceAtLeast(1L))
+            DiscogsSourceOnlyDiscovery.store.prune(System.currentTimeMillis())
+        }
+    }
     LaunchedEffect(proofs) {
         val now = System.currentTimeMillis()
         DiscogsGroupEditorialEvidence.store.nextExpiryMillis(now)?.let { expiry ->
@@ -33,7 +44,7 @@ internal fun rememberDiscogsEditorialFeeds(
             DiscogsGroupEditorialEvidence.store.prune(System.currentTimeMillis())
         }
     }
-    return remember(cached, worldwide, genre, proofs) {
+    return remember(cached, worldwide, genre, proofs, sourceSnapshots) {
         DiscogsEditorialFeeds(
             cached = discogsEditorialProjectedRows(cached, proofs),
             worldwide = discogsEditorialProjectedRows(worldwide, proofs),
@@ -43,6 +54,9 @@ internal fun rememberDiscogsEditorialFeeds(
                 )
                 else -> genre
             },
+            sourceOnlyShelves = discogsSourceOnlyCatalogShelves(
+                DiscogsSourceOnlyDiscovery.store.active(System.currentTimeMillis()),
+            ),
         )
     }
 }
