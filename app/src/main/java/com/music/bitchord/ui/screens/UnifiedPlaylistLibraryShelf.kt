@@ -712,9 +712,7 @@ private fun UnifiedPlaylistCompactRow(
         imageUrl = (card as? LibraryPlaylistCard.Normal)?.shelfItem?.thumbnailUrl,
         onClick = onClick,
         onLongPress = onMore,
-        trailing = {
-            RowMoreButton(onClick = onMore, contentDescription = "Opções de ${card.title}")
-        },
+        trailing = {}, // Root list options remain available on long press.
         modifier = modifier,
         horizontalPadding = 4.dp,
         // Keep Library rows compact. The large hero belongs to the
