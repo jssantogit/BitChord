@@ -16,6 +16,7 @@ import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditorialShelf
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowCatalog
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowRelease
+import com.music.bitchord.data.catalog.metadata.discogs.loadCompleteMusicBrainzArtistGroupTitles
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -49,15 +50,21 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
         artistName,
     ) {
         value = emptyList()
-        if (artistMbid == null || !musicBrainzCatalogComplete ||
+        if (artistMbid == null ||
             !DiscogsEditionAccess.ENABLED || !DiscogsEditionAccess.isSearchConfigured()
         ) return@produceState
         value = try {
             withContext(Dispatchers.IO) {
+                // The initial MusicBrainz page is not complete for large artists.
+                // Never identify source-only releases until a bounded, exact
+                // artist-MBID browse has checked every relevant group.
+                val completedTitles = if (musicBrainzCatalogComplete) knownNames
+                    else loadCompleteMusicBrainzArtistGroupTitles(artistMbid)
+                        ?: return@withContext emptyList<DiscogsShadowRelease>()
                 DiscogsEditionAccess.discovery.findForArtist(
                     artistName = artistName,
                     mbCatalogChecked = true,
-                    knownMusicBrainzTitles = knownNames,
+                    knownMusicBrainzTitles = completedTitles,
                 )
             }
         } catch (cancelled: CancellationException) {
