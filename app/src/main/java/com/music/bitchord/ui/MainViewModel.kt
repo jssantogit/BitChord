@@ -3647,46 +3647,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // cache: a fresh YT-off installation must not render a blank Home
             // just because no public MBID has been looked up yet.
             val app = getApplication<Application>()
-            val picks = try {
-                val local = if (LocalMediaRepository.hasStoragePermission(app)) {
-                    LocalMediaRepository.getLocalMusic(app)
-                } else emptyList()
-                val downloaded = Downloads.getDownloadedSongs(app)
-                (local + downloaded)
-                    .filter { com.music.bitchord.ui.isPlayableLocalPick(it) }
-                    .distinctBy { it.localUri }
-                    .take(500)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                emptyList()
-            }
-            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) && isCanonicalDiscoverySelected()) {
-                _canonicalHomeLocalPicks.value = picks
-            }
-
-            // A valid Server MediaAsset can populate "Escolha a dedo" even when
-            // MediaStore is empty and MusicBrainz has not been searched yet.
-            // This DAO projection omits stream URLs and provider-native IDs.
-            val remotePicks = try {
-                CanonicalCatalogDatabase.get(app).catalogDao()
-                    .searchCanonicalRemoteServerAssets("", limit = 400)
-                    .distinctBy { it.providerKey to it.mediaAssetId }
-                    .map { row ->
-                        CanonicalServerSearchRow(
-                            recordingId = row.recordingId,
-                            mediaAssetId = row.mediaAssetId,
-                            providerKey = row.providerKey,
-                            title = row.title,
-                            artistDisplay = row.artistDisplay,
-                            artworkUri = row.artworkUri,
-                        )
-                    }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                emptyList()
-            }
+            // Local MediaStore enumeration and server Room snapshot are independent.
+            // Start the remote snapshot before scanning large on-device libraries;
+            // both are still bounded IO work and share no playback assumptions.
+            val remoteDeferred = async(Dispatchers.IO) {
+            val remotePicks = remoteDeferred.await()
             if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
                 isCanonicalDiscoverySelected()
             ) {
