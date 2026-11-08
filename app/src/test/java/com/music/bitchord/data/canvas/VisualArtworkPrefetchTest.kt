@@ -104,6 +104,43 @@ class VisualArtworkPrefetchTest {
         assertEquals(1, secondAttempts)
     }
 
+    @Test fun completedWarmupDoesNotDecodeAgainUntilItsTtlExpires() = runBlocking {
+        var now = 1_000L
+        val gate = VisualArtworkFetchGate(
+            maxConcurrent = 2, nowMillis = { now }, successTtlMs = 1_000L,
+        )
+        var requests = 0
+        assertTrue(gate.fetchOnce("same:250") { requests++ })
+        assertFalse(gate.fetchOnce("same:250") { requests++ })
+        now += 1_001L
+        assertTrue(gate.fetchOnce("same:250") { requests++ })
+        assertEquals(2, requests)
+    }
+
+    @Test fun failedOrCancelledWarmupMayRetryImmediately() = runBlocking {
+        val gate = VisualArtworkFetchGate(maxConcurrent = 2)
+        var calls = 0
+        try {
+            gate.fetchOnce("broken") {
+                calls++
+                error("Image request failed")
+            }
+        } catch (_: IllegalStateException) {}
+        assertTrue(gate.fetchOnce("broken") { calls++ })
+        assertEquals(2, calls)
+    }
+
+    @Test fun completedWarmupLedgerHasBoundedMemoryAndEvictsOldest() = runBlocking {
+        val gate = VisualArtworkFetchGate(
+            maxConcurrent = 1, successCapacity = 2,
+        )
+        gate.fetchOnce("a") {}
+        gate.fetchOnce("b") {}
+        gate.fetchOnce("c") {}
+        assertFalse(gate.fetchOnce("b") {})
+        assertTrue(gate.fetchOnce("a") {})
+    }
+
     @Test fun invalidOrLocalImageDoesNotJoinSpeculativeHttpQueue() {
         val planned = planVisualArtworkPrefetch(listOf(
             VisualArtworkCandidate("https://cdn.example/a.jpg", VisualArtworkPriority.VISIBLE, 250),
