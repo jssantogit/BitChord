@@ -221,7 +221,15 @@ internal class DiscogsAuthenticatedDiscovery(
         val ids = LinkedHashSet<Long>()
         for (query in queries) {
             when (val result = search.search(query)) {
-                is DiscogsSearchResult.Found -> ids.addAll(result.ids)
+                is DiscogsSearchResult.Found -> {
+                    // This lookup sees only page 1; unexamined pages may
+                    // contain other equally strong Release candidates.
+                    // Fail closed rather than claiming an exact edition.
+                    if (result.nextPage != null) {
+                        return DiscogsAuthenticatedMatch.Ambiguous(result.ids.size)
+                    }
+                    ids.addAll(result.ids)
+                }
                 DiscogsSearchResult.Empty -> Unit
                 DiscogsSearchResult.AuthRequired -> return DiscogsAuthenticatedMatch.AuthRequired
                 // An incomplete candidate search cannot establish uniqueness.
