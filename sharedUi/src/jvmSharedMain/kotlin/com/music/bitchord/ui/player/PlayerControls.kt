@@ -1602,14 +1602,19 @@ private fun LosslessOrStats(
             modifier = modifier,
             appleStyle = appleStyle,
         )
-        measuredBadge == AppleQualityBadgeKind.DOLBY_ATMOS -> LosslessLabel(
-            text = "Dolby Atmos",
-            animated = !appleStyle,
-            iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
-            iconSize = 13.dp,
-            modifier = modifier,
-            appleStyle = appleStyle,
-        )
+        measuredBadge == AppleQualityBadgeKind.DOLBY_ATMOS -> {
+            if (appleStyle) {
+                AppleDolbyAtmosBadge(modifier)
+            } else {
+                LosslessLabel(
+                    text = "Dolby Atmos",
+                    animated = true,
+                    iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
+                    iconSize = 13.dp,
+                    modifier = modifier,
+                )
+            }
+        }
         // Lossy, but the good end of lossy — a module's 320kbps tier, which
         // for a great many tracks is the best copy that exists anywhere the
         // app can reach. See [NerdStats.Snapshot.isHiQuality].
@@ -1635,6 +1640,25 @@ private fun LosslessOrStats(
         )
         // No measured codec/bitrate: do not invent an Atmos or Lossless badge.
         else -> {}
+    }
+}
+
+/** The extracted Apple Music Atmos asset is one 83×15dp wordmark.
+ * A separate double-D glyph plus text has the wrong proportions and spacing. */
+@Composable
+private fun AppleDolbyAtmosBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(5.dp))
+            .padding(horizontal = 7.dp, vertical = 3.5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(Res.drawable.ic_apple_nowplaying_dolby_atmos),
+            contentDescription = "Dolby Atmos",
+            tint = LocalPlayerTint.current.copy(alpha = 0.9f),
+            modifier = Modifier.size(width = 83.dp, height = 15.dp),
+        )
     }
 }
 
