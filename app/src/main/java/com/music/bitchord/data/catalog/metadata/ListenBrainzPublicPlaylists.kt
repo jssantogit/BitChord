@@ -348,6 +348,12 @@ internal class ListenBrainzPublicPlaylistClient(
     )
     private val artistCacheMutex = kotlinx.coroutines.sync.Mutex()
     private val artistCache = linkedMapOf<Pair<String, List<String>>, ArtistPlaylistCache>()
+    // Reopening an already inspected public playlist must not pay another
+    // upstream HTTP + rate-limit slot. Only successful exact-MBID JSPF data
+    // is cached; transient failures are always retryable.
+    private data class CachedDetail(val atMs: Long, val detail: ListenBrainzPublicPlaylistDetail)
+    private val detailCacheMutex = kotlinx.coroutines.sync.Mutex()
+    private val detailCache = linkedMapOf<String, CachedDetail>()
 
     suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? {
         if (tag !in setOf("pop", "rock", "hip-hop", "electronic", "k-pop", "rnb",
@@ -500,11 +506,31 @@ internal class ListenBrainzPublicPlaylistClient(
     }
 
     suspend fun detail(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? {
-        if (checkedPlaylistId(selected.mbid) == null) return null
-        val response = try { limiter.run { transport.detail(selected.mbid) } }
+        val id = checkedPlaylistId(selected.mbid) ?: return null
+        val now = nowMillis()
+        detailCacheMutex.lock()
+        try {
+            val cached = detailCache[id]
+            if (cached != null && now >= cached.atMs &&
+                now - cached.atMs < 10 * 60_000L
+            ) return cached.detail
+            detailCache.remove(id)
+        } finally {
+            detailCacheMutex.unlock()
+        }
+        val response = try { limiter.run { transport.detail(id) } }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { return null }
         if (response.status != 200) return null
-        return parseListenBrainzPublicPlaylistDetail(response.body, selected)
+        val parsed = parseListenBrainzPublicPlaylistDetail(response.body, selected) ?: return null
+        detailCacheMutex.lock()
+        try {
+            detailCache.remove(id)
+            detailCache[id] = CachedDetail(nowMillis(), parsed)
+            while (detailCache.size > 24) detailCache.remove(detailCache.keys.first())
+        } finally {
+            detailCacheMutex.unlock()
+        }
+        return parsed
     }
 }
