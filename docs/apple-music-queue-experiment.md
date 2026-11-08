@@ -23,6 +23,7 @@ AM-DECOMP evidence: `docs/components/player-panels.md`, `docs/motion/player-pane
 - The handle is at the **right** of future-track rows; it keeps the existing drag coordinator, boundary checks, per-section reordering and edge auto-scroll. History cannot be reordered or swipe-removed. Swiping a future row left crosses the 72dp threshold to invoke the existing remove callback; a held row and locked-party queue are inert. The legacy presentation (e.g. desktop/landscape) remains unchanged.
 - The queue-header star persists SHA-256 hashes of exact playback-media identities in a private Android SharedPreferences set. This is **not** a 5-star rating, not a retired-provider thumbs-up, and not a claim to synchronize with every Library shelf. Existing ratings stay accessible in the three-dot menu.
 - The existing `SongActionsSheet` remains one modular sheet. The Apple queue context hides **Create Station**, permits the native local playlist picker without a retired provider login, and offers native Favorite, rating, download, Play Next, Add to Queue, open album/artist when ids are known, and music-text sharing. Unsupported Share Station, Suggest Less, Credits and Sleep Timer options are not presented.
+- The specialized action-set flag is passed **only** by the queue header's vertical ⋮ action. It is false in the normal Now Playing ⋮ and other track menus. `shouldUseAppleQueueSongActions` has explicit tests for all four combinations of caller location and player context.
 
 ## Validation
 
