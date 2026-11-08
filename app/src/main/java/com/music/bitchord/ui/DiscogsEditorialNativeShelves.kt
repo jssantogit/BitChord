@@ -61,9 +61,10 @@ internal fun discogsEditorialArtistShelves(
     val evidenceByGroup = musicBrainzGroups.filter {
         it.kind == CanonicalSearchKind.RELEASE_GROUP
     }.associateBy { it.musicBrainzId }
-    val cards = original.flatMap { it.items }.mapNotNull { card ->
-        card.browseId?.let { it to card }
-    }.toMap()
+    val cards = original.filter { it.title == albumsHeading || it.title == singlesHeading }
+        .flatMap { it.items }.mapNotNull { card ->
+            card.browseId?.let { it to card }
+        }.toMap()
     val changes = evidenceByGroup.mapNotNull { (id, row) ->
         val proofs = groupProofs[id].orEmpty()
         if (proofs.isEmpty()) return@mapNotNull null
@@ -85,7 +86,8 @@ internal fun discogsEditorialArtistShelves(
     val affectedBrowseIds = changes.keys.mapTo(HashSet()) {
         "catalog:RELEASE_GROUP:$it"
     }
-    val retained = original.flatMap { it.items }.filter { it.browseId !in affectedBrowseIds }
+    val retained = original.filter { it.title == albumsHeading || it.title == singlesHeading }
+        .flatMap { it.items }.filter { it.browseId !in affectedBrowseIds }
     val moved = changes.map { (id, item) ->
         val row = item.first
         val browseId = "catalog:RELEASE_GROUP:$id"
