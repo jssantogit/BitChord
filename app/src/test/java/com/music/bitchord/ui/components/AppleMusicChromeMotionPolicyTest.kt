@@ -7,15 +7,15 @@ import org.junit.Test
 class AppleMusicChromeMotionPolicyTest {
     @Test
     fun radioNeverAnimatesAsThoughItCanBePressedOrSelected() {
-        assertEquals(1f, appleMusicTabScaleTarget(enabled = false, selected = false, pressed = true))
-        assertEquals(1f, appleMusicTabScaleTarget(enabled = false, selected = true, pressed = true))
+        assertEquals(1f, appleMusicTabScaleTarget(enabled = false, selected = false, pressed = true), 0.0001f)
+        assertEquals(1f, appleMusicTabScaleTarget(enabled = false, selected = true, pressed = true), 0.0001f)
     }
 
     @Test
     fun enabledTabsReactToSelectionAndPressAndReturnToRest() {
-        assertEquals(1f, appleMusicTabScaleTarget(enabled = true, selected = false, pressed = false))
-        assertEquals(1.04f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = false))
-        assertEquals(0.91f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = true))
+        assertEquals(1f, appleMusicTabScaleTarget(enabled = true, selected = false, pressed = false), 0.0001f)
+        assertEquals(1.04f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = false), 0.0001f)
+        assertEquals(0.91f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = true), 0.0001f)
     }
 
     @Test
