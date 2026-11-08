@@ -68,9 +68,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
-import androidx.compose.ui.graphics.painter.Painter
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
-import org.jetbrains.compose.resources.painterResource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -645,9 +643,9 @@ private fun SlidingPlayerDeck(
  */
 /** Original Apple 7.0 vector button for the queue overflow. */
 @Composable
-private fun AppleQueueHeaderAction(painter: Painter, description: String, onClick: () -> Unit) {
+private fun AppleQueueHeaderAction(imageVector: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
     Box(Modifier.size(40.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Icon(painter = painter, contentDescription = description, tint = Color.White, modifier = Modifier.size(34.dp))
+        Icon(imageVector = imageVector, contentDescription = description, tint = Color.White, modifier = Modifier.size(34.dp))
     }
 }
 
@@ -2071,7 +2069,7 @@ fun NowPlayingScreen(
                                     Spacer(Modifier.weight(1f))
                                     PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
                                     AppleQueueHeaderAction(
-                                        painter = painterResource(Res.drawable.apple_queue_more),
+                                        imageVector = AppleQueueVectors.More,
                                         description = stringResource(Res.string.more),
                                         onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
                                     )
@@ -3322,7 +3320,7 @@ fun NowPlayingScreen(
                                 !lyrics.isNullOrEmpty() && (!lyricsControlsOpen || lyricPicker.picking)
                             if (queueOpen && appleQueueStyle) {
                                 AppleQueueHeaderAction(
-                                    painter = painterResource(Res.drawable.apple_queue_more),
+                                    imageVector = AppleQueueVectors.More,
                                     description = stringResource(Res.string.more),
                                     onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
                                 )

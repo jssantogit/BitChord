@@ -14,10 +14,7 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.sharedui.resources.Res
-import com.music.bitchord.sharedui.resources.apple_queue_favorite
-import com.music.bitchord.sharedui.resources.apple_queue_favorited
 import com.music.bitchord.sharedui.resources.recording_feedback_edit
-import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Only a saved, first-party score marks the star; a remote rating alone never does. */
@@ -44,10 +41,7 @@ internal fun PlayerRatingStar(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            painter = painterResource(
-                if (isRated) Res.drawable.apple_queue_favorited
-                else Res.drawable.apple_queue_favorite
-            ),
+            imageVector = if (isRated) AppleQueueVectors.Favorited else AppleQueueVectors.Favorite,
             contentDescription = stringResource(Res.string.recording_feedback_edit),
             tint = Color.White,
             modifier = Modifier.size(34.dp),

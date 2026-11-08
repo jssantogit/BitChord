@@ -31,6 +31,14 @@ Static tests cover the queue split, duplicate keys, swipe safety, queue-only men
 
 ## Follow-up: player-wide rating star
 
-The Apple SVG variants named `apple_queue_favorite` and `apple_queue_favorited` now indicate **unrated / locally rated**, not a Favorite toggle. The star appears in Android's song, lyrics and queue panels in portrait and in the corresponding landscape states. Existing desktop/non-experimental consumers retain their old rating-strip presentation. The current Recording score lives in Listening Room and updates through the existing canonical rating presentation snapshot. The action is a pure entrance to the existing verifier and modal; tapping never writes a score. The three-dot menu continues to open the same modular sheet with its other supported actions.
+The original Apple queue vector outlines, now stored as platform-compatible Compose `ImageVector` paths (`AppleQueueVectors`), indicate **unrated / locally rated**, not a Favorite toggle. The star appears in Android's song, lyrics and queue panels in portrait and in the corresponding landscape states. Existing desktop/non-experimental consumers retain their old rating-strip presentation. The current Recording score lives in Listening Room and updates through the existing canonical rating presentation snapshot. The action is a pure entrance to the existing verifier and modal; tapping never writes a score. The three-dot menu continues to open the same modular sheet with its other supported actions.
 
 No APK build was triggered by this documentation change. The latest code commit must first be compiled/tested; the smoke APK workflow remains a manual PR label action.
+
+## Crash fix (08 Nov 2026, after APK 73a6cf0)
+
+Device diagnostics `bitchord-diagnostics-20261108-130547.txt` captured the crash at 2026-11-08T16:05:35Z (Samsung SM-A546E, Android 14): `java.lang.IllegalStateException: Android platform doesn't support SVG format`. Stack trace enters `org.jetbrains.compose.resources.ImageResources_androidKt.toSvgElement` through `painterResource` at `PlayerRatingStar.kt:47` when the miniplayer expands. These are runtime-incompatible Compose SVG drawable resources, not a playback-engine error.
+
+Fix: convert **all four** original AM-DECOMP Apple queue icons (outlined star, marked star, overflow and reorder grip) to native `ImageVector.Builder.addPath(addPathNodes(...))` paths while retaining original 28×28 vector geometry, path fill rules and opacity. Delete the four `sharedUi/composeResources/drawable/apple_queue_*.svg` assets, replace their `painterResource` callsites with direct `Icon(imageVector = ...)`, and keep the native rating editor unchanged. All original SVG geometries are preserved in Kotlin vector nodes. A `sharedUi` test constructs each vector to guard against reintroducing the unsupported runtime SVG painter. Android CI + a fresh device smoke must still confirm that opening Now Playing, accessing Queue and its ⋮, rating a track and dragging the list do not crash.
+
+No change to transport controls, ratings persistence or the PR #209.

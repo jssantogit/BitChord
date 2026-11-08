@@ -59,7 +59,6 @@ import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import org.jetbrains.compose.resources.stringResource
-import org.jetbrains.compose.resources.painterResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -910,7 +909,7 @@ private fun InlineQueueRow(
         }
         if (appleStyle && draggable) {
             Icon(
-                painter = painterResource(Res.drawable.apple_queue_drag_handle),
+                imageVector = AppleQueueVectors.DragHandle,
                 contentDescription = stringResource(Res.string.drag_to_reorder),
                 tint = Color.White.copy(alpha = 0.34f),
                 modifier = Modifier.size(32.dp).pointerInput(song.queueEntryId, song.videoId) {
