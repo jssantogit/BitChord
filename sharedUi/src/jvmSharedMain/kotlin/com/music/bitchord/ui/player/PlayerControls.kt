@@ -1666,7 +1666,7 @@ private fun LosslessLabel(
             painter = iconPainter,
             contentDescription = null,
             tint = tint,
-            modifier = if (appleStyle && iconPainter == iconPainter) Modifier.size(width = 14.dp, height = 9.dp)
+            modifier = if (appleStyle && !iconSize.isSpecified) Modifier.size(width = 14.dp, height = 9.dp)
                 else if (iconSize.isSpecified) Modifier.size(iconSize) else Modifier,
         )
         Spacer(Modifier.width(if (appleStyle) 5.dp else 4.dp))
