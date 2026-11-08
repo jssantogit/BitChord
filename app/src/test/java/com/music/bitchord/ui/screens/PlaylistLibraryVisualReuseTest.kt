@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
@@ -167,11 +168,13 @@ class PlaylistLibraryVisualReuseTest {
             )
         }
         val app = org.robolectric.RuntimeEnvironment.getApplication()
+        // Compose's disabled clickable retains accessibility action metadata,
+        // but exposes Disabled and never executes the callback.
         compose.onNodeWithText(app.getString(com.music.bitchord.R.string.play))
-            .assertHasNoClickAction()
+            .assertIsNotEnabled()
         compose.onNodeWithContentDescription(
             app.getString(com.music.bitchord.R.string.shuffle),
-        ).assertHasNoClickAction()
+        ).assertIsNotEnabled()
         compose.onNodeWithContentDescription("Fixar álbum na Biblioteca").performClick()
         compose.runOnIdle {
             assertEquals(0, played)

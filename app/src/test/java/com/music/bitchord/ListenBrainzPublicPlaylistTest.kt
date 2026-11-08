@@ -9,7 +9,11 @@ import com.music.bitchord.data.catalog.metadata.parseListenBrainzPublicPlaylistS
 import com.music.bitchord.data.catalog.metadata.parseListenBrainzPublicRecordingArtwork
 import com.music.bitchord.data.catalog.metadata.parseListenBrainzPublicPlaylistDetail
 import com.music.bitchord.data.catalog.metadata.publicPlaylistMbid
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -342,6 +346,74 @@ class ListenBrainzPublicPlaylistTest {
         assertEquals(listOf("K-pop"), requested)
         assertTrue(client.searchPublicQuery("  ").isEmpty())
         assertEquals(listOf("K-pop"), requested)
+    }
+
+    @Test fun cachedOtherArtistIsNotBlockedBySlowRemoteArtistRequest() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var requests = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    requests++
+                    if (query == "Slow artist") {
+                        started.complete(Unit)
+                        release.await()
+                    }
+                    return ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+                }
+                override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp =
+                    ListenBrainzPublicPlaylistHttp(200,
+                        """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$mbid",
+                          "track":[{"identifier":"https://musicbrainz.org/recording/$song"}]}}""")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        val cached = client.searchArtistVerified("Fast artist", setOf(song))
+        val slow = async(start = CoroutineStart.UNDISPATCHED) {
+            client.searchArtistVerified("Slow artist", setOf(song))
+        }
+        started.await()
+        try {
+            assertEquals(cached, withTimeout(1_000L) {
+                client.searchArtistVerified("Fast artist", setOf(song))
+            })
+        } finally {
+            release.complete(Unit)
+            slow.await()
+        }
+        assertEquals(2, requests)
+    }
+
+    @Test fun concurrentSameArtistLookupsShareExactVerifiedMembershipRequest() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var searches = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    searches++
+                    started.complete(Unit)
+                    release.await()
+                    return ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+                }
+                override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp =
+                    ListenBrainzPublicPlaylistHttp(200,
+                        """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$mbid",
+                          "track":[{"identifier":"https://musicbrainz.org/recording/$song"}]}}""")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        val first = async(start = CoroutineStart.UNDISPATCHED) {
+            client.searchArtistVerified("Concurrent artist", setOf(song))
+        }
+        started.await()
+        val second = async(start = CoroutineStart.UNDISPATCHED) {
+            client.searchArtistVerified("Concurrent artist", setOf(song))
+        }
+        release.complete(Unit)
+        assertEquals(first.await(), second.await())
+        assertEquals(1, searches)
     }
 
     @Test fun artistPlaylistSearchCacheFollowsExactRecordingEvidence() = runBlocking {

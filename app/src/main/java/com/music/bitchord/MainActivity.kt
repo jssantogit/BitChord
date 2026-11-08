@@ -2711,108 +2711,115 @@ private fun BitChordApp(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
     ) {
-        // A pushed album/artist/playlist page replaces the tab content but
-        // leaves the tab bar and mini player in place.
-        // Replay's three layers unwind in the order they were opened. Ahead of
-        // every other handler because they are drawn over everything else.
-        BackHandler(enabled = showReplayShare) { showReplayShare = false }
-        BackHandler(enabled = replayStory != null && !showReplayShare) { replayStory = null }
-        BackHandler(
-            enabled = showReplay && replayStory == null && !showReplayShare,
-        ) {
-            if (settingsSubScreen == "replay") {
-                // Dismiss Replay overlay and return to SettingsSheet beneath.
-                showReplay = false
-                settingsSubScreen = null
-            } else {
-                showReplay = false
+        // Keep route-specific BackHandler order unchanged while compiling the
+        // Compose callbacks outside the oversized BitChordApp method. In
+        // particular, the last enabled handler retains its navigation priority.
+        val routeBackHandlers: @Composable () -> Unit = {
+            // A pushed album/artist/playlist page replaces the tab content but
+            // leaves the tab bar and mini player in place.
+            // Replay's three layers unwind in the order they were opened. Ahead of
+            // every other handler because they are drawn over everything else.
+            BackHandler(enabled = showReplayShare) { showReplayShare = false }
+            BackHandler(enabled = replayStory != null && !showReplayShare) { replayStory = null }
+            BackHandler(
+                enabled = showReplay && replayStory == null && !showReplayShare,
+            ) {
+                if (settingsSubScreen == "replay") {
+                    // Dismiss Replay overlay and return to SettingsSheet beneath.
+                    showReplay = false
+                    settingsSubScreen = null
+                } else {
+                    showReplay = false
+                }
             }
-        }
-        BackHandler(
-            enabled = detail != null && !showSettings && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs &&
-                !showEqualizer && !showReplay,
-        ) { viewModel.closeDetail() }
+            BackHandler(
+                enabled = detail != null && !showSettings && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs &&
+                    !showEqualizer && !showReplay,
+            ) { viewModel.closeDetail() }
 
-        BackHandler(enabled = showDiscord) {
-            showDiscord = false
-        }
-        BackHandler(enabled = showSpotify && detail == null) {
-            showSpotify = false
-        }
-        BackHandler(enabled = showAccountScrobbling && !showDiscord && !showSpotify) {
-            showAccountScrobbling = false
-            if (settingsSubScreen == "account_scrobbling") settingsSubScreen = null
-        }
-        BackHandler(enabled = showSources) {
-            showSources = false
-            if (settingsSubScreen == "sources") settingsSubScreen = null
-        }
-        BackHandler(enabled = showListenTogether) {
-            showListenTogether = false
-            if (settingsSubScreen == "listen_together") settingsSubScreen = null
-        }
-        BackHandler(enabled = showWearOs) {
-            showWearOs = false
-            if (settingsSubScreen == "wear_os") settingsSubScreen = null
-        }
-        BackHandler(enabled = showEqualizer) {
-            showEqualizer = false
-            if (settingsSubScreen == "equalizer") settingsSubScreen = null
-        }
-        BackHandler(enabled = settingsSubScreen == "soulseek" ||
-            settingsSubScreen == "diagnostics") {
-            settingsSubScreen = null
-        }
-        // One back step out of Settings, or out of any tab but Home, lands on
-        // Home rather than exiting — only Home itself hands back to the system,
-        // which is what actually closes/minimizes the app.
-        BackHandler(enabled = showSettings && settingsSubScreen == null && !showSpotify && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay) {
-            if (settingsSection != null) {
-                settingsSection = null
-            } else {
-                showSettings = false
-                // Closing the root settings page, not a nested category.
-                if (detail == null && !showReplay) selectedTab = TAB_HOME
+            BackHandler(enabled = showDiscord) {
+                showDiscord = false
             }
+            BackHandler(enabled = showSpotify && detail == null) {
+                showSpotify = false
+            }
+            BackHandler(enabled = showAccountScrobbling && !showDiscord && !showSpotify) {
+                showAccountScrobbling = false
+                if (settingsSubScreen == "account_scrobbling") settingsSubScreen = null
+            }
+            BackHandler(enabled = showSources) {
+                showSources = false
+                if (settingsSubScreen == "sources") settingsSubScreen = null
+            }
+            BackHandler(enabled = showListenTogether) {
+                showListenTogether = false
+                if (settingsSubScreen == "listen_together") settingsSubScreen = null
+            }
+            BackHandler(enabled = showWearOs) {
+                showWearOs = false
+                if (settingsSubScreen == "wear_os") settingsSubScreen = null
+            }
+            BackHandler(enabled = showEqualizer) {
+                showEqualizer = false
+                if (settingsSubScreen == "equalizer") settingsSubScreen = null
+            }
+            BackHandler(enabled = settingsSubScreen == "soulseek" ||
+                settingsSubScreen == "diagnostics") {
+                settingsSubScreen = null
+            }
+            // One back step out of Settings, or out of any tab but Home, lands on
+            // Home rather than exiting — only Home itself hands back to the system,
+            // which is what actually closes/minimizes the app.
+            BackHandler(enabled = showSettings && settingsSubScreen == null && !showSpotify && !showAccountScrobbling && !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay) {
+                if (settingsSection != null) {
+                    settingsSection = null
+                } else {
+                    showSettings = false
+                    // Closing the root settings page, not a nested category.
+                    if (detail == null && !showReplay) selectedTab = TAB_HOME
+                }
+            }
+            BackHandler(
+                enabled = detail == null && !showSettings && !showAccountScrobbling && !showSpotify &&
+                    !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay &&
+                    selectedTab != TAB_HOME && openedPublicPlaylist == null,
+            ) {
+                selectedTab = TAB_HOME
+            }
+            BackHandler(enabled = showUpdateDialog) { showUpdateDialog = false }
+            BackHandler(enabled = showListenBrainzLogin) { showListenBrainzLogin = false }
+            BackHandler(enabled = showLastfmLogin) { showLastfmLogin = false }
+            BackHandler(enabled = discordDialog != null) { discordDialog = null }
+            BackHandler(enabled = editingSource != null) { editingSource = null }
+            BackHandler(enabled = editingPartyServer) { editingPartyServer = false }
+            BackHandler(enabled = editingSignatureApi) { editingSignatureApi = false }
+            BackHandler(enabled = showHistory) { showHistory = false }
+            // Disabled while a detail page is open over the grid: that one's own
+            // BackHandler below has to close first, or back would skip past it
+            // straight to Library. See [onLibraryItemClick].
+            BackHandler(enabled = libraryShowAll != null && detail == null) { libraryShowAll = null }
+            BackHandler(enabled = showAllLocalRecentAdditions && detail == null) { showAllLocalRecentAdditions = false }
+            BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
+            BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
+            BackHandler(enabled = communityMetadataRecording != null) { communityMetadataRecording = null }
+            BackHandler(enabled = activeCanonicalGenre != null && selectedTab == TAB_EXPLORE &&
+                detail == null && communityMetadataRecording == null && openedPublicPlaylist == null
+            ) { activeCanonicalGenre = null }
+            BackHandler(enabled = openedPublicPlaylist != null) { openedPublicPlaylist = null }
+            BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
+            BackHandler(enabled = unifiedLibraryCategory != null) {
+                if (unifiedLibraryDetailOpen) unifiedLibraryBackToken++
+                else unifiedLibraryCategory = null
+            }
+            BackHandler(enabled = showPlaylistLibrary && detail == null &&
+                !showSmartPlaylistBuilder) {
+                if (openedCanonicalPlaylist != null) openedCanonicalPlaylist = null
+                else showPlaylistLibrary = false
+            }
+            BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
+
         }
-        BackHandler(
-            enabled = detail == null && !showSettings && !showAccountScrobbling && !showSpotify &&
-                !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showReplay &&
-                selectedTab != TAB_HOME && openedPublicPlaylist == null,
-        ) {
-            selectedTab = TAB_HOME
-        }
-        BackHandler(enabled = showUpdateDialog) { showUpdateDialog = false }
-        BackHandler(enabled = showListenBrainzLogin) { showListenBrainzLogin = false }
-        BackHandler(enabled = showLastfmLogin) { showLastfmLogin = false }
-        BackHandler(enabled = discordDialog != null) { discordDialog = null }
-        BackHandler(enabled = editingSource != null) { editingSource = null }
-        BackHandler(enabled = editingPartyServer) { editingPartyServer = false }
-        BackHandler(enabled = editingSignatureApi) { editingSignatureApi = false }
-        BackHandler(enabled = showHistory) { showHistory = false }
-        // Disabled while a detail page is open over the grid: that one's own
-        // BackHandler below has to close first, or back would skip past it
-        // straight to Library. See [onLibraryItemClick].
-        BackHandler(enabled = libraryShowAll != null && detail == null) { libraryShowAll = null }
-        BackHandler(enabled = showAllLocalRecentAdditions && detail == null) { showAllLocalRecentAdditions = false }
-        BackHandler(enabled = detailActiveShelf != null) { detailActiveShelf = null }
-        BackHandler(enabled = rediscoveryRecordingId != null) { rediscoveryRecordingId = null }
-        BackHandler(enabled = communityMetadataRecording != null) { communityMetadataRecording = null }
-        BackHandler(enabled = activeCanonicalGenre != null && selectedTab == TAB_EXPLORE &&
-            detail == null && communityMetadataRecording == null && openedPublicPlaylist == null
-        ) { activeCanonicalGenre = null }
-        BackHandler(enabled = openedPublicPlaylist != null) { openedPublicPlaylist = null }
-        BackHandler(enabled = showCanonicalMyRatings) { showCanonicalMyRatings = false }
-        BackHandler(enabled = unifiedLibraryCategory != null) {
-            if (unifiedLibraryDetailOpen) unifiedLibraryBackToken++
-            else unifiedLibraryCategory = null
-        }
-        BackHandler(enabled = showPlaylistLibrary && detail == null &&
-            !showSmartPlaylistBuilder) {
-            if (openedCanonicalPlaylist != null) openedCanonicalPlaylist = null
-            else showPlaylistLibrary = false
-        }
-        BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
+        routeBackHandlers()
 
         // On a tablet the page and the player stand side by side rather than
         // one over the other: everything a phone stacks in a single column —

@@ -12,6 +12,9 @@ import io.ktor.client.request.parameter
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -348,6 +351,9 @@ internal class ListenBrainzPublicPlaylistClient(
     )
     private val artistCacheMutex = kotlinx.coroutines.sync.Mutex()
     private val artistCache = linkedMapOf<Pair<String, List<String>>, ArtistPlaylistCache>()
+    // Contains only active lookups; keys are removed even on cancellation.
+    private val artistInFlight = mutableMapOf<Pair<String, List<String>>,
+        CompletableDeferred<List<ListenBrainzPublicPlaylist>>>()
     // Reopening an already inspected public playlist must not pay another
     // upstream HTTP + rate-limit slot. Only successful exact-MBID JSPF data
     // is cached; transient failures are always retryable.
@@ -429,9 +435,13 @@ internal class ListenBrainzPublicPlaylistClient(
         if (name.length !in 3..100 || name.any(Char::isISOControl) || approved.isEmpty())
             return emptyList()
         val key = name.lowercase(Locale.ROOT) to approved.sorted()
-        // The artist shelf is inside a LazyColumn. Its re-entry must reuse
-        // verified membership instead of repeating a 15-90-second fuzzy search.
-        // A different Recording MBID set is a different query and must recheck.
+
+        // Only the exact-key cache and in-flight bookkeeping hold this lock.
+        // Public trigram searches can take 15-90s: holding a global cache
+        // mutex across them blocks even an unrelated artist's cache HIT.
+        var cached: List<ListenBrainzPublicPlaylist>? = null
+        var pending: CompletableDeferred<List<ListenBrainzPublicPlaylist>>? = null
+        var owner = false
         artistCacheMutex.lock()
         try {
             val prior = artistCache[key]
@@ -442,7 +452,28 @@ internal class ListenBrainzPublicPlaylistClient(
                     prior.playlists.isEmpty() -> 5L * 60L * 1_000L
                     else -> 30L * 60L * 1_000L
                 }
-            ) return prior.playlists
+            ) {
+                cached = prior.playlists
+            } else {
+                val running = artistInFlight[key]
+                if (running != null) {
+                    pending = running
+                } else {
+                    pending = CompletableDeferred()
+                    artistInFlight[key] = pending!!
+                    owner = true
+                }
+            }
+        } finally {
+            artistCacheMutex.unlock()
+        }
+        cached?.let { return it }
+        val request = pending ?: return emptyList()
+        // Multiple screens requesting the SAME artist and recording evidence
+        // share one network request; different artists can read cached facts
+        // while the upstream limiter coordinates their remote requests.
+        if (!owner) return request.await()
+        try {
             val candidates = search(listOf(name), null, surface = "artist")
             val confirmed = mutableListOf<ListenBrainzPublicPlaylist>()
             var detailsHealthy = candidates != null
@@ -452,13 +483,35 @@ internal class ListenBrainzPublicPlaylistClient(
                 else if (details.tracks.any { it.recordingMbid in approved }) confirmed += candidate
                 if (confirmed.size >= 3) break
             }
-            if (artistCache.size >= 32) artistCache.remove(artistCache.keys.first())
-            artistCache[key] = ArtistPlaylistCache(
-                atMs = nowMillis(), playlists = confirmed, healthy = detailsHealthy,
-            )
+            artistCacheMutex.lock()
+            try {
+                if (artistCache.size >= 32) artistCache.remove(artistCache.keys.first())
+                artistCache[key] = ArtistPlaylistCache(
+                    atMs = nowMillis(), playlists = confirmed, healthy = detailsHealthy,
+                )
+            } finally {
+                artistCacheMutex.unlock()
+            }
+            request.complete(confirmed)
             return confirmed
+        } catch (cancelled: CancellationException) {
+            request.completeExceptionally(cancelled)
+            throw cancelled
+        } catch (_: Exception) {
+            // An unexpected parse/cache exception must not turn into a
+            // long-lived negative cache or permanently strand other callers.
+            request.complete(emptyList())
+            return emptyList()
         } finally {
-            artistCacheMutex.unlock()
+            // Cancellation cannot leave the in-flight map poisoned.
+            withContext(NonCancellable) {
+                artistCacheMutex.lock()
+                try {
+                    if (artistInFlight[key] === request) artistInFlight.remove(key)
+                } finally {
+                    artistCacheMutex.unlock()
+                }
+            }
         }
     }
 
