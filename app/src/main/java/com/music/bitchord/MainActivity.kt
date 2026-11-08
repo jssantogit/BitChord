@@ -4353,6 +4353,23 @@ private fun BitChordApp(
                     !showHistory && !showSpotify && !showReplay &&
                     openedPublicPlaylist == null
 
+                // Only the Library landing and its undrilled collections use
+                // independently surfaced Apple-style round top actions.
+                val appleLibraryLandingChrome = selectedTab == TAB_LIBRARY &&
+                    detail == null && libraryShowAll == null &&
+                    unifiedLibraryCategory == null && !showPlaylistLibrary &&
+                    !showSettings && !showHistory && !showReplay &&
+                    !showAllLocalRecentAdditions && !showSmartPlaylistBuilder &&
+                    openedPublicPlaylist == null && !showAccountScrobbling &&
+                    !showDiscord && !showSpotify
+                val appleLibraryCategoryChrome = unifiedLibraryCategory != null &&
+                    !unifiedLibraryDetailOpen && detail == null && !showSettings
+                val applePlaylistCategoryChrome = showPlaylistLibrary &&
+                    openedCanonicalPlaylist == null && !showSmartPlaylistBuilder &&
+                    detail == null && !showSettings
+                val appleLibraryRoundChrome = appleLibraryLandingChrome ||
+                    appleLibraryCategoryChrome || applePlaylistCategoryChrome
+
                 FrostedTopBar(
                     title = when {
                         showSpotify && detail == null -> stringResource(R.string.spotify)
@@ -4392,6 +4409,7 @@ private fun BitChordApp(
                     // Never render a second profile button or Material3 overflow
                     // beside the large Início title.
                     showActions = true,
+                    separateActions = appleLibraryRoundChrome,
                     // The generic top bar scroll flag flips after 24px,
                     // while the large Home heading is still fully legible.
                     // Only show its compact replacement when item 0 has left
@@ -4520,6 +4538,44 @@ private fun BitChordApp(
                         }
                     } else null,
                     actions = {
+                        if (appleLibraryRoundChrome) {
+                            if (appleLibraryLandingChrome || applePlaylistCategoryChrome) {
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                    IconButton(onClick = {
+                                        editingSmartPlaylistId = null
+                                        editingNormalPlaylistId = null
+                                        showSmartPlaylistBuilder = true
+                                    }) {
+                                        Icon(Icons.Rounded.PlaylistAdd,
+                                            contentDescription = "Criar playlist",
+                                            tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                            if (appleLibraryCategoryChrome) {
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                    IconButton(onClick = { unifiedControls.sourceMenuOpen = true }) {
+                                        Icon(Icons.Rounded.Layers, contentDescription = "Fonte do catálogo",
+                                            tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                    IconButton(onClick = { unifiedControls.sortMenuOpen = true }) {
+                                        Icon(Icons.Rounded.Sort, contentDescription = "Filtros da biblioteca",
+                                            tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                            if (applePlaylistCategoryChrome) {
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                    IconButton(onClick = { playlistLibraryOptionsMenu = true }) {
+                                        Icon(Icons.Rounded.Sort, contentDescription = "Filtros de playlists",
+                                            tint = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                            LibrarySettingsOverflowCircle(hazeState) { showSettings = true }
+                        } else {
                         UnifiedLibraryRouteToolbar(
                             recentPage = showAllLocalRecentAdditions,
                             settingsOpen = showSettings,
@@ -4716,6 +4772,7 @@ private fun BitChordApp(
                                 onClick = { showSettings = true },
                                 onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
+                        }
                         }
                     },
                 )
@@ -6326,6 +6383,29 @@ private fun ConnectionEditors(
  * The same icon controls as other browse screens, with no UI logic in BitChordApp.
  */
 @Composable
+/** Only Settings belongs to the undrilled Library overflow; detail pages retain actions. */
+@Composable
+private fun LibrarySettingsOverflowCircle(
+    hazeState: HazeState,
+    onSettings: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+            IconButton(onClick = { expanded = true }) {
+                Icon(Icons.Rounded.MoreVert, contentDescription = "Mais opções da biblioteca",
+                    tint = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.settings)) },
+                onClick = { expanded = false; onSettings() },
+            )
+        }
+    }
+}
+
 private fun CanonicalPlaylistToolbarActions(
     hasDetail: Boolean,
     showCreate: Boolean,
