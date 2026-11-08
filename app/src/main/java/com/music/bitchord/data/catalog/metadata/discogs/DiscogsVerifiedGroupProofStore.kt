@@ -77,7 +77,8 @@ internal class DiscogsVerifiedGroupProofStore {
     }
 
     private fun Map<String, List<Record>>.takeLastGroups(limit: Int) =
-        if (size <= limit) this else entries.takeLast(limit).associate { it.key to it.value }
+        if (size <= limit) this else entries.toList().takeLast(limit)
+            .associate { (key, records) -> key to records }
 }
 
 /** Process-scoped read model, cleared when observations expire or app restarts. */
