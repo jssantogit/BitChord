@@ -302,5 +302,6 @@
     <string name="search_server_no_results">Nenhum servidor ou addon encontrou “%1$s”.</string>
     <string name="apple_queue_history">Histórico</string>
     <string name="apple_queue_continue">Continuar Reproduzindo</string>
+    <string name="apple_queue_empty">Não há músicas na fila</string>
     <string name="apple_queue_similar">Reprodução automática de músicas similares</string>
 </resources>
