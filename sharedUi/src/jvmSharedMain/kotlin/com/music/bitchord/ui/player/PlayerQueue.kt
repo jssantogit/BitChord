@@ -372,8 +372,40 @@ internal fun InlineQueue(
                         )
                     }
                 }
+                if (appleStyle && (tracks.user.isNotEmpty() || tracks.context.isNotEmpty() || tracks.autoplay.isNotEmpty())) {
+                    item(key = "apple-continuation-heading") {
+                        Column(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp).then(queueMotion())) {
+                            Text(
+                                text = stringResource(Res.string.apple_queue_continue),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = Color.White,
+                            )
+                            // Do not infer a queued song's origin from the currently playing track.
+                            val origin = tracks.context.firstOrNull()?.song?.let {
+                                it.playbackSource?.takeIf(String::isNotBlank)
+                                    ?: it.albumName?.takeIf(String::isNotBlank)
+                            }
+                            val description = when {
+                                tracks.user.isNotEmpty() -> null
+                                tracks.context.isNotEmpty() -> origin
+                                tracks.autoplay.isNotEmpty() -> stringResource(Res.string.apple_queue_similar)
+                                else -> null
+                            }
+                            if (description != null) {
+                                Text(
+                                    text = description,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    maxLines = 2,
+                                )
+                            }
+                        }
+                    }
+                }
                 if (tracks.user.isNotEmpty()) {
-                    item(key = "header-user-queue") {
+                    if (!appleStyle) item(key = "header-user-queue") {
                         QueueHeading(
                             title = stringResource(if (appleStyle) Res.string.apple_queue_continue else Res.string.next_in_queue),
                             modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).then(queueMotion()),
@@ -388,7 +420,7 @@ internal fun InlineQueue(
                     queueSection(tracks.user, QueueSection.USER, drag, controlsLocked, onJumpTo, onRemove, appleStyle)
                 }
                 if (tracks.context.isNotEmpty()) {
-                    item(key = "header-context") {
+                    if (!appleStyle) item(key = "header-context") {
                         QueueHeading(
                             title = if (contextTitle != null) {
                                 stringResource(Res.string.next_from, contextTitle)
@@ -401,8 +433,8 @@ internal fun InlineQueue(
                     }
                     queueSection(tracks.context, QueueSection.CONTEXT, drag, controlsLocked, onJumpTo, onRemove, appleStyle)
                 }
-                if (autoplayEnabled || tracks.autoplay.isNotEmpty()) {
-                    item(key = "autoplay-heading") {
+                if ((!appleStyle && autoplayEnabled) || tracks.autoplay.isNotEmpty()) {
+                    if (!appleStyle) item(key = "autoplay-heading") {
                         if (appleStyle) {
                             Column(
                                 Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp).then(queueMotion()),
