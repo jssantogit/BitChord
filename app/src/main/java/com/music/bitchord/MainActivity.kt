@@ -3619,6 +3619,8 @@ private fun BitChordApp(
                             ) canonicalEditionPage.selectedEditionFacts else emptyList(),
                             discogsArtistCatalogComplete = discogsArtistContext.complete,
                             discogsArtistKnownGroupTitles = discogsArtistContext.titles,
+                            canonicalArtistReleaseRows = if (publicArtistMbid != null)
+                                canonicalBrowsePage?.rows.orEmpty() else emptyList(),
                             onCanonicalTrackPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },

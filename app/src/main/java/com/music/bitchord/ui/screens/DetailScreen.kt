@@ -2,6 +2,8 @@ package com.music.bitchord.ui.screens
 
 import android.os.Build
 import com.music.bitchord.R
+import com.music.bitchord.ui.discogsEditorialArtistShelves
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsGroupEditorialEvidence
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
@@ -342,6 +344,7 @@ fun DetailScreen(
     /** Source-only catalog candidates; never musicbrainz/MediaAsset identifiers. */
     discogsArtistCatalogComplete: Boolean = false,
     discogsArtistKnownGroupTitles: Set<String> = emptySet(),
+    canonicalArtistReleaseRows: List<CanonicalCatalogSearchRow> = emptyList(),
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
@@ -391,6 +394,29 @@ fun DetailScreen(
         musicBrainzCatalogComplete = discogsArtistCatalogComplete,
         knownMusicBrainzTitles = discogsArtistKnownGroupTitles,
     )
+    val groupProofs by DiscogsGroupEditorialEvidence.store.proofs.collectAsStateWithLifecycle()
+    val albumHeading = stringResource(R.string.albums)
+    val singlesHeading = stringResource(R.string.canonical_singles_eps)
+    val editorialArtistSections = remember(
+        page.sections, canonicalArtistReleaseRows, groupProofs, albumHeading, singlesHeading,
+    ) {
+        if (publicArtistMbid == null) page.sections
+        else discogsEditorialArtistShelves(
+            original = page.sections,
+            musicBrainzGroups = canonicalArtistReleaseRows,
+            groupProofs = groupProofs,
+            albumsHeading = albumHeading,
+            singlesHeading = singlesHeading,
+        )
+    }
+    LaunchedEffect(groupProofs) {
+        val now = System.currentTimeMillis()
+        val expiresAt = DiscogsGroupEditorialEvidence.store.nextExpiryMillis(now)
+        if (expiresAt != null) {
+            kotlinx.coroutines.delay((expiresAt - now).coerceAtLeast(1L))
+            DiscogsGroupEditorialEvidence.store.prune(System.currentTimeMillis())
+        }
+    }
     val publicTopRows = if (publicArtistMbid != null &&
         onCanonicalPublicTopOpen != null
     ) canonicalPublicTopTracks.filter {
@@ -1016,7 +1042,7 @@ fun DetailScreen(
             }
 
             // Albums / Singles & EPs carousels (artist pages).
-            items(page.sections) { shelf ->
+            items(editorialArtistSections) { shelf ->
                 val canShowAll = shelf.items.size > ARTIST_ROW_MAX_ITEMS
                 val displayItems = remember(shelf.items) {
                     if (canShowAll) shelf.items.take(ARTIST_ROW_MAX_ITEMS) else shelf.items
