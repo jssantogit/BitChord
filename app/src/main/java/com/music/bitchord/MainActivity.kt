@@ -4538,17 +4538,8 @@ private fun BitChordApp(
                             selectedTab == TAB_HOME
                         ) {
                             updateNotice?.let { update ->
-                                IconButton(onClick = { showUpdateDialog = true }) {
-                                    Icon(
-                                        // An arrow rising out of a bar, not the
-                                        // little phone-with-an-arrow: at 24dp the
-                                        // handset outline is mush, and the glyph
-                                        // has to read as "newer version" rather
-                                        // than as "something about your device".
-                                        Icons.Rounded.Upgrade,
-                                        contentDescription = stringResource(R.string.update_available, update.version),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
+                                NativeUpdateTopBarAction(update.version) {
+                                    showUpdateDialog = true
                                 }
                             }
                         }
@@ -4561,18 +4552,10 @@ private fun BitChordApp(
                                 selectedTab == TAB_LIBRARY &&
                                 unifiedLibraryCategory == null
                             ) {
-                                IconButton(
-                                    onClick = {
-                                        showHistory = true
-                                        viewModel.loadHistory()
-                                    },
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.History,
-                                        contentDescription = stringResource(R.string.listening_history),
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
+                                NativeHistoryTopBarAction(onClick = {
+                                    showHistory = true
+                                    viewModel.loadHistory()
+                                })
                             }
                             // Left of the account photo, and only on a Library
                             // "Show all" grid — the same control the Downloads
@@ -4580,32 +4563,16 @@ private fun BitChordApp(
                             // the one thing a playlist or album card carries: a
                             // title.
                             if (libraryShowAll != null && detail == null) {
-                                Box {
-                                    IconButton(onClick = { librarySortMenuOpen = true }) {
-                                        Icon(
-                                            Icons.Rounded.Sort,
-                                            contentDescription = stringResource(R.string.sort_library),
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
-                                    DropdownMenu(
-                                        expanded = librarySortMenuOpen,
-                                        onDismissRequest = { librarySortMenuOpen = false },
-                                    ) {
-                                        LibrarySort.entries.forEach { option ->
-                                            DropdownMenuItem(
-                                                text = { Text(option.localizedLabel()) },
-                                                trailingIcon = if (option == librarySort) {
-                                                    { Icon(Icons.Rounded.Check, contentDescription = null) }
-                                                } else null,
-                                                onClick = {
-                                                    AppSettings.setLibrarySort(option)
-                                                    librarySortMenuOpen = false
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
+                                NativeLibraryTopBarSortAction(
+                                    expanded = librarySortMenuOpen,
+                                    current = librarySort,
+                                    onOpen = { librarySortMenuOpen = true },
+                                    onClose = { librarySortMenuOpen = false },
+                                    onChange = { selected ->
+                                        AppSettings.setLibrarySort(selected)
+                                        librarySortMenuOpen = false
+                                    },
+                                )
                             }
                             // Sort, only on an album or playlist page or a device
                             // folder — an artist page has no single track list to
@@ -4618,95 +4585,45 @@ private fun BitChordApp(
                             // Shuffle / Play / Add.
                             if ((isReleaseDetail || isLocalDetail) && detail != null) {
                                 val releaseSongs = (detail.songs as? UiState.Success)?.data.orEmpty()
-                                val isOnlineAlbumMetadata = detail.browseId.startsWith("catalog:RELEASE:") ||
-                                    detail.browseId.startsWith("catalog:RELEASE_GROUP:")
-                                if (releaseSongs.isNotEmpty() || isOnlineAlbumMetadata) {
-                                    NativeCollectionSearchAction(
-                                        searching = detailSearching,
-                                        contentDescription = stringResource(
-                                            if (detailSearching) R.string.close_search else R.string.search_this_list,
-                                        ),
-                                        onClick = { detailSearching = !detailSearching },
-                                    )
-                                }
-                                // The menu itself is [FrostedSortMenu], composed
-                                // with the app's other frosted overlays further
-                                // down — in the main hierarchy, where the haze
-                                // can see the content it blurs.
-                                NativeCollectionSortAction(
-                                    contentDescription = stringResource(
-                                        if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
-                                    ),
-                                    onClick = {
-                                        if (isLocalDetail) folderMenuOpen = true else songSortMenuOpen = true
+                                NativeDetailAlbumTopBarActions(
+                                    isReleaseDetail = isReleaseDetail,
+                                    isLocalDetail = isLocalDetail,
+                                    browseId = detail.browseId,
+                                    title = detail.title,
+                                    subtitle = detail.subtitle.orEmpty(),
+                                    thumbnailUrl = detail.thumbnailUrl,
+                                    songs = releaseSongs,
+                                    searching = detailSearching,
+                                    onToggleSearch = { detailSearching = !detailSearching },
+                                    onSort = {
+                                        if (isLocalDetail) folderMenuOpen = true
+                                        else songSortMenuOpen = true
                                     },
-                                )
-                                if (isReleaseDetail && isOnlineAlbumMetadata) {
-                                    Box {
-                                        NativeCollectionOverflowAction(
-                                            contentDescription = stringResource(R.string.more),
-                                            onClick = { catalogAlbumOverflowOpen = true },
-                                        )
-                                        com.music.bitchord.ui.screens.CanonicalCatalogReleaseOverflowMenu(
+                                    catalogOverflowExpanded = catalogAlbumOverflowOpen,
+                                    onOpenCatalogOverflow = { catalogAlbumOverflowOpen = true },
+                                    onDismissCatalogOverflow = { catalogAlbumOverflowOpen = false },
+                                    onAlbumActions = {
+                                        browseActions = BrowseTarget(
                                             browseId = detail.browseId,
                                             title = detail.title,
-                                            subtitle = detail.subtitle.orEmpty(),
-                                            cover = detail.thumbnailUrl,
-                                            expanded = catalogAlbumOverflowOpen,
-                                            onDismiss = { catalogAlbumOverflowOpen = false },
+                                            subtitle = detail.subtitle,
+                                            thumbnailUrl = detail.thumbnailUrl,
+                                            type = detail.type,
+                                            songs = releaseSongs.sortedForDetail(songSort).map { song ->
+                                                if (detail.type == BrowseType.ALBUM)
+                                                    song.copy(albumName = song.albumName ?: detail.title)
+                                                else song
+                                            },
+                                            fromCard = false,
+                                            downloadId = downloadIdFor(detail.browseId),
                                         )
-                                    }
-                                } else if (isReleaseDetail && releaseSongs.isNotEmpty()) {
-                                    // The page's own tracks, in the order the page
-                                    // shows them, so the sheet has them already and
-                                    // Play, Shuffle and Open are the buttons beside
-                                    // the one that opened it rather than rows on it.
-                                    // Download lives in the sheet too — and the
-                                    // tracks arrive stamped with the album they came
-                                    // off, which is what the download record groups
-                                    // them under.
-                                    NativeCollectionOverflowAction(
-                                        contentDescription = stringResource(R.string.more),
-                                        onClick = {
-                                            browseActions = BrowseTarget(
-                                                browseId = detail.browseId,
-                                                title = detail.title,
-                                                subtitle = detail.subtitle,
-                                                thumbnailUrl = detail.thumbnailUrl,
-                                                type = detail.type,
-                                                songs = releaseSongs.sortedForDetail(songSort).map { song ->
-                                                    if (detail.type == BrowseType.ALBUM) {
-                                                        song.copy(albumName = song.albumName ?: detail.title)
-                                                    } else {
-                                                        song
-                                                    }
-                                                },
-                                                fromCard = false,
-                                                downloadId = downloadIdFor(detail.browseId),
-                                            )
-                                        },
-                                    )
-                                }
+                                    },
+                                )
                             }
                             // Share the artist's name without inventing a provider-specific link.
                             if (detail != null && detail.type == BrowseType.ARTIST &&
-                                detailActiveShelf == null
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                            type = "text/plain"
-                                            putExtra(Intent.EXTRA_TEXT, detail.title)
-                                        }
-                                        context.startActivity(Intent.createChooser(sendIntent, detail.title))
-                                    },
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.IosShare,
-                                        contentDescription = stringResource(R.string.share),
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
+                                detailActiveShelf == null) {
+                                NativeArtistShareTopBarAction(detail.title)
                             }
                             // Left of the account photo, and only there while
                             // there is a batch to report on — see
@@ -7204,4 +7121,127 @@ private fun NativePublicPlaylistTopBarActions(
         sort = sort,
         onSort = onSort,
     )
+}
+
+/** Provider-neutral album toolbar. Keep Compose icon/menu groups out of the
+ * oversized BitChordApp bytecode method, while preserving its callbacks. */
+@Composable
+private fun NativeDetailAlbumTopBarActions(
+    isReleaseDetail: Boolean,
+    isLocalDetail: Boolean,
+    browseId: String,
+    title: String,
+    subtitle: String,
+    thumbnailUrl: String?,
+    songs: List<Song>,
+    searching: Boolean,
+    onToggleSearch: () -> Unit,
+    onSort: () -> Unit,
+    catalogOverflowExpanded: Boolean,
+    onOpenCatalogOverflow: () -> Unit,
+    onDismissCatalogOverflow: () -> Unit,
+    onAlbumActions: () -> Unit,
+) {
+    val onlineMetadata = browseId.startsWith("catalog:RELEASE:") ||
+        browseId.startsWith("catalog:RELEASE_GROUP:")
+    if (songs.isNotEmpty() || onlineMetadata) {
+        NativeCollectionSearchAction(
+            searching = searching,
+            contentDescription = stringResource(
+                if (searching) R.string.close_search else R.string.search_this_list,
+            ),
+            onClick = onToggleSearch,
+        )
+    }
+    NativeCollectionSortAction(
+        contentDescription = stringResource(
+            if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
+        ),
+        onClick = onSort,
+    )
+    if (isReleaseDetail && onlineMetadata) {
+        Box {
+            NativeCollectionOverflowAction(
+                contentDescription = stringResource(R.string.more),
+                onClick = onOpenCatalogOverflow,
+            )
+            com.music.bitchord.ui.screens.CanonicalCatalogReleaseOverflowMenu(
+                browseId = browseId,
+                title = title,
+                subtitle = subtitle,
+                cover = thumbnailUrl,
+                expanded = catalogOverflowExpanded,
+                onDismiss = onDismissCatalogOverflow,
+            )
+        }
+    } else if (isReleaseDetail && songs.isNotEmpty()) {
+        NativeCollectionOverflowAction(
+            contentDescription = stringResource(R.string.more),
+            onClick = onAlbumActions,
+        )
+    }
+}
+
+@Composable
+private fun NativeLibraryTopBarSortAction(
+    expanded: Boolean,
+    current: LibrarySort,
+    onOpen: () -> Unit,
+    onClose: () -> Unit,
+    onChange: (LibrarySort) -> Unit,
+) {
+    Box {
+        IconButton(onClick = onOpen) {
+            Icon(
+                Icons.Rounded.Sort,
+                contentDescription = stringResource(R.string.sort_library),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = onClose) {
+            LibrarySort.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.localizedLabel()) },
+                    trailingIcon = if (option == current) {
+                        { Icon(Icons.Rounded.Check, contentDescription = null) }
+                    } else null,
+                    onClick = { onChange(option) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NativeArtistShareTopBarAction(title: String) {
+    val context = LocalContext.current
+    IconButton(onClick = {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, title)
+        }
+        context.startActivity(Intent.createChooser(intent, title))
+    }) {
+        Icon(Icons.Rounded.IosShare, contentDescription = stringResource(R.string.share),
+            tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun NativeHistoryTopBarAction(onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(Icons.Rounded.History, contentDescription = stringResource(R.string.listening_history),
+            tint = MaterialTheme.colorScheme.onSurface)
+    }
+}
+
+@Composable
+private fun NativeUpdateTopBarAction(version: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick) {
+        Icon(
+            Icons.Rounded.Upgrade,
+            contentDescription = stringResource(R.string.update_available, version),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+    }
 }
