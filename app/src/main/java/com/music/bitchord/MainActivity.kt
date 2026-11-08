@@ -709,6 +709,7 @@ private fun BitChordApp(
     // Only the queue menu receives the Apple-specific Favorite/playlist action set.
     // Other Now Playing views keep their existing ⋮ behavior untouched.
     var menuFromAppleQueue by remember { mutableStateOf(false) }
+    var playerShareLyricsRequestToken by remember { mutableIntStateOf(0) }
     /**
      * The row or card that was held to open the track menu, or null when it
      * was opened any other way. Non-null lifts that item into
@@ -2515,6 +2516,7 @@ private fun BitChordApp(
             signedIn = signedIn,
             onEditCanonicalRating = { localRatingDialogOpen = true },
             appleQueueStyle = true,
+            lyricsShareRequestToken = playerShareLyricsRequestToken,
             // The service owns both the queue and the Shuffle state. Keeping
             // the toggle on that side prevents the UI from changing the icon
             // before its asynchronous reorder command has actually landed.
@@ -5053,6 +5055,53 @@ private fun BitChordApp(
                         } else {
                             null
                         },
+                    onPinToLibrary = if (fromAppleQueue) {
+                        {
+                            songActions = null
+                            scope.launch {
+                                // Same exact-asset resolver as canonical ratings. Never
+                                // use legacy videoId, title or artist as a RecordingId.
+                                val recordingId = try {
+                                    withContext(Dispatchers.IO) {
+                                        com.music.bitchord.ui.screens.CanonicalSongFeedbackTarget(
+                                            com.music.bitchord.playback.androidCanonicalQueueResolver(context),
+                                        ).recordingId(song)
+                                    }
+                                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    null
+                                }
+                                if (recordingId != null) {
+                                    withContext(Dispatchers.IO) {
+                                        com.music.bitchord.ui.screens.CanonicalLibraryPinRepository
+                                            .get(context)
+                                            .toggle(
+                                                com.music.bitchord.ui.screens.CanonicalLibraryPin(
+                                                    com.music.bitchord.ui.screens.CanonicalLibrarySelection(
+                                                        com.music.bitchord.ui.screens.CanonicalLibraryEntityType.TRACK,
+                                                        recordingId,
+                                                    ),
+                                                    song.title,
+                                                    song.artist,
+                                                ),
+                                            )
+                                    }
+                                } else {
+                                    Toast.makeText(
+                                        context, "Faixa sem identidade canônica verificável",
+                                        Toast.LENGTH_SHORT,
+                                    ).show()
+                                }
+                            }
+                        }
+                    } else null,
+                    onShareLyrics = if (fromAppleQueue) {
+                        {
+                            songActions = null
+                            playerShareLyricsRequestToken++
+                        }
+                    } else null,
                     onAddToPlaylist = {
                         songActions = null
                         viewModel.loadPlaylists()
