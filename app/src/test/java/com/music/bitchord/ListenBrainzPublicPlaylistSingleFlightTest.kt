@@ -103,4 +103,76 @@ class ListenBrainzPublicPlaylistSingleFlightTest {
         assertNotNull(client.detail(selected))
         assertEquals(2, requests)
     }
+    @Test fun returningToHomeAndGenreReusesVerifiedPublicDiscovery() = runBlocking {
+        var now = 10_000L
+        val queries = mutableListOf<String>()
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    queries += query
+                    return ListenBrainzPublicPlaylistHttp(200,
+                        """{"playlists":[{"playlist_mbid":"$playlistId",
+                            "title":"Classic rock essentials","public":true}]}""")
+                }
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = {}),
+            nowMillis = { now },
+        )
+        assertEquals(1, client.searchHome()!!.size)
+        assertEquals(1, client.searchHome()!!.size)
+        assertEquals(1, client.searchGenre("rock")!!.size)
+        assertEquals(1, client.searchGenre("rock")!!.size)
+        assertEquals(listOf("essentials", "rock"), queries)
+        now += 5 * 60_000L + 1L
+        assertEquals(1, client.searchHome()!!.size)
+        assertEquals(listOf("essentials", "rock", "essentials"), queries)
+    }
+
+    @Test fun concurrentSameHomeDiscoveryDoesNotQueueDuplicateUpstreamWork() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    started.complete(Unit)
+                    release.await()
+                    return ListenBrainzPublicPlaylistHttp(200,
+                        """{"playlists":[{"playlist_mbid":"$playlistId",
+                            "title":"Classic rock essentials","public":true}]}""")
+                }
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 10_000L }, waitMillis = {}),
+        )
+        val first = async(start = CoroutineStart.UNDISPATCHED) { client.searchHome() }
+        withTimeout(2_000L) { started.await() }
+        val second = async(start = CoroutineStart.UNDISPATCHED) { client.searchHome() }
+        release.complete(Unit)
+        assertEquals(first.await(), second.await())
+        assertEquals(1, calls)
+    }
+
+    @Test fun unavailableHomeDiscoveryDoesNotPoisonCache() = runBlocking {
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    return if (calls <= 3) ListenBrainzPublicPlaylistHttp(503, "")
+                        else ListenBrainzPublicPlaylistHttp(200,
+                            """{"playlists":[{"playlist_mbid":"$playlistId",
+                                "title":"Classic rock essentials","public":true}]}""")
+                }
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { 10_000L }, waitMillis = {}),
+        )
+        assertNull(client.searchHome())
+        assertEquals(1, client.searchHome()!!.size)
+        assertEquals(4, calls)
+    }
+
 }
