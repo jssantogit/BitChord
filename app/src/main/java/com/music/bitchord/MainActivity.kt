@@ -252,6 +252,8 @@ import com.music.bitchord.ui.components.BottomFadeScrim
 import com.music.bitchord.ui.components.FloatingBarsTapGuard
 import com.music.bitchord.ui.components.BottomTab
 import com.music.bitchord.ui.components.FLOATING_BAR_MAX_WIDTH
+import com.music.bitchord.ui.components.AppleMusicBottomBar
+import com.music.bitchord.ui.components.AppleMusicNavIcons
 import com.music.bitchord.ui.components.FloatingBottomBar
 import com.music.bitchord.ui.components.GlassNavBar
 import com.music.bitchord.ui.components.floatingtabbar.rememberFloatingTabBarScrollConnection
@@ -1421,17 +1423,21 @@ private fun BitChordApp(
     val homeLabel = stringResource(R.string.home)
     val playLabel = stringResource(R.string.play)
     val exploreLabel = stringResource(R.string.explore)
+    val radioLabel = stringResource(R.string.apple_music_radio_tab)
     val libraryLabel = stringResource(R.string.library)
     val searchLabel = stringResource(R.string.search)
     val historyLabel = stringResource(R.string.history)
     val replayLabel = stringResource(R.string.replay)
     val queueLabel = stringResource(R.string.queue)
     val sharedLinkLabel = stringResource(R.string.shared_link)
-    val tabs = remember(homeLabel, exploreLabel, libraryLabel, searchLabel) {
+    // Five Apple Music visual slots; Radio is a disabled future destination.
+    // MainActivity's saved route indices remain 0..3 (Home, Explore, Library, Search).
+    val tabs = remember(homeLabel, exploreLabel, radioLabel, libraryLabel, searchLabel) {
         listOf(
             BottomTab(homeLabel, BitChordIcons.Home),
             BottomTab(exploreLabel, BitChordIcons.TabExplore),
-            BottomTab(libraryLabel, BitChordIcons.TabLibrary),
+            BottomTab(radioLabel, AppleMusicNavIcons.Radio),
+            BottomTab(libraryLabel, AppleMusicNavIcons.Library),
             BottomTab(searchLabel, BitChordIcons.TabSearch),
         )
     }
@@ -4704,52 +4710,9 @@ private fun BitChordApp(
                     }
                 }
 
-                if (glassActive) Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .widthIn(max = FLOATING_BAR_MAX_WIDTH)
-                        .fillMaxWidth()
-                        .onSizeChanged { floatingBarsHeight.intValue = it.height },
-                ) {
-                    QueueActionNoticeHost(queueNotice)
-                    recoveryNotice?.let { notice ->
-                        PlaybackRecoveryBanner(
-                            notice = notice,
-                            onRetry = { controller?.retryCanonicalFailure(notice.entryId) },
-                            onDismiss = { PlaybackRecoveryNotices.dismiss(notice.entryId) },
-                            retryEnabled = controller != null && !controlsLocked,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        )
-                    }
-                    // Liquid glass replaces the two stacked bars with the single
-                    // component they are stacked to imitate: the now playing
-                    // controls dock into the tab bar rather than riding above it,
-                    // and the pair folds together on scroll. See [GlassNavBar].
-                    GlassNavBar(
-                        tabs = tabs,
-                        selectedIndex = selectedTab,
-                        onTabSelected = onTabSelected,
-                        scrollConnection = navBarScroll,
-                        song = player.song,
-                        isPlaying = player.isPlaying,
-                        isLoading = playPauseBusy,
-                        onPlayPause = {
-                            togglePlayPause()
-                        },
-                        onNext = { controller?.seekToNextMediaItem() },
-                        onPrevious = { controller?.seekToPrevious() },
-                        onExpand = if (reducePlayerMotion) {
-                            { showNowPlaying = true }
-                        } else {
-                            playerSheetMotion::open
-                        },
-                        controlsLocked = controlsLocked,
-                        onBlockedControl = showHostOnlyNotice,
-                        dock = activeDock,
-                        pull = playerSheetMotion.takeIf { !reducePlayerMotion },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else Column(
+                // Dedicated Apple Music experiment: one consistent stacked-pill layout.
+                // Do not use the alternate iOS 26 folding navigation on this branch.
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         // Capped and centred rather than run to the page's edges
@@ -4797,11 +4760,11 @@ private fun BitChordApp(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    FloatingBottomBar(
+                    AppleMusicBottomBar(
                         tabs = tabs,
-                        selectedIndex = selectedTab,
+                        selectedRouteIndex = selectedTab,
                         hazeState = hazeState,
-                        onTabSelected = onTabSelected,
+                        onRouteSelected = onTabSelected,
                     )
                 }
             }
