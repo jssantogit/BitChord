@@ -1549,6 +1549,14 @@ private fun LosslessOrStats(
     modifier: Modifier = Modifier,
     appleStyle: Boolean = false,
 ) {
+    val measuredBadge = appleQualityBadgeKind(
+        measuredLossless = nerdStats?.isLossless,
+        measuredHiRes = nerdStats?.isHiRes == true,
+        measuredAtmos = nerdStats?.isDolbyAtmos == true,
+        measuredHighQuality = nerdStats?.isHiQuality == true,
+        measuredMediumQuality = nerdStats?.isMediumQuality == true,
+        resolving = stillRacing || (isLoading && losslessRequested && nerdStats == null),
+    )
     when {
         // Still resolving — either the player itself is buffering, or a
         // module is still racing YouTube for this track in the background
@@ -1582,7 +1590,7 @@ private fun LosslessOrStats(
             modifier = modifier,
             appleStyle = appleStyle,
         )
-        nerdStats?.isLossless == true -> LosslessLabel(
+        (measuredBadge == AppleQualityBadgeKind.LOSSLESS || measuredBadge == AppleQualityBadgeKind.HI_RES) -> LosslessLabel(
             // Same line Tidal, Qobuz and Apple Music draw it at — see
             // [NerdStats.Snapshot.isHiRes].
             text = stringResource(if (nerdStats.isHiRes) Res.string.hi_res_lossless else Res.string.lossless),
@@ -1594,17 +1602,18 @@ private fun LosslessOrStats(
             modifier = modifier,
             appleStyle = appleStyle,
         )
-        nerdStats?.isDolbyAtmos == true -> LosslessLabel(
+        measuredBadge == AppleQualityBadgeKind.DOLBY_ATMOS -> LosslessLabel(
             text = "Dolby Atmos",
-            animated = true,
+            animated = !appleStyle,
             iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
+            iconSize = 13.dp,
             modifier = modifier,
             appleStyle = appleStyle,
         )
         // Lossy, but the good end of lossy — a module's 320kbps tier, which
         // for a great many tracks is the best copy that exists anywhere the
         // app can reach. See [NerdStats.Snapshot.isHiQuality].
-        nerdStats?.isHiQuality == true && !appleStyle -> LosslessLabel(
+        measuredBadge == AppleQualityBadgeKind.HIGH -> LosslessLabel(
             text = stringResource(Res.string.high_quality),
             animated = false,
             iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
@@ -1613,8 +1622,18 @@ private fun LosslessOrStats(
             modifier = modifier,
             appleStyle = appleStyle,
         )
-        // Below that, no badge: "Medium Quality" and "Data Saver" are gone.
-        // The space under the bar is kept for what is worth announcing.
+        // The Apple-derived variant must not become completely blank for
+        // measured compressed audio. This is a Bitchord informational fallback,
+        // not a claim that the stream is Apple Music Lossless/Atmos.
+        appleStyle && measuredBadge == AppleQualityBadgeKind.MEDIUM -> LosslessLabel(
+            text = stringResource(Res.string.medium_quality),
+            animated = false,
+            iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
+            iconSize = 13.dp,
+            modifier = modifier,
+            appleStyle = true,
+        )
+        // No measured codec/bitrate: do not invent an Atmos or Lossless badge.
         else -> {}
     }
 }
