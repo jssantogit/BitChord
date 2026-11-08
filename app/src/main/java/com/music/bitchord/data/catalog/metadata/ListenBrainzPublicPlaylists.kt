@@ -354,6 +354,12 @@ internal class ListenBrainzPublicPlaylistClient(
     private data class CachedDetail(val atMs: Long, val detail: ListenBrainzPublicPlaylistDetail)
     private val detailCacheMutex = kotlinx.coroutines.sync.Mutex()
     private val detailCache = linkedMapOf<String, CachedDetail>()
+    private data class TextSearchCache(
+        val atMs: Long,
+        val playlists: List<ListenBrainzPublicPlaylist>,
+    )
+    private val textSearchMutex = kotlinx.coroutines.sync.Mutex()
+    private val textSearchCache = linkedMapOf<String, TextSearchCache>()
 
     suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? {
         if (tag !in setOf("pop", "rock", "hip-hop", "electronic", "k-pop", "rnb",
@@ -368,10 +374,34 @@ internal class ListenBrainzPublicPlaylistClient(
         val trimmed = query.trim()
         if (trimmed.length !in 2..80 || trimmed.any(Char::isISOControl))
             return emptyList()
+        val key = trimmed.lowercase(Locale.ROOT)
+        textSearchMutex.lock()
+        try {
+            val cached = textSearchCache[key]
+            if (cached != null) {
+                val age = nowMillis() - cached.atMs
+                val ttl = if (cached.playlists.isEmpty()) 2 * 60_000L else 30 * 60_000L
+                if (age >= 0 && age < ttl) return cached.playlists
+                textSearchCache.remove(key)
+            }
+        } finally {
+            textSearchMutex.unlock()
+        }
         // The upstream fuzzy search can put an exact title/annotation match
-        // below its first twelve hits. Apply the evidence filter before the
-        // shared 12-item display cap, or valid matches silently disappear.
-        return search(listOf(trimmed), trimmed, surface = "search").orEmpty()
+        // below its first twelve hits. Filter by evidence *before* capping.
+        val verified = search(listOf(trimmed), trimmed, surface = "search")
+            ?: return emptyList() // Unavailable API must not poison the cache.
+        textSearchMutex.lock()
+        try {
+            textSearchCache.remove(key)
+            textSearchCache[key] = TextSearchCache(nowMillis(), verified)
+            while (textSearchCache.size > 24) {
+                textSearchCache.remove(textSearchCache.keys.first())
+            }
+        } finally {
+            textSearchMutex.unlock()
+        }
+        return verified
     }
 
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
