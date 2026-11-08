@@ -332,7 +332,7 @@ fun SongActionsSheet(
         } else {
             rows()
         }
-        Spacer(Modifier.height(24.dp))
+        if (!appleQueuePlayerMenu) Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -427,10 +427,9 @@ private fun TintedSheet(
             artPx = ROW_ART_PX,
         )
         Column(
-            Modifier.fillMaxWidth().heightIn(
-                min = if (appleStyle) LocalConfiguration.current.screenHeightDp.dp * 0.70f else 0.dp,
-                max = maxHeight,
-            ),
+            // Let the six Apple actions determine the sheet's actual height.
+            // The earlier 70%-of-screen minimum left a large empty block.
+            Modifier.fillMaxWidth().heightIn(max = maxHeight),
         ) {
             // Drawn rather than taken from BottomSheetDefaults, whose handle
             // carries 22dp of padding on each side — half a row's worth of
