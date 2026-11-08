@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "description": "Discogs #211 evaluation manifest — unreviewed slots; not evidence or measured coverage",
+  "cases": [
+    {
+      "id": "A-01",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-02",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-03",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-04",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-05",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-06",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-07",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-08",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-09",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-10",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "B-01",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-02",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-03",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-04",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-05",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-06",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-07",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-08",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-09",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-10",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "C-01",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-02",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-03",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-04",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-05",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-06",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-07",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-08",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-09",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-10",
+      "cohort": "source_only",
+      "reviewed": false
+    }
+  ]
+}
