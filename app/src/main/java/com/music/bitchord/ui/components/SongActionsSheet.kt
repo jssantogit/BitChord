@@ -413,7 +413,7 @@ private fun TintedSheet(
     Box(
         modifier
             .fillMaxWidth()
-            .clip(SHEET_SHAPE),
+            .clip(if (appleStyle) RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp) else SHEET_SHAPE),
     ) {
         if (appleStyle) {
             Box(Modifier.matchParentSize().background(palette.background))
@@ -432,18 +432,20 @@ private fun TintedSheet(
             // nothing between the grip and the track it is about. Kept outside
             // the scrolling rows below so it stays put as a grab target rather
             // than travelling with the list.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+            if (!appleStyle) {
                 Box(
-                    Modifier
-                        .size(width = 34.dp, height = 4.dp)
-                        .clip(CircleShape)
-                        .background(palette.onBackground.copy(alpha = 0.35f)),
-                )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .size(width = 34.dp, height = 4.dp)
+                            .clip(CircleShape)
+                            .background(palette.onBackground.copy(alpha = 0.35f)),
+                    )
+                }
             }
             Column(
                 Modifier
