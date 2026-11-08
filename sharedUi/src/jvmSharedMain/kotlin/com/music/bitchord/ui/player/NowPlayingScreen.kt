@@ -1939,6 +1939,7 @@ fun NowPlayingScreen(
                             },
                             scrubber = {
                                 PlayerScrubber(
+                        appleStyle = appleQueueStyle,
                                     shown = shown,
                                     durationMs = durationMs,
                                     loading = versionAligning || audioVersionSwitching,
@@ -3610,6 +3611,7 @@ fun NowPlayingScreen(
                     }
                     val transitionWindow by PlayerSettings.smartTransitionWindow.collectAsStateWithLifecycle()
                     PlayerScrubber(
+                        appleStyle = appleQueueStyle,
                         shown = shown,
                         durationMs = durationMs,
                         loading = versionSwitching,
