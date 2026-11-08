@@ -1016,10 +1016,10 @@ fun NowPlayingScreen(
     // Entry from the player overflow uses the existing native verse picker and
     // card share pipeline; it never constructs a competing lyrics share screen.
     LaunchedEffect(lyricsShareRequestToken) {
-        if (lyricsShareRequestToken > 0 && lyricsShareAvailable) {
+        if (lyricsShareRequestToken > 0) {
             queueOpen = false
             lyricsOpen = true
-            lyricPicker.beginPicking()
+            if (lyricsShareAvailable) lyricPicker.beginPicking()
         }
     }
     // Nothing here resets [lyricsOpen] on a track change, deliberately. The
