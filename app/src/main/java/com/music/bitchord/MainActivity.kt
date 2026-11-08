@@ -252,6 +252,8 @@ import com.music.bitchord.ui.components.BottomFadeScrim
 import com.music.bitchord.ui.components.FloatingBarsTapGuard
 import com.music.bitchord.ui.components.BottomTab
 import com.music.bitchord.ui.components.FLOATING_BAR_MAX_WIDTH
+import com.music.bitchord.ui.components.AppleMusicBottomBar
+import com.music.bitchord.ui.components.AppleMusicMiniPlayer
 import com.music.bitchord.ui.components.FloatingBottomBar
 import com.music.bitchord.ui.components.GlassNavBar
 import com.music.bitchord.ui.components.floatingtabbar.rememberFloatingTabBarScrollConnection
@@ -4704,60 +4706,12 @@ private fun BitChordApp(
                     }
                 }
 
-                if (glassActive) Column(
+                // Screenshot-matched experiment: two independent Apple Music
+                // capsules on all devices, including those supporting liquid glass.
+                // Radio is a disabled visual slot, not an additional route.
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .widthIn(max = FLOATING_BAR_MAX_WIDTH)
-                        .fillMaxWidth()
-                        .onSizeChanged { floatingBarsHeight.intValue = it.height },
-                ) {
-                    QueueActionNoticeHost(queueNotice)
-                    recoveryNotice?.let { notice ->
-                        PlaybackRecoveryBanner(
-                            notice = notice,
-                            onRetry = { controller?.retryCanonicalFailure(notice.entryId) },
-                            onDismiss = { PlaybackRecoveryNotices.dismiss(notice.entryId) },
-                            retryEnabled = controller != null && !controlsLocked,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                        )
-                    }
-                    // Liquid glass replaces the two stacked bars with the single
-                    // component they are stacked to imitate: the now playing
-                    // controls dock into the tab bar rather than riding above it,
-                    // and the pair folds together on scroll. See [GlassNavBar].
-                    GlassNavBar(
-                        tabs = tabs,
-                        selectedIndex = selectedTab,
-                        onTabSelected = onTabSelected,
-                        scrollConnection = navBarScroll,
-                        song = player.song,
-                        isPlaying = player.isPlaying,
-                        isLoading = playPauseBusy,
-                        onPlayPause = {
-                            togglePlayPause()
-                        },
-                        onNext = { controller?.seekToNextMediaItem() },
-                        onPrevious = { controller?.seekToPrevious() },
-                        onExpand = if (reducePlayerMotion) {
-                            { showNowPlaying = true }
-                        } else {
-                            playerSheetMotion::open
-                        },
-                        controlsLocked = controlsLocked,
-                        onBlockedControl = showHostOnlyNotice,
-                        dock = activeDock,
-                        pull = playerSheetMotion.takeIf { !reducePlayerMotion },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                } else Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        // Capped and centred rather than run to the page's edges
-                        // — see [FLOATING_BAR_MAX_WIDTH]. It sits on the Column
-                        // rather than on each bar so the two are held to the same
-                        // width and keep the shared left and right edge they have
-                        // on a phone. Before fillMaxWidth, so the fill has
-                        // already been bounded by the time it is applied.
                         .widthIn(max = FLOATING_BAR_MAX_WIDTH)
                         .fillMaxWidth()
                         .onSizeChanged { floatingBarsHeight.intValue = it.height },
@@ -4774,14 +4728,12 @@ private fun BitChordApp(
                         )
                     }
                     player.song?.let { song ->
-                        MiniPlayer(
+                        AppleMusicMiniPlayer(
                             song = song,
                             isPlaying = player.isPlaying,
                             isLoading = playPauseBusy,
                             hazeState = hazeState,
-                            onPlayPause = {
-                                togglePlayPause()
-                            },
+                            onPlayPause = { togglePlayPause() },
                             onNext = { controller?.seekToNextMediaItem() },
                             onPrevious = { controller?.seekToPrevious() },
                             onExpand = if (reducePlayerMotion) {
@@ -4797,7 +4749,7 @@ private fun BitChordApp(
                         )
                         Spacer(Modifier.height(8.dp))
                     }
-                    FloatingBottomBar(
+                    AppleMusicBottomBar(
                         tabs = tabs,
                         selectedIndex = selectedTab,
                         hazeState = hazeState,
