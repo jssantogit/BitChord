@@ -12,12 +12,12 @@ class CanonicalSearchProgressiveTest {
     @Test fun exactOnlineArtistSupersedesOnlyItsOwnCachedIdentity() {
         val cached = listOf(
             CanonicalCatalogSearchRow(artistId, CanonicalSearchKind.ARTIST, "Old cached title",
-                fromOfflineCache = true),
+                subtitle = null, fromOfflineCache = true),
             CanonicalCatalogSearchRow(recordingId, CanonicalSearchKind.RECORDING, "Song",
-                fromOfflineCache = true),
+                subtitle = null, fromOfflineCache = true),
         )
         val fresh = listOf(
-            CanonicalCatalogSearchRow(artistId, CanonicalSearchKind.ARTIST, "Updated title"),
+            CanonicalCatalogSearchRow(artistId, CanonicalSearchKind.ARTIST, "Updated title", subtitle = null),
         )
         val rows = canonicalProgressiveSearchPreview(cached, fresh)
         assertEquals(listOf(artistId, recordingId), rows.map { it.musicBrainzId })
@@ -27,10 +27,10 @@ class CanonicalSearchProgressiveTest {
 
     @Test fun distinctEntityKindsWithSameMbidRemainDistinct() {
         val cached = listOf(
-            CanonicalCatalogSearchRow(artistId, CanonicalSearchKind.RELEASE_GROUP, "Album"),
+            CanonicalCatalogSearchRow(artistId, CanonicalSearchKind.RELEASE_GROUP, "Album", subtitle = null),
         )
         val fresh = listOf(
-            CanonicalCatalogSearchRow(artistId, CanonicalSearchKind.ARTIST, "Artist"),
+            CanonicalCatalogSearchRow(artistId, CanonicalSearchKind.ARTIST, "Artist", subtitle = null),
         )
         assertEquals(2, canonicalProgressiveSearchPreview(cached, fresh).size)
     }
