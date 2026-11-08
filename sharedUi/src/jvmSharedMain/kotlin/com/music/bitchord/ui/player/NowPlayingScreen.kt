@@ -680,6 +680,7 @@ fun NowPlayingScreen(
     onEditCanonicalRating: () -> Unit = {},
     appleQueueStyle: Boolean = false,
     lyricsShareRequestToken: Int = 0,
+    onLyricsShareRequestConsumed: () -> Unit = {},
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1017,6 +1018,7 @@ fun NowPlayingScreen(
     // card share pipeline; it never constructs a competing lyrics share screen.
     LaunchedEffect(lyricsShareRequestToken) {
         if (lyricsShareRequestToken > 0) {
+            onLyricsShareRequestConsumed()
             queueOpen = false
             lyricsOpen = true
             if (lyricsShareAvailable) lyricPicker.beginPicking()
