@@ -175,7 +175,15 @@ internal fun openUnifiedLibraryCategory(
  * LocalFolder tab state. Categories are routes, not one-off playlist shelves.
  * The standalone playlist page owns its own saved collection list.
  */
+data class LibraryCategoryLabels(
+    val playlists: String,
+    val artists: String,
+    val albums: String,
+    val songs: String,
+)
+
 fun libraryNavigationLinks(
+    labels: LibraryCategoryLabels,
     deviceLinks: List<LibraryLink>,
     onOpenPlaylists: () -> Unit,
     onOpenLocalCategory: (LocalFolderTab) -> Unit,
@@ -190,14 +198,14 @@ fun libraryNavigationLinks(
             onClick = onClick,
         )
     return listOf(
-        destination("Playlists", Icons.Rounded.QueueMusic, onOpenPlaylists),
-        destination("Artistas", Icons.Rounded.Person) {
+        destination(labels.playlists, Icons.Rounded.QueueMusic, onOpenPlaylists),
+        destination(labels.artists, Icons.Rounded.Person) {
             onOpenLocalCategory(LocalFolderTab.ARTISTS)
         },
-        destination("Álbuns", Icons.Rounded.Album) {
+        destination(labels.albums, Icons.Rounded.Album) {
             onOpenLocalCategory(LocalFolderTab.ALBUMS)
         },
-        destination("Músicas", Icons.Rounded.MusicNote) {
+        destination(labels.songs, Icons.Rounded.MusicNote) {
             onOpenLocalCategory(LocalFolderTab.SONGS)
         },
     ) + deviceLinks.filter { it.item.browseId == "local:downloads" }
