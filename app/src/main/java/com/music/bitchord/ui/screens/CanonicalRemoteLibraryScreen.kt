@@ -1759,6 +1759,7 @@ internal fun CanonicalTrackRow(
     // Only a category's row enters selection on long press; detail pages don't.
     onLongPress: (() -> Unit)? = null,
     compactForArtist: Boolean = false,
+    showInlineOptions: Boolean = true,
     palette: ArtworkPalette? = null,
     albumTrackNumber: Int? = null,
 ) {
@@ -1769,7 +1770,7 @@ internal fun CanonicalTrackRow(
             else onClick()
         },
         onLongPress = onLongPress,
-        onMore = onOptions,
+        onMore = onOptions.takeIf { showInlineOptions },
         horizontalInset = if (compactForArtist) 0.dp else PAGE_GUTTER,
         modifier = if (compactForArtist) Modifier else Modifier.heightIn(min = 68.dp),
         textGap = if (albumTrackNumber != null) PAGE_GUTTER
@@ -1827,7 +1828,9 @@ internal fun CanonicalTrackRow(
                     )
                 }
             } else {
-                CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
+                if (showInlineOptions) {
+                    CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
+                }
             }
         },
     )
@@ -2273,7 +2276,7 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onTrackPlay(track)
                                 },
-                                onMore = { onTrackOptions(track) },
+                                onMore = null, // Category root has no inline overflow.
                                 onLongPress = null, // The list-level gesture handles hold and drag.
                                 selectionMode = selectedItems.isNotEmpty(),
                                 selected = target in selectedItems,
@@ -2292,6 +2295,7 @@ private fun NativeUnifiedLibraryBody(
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
+                            showInlineOptions = false,
                             onLongPress = null, // The list-level gesture handles hold and drag.
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = target in selectedItems,
@@ -2337,7 +2341,7 @@ private fun NativeUnifiedLibraryBody(
                                             album.id, album.title, album.artworkUri,
                                         ))
                                     },
-                                    onMore = { onAlbumOptions(album) },
+                                    onMore = null, // Category root has no inline overflow.
                                     onLongPress = null, // The list-level gesture handles hold and drag.
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
@@ -2384,7 +2388,6 @@ private fun NativeUnifiedLibraryBody(
                                                 modifier = Modifier.padding(end = 8.dp),
                                             )
                                         }
-                                        RowMoreButton(onClick = { onAlbumOptions(album) })
                                     }
                                 },
                                 artworkSize = 52.dp,
@@ -2430,7 +2433,7 @@ private fun NativeUnifiedLibraryBody(
                                         if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                         else onEntitySelect(artist)
                                     },
-                                    onMore = { onArtistOptions(artist) },
+                                    onMore = null, // Category root has no inline overflow.
                                     onLongPress = null, // The list-level gesture handles hold and drag.
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
@@ -2476,7 +2479,6 @@ private fun NativeUnifiedLibraryBody(
                                                 modifier = Modifier.padding(end = 8.dp),
                                             )
                                         }
-                                        RowMoreButton(onClick = { onArtistOptions(artist) })
                                     }
                                 },
                                 artworkSize = 52.dp,
