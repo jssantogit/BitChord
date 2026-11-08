@@ -110,6 +110,23 @@ class DiscogsEditorialCatalogPolicyTest {
         assertTrue(recovered.single().attributionUrl.startsWith("https://www.discogs.com/release/"))
     }
 
+    @Test fun discogsOnlyShelvesNeverDuplicateKnownMusicBrainzGroups() {
+        val observations = listOf(
+            DiscogsPublicEditionSnapshot(edition(101, master = 987), 1_000),
+        )
+        val shadow = DiscogsShadowCatalog.select(
+            observations, expectedArtist = "ILLIT",
+            mbCatalogChecked = true, nowMillis = 1_200,
+            knownMusicBrainzTitles = setOf("SUPER REAL ME"),
+        )
+        assertTrue(shadow.isEmpty())
+        assertTrue(DiscogsShadowCatalog.select(
+            observations, expectedArtist = "ILLIT",
+            mbCatalogChecked = false, nowMillis = 1_200,
+            knownMusicBrainzTitles = emptySet(),
+        ).isEmpty())
+    }
+
     @Test fun recoveredCatalogRejectsUnofficialStaleAndAlreadyLinkedEditions() {
         val inputs = listOf(
             DiscogsPublicEditionSnapshot(edition(101, unofficial = true), 1_000),
