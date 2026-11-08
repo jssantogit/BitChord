@@ -84,10 +84,10 @@ class NativeAlbumEditorialFooterComposeTest {
             }
         }
         compose.onNodeWithText("Gravadora: Second Label (CAT-02)").assertDoesNotExist()
-        compose.onNodeWithText("Formato · Reissue").assertDoesNotExist()
+        compose.onNodeWithText("Formato: Reissue").assertDoesNotExist()
         compose.onNodeWithText("Ver mais").performClick()
         compose.onNodeWithText("Gravadora: Second Label (CAT-02)").assertExists()
-        compose.onNodeWithText("Formato · Reissue").assertExists()
+        compose.onNodeWithText("Formato: Reissue").assertExists()
         compose.onNodeWithTag("native-album-editorial-attribution").assertExists()
         compose.onNodeWithText("Ver menos").performClick()
         compose.onNodeWithText("Gravadora: Second Label (CAT-02)").assertDoesNotExist()

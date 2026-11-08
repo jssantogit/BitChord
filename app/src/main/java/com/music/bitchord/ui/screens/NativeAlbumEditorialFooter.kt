@@ -132,7 +132,7 @@ internal fun nativeEditionDisplayCountry(raw: String): String? {
                         .equals(raw.trim(), ignoreCase = true)
                 }
             }
-            countryCode?.let { iso ->
+            countryCode?.takeIf { it in Locale.getISOCountries() }?.let { iso ->
                 Locale("", iso).getDisplayCountry(Locale.forLanguageTag("pt-BR"))
                     .takeIf { it.isNotBlank() && !it.equals(iso, ignoreCase = true) }
                     ?.replaceFirstChar { it.titlecase(Locale.forLanguageTag("pt-BR")) }
