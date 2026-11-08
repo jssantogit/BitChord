@@ -36,3 +36,10 @@
 - Existing `NativeCanonicalLibraryFiltersComposeTest`, `CanonicalLibraryStarSourceFiltersTest`, `UnifiedPlaylistLibraryShelfTest` and `CanonicalRecentAdditionsFiltersTest` cover native filtering and shelf ownership.
 
 Current state: first visual and architectural pass. **Do not assert device-level parity until screenshots/interaction smoke are available**. Keep PR #212 draft, #209/main unchanged.
+
+## Validation follow-up — 2026-11-08
+
+- Android CI #6013 failed a single UI test after the intentional heading change to Adições Recentes. Commit ac014a2 corrected the old test expectation without reverting the user-visible text.
+- Android CI #6014 passed the Android unit tests and shared Automix planner but failed shared JVM compilation: PlatformTextStyle(includeFontPadding = false) was unavailable on JVM. Commit 2eee7c4 removed that Android-specific override in shared PlayerControls while retaining the 11sp badge label and 13sp Apple-style line height. Android CI #6015 was in progress at this checkpoint, not yet proven green.
+- The am-descomp category-list investigation explicitly classifies exact row dimensions, icons, and spacing as unknown. The present 44dp rows, 22dp icons, and 17sp labels are provisional choices, not measured Apple geometry.
+- Outstanding physical checks: six-cover shelf, header, category rows, recent additions, search, bottom chrome, font scale, and sparse/empty library. Do not merge or declare pixel parity without device evidence.
