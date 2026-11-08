@@ -163,7 +163,7 @@ class DiscogsEditionRepositoryTest {
                 ): DiscogsHttpResponse {
                     searches++
                     assertEquals("Artist", query.artist)
-                    assertEquals("Album", query.title)
+                    assertEquals("8809704427821", query.barcode)
                     return DiscogsHttpResponse(200,
                         """{"results":[{"type":"release","id":12345}]}""")
                 }
