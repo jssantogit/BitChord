@@ -307,4 +307,9 @@
     <string name="search_server_hint">Search connected servers and enabled addons</string>
     <string name="search_server_empty">Search songs indexed from connected servers or available addons.</string>
     <string name="search_server_no_results">No server or addon matches “%1$s”.</string>
+    <string name="apple_queue_history">History</string>
+    <string name="apple_queue_continue">Continue Playing</string>
+    <string name="apple_queue_similar">Autoplay of similar songs</string>
+    <string name="apple_queue_mark_favorite">Favorite</string>
+    <string name="apple_queue_remove_favorite">Remove from favorites</string>
 </resources>

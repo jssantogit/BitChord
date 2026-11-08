@@ -144,6 +144,8 @@ import com.music.bitchord.data.TrackLog
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LikeStatus
+import com.music.bitchord.data.library.NativeTrackFavorites
+import com.music.bitchord.data.library.nativeTrackFavoriteKey
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
@@ -547,6 +549,7 @@ private fun BitChordApp(
     viewModel: MainViewModel = viewModel(),
 ) {
     val context = LocalContext.current
+    val nativeTrackFavorites = remember(context) { NativeTrackFavorites(context.applicationContext) }
     val clipboard = LocalClipboardManager.current
     val hazeState = remember { HazeState() }
     // Recording the backdrop layer costs a draw pass, so it only runs when a
@@ -2432,6 +2435,7 @@ private fun BitChordApp(
                     }?.displayName?.takeIf(String::isNotBlank)
             }
         var localRatingDialogOpen by remember(displayedSong.videoId) { mutableStateOf(false) }
+        val favoriteKeys by nativeTrackFavorites.favoriteKeys.collectAsStateWithLifecycle()
         Box(Modifier.fillMaxSize()) {
         NowPlayingScreen(
             song = displayedSong,
@@ -2500,6 +2504,9 @@ private fun BitChordApp(
             autoplayEnabled = autoplayEnabled,
             signedIn = signedIn,
             onEditCanonicalRating = { localRatingDialogOpen = true },
+            appleQueueStyle = true,
+            isFavorite = nativeTrackFavoriteKey(displayedSong)?.let { it in favoriteKeys } == true,
+            onToggleFavorite = { nativeTrackFavorites.toggle(displayedSong) },
             // The service owns both the queue and the Shuffle state. Keeping
             // the toggle on that side prevents the UI from changing the icon
             // before its asynchronous reorder command has actually landed.
@@ -2666,6 +2673,14 @@ private fun BitChordApp(
                 // Keep what's playing and context/autoplay; drop user-queued tracks.
                 controller?.let { c ->
                     QueueCoordinator.clearUserQueue(c)
+                }
+            },
+            onClearQueueHistory = {
+                // Only the rows before the current song are played history.
+                // Media3 preserves the current song and all upcoming entries.
+                controller?.let { c ->
+                    val endExclusive = c.currentMediaItemIndex.coerceIn(0, c.mediaItemCount)
+                    if (endExclusive > 0) c.removeMediaItems(0, endExclusive)
                 }
             },
         )
@@ -4969,6 +4984,7 @@ private fun BitChordApp(
                 // read off the player's own visibility any more, because on a
                 // tablet the player is visible whatever the menu was opened from.
                 val fromPlayer = menuFromPlayer
+                val favoriteKeys by nativeTrackFavorites.favoriteKeys.collectAsStateWithLifecycle()
                 val share: () -> Unit = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -5001,6 +5017,14 @@ private fun BitChordApp(
                         )
                     } else null,
                     signedIn = signedIn,
+                    appleQueuePlayerMenu = fromPlayer,
+                    isFavorite = nativeTrackFavoriteKey(song)?.let { it in favoriteKeys } == true,
+                    onToggleFavorite = if (fromPlayer) {
+                        {
+                            nativeTrackFavorites.toggle(song)
+                            songActions = null
+                        }
+                    } else null,
                     canonicalRatingContent = { CanonicalSongMenuRating(song) },
                     onPlayNext = { playNext(song); songActions = null },
                     onAddToQueue = { addToQueue(song); songActions = null },

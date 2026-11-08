@@ -68,6 +68,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.painter.Painter
+import org.jetbrains.compose.resources.painterResource
 import androidx.compose.material3.MaterialTheme
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import androidx.compose.material3.Text
@@ -641,6 +643,14 @@ private fun SlidingPlayerDeck(
  * glyphs, a volume capsule flanked by speaker icons, and lyrics / AirPlay /
  * queue along the bottom.
  */
+/** Original Apple 7.0 vector buttons, scoped to the queue experiment. */
+@Composable
+private fun AppleQueueHeaderAction(painter: Painter, description: String, onClick: () -> Unit) {
+    Box(Modifier.size(40.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(painter = painter, contentDescription = description, tint = Color.White, modifier = Modifier.size(34.dp))
+    }
+}
+
 @Composable
 @OptIn(ExperimentalHazeApi::class, ExperimentalHazeMaterialsApi::class)
 fun NowPlayingScreen(
@@ -670,6 +680,9 @@ fun NowPlayingScreen(
     signedIn: Boolean,
     accountName: String?,
     onEditCanonicalRating: () -> Unit = {},
+    appleQueueStyle: Boolean = false,
+    isFavorite: Boolean = false,
+    onToggleFavorite: () -> Unit = {},
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -708,6 +721,7 @@ fun NowPlayingScreen(
      */
     onQueueDragActiveChange: (Boolean) -> Unit = {},
     onClearQueue: () -> Unit,
+    onClearQueueHistory: () -> Unit = {},
     /** Pass the already-resolved cover along with the menu action. */
     onOpenMenu: (Any?) -> Unit,
     onOpenAlbum: (String) -> Unit,
@@ -3254,9 +3268,21 @@ fun NowPlayingScreen(
                                     }
                                 }
                             }
-                            // During Queue the current track is already rated in
-                            // its queue row: do not repeat stars in this header.
-                            if (!queueOpen) {
+                            // The favorite star is independent of 1–5-star ratings.
+                            // The native rating editor remains in the ⋮ sheet.
+                            if (queueOpen && appleQueueStyle) {
+                                AppleQueueHeaderAction(
+                                    painter = painterResource(
+                                        if (isFavorite) Res.drawable.apple_queue_favorited
+                                        else Res.drawable.apple_queue_favorite
+                                    ),
+                                    description = stringResource(
+                                        if (isFavorite) Res.string.apple_queue_remove_favorite
+                                        else Res.string.apple_queue_mark_favorite
+                                    ),
+                                    onClick = onToggleFavorite,
+                                )
+                            } else if (!queueOpen) {
                                 CanonicalSongRatingStars(
                                     song = song,
                                     modifier = Modifier.padding(end = 8.dp),
@@ -3278,6 +3304,13 @@ fun NowPlayingScreen(
                             // whichever way the controls are.
                             val lyricsShareGlyphVisible = lyricsOpen && collapseDone && lyricsShareEnabled &&
                                 !lyrics.isNullOrEmpty() && (!lyricsControlsOpen || lyricPicker.picking)
+                            if (queueOpen && appleQueueStyle) {
+                                AppleQueueHeaderAction(
+                                    painter = painterResource(Res.drawable.apple_queue_more),
+                                    description = stringResource(Res.string.more),
+                                    onClick = openMenuWithArtwork,
+                                )
+                            } else {
                             CircleGlyph(
                                 icon = when {
                                     lyricsShareGlyphVisible && lyricPicker.picking -> Icons.Rounded.Close
@@ -3302,6 +3335,7 @@ fun NowPlayingScreen(
                                     Haptic.Tap
                                 },
                             )
+                            }
                         }
 
                         // [lyricsOpen] asked first: a close has already hidden the
@@ -3460,6 +3494,8 @@ fun NowPlayingScreen(
                                     onClear = onClearQueue,
                                     onScrollingChange = { queueScrolling = it },
                                     onDragActiveChange = onQueueDragActiveChange,
+                                    appleStyle = appleQueueStyle,
+                                    onClearHistory = onClearQueueHistory,
                                     collapsePlayerOnScroll = true,
                                     onRevealPlayer = { queueControlsOpen = true },
                                     onHidePlayer = { queueControlsOpen = false },

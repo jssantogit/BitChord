@@ -300,4 +300,9 @@
     <string name="search_server_hint">Pesquisar nos servidores e addons</string>
     <string name="search_server_empty">Pesquise músicas dos servidores conectados ou addons disponíveis.</string>
     <string name="search_server_no_results">Nenhum servidor ou addon encontrou “%1$s”.</string>
+    <string name="apple_queue_history">Histórico</string>
+    <string name="apple_queue_continue">Continuar Reproduzindo</string>
+    <string name="apple_queue_similar">Reprodução automática de músicas similares</string>
+    <string name="apple_queue_mark_favorite">Favorito</string>
+    <string name="apple_queue_remove_favorite">Remover dos favoritos</string>
 </resources>

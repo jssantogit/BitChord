@@ -37,6 +37,8 @@ import androidx.compose.material.icons.rounded.Downloading
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.HighQuality
 import androidx.compose.material.icons.rounded.Person
@@ -89,6 +91,10 @@ import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
+import com.music.bitchord.sharedui.resources.Res as SharedRes
+import com.music.bitchord.sharedui.resources.apple_queue_mark_favorite
+import com.music.bitchord.sharedui.resources.apple_queue_remove_favorite
+import org.jetbrains.compose.resources.stringResource as sharedStringResource
 
 /**
  * Long-press menu for a track, in the shape music apps normally use.
@@ -145,6 +151,9 @@ fun SongActionsSheet(
     preloadedArtworkModel: Any? = null,
     /** The only rating action shown: canonical stars by Recording identity. */
     canonicalRatingContent: (@Composable () -> Unit)? = null,
+    appleQueuePlayerMenu: Boolean = false,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
 ) {
     val menu = presentation == SongActionsPresentation.Menu
     // Read from the thumbnail the row that opened this sheet was already
@@ -164,7 +173,21 @@ fun SongActionsSheet(
     val isOffline = song.localUri != null
 
     val rows: @Composable ColumnScope.() -> Unit = {
-        if (signedIn && !isOffline) {
+        if (appleQueuePlayerMenu) {
+            onToggleFavorite?.let { toggle ->
+                ActionRow(
+                    icon = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                    label = sharedStringResource(
+                        if (isFavorite) SharedRes.string.apple_queue_remove_favorite
+                        else SharedRes.string.apple_queue_mark_favorite
+                    ),
+                    accent = palette.accent,
+                    onClick = toggle,
+                )
+            }
+        }
+        // Native playlists work for local and canonical playback without login.
+        if (appleQueuePlayerMenu || (signedIn && !isOffline)) {
             ActionRow(
                 icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
                 label = stringResource(R.string.add_to_playlist),
@@ -187,12 +210,15 @@ fun SongActionsSheet(
 
         DownloadRow(song, palette, isOffline, onDownload)
         WebDavUploadRow(song, palette, isOffline, onUploadToWebDav)
-        ActionRow(
-            icon = Icons.Rounded.Radio,
-            label = stringResource(R.string.start_radio),
-            accent = palette.accent,
-            onClick = onStartRadio,
-        )
+        // Station generation is not implemented for the Apple queue variant.
+        if (!appleQueuePlayerMenu) {
+            ActionRow(
+                icon = Icons.Rounded.Radio,
+                label = stringResource(R.string.start_radio),
+                accent = palette.accent,
+                onClick = onStartRadio,
+            )
+        }
         ActionRow(
             icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
             label = stringResource(R.string.play_next),
