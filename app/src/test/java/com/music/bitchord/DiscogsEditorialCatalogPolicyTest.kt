@@ -150,6 +150,39 @@ class DiscogsEditorialCatalogPolicyTest {
         ).isEmpty())
     }
 
+    @Test fun physicalEditionVersionOfKnownGroupIsNotDeclaredDiscogsOnly() {
+        val variants = listOf(
+            "Super Real Me (SUPER ME ver.)",
+            "ILLIT - Super Real Me (REAL ME version)",
+            "Super Real Me [Limited Edition]",
+        )
+        variants.forEachIndexed { i, title ->
+            val snapshot = DiscogsPublicEditionSnapshot(
+                edition(130 + i.toLong(), master = null).copy(title = title), 1_000,
+            )
+            assertTrue("Known group must cover physical edition: $title",
+                DiscogsShadowCatalog.select(
+                    listOf(snapshot), expectedArtist = "ILLIT",
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                    knownMusicBrainzTitles = setOf("SUPER REAL ME"),
+                ).isEmpty())
+        }
+    }
+
+    @Test fun distinctRemixOrLiveReleaseIsNotSilentlyCollapsedIntoOriginalGroup() {
+        val titles = listOf("Super Real Me (remix)", "Super Real Me (live)")
+        titles.forEachIndexed { i, title ->
+            val snapshot = DiscogsPublicEditionSnapshot(
+                edition(140 + i.toLong(), master = null).copy(title = title), 1_000,
+            )
+            assertEquals(title, DiscogsShadowCatalog.select(
+                listOf(snapshot), expectedArtist = "ILLIT",
+                mbCatalogChecked = true, nowMillis = 1_200,
+                knownMusicBrainzTitles = setOf("SUPER REAL ME"),
+            ).single().title)
+        }
+    }
+
     @Test fun differentArtistPrefixMustNotBeStrippedAsAnIdentityShortcut() {
         val snapshot = DiscogsPublicEditionSnapshot(
             edition(111, master = null).copy(title = "OTHER - SUPER REAL ME"), 1_000,
