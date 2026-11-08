@@ -232,6 +232,7 @@ internal class DiscogsAuthenticatedDiscovery(
         artistName: String,
         mbCatalogChecked: Boolean,
         knownDiscogsReleaseIds: Set<Long> = emptySet(),
+        knownMusicBrainzTitles: Set<String> = emptySet(),
     ): List<DiscogsShadowRelease> {
         if (!mbCatalogChecked) return emptyList()
         val searchResult = search.search(DiscogsSearchRequest(artist = artistName))
@@ -239,7 +240,7 @@ internal class DiscogsAuthenticatedDiscovery(
         val fetchedAt = nowMillis()
         val records = hydrate(ids).map { DiscogsPublicEditionSnapshot(it, fetchedAt) }
         return DiscogsShadowCatalog.select(records, artistName, mbCatalogChecked,
-            nowMillis(), knownDiscogsReleaseIds)
+            nowMillis(), knownDiscogsReleaseIds, knownMusicBrainzTitles)
     }
 
     private suspend fun hydrate(ids: List<Long>): List<DiscogsRecord> {

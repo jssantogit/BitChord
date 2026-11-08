@@ -180,18 +180,28 @@ internal object DiscogsEditionAccess {
         searchTokenVault = DiscogsSearchTokenVault(context.applicationContext)
     }
 
-    val coordinator: DiscogsCanonicalEditionCoordinator by lazy {
-        val publicClient = DiscogsClient(enabled = ENABLED)
-        val authenticatedSearch = DiscogsDatabaseSearchClient(
+    fun isSearchConfigured(): Boolean = searchTokenVault?.configured() == true
+
+    private val publicClient: DiscogsClient by lazy {
+        DiscogsClient(enabled = ENABLED)
+    }
+
+    private val searchClient: DiscogsDatabaseSearchClient by lazy {
+        DiscogsDatabaseSearchClient(
             enabled = ENABLED,
             tokenProvider = { searchTokenVault?.readForSearch() },
         )
+    }
+
+    val discovery: DiscogsAuthenticatedDiscovery by lazy {
+        DiscogsAuthenticatedDiscovery(searchClient, publicClient)
+    }
+
+    val coordinator: DiscogsCanonicalEditionCoordinator by lazy {
         DiscogsCanonicalEditionCoordinator(
             editions = DiscogsEditionRepository(
                 discogs = publicClient,
-                authenticatedDiscovery = DiscogsAuthenticatedDiscovery(
-                    authenticatedSearch, publicClient,
-                ),
+                authenticatedDiscovery = discovery,
                 enabled = ENABLED,
             ),
             enabled = ENABLED,

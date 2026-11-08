@@ -149,9 +149,13 @@ internal object DiscogsShadowCatalog {
         mbCatalogChecked: Boolean,
         nowMillis: Long,
         linkedReleaseIds: Set<Long> = emptySet(),
+        knownMusicBrainzTitles: Set<String> = emptySet(),
     ): List<DiscogsShadowRelease> {
         if (!mbCatalogChecked || expectedArtist.isBlank() || nowMillis < 0L) return emptyList()
         val artist = expectedArtist.trim().lowercase(Locale.ROOT)
+        val knownTitles = knownMusicBrainzTitles.mapTo(HashSet()) {
+            it.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+        }
         val eligible = observations.take(80).mapNotNull { item ->
             val release = item.record
             if (item.fetchedAtMillis !in 0..nowMillis ||
@@ -159,6 +163,8 @@ internal object DiscogsShadowCatalog {
                 release.link.kind != DiscogsKind.RELEASE ||
                 release.link.id in linkedReleaseIds ||
                 release.unofficial || release.title.isBlank() ||
+                release.title.trim().lowercase(Locale.ROOT)
+                    .replace(Regex("\\s+"), " ") in knownTitles ||
                 release.artistNames.size != 1 ||
                 release.artistNames.single().trim().lowercase(Locale.ROOT) != artist ||
                 release.tracklist.isEmpty() ||
