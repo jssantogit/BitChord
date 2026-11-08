@@ -360,12 +360,17 @@ internal class ListenBrainzPublicPlaylistClient(
     private data class CachedDetail(val atMs: Long, val detail: ListenBrainzPublicPlaylistDetail)
     private val detailCacheMutex = kotlinx.coroutines.sync.Mutex()
     private val detailCache = linkedMapOf<String, CachedDetail>()
+    private val detailInFlight = mutableMapOf<String,
+        CompletableDeferred<ListenBrainzPublicPlaylistDetail?>>()
     private data class TextSearchCache(
         val atMs: Long,
         val playlists: List<ListenBrainzPublicPlaylist>,
     )
     private val textSearchMutex = kotlinx.coroutines.sync.Mutex()
     private val textSearchCache = linkedMapOf<String, TextSearchCache>()
+    // Concurrent requests must reuse the same upstream rate-limit slot.
+    private val textSearchInFlight = mutableMapOf<String,
+        CompletableDeferred<List<ListenBrainzPublicPlaylist>>>()
 
     suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? {
         if (tag !in setOf("pop", "rock", "hip-hop", "electronic", "k-pop", "rnb",
@@ -381,33 +386,68 @@ internal class ListenBrainzPublicPlaylistClient(
         if (trimmed.length !in 2..80 || trimmed.any(Char::isISOControl))
             return emptyList()
         val key = trimmed.lowercase(Locale.ROOT)
+        var cached: List<ListenBrainzPublicPlaylist>? = null
+        var pending: CompletableDeferred<List<ListenBrainzPublicPlaylist>>? = null
+        var owner = false
         textSearchMutex.lock()
         try {
-            val cached = textSearchCache[key]
-            if (cached != null) {
-                val age = nowMillis() - cached.atMs
-                val ttl = if (cached.playlists.isEmpty()) 2 * 60_000L else 30 * 60_000L
-                if (age >= 0 && age < ttl) return cached.playlists
-                textSearchCache.remove(key)
+            val previous = textSearchCache[key]
+            if (previous != null) {
+                val age = nowMillis() - previous.atMs
+                val ttl = if (previous.playlists.isEmpty()) 2 * 60_000L else 30 * 60_000L
+                if (age >= 0 && age < ttl) cached = previous.playlists
+                else textSearchCache.remove(key)
+            }
+            if (cached == null) {
+                val running = textSearchInFlight[key]
+                if (running != null) pending = running
+                else {
+                    pending = CompletableDeferred()
+                    textSearchInFlight[key] = pending!!
+                    owner = true
+                }
             }
         } finally {
             textSearchMutex.unlock()
         }
-        // The upstream fuzzy search can put an exact title/annotation match
-        // below its first twelve hits. Filter by evidence *before* capping.
-        val verified = search(listOf(trimmed), trimmed, surface = "search")
-            ?: return emptyList() // Unavailable API must not poison the cache.
-        textSearchMutex.lock()
+        cached?.let { return it }
+        val request = pending ?: return emptyList()
+        // Join only the exact normalized query. Other queries can still
+        // observe cache hits while the slow public trigram endpoint runs.
+        if (!owner) return request.await()
         try {
-            textSearchCache.remove(key)
-            textSearchCache[key] = TextSearchCache(nowMillis(), verified)
-            while (textSearchCache.size > 24) {
-                textSearchCache.remove(textSearchCache.keys.first())
+            // Filter by evidence before capping; a remote failure stays retryable.
+            val verified = search(listOf(trimmed), trimmed, surface = "search")
+            if (verified != null) {
+                textSearchMutex.lock()
+                try {
+                    textSearchCache.remove(key)
+                    textSearchCache[key] = TextSearchCache(nowMillis(), verified)
+                    while (textSearchCache.size > 24)
+                        textSearchCache.remove(textSearchCache.keys.first())
+                } finally {
+                    textSearchMutex.unlock()
+                }
             }
+            val result = verified.orEmpty()
+            request.complete(result)
+            return result
+        } catch (cancelled: CancellationException) {
+            request.completeExceptionally(cancelled)
+            throw cancelled
+        } catch (_: Exception) {
+            request.complete(emptyList())
+            return emptyList()
         } finally {
-            textSearchMutex.unlock()
+            withContext(NonCancellable) {
+                textSearchMutex.lock()
+                try {
+                    if (textSearchInFlight[key] === request) textSearchInFlight.remove(key)
+                } finally {
+                    textSearchMutex.unlock()
+                }
+            }
         }
-        return verified
     }
 
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
@@ -590,30 +630,69 @@ internal class ListenBrainzPublicPlaylistClient(
 
     suspend fun detail(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? {
         val id = checkedPlaylistId(selected.mbid) ?: return null
-        val now = nowMillis()
+        var cached: ListenBrainzPublicPlaylistDetail? = null
+        var pending: CompletableDeferred<ListenBrainzPublicPlaylistDetail?>? = null
+        var owner = false
         detailCacheMutex.lock()
         try {
-            val cached = detailCache[id]
-            if (cached != null && now >= cached.atMs &&
-                now - cached.atMs < 10 * 60_000L
-            ) return cached.detail
-            detailCache.remove(id)
+            val previous = detailCache[id]
+            val now = nowMillis()
+            if (previous != null && now >= previous.atMs &&
+                now - previous.atMs < 10 * 60_000L
+            ) {
+                cached = previous.detail
+            } else {
+                detailCache.remove(id)
+                val running = detailInFlight[id]
+                if (running != null) pending = running
+                else {
+                    pending = CompletableDeferred()
+                    detailInFlight[id] = pending!!
+                    owner = true
+                }
+            }
         } finally {
             detailCacheMutex.unlock()
         }
-        val response = try { limiter.run { transport.detail(id) } }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { return null }
-        if (response.status != 200) return null
-        val parsed = parseListenBrainzPublicPlaylistDetail(response.body, selected) ?: return null
-        detailCacheMutex.lock()
+        cached?.let { return it }
+        val request = pending ?: return null
+        if (!owner) return request.await()
         try {
-            detailCache.remove(id)
-            detailCache[id] = CachedDetail(nowMillis(), parsed)
-            while (detailCache.size > 24) detailCache.remove(detailCache.keys.first())
+            val response = try { limiter.run { transport.detail(id) } }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { null }
+            val parsed = if (response?.status == 200)
+                parseListenBrainzPublicPlaylistDetail(response.body, selected) else null
+            // Only a verified JSPF becomes a durable cache entry. Failures
+            // unblock all waiters, then permit a fresh retry on next access.
+            if (parsed != null) {
+                detailCacheMutex.lock()
+                try {
+                    detailCache.remove(id)
+                    detailCache[id] = CachedDetail(nowMillis(), parsed)
+                    while (detailCache.size > 24)
+                        detailCache.remove(detailCache.keys.first())
+                } finally {
+                    detailCacheMutex.unlock()
+                }
+            }
+            request.complete(parsed)
+            return parsed
+        } catch (cancelled: CancellationException) {
+            request.completeExceptionally(cancelled)
+            throw cancelled
+        } catch (_: Exception) {
+            request.complete(null)
+            return null
         } finally {
-            detailCacheMutex.unlock()
+            withContext(NonCancellable) {
+                detailCacheMutex.lock()
+                try {
+                    if (detailInFlight[id] === request) detailInFlight.remove(id)
+                } finally {
+                    detailCacheMutex.unlock()
+                }
+            }
         }
-        return parsed
     }
 }
