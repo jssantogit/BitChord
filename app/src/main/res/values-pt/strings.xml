@@ -1427,4 +1427,7 @@
     <string name="visual_offline_cleared">Visuais offline apagados</string>
     <string name="apple_music_tab_radio">Rádio</string>
     <string name="apple_music_tab_radio_unavailable">Rádio, em breve</string>
+    <string name="apple_player_add_to_playlist">Adicionar a uma Playlist...</string>
+    <string name="apple_player_share_song">Compartilhar Música</string>
+    <string name="apple_player_share_lyrics">Compartilhar Letra...</string>
 </resources>
