@@ -89,4 +89,12 @@ class PlayerAlbumEvidenceTest {
         assertNull(contextualAlbumFromCurrent(track("Bad Idea"), listOf(track("UFO")), null))
         assertNull(contextualAlbumFromCurrent(track("Bad Idea", art = null), listOf(track("UFO", art = null)), "&Our Vibe"))
     }
+
+    @Test fun playerMetadataCanEnrichMatchingQueueEntryWithoutOverwritingItsTier() {
+        val queued = track("Bad Idea", album = null)
+        val displayed = track("Bad Idea", album = "&Our Vibe")
+        assertEquals("&Our Vibe", effectiveQueueAlbumSeed(queued, displayed).albumName)
+        assertEquals(QueueTier.CONTEXT, effectiveQueueAlbumSeed(queued, displayed).queueTier)
+        assertEquals(null, effectiveQueueAlbumSeed(queued, track("Another Song", album = "Wrong")).albumName)
+    }
 }
