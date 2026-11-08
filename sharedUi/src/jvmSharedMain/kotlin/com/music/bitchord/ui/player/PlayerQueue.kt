@@ -37,6 +37,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -137,10 +138,23 @@ internal fun queueTracksForPresentation(queue: List<Song>, currentIndex: Int, ap
 /** Uses only the pending context entry: a manual queue must not inherit album provenance. */
 internal fun appleQueueContextOrigin(tracks: QueueTracks): String? {
     if (tracks.user.isNotEmpty()) return null
-    val source = tracks.context.firstOrNull()?.song ?: return null
-    return source.playbackSource?.takeIf(String::isNotBlank)
-        ?: source.albumName?.takeIf(String::isNotBlank)
+    val next = tracks.context.firstOrNull()?.song ?: return null
+    val nextOrigin = next.playbackSource?.takeIf(String::isNotBlank)
+        ?: next.albumName?.takeIf(String::isNotBlank)
+    if (nextOrigin != null) return nextOrigin
+    // Queue entries may omit source metadata even when the playback context
+    // still has it. Only borrow the active source for same-artist context entries.
+    val current = tracks.nowPlaying?.song ?: return null
+    if (!current.artist.equals(next.artist, ignoreCase = true)) return null
+    return current.playbackSource?.takeIf(String::isNotBlank)
+        ?: current.albumName?.takeIf(String::isNotBlank)
 }
+
+internal fun appleQueueHasUpcoming(tracks: QueueTracks): Boolean =
+    tracks.user.isNotEmpty() || tracks.context.isNotEmpty() || tracks.autoplay.isNotEmpty()
+
+internal fun appleQueueShouldShowEmpty(tracks: QueueTracks): Boolean =
+    tracks.history.isEmpty() && !appleQueueHasUpcoming(tracks)
 
 /** Played history is never swipe-removable; locked queues aren't editable. */
 internal fun appleQueueMaySwipeRemove(appleStyle: Boolean, history: Boolean, locked: Boolean, lifted: Boolean): Boolean =
@@ -362,6 +376,17 @@ internal fun InlineQueue(
                         )
                     }
                 }
+                if (appleStyle && appleQueueShouldShowEmpty(tracks)) {
+                    item(key = "apple-queue-empty") {
+                        Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = stringResource(Res.string.apple_queue_empty),
+                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp),
+                                color = Color.White.copy(alpha = 0.45f),
+                            )
+                        }
+                    }
+                }
                 if (!appleStyle && nowPlaying != null) {
                     item(key = "header-now-playing") {
                         QueueHeading(
@@ -380,7 +405,7 @@ internal fun InlineQueue(
                         )
                     }
                 }
-                if (appleStyle && (tracks.user.isNotEmpty() || tracks.context.isNotEmpty() || tracks.autoplay.isNotEmpty())) {
+                if (appleStyle && appleQueueHasUpcoming(tracks)) {
                     item(key = "apple-continuation-heading") {
                         Column(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp).then(queueMotion())) {
                             Text(
@@ -392,9 +417,10 @@ internal fun InlineQueue(
                             )
                             // Do not infer a queued song's origin from the currently playing track.
                             val description = when {
-                                tracks.user.isNotEmpty() -> null
-                                tracks.context.isNotEmpty() -> appleQueueContextOrigin(tracks)
-                                tracks.autoplay.isNotEmpty() -> stringResource(Res.string.apple_queue_similar)
+                                tracks.context.isNotEmpty() && tracks.user.isEmpty() ->
+                                    appleQueueContextOrigin(tracks) ?: stringResource(Res.string.apple_queue_similar)
+                                tracks.autoplay.isNotEmpty() || tracks.user.isNotEmpty() ->
+                                    stringResource(Res.string.apple_queue_similar)
                                 else -> null
                             }
                             if (description != null) {
@@ -837,7 +863,7 @@ private fun InlineQueueRow(
     onDragEnd: () -> Unit = {},
 ) {
     val canSwipeRemove = appleQueueMaySwipeRemove(appleStyle, isHistory, locked, lifted)
-    val swipeLimitPx = with(LocalDensity.current) { 96.dp.toPx() }
+    val swipeLimitPx = with(LocalDensity.current) { 132.dp.toPx() }
     val swipeCommitPx = with(LocalDensity.current) { 72.dp.toPx() }
     var swipeOffset by remember(song.queueEntryId, song.videoId) { mutableFloatStateOf(0f) }
     var swiping by remember { mutableStateOf(false) }
@@ -847,13 +873,22 @@ private fun InlineQueueRow(
         label = "appleQueueSwipe",
     )
     Box(modifier.fillMaxWidth()) {
-        if (canSwipeRemove && swipeTranslation < -8f) {
-            Icon(
-                Icons.Rounded.Close,
-                contentDescription = stringResource(Res.string.remove_from_queue),
-                tint = Color.White.copy(alpha = 0.55f),
-                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 12.dp).size(20.dp),
-            )
+        if (canSwipeRemove && kotlin.math.abs(swipeTranslation) > 2f) {
+            Box(
+                modifier = Modifier
+                    .align(if (swipeTranslation > 0f) Alignment.CenterStart else Alignment.CenterEnd)
+                    .width(with(LocalDensity.current) { kotlin.math.abs(swipeTranslation).toDp() })
+                    .height(76.dp)
+                    .background(Color(0xFF0091FF)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.Delete,
+                    contentDescription = stringResource(Res.string.remove_from_queue),
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
         }
         Row(
             modifier = Modifier
@@ -867,14 +902,14 @@ private fun InlineQueueRow(
                             onDragStart = { swiping = true },
                             onDragCancel = { swiping = false; swipeOffset = 0f },
                             onDragEnd = {
-                                val remove = swipeOffset <= -swipeCommitPx
+                                val remove = kotlin.math.abs(swipeOffset) >= swipeCommitPx
                                 swiping = false
                                 swipeOffset = 0f
                                 if (remove) onRemove()
                             },
                             onHorizontalDrag = { change, amount ->
                                 change.consume()
-                                swipeOffset = (swipeOffset + amount).coerceIn(-swipeLimitPx, 0f)
+                                swipeOffset = (swipeOffset + amount).coerceIn(-swipeLimitPx, swipeLimitPx)
                             },
                         )
                     } else Modifier,
@@ -914,7 +949,7 @@ private fun InlineQueueRow(
             model = rememberPlaybackArtworkImageModel(song, com.music.bitchord.data.model.ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
-                .size(44.dp)
+                .size(if (appleStyle) 48.dp else 44.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .thumbnailBorder(RoundedCornerShape(6.dp))
                 .background(Color.White.copy(alpha = 0.08f)),
@@ -930,7 +965,8 @@ private fun InlineQueueRow(
             )
             Text(
                 text = song.artist,
-                style = MaterialTheme.typography.bodyMedium,
+                style = if (appleStyle) MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp)
+                    else MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.55f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
