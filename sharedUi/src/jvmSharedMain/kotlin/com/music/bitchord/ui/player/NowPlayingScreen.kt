@@ -3340,6 +3340,14 @@ fun NowPlayingScreen(
                                     description = stringResource(Res.string.more),
                                     onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
                                 )
+                            } else if (appleQueueStyle && !lyricsShareGlyphVisible) {
+                                // Same glyph, dimensions, and contextual sheet
+                                // as the Apple-derived queue overflow.
+                                AppleQueueHeaderAction(
+                                    imageVector = AppleQueueVectors.More,
+                                    description = stringResource(Res.string.more),
+                                    onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                )
                             } else {
                             CircleGlyph(
                                 icon = when {
