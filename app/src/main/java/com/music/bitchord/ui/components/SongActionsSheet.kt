@@ -149,6 +149,7 @@ fun SongActionsSheet(
     /** The only rating action shown: canonical stars by Recording identity. */
     canonicalRatingContent: (@Composable () -> Unit)? = null,
     appleQueuePlayerMenu: Boolean = false,
+    verifiedAlbumTitle: String? = null,
     onPinToLibrary: (() -> Unit)? = null,
     onShareLyrics: (() -> Unit)? = null,
 ) {
@@ -323,6 +324,7 @@ fun SongActionsSheet(
             subtitleColor = palette.onBackgroundVariant,
             preloadedArtworkModel = preloadedArtworkModel,
             appleStyle = appleQueuePlayerMenu,
+            verifiedAlbumTitle = verifiedAlbumTitle,
         )
         HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
         if (appleQueuePlayerMenu) {
@@ -740,6 +742,7 @@ internal fun SheetTrackHeader(
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     preloadedArtworkModel: Any? = null,
     appleStyle: Boolean = false,
+    verifiedAlbumTitle: String? = null,
 ) {
     Row(
         modifier = modifier
@@ -773,7 +776,7 @@ internal fun SheetTrackHeader(
                 overflow = TextOverflow.Ellipsis,
             )
             if (appleStyle) {
-                song.albumName?.takeIf(String::isNotBlank)?.let { album ->
+                (verifiedAlbumTitle ?: song.albumName)?.takeIf(String::isNotBlank)?.let { album ->
                     Text(
                         text = album,
                         style = MaterialTheme.typography.bodyMedium,
