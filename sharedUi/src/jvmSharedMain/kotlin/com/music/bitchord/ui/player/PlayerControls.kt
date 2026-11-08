@@ -96,7 +96,6 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
@@ -1729,8 +1728,6 @@ private fun LosslessLabel(
                     // Android's Material label line-height and font padding
                     // otherwise make the 11sp Apple badge visibly too tall.
                     lineHeight = if (appleStyle) 13.sp else MaterialTheme.typography.labelMedium.lineHeight,
-                    platformStyle = if (appleStyle) PlatformTextStyle(includeFontPadding = false)
-                        else MaterialTheme.typography.labelMedium.platformStyle,
                 ),
                 color = LocalPlayerTint.current.copy(alpha = if (appleStyle) 0.9f else 0.45f),
                 maxLines = 1,
