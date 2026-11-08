@@ -16,6 +16,7 @@ import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditorialShelf
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowCatalog
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowRelease
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsSourceOnlyDiscovery
 import com.music.bitchord.data.catalog.metadata.discogs.loadCompleteMusicBrainzArtistGroupTitles
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
@@ -65,7 +66,13 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
                     artistName = artistName,
                     mbCatalogChecked = true,
                     knownMusicBrainzTitles = completedTitles,
-                )
+                ).also { safe ->
+                    // These are already compared against a complete artist
+                    // catalog and carry no invented MusicBrainz identity.
+                    DiscogsSourceOnlyDiscovery.store.update(
+                        artistMbid, safe, System.currentTimeMillis(),
+                    )
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

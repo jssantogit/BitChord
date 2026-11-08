@@ -88,6 +88,7 @@ internal class DiscogsCanonicalEditionCoordinator(
         entries.clear()
         editions.clearCachedEvidence()
         DiscogsGroupEditorialEvidence.store.clear()
+        DiscogsSourceOnlyDiscovery.store.clear()
     }
 
     suspend fun observeRelease(musicBrainzReleaseMbid: String): DiscogsEditionEnrichment {
