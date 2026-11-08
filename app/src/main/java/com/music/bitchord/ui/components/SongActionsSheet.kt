@@ -426,7 +426,12 @@ private fun TintedSheet(
             washFraction = 0.75f,
             artPx = ROW_ART_PX,
         )
-        Column(Modifier.fillMaxWidth().heightIn(max = maxHeight)) {
+        Column(
+            Modifier.fillMaxWidth().heightIn(
+                min = if (appleStyle) LocalConfiguration.current.screenHeightDp.dp * 0.65f else 0.dp,
+                max = maxHeight,
+            ),
+        ) {
             // Drawn rather than taken from BottomSheetDefaults, whose handle
             // carries 22dp of padding on each side — half a row's worth of
             // nothing between the grip and the track it is about. Kept outside
