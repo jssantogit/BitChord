@@ -511,7 +511,7 @@ class PlaylistLibraryVisualReuseTest {
                 onPlayTrack = { playedRecordingId = it },
             )
         }
-        compose.onNodeWithText("Adições recentes").assertExists()
+        compose.onNodeWithText("Adições Recentes").assertExists()
         compose.onNodeWithText("Hurt").assertExists()
         compose.onNodeWithText("NewJeans").assertExists()
         compose.onNodeWithText("Hurt").performClick()
