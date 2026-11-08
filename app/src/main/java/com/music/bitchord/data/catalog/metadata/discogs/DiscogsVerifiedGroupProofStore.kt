@@ -56,6 +56,11 @@ internal class DiscogsVerifiedGroupProofStore {
             records.filter { it.expiresAtMillis > nowMillis }.map { it.proof }
         }.filterValues { it.isNotEmpty() }
 
+    fun clear() {
+        mutable.value = emptyMap()
+        display.value = emptyMap()
+    }
+
     fun prune(nowMillis: Long) {
         mutable.update { map ->
             map.mapValues { (_, records) ->

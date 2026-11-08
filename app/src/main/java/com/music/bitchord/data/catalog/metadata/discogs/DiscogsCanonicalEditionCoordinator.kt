@@ -87,6 +87,7 @@ internal class DiscogsCanonicalEditionCoordinator(
     suspend fun clear() = lock.withLock {
         entries.clear()
         editions.clearCachedEvidence()
+        DiscogsGroupEditorialEvidence.store.clear()
     }
 
     suspend fun observeRelease(musicBrainzReleaseMbid: String): DiscogsEditionEnrichment {
@@ -153,7 +154,22 @@ internal class DiscogsCanonicalEditionCoordinator(
             creditedArtistNames = detail.artistCreditNames,
             musicBrainzReleaseGroupId = detail.groupMbid,
         )
-        return editions.observe(canonical)
+        val result = editions.observe(canonical)
+        if (result is DiscogsEditionEnrichment.Verified) {
+            val now = nowMillis()
+            val kind = DiscogsEditionPresentation.from(result, now)?.editorialKind
+            // An exact MusicBrainz edition graph independently anchors its
+            // parent group. Source facts remain volatile and UI-only.
+            DiscogsGroupEditorialEvidence.store.record(
+                releaseGroupMbid = canonical.musicBrainzReleaseGroupId,
+                discogsReleaseId = result.observation.record.link.id,
+                kind = kind,
+                verified = true,
+                expiresAtMillis = result.observation.fetchedAtMillis + DiscogsObservation.TTL_MILLIS,
+                nowMillis = now,
+            )
+        }
+        return result
     }
 }
 
