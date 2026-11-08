@@ -157,6 +157,10 @@ internal fun appleQueueHasUpcoming(tracks: QueueTracks): Boolean =
 internal fun appleQueueShouldShowEmpty(tracks: QueueTracks): Boolean =
     !appleQueueHasUpcoming(tracks)
 
+/** Swipe-to-remove accepts either horizontal direction, never the reorder gesture. */
+internal fun appleQueueShouldCommitSwipe(offsetPx: Float, thresholdPx: Float): Boolean =
+    thresholdPx > 0f && kotlin.math.abs(offsetPx) >= thresholdPx
+
 /** Played history is never swipe-removable; locked queues aren't editable. */
 internal fun appleQueueMaySwipeRemove(appleStyle: Boolean, history: Boolean, locked: Boolean, lifted: Boolean): Boolean =
     appleStyle && !history && !locked && !lifted
@@ -907,7 +911,7 @@ private fun InlineQueueRow(
                             onDragStart = { swiping = true },
                             onDragCancel = { swiping = false; swipeOffset = 0f },
                             onDragEnd = {
-                                val remove = kotlin.math.abs(swipeOffset) >= swipeCommitPx
+                                val remove = appleQueueShouldCommitSwipe(swipeOffset, swipeCommitPx)
                                 swiping = false
                                 swipeOffset = 0f
                                 if (remove) onRemove()
