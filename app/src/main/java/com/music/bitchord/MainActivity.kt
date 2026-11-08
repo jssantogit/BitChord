@@ -244,6 +244,7 @@ import com.music.bitchord.playback.retryCanonicalFailure
 import com.music.bitchord.ui.components.PlaybackRecoveryBanner
 import com.music.bitchord.playback.setQueueDragActive
 import com.music.bitchord.ui.MainViewModel
+import com.music.bitchord.ui.rememberDiscogsEditorialFeeds
 import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.SearchOrigin
 import com.music.bitchord.ui.searchOriginOf
@@ -1024,11 +1025,14 @@ private fun BitChordApp(
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
             .format(java.util.Date())
     }
+    val discogsEditorialFeeds = rememberDiscogsEditorialFeeds(
+        cachedCanonicalRows, canonicalWorldwideReleases, canonicalGenreResults,
+    )
     // Rendering Now Playing and the mini-player must not rehash and sort hundreds
     // of media URIs. Recompute the native Home shelves only when their input
     // snapshot, date, or the user's locale actually changes.
     val canonicalHomeShelves = remember(
-        downloadedReleases, cachedCanonicalRows, canonicalWorldwideReleases,
+        downloadedReleases, discogsEditorialFeeds.cached, discogsEditorialFeeds.worldwide,
         canonicalHomeLocalPicks, canonicalHomeRemotePicks,
         canonicalTrendingMbids, canonicalTrendingLocalSongs,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
@@ -1044,7 +1048,7 @@ private fun BitChordApp(
                     browseId = Downloads.pageIdFor(collection.id),
                 )
             },
-            metadata = (cachedCanonicalRows + canonicalWorldwideReleases)
+            metadata = (discogsEditorialFeeds.cached + discogsEditorialFeeds.worldwide)
                 .distinctBy { it.kind to it.musicBrainzId },
             localPicks = canonicalHomeLocalPicks,
             remotePicks = canonicalHomeRemotePicks,
@@ -1153,7 +1157,7 @@ private fun BitChordApp(
     val canonicalHomePublicPlaylists = publicPlaylistUi.homeShelf
     val canonicalHomePlaylistNotice = publicPlaylistUi.homeNotice
     val canonicalHomeDisplayShelves = remember(
-        canonicalHomeShelves, canonicalWorldwideReleases,
+        canonicalHomeShelves, discogsEditorialFeeds.worldwide,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
         canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
         worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
@@ -1161,7 +1165,7 @@ private fun BitChordApp(
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
-            worldwideReleases = canonicalWorldwideReleases,
+            worldwideReleases = discogsEditorialFeeds.worldwide,
             releasesHeading = canonicalReleasesHeading,
             picksHeading = canonicalPicksHeading,
             trendingHeading = canonicalTrendingHeading,
@@ -1189,7 +1193,7 @@ private fun BitChordApp(
     }.orEmpty()
     val canonicalGenreState: UiState<List<HomeShelf>> =
         com.music.bitchord.ui.canonicalGenreDisplayState(
-            activeCanonicalGenre, canonicalGenreResults, activeGenrePlaylists,
+            activeCanonicalGenre, discogsEditorialFeeds.genre, activeGenrePlaylists,
             canonicalFeedDate,
         )
     // What a browse id is recorded under in Downloads.collections, when it names
