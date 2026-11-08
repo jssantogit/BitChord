@@ -2517,6 +2517,7 @@ private fun BitChordApp(
             onEditCanonicalRating = { localRatingDialogOpen = true },
             appleQueueStyle = true,
             lyricsShareRequestToken = playerShareLyricsRequestToken,
+            onLyricsShareRequestConsumed = { playerShareLyricsRequestToken = 0 },
             // The service owns both the queue and the Shuffle state. Keeping
             // the toggle on that side prevents the UI from changing the icon
             // before its asynchronous reorder command has actually landed.
