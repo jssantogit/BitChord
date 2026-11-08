@@ -388,6 +388,9 @@ fun DetailScreen(
     val publicArtistMbid = page.browseId.takeIf {
         isArtist && it.startsWith("catalog:ARTIST:")
     }?.removePrefix("catalog:ARTIST:")
+    DiscogsGroupCorroborationEffect(
+        page.browseId, selectedReleaseGroupMbid, selectedReleaseMbid,
+    )
     val discogsSupplementaryReleases = rememberDiscogsArtistSupplementaryReleases(
         artistBrowseId = page.browseId,
         artistName = page.title,
