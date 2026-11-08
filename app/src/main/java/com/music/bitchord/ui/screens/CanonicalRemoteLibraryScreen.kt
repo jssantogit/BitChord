@@ -2031,7 +2031,7 @@ internal fun NativeUnifiedLibraryCategoryHeader(
             modifier = Modifier.padding(horizontal = PAGE_GUTTER),
         )
         Spacer(Modifier.height(12.dp))
-        DetailSearchField(
+        NativeDetailSearchField(
             query = query,
             onQueryChange = onQueryChange,
             onClose = { onQueryChange("") },
@@ -2040,6 +2040,7 @@ internal fun NativeUnifiedLibraryCategoryHeader(
             palette = palette,
             placeholder = "Buscar em $title",
             horizontalInset = PAGE_GUTTER,
+            appleLibraryCategoryStyle = true,
         )
         if (shouldShowCanonicalLibraryCategoryPlayback(
                 context, isAlbumDetail = false, hasPlayableTracks = hasPlayableTracks,
