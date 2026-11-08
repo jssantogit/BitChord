@@ -79,6 +79,56 @@ class DiscogsAuthenticatedDiscoveryTest {
         assertEquals(1, requested)
     }
 
+    @Test fun barcodeMissFallsBackToArtistAndReleaseTitleWithoutInventingIdentity() = runBlocking {
+        val queries = mutableListOf<DiscogsSearchRequest>()
+        val search = DiscogsDatabaseSearchClient(
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse {
+                    queries += query
+                    return if (query.barcode != null)
+                        DiscogsHttpResponse(200, """{"results":[]}""")
+                    else DiscogsHttpResponse(200,
+                        """{"results":[{"id":321,"type":"release"}]}""")
+                }
+            },
+            tokenProvider = { token }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val hydrated = mutableListOf<String>()
+        val editions = DiscogsClient(
+            transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                    hydrated += path
+                    return DiscogsHttpResponse(200, """{
+                        "id":321, "title":"SUPER REAL ME",
+                        "artists":[{"name":"ILLIT"}],
+                        "year":2024, "country":"South Korea",
+                        "labels":[{"name":"BELIFT LAB","catno":"CMDC12000"}],
+                        "identifiers":[{"type":"Barcode","value":"8809704427821"}],
+                        "formats":[{"name":"CD","descriptions":["EP"]}],
+                        "tracklist":[{"position":"1","title":"Magnetic"}]
+                    }""")
+                }
+            }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+            title = "SUPER REAL ME", creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"), status = "Official",
+            barcodes = listOf("8809704427821"),
+            trackTitles = listOf("Magnetic"), releaseYear = 2024, country = "KR",
+        )
+        val result = DiscogsAuthenticatedDiscovery(search, editions).findForEdition(canonical)
+        assertTrue(result is DiscogsAuthenticatedMatch.Verified)
+        assertEquals(2, queries.size)
+        assertEquals("8809704427821", queries.first().barcode)
+        assertEquals("SUPER REAL ME", queries.last().title)
+        assertEquals(listOf("releases/321"), hydrated)
+    }
+
     @Test fun tokenNeverAppearsInSearchResultAndOnlyReturnedIdsAreHydrated() = runBlocking {
         val search = DiscogsDatabaseSearchClient(
             transport = object : DiscogsSearchTransport {
