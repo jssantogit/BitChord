@@ -1425,7 +1425,7 @@ private fun BitChordApp(
     val exploreLabel = stringResource(R.string.explore)
     val radioLabel = stringResource(R.string.apple_music_radio_tab)
     val libraryLabel = stringResource(R.string.library)
-    val searchLabel = stringResource(R.string.search)
+    val searchLabel = stringResource(R.string.apple_music_search_tab)
     val historyLabel = stringResource(R.string.history)
     val replayLabel = stringResource(R.string.replay)
     val queueLabel = stringResource(R.string.queue)
