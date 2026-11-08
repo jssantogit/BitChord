@@ -134,6 +134,14 @@ internal fun queueTracksForPresentation(queue: List<Song>, currentIndex: Int, ap
     if (appleStyle) splitQueue(queue, currentIndex, showHistory = true)
     else visibleNowPlayingQueue(queue, currentIndex)
 
+/** Uses only the pending context entry: a manual queue must not inherit album provenance. */
+internal fun appleQueueContextOrigin(tracks: QueueTracks): String? {
+    if (tracks.user.isNotEmpty()) return null
+    val source = tracks.context.firstOrNull()?.song ?: return null
+    return source.playbackSource?.takeIf(String::isNotBlank)
+        ?: source.albumName?.takeIf(String::isNotBlank)
+}
+
 /** Played history is never swipe-removable; locked queues aren't editable. */
 internal fun appleQueueMaySwipeRemove(appleStyle: Boolean, history: Boolean, locked: Boolean, lifted: Boolean): Boolean =
     appleStyle && !history && !locked && !lifted
@@ -383,13 +391,9 @@ internal fun InlineQueue(
                                 color = Color.White,
                             )
                             // Do not infer a queued song's origin from the currently playing track.
-                            val origin = tracks.context.firstOrNull()?.song?.let {
-                                it.playbackSource?.takeIf(String::isNotBlank)
-                                    ?: it.albumName?.takeIf(String::isNotBlank)
-                            }
                             val description = when {
                                 tracks.user.isNotEmpty() -> null
-                                tracks.context.isNotEmpty() -> origin
+                                tracks.context.isNotEmpty() -> appleQueueContextOrigin(tracks)
                                 tracks.autoplay.isNotEmpty() -> stringResource(Res.string.apple_queue_similar)
                                 else -> null
                             }
