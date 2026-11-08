@@ -148,7 +148,7 @@ fun LibraryScreen(
             // floating root actions. The generic page inset placed it an
             // entire toolbar-height too low in device comparisons.
             contentPadding = if (navigationHome) PaddingValues(
-                top = (contentPadding.calculateTopPadding() - 40.dp).coerceAtLeast(0.dp),
+                top = (contentPadding.calculateTopPadding() - 48.dp).coerceAtLeast(0.dp),
                 bottom = contentPadding.calculateBottomPadding(),
             ) else contentPadding,
         ) {
@@ -161,8 +161,8 @@ fun LibraryScreen(
                         ) else MaterialTheme.typography.displayLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(
-                            start = PAGE_GUTTER,
-                            end = PAGE_GUTTER,
+                            start = if (navigationHome) 18.dp else PAGE_GUTTER,
+                            end = if (navigationHome) 18.dp else PAGE_GUTTER,
                             top = if (navigationHome) 4.dp else 8.dp,
                             bottom = if (navigationHome) 0.dp else 8.dp,
                         ),
@@ -326,7 +326,7 @@ private fun LibraryLinkList(
                     .clickable(enabled = link.enabled) {
                         link.onClick?.invoke() ?: onClick(link.item)
                     }
-                    .padding(horizontal = PAGE_GUTTER),
+                    .padding(horizontal = if (compact) PAGE_GUTTER + 8.dp else PAGE_GUTTER),
             ) {
                 if (link.logo != null) {
                     // A mark, not a glyph: white on dark, black on light, with
@@ -369,7 +369,7 @@ private fun LibraryLinkList(
             }
             if (index < links.lastIndex) {
                 HorizontalDivider(
-                    modifier = Modifier.padding(start = PAGE_GUTTER + LINK_ICON_SIZE + LINK_ICON_GAP),
+                    modifier = Modifier.padding(start = PAGE_GUTTER + LINK_ICON_SIZE + LINK_ICON_GAP + if (compact) 8.dp else 0.dp),
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outline,
                 )
