@@ -163,13 +163,13 @@ fun SongActionsSheet(
     // than sitting on the sleeve's own ground, and an accent pitched against
     // that tint is not guaranteed to read against the theme's surface.
     val palette = if (appleQueuePlayerMenu) {
-        ArtworkPalette(
-            background = Color(0xFF1C1C1E),
-            wash = Color(0xFF1C1C1E),
-            elevated = Color(0xFF28282A),
+        // Preserve the original artwork-dependent blurred gradient the user
+        // selected. Lock foreground contrast only; do not replace the
+        // underlying sleeve palette with a flat charcoal colour.
+        rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX).copy(
             accent = Color.White,
             onBackground = Color.White,
-            onBackgroundVariant = Color.White.copy(alpha = 0.56f),
+            onBackgroundVariant = Color.White.copy(alpha = 0.64f),
             divider = Color.White.copy(alpha = 0.09f),
         )
     } else if (menu) {
