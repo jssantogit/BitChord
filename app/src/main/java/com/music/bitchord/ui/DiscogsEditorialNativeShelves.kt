@@ -11,6 +11,41 @@ import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 
 /**
+ * Read-only overlay for native Home and Explore release rows. The original
+ * MusicBrainz primary type remains untouched in Room and source caches.
+ * Callers may recompose when the short-lived group-proof snapshot changes.
+ */
+internal fun discogsEditorialProjectedRows(
+    rows: List<CanonicalCatalogSearchRow>,
+    groupProofs: Map<String, List<DiscogsGroupTypeProof>>,
+): List<CanonicalCatalogSearchRow> {
+    if (groupProofs.isEmpty()) return rows
+    var changed = false
+    val projected = rows.map { row ->
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP) return@map row
+        val proof = groupProofs[row.musicBrainzId] ?: return@map row
+        val decided = DiscogsTypeConsensus.resolve(row.releaseKind, proof)
+            as? DiscogsTypeResolution.Decided ?: return@map row
+        if (decided.source !in setOf(
+                DiscogsTypeSource.DISCOGS_CORRECTION,
+                DiscogsTypeSource.DISCOGS_FILL,
+            )
+        ) return@map row
+        val type = when (decided.kind) {
+            DiscogsEditorialKind.ALBUM -> "Album"
+            DiscogsEditorialKind.EP -> "EP"
+            DiscogsEditorialKind.SINGLE -> "Single"
+            else -> return@map row
+        }
+        if (row.releaseKind == type) row else {
+            changed = true
+            row.copy(releaseKind = type)
+        }
+    }
+    return if (changed) projected else rows
+}
+
+/**
  * Source-scoped overrides of existing native artist shelves. The MBID remains
  * the browse identity; never write this derived classification into MusicBrainz
  * Room tables. Disputes retain the canonical MusicBrainz classification.
