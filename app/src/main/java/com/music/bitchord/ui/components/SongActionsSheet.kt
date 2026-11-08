@@ -260,7 +260,11 @@ fun SongActionsSheet(
             appleStyle = appleQueuePlayerMenu,
         )
         HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
-        rows()
+        if (appleQueuePlayerMenu) {
+            CompositionLocalProvider(LocalActionRowStyle provides ActionRowStyle.Apple) { rows() }
+        } else {
+            rows()
+        }
         Spacer(Modifier.height(24.dp))
     }
 }
@@ -269,7 +273,7 @@ fun SongActionsSheet(
 enum class SongActionsPresentation { Sheet, Menu }
 
 /** Row density and layout, set by whichever surface the rows are drawn on. */
-internal enum class ActionRowStyle { Sheet, Menu }
+internal enum class ActionRowStyle { Sheet, Menu, Apple }
 
 internal val LocalActionRowStyle = staticCompositionLocalOf { ActionRowStyle.Sheet }
 
@@ -547,16 +551,17 @@ internal fun ActionRow(
     onClick: () -> Unit,
 ) {
     val menu = LocalActionRowStyle.current == ActionRowStyle.Menu
+    val apple = LocalActionRowStyle.current == ActionRowStyle.Apple
     // The popup sits on a surface rather than the page background, so its
     // text follows the surface's colour — the two differ in light mode.
-    val foreground = if (menu) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onBackground
+    val foreground = if (apple) Color.White else if (menu) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onBackground
     val alpha = if (enabled) 1f else 0.4f
     val iconView: @Composable () -> Unit = {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = (tint ?: foreground).copy(alpha = alpha),
-            modifier = Modifier.size(if (menu) 20.dp else 22.dp),
+            modifier = Modifier.size(if (apple) 28.dp else if (menu) 20.dp else 22.dp),
         )
     }
     Row(
@@ -567,6 +572,8 @@ internal fun ActionRow(
             .then(
                 if (menu) {
                     Modifier.heightIn(min = 46.dp).padding(horizontal = 18.dp, vertical = 11.dp)
+                } else if (apple) {
+                    Modifier.heightIn(min = 72.dp).padding(horizontal = 16.dp, vertical = 14.dp)
                 } else {
                     Modifier.padding(horizontal = 22.dp, vertical = 15.dp)
                 },
@@ -577,11 +584,11 @@ internal fun ActionRow(
         // the sheet keeps the glyph leading, like every other list in the app.
         if (!menu) {
             iconView()
-            Spacer(Modifier.width(18.dp))
+            Spacer(Modifier.width(if (apple) 20.dp else 18.dp))
         }
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = if (apple) MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp) else MaterialTheme.typography.bodyLarge,
             color = foreground.copy(alpha = alpha),
             maxLines = if (menu) 2 else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis,
