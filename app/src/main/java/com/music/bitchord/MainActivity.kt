@@ -1328,72 +1328,20 @@ private fun BitChordApp(
     }
 
     val homeListState = rememberLazyListState()
-    // One speculative image pipeline for the existing native Home shelves.
-    // Follow the visible LazyColumn window, not the full catalog: preloading
-    // every public release would slow down metadata and drain data allowance.
-    LaunchedEffect(canonicalHomeDisplayShelves, selectedTab) {
-        if (selectedTab == TAB_HOME) {
-            androidx.compose.runtime.snapshotFlow {
-                homeListState.firstVisibleItemIndex
-            }.collect { firstVisible ->
-                val upcoming = com.music.bitchord.data.canvas.planVisualShelfArtwork(
-                    shelfUrls = canonicalHomeDisplayShelves.map { shelf ->
-                        shelf.items.map { item -> item.thumbnailUrl }
-                    },
-                    visibleShelfIndex = firstVisible,
-                    targetPx = com.music.bitchord.data.model.CARD_ART_PX,
-                )
-                com.music.bitchord.data.canvas.VisualArtworkPrefetch.warm(context, upcoming)
-            }
-        }
-    }
-
-    // Search uses the same global Coil cache and request gate as Home and
-    // artist/album details. Warm only sleeves already verified by metadata,
-    // never launch per-character image lookups or decode the whole catalog.
-    LaunchedEffect(selectedTab, detail?.browseId) {
-        if (selectedTab == TAB_SEARCH && detail == null) {
-            viewModel.canonicalResults.collectLatest { result ->
-                val rows = (result as? UiState.Success)?.data.orEmpty()
-                val targets = rows.asSequence()
-                    .mapNotNull { row -> row.artworkUri?.takeIf(String::isNotBlank) }
-                    .distinct().take(10)
-                    .map { url -> com.music.bitchord.data.canvas.VisualArtworkCandidate(
-                        url = url,
-                        priority = com.music.bitchord.data.canvas.VisualArtworkPriority.VISIBLE,
-                        targetPx = com.music.bitchord.data.model.ROW_ART_PX,
-                    ) }.toList()
-                com.music.bitchord.data.canvas.VisualArtworkPrefetch.warm(context, targets)
-            }
-        }
-    }
-
     val exploreListState = rememberLazyListState()
-    // Genre discovery and genre-detail shelves share the same limited Coil
-    // warmup policy; avoid decoding all of Explore below the fold.
-    LaunchedEffect(
-        selectedTab, activeCanonicalGenre?.tag, canonicalGenreState,
-        canonicalExploreGenreCovers,
-    ) {
-        if (selectedTab == TAB_EXPLORE) {
-            val artwork = if (activeCanonicalGenre == null) {
-                canonicalExploreGenreCovers.values.asSequence()
-            } else {
-                (canonicalGenreState as? UiState.Success)?.data.orEmpty()
-                    .asSequence().take(3).flatMap { shelf ->
-                        shelf.items.asSequence().take(5).map { it.thumbnailUrl }
-                    }
-            }
-            val targets = artwork.filterNotNull().filter(String::isNotBlank)
-                .distinct().take(12).map { url ->
-                    com.music.bitchord.data.canvas.VisualArtworkCandidate(
-                        url, com.music.bitchord.data.canvas.VisualArtworkPriority.VISIBLE,
-                        com.music.bitchord.data.model.CARD_ART_PX,
-                    )
-                }.toList()
-            com.music.bitchord.data.canvas.VisualArtworkPrefetch.warm(context, targets)
-        }
-    }
+    // Keep expensive coroutine/composition machinery outside BitChordApp's
+    // enormous Compose bytecode method. One shared native warmup surface.
+    CatalogArtworkWarmupEffects(
+        showHome = selectedTab == TAB_HOME,
+        homeShelves = canonicalHomeDisplayShelves,
+        homeListState = homeListState,
+        showSearch = selectedTab == TAB_SEARCH && detail == null,
+        searchResults = viewModel.canonicalResults,
+        showExplore = selectedTab == TAB_EXPLORE,
+        showGenreDetail = activeCanonicalGenre != null,
+        genreState = canonicalGenreState,
+        genreCovers = canonicalExploreGenreCovers,
+    )
     // Preserve the native genre-grid scroll when visiting an editorial detail.
     val genreListState = rememberLazyListState()
     LaunchedEffect(activeCanonicalGenre?.tag) {
