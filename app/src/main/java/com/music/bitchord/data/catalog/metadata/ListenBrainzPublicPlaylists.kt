@@ -372,10 +372,87 @@ internal class ListenBrainzPublicPlaylistClient(
     private val textSearchInFlight = mutableMapOf<String,
         CompletableDeferred<List<ListenBrainzPublicPlaylist>>>()
 
+    // The Home and genre shelves can be reopened repeatedly while an upstream
+    // public trigram search takes tens of seconds. Cache only completed,
+    // verified discovery, and share active requests by surface + genre.
+    private data class CachedDiscovery(
+        val atMs: Long, val playlists: List<ListenBrainzPublicPlaylist>,
+    )
+    private val discoveryMutex = kotlinx.coroutines.sync.Mutex()
+    private val discoveryCache = linkedMapOf<String, CachedDiscovery>()
+    private val discoveryInFlight = mutableMapOf<String,
+        CompletableDeferred<List<ListenBrainzPublicPlaylist>?>>()
+
+
+    private suspend fun cachedDiscovery(
+        key: String, load: suspend () -> List<ListenBrainzPublicPlaylist>?,
+    ): List<ListenBrainzPublicPlaylist>? {
+        var cached: List<ListenBrainzPublicPlaylist>? = null
+        var pending: CompletableDeferred<List<ListenBrainzPublicPlaylist>?>? = null
+        var owner = false
+        discoveryMutex.lock()
+        try {
+            val previous = discoveryCache[key]
+            if (previous != null) {
+                val age = nowMillis() - previous.atMs
+                val ttl = if (previous.playlists.isEmpty()) 60_000L else 5 * 60_000L
+                if (age >= 0 && age < ttl) cached = previous.playlists
+                else discoveryCache.remove(key)
+            }
+            if (cached == null) {
+                val running = discoveryInFlight[key]
+                if (running != null) pending = running
+                else {
+                    pending = CompletableDeferred()
+                    discoveryInFlight[key] = pending!!
+                    owner = true
+                }
+            }
+        } finally {
+            discoveryMutex.unlock()
+        }
+        cached?.let { return it }
+        val request = pending ?: return null
+        if (!owner) return request.await()
+        try {
+            val result = load()
+            if (result != null) {
+                discoveryMutex.lock()
+                try {
+                    discoveryCache.remove(key)
+                    discoveryCache[key] = CachedDiscovery(nowMillis(), result)
+                    while (discoveryCache.size > 16)
+                        discoveryCache.remove(discoveryCache.keys.first())
+                } finally {
+                    discoveryMutex.unlock()
+                }
+            }
+            request.complete(result)
+            return result
+        } catch (cancelled: CancellationException) {
+            request.completeExceptionally(cancelled)
+            throw cancelled
+        } catch (_: Exception) {
+            request.complete(null)
+            return null
+        } finally {
+            withContext(NonCancellable) {
+                discoveryMutex.lock()
+                try {
+                    if (discoveryInFlight[key] === request) discoveryInFlight.remove(key)
+                } finally {
+                    discoveryMutex.unlock()
+                }
+            }
+        }
+    }
+
     suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? {
         if (tag !in setOf("pop", "rock", "hip-hop", "electronic", "k-pop", "rnb",
                 "jazz", "metal", "classical", "folk", "ambient", "punk")) return null
-        return search(publicPlaylistGenreQueries(tag), tag)
+        return cachedDiscovery("genre:$tag") {
+            search(publicPlaylistGenreQueries(tag), tag)
+        }
     }
     /** A typed query is separate from genre discovery and Home curation.
      * Title/annotation must actually include the requested words; fuzzy
@@ -451,12 +528,11 @@ internal class ListenBrainzPublicPlaylistClient(
     }
 
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
-        // Physical smoke showed the generic "music" query taking 16–33 s
-        // and yielding no descriptive cards, while the next query returned
-        // valid curated titles. Start with that better public candidate set.
-        // Keep the generic query as a bounded last resort, not the first
-        // synchronous barrier before Home can render a playlist shelf.
-        search(listOf("essentials", "favorites", "music"), null)
+        cachedDiscovery("home") {
+            // Avoid repeated 15-90s upstream searches on Home re-entry.
+            // Existing preference for descriptive candidates is unchanged.
+            search(listOf("essentials", "favorites", "music"), null)
+        }
 
 
     /**
