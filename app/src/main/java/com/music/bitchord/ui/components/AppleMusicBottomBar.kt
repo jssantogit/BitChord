@@ -331,13 +331,13 @@ private val AppleMusicRadioWaves: ImageVector by lazy {
     ).apply {
         path(stroke = paint, strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
             moveTo(8.5f, 8.1f)
-            cubicTo(5.9f, 10.3f, 5.9f, 13.7f, 8.5f, 15.9f)
+            curveTo(5.9f, 10.3f, 5.9f, 13.7f, 8.5f, 15.9f)
             moveTo(15.5f, 8.1f)
-            cubicTo(18.1f, 10.3f, 18.1f, 13.7f, 15.5f, 15.9f)
+            curveTo(18.1f, 10.3f, 18.1f, 13.7f, 15.5f, 15.9f)
             moveTo(6.1f, 5.5f)
-            cubicTo(1.4f, 9.0f, 1.4f, 15.0f, 6.1f, 18.5f)
+            curveTo(1.4f, 9.0f, 1.4f, 15.0f, 6.1f, 18.5f)
             moveTo(17.9f, 5.5f)
-            cubicTo(22.6f, 9.0f, 22.6f, 15.0f, 17.9f, 18.5f)
+            curveTo(22.6f, 9.0f, 22.6f, 15.0f, 17.9f, 18.5f)
         }
         path(fill = paint) {
             moveTo(14.4f, 12f)
