@@ -189,7 +189,6 @@ fun libraryNavigationLinks(
             icon = icon,
             onClick = onClick,
         )
-    val radios = destination("Rádios", Icons.Rounded.Radio) { }.copy(enabled = false)
     return listOf(
         destination("Playlists", Icons.Rounded.QueueMusic, onOpenPlaylists),
         destination("Artistas", Icons.Rounded.Person) {
@@ -201,7 +200,6 @@ fun libraryNavigationLinks(
         destination("Músicas", Icons.Rounded.MusicNote) {
             onOpenLocalCategory(LocalFolderTab.SONGS)
         },
-        radios,
     ) + deviceLinks.filter { it.item.browseId == "local:downloads" }
 }
 
