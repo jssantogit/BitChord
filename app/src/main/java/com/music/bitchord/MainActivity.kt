@@ -4110,6 +4110,12 @@ private fun BitChordApp(
                                 )
                             },
                             links = com.music.bitchord.ui.screens.libraryNavigationLinks(
+                                labels = com.music.bitchord.ui.screens.LibraryCategoryLabels(
+                                    playlists = androidx.compose.ui.res.stringResource(R.string.playlists),
+                                    artists = androidx.compose.ui.res.stringResource(R.string.artists),
+                                    albums = androidx.compose.ui.res.stringResource(R.string.albums),
+                                    songs = androidx.compose.ui.res.stringResource(R.string.songs),
+                                ),
                                 deviceLinks = libraryLinks(),
                                 onOpenPlaylists = { showPlaylistLibrary = true },
                                 onOpenLocalCategory = { category ->
