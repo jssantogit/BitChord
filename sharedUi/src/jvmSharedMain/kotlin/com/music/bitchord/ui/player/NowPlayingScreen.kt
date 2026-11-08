@@ -679,6 +679,7 @@ fun NowPlayingScreen(
     accountName: String?,
     onEditCanonicalRating: () -> Unit = {},
     appleQueueStyle: Boolean = false,
+    lyricsShareRequestToken: Int = 0,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1012,6 +1013,15 @@ fun NowPlayingScreen(
         haptics = haptics,
         onCard = { lyricsShare = it },
     )
+    // Entry from the player overflow uses the existing native verse picker and
+    // card share pipeline; it never constructs a competing lyrics share screen.
+    LaunchedEffect(lyricsShareRequestToken) {
+        if (lyricsShareRequestToken > 0 && lyricsShareAvailable) {
+            queueOpen = false
+            lyricsOpen = true
+            lyricPicker.beginPicking()
+        }
+    }
     // Nothing here resets [lyricsOpen] on a track change, deliberately. The
     // panel is a place, not a property of the track: someone reading along who
     // skips — or who simply lets the queue run on — means to carry on reading,
