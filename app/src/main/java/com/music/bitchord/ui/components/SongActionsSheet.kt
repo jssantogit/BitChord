@@ -156,7 +156,17 @@ fun SongActionsSheet(
     // The popup stays neutral instead: it floats over a blurred page rather
     // than sitting on the sleeve's own ground, and an accent pitched against
     // that tint is not guaranteed to read against the theme's surface.
-    val palette = if (menu) {
+    val palette = if (appleQueuePlayerMenu) {
+        ArtworkPalette(
+            background = Color(0xFF1C1C1E),
+            wash = Color(0xFF1C1C1E),
+            elevated = Color(0xFF28282A),
+            accent = Color.White,
+            onBackground = Color.White,
+            onBackgroundVariant = Color.White.copy(alpha = 0.56f),
+            divider = Color.White.copy(alpha = 0.09f),
+        )
+    } else if (menu) {
         neutralMenuPalette()
     } else {
         rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX)
@@ -242,11 +252,12 @@ fun SongActionsSheet(
         return
     }
 
-    TintedSheet(palette = palette, imageUrl = song.thumbnailUrl, modifier = modifier) {
+    TintedSheet(palette = palette, imageUrl = song.thumbnailUrl, modifier = modifier, appleStyle = appleQueuePlayerMenu) {
         SheetTrackHeader(
             song,
             subtitleColor = palette.onBackgroundVariant,
             preloadedArtworkModel = preloadedArtworkModel,
+            appleStyle = appleQueuePlayerMenu,
         )
         HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
         rows()
@@ -326,6 +337,7 @@ private fun TintedSheet(
     palette: ArtworkPalette,
     imageUrl: String?,
     modifier: Modifier = Modifier,
+    appleStyle: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val maxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.85f
@@ -334,7 +346,9 @@ private fun TintedSheet(
             .fillMaxWidth()
             .clip(SHEET_SHAPE),
     ) {
-        ArtworkBackdrop(
+        if (appleStyle) {
+            Box(Modifier.matchParentSize().background(palette.background))
+        } else ArtworkBackdrop(
             palette = palette,
             imageUrl = imageUrl,
             modifier = Modifier.matchParentSize(),
@@ -646,11 +660,12 @@ internal fun SheetTrackHeader(
     modifier: Modifier = Modifier,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     preloadedArtworkModel: Any? = null,
+    appleStyle: Boolean = false,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = if (appleStyle) 16.dp else 20.dp, vertical = if (appleStyle) 16.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
@@ -658,7 +673,7 @@ internal fun SheetTrackHeader(
                 ?: com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
-                .size(52.dp)
+                .size(if (appleStyle) 80.dp else 52.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .thumbnailBorder(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -667,8 +682,8 @@ internal fun SheetTrackHeader(
         Column(Modifier.weight(1f)) {
             ExplicitSongTitle(
                 song = song,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = if (appleStyle) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                color = if (appleStyle) Color.White else MaterialTheme.colorScheme.onBackground,
             )
             Text(
                 text = song.artist,
