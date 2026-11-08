@@ -170,6 +170,36 @@ class DiscogsAuthenticatedDiscoveryTest {
         assertEquals(listOf("MISSING EP"), found.map { it.title })
     }
 
+    @Test fun paginatedUnexaminedEditionCandidatesCannotClaimUniqueness() = runBlocking {
+        val search = DiscogsDatabaseSearchClient(
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse = DiscogsHttpResponse(200,
+                    """{"pagination":{"page":1,"pages":3},
+                    "results":[{"type":"release","id":501}]}""")
+            },
+            tokenProvider = { token }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val discogs = DiscogsClient(
+            transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse =
+                    error("Incomplete index cannot establish unique identity")
+            }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+            title = "SUPER REAL ME", creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"), status = "Official",
+            barcodes = listOf("8809704427821"), trackTitles = listOf("Magnetic"),
+            releaseYear = 2024, country = "KR",
+        )
+        val result = DiscogsAuthenticatedDiscovery(search, discogs).findForEdition(canonical)
+        assertTrue(result is DiscogsAuthenticatedMatch.Ambiguous)
+    }
+
     @Test fun tooManyDistinctCandidateIdsCannotBeCalledAUniqueEdition() = runBlocking {
         val search = DiscogsDatabaseSearchClient(
             transport = object : DiscogsSearchTransport {
