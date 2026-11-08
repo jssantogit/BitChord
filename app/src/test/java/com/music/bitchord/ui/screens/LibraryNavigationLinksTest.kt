@@ -35,6 +35,7 @@ class LibraryNavigationLinksTest {
 
     @Test fun libraryHomeIsCategoryFirstAndKeepsOnlyDownloadsFromDeviceLinks() {
         val result = libraryNavigationLinks(
+            labels = LibraryCategoryLabels("Playlists", "Artistas", "Álbuns", "Músicas"),
             deviceLinks = listOf(
                 deviceLink("Downloads", "local:downloads"),
                 deviceLink("Música local", "local:all"),
@@ -51,6 +52,26 @@ class LibraryNavigationLinksTest {
         assertEquals("local:downloads", result.last().item.browseId)
         assertEquals(true, result.all { it.enabled })
     }
+    @Test fun localizedCategoryNamesKeepTheSameNavigationAndDownloadRoute() {
+        val destinations = mutableListOf<LocalFolderTab>()
+        var playlistOpened = 0
+        val result = libraryNavigationLinks(
+            labels = LibraryCategoryLabels("Playlists", "Artists", "Albums", "Songs"),
+            deviceLinks = listOf(deviceLink("Downloads", "local:downloads")),
+            onOpenPlaylists = { playlistOpened++ },
+            onOpenLocalCategory = { destinations += it },
+        )
+        assertEquals(listOf("Playlists", "Artists", "Albums", "Songs", "Downloads"),
+            result.map { it.item.title })
+        result[0].onClick?.invoke()
+        result[1].onClick?.invoke()
+        result[2].onClick?.invoke()
+        result[3].onClick?.invoke()
+        assertEquals(1, playlistOpened)
+        assertEquals(listOf(LocalFolderTab.ARTISTS, LocalFolderTab.ALBUMS, LocalFolderTab.SONGS), destinations)
+        assertEquals("local:downloads", result.last().item.browseId)
+    }
+
     @Test fun unifiedLibraryRequestsMissingAudioPermissionWithoutBlockingNavigation() {
         val transitions = mutableListOf<String>()
         openUnifiedLibraryCategory(
