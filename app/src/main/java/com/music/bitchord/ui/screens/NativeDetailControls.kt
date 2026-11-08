@@ -22,6 +22,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.liquidGlassRim
@@ -62,10 +66,15 @@ internal fun ActionPill(
                         .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
                 },
             )
-            .clickable(enabled = enabled) {
-                haptics.play(Haptic.Resume)
-                onClick()
-            }
+            .then(
+                if (enabled) Modifier.clickable {
+                    haptics.play(Haptic.Resume)
+                    onClick()
+                } else Modifier.semantics(mergeDescendants = true) {
+                    disabled()
+                    role = Role.Button
+                },
+            )
             .padding(horizontal = 24.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -112,10 +121,15 @@ internal fun CircleIconButton(
             // only: over the page's flat tint a blurred fill would look the same.
             .liquidGlassRim(CircleShape)
             .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
-            .clickable(enabled = enabled) {
-                haptics.play(haptic)
-                onClick()
-            },
+            .then(
+                if (enabled) Modifier.clickable {
+                    haptics.play(haptic)
+                    onClick()
+                } else Modifier.semantics(mergeDescendants = true) {
+                    disabled()
+                    role = Role.Button
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
