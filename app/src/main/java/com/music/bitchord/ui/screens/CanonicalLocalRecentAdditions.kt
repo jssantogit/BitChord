@@ -345,7 +345,7 @@ internal fun CanonicalRecentAdditionsShelf(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                "Adições recentes",
+                "Adições Recentes",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
