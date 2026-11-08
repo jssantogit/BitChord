@@ -5171,6 +5171,10 @@ private fun BitChordApp(
                         skipPartiallyExpanded = applePlayerMenu,
                     ),
                     containerColor = Color.Transparent,
+                    // The reference sheet dims the player almost to black.
+                    // Scope the stronger scrim to the Apple queue menu only.
+                    scrimColor = if (applePlayerMenu) Color.Black.copy(alpha = 0.76f)
+                        else BottomSheetDefaults.ScrimColor,
                     dragHandle = null,
                 ) {
                     songMenuBody(song, SongActionsPresentation.Sheet)
