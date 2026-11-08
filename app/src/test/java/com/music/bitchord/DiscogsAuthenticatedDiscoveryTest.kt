@@ -129,6 +129,47 @@ class DiscogsAuthenticatedDiscoveryTest {
         assertEquals(listOf("releases/321"), hydrated)
     }
 
+    @Test fun twoIndependentSearchesMustNotSilentlyChooseTheFirstVerifiedEdition() = runBlocking {
+        val search = DiscogsDatabaseSearchClient(
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse = if (query.barcode != null)
+                    DiscogsHttpResponse(200, """{"results":[{"id":111,"type":"release"}]}""")
+                else
+                    DiscogsHttpResponse(200, """{"results":[{"id":112,"type":"release"}]}""")
+            },
+            tokenProvider = { token }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val calls = mutableListOf<String>()
+        val editions = DiscogsClient(
+            transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                    calls += path
+                    return DiscogsHttpResponse(200, """{
+                        "id":${path.substringAfter("/")},
+                        "title":"SUPER REAL ME","artists":[{"name":"ILLIT"}],
+                        "year":2024, "country":"South Korea",
+                        "labels":[{"name":"BELIFT LAB","catno":"CMDC12000"}],
+                        "identifiers":[{"type":"Barcode","value":"8809704427821"}],
+                        "formats":[{"name":"CD","descriptions":["EP"]}],
+                        "tracklist":[{"position":"1","title":"Magnetic"}]}""")
+                }
+            }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+            title = "SUPER REAL ME", creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"), status = "Official",
+            barcodes = listOf("8809704427821"), trackTitles = listOf("Magnetic"),
+            releaseYear = 2024, country = "KR",
+        )
+        assertTrue(DiscogsAuthenticatedDiscovery(search, editions)
+            .findForEdition(canonical) is DiscogsAuthenticatedMatch.Ambiguous)
+        assertEquals(listOf("releases/111", "releases/112"), calls)
+    }
+
     @Test fun tokenNeverAppearsInSearchResultAndOnlyReturnedIdsAreHydrated() = runBlocking {
         val search = DiscogsDatabaseSearchClient(
             transport = object : DiscogsSearchTransport {
