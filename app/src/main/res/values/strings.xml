@@ -1302,4 +1302,7 @@
     <string name="visual_offline_cleared">Offline visuals cleared</string>
     <string name="apple_music_tab_radio">Radio</string>
     <string name="apple_music_tab_radio_unavailable">Radio, coming soon</string>
+    <string name="apple_player_add_to_playlist">Add to a playlist…</string>
+    <string name="apple_player_share_song">Share song</string>
+    <string name="apple_player_share_lyrics">Share lyrics…</string>
 </resources>
