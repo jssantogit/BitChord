@@ -3,6 +3,8 @@ from catalog_211_discogs_corpus_report import report
 
 def case(cohort, i):
     return dict(id=f"{cohort}-{i}", cohort=cohort, reviewed=True,
+                musicbrainz_group_mbid="00000000-0000-4000-8000-000000000001",
+                discogs_release_id=1000 + i,
                 sources=["artist", "discogs"], reference_type="EP",
                 musicbrainz_type="Album", app_type="EP",
                 match_state="verified", match_correct=True,
@@ -32,6 +34,11 @@ class CorpusReportTests(unittest.TestCase):
         self.assertIsNone(report({"schema_version": 1, "cases": cases})["metrics"])
         cases[5]["reviewed"] = True
         cases[7]["sources"] = []
+        self.assertIsNone(report({"schema_version": 1, "cases": cases})["metrics"])
+        cases[7]["sources"] = ["discogs"]
+        self.assertIsNone(report({"schema_version": 1, "cases": cases})["metrics"])
+        cases[7]["sources"] = ["label"]
+        cases[7]["discogs_release_id"] = None
         self.assertIsNone(report({"schema_version": 1, "cases": cases})["metrics"])
 
     def test_false_positive_is_not_hidden(self):
