@@ -357,9 +357,11 @@ internal fun InlineQueue(
                             appleStyle = true,
                             modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
                             trailing = {
-                                if (tracks.history.isNotEmpty()) {
-                                    QueueClearButton(MaterialTheme.typography.bodyLarge, controlsLocked, onClearHistory)
-                                }
+                                QueueClearButton(
+                                    MaterialTheme.typography.bodyLarge,
+                                    controlsLocked || tracks.history.isEmpty(),
+                                    onClearHistory,
+                                )
                             },
                         )
                     }
