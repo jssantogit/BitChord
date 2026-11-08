@@ -470,7 +470,7 @@ internal fun LandscapeCredits(
         }
         Spacer(Modifier.width(10.dp))
         CircleGlyph(
-            icon = Icons.Rounded.MoreHoriz,
+            icon = if (showPlayerRatingStar) AppleQueueVectors.More else Icons.Rounded.MoreHoriz,
             contentDescription = stringResource(Res.string.more),
             onClick = onOpenMenu,
         )
