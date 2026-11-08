@@ -679,6 +679,7 @@ fun NowPlayingScreen(
     accountName: String?,
     onEditCanonicalRating: () -> Unit = {},
     appleQueueStyle: Boolean = false,
+    verifiedQueueAlbumTitle: String? = null,
     lyricsShareRequestToken: Int = 0,
     onLyricsShareRequestConsumed: () -> Unit = {},
     onPlayPause: () -> Unit,
@@ -2100,6 +2101,7 @@ fun NowPlayingScreen(
                             onClear = onClearQueue,
                             onDragActiveChange = onQueueDragActiveChange,
                             appleStyle = appleQueueStyle,
+                            verifiedQueueAlbumTitle = verifiedQueueAlbumTitle,
                             onClearHistory = onClearQueueHistory,
                             modifier = Modifier.weight(1f),
                         )
