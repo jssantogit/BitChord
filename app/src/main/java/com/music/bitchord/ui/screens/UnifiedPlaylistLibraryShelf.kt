@@ -144,12 +144,13 @@ internal fun PlaylistLibrarySearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit = {},
+    autoFocus: Boolean = false,
 ) {
     NativeDetailSearchField(
         query = query,
         onQueryChange = onQueryChange,
         onClose = onClose,
-        autoFocus = true,
+        autoFocus = autoFocus,
         onFocused = {},
         palette = themeArtworkPalette(),
         placeholder = "Buscar em Playlists",
@@ -301,17 +302,18 @@ internal fun UnifiedPlaylistLibraryShelf(
     ) {
         // Page title belongs to the native floating top bar, not a second
         // scrollable header that may vanish or restore at a stale offset.
-        if (searching || query.isNotBlank()) {
-            item(key = "playlist-search") {
-                PlaylistLibrarySearchField(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    onClose = {
-                        onQueryChange("")
-                        onSearchingChange(false)
-                    },
-                )
-            }
+        // Apple Music keeps library-category search discoverable even when
+        // the search keyboard is closed. Do not autofocus on normal entry.
+        item(key = "playlist-search") {
+            PlaylistLibrarySearchField(
+                query = query,
+                onQueryChange = onQueryChange,
+                autoFocus = searching,
+                onClose = {
+                    onQueryChange("")
+                    onSearchingChange(false)
+                },
+            )
         }
         if (failed) item(key = "smart-error") {
             Text(
