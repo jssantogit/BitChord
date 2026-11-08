@@ -51,6 +51,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -200,6 +201,7 @@ internal fun PlayerScrubber(
     transitionWindow: ClosedFloatingPointRange<Float>?,
     onScrub: (Float) -> Unit,
     onScrubFinished: () -> Unit,
+    appleStyle: Boolean = false,
     centerLabel: @Composable BoxScope.() -> Unit = {},
 ) {
     val shown = shown()
@@ -249,8 +251,10 @@ internal fun PlayerScrubber(
             // for as long as a blend holds the bar.
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .fillMaxWidth()
+                    .then(if (appleStyle) Modifier.heightIn(min = 24.dp) else Modifier)
                     .graphicsLayer { alpha = 1f - mixPulse.cover },
+                contentAlignment = Alignment.Center,
             ) {
                 centerLabel()
             }
