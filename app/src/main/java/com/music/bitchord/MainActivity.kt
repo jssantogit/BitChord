@@ -707,6 +707,9 @@ private fun BitChordApp(
      * question has to be answered by whoever opened the menu.
      */
     var menuFromPlayer by remember { mutableStateOf(false) }
+    // Only the queue menu receives the Apple-specific Favorite/playlist action set.
+    // Other Now Playing views keep their existing ⋮ behavior untouched.
+    var menuFromAppleQueue by remember { mutableStateOf(false) }
     /**
      * The row or card that was held to open the track menu, or null when it
      * was opened any other way. Non-null lifts that item into
@@ -2436,6 +2439,15 @@ private fun BitChordApp(
             }
         var localRatingDialogOpen by remember(displayedSong.videoId) { mutableStateOf(false) }
         val favoriteKeys by nativeTrackFavorites.favoriteKeys.collectAsStateWithLifecycle()
+        val openMenuFromPlayer: (Any?, Boolean) -> Unit = { loadedArtworkModel, appleQueue ->
+            menuFromPlayer = true
+            menuFromAppleQueue = appleQueue
+            songMenuOrigin = null
+            openedPlayerArtwork = com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity
+                .fromSong(displayedSong)
+                ?.let { identity -> loadedArtworkModel?.let { identity to it } }
+            songActions = displayedSong
+        }
         Box(Modifier.fillMaxSize()) {
         NowPlayingScreen(
             song = displayedSong,
@@ -2549,14 +2561,8 @@ private fun BitChordApp(
             // The enriched copy, not player.song — otherwise the menu
             // hides the album and artist rows even once their browse
             // ids have been resolved.
-            onOpenMenu = { loadedArtworkModel ->
-                menuFromPlayer = true
-                songMenuOrigin = null
-                openedPlayerArtwork = com.music.bitchord.ui.player.CanonicalPlaybackArtworkIdentity
-                    .fromSong(song)
-                    ?.let { identity -> loadedArtworkModel?.let { identity to it } }
-                songActions = song
-            },
+            onOpenMenu = { loadedArtworkModel -> openMenuFromPlayer(loadedArtworkModel, false) },
+            onOpenQueueMenu = { loadedArtworkModel -> openMenuFromPlayer(loadedArtworkModel, true) },
             onOpenAlbum = { id ->
                 dismissPlayer()
                 showReplay = false
@@ -4984,6 +4990,7 @@ private fun BitChordApp(
                 // read off the player's own visibility any more, because on a
                 // tablet the player is visible whatever the menu was opened from.
                 val fromPlayer = menuFromPlayer
+                val fromAppleQueue = fromPlayer && menuFromAppleQueue
                 val favoriteKeys by nativeTrackFavorites.favoriteKeys.collectAsStateWithLifecycle()
                 val share: () -> Unit = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
@@ -5017,9 +5024,9 @@ private fun BitChordApp(
                         )
                     } else null,
                     signedIn = signedIn,
-                    appleQueuePlayerMenu = fromPlayer,
+                    appleQueuePlayerMenu = fromAppleQueue,
                     isFavorite = nativeTrackFavoriteKey(song)?.let { it in favoriteKeys } == true,
-                    onToggleFavorite = if (fromPlayer) {
+                    onToggleFavorite = if (fromAppleQueue) {
                         {
                             nativeTrackFavorites.toggle(song)
                             songActions = null

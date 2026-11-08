@@ -724,6 +724,8 @@ fun NowPlayingScreen(
     onClearQueueHistory: () -> Unit = {},
     /** Pass the already-resolved cover along with the menu action. */
     onOpenMenu: (Any?) -> Unit,
+    /** Only the dedicated queue's top ⋮ uses this menu variant. */
+    onOpenQueueMenu: ((Any?) -> Unit)? = null,
     onOpenAlbum: (String) -> Unit,
     /**
      * Opens an artist's page. [browseId] is null for anyone but the lead credit:
@@ -3308,7 +3310,7 @@ fun NowPlayingScreen(
                                 AppleQueueHeaderAction(
                                     painter = painterResource(Res.drawable.apple_queue_more),
                                     description = stringResource(Res.string.more),
-                                    onClick = openMenuWithArtwork,
+                                    onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
                                 )
                             } else {
                             CircleGlyph(
