@@ -175,4 +175,88 @@ class ListenBrainzPublicPlaylistSingleFlightTest {
         assertEquals(4, calls)
     }
 
+
+    @Test fun repeatedRecordingArtworkLookupsReuseExactVerifiedBatchDespiteOrder() = runBlocking {
+        val id1 = "33333333-3333-4333-8333-333333333333"
+        val id2 = "44444444-4444-4444-8444-444444444444"
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) =
+                    ListenBrainzPublicPlaylistHttp(200, """{"playlists":[]}""")
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(404, "")
+                override suspend fun recordingArtwork(
+                    recordingMbids: List<String>,
+                ): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    return ListenBrainzPublicPlaylistHttp(200,
+                        """{"$id1":{"release":{"caa_release_mbid":"$playlistId","caa_id":123}},
+                            "$id2":{"release":{"caa_release_mbid":"$playlistId","caa_id":124}}}""")
+                }
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        val first = client.artworkForRecordings(listOf(id1, id2))
+        assertEquals(first, client.artworkForRecordings(listOf(id2, id1)))
+        assertEquals(2, first.size)
+        assertEquals(1, calls)
+    }
+
+    @Test fun concurrentRecordingArtworkRequestsShareOneUpstreamLookup() = runBlocking {
+        val recording = "33333333-3333-4333-8333-333333333333"
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) =
+                    ListenBrainzPublicPlaylistHttp(200, """{"playlists":[]}""")
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(404, "")
+                override suspend fun recordingArtwork(
+                    recordingMbids: List<String>,
+                ): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    started.complete(Unit)
+                    release.await()
+                    return ListenBrainzPublicPlaylistHttp(200,
+                        """{"$recording":{"release":{"caa_release_mbid":"$playlistId","caa_id":123}}}""")
+                }
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        val first = async(start = CoroutineStart.UNDISPATCHED) {
+            client.artworkForRecordings(listOf(recording))
+        }
+        withTimeout(2_000L) { started.await() }
+        val second = async(start = CoroutineStart.UNDISPATCHED) {
+            client.artworkForRecordings(listOf(recording))
+        }
+        release.complete(Unit)
+        assertEquals(first.await(), second.await())
+        assertEquals(1, calls)
+    }
+
+    @Test fun temporaryRecordingArtworkErrorCanRetryWithoutNegativeCache() = runBlocking {
+        val recording = "33333333-3333-4333-8333-333333333333"
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) =
+                    ListenBrainzPublicPlaylistHttp(200, """{"playlists":[]}""")
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(404, "")
+                override suspend fun recordingArtwork(
+                    recordingMbids: List<String>,
+                ): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    return if (calls == 1) ListenBrainzPublicPlaylistHttp(503, "")
+                        else ListenBrainzPublicPlaylistHttp(200,
+                            """{"$recording":{"release":{"caa_release_mbid":"$playlistId","caa_id":123}}}""")
+                }
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        assertEquals(emptyMap<String, String>(), client.artworkForRecordings(listOf(recording)))
+        assertEquals(1, client.artworkForRecordings(listOf(recording)).size)
+        assertEquals(2, calls)
+    }
 }
