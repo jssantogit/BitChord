@@ -6641,7 +6641,7 @@ private fun FrostedFolderMenu(
  * The parent app was already near the JVM method-size ceiling; keeping menus
  * and their event state here prevents adding their Compose bytecode to it.
  */
-private internal fun appleLibraryDefaultViewType(
+internal fun appleLibraryDefaultViewType(
     category: com.music.bitchord.data.listening.CanonicalSmartFilterContext,
 ): LibraryViewType = when (category) {
     com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS -> LibraryViewType.GRID
