@@ -38,7 +38,7 @@ internal class DiscogsEditionRepository(
         if (!enabled) return DiscogsEditionEnrichment.Disabled
         val link = when (val result = links.findRelease(canonical.musicBrainzReleaseId)) {
             is DiscogsRelationResult.Linked -> result.link
-            DiscogsRelationResult.NoLink -> return DiscogsEditionEnrichment.NoLink
+            DiscogsRelationResult.NoLink -> return observeViaReleaseGroupMaster(canonical)
             DiscogsRelationResult.Ambiguous -> return DiscogsEditionEnrichment.Ambiguous
             DiscogsRelationResult.InvalidCanonicalId,
             DiscogsRelationResult.InvalidResponse -> return DiscogsEditionEnrichment.Invalid
@@ -65,6 +65,67 @@ internal class DiscogsEditionRepository(
             )
         }
         return when (DiscogsEditionMatcher.assess(canonical, link, observation.record)) {
+            DiscogsEditionVerdict.VERIFIED -> {
+                if (!observation.isDisplayableAt(nowMillis())) {
+                    DiscogsEditionEnrichment.Unavailable
+                } else {
+                    if (cached == null) cache.put(observation)
+                    DiscogsEditionEnrichment.Verified(observation)
+                }
+            }
+            DiscogsEditionVerdict.CANDIDATE -> DiscogsEditionEnrichment.Candidate
+            DiscogsEditionVerdict.CONFLICT -> DiscogsEditionEnrichment.Conflict
+        }
+    }
+    /**
+     * ReleaseGroup → Master relationships can recover an *edition candidate*
+     * without a direct Release URL. A Discogs Master only supplies the ID of a
+     * possible Release; it never asserts exact edition identity by itself.
+     * The main release is intentionally just the first candidate, not an
+     * exhaustive authenticated catalog search.
+     */
+    private suspend fun observeViaReleaseGroupMaster(
+        canonical: CanonicalEditionEvidence,
+    ): DiscogsEditionEnrichment {
+        val groupId = canonical.musicBrainzReleaseGroupId?.trim()?.takeIf {
+            Regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$").matches(it)
+        } ?: return DiscogsEditionEnrichment.NoLink
+        val masterLink = when (val result = links.findReleaseGroup(groupId)) {
+            is DiscogsRelationResult.Linked -> result.link
+            DiscogsRelationResult.NoLink -> return DiscogsEditionEnrichment.NoLink
+            DiscogsRelationResult.Ambiguous -> return DiscogsEditionEnrichment.Ambiguous
+            DiscogsRelationResult.InvalidCanonicalId,
+            DiscogsRelationResult.InvalidResponse -> return DiscogsEditionEnrichment.Invalid
+            DiscogsRelationResult.Unavailable -> return DiscogsEditionEnrichment.Unavailable
+        }
+        val master = when (val response = discogs.fetchMaster(masterLink.id)) {
+            is DiscogsLookupResult.FoundMaster -> response.record
+            DiscogsLookupResult.Missing -> return DiscogsEditionEnrichment.NoLink
+            DiscogsLookupResult.Malformed, DiscogsLookupResult.InvalidId,
+            is DiscogsLookupResult.Found -> return DiscogsEditionEnrichment.Invalid
+            DiscogsLookupResult.Disabled -> return DiscogsEditionEnrichment.Disabled
+            else -> return DiscogsEditionEnrichment.Unavailable
+        }
+        val editionId = master.mainReleaseId ?: return DiscogsEditionEnrichment.Candidate
+        val editionLink = DiscogsLink(DiscogsKind.RELEASE, editionId)
+        val cached = cache.get(canonical.musicBrainzReleaseId, editionLink, nowMillis())
+        val observation = if (cached != null) cached else {
+            val record = when (val response = discogs.fetchRelease(editionId)) {
+                is DiscogsLookupResult.Found -> response.record
+                DiscogsLookupResult.Missing -> return DiscogsEditionEnrichment.NoLink
+                DiscogsLookupResult.Malformed, DiscogsLookupResult.InvalidId,
+                is DiscogsLookupResult.FoundMaster -> return DiscogsEditionEnrichment.Invalid
+                DiscogsLookupResult.Disabled -> return DiscogsEditionEnrichment.Disabled
+                else -> return DiscogsEditionEnrichment.Unavailable
+            }
+            DiscogsObservation(
+                canonicalMbid = canonical.musicBrainzReleaseId,
+                kind = DiscogsKind.RELEASE,
+                record = record,
+                fetchedAtMillis = nowMillis(),
+            )
+        }
+        return when (DiscogsEditionMatcher.assessUnlinked(canonical, observation.record)) {
             DiscogsEditionVerdict.VERIFIED -> {
                 if (!observation.isDisplayableAt(nowMillis())) {
                     DiscogsEditionEnrichment.Unavailable

@@ -18,6 +18,8 @@ internal data class CanonicalEditionEvidence(
     val releaseYear: Int? = null,
     /** Verbatim MB release artist-credit entries, never a split display string. */
     val creditedArtistNames: List<String> = emptyList(),
+    /** Parent grouping identity, never interchangeable with this edition MBID. */
+    val musicBrainzReleaseGroupId: String? = null,
 )
 
 /** A Discogs link is an identity *anchor*. Matching fields are separate evidence. */

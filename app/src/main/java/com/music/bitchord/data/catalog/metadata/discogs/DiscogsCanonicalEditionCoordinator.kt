@@ -151,6 +151,7 @@ internal class DiscogsCanonicalEditionCoordinator(
             releaseYear = detail.releaseDate?.take(4)
                 ?.toIntOrNull()?.takeIf { it in 1800..2200 },
             creditedArtistNames = detail.artistCreditNames,
+            musicBrainzReleaseGroupId = detail.groupMbid,
         )
         return editions.observe(canonical)
     }
