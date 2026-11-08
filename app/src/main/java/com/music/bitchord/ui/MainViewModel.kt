@@ -4214,16 +4214,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * MusicBrainz has a shared 1 req/s budget: never send a request on each
      * keystroke. Submitting the query performs the explicit live search.
      */
-    private fun showCachedCanonicalTypeahead(query: String) {
-        canonicalTypeaheadJob?.cancel()
-        if (query.isBlank()) return
-        canonicalTypeaheadJob = viewModelScope.launch {
-            delay(180L)
-            if (_searchSource.value != SearchSource.CANONICAL ||
-                searchSubmitted || _query.value.trim() != query
-            ) return@launch
-
-            val cached = try {
+    /** One IO-only typed Room lookup shared by typeahead and submitted search.
+     * Local matches can paint immediately while MusicBrainz's global rate limit
+     * meters the subsequent artist/recording/group/release HTTP requests. */
+    private suspend fun canonicalCachedSearchRows(
+        query: String,
+    ): List<CanonicalCatalogSearchRow> {
+            return try {
                 withContext(Dispatchers.IO) {
                     val dao = CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao()
                     val recordings = dao.searchKnownMusicBrainzRecordings(query, 8)
@@ -4271,6 +4268,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { emptyList() }
+    }
+
+    private fun showCachedCanonicalTypeahead(query: String) {
+        canonicalTypeaheadJob?.cancel()
+        if (query.isBlank()) return
+        canonicalTypeaheadJob = viewModelScope.launch {
+            delay(180L)
+            if (_searchSource.value != SearchSource.CANONICAL ||
+                searchSubmitted || _query.value.trim() != query
+            ) return@launch
+
+            val cached = canonicalCachedSearchRows(query)
 
             if (!searchSubmitted && _searchSource.value == SearchSource.CANONICAL &&
                 _query.value.trim() == query && cached.isNotEmpty()
@@ -4296,6 +4305,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
         canonicalSearchJob = viewModelScope.launch {
+            // Do not wait for the first public HTTP response to paint a previously
+            // indexed catalog. A sibling IO task also avoids putting Room work
+            // in front of the rate-limited MusicBrainz request.
+            launch(Dispatchers.IO) {
+                val cached = canonicalCachedSearchRows(query)
+                if (cached.isNotEmpty() && _searchSource.value == SearchSource.CANONICAL &&
+                    _query.value.trim() == query && _canonicalResults.value is UiState.Loading
+                ) {
+                    val verified = withVerifiedLocalBadges(cached)
+                    if (_searchSource.value == SearchSource.CANONICAL &&
+                        _query.value.trim() == query &&
+                        _canonicalResults.value is UiState.Loading
+                    ) _canonicalResults.value = UiState.Success(verified)
+                }
+            }
             // Resolve the artist identity FIRST. A query exactly naming an
             // artist must browse that artist's MBID, not return unrelated
             // recordings with the same word in their title.
@@ -4305,6 +4329,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     it.name.equals(query.trim(), ignoreCase = true)
                 }?.musicBrainzId
             } else null
+            // Publish the first live typed artist identities while the other
+            // three rate-limited requests are still pending. Final results
+            // replace this preview after all entity types have been queried.
+            if (artists is MusicBrainzCatalogSearchResult.Success &&
+                _searchSource.value == SearchSource.CANONICAL &&
+                _query.value.trim() == query &&
+                artists.page.items.isNotEmpty()
+            ) {
+                val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+                val fresh = artists.page.items.map { hit ->
+                    CanonicalCatalogSearchRow(
+                        musicBrainzId = hit.musicBrainzId,
+                        kind = CanonicalSearchKind.ARTIST,
+                        title = hit.name,
+                        subtitle = hit.disambiguation ?: hit.country,
+                    )
+                }
+                _canonicalResults.value = UiState.Success(
+                    canonicalProgressiveSearchPreview(current, fresh),
+                )
+            }
             val recordings = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchRecordingsForArtistMbid(artistScopeMbid, limit = 25)
             } else musicBrainzSearch.searchRecordings(query, limit = 25)
