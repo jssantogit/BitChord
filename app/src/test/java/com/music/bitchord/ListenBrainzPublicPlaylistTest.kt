@@ -54,6 +54,55 @@ class ListenBrainzPublicPlaylistTest {
          "extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true}}}}
     ]}"""
 
+    @Test fun publicPlaylistDetailsReuseSuccessfulExactIdWithinFreshnessWindow() = runBlocking {
+        var now = 1_000L
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) =
+                    ListenBrainzPublicPlaylistHttp(200, """{"playlists":[]}""")
+                override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    return ListenBrainzPublicPlaylistHttp(200,
+                        """{"playlist":{"identifier":"https://listenbrainz.org/playlist/$rock",
+                            "title":"Rock","track":[
+                            {"identifier":"https://musicbrainz.org/recording/$song",
+                             "title":"Test song","creator":"Test artist"}]}}""")
+                }
+            },
+            ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = {}),
+            nowMillis = { now },
+        )
+        val selected = ListenBrainzPublicPlaylist(rock, "Rock", "Curator", null)
+        assertEquals(1, client.detail(selected)!!.tracks.size)
+        assertEquals(1, client.detail(selected)!!.tracks.size)
+        assertEquals(1, calls)
+        now += 10 * 60_000L + 1L
+        assertEquals(1, client.detail(selected)!!.tracks.size)
+        assertEquals(2, calls)
+    }
+
+    @Test fun temporaryPublicDetailFailureIsRetriedInsteadOfCachedAsEmpty() = runBlocking {
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) =
+                    ListenBrainzPublicPlaylistHttp(200, """{"playlists":[]}""")
+                override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    return if (calls == 1) ListenBrainzPublicPlaylistHttp(503, "")
+                        else ListenBrainzPublicPlaylistHttp(200,
+                            """{"playlist":{"track":[]}}""")
+                }
+            },
+            ListenBrainzRateLimiter(nowMillis = { 1_000L }, waitMillis = {}),
+        )
+        val selected = ListenBrainzPublicPlaylist(rock, "Rock", "Curator", null)
+        assertNull(client.detail(selected))
+        assertEquals(0, client.detail(selected)!!.tracks.size)
+        assertEquals(2, calls)
+    }
+
     @Test fun liveJspfSearchAcceptsPublicPlaylistIdentityWithoutFlattenedMbid() {
         val global = parseListenBrainzPublicPlaylistSearch(realJspfSearchResponse())!!
         assertEquals(listOf(rock, pop), global.map { it.mbid })
