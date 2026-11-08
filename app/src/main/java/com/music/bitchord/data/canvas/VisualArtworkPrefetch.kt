@@ -3,6 +3,7 @@ package com.music.bitchord.data.canvas
 import android.content.Context
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
+import coil3.request.SuccessResult
 import com.music.bitchord.data.model.artworkAt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -56,19 +57,41 @@ fun planVisualArtworkPrefetch(
  * A cancelled page releases its key in finally; a later page may try again.
  * Actual visible AsyncImage loads always remain independent and prioritized.
  */
-internal class VisualArtworkFetchGate(maxConcurrent: Int = 3) {
+internal class VisualArtworkFetchGate(
+    maxConcurrent: Int = 3,
+    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val successTtlMs: Long = 5 * 60_000L,
+    private val successCapacity: Int = 256,
+) {
     private val inflight = mutableSetOf<String>()
+    // Coil keeps actual pixels; this tiny bounded ledger only prevents
+    // repeated speculative decodes when a shelf re-enters the viewport.
+    private val warmed = LinkedHashMap<String, Long>()
     private val lock = Mutex()
     private val permits = Semaphore(maxConcurrent)
 
     suspend fun fetchOnce(key: String, fetch: suspend () -> Unit): Boolean {
-        if (!lock.withLock { inflight.add(key) }) return false
+        if (!lock.withLock {
+            val at = warmed[key]
+            if (at != null) {
+                val age = nowMillis() - at
+                if (age >= 0 && age < successTtlMs) return@withLock false
+                warmed.remove(key)
+            }
+            inflight.add(key)
+        }) return false
         try {
             permits.withPermit { fetch() }
+            lock.withLock {
+                warmed.remove(key)
+                warmed[key] = nowMillis()
+                while (warmed.size > successCapacity.coerceAtLeast(1)) {
+                    warmed.remove(warmed.keys.first())
+                }
+            }
             return true
         } finally {
-            // Cancellation should stop the decode, not permanently leave
-            // an in-flight marker that blocks every future screen visit.
+            // A timeout or cancellation must never suppress the next attempt.
             withContext(NonCancellable) {
                 lock.withLock { inflight.remove(key) }
             }
@@ -131,19 +154,22 @@ object VisualArtworkPrefetch {
             planned.forEach { candidate ->
                 launch(Dispatchers.IO) {
                     val url = candidate.url ?: return@launch
-                    gate.fetchOnce(url + "@" + candidate.targetPx) {
-                        val request = ImageRequest.Builder(context)
-                            .data(url)
-                            .size(candidate.targetPx, candidate.targetPx)
-                            .build()
-                        try {
-                            loader.execute(request)
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) {
-                            // A speculative image can fail without affecting
-                            // the native shelf's existing placeholder.
+                    try {
+                        gate.fetchOnce(url + "@" + candidate.targetPx) {
+                            val request = ImageRequest.Builder(context)
+                                .data(url)
+                                .size(candidate.targetPx, candidate.targetPx)
+                                .build()
+                            // A failed Coil result is not a warmed image:
+                            // future visible screens must still be able to retry.
+                            if (loader.execute(request) !is SuccessResult) {
+                                error("Artwork warmup did not produce a decoded image")
+                            }
                         }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Speculative failures never replace the UI placeholder.
                     }
                 }
             }
