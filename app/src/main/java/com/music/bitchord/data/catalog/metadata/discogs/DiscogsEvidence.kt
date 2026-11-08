@@ -127,6 +127,8 @@ internal data class DiscogsRecord(
     val formats: List<String>,
     val tracklist: List<Pair<String, String>>,
     val unofficial: Boolean,
+    /** Discogs Master linkage is source-scoped; never a MusicBrainz ReleaseGroup ID. */
+    val masterId: Long? = null,
 ) {
     val attributionUrl: String get() = link.attributionUrl
 }
@@ -225,6 +227,8 @@ internal object DiscogsRecordParser {
                     desc.equals("Unofficial Release", ignoreCase = true) ||
                         desc.equals("Partially Unofficial", ignoreCase = true)
                 },
+                masterId = (obj["master_id"] as? JsonPrimitive)?.longOrNull
+                    ?.takeIf { it in 1..999_999_999_999L },
             )
         } catch (_: Exception) {
             null

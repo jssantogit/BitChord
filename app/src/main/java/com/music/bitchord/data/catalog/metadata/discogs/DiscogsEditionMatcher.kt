@@ -129,6 +129,28 @@ internal object DiscogsEditionMatcher {
     }
 
     /**
+     * Exact evidence for a Discogs Release found without a MusicBrainz URL.
+     * A shared UPC by itself is not an identity. Require equal complete track
+     * order, credited artists/title, a checked barcode and compatible year.
+     * Candidates never rewrite MusicBrainz identifiers or canonical type.
+     */
+    fun assessUnlinked(
+        canonical: CanonicalEditionEvidence,
+        candidate: DiscogsRecord,
+    ): DiscogsEditionVerdict {
+        val linkedAssessment = assess(canonical, candidate.link, candidate)
+        if (linkedAssessment != DiscogsEditionVerdict.VERIFIED) return linkedAssessment
+        if (canonical.releaseYear == null || candidate.year == null ||
+            canonical.releaseYear != candidate.year
+        ) return DiscogsEditionVerdict.CANDIDATE
+        val expected = canonical.barcodes.mapNotNull(::barcode).toSet()
+        val observed = candidate.barcodes.mapNotNull(::barcode).toSet()
+        if (expected.isEmpty() || observed.isEmpty()) return DiscogsEditionVerdict.CANDIDATE
+        return if (expected.any { it in observed }) DiscogsEditionVerdict.VERIFIED
+        else DiscogsEditionVerdict.CONFLICT
+    }
+
+    /**
      * Discogs' release.title commonly contains a leading "Artist - " while
      * MusicBrainz release.title does not. Strip only a *known credited artist*
      * prefix; creditedArtist is checked against Discogs artistNames above.
