@@ -394,6 +394,7 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -1343,6 +1344,26 @@ private fun BitChordApp(
                     targetPx = com.music.bitchord.data.model.CARD_ART_PX,
                 )
                 com.music.bitchord.data.canvas.VisualArtworkPrefetch.warm(context, upcoming)
+            }
+        }
+    }
+
+    // Search uses the same global Coil cache and request gate as Home and
+    // artist/album details. Warm only sleeves already verified by metadata,
+    // never launch per-character image lookups or decode the whole catalog.
+    LaunchedEffect(selectedTab, detail?.browseId) {
+        if (selectedTab == TAB_SEARCH && detail == null) {
+            viewModel.canonicalResults.collectLatest { result ->
+                val rows = (result as? UiState.Success)?.data.orEmpty()
+                val targets = rows.asSequence()
+                    .mapNotNull { row -> row.artworkUri?.takeIf(String::isNotBlank) }
+                    .distinct().take(10)
+                    .map { url -> com.music.bitchord.data.canvas.VisualArtworkCandidate(
+                        url = url,
+                        priority = com.music.bitchord.data.canvas.VisualArtworkPriority.VISIBLE,
+                        targetPx = com.music.bitchord.data.model.ROW_ART_PX,
+                    ) }.toList()
+                com.music.bitchord.data.canvas.VisualArtworkPrefetch.warm(context, targets)
             }
         }
     }
