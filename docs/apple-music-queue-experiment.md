@@ -27,7 +27,7 @@ AM-DECOMP evidence: `docs/components/player-panels.md`, `docs/motion/player-pane
 
 ## Validation
 
-Static tests cover the queue split, duplicate keys, swipe safety, queue-only menu policy, native-rating selection state and first-time clickability. Android CI must compile the shared Compose SVG painters and finish Android unit tests; code publication is not a physical smoke. APK workflow stays manually triggered by applying `apple-music-smoke` to draft PR #212. A device check should cover real history and clear semantics; manual and autoplay reordering including long lists; gesture conflict with vertical scroll and sheet dismissal; native rating after app restart, including a first rating; menu availability; no change to excluded transport/volume/progress UI.
+Static tests cover the queue split, duplicate keys, swipe safety, queue-only menu policy, and native-rating selected state. The new first-time click action reuses the existing verified-Recording editor and must also be checked in a physical smoke. Tests of internal sharedUi implementation live in sharedUi's JVM test source set; Android-module tests cannot access Kotlin `internal` across Gradle module boundaries. Android CI must compile the shared Compose SVG painters and finish Android unit tests; code publication is not a physical smoke. APK workflow stays manually triggered by applying `apple-music-smoke` to draft PR #212. A device check should cover real history and clear semantics; manual and autoplay reordering including long lists; gesture conflict with vertical scroll and sheet dismissal; native rating after app restart, including a first rating; menu availability; no change to excluded transport/volume/progress UI.
 
 ## Follow-up: player-wide rating star
 
