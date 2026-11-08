@@ -211,7 +211,11 @@ internal fun NativeReleaseHeaderLayout(
         // The original rating slot shows first-party stars when saved. With
         // no rating it uses the exact Now Playing source badge; never invent
         // "Hi-Res" from bitrate or claim provider evidence was played.
-        if (onRate != null) {
+        // A verified source-quality badge has priority over an EMPTY rating.
+        // When the user has actually rated the release, show the stars instead.
+        // Keep the native rating editor reachable from the badge as well as
+        // from the existing album overflow; never hide genuine audio quality.
+        if (onRate != null && (rating != null || quality == null)) {
             Spacer(Modifier.height(8.dp))
             Box(
                 modifier = Modifier.clip(RoundedCornerShape(8.dp))
@@ -236,7 +240,10 @@ internal fun NativeReleaseHeaderLayout(
                 quality = quality,
                 color = palette.onBackgroundVariant,
                 style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.testTag("native-album-source-quality"),
+                modifier = Modifier.testTag("native-album-source-quality")
+                    .then(if (onRate == null) Modifier else Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClickLabel = "Avaliar álbum", onClick = onRate)),
             )
         }
         if (meta.isNotBlank()) {
