@@ -430,7 +430,7 @@ private fun TintedSheet(
         )
         Column(
             Modifier.fillMaxWidth().heightIn(
-                min = if (appleStyle) LocalConfiguration.current.screenHeightDp.dp * 0.65f else 0.dp,
+                min = if (appleStyle) LocalConfiguration.current.screenHeightDp.dp * 0.70f else 0.dp,
                 max = maxHeight,
             ),
         ) {
@@ -635,7 +635,7 @@ internal fun ActionRow(
             imageVector = icon,
             contentDescription = null,
             tint = (tint ?: foreground).copy(alpha = alpha),
-            modifier = Modifier.size(if (apple) 28.dp else if (menu) 20.dp else 22.dp),
+            modifier = Modifier.size(if (apple) 18.dp else if (menu) 20.dp else 22.dp),
         )
     }
     Row(
@@ -647,7 +647,7 @@ internal fun ActionRow(
                 if (menu) {
                     Modifier.heightIn(min = 46.dp).padding(horizontal = 18.dp, vertical = 11.dp)
                 } else if (apple) {
-                    Modifier.heightIn(min = 72.dp).padding(horizontal = 16.dp, vertical = 14.dp)
+                    Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 9.dp)
                 } else {
                     Modifier.padding(horizontal = 22.dp, vertical = 15.dp)
                 },
@@ -658,11 +658,11 @@ internal fun ActionRow(
         // the sheet keeps the glyph leading, like every other list in the app.
         if (!menu) {
             iconView()
-            Spacer(Modifier.width(if (apple) 20.dp else 18.dp))
+            Spacer(Modifier.width(if (apple) 22.dp else 18.dp))
         }
         Text(
             text = label,
-            style = if (apple) MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp) else MaterialTheme.typography.bodyLarge,
+            style = if (apple) MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp) else MaterialTheme.typography.bodyLarge,
             color = foreground.copy(alpha = alpha),
             maxLines = if (menu) 2 else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis,
