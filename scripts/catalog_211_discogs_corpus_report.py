@@ -86,13 +86,20 @@ def report(document: dict) -> dict:
     ty = [x for x in cases if x["cohort"] == "type"]
     ul = [x for x in cases if x["cohort"] == "unlinked"]
     so = [x for x in cases if x["cohort"] == "source_only"]
-    incorrect = [x for x in ty if x["musicbrainz_type"] != x["reference_type"]]
+    incorrect = [x for x in ty if x["musicbrainz_type"] in {"Album", "EP", "Single"}
+                 and x["musicbrainz_type"] != x["reference_type"]]
+    unknown = [x for x in ty if x["musicbrainz_type"] == "Unknown"
+               and x["reference_type"] != "Unknown"]
     verified = [x for x in cases if x["match_state"] == "verified"]
     confirmed = [x for x in so if x["absent_in_musicbrainz"]]
     output["metrics"] = {
         "type_correction": {
             "corrected": sum(x["app_type"] == x["reference_type"] for x in incorrect),
             "eligible": len(incorrect),
+        },
+        "type_fill": {
+            "filled": sum(x["app_type"] == x["reference_type"] for x in unknown),
+            "eligible": len(unknown),
         },
         "unlinked_matching": {
             "verified": sum(x["match_state"] == "verified" for x in ul),
