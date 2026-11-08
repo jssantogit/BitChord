@@ -6379,10 +6379,6 @@ private fun ConnectionEditors(
 
 }
 
-/** Native toolbar actions shared by library and canonical playlist details.
- * The same icon controls as other browse screens, with no UI logic in BitChordApp.
- */
-@Composable
 /** Only Settings belongs to the undrilled Library overflow; detail pages retain actions. */
 @Composable
 private fun LibrarySettingsOverflowCircle(
@@ -6406,6 +6402,8 @@ private fun LibrarySettingsOverflowCircle(
     }
 }
 
+/** Native toolbar actions shared by library and canonical playlist details. */
+@Composable
 private fun CanonicalPlaylistToolbarActions(
     hasDetail: Boolean,
     showCreate: Boolean,
