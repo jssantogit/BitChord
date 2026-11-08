@@ -272,6 +272,7 @@ internal fun InlineQueue(
     onClear: () -> Unit,
     onClearHistory: () -> Unit = {},
     appleStyle: Boolean = false,
+    verifiedQueueAlbumTitle: String? = null,
     onScrollingChange: (Boolean) -> Unit = {},
     onDragActiveChange: (Boolean) -> Unit = {},
     /** Phone only: let queue scrolling dismiss/restore the lower half player. */
@@ -425,7 +426,9 @@ internal fun InlineQueue(
                             // Do not infer a queued song's origin from the currently playing track.
                             val description = when {
                                 tracks.context.isNotEmpty() && tracks.user.isEmpty() ->
-                                    appleQueueContextOrigin(tracks) ?: stringResource(Res.string.apple_queue_similar)
+                                    verifiedQueueAlbumTitle?.takeIf(String::isNotBlank)
+                                        ?: appleQueueContextOrigin(tracks)
+                                        ?: stringResource(Res.string.apple_queue_similar)
                                 tracks.autoplay.isNotEmpty() || tracks.user.isNotEmpty() ->
                                     stringResource(Res.string.apple_queue_similar)
                                 else -> null
