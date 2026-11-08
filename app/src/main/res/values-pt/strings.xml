@@ -28,6 +28,7 @@
     <string name="play">Tocar</string>
     <string name="explore">Explorar</string>
     <string name="apple_music_radio_tab">Rádio</string>
+    <string name="apple_music_search_tab">Buscar</string>
     <string name="explore_genres">Gêneros</string>
     <string name="listen_now">Ouvir agora</string>
     <string name="downloads">Downloads</string>
