@@ -444,6 +444,33 @@ class ListenBrainzPublicPlaylistTest {
     }
 
 
+    @Test fun typedPublicSearchReusesVerifiedQueryForReentryButExpires() = runBlocking {
+        var now = 1_000L
+        var calls = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) =
+                    ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+                override suspend fun searchWide(query: String): ListenBrainzPublicPlaylistHttp {
+                    calls++
+                    return ListenBrainzPublicPlaylistHttp(200, realJspfSearchResponse())
+                }
+                override suspend fun detail(mbid: String) =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = {}),
+            nowMillis = { now },
+        )
+        assertEquals(listOf(rock), client.searchPublicQuery("K-pop").map { it.mbid })
+        assertEquals(listOf(rock), client.searchPublicQuery("K-pop").map { it.mbid })
+        assertEquals(1, calls)
+        client.searchPublicQuery("Pop essentials")
+        assertEquals(2, calls)
+        now += 30 * 60_000L + 1L
+        assertEquals(listOf(rock), client.searchPublicQuery("K-pop").map { it.mbid })
+        assertEquals(3, calls)
+    }
+
     @Test fun homeSkipsOnlyGenericFuzzyHitsAndRetriesDescriptiveQuery() = runBlocking {
         val calls = mutableListOf<String>()
         val client = ListenBrainzPublicPlaylistClient(
