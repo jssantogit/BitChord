@@ -488,13 +488,13 @@ fun MiniPlayer(
  * read as one glyph at two sizes. Shared with the glass bar's docked player.
  */
 @Composable
-internal fun MiniPlayerNextGlyph(tint: Color) {
+internal fun MiniPlayerNextGlyph(tint: Color, glyphSize: Dp = NEXT_GLYPH_SIZE) {
     Icon(
         painter = painterResource(SharedRes.drawable.ic_player_next),
         contentDescription = stringResource(R.string.widget_next),
         tint = tint,
         modifier = Modifier
-            .size(NEXT_GLYPH_SIZE)
+            .size(glyphSize)
             .graphicsLayer { scaleY = 0.85f },
     )
 }
