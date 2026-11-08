@@ -67,6 +67,7 @@ internal fun NativeDetailSearchField(
     palette: ArtworkPalette,
     placeholder: String? = null,
     horizontalInset: Dp = HEADER_GUTTER,
+    appleLibraryCategoryStyle: Boolean = false,
 ) {
     // Opened by a tap on a button, which is as clear a statement of intent as
     // the keyboard is going to get — so it comes up with the field rather than
@@ -88,18 +89,21 @@ internal fun NativeDetailSearchField(
             .height(48.dp)
             .testTag("native-detail-search-field")
             .clip(NativeSearchShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-            .border(0.5.dp, Color.White.copy(alpha = 0.10f), NativeSearchShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (appleLibraryCategoryStyle) 1f else 0.6f))
+            .then(if (appleLibraryCategoryStyle) Modifier else
+                Modifier.border(0.5.dp, Color.White.copy(alpha = 0.10f), NativeSearchShape))
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = BitChordIcons.Search,
-            contentDescription = null,
-            tint = palette.onBackgroundVariant,
-            modifier = Modifier.size(18.dp),
-        )
-        Spacer(Modifier.width(10.dp))
+        if (!appleLibraryCategoryStyle) {
+            Icon(
+                imageVector = BitChordIcons.Search,
+                contentDescription = null,
+                tint = palette.onBackgroundVariant,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+        }
         Box(Modifier.weight(1f)) {
             if (query.isEmpty()) {
                 Text(
@@ -122,7 +126,7 @@ internal fun NativeDetailSearchField(
                     .semantics { contentDescription = searchHint },
             )
         }
-        Box(
+        if (!appleLibraryCategoryStyle || query.isNotEmpty()) Box(
             modifier = Modifier
                 .size(30.dp)
                 .clip(CircleShape)
