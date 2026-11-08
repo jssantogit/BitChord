@@ -213,6 +213,8 @@ internal fun Modifier.miniPlayerGestures(
     /** Listening in a party whose host holds the controls. Swipes say so instead of skipping. */
     locked: Boolean = false,
     onBlocked: () -> Unit = {},
+    /** Optional visual drag feedback; does not alter track-skip decisions. */
+    onHorizontalSwipe: (Float, Boolean) -> Unit = { _, _ -> },
 ): Modifier {
     // Playback state updates can recompose the bar while a finger is down.
     // Keep the gesture coroutine alive through those updates while still
@@ -222,6 +224,7 @@ internal fun Modifier.miniPlayerGestures(
     val currentOnPrevious by rememberUpdatedState(onPrevious)
     val currentLocked by rememberUpdatedState(locked)
     val currentOnBlocked by rememberUpdatedState(onBlocked)
+    val currentOnHorizontalSwipe by rememberUpdatedState(onHorizontalSwipe)
     val scope = rememberCoroutineScope()
     // Read at draw only, in the layer below: a pull moves the bar without
     // recomposing it.
@@ -257,11 +260,14 @@ internal fun Modifier.miniPlayerGestures(
 
             if (!vertical) {
                 var dragged = slopped.position.x - down.position.x
+                currentOnHorizontalSwipe(dragged, true)
                 // Read before consuming: a consumed change reports no movement.
                 val finished = drag(pointer) { change ->
                     dragged += change.positionChange().x
+                    currentOnHorizontalSwipe(dragged, true)
                     change.consume()
                 }
+                currentOnHorizontalSwipe(0f, false)
                 if (!finished) return@awaitEachGesture
                 val crossed = dragged <= -trackThreshold || dragged >= trackThreshold
                 when {

@@ -23,6 +23,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -254,6 +255,7 @@ import com.music.bitchord.ui.components.BottomTab
 import com.music.bitchord.ui.components.FLOATING_BAR_MAX_WIDTH
 import com.music.bitchord.ui.components.AppleMusicBottomBar
 import com.music.bitchord.ui.components.AppleMusicMiniPlayer
+import com.music.bitchord.ui.components.AppleMusicChromeMotion
 import com.music.bitchord.ui.components.FloatingBottomBar
 import com.music.bitchord.ui.components.GlassNavBar
 import com.music.bitchord.ui.components.floatingtabbar.rememberFloatingTabBarScrollConnection
@@ -4727,27 +4729,51 @@ private fun BitChordApp(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                         )
                     }
-                    player.song?.let { song ->
-                        AppleMusicMiniPlayer(
-                            song = song,
-                            isPlaying = player.isPlaying,
-                            isLoading = playPauseBusy,
-                            hazeState = hazeState,
-                            onPlayPause = { togglePlayPause() },
-                            onNext = { controller?.seekToNextMediaItem() },
-                            onPrevious = { controller?.seekToPrevious() },
-                            onExpand = if (reducePlayerMotion) {
-                                { showNowPlaying = true }
-                            } else {
-                                playerSheetMotion::open
-                            },
-                            controlsLocked = controlsLocked,
-                            onBlockedControl = showHostOnlyNotice,
-                            dock = activeDock,
-                            pull = playerSheetMotion.takeIf { !reducePlayerMotion },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(8.dp))
+                    // Keep the last real song for the exit animation. An
+                    // AnimatedVisibility child reading only player.song would
+                    // disappear immediately when song becomes null.
+                    val lastMiniSong = remember { mutableStateOf<Song?>(null) }
+                    LaunchedEffect(player.song) {
+                        if (player.song != null) lastMiniSong.value = player.song
+                    }
+                    val displayedMiniSong = player.song ?: lastMiniSong.value
+                    AnimatedVisibility(
+                        visible = player.song != null,
+                        enter = if (reducePlayerMotion) EnterTransition.None else
+                            fadeIn(tween(AppleMusicChromeMotion.miniAppearMillis)) + slideInVertically(
+                                animationSpec = tween(AppleMusicChromeMotion.miniAppearMillis),
+                                initialOffsetY = { it / 4 },
+                            ),
+                        exit = if (reducePlayerMotion) ExitTransition.None else
+                            fadeOut(tween(AppleMusicChromeMotion.miniDisappearMillis)) + slideOutVertically(
+                                animationSpec = tween(AppleMusicChromeMotion.miniDisappearMillis),
+                                targetOffsetY = { it / 4 },
+                            ),
+                    ) {
+                        displayedMiniSong?.let { song ->
+                            Column {
+                                AppleMusicMiniPlayer(
+                                    song = song,
+                                    isPlaying = player.isPlaying,
+                                    isLoading = playPauseBusy,
+                                    hazeState = hazeState,
+                                    onPlayPause = { togglePlayPause() },
+                                    onNext = { controller?.seekToNextMediaItem() },
+                                    onPrevious = { controller?.seekToPrevious() },
+                                    onExpand = if (reducePlayerMotion) {
+                                        { showNowPlaying = true }
+                                    } else {
+                                        playerSheetMotion::open
+                                    },
+                                    controlsLocked = controlsLocked,
+                                    onBlockedControl = showHostOnlyNotice,
+                                    dock = activeDock,
+                                    pull = playerSheetMotion.takeIf { !reducePlayerMotion },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
+                        }
                     }
                     AppleMusicBottomBar(
                         tabs = tabs,

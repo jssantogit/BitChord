@@ -1,15 +1,23 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -25,11 +33,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -39,6 +50,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -92,6 +104,41 @@ internal object AppleMusicChromeMetrics {
     val nextGlyphSize = 32.dp
     val titleSize = 15.sp
     val artistSize = 15.sp
+}
+
+/**
+ * Experimental motion values, not extracted Apple Music animation timings.
+ * AM-DECOMP documents the tab tint state and player artwork geometry, but does
+ * NOT establish tab-selection, transport or mini-player crossfade durations.
+ */
+internal object AppleMusicChromeMotion {
+    const val tabTintMillis = 180
+    const val trackCrossfadeMillis = 220
+    const val transportCrossfadeMillis = 150
+    const val miniAppearMillis = 220
+    const val miniDisappearMillis = 180
+
+    fun duration(baseMillis: Int, reduced: Boolean): Int =
+        if (reduced) 0 else baseMillis
+}
+
+/** A disabled slot (Radio) never reacts to press or selection animations. */
+internal fun appleMusicTabScaleTarget(enabled: Boolean, selected: Boolean, pressed: Boolean): Float =
+    when {
+        !enabled -> 1f
+        pressed -> 0.91f
+        selected -> 1.04f
+        else -> 1f
+}
+
+@Composable
+private fun appleMusicPressScale(pressed: Boolean, reduced: Boolean): Float {
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.9f else 1f,
+        animationSpec = if (reduced) snap() else spring(dampingRatio = 0.80f, stiffness = 510f),
+        label = "appleMusicTransportPress",
+    )
+    return scale
 }
 
 /** Maps the existing four real destinations to five *visible* tab positions. */
@@ -163,6 +210,7 @@ fun AppleMusicBottomBar(
     val radioAccessibilityLabel = stringResource(R.string.apple_music_tab_radio_unavailable)
     val visualLabels = listOf(tabs[0].label, tabs[1].label, radioLabel, tabs[2].label, tabs[3].label)
     val selectedVisibleIndex = appleMusicVisualIndexForDestination(selectedIndex)
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val haptics = rememberHaptics()
 
     Row(
@@ -181,11 +229,29 @@ fun AppleMusicBottomBar(
             val destination = appleMusicDestinationForVisualIndex(visibleIndex)
             val enabled = destination != null
             val selected = selectedVisibleIndex == visibleIndex
-            val tint = when {
+            val targetTint = when {
                 !enabled -> AppleWhite.copy(alpha = 0.34f)
                 selected -> AppleBlue
                 else -> AppleWhite
             }
+            val tint by animateColorAsState(
+                targetValue = targetTint,
+                animationSpec = tween(
+                    durationMillis = AppleMusicChromeMotion.duration(
+                        AppleMusicChromeMotion.tabTintMillis, reduceMotion,
+                    ),
+                ),
+                label = "appleMusicTabTint",
+            )
+            val interaction = remember { MutableInteractionSource() }
+            val pressed by interaction.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                targetValue = appleMusicTabScaleTarget(enabled, selected, pressed),
+                animationSpec = if (reduceMotion) snap() else spring(
+                    dampingRatio = 0.82f, stiffness = 500f,
+                ),
+                label = "appleMusicTabScale",
+            )
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -194,7 +260,7 @@ fun AppleMusicBottomBar(
                         selected = selected,
                         enabled = enabled,
                         role = Role.Tab,
-                        interactionSource = remember { MutableInteractionSource() },
+                        interactionSource = interaction,
                         indication = null,
                     ) {
                         if (destination != null) {
@@ -215,7 +281,12 @@ fun AppleMusicBottomBar(
                     painter = painterResource(appleMusicTabIconForVisualIndex(visibleIndex)),
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(AppleMusicChromeMetrics.navigationIconSize),
+                    modifier = Modifier
+                        .size(AppleMusicChromeMetrics.navigationIconSize)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        },
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
@@ -254,6 +325,34 @@ fun AppleMusicMiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val haptics = rememberHaptics()
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val trackFade = AppleMusicChromeMotion.duration(
+        AppleMusicChromeMotion.trackCrossfadeMillis, reduceMotion,
+    )
+    val controlFade = AppleMusicChromeMotion.duration(
+        AppleMusicChromeMotion.transportCrossfadeMillis, reduceMotion,
+    )
+    val playInteraction = remember { MutableInteractionSource() }
+    val nextInteraction = remember { MutableInteractionSource() }
+    val playPressed by playInteraction.collectIsPressedAsState()
+    val nextPressed by nextInteraction.collectIsPressedAsState()
+    val playScale = appleMusicPressScale(playPressed, reduceMotion)
+    val nextScale = appleMusicPressScale(nextPressed, reduceMotion)
+
+    // Horizontal swipes already skip tracks in the native gesture recognizer.
+    // Give only the experimental bar a small, clipped drag and spring-back.
+    val swipeDistance = remember { mutableFloatStateOf(0f) }
+    var swipeActive by remember { mutableStateOf(false) }
+    val swipeLimitPx = with(LocalDensity.current) { 72.dp.toPx() }
+    val swipeMaxPx = with(LocalDensity.current) { 12.dp.toPx() }
+    val swipeOffset by animateFloatAsState(
+        targetValue = if (swipeActive && !reduceMotion) {
+            (swipeDistance.floatValue / swipeLimitPx).coerceIn(-1f, 1f) * swipeMaxPx
+        } else 0f,
+        animationSpec = if (reduceMotion || swipeActive) snap()
+            else spring(dampingRatio = 0.78f, stiffness = 400f),
+        label = "appleMusicMiniSwipeSettle",
+    )
     Box(
         modifier = modifier
             .padding(horizontal = AppleMusicChromeMetrics.pillHorizontalInset)
@@ -269,6 +368,10 @@ fun AppleMusicMiniPlayer(
                 },
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
+                onHorizontalSwipe = { distancePx, active ->
+                    swipeDistance.floatValue = distancePx
+                    swipeActive = active
+                },
             )
             .fillMaxWidth()
             .height(AppleMusicChromeMetrics.miniPlayerHeight)
@@ -276,65 +379,99 @@ fun AppleMusicMiniPlayer(
             .clickable(onClick = onExpand),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(AppleMusicChromeMetrics.miniPlayerHeight).padding(horizontal = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(AppleMusicChromeMetrics.miniPlayerHeight)
+                .padding(horizontal = 12.dp)
+                .graphicsLayer { translationX = swipeOffset },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val artCorner = RoundedCornerShape(6.dp)
-            AsyncImage(
-                model = rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
-                contentDescription = null,
+            // Keep exactly one dock coordinate reporter during the artwork
+            // crossfade. Two dock reporters would compete during a track skip.
+            Box(
                 modifier = Modifier
                     .size(AppleMusicChromeMetrics.artworkSize)
                     .playerDockArt(dock, 6.dp)
                     .clip(artCorner)
                     .thumbnailBorder(artCorner)
                     .background(AppleNightSurface),
-            )
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                ExplicitSongTitle(
-                    song = song,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = AppleMusicChromeMetrics.titleSize,
-                        lineHeight = 18.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = AppleWhite,
-                )
-                Text(
-                    text = song.artist,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = AppleMusicChromeMetrics.artistSize,
-                        lineHeight = 18.sp,
-                        fontWeight = FontWeight.Normal,
-                    ),
-                    color = AppleSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (isLoading) {
-                Box(Modifier.size(AppleMusicChromeMetrics.controlTouchSize), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
-                        color = AppleWhite,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(20.dp),
+            ) {
+                Crossfade(
+                    targetState = song,
+                    animationSpec = tween(trackFade),
+                    label = "appleMusicMiniArtwork",
+                ) { displayedSong ->
+                    AsyncImage(
+                        model = rememberPlaybackArtworkImageModel(displayedSong, ROW_ART_PX),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
-            } else {
-                IconButton(
-                    onClick = {
-                        haptics.play(if (isPlaying) Haptic.Pause else Haptic.Resume)
-                        onPlayPause()
-                    },
-                    modifier = Modifier.size(AppleMusicChromeMetrics.controlTouchSize),
-                ) {
-                    Icon(
-                        painter = painterResource(appleMusicMiniPlayerPlayPauseIcon(isPlaying)),
-                        contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
-                        tint = AppleWhite,
-                        modifier = Modifier.size(AppleMusicChromeMetrics.playGlyphSize),
+            }
+            Spacer(Modifier.width(8.dp))
+            Crossfade(
+                targetState = song,
+                animationSpec = tween(trackFade),
+                modifier = Modifier.weight(1f),
+                label = "appleMusicMiniMetadata",
+            ) { displayedSong ->
+                Column(verticalArrangement = Arrangement.Center) {
+                    ExplicitSongTitle(
+                        song = displayedSong,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = AppleMusicChromeMetrics.titleSize,
+                            lineHeight = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = AppleWhite,
                     )
+                    Text(
+                        text = displayedSong.artist,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = AppleMusicChromeMetrics.artistSize,
+                            lineHeight = 18.sp,
+                            fontWeight = FontWeight.Normal,
+                        ),
+                        color = AppleSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            IconButton(
+                onClick = {
+                    haptics.play(if (isPlaying) Haptic.Pause else Haptic.Resume)
+                    onPlayPause()
+                },
+                enabled = !isLoading,
+                interactionSource = playInteraction,
+                modifier = Modifier
+                    .size(AppleMusicChromeMetrics.controlTouchSize)
+                    .graphicsLayer {
+                        scaleX = playScale
+                        scaleY = playScale
+                    },
+            ) {
+                Crossfade(
+                    targetState = isLoading to isPlaying,
+                    animationSpec = tween(controlFade),
+                    label = "appleMusicMiniPlaybackState",
+                ) { (loading, playing) ->
+                    if (loading) {
+                        CircularProgressIndicator(
+                            color = AppleWhite,
+                            strokeWidth = 2.dp,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    } else {
+                        Icon(
+                            painter = painterResource(appleMusicMiniPlayerPlayPauseIcon(playing)),
+                            contentDescription = stringResource(if (playing) R.string.pause else R.string.play),
+                            tint = AppleWhite,
+                            modifier = Modifier.size(AppleMusicChromeMetrics.playGlyphSize),
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(6.dp))
@@ -344,7 +481,13 @@ fun AppleMusicMiniPlayer(
                     onNext()
                 },
                 enabled = !controlsLocked,
-                modifier = Modifier.size(AppleMusicChromeMetrics.controlTouchSize),
+                interactionSource = nextInteraction,
+                modifier = Modifier
+                    .size(AppleMusicChromeMetrics.controlTouchSize)
+                    .graphicsLayer {
+                        scaleX = nextScale
+                        scaleY = nextScale
+                    },
             ) {
                 Icon(
                     painter = painterResource(R.drawable.apple_music_mp_next),
