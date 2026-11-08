@@ -1,0 +1,10 @@
+<resources>
+    <string name="discogs_search_title">Discogs catalog search</string>
+    <string name="discogs_search_connected">Personal search token configured · additional verified editions can be discovered</string>
+    <string name="discogs_search_disconnected">Optional personal token · required for searching editions without MusicBrainz links</string>
+    <string name="discogs_search_help">Searches only public Discogs metadata for catalog items you open. Your token stays encrypted on this device and is never included in backups or diagnostics. Discogs data is independent and does not authorize playback.</string>
+    <string name="discogs_search_token_label">Personal Discogs token</string>
+    <string name="discogs_search_save_failed">Token invalid or secure storage unavailable. Nothing was saved.</string>
+    <string name="discogs_search_save">Save</string>
+    <string name="discogs_search_remove">Remove token</string>
+</resources>

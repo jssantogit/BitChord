@@ -124,6 +124,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.viewinterop.AndroidView
 import com.music.bitchord.AppIcon
 import androidx.compose.ui.res.stringResource
@@ -157,6 +158,8 @@ import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.listentogether.ListenTogether
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsSearchTokenVault
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.canvas.VisualRetentionMode
 import com.music.bitchord.data.canvas.VisualSurface
@@ -214,6 +217,14 @@ internal fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val discogsTokenVault = remember(context) { DiscogsSearchTokenVault(context) }
+    var discogsTokenConfigured by remember { mutableStateOf(discogsTokenVault.configured()) }
+    var discogsEditorOpen by remember { mutableStateOf(false) }
+    // Intentionally not saveable: do not serialize the pasted token in Android
+    // instance state, app diagnostics, or navigation restoration.
+    var discogsDraft by remember { mutableStateOf("") }
+    var discogsTokenError by remember { mutableStateOf(false) }
+    val discogsScope = rememberCoroutineScope()
 
     val wifiQuality by AppSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by AppSettings.audioQualityCellular.collectAsStateWithLifecycle()
@@ -1642,6 +1653,22 @@ internal fun SettingsScreen(
                     )
                 }
             }
+            val discogsSearchTitle = stringResource(R.string.discogs_search_title)
+            row(discogsSearchTitle, "discogs", "token", "edition", "release", "search") {
+                SettingsRow(
+                    icon = Icons.Rounded.LocalOffer,
+                    title = discogsSearchTitle,
+                    subtitle = stringResource(
+                        if (discogsTokenConfigured) R.string.discogs_search_connected
+                        else R.string.discogs_search_disconnected,
+                    ),
+                    onClick = {
+                        discogsDraft = ""
+                        discogsTokenError = false
+                        discogsEditorOpen = true
+                    },
+                )
+            }
             val sourceMatchingTitle = stringResource(R.string.upgrade_length_slack)
             row(sourceMatchingTitle, "source", "matching", "duration", "tolerance", "seconds") {
                 SliderRow(
@@ -1710,6 +1737,76 @@ internal fun SettingsScreen(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
             )
         }
+        }
+    }
+
+    if (discogsEditorOpen) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                discogsDraft = ""
+                discogsTokenError = false
+                discogsEditorOpen = false
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.discogs_search_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = stringResource(R.string.discogs_search_help),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = discogsDraft,
+                    onValueChange = { discogsDraft = it; discogsTokenError = false },
+                    label = { Text(stringResource(R.string.discogs_search_token_label)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (discogsTokenError) {
+                    Text(
+                        text = stringResource(R.string.discogs_search_save_failed),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(onClick = {
+                        if (discogsTokenVault.store(discogsDraft)) {
+                            discogsTokenConfigured = true
+                            discogsDraft = ""
+                            discogsEditorOpen = false
+                            discogsScope.launch { DiscogsEditionAccess.coordinator.clear() }
+                        } else {
+                            discogsTokenError = true
+                        }
+                    }) {
+                        Text(stringResource(R.string.discogs_search_save))
+                    }
+                    if (discogsTokenConfigured) {
+                        TextButton(onClick = {
+                            if (discogsTokenVault.clear()) {
+                                discogsTokenConfigured = false
+                                discogsDraft = ""
+                                discogsEditorOpen = false
+                                discogsScope.launch { DiscogsEditionAccess.coordinator.clear() }
+                            } else {
+                                discogsTokenError = true
+                            }
+                        }) {
+                            Text(stringResource(R.string.discogs_search_remove))
+                        }
+                    }
+                }
+            }
         }
     }
 
