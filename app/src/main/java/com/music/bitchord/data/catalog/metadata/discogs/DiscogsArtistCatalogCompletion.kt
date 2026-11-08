@@ -63,13 +63,15 @@ internal suspend fun loadCompleteMusicBrainzArtistGroupTitles(
     artistMbid: String,
     graph: MusicBrainzCatalogGraph = MusicBrainzCatalogGraph(),
 ): Set<String>? = collectCompleteDiscogsArtistGroupTitles { offset ->
-    val result = graph.browseReleaseGroupsForArtist(artistMbid, limit = 75, offset = offset)
-    (result as? MusicBrainzCatalogGraphResult.Success)?.value?.let { page ->
-        DiscogsArtistGroupPage(
-            groups = page.items.map { it.musicBrainzId to it.title },
-            total = page.total,
-            offset = page.offset,
-            consumedCount = page.consumedCount,
-        )
+    when (val result = graph.browseReleaseGroupsForArtist(artistMbid, limit = 75, offset = offset)) {
+        is MusicBrainzCatalogGraphResult.Success -> result.value.let { page ->
+            DiscogsArtistGroupPage(
+                groups = page.items.map { it.musicBrainzId to it.title },
+                total = page.total,
+                offset = page.offset,
+                consumedCount = page.consumedCount,
+            )
+        }
+        is MusicBrainzCatalogGraphResult.Failure -> null
     }
 }
