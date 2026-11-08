@@ -8,6 +8,13 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class NativeTrackFavoriteIdentityTest {
+    @Test fun specialActionsRequirePlayerAndQueueHeaderTogether() {
+        assertEquals(false, shouldUseAppleQueueSongActions(fromPlayer = false, fromQueueHeader = false))
+        assertEquals(false, shouldUseAppleQueueSongActions(fromPlayer = false, fromQueueHeader = true))
+        assertEquals(false, shouldUseAppleQueueSongActions(fromPlayer = true, fromQueueHeader = false))
+        assertEquals(true, shouldUseAppleQueueSongActions(fromPlayer = true, fromQueueHeader = true))
+    }
+
     private fun song(id: String, local: String? = null) =
         Song(videoId = id, title = "Title", artist = "Artist", thumbnailUrl = null, localUri = local)
 

@@ -44,3 +44,7 @@ internal class NativeTrackFavorites(context: Context) {
         }
     }
 }
+
+/** Keep the queue-specific action sheet out of the normal player and track menus. */
+internal fun shouldUseAppleQueueSongActions(fromPlayer: Boolean, fromQueueHeader: Boolean): Boolean =
+    fromPlayer && fromQueueHeader

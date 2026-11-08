@@ -146,6 +146,7 @@ import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LikeStatus
 import com.music.bitchord.data.library.NativeTrackFavorites
 import com.music.bitchord.data.library.nativeTrackFavoriteKey
+import com.music.bitchord.data.library.shouldUseAppleQueueSongActions
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
@@ -4990,7 +4991,7 @@ private fun BitChordApp(
                 // read off the player's own visibility any more, because on a
                 // tablet the player is visible whatever the menu was opened from.
                 val fromPlayer = menuFromPlayer
-                val fromAppleQueue = fromPlayer && menuFromAppleQueue
+                val fromAppleQueue = shouldUseAppleQueueSongActions(fromPlayer, menuFromAppleQueue)
                 val favoriteKeys by nativeTrackFavorites.favoriteKeys.collectAsStateWithLifecycle()
                 val share: () -> Unit = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
