@@ -4358,9 +4358,52 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val recordings = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchRecordingsForArtistMbid(artistScopeMbid, limit = 25)
             } else musicBrainzSearch.searchRecordings(query, limit = 25)
+            // Do not make listeners wait for the two release endpoints just
+            // to see the verified recording results. These are metadata-only
+            // until the final local MediaAsset claim query has completed.
+            if (recordings is MusicBrainzCatalogSearchResult.Success &&
+                _searchSource.value == SearchSource.CANONICAL &&
+                _query.value.trim() == query
+            ) {
+                val fresh = recordings.page.items
+                    .filter(::isCuratedMusicBrainzRecording)
+                    .map { hit -> CanonicalCatalogSearchRow(
+                        musicBrainzId = hit.musicBrainzId,
+                        kind = CanonicalSearchKind.RECORDING,
+                        title = hit.title,
+                        subtitle = hit.artistDisplay,
+                        artistScopeMbid = artistScopeMbid,
+                        coverReleaseMbid = hit.coverReleaseMbid,
+                        coverGroupMbid = hit.coverGroupMbid,
+                        durationMs = hit.durationMs,
+                    ) }
+                val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+                if (fresh.isNotEmpty()) _canonicalResults.value = UiState.Success(
+                    canonicalProgressiveSearchPreview(current, fresh),
+                )
+            }
             val groups = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchReleaseGroupsForArtistMbid(artistScopeMbid, limit = 15)
             } else musicBrainzSearch.searchReleaseGroups(query, limit = 15)
+            if (groups is MusicBrainzCatalogSearchResult.Success &&
+                _searchSource.value == SearchSource.CANONICAL &&
+                _query.value.trim() == query
+            ) {
+                val fresh = groups.page.items.map { hit -> CanonicalCatalogSearchRow(
+                    musicBrainzId = hit.musicBrainzId,
+                    kind = CanonicalSearchKind.RELEASE_GROUP,
+                    title = hit.title,
+                    subtitle = hit.artistDisplay ?: hit.primaryType,
+                    releaseDate = hit.firstReleaseDate,
+                    releaseKind = hit.primaryType,
+                    secondaryTypes = hit.secondaryTypes,
+                    artistScopeMbid = artistScopeMbid,
+                ) }
+                val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+                if (fresh.isNotEmpty()) _canonicalResults.value = UiState.Success(
+                    canonicalProgressiveSearchPreview(current, fresh),
+                )
+            }
             val editions = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchReleasesForArtistMbid(artistScopeMbid, limit = 15)
             } else musicBrainzSearch.searchReleases(query, limit = 15)
