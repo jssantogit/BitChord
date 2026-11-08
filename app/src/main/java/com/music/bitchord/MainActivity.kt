@@ -5133,10 +5133,14 @@ private fun BitChordApp(
                 )
             }
             songActions?.takeIf { songMenuOrigin == null }?.let { song ->
+                val applePlayerMenu = shouldUseAppleQueueSongActions(menuFromPlayer, menuFromAppleQueue)
                 ModalBottomSheet(
                     onDismissRequest = { songActions = null },
-                    // The sheet paints itself in the track's own colours, corners
-                    // and drag handle included — see SongActionsSheet.
+                    // Apple player actions must open fully: the Material3 partial
+                    // state previously clipped the six commands below the fold.
+                    sheetState = rememberModalBottomSheetState(
+                        skipPartiallyExpanded = applePlayerMenu,
+                    ),
                     containerColor = Color.Transparent,
                     dragHandle = null,
                 ) {
