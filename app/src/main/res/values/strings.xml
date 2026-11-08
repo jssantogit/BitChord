@@ -26,6 +26,7 @@
     <string name="play">Play</string>
     <string name="explore">Explore</string>
     <string name="apple_music_radio_tab">Radio</string>
+    <string name="apple_music_search_tab">Search</string>
     <string name="explore_genres">Genres</string>
     <string name="listen_now">Listen Now</string>
     <string name="canonical_discovery_header">Catalog discovery</string>
