@@ -41,6 +41,16 @@ class CorpusReportTests(unittest.TestCase):
         cases[7]["discogs_release_id"] = None
         self.assertIsNone(report({"schema_version": 1, "cases": cases})["metrics"])
 
+    def test_unknown_type_fill_is_not_counted_as_correction(self):
+        cases = [case(c, i) for c in ("type", "unlinked", "source_only")
+                 for i in range(10)]
+        cases[0]["musicbrainz_type"] = "Unknown"
+        result = report({"schema_version": 1, "cases": cases})
+        self.assertEqual({"corrected": 9, "eligible": 9},
+                         result["metrics"]["type_correction"])
+        self.assertEqual({"filled": 1, "eligible": 1},
+                         result["metrics"]["type_fill"])
+
     def test_false_positive_is_not_hidden(self):
         cases = [case(c, i) for c in ("type", "unlinked", "source_only")
                  for i in range(10)]
