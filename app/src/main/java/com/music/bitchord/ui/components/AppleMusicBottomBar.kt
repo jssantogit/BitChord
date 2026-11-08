@@ -18,9 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,10 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -115,6 +109,25 @@ internal fun appleMusicDestinationForVisualIndex(visibleIndex: Int): Int? = when
     else -> null
 }
 
+/**
+ * Exact vector drawables recovered from Apple Music Android 7.0.0 (build 1614).
+ * The AM-DECOMP static menu binds these five resources to the five tab slots;
+ * the experimental BitChord destinations remain unchanged. Source/provenance:
+ * docs/apple-music-original-icon-experiment.md
+ */
+internal fun appleMusicTabIconForVisualIndex(visibleIndex: Int): Int = when (visibleIndex) {
+    0 -> R.drawable.apple_music_tab_home
+    1 -> R.drawable.apple_music_tab_explore
+    2 -> R.drawable.apple_music_tab_radio
+    3 -> R.drawable.apple_music_tab_library
+    4 -> R.drawable.apple_music_tab_search
+    else -> error("Unknown Apple Music visual tab index: $visibleIndex")
+}
+
+/** True when playing: the original pause icon is shown, otherwise original play. */
+internal fun appleMusicMiniPlayerPlayPauseIcon(isPlaying: Boolean): Int =
+    if (isPlaying) R.drawable.apple_music_mp_pause else R.drawable.apple_music_mp_play
+
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun Modifier.appleMusicChrome(hazeState: HazeState): Modifier {
@@ -145,9 +158,7 @@ fun AppleMusicBottomBar(
     require(tabs.size == 4) { "Apple Music experiment requires four real routes" }
     val radioLabel = stringResource(R.string.apple_music_tab_radio)
     val radioAccessibilityLabel = stringResource(R.string.apple_music_tab_radio_unavailable)
-    val visualTabs = remember(tabs, radioLabel) {
-        listOf(tabs[0], tabs[1], BottomTab(radioLabel, AppleMusicRadioWaves), tabs[2], tabs[3])
-    }
+    val visualLabels = listOf(tabs[0].label, tabs[1].label, radioLabel, tabs[2].label, tabs[3].label)
     val selectedVisibleIndex = appleMusicVisualIndexForDestination(selectedIndex)
     val haptics = rememberHaptics()
 
@@ -163,7 +174,7 @@ fun AppleMusicBottomBar(
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        visualTabs.forEachIndexed { visibleIndex, tab ->
+        visualLabels.forEachIndexed { visibleIndex, label ->
             val destination = appleMusicDestinationForVisualIndex(visibleIndex)
             val enabled = destination != null
             val selected = selectedVisibleIndex == visibleIndex
@@ -198,14 +209,14 @@ fun AppleMusicBottomBar(
                 verticalArrangement = Arrangement.Center,
             ) {
                 Icon(
-                    imageVector = tab.icon,
+                    painter = painterResource(appleMusicTabIconForVisualIndex(visibleIndex)),
                     contentDescription = null,
                     tint = tint,
                     modifier = Modifier.size(AppleMusicChromeMetrics.navigationIconSize),
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = tab.label,
+                    text = label,
                     fontSize = AppleMusicChromeMetrics.navigationLabelSize,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                     color = tint,
@@ -316,7 +327,7 @@ fun AppleMusicMiniPlayer(
                     modifier = Modifier.size(AppleMusicChromeMetrics.controlTouchSize),
                 ) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        painter = painterResource(appleMusicMiniPlayerPlayPauseIcon(isPlaying)),
                         contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
                         tint = AppleWhite,
                         modifier = Modifier.size(AppleMusicChromeMetrics.playGlyphSize),
@@ -332,40 +343,13 @@ fun AppleMusicMiniPlayer(
                 enabled = !controlsLocked,
                 modifier = Modifier.size(AppleMusicChromeMetrics.controlTouchSize),
             ) {
-                MiniPlayerNextGlyph(
+                Icon(
+                    painter = painterResource(R.drawable.apple_music_mp_next),
+                    contentDescription = stringResource(R.string.widget_next),
                     tint = AppleWhite.copy(alpha = if (controlsLocked) 0.34f else 1f),
-                    glyphSize = AppleMusicChromeMetrics.nextGlyphSize,
+                    modifier = Modifier.size(AppleMusicChromeMetrics.nextGlyphSize),
                 )
             }
         }
     }
-}
-
-/** Original wave glyph with the same silhouette family as the supplied image. */
-private val AppleMusicRadioWaves: ImageVector by lazy {
-    val paint = SolidColor(Color.Black)
-    ImageVector.Builder(
-        name = "apple_music_radio_future",
-        defaultWidth = 24.dp,
-        defaultHeight = 24.dp,
-        viewportWidth = 24f,
-        viewportHeight = 24f,
-    ).apply {
-        path(stroke = paint, strokeLineWidth = 1.8f, strokeLineCap = StrokeCap.Round) {
-            moveTo(8.5f, 8.1f)
-            curveTo(5.9f, 10.3f, 5.9f, 13.7f, 8.5f, 15.9f)
-            moveTo(15.5f, 8.1f)
-            curveTo(18.1f, 10.3f, 18.1f, 13.7f, 15.5f, 15.9f)
-            moveTo(6.1f, 5.5f)
-            curveTo(1.4f, 9.0f, 1.4f, 15.0f, 6.1f, 18.5f)
-            moveTo(17.9f, 5.5f)
-            curveTo(22.6f, 9.0f, 22.6f, 15.0f, 17.9f, 18.5f)
-        }
-        path(fill = paint) {
-            moveTo(14.4f, 12f)
-            arcToRelative(2.4f, 2.4f, 0f, true, true, -4.8f, 0f)
-            arcToRelative(2.4f, 2.4f, 0f, true, true, 4.8f, 0f)
-            close()
-        }
-    }.build()
 }
