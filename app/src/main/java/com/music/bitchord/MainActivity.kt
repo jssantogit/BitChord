@@ -105,6 +105,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -2437,6 +2438,21 @@ private fun BitChordApp(
                         it.memberId == playback.startedBy
                     }?.displayName?.takeIf(String::isNotBlank)
             }
+        val verifiedQueueAlbum by produceState<String?>(
+            initialValue = null,
+            key1 = player.queue,
+            key2 = player.queueIndex,
+        ) {
+            value = try {
+                com.music.bitchord.ui.components.verifiedQueueAlbumTitle(
+                    context, player.queue, player.queueIndex,
+                )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+        }
         var localRatingDialogOpen by remember(displayedSong.videoId) { mutableStateOf(false) }
         val openMenuFromPlayer: (Any?, Boolean) -> Unit = { loadedArtworkModel, appleQueue ->
             menuFromPlayer = true
@@ -2516,6 +2532,7 @@ private fun BitChordApp(
             signedIn = signedIn,
             onEditCanonicalRating = { localRatingDialogOpen = true },
             appleQueueStyle = true,
+            verifiedQueueAlbumTitle = verifiedQueueAlbum,
             lyricsShareRequestToken = playerShareLyricsRequestToken,
             onLyricsShareRequestConsumed = { playerShareLyricsRequestToken = 0 },
             // The service owns both the queue and the Shuffle state. Keeping
@@ -4997,6 +5014,17 @@ private fun BitChordApp(
                 // tablet the player is visible whatever the menu was opened from.
                 val fromPlayer = menuFromPlayer
                 val fromAppleQueue = shouldUseAppleQueueSongActions(fromPlayer, menuFromAppleQueue)
+                val verifiedMenuAlbum by produceState<String?>(
+                    initialValue = null, key1 = song, key2 = fromAppleQueue,
+                ) {
+                    value = if (!fromAppleQueue) null else try {
+                        com.music.bitchord.ui.components.verifiedPlayerAlbumTitle(context, song)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
                 val share: () -> Unit = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -5030,6 +5058,7 @@ private fun BitChordApp(
                     } else null,
                     signedIn = signedIn,
                     appleQueuePlayerMenu = fromAppleQueue,
+                    verifiedAlbumTitle = verifiedMenuAlbum,
                     // The player-wide star now owns rating edits.
                     // Other track-list menus retain the existing first-rating entry.
                     canonicalRatingContent = if (shouldShowRatingEditorInSongActions(fromPlayer)) {
