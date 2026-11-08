@@ -36,7 +36,7 @@ internal data class DiscogsSearchRequest(
     fun isValid(): Boolean {
         fun safe(value: String?) = value == null || (
             value.length <= 120 && value.isNotBlank() &&
-                value.none { it.isISOControl() }
+                value.none { Character.isISOControl(it) }
         )
         return safe(artist) && artist.isNotBlank() && safe(title) &&
             safe(barcode) && safe(catalogNumber) &&
@@ -140,11 +140,8 @@ internal class DiscogsDatabaseSearchClient(
         if (!query.isValid()) return DiscogsSearchResult.InvalidQuery
         // Authentication is opt-in and fail-closed, including if Keystore is
         // unavailable. Never log or embed credentials in diagnostics/results.
-        val token = tokenProvider()?.trim()?.takeIf {
-            it.length in 24..128 && it.all { c ->
-                c.isLetterOrDigit() && c.code < 128 || c == '_' || c == '-'
-            }
-        } ?: return DiscogsSearchResult.AuthRequired
+        val token = tokenProvider()?.trim()?.takeIf(::isValidDiscogsSearchToken)
+            ?: return DiscogsSearchResult.AuthRequired
         val response = try {
             limiter.runHttpLimited { transport.search(query, token, userAgent) }
         } catch (cancelled: CancellationException) {
