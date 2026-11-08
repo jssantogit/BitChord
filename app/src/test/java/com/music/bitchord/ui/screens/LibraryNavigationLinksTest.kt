@@ -44,13 +44,12 @@ class LibraryNavigationLinksTest {
         )
         assertEquals(
             listOf(
-                "Playlists", "Artistas", "Álbuns", "Músicas",
-                "Rádios", "Downloads",
+                "Playlists", "Artistas", "Álbuns", "Músicas", "Downloads",
             ),
             result.map { it.item.title },
         )
-        assertFalse(result[4].enabled)
         assertEquals("local:downloads", result.last().item.browseId)
+        assertEquals(true, result.all { it.enabled })
     }
     @Test fun unifiedLibraryRequestsMissingAudioPermissionWithoutBlockingNavigation() {
         val transitions = mutableListOf<String>()
