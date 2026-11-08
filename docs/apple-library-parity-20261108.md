@@ -43,3 +43,10 @@ Current state: first visual and architectural pass. **Do not assert device-level
 - Android CI #6014 passed the Android unit tests and shared Automix planner but failed shared JVM compilation: PlatformTextStyle(includeFontPadding = false) was unavailable on JVM. Commit 2eee7c4 removed that Android-specific override in shared PlayerControls while retaining the 11sp badge label and 13sp Apple-style line height. Android CI #6015 was in progress at this checkpoint, not yet proven green.
 - The am-descomp category-list investigation explicitly classifies exact row dimensions, icons, and spacing as unknown. The present 44dp rows, 22dp icons, and 17sp labels are provisional choices, not measured Apple geometry.
 - Outstanding physical checks: six-cover shelf, header, category rows, recent additions, search, bottom chrome, font scale, and sparse/empty library. Do not merge or declare pixel parity without device evidence.
+
+## Library category localization — 2026-11-08
+
+- The Apple-style landing previously hardcoded Portuguese titles for Artists, Albums, and Songs, despite Android resources already providing translated labels. The existing category destinations were preserved while the caller now supplies `R.string.playlists`, `R.string.artists`, `R.string.albums`, and `R.string.songs` via `LibraryCategoryLabels`.
+- The navigation regression asserts that English titles render in the same Playlists → Artists → Albums → Songs → Downloads order, that each item keeps its existing callback, and that Downloads retains its actual local browse ID. The previous Portuguese order check is retained with explicit labels.
+- This change affects category text only. It does not change searches, filters, pinned cover shelf, library content, or underlying navigation routes.
+- Validation of the localization commit requires the new Android CI run; no device smoke has been completed.
