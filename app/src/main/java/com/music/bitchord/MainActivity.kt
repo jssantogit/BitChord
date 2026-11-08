@@ -2442,10 +2442,16 @@ private fun BitChordApp(
             initialValue = null,
             key1 = player.queue,
             key2 = player.queueIndex,
+            key3 = displayedSong,
         ) {
+            val contextualQueue = player.queue.mapIndexed { index, queued ->
+                if (index == player.queueIndex) {
+                    com.music.bitchord.ui.components.effectiveQueueAlbumSeed(queued, displayedSong)
+                } else queued
+            }
             value = try {
                 com.music.bitchord.ui.components.verifiedQueueAlbumTitle(
-                    context, player.queue, player.queueIndex,
+                    context, contextualQueue, player.queueIndex,
                 )
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
@@ -2577,7 +2583,7 @@ private fun BitChordApp(
             // The enriched copy, not player.song — otherwise the menu
             // hides the album and artist rows even once their browse
             // ids have been resolved.
-            onOpenMenu = { loadedArtworkModel -> openMenuFromPlayer(loadedArtworkModel, false) },
+            onOpenMenu = { loadedArtworkModel -> openMenuFromPlayer(loadedArtworkModel, true) },
             onOpenQueueMenu = { loadedArtworkModel -> openMenuFromPlayer(loadedArtworkModel, true) },
             onOpenAlbum = { id ->
                 dismissPlayer()
