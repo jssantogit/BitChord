@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Star
@@ -199,10 +199,10 @@ fun libraryNavigationLinks(
         )
     return listOf(
         destination(labels.playlists, Icons.Rounded.QueueMusic, onOpenPlaylists),
-        destination(labels.artists, Icons.Rounded.Person) {
+        destination(labels.artists, Icons.Rounded.Mic) {
             onOpenLocalCategory(LocalFolderTab.ARTISTS)
         },
-        destination(labels.albums, Icons.Rounded.Album) {
+        destination(labels.albums, Icons.Rounded.Collections) {
             onOpenLocalCategory(LocalFolderTab.ALBUMS)
         },
         destination(labels.songs, Icons.Rounded.MusicNote) {
