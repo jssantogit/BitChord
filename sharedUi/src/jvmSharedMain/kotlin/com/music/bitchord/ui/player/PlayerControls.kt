@@ -1570,7 +1570,7 @@ private fun LosslessOrStats(
         (stillRacing && nerdStats?.isLossless != true) ||
             (isLoading && losslessRequested && nerdStats == null) -> LosslessLabel(
             text = stringResource(Res.string.upgrading_quality),
-            iconPainter = painterResource(Res.drawable.ic_lossless),
+            iconPainter = if (appleStyle) rememberVectorPainter(AppleQualityVectors.Lossless) else painterResource(Res.drawable.ic_lossless),
             // Breathes for as long as the search runs: a wait, not a result,
             // and the one badge state that is still going to change.
             pulsing = true,
@@ -1582,11 +1582,11 @@ private fun LosslessOrStats(
             // Same line Tidal, Qobuz and Apple Music draw it at — see
             // [NerdStats.Snapshot.isHiRes].
             text = stringResource(if (nerdStats.isHiRes) Res.string.hi_res_lossless else Res.string.lossless),
-            iconPainter = painterResource(Res.drawable.ic_lossless),
+            iconPainter = if (appleStyle) rememberVectorPainter(AppleQualityVectors.Lossless) else painterResource(Res.drawable.ic_lossless),
             // Shimmer is reserved for the thing that was asked for and
             // confirmed. It is what makes the badge read as an achievement
             // rather than a label, which only one of these two is.
-            animated = true,
+            animated = !appleStyle,
             modifier = modifier,
             appleStyle = appleStyle,
         )
@@ -1650,8 +1650,8 @@ private fun LosslessLabel(
         // call in place rather than through an offscreen buffer: the glyph and
         // the word never overlap, so there is nothing a buffer would fix.
         modifier = modifier
-            .then(if (appleStyle) Modifier.background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(7.dp))
-                .padding(horizontal = 8.dp, vertical = 3.dp) else Modifier)
+            .then(if (appleStyle) Modifier.background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(5.dp))
+                .padding(horizontal = 7.dp, vertical = 3.5.dp) else Modifier)
             .graphicsLayer {
                 alpha = pulse?.value ?: 1f
                 compositingStrategy = CompositingStrategy.ModulateAlpha
@@ -1666,9 +1666,10 @@ private fun LosslessLabel(
             painter = iconPainter,
             contentDescription = null,
             tint = tint,
-            modifier = if (iconSize.isSpecified) Modifier.size(iconSize) else Modifier,
+            modifier = if (appleStyle && iconPainter == iconPainter) Modifier.size(width = 14.dp, height = 9.dp)
+                else if (iconSize.isSpecified) Modifier.size(iconSize) else Modifier,
         )
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(if (appleStyle) 5.dp else 4.dp))
         if (animated) {
             ShimmerText(text = text)
         } else {
@@ -1676,9 +1677,9 @@ private fun LosslessLabel(
                 text = text,
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Medium,
-                    fontSize = (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
+                    fontSize = if (appleStyle) 11.sp else (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
                 ),
-                color = LocalPlayerTint.current.copy(alpha = 0.45f),
+                color = LocalPlayerTint.current.copy(alpha = if (appleStyle) 0.9f else 0.45f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
