@@ -52,4 +52,28 @@ class AppleQueuePresentationTest {
         )
         assertEquals(null, appleQueueContextOrigin(autoOnly))
     }
+
+    @Test fun contextualAlbumCanUseCurrentPlaybackOriginWhenFutureRowsOmitIt() {
+        val current = song("current").copy(albumName = "New Jeans", playbackSource = "New Jeans 1st EP")
+        val next = song("next")
+        assertEquals(
+            "New Jeans 1st EP",
+            appleQueueContextOrigin(queueTracksForPresentation(listOf(current, next), 0, appleStyle = true)),
+        )
+        val differentArtist = next.copy(artist = "Another artist")
+        assertEquals(
+            null,
+            appleQueueContextOrigin(queueTracksForPresentation(listOf(current, differentArtist), 0, appleStyle = true)),
+        )
+    }
+
+    @Test fun emptyQueueIsIndependentOfCurrentTrackAndHistory() {
+        val lone = queueTracksForPresentation(listOf(song("current")), 0, appleStyle = true)
+        assertTrue(appleQueueShouldShowEmpty(lone))
+        assertFalse(appleQueueHasUpcoming(lone))
+        val history = queueTracksForPresentation(listOf(song("past"), song("current")), 1, appleStyle = true)
+        assertFalse(appleQueueShouldShowEmpty(history))
+        val pending = queueTracksForPresentation(listOf(song("current"), song("next")), 0, appleStyle = true)
+        assertFalse(appleQueueShouldShowEmpty(pending))
+    }
 }
