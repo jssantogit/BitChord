@@ -129,6 +129,47 @@ class DiscogsAuthenticatedDiscoveryTest {
         assertEquals(listOf("releases/321"), hydrated)
     }
 
+    @Test fun sourceOnlyArtistDiscoveryChecksNextPageWhenFirstContainsOnlyKnownMusicBrainzTitles() = runBlocking {
+        val pages = mutableListOf<Int>()
+        val client = DiscogsDatabaseSearchClient(
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse {
+                    pages += query.page
+                    return if (query.page == 1)
+                        DiscogsHttpResponse(200, """{
+                            "pagination":{"page":1,"pages":2},
+                            "results":[{"id":501,"type":"release"}]}""")
+                    else DiscogsHttpResponse(200, """{
+                        "pagination":{"page":2,"pages":2},
+                        "results":[{"id":502,"type":"release"}]}""")
+                }
+            }, tokenProvider = { token }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val detail = DiscogsClient(
+            transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                    val id = path.substringAfter("/").toLong()
+                    return DiscogsHttpResponse(200, """{
+                        "id":$id,"title":"${if (id == 501L) "KNOWN EP" else "MISSING EP"}",
+                        "artists":[{"name":"ILLIT"}],
+                        "year":2026,
+                        "labels":[{"name":"BELIFT LAB","catno":"AB-02"}],
+                        "formats":[{"name":"CD","descriptions":["EP"]}],
+                        "tracklist":[{"position":"1","title":"Track A"}]}""")
+                }
+            }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val found = DiscogsAuthenticatedDiscovery(client, detail).findForArtist(
+            artistName = "ILLIT", mbCatalogChecked = true,
+            knownMusicBrainzTitles = setOf("KNOWN EP"),
+        )
+        assertEquals(listOf(1, 2), pages)
+        assertEquals(listOf("MISSING EP"), found.map { it.title })
+    }
+
     @Test fun tooManyDistinctCandidateIdsCannotBeCalledAUniqueEdition() = runBlocking {
         val search = DiscogsDatabaseSearchClient(
             transport = object : DiscogsSearchTransport {
