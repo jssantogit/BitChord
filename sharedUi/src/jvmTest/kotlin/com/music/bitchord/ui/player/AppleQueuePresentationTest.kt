@@ -36,4 +36,20 @@ class AppleQueuePresentationTest {
         assertEquals(4, all.map { it.key }.distinct().size)
         assertEquals(listOf(0, 1, 2, 3), all.map { it.timelineIndex })
     }
+    @Test fun continuationOriginUsesQueuedContextAndNotCurrentOrManualEntries() {
+        val current = song("current").copy(albumName = "Wrong current album")
+        val context = song("next").copy(albumName = "New Jeans EP")
+        val fromAlbum = queueTracksForPresentation(listOf(current, context), 0, appleStyle = true)
+        assertEquals("New Jeans EP", appleQueueContextOrigin(fromAlbum))
+
+        val manual = queueTracksForPresentation(
+            listOf(current, song("manual", QueueTier.USER_QUEUE), context), 0, appleStyle = true,
+        )
+        assertEquals(null, appleQueueContextOrigin(manual))
+
+        val autoOnly = queueTracksForPresentation(
+            listOf(current, song("auto", QueueTier.AUTOPLAY)), 0, appleStyle = true,
+        )
+        assertEquals(null, appleQueueContextOrigin(autoOnly))
+    }
 }
