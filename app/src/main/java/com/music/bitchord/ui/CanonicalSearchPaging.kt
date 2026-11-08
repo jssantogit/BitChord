@@ -76,3 +76,15 @@ internal fun mergeCanonicalSearchRows(
     (live + cached.filter { it.kind in failedKinds })
         .distinctBy { it.kind to it.musicBrainzId }
 
+
+/**
+ * Fast first paint: the first rate-limited MusicBrainz response should not
+ * hide already indexed results while the remaining three endpoints load.
+ * A fresh typed identity replaces only its own cached counterpart.
+ * The complete search still publishes its authoritative final ordering.
+ */
+internal fun canonicalProgressiveSearchPreview(
+    existing: List<CanonicalCatalogSearchRow>,
+    fresh: List<CanonicalCatalogSearchRow>,
+): List<CanonicalCatalogSearchRow> =
+    (fresh + existing).distinctBy { it.kind to it.musicBrainzId }
