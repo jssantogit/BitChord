@@ -1950,6 +1950,7 @@ fun NowPlayingScreen(
                                     onScrubFinished = onScrubFinished,
                                 ) {
                                     PlaybackQualityLabel(
+                            appleStyle = appleQueueStyle,
                                         song = song,
                                         isLoading = isLoading,
                                         modifier = Modifier
@@ -3624,6 +3625,7 @@ fun NowPlayingScreen(
                         onScrubFinished = onScrubFinished,
                     ) {
                         PlaybackQualityLabel(
+                            appleStyle = appleQueueStyle,
                             song = song,
                             isLoading = isLoading,
                             modifier = Modifier
