@@ -120,37 +120,29 @@ internal fun discogsEditorialArtistShelves(
     val affectedBrowseIds = changes.keys.mapTo(HashSet()) {
         "catalog:RELEASE_GROUP:$it"
     }
-    val retained = original.filter { it.title == albumsHeading || it.title == singlesHeading }
+    // Retain the already loaded native cards in their ORIGINAL shelf when
+    // this artist browse page does not contain the corresponding MB group.
+    // An incremental browse must not silently delete cards on a proof update.
+    fun retained(title: String) = original.filter { it.title == title }
         .flatMap { it.items }.filter { it.browseId !in affectedBrowseIds }
+
     val moved = changes.map { (id, item) ->
         val row = item.first
         val browseId = "catalog:RELEASE_GROUP:$id"
         val previous = cards[browseId]
         val subtitle = item.second + " · Discogs"
-        (previous ?: ShelfItem(row.title, subtitle, row.artworkUri, null, browseId))
+        val card = (previous ?: ShelfItem(row.title, subtitle, row.artworkUri, null, browseId))
             .copy(subtitle = subtitle)
-    }
-    val byId = evidenceByGroup.values.associateBy {
-        "catalog:RELEASE_GROUP:${it.musicBrainzId}"
-    }
-    val sorted = (retained + moved).distinctBy { it.browseId }
-        .sortedWith(compareByDescending<ShelfItem> {
-            byId[it.browseId]?.releaseDate.orEmpty()
-        }.thenBy { it.browseId.orEmpty() })
-    val albums = sorted.filter { card ->
-        val id = card.browseId?.removePrefix("catalog:RELEASE_GROUP:")
-        val format = changes[id]?.second ?: canonicalEditorialReleaseType(
-            evidenceByGroup[id] ?: return@filter false
-        )
-        format == "Album"
-    }
-    val singles = sorted.filter { card ->
-        val id = card.browseId?.removePrefix("catalog:RELEASE_GROUP:")
-        val format = changes[id]?.second ?: canonicalEditorialReleaseType(
-            evidenceByGroup[id] ?: return@filter false
-        )
-        format == "Single" || format == "EP"
-    }
+        Triple(item.second, row.releaseDate.orEmpty(), card)
+    }.sortedWith(compareByDescending<Triple<String, String, ShelfItem>> { it.second }
+        .thenBy { it.third.browseId.orEmpty() })
+
+    val albums = (retained(albumsHeading) +
+        moved.filter { it.first == "Album" }.map { it.third })
+        .distinctBy { it.browseId }
+    val singles = (retained(singlesHeading) +
+        moved.filter { it.first == "EP" || it.first == "Single" }.map { it.third })
+        .distinctBy { it.browseId }
     val extras = original.filterNot { it.title in setOf(albumsHeading, singlesHeading) }
     return buildList {
         if (albums.isNotEmpty()) add(
