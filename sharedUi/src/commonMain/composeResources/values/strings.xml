@@ -309,5 +309,6 @@
     <string name="search_server_no_results">No server or addon matches “%1$s”.</string>
     <string name="apple_queue_history">History</string>
     <string name="apple_queue_continue">Continue Playing</string>
+    <string name="apple_queue_empty">No songs in the queue</string>
     <string name="apple_queue_similar">Autoplay of similar songs</string>
 </resources>
