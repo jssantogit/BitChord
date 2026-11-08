@@ -48,6 +48,37 @@ class DiscogsEditorialArtistShelvesTest {
             it.subtitle.startsWith("Single") })
     }
 
+    @Test fun homeAndExploreRowsOnlyChangeDerivedKindAfterIndependentConsensus() {
+        val rows = listOf(album, ep, unknown)
+        val evidence = mapOf(
+            album.musicBrainzId to listOf(
+                DiscogsGroupTypeProof(41, DiscogsEditorialKind.EP, true),
+                DiscogsGroupTypeProof(42, DiscogsEditorialKind.EP, true),
+            ),
+            unknown.musicBrainzId to listOf(
+                DiscogsGroupTypeProof(43, DiscogsEditorialKind.ALBUM, true),
+            ),
+        )
+        val projected = com.music.bitchord.ui.discogsEditorialProjectedRows(rows, evidence)
+        assertEquals(listOf("EP", "EP", "Album"), projected.map { it.releaseKind })
+        assertEquals(rows.map { it.musicBrainzId }, projected.map { it.musicBrainzId })
+        assertEquals(rows.map { it.title }, projected.map { it.title })
+        assertEquals("Album", album.releaseKind)
+        assertEquals("Other", unknown.releaseKind)
+        assertEquals(rows, com.music.bitchord.ui.discogsEditorialProjectedRows(rows, emptyMap()))
+    }
+
+    @Test fun unknownGroupOrSingleConflictingProofCannotChangeReleaseClassification() {
+        val evidence = mapOf(album.musicBrainzId to listOf(
+            DiscogsGroupTypeProof(4, DiscogsEditorialKind.SINGLE, true),
+        ), "unrelated-group" to listOf(
+            DiscogsGroupTypeProof(5, DiscogsEditorialKind.EP, true),
+            DiscogsGroupTypeProof(6, DiscogsEditorialKind.EP, true),
+        ))
+        assertEquals(listOf(album, ep),
+            com.music.bitchord.ui.discogsEditorialProjectedRows(listOf(album, ep), evidence))
+    }
+
     @Test fun oneContraryEditionNeverChangesExistingAlbumShelf() {
         val original = listOf(HomeShelf("Álbuns", listOf(
             ShelfItem(album.title, "Album", null, null,
