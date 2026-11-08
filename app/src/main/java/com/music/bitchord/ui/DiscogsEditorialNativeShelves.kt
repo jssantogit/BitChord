@@ -11,6 +11,40 @@ import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 
 /**
+ * Metadata-only release cards shared by native Home and Explore. The Discogs
+ * Release URL is resolved from an exact temporary source record on click;
+ * the browseId namespace cannot be confused with MusicBrainz or audio.
+ */
+internal fun discogsSourceOnlyCatalogShelves(
+    releases: List<com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowRelease>,
+): List<HomeShelf> {
+    if (releases.isEmpty()) return emptyList()
+    val sections = listOf(
+        com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditorialShelf.ALBUMS to
+            "Álbuns · Discogs",
+        com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditorialShelf.EPS to
+            "EPs · Discogs",
+        com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditorialShelf.SINGLES to
+            "Singles · Discogs",
+    )
+    return sections.mapNotNull { (kind, title) ->
+        val rows = releases.filter { it.shelf == kind }.take(8)
+        if (rows.isEmpty()) null else HomeShelf(
+            title = title,
+            items = rows.map { release ->
+                ShelfItem(
+                    title = release.title,
+                    subtitle = "${release.kind.displayName} · ${release.artist} · só metadados",
+                    thumbnailUrl = null,
+                    videoId = null,
+                    browseId = "discogs:release:${release.discogsReleaseId}",
+                )
+            },
+        )
+    }
+}
+
+/**
  * Read-only overlay for native Home and Explore release rows. The original
  * MusicBrainz primary type remains untouched in Room and source caches.
  * Callers may recompose when the short-lived group-proof snapshot changes.
