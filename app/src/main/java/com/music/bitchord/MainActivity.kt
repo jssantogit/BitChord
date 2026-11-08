@@ -1162,6 +1162,7 @@ private fun BitChordApp(
         canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
         worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
         canonicalHomePublicPlaylists, canonicalHomeGlobalDiscoveryHeading, canonicalFeedDate,
+        discogsEditorialFeeds.sourceOnlyShelves,
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
@@ -1178,7 +1179,7 @@ private fun BitChordApp(
             personal = canonicalPersonalShelf,
             publicPlaylists = canonicalHomePublicPlaylists,
             globalDiscoveryHeading = canonicalHomeGlobalDiscoveryHeading,
-        )
+        ) + discogsEditorialFeeds.sourceOnlyShelves
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
@@ -2078,6 +2079,22 @@ private fun BitChordApp(
     var communityMetadataRecording by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
     val onCanonicalShelfClick: (ShelfItem, String, PlaybackSourceType) -> Unit =
         click@{ item, shelfTitle, tabOrigin ->
+        if (item.browseId?.startsWith("discogs:release:") == true) {
+            // Source-only cards have no MusicBrainz or MediaAsset identity.
+            // Resolve a fresh, canonical attribution URL from the verified
+            // temporary store; stale/forged IDs cannot open arbitrary hosts.
+            com.music.bitchord.data.catalog.metadata.discogs
+                .DiscogsSourceOnlyDiscovery.store
+                .openUrl(item.browseId, System.currentTimeMillis())
+                ?.let { url ->
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)),
+                        )
+                    }
+                }
+            return@click
+        }
         com.music.bitchord.data.catalog.metadata.publicPlaylistMbid(item.browseId)?.let { id ->
             val candidate = canonicalPublicPlaylists.values.asSequence()
                 .flatMap { it.asSequence() }.firstOrNull { it.mbid == id }
@@ -3702,6 +3719,13 @@ private fun BitChordApp(
                                 onCanonicalGenreClick = { item ->
                                     onCanonicalShelfClick(
                                         item, canonicalGenresHeading,
+                                        canonicalEditorialPlaybackSource(explore = true),
+                                    )
+                                },
+                                supplementaryCatalogShelves = discogsEditorialFeeds.sourceOnlyShelves,
+                                onSupplementaryCatalogClick = { item, heading ->
+                                    onCanonicalShelfClick(
+                                        item, heading,
                                         canonicalEditorialPlaybackSource(explore = true),
                                     )
                                 },
