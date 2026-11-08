@@ -77,6 +77,26 @@ private val AppleWhite = Color(0xFFF9F9FB)
 private val AppleSecondary = Color(0xFFB6B6BB)
 private val ApplePillShape = RoundedCornerShape(percent = 50)
 
+/**
+ * AM-DECOMP contract: 62dp host, 30dp icons and 48dp default mini-player are
+ * static XML tokens. The screenshots suggest larger labels, artwork and
+ * transport glyphs than the first smoke; those values are visual calibration,
+ * not claimed to be measurements or a proven w675dp configuration.
+ */
+internal object AppleMusicChromeMetrics {
+    val navigationHeight = 62.dp
+    val navigationIconSize = 30.dp
+    val navigationLabelSize = 13.sp
+
+    val miniPlayerHeight = 48.dp
+    val artworkSize = 34.dp
+    val controlTouchSize = 40.dp
+    val playGlyphSize = 32.dp
+    val nextGlyphSize = 32.dp
+    val titleSize = 15.sp
+    val artistSize = 15.sp
+}
+
 /** Maps the existing four real destinations to five *visible* tab positions. */
 internal fun appleMusicVisualIndexForDestination(destination: Int): Int = when (destination) {
     0 -> 0 // Home
@@ -137,7 +157,7 @@ fun AppleMusicBottomBar(
             .padding(horizontal = 10.dp)
             .padding(bottom = 2.dp)
             .fillMaxWidth()
-            .height(62.dp)
+            .height(AppleMusicChromeMetrics.navigationHeight)
             .appleMusicChrome(hazeState)
             .padding(horizontal = 5.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -181,12 +201,12 @@ fun AppleMusicBottomBar(
                     imageVector = tab.icon,
                     contentDescription = null,
                     tint = tint,
-                    modifier = Modifier.size(25.dp),
+                    modifier = Modifier.size(AppleMusicChromeMetrics.navigationIconSize),
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = tab.label,
-                    fontSize = 11.sp,
+                    fontSize = AppleMusicChromeMetrics.navigationLabelSize,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                     color = tint,
                     maxLines = 1,
@@ -237,12 +257,12 @@ fun AppleMusicMiniPlayer(
                 onBlocked = onBlockedControl,
             )
             .fillMaxWidth()
-            .height(48.dp)
+            .height(AppleMusicChromeMetrics.miniPlayerHeight)
             .appleMusicChrome(hazeState)
             .clickable(onClick = onExpand),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().height(AppleMusicChromeMetrics.miniPlayerHeight).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val artCorner = RoundedCornerShape(6.dp)
@@ -250,28 +270,29 @@ fun AppleMusicMiniPlayer(
                 model = rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier
-                    .size(30.dp)
+                    .size(AppleMusicChromeMetrics.artworkSize)
                     .playerDockArt(dock, 6.dp)
                     .clip(artCorner)
                     .thumbnailBorder(artCorner)
                     .background(AppleNightSurface),
             )
-            Spacer(Modifier.width(9.dp))
+            Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                 ExplicitSongTitle(
                     song = song,
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 14.sp,
-                        lineHeight = 17.sp,
-                        fontWeight = FontWeight.Medium,
+                        fontSize = AppleMusicChromeMetrics.titleSize,
+                        lineHeight = 18.sp,
+                        fontWeight = FontWeight.SemiBold,
                     ),
                     color = AppleWhite,
                 )
                 Text(
                     text = song.artist,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 15.sp,
+                        fontSize = AppleMusicChromeMetrics.artistSize,
+                        lineHeight = 18.sp,
+                        fontWeight = FontWeight.Normal,
                     ),
                     color = AppleSecondary,
                     maxLines = 1,
@@ -279,7 +300,7 @@ fun AppleMusicMiniPlayer(
                 )
             }
             if (isLoading) {
-                Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(AppleMusicChromeMetrics.controlTouchSize), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
                         color = AppleWhite,
                         strokeWidth = 2.dp,
@@ -292,27 +313,28 @@ fun AppleMusicMiniPlayer(
                         haptics.play(if (isPlaying) Haptic.Pause else Haptic.Resume)
                         onPlayPause()
                     },
-                    modifier = Modifier.size(34.dp),
+                    modifier = Modifier.size(AppleMusicChromeMetrics.controlTouchSize),
                 ) {
                     Icon(
                         imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
                         tint = AppleWhite,
-                        modifier = Modifier.size(26.dp),
+                        modifier = Modifier.size(AppleMusicChromeMetrics.playGlyphSize),
                     )
                 }
             }
-            Spacer(Modifier.width(5.dp))
+            Spacer(Modifier.width(6.dp))
             IconButton(
                 onClick = {
                     haptics.play(Haptic.SkipNext)
                     onNext()
                 },
                 enabled = !controlsLocked,
-                modifier = Modifier.size(34.dp),
+                modifier = Modifier.size(AppleMusicChromeMetrics.controlTouchSize),
             ) {
                 MiniPlayerNextGlyph(
                     tint = AppleWhite.copy(alpha = if (controlsLocked) 0.34f else 1f),
+                    glyphSize = AppleMusicChromeMetrics.nextGlyphSize,
                 )
             }
         }
