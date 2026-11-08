@@ -1,5 +1,6 @@
 package com.music.bitchord.data.catalog.metadata.discogs
 
+import java.text.Normalizer
 import java.util.Locale
 
 /**
@@ -143,6 +144,20 @@ internal data class DiscogsShadowRelease(
 }
 
 internal object DiscogsShadowCatalog {
+    // Normalization is comparison-only. An exact credited artist prefix is
+    // common in Discogs titles; never strip arbitrary dash-separated text.
+    private val whitespace = Regex("\\s+")
+
+    private fun normalizedTitle(raw: String): String =
+        Normalizer.normalize(raw, Normalizer.Form.NFKC).trim()
+            .lowercase(Locale.ROOT).replace(whitespace, " ")
+
+    private fun comparisonTitle(raw: String, artist: String): String {
+        val title = normalizedTitle(raw)
+        val prefix = "${normalizedTitle(artist)} - "
+        return if (title.startsWith(prefix)) title.removePrefix(prefix) else title
+    }
+
     fun select(
         observations: List<DiscogsPublicEditionSnapshot>,
         expectedArtist: String,
@@ -152,9 +167,9 @@ internal object DiscogsShadowCatalog {
         knownMusicBrainzTitles: Set<String> = emptySet(),
     ): List<DiscogsShadowRelease> {
         if (!mbCatalogChecked || expectedArtist.isBlank() || nowMillis < 0L) return emptyList()
-        val artist = expectedArtist.trim().lowercase(Locale.ROOT)
+        val artist = normalizedTitle(expectedArtist)
         val knownTitles = knownMusicBrainzTitles.mapTo(HashSet()) {
-            it.trim().lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+            normalizedTitle(it)
         }
         val eligible = observations.take(80).mapNotNull { item ->
             val release = item.record
@@ -163,10 +178,9 @@ internal object DiscogsShadowCatalog {
                 release.link.kind != DiscogsKind.RELEASE ||
                 release.link.id in linkedReleaseIds ||
                 release.unofficial || release.title.isBlank() ||
-                release.title.trim().lowercase(Locale.ROOT)
-                    .replace(Regex("\\s+"), " ") in knownTitles ||
                 release.artistNames.size != 1 ||
-                release.artistNames.single().trim().lowercase(Locale.ROOT) != artist ||
+                normalizedTitle(release.artistNames.single()) != artist ||
+                comparisonTitle(release.title, expectedArtist) in knownTitles ||
                 release.tracklist.isEmpty() ||
                 release.year == null ||
                 release.labels.isEmpty()
@@ -198,7 +212,7 @@ internal object DiscogsShadowCatalog {
         // classified item. Prefer omitting it to arbitrarily selecting a version.
         return eligible.groupBy { it.key }.values.mapNotNull { variants ->
             if (variants.map { it.shelf }.distinct().size > 1 ||
-                variants.map { it.title.lowercase(Locale.ROOT) }.distinct().size > 1
+                variants.map { comparisonTitle(it.title, expectedArtist) }.distinct().size > 1
             ) null
             else variants.minWithOrNull(compareBy<DiscogsShadowRelease> { it.year }
                 .thenBy { it.discogsReleaseId })
