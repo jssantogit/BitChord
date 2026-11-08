@@ -153,6 +153,57 @@ class DiscogsEditionRepositoryTest {
         ).observe(canonical) is DiscogsEditionEnrichment.Verified)
     }
 
+    @Test fun authenticatedSearchRecoversReleaseWithNoDirectOrMasterLink() = runBlocking {
+        val token = "A".repeat(40)
+        var searches = 0
+        val search = DiscogsDatabaseSearchClient(
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse {
+                    searches++
+                    assertEquals("Artist", query.artist)
+                    assertEquals("Album", query.title)
+                    return DiscogsHttpResponse(200,
+                        """{"results":[{"type":"release","id":12345}]}""")
+                }
+            },
+            tokenProvider = { token }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$mbid","relations":[]}"""
+        })
+        val discogs = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/12345", path)
+                return DiscogsHttpResponse(200,
+                    """{"id":12345,"title":"Album","artists":[{"name":"Artist"}],
+                        "country":"South Korea","year":2024,
+                        "labels":[{"name":"Label","catno":"A-1"}],
+                        "identifiers":[{"type":"Barcode","value":"8809704427821"}],
+                        "formats":[{"name":"Digital Media","descriptions":["EP"]}],
+                        "tracklist":[{"position":"1","title":"Track"}]}""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = mbid, title = "Album", creditedArtist = "Artist",
+            creditedArtistNames = listOf("Artist"), status = "Official",
+            barcodes = listOf("8809704427821"), trackTitles = listOf("Track"),
+            country = "KR", releaseYear = 2024,
+        )
+        val repository = DiscogsEditionRepository(
+            links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
+            authenticatedDiscovery = DiscogsAuthenticatedDiscovery(search, discogs),
+            enabled = true, nowMillis = { System.currentTimeMillis() },
+        )
+        val result = repository.observe(canonical)
+        assertTrue(result is DiscogsEditionEnrichment.Verified)
+        assertEquals(1, searches)
+    }
+
     @Test fun mismatchedEditionDoesNotShowDiscogsAsVerified() = runBlocking {
         val links = DiscogsMusicBrainzLinks(MusicBrainzClient(transport = object : MusicBrainzTransport {
             override suspend fun get(path: String, parameters: Map<String, String>,
