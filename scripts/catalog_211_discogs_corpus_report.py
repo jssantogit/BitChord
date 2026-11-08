@@ -17,6 +17,7 @@ def report(document: dict) -> dict:
         raise ValueError("Expected schema_version=1 and cases array")
     cases = document["cases"]
     seen = set()
+    source_identities = set()
     counts = Counter()
     reviewed = Counter()
     errors = []
@@ -68,7 +69,19 @@ def report(document: dict) -> dict:
                 errors.append(f"case {cid}: {field} must be an explicit boolean")
                 break
         else:
-            reviewed[cohort] += 1
+            # A type correction must be independently evaluated per ReleaseGroup,
+            # while unlinked matching is edition-scoped. Duplicate cases must
+            # never inflate coverage merely by changing the case label.
+            identity = (
+                (cohort, mbid.lower()) if cohort == "type" else
+                (cohort, mbid.lower(), release_id) if cohort == "unlinked" else
+                (cohort, release_id)
+            )
+            if identity in source_identities:
+                errors.append(f"case {cid}: duplicate source identity")
+            else:
+                source_identities.add(identity)
+                reviewed[cohort] += 1
     if len(cases) != 30:
         errors.append(f"expected 30 slots, found {len(cases)}")
     for cohort in COHORTS:
