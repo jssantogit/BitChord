@@ -204,23 +204,36 @@ internal class DiscogsAuthenticatedDiscovery(
         val artist = canonical.creditedArtist?.takeIf(String::isNotBlank)
             ?: return DiscogsAuthenticatedMatch.NoMatch
         val barcode = canonical.barcodes.firstOrNull()
-        val query = if (barcode != null)
-            DiscogsSearchRequest(artist = artist, barcode = barcode)
-        else DiscogsSearchRequest(artist = artist, title = canonical.title)
-        return when (val result = search.search(query)) {
-            is DiscogsSearchResult.Found -> {
-                val releases = hydrate(result.ids)
-                when (val match = DiscogsUnlinkedMatch.select(canonical, releases)) {
-                    is DiscogsUnlinkedMatch.Verified -> DiscogsAuthenticatedMatch.Verified(match.record)
-                    is DiscogsUnlinkedMatch.Ambiguous -> DiscogsAuthenticatedMatch.Ambiguous(match.records.size)
-                    is DiscogsUnlinkedMatch.Candidates -> DiscogsAuthenticatedMatch.Candidates(match.records.size)
-                    DiscogsUnlinkedMatch.NoMatch -> DiscogsAuthenticatedMatch.NoMatch
-                }
-            }
-            DiscogsSearchResult.Empty -> DiscogsAuthenticatedMatch.NoMatch
-            DiscogsSearchResult.AuthRequired -> DiscogsAuthenticatedMatch.AuthRequired
-            else -> DiscogsAuthenticatedMatch.Unavailable
+        // The precise barcode index has priority, but incomplete Discogs
+        // indexing must not silently hide an otherwise matching edition.
+        // Never bypass exact artist/title/tracklist/barcode verification.
+        val queries = buildList {
+            if (barcode != null) add(DiscogsSearchRequest(artist = artist, barcode = barcode))
+            add(DiscogsSearchRequest(artist = artist, title = canonical.title))
         }
+        var tentative: DiscogsAuthenticatedMatch.Candidates? = null
+        for (query in queries) {
+            when (val result = search.search(query)) {
+                is DiscogsSearchResult.Found -> {
+                    val releases = hydrate(result.ids)
+                    when (val match = DiscogsUnlinkedMatch.select(canonical, releases)) {
+                        is DiscogsUnlinkedMatch.Verified ->
+                            return DiscogsAuthenticatedMatch.Verified(match.record)
+                        is DiscogsUnlinkedMatch.Ambiguous ->
+                            return DiscogsAuthenticatedMatch.Ambiguous(match.records.size)
+                        is DiscogsUnlinkedMatch.Candidates ->
+                            tentative = DiscogsAuthenticatedMatch.Candidates(match.records.size)
+                        DiscogsUnlinkedMatch.NoMatch -> Unit
+                    }
+                }
+                DiscogsSearchResult.Empty -> Unit
+                DiscogsSearchResult.AuthRequired -> return DiscogsAuthenticatedMatch.AuthRequired
+                // If the second search fails, never convert the first pass's
+                // tentative candidates to verified evidence.
+                else -> return tentative ?: DiscogsAuthenticatedMatch.Unavailable
+            }
+        }
+        return tentative ?: DiscogsAuthenticatedMatch.NoMatch
     }
 
     /**
