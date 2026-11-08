@@ -317,6 +317,7 @@ internal fun PlaybackQualityLabel(
     song: Song,
     isLoading: Boolean,
     modifier: Modifier = Modifier,
+    appleStyle: Boolean = false,
 ) {
     val wifiQuality by PlayerSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by PlayerSettings.audioQualityCellular.collectAsStateWithLifecycle()
@@ -339,6 +340,7 @@ internal fun PlaybackQualityLabel(
         losslessRequested = effectiveQuality == AudioQuality.LOSSLESS,
         nerdStats = nerdStats,
         modifier = modifier,
+        appleStyle = appleStyle,
     )
 }
 
@@ -1541,6 +1543,7 @@ private fun LosslessOrStats(
     losslessRequested: Boolean,
     nerdStats: NerdStats.Snapshot?,
     modifier: Modifier = Modifier,
+    appleStyle: Boolean = false,
 ) {
     when {
         // Still resolving — either the player itself is buffering, or a
@@ -1573,6 +1576,7 @@ private fun LosslessOrStats(
             pulsing = true,
             animated = false,
             modifier = modifier,
+            appleStyle = appleStyle,
         )
         nerdStats?.isLossless == true -> LosslessLabel(
             // Same line Tidal, Qobuz and Apple Music draw it at — see
@@ -1584,12 +1588,14 @@ private fun LosslessOrStats(
             // rather than a label, which only one of these two is.
             animated = true,
             modifier = modifier,
+            appleStyle = appleStyle,
         )
         nerdStats?.isDolbyAtmos == true -> LosslessLabel(
             text = "Dolby Atmos",
             animated = true,
             iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
             modifier = modifier,
+            appleStyle = appleStyle,
         )
         // Lossy, but the good end of lossy — a module's 320kbps tier, which
         // for a great many tracks is the best copy that exists anywhere the
@@ -1601,6 +1607,7 @@ private fun LosslessOrStats(
             // A Material glyph's own size is 24dp; the badge's are drawn small.
             iconSize = 13.dp,
             modifier = modifier,
+            appleStyle = appleStyle,
         )
         // Below that, no badge: "Medium Quality" and "Data Saver" are gone.
         // The space under the bar is kept for what is worth announcing.
@@ -1619,6 +1626,7 @@ private fun LosslessLabel(
     pulsing: Boolean = false,
     /** Unspecified draws [iconPainter] at its own size. */
     iconSize: Dp = Dp.Unspecified,
+    appleStyle: Boolean = false,
 ) {
     // Only while asked for, and not at all under "Reduce animation": the
     // label then just holds still, which says "waiting" well enough.
@@ -1641,14 +1649,17 @@ private fun LosslessLabel(
         // label — no recomposition, no relayout. ModulateAlpha fades each draw
         // call in place rather than through an offscreen buffer: the glyph and
         // the word never overlap, so there is nothing a buffer would fix.
-        modifier = modifier.graphicsLayer {
-            alpha = pulse?.value ?: 1f
-            compositingStrategy = CompositingStrategy.ModulateAlpha
-        },
+        modifier = modifier
+            .then(if (appleStyle) Modifier.background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(7.dp))
+                .padding(horizontal = 8.dp, vertical = 3.dp) else Modifier)
+            .graphicsLayer {
+                alpha = pulse?.value ?: 1f
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val tint = LocalPlayerTint.current.copy(alpha = if (animated) 0.7f else 0.45f)
+        val tint = LocalPlayerTint.current.copy(alpha = if (appleStyle) 0.85f else if (animated) 0.7f else 0.45f)
         // At the drawable's own size — the wave is wide, the double-D
         // nearly square, and one box squashed one of them.
         Icon(
