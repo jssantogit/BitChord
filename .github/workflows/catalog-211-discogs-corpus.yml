@@ -1,0 +1,42 @@
+name: Catalog #211 — Discogs editorial corpus checks
+
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - scripts/catalog_211_discogs_corpus_report.py
+      - scripts/test_catalog_211_discogs_corpus_report.py
+      - docs/plans/catalog-211-discogs-corpus-manifest.json
+      - .github/workflows/catalog-211-discogs-corpus.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run pure offline corpus regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_report.py' -v
+      - name: Assert unreviewed manifest does not make coverage claims
+        run: |
+          python3 - <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, "scripts")
+          from catalog_211_discogs_corpus_report import report
+          manifest = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
+          result = report(manifest)
+          assert not result["complete"], "Unreviewed cases must never count as measured coverage"
+          assert result["metrics"] is None, "No metric may be invented before adjudication"
+          assert len(manifest["cases"]) == 30
+          print("30 evaluation slots: pending independent editorial review; no fabricated metrics.")
+          PY
