@@ -68,6 +68,24 @@ internal suspend fun verifiedPlayerAlbumTitle(context: Context, song: Song): Str
     }
 
 /**
+ * Metadata displayed in Now Playing can be more complete than the service's
+ * lightweight queue snapshot. Only enrich the exact matching queue entry;
+ * keep its immutable queue identity and queue tier intact.
+ */
+internal fun effectiveQueueAlbumSeed(queued: Song, displayed: Song): Song {
+    if (queued.videoId != displayed.videoId ||
+        !queued.title.equals(displayed.title, ignoreCase = true) ||
+        !queued.artist.equals(displayed.artist, ignoreCase = true)
+    ) return queued
+    return queued.copy(
+        albumName = queued.albumName ?: displayed.albumName,
+        albumId = queued.albumId ?: displayed.albumId,
+        playbackSource = queued.playbackSource ?: displayed.playbackSource,
+        playbackSourceId = queued.playbackSourceId ?: displayed.playbackSourceId,
+    )
+}
+
+/**
  * A queue context may contain stripped-down track rows even when the playing
  * track's exact album has already been resolved for the ⋯ action sheet.
  * Use that same evidence only when every next track is from the original
