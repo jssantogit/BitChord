@@ -1593,7 +1593,7 @@ private fun LosslessOrStats(
         (measuredBadge == AppleQualityBadgeKind.LOSSLESS || measuredBadge == AppleQualityBadgeKind.HI_RES) -> LosslessLabel(
             // Same line Tidal, Qobuz and Apple Music draw it at — see
             // [NerdStats.Snapshot.isHiRes].
-            text = stringResource(if (nerdStats.isHiRes) Res.string.hi_res_lossless else Res.string.lossless),
+            text = stringResource(if (measuredBadge == AppleQualityBadgeKind.HI_RES) Res.string.hi_res_lossless else Res.string.lossless),
             iconPainter = if (appleStyle) rememberVectorPainter(AppleQualityVectors.Lossless) else painterResource(Res.drawable.ic_lossless),
             // Shimmer is reserved for the thing that was asked for and
             // confirmed. It is what makes the badge read as an achievement
