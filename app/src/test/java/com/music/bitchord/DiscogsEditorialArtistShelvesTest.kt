@@ -101,6 +101,35 @@ class DiscogsEditorialArtistShelvesTest {
         assertEquals("catalog:RELEASE_GROUP:${album.musicBrainzId}", typed.single().browseId)
     }
 
+    @Test fun partialMusicBrainzPageMustNotDropExistingArtistCardsOnCorrection() {
+        val notOnCurrentPage = ShelfItem("Previously loaded album", "Album",
+            "cover://preserve", null,
+            "catalog:RELEASE_GROUP:00000000-0000-4000-8000-000000000888")
+        val original = listOf(
+            HomeShelf("Álbuns", listOf(
+                ShelfItem(album.title, "Album", null, null,
+                    "catalog:RELEASE_GROUP:${album.musicBrainzId}"),
+                notOnCurrentPage,
+            )),
+            HomeShelf("Singles e EPs", listOf(
+                ShelfItem(ep.title, "EP", null, null,
+                    "catalog:RELEASE_GROUP:${ep.musicBrainzId}"),
+            )),
+        )
+        val proofs = mapOf(album.musicBrainzId to listOf(
+            DiscogsGroupTypeProof(10, DiscogsEditorialKind.EP, true),
+            DiscogsGroupTypeProof(11, DiscogsEditorialKind.EP, true),
+        ))
+        val result = discogsEditorialArtistShelves(
+            original, listOf(album), proofs,
+        )
+        assertEquals(listOf(notOnCurrentPage),
+            result.first { it.title == "Álbuns" }.items)
+        assertTrue(result.first { it.title == "Singles e EPs" }.items
+            .any { it.browseId == "catalog:RELEASE_GROUP:${ep.musicBrainzId}" })
+        assertEquals(3, result.flatMap { it.items }.size)
+    }
+
     @Test fun oneContraryEditionNeverChangesExistingAlbumShelf() {
         val original = listOf(HomeShelf("Álbuns", listOf(
             ShelfItem(album.title, "Album", null, null,
