@@ -30,6 +30,7 @@ internal class DiscogsEditionRepository(
     private val cache: DiscogsMemoryEvidenceStore = DiscogsMemoryEvidenceStore(),
     private val enabled: Boolean = false,
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val authenticatedDiscovery: DiscogsAuthenticatedDiscovery? = null,
 ) {
     /** On provider rollback, purge only volatile Discogs observations. */
     fun clearCachedEvidence() = cache.clear()
@@ -38,7 +39,7 @@ internal class DiscogsEditionRepository(
         if (!enabled) return DiscogsEditionEnrichment.Disabled
         val link = when (val result = links.findRelease(canonical.musicBrainzReleaseId)) {
             is DiscogsRelationResult.Linked -> result.link
-            DiscogsRelationResult.NoLink -> return observeViaReleaseGroupMaster(canonical)
+            DiscogsRelationResult.NoLink -> return observeFallbacks(canonical)
             DiscogsRelationResult.Ambiguous -> return DiscogsEditionEnrichment.Ambiguous
             DiscogsRelationResult.InvalidCanonicalId,
             DiscogsRelationResult.InvalidResponse -> return DiscogsEditionEnrichment.Invalid
@@ -77,6 +78,43 @@ internal class DiscogsEditionRepository(
             DiscogsEditionVerdict.CONFLICT -> DiscogsEditionEnrichment.Conflict
         }
     }
+    /**
+     * Optional search is attempted only after cheaper canonical relation paths.
+     * Search requires a local personal token; without one, existing anonymous
+     * behavior is unchanged. The result is always re-verified against the
+     * exact MusicBrainz edition before it can become a UI fact.
+     */
+    private suspend fun observeFallbacks(
+        canonical: CanonicalEditionEvidence,
+    ): DiscogsEditionEnrichment {
+        val masterResult = observeViaReleaseGroupMaster(canonical)
+        if (masterResult is DiscogsEditionEnrichment.Verified) return masterResult
+        val discovery = authenticatedDiscovery ?: return masterResult
+        return when (val match = discovery.findForEdition(canonical)) {
+            is DiscogsAuthenticatedMatch.Verified -> {
+                val now = nowMillis()
+                val observation = DiscogsObservation(
+                    canonicalMbid = canonical.musicBrainzReleaseId,
+                    kind = DiscogsKind.RELEASE,
+                    record = match.record,
+                    fetchedAtMillis = now,
+                )
+                if (!observation.isDisplayableAt(now)) DiscogsEditionEnrichment.Unavailable
+                else {
+                    cache.put(observation)
+                    DiscogsEditionEnrichment.Verified(observation)
+                }
+            }
+            is DiscogsAuthenticatedMatch.Ambiguous -> DiscogsEditionEnrichment.Ambiguous
+            is DiscogsAuthenticatedMatch.Candidates ->
+                if (masterResult is DiscogsEditionEnrichment.Conflict) masterResult
+                else DiscogsEditionEnrichment.Candidate
+            // A missing token, unavailable search, or no result never converts
+            // an independently observed Master conflict into a fake match.
+            else -> masterResult
+        }
+    }
+
     /**
      * ReleaseGroup → Master relationships can recover an *edition candidate*
      * without a direct Release URL. A Discogs Master only supplies the ID of a

@@ -173,10 +173,25 @@ internal object DiscogsEditionAccess {
         "This application uses Discogs’ API but is not affiliated with, sponsored or endorsed by Discogs. " +
             "‘Discogs’ is a trademark of Zink Media, LLC."
 
+    @Volatile private var searchTokenVault: DiscogsSearchTokenVault? = null
+
+    /** Install application context, never a token, before first UI composition. */
+    fun configureSearchCredentials(context: android.content.Context) {
+        searchTokenVault = DiscogsSearchTokenVault(context.applicationContext)
+    }
+
     val coordinator: DiscogsCanonicalEditionCoordinator by lazy {
+        val publicClient = DiscogsClient(enabled = ENABLED)
+        val authenticatedSearch = DiscogsDatabaseSearchClient(
+            enabled = ENABLED,
+            tokenProvider = { searchTokenVault?.readForSearch() },
+        )
         DiscogsCanonicalEditionCoordinator(
             editions = DiscogsEditionRepository(
-                discogs = DiscogsClient(enabled = ENABLED),
+                discogs = publicClient,
+                authenticatedDiscovery = DiscogsAuthenticatedDiscovery(
+                    authenticatedSearch, publicClient,
+                ),
                 enabled = ENABLED,
             ),
             enabled = ENABLED,

@@ -415,6 +415,8 @@ internal fun shouldSkipAfterDislike(
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
+            .configureSearchCredentials(applicationContext)
         enableEdgeToEdge()
         // Before the composition, so a cold launch from a widget's artwork has
         // the request already standing by the time BitChordApp first reads it.
