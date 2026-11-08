@@ -226,8 +226,8 @@ internal const val SEEK_SETTLE_TOLERANCE_MS = 1_500L
  */
 internal const val SEEK_SETTLE_TIMEOUT_MS = 4_000L
 
-private val THUMB_SIZE = 54.dp
-private val HEADER_HEIGHT = 60.dp
+private val THUMB_SIZE = 60.dp
+private val HEADER_HEIGHT = 64.dp
 private val ART_TITLE_GAP = 20.dp
 /**
  * How long the sleeve takes to travel the whole way between the full player and
