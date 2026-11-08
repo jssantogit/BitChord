@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.R
+
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -39,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
 import androidx.compose.ui.text.font.FontWeight
@@ -308,7 +311,7 @@ internal fun UnifiedPlaylistLibraryShelf(
         // title is not rendered at rest on this route.
         item(key = "playlist-category-title") {
             Text(
-                "Playlists",
+                stringResource(R.string.playlists),
                 style = MaterialTheme.typography.headlineLarge.copy(
                     fontSize = 30.sp, fontWeight = FontWeight.Bold,
                 ),
