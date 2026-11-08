@@ -176,6 +176,16 @@ fun SongActionsSheet(
     } else {
         rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX)
     }
+    // Show the native pin's actual state where the verified Recording is already
+    // in the canonical presentation snapshot. The click still revalidates it.
+    val context = LocalContext.current.applicationContext
+    val pinnedSelections by com.music.bitchord.ui.screens.CanonicalLibraryPinRepository
+        .get(context).pins.collectAsStateWithLifecycle()
+    val recordingId = LocalCanonicalRatingDisplay.current.recordingIdForSong(song)
+    val alreadyPinned = recordingId != null && pinnedSelections.any {
+        it.selection.type == com.music.bitchord.ui.screens.CanonicalLibraryEntityType.TRACK &&
+            it.selection.entityId == recordingId
+    }
     // A local file may not have a provider-managed playlist entry.
     val isOffline = song.localUri != null
 
@@ -185,7 +195,7 @@ fun SongActionsSheet(
             // unrelated actions (credits, station, timer, Favorite) do not appear.
             ActionRow(
                 icon = Icons.Rounded.Add,
-                label = stringResource(R.string.add_to_library),
+                label = stringResource(if (alreadyPinned) R.string.remove_from_library else R.string.add_to_library),
                 accent = palette.accent,
                 enabled = onPinToLibrary != null,
                 onClick = { onPinToLibrary?.invoke() },
