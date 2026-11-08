@@ -1435,7 +1435,7 @@ private fun BitChordApp(
     val tabs = remember(homeLabel, exploreLabel, radioLabel, libraryLabel, searchLabel) {
         listOf(
             BottomTab(homeLabel, BitChordIcons.Home),
-            BottomTab(exploreLabel, BitChordIcons.TabExplore),
+            BottomTab(exploreLabel, AppleMusicNavIcons.Explore),
             BottomTab(radioLabel, AppleMusicNavIcons.Radio),
             BottomTab(libraryLabel, AppleMusicNavIcons.Library),
             BottomTab(searchLabel, BitChordIcons.TabSearch),
