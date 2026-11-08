@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.draw.alpha
 import kotlin.math.abs
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -154,7 +156,7 @@ internal fun appleQueueHasUpcoming(tracks: QueueTracks): Boolean =
     tracks.user.isNotEmpty() || tracks.context.isNotEmpty() || tracks.autoplay.isNotEmpty()
 
 internal fun appleQueueShouldShowEmpty(tracks: QueueTracks): Boolean =
-    tracks.history.isEmpty() && !appleQueueHasUpcoming(tracks)
+    !appleQueueHasUpcoming(tracks)
 
 /** Played history is never swipe-removable; locked queues aren't editable. */
 internal fun appleQueueMaySwipeRemove(appleStyle: Boolean, history: Boolean, locked: Boolean, lifted: Boolean): Boolean =
@@ -876,20 +878,22 @@ private fun InlineQueueRow(
     )
     Box(modifier.fillMaxWidth()) {
         if (canSwipeRemove && kotlin.math.abs(swipeTranslation) > 2f) {
-            Box(
-                modifier = Modifier
-                    .align(if (swipeTranslation > 0f) Alignment.CenterStart else Alignment.CenterEnd)
-                    .width(with(LocalDensity.current) { kotlin.math.abs(swipeTranslation).toDp() })
-                    .height(76.dp)
-                    .background(Color(0xFF0091FF)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.Delete,
-                    contentDescription = stringResource(Res.string.remove_from_queue),
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp),
-                )
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    modifier = Modifier
+                        .align(if (swipeTranslation > 0f) Alignment.CenterStart else Alignment.CenterEnd)
+                        .width(with(LocalDensity.current) { kotlin.math.abs(swipeTranslation).toDp() })
+                        .fillMaxHeight()
+                        .background(Color(0xFF0091FF)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = stringResource(Res.string.remove_from_queue),
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
             }
         }
         Row(
