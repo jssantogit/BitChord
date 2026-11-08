@@ -79,6 +79,28 @@ class DiscogsEditorialArtistShelvesTest {
             com.music.bitchord.ui.discogsEditorialProjectedRows(listOf(album, ep), evidence))
     }
 
+    @Test fun unrelatedDiscoveryShelvesDoNotLeakTheirCardsIntoTypedArtistShelves() {
+        val duplicate = ShelfItem(ep.title, "EP", null, null,
+            "catalog:RELEASE_GROUP:${ep.musicBrainzId}")
+        val discovery = HomeShelf("Para descobrir", listOf(duplicate))
+        val albums = HomeShelf("Álbuns", listOf(
+            ShelfItem(album.title, "Album", null, null,
+                "catalog:RELEASE_GROUP:${album.musicBrainzId}"),
+        ))
+        val overrides = mapOf(album.musicBrainzId to listOf(
+            DiscogsGroupTypeProof(41, DiscogsEditorialKind.EP, true),
+            DiscogsGroupTypeProof(42, DiscogsEditorialKind.EP, true),
+        ))
+        val result = discogsEditorialArtistShelves(
+            listOf(discovery, albums), listOf(album, ep), overrides,
+        )
+        assertEquals(listOf(duplicate),
+            result.first { it.title == "Para descobrir" }.items)
+        val typed = result.first { it.title == "Singles e EPs" }.items
+        assertEquals(1, typed.size)
+        assertEquals("catalog:RELEASE_GROUP:${album.musicBrainzId}", typed.single().browseId)
+    }
+
     @Test fun oneContraryEditionNeverChangesExistingAlbumShelf() {
         val original = listOf(HomeShelf("Álbuns", listOf(
             ShelfItem(album.title, "Album", null, null,
