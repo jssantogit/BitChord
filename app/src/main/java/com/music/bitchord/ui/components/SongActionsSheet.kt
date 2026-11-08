@@ -417,14 +417,12 @@ private fun TintedSheet(
             .fillMaxWidth()
             .clip(if (appleStyle) RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp) else SHEET_SHAPE),
     ) {
-        if (appleStyle) {
-            Box(Modifier.matchParentSize().background(palette.background))
-        } else ArtworkBackdrop(
+        ArtworkBackdrop(
             palette = palette,
             imageUrl = imageUrl,
             modifier = Modifier.matchParentSize(),
-            // A sheet is a fraction of the height of a page, so the wash has
-            // to resolve over a much shorter run to read the same way.
+            // Keep the user-requested artwork-driven blurred gradient even for
+            // Apple-mode overflow; only row geometry/action policy differs.
             washFraction = 0.75f,
             artPx = ROW_ART_PX,
         )
