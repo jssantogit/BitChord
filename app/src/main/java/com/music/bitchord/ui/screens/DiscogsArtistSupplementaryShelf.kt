@@ -40,12 +40,13 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
 ): List<DiscogsShadowRelease> {
     val artistMbid = SOURCE_ARTIST_MBID.matchEntire(artistBrowseId)?.groupValues?.get(1)
     val knownNames = remember(knownMusicBrainzTitles) { knownMusicBrainzTitles.toSet() }
+    // Use the vararg-key overload; Compose exposes only key1..key3 on named overloads.
     val rows by produceState<List<DiscogsShadowRelease>>(
-        initialValue = emptyList(),
-        key1 = artistMbid,
-        key2 = musicBrainzCatalogComplete,
-        key3 = knownNames,
-        key4 = artistName,
+        emptyList(),
+        artistMbid,
+        musicBrainzCatalogComplete,
+        knownNames,
+        artistName,
     ) {
         value = emptyList()
         if (artistMbid == null || !musicBrainzCatalogComplete ||

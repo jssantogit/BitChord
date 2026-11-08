@@ -3532,9 +3532,11 @@ private fun BitChordApp(
                         // A first page or a cached offline discography cannot
                         // prove an item is absent from MusicBrainz.
                         val discogsArtistCatalogComplete =
-                            discogsArtistPage?.nextOffset == null &&
-                                discogsArtistPage?.totalCount != null &&
-                                discogsArtistPage.rows.size >= discogsArtistPage.totalCount
+                            discogsArtistPage?.let { listing ->
+                                val expectedCount = listing.totalCount
+                                listing.nextOffset == null && expectedCount != null &&
+                                    listing.rows.size >= expectedCount
+                            } == true
                         val displayedEditionMbid =
                             com.music.bitchord.data.catalog.metadata.discogs
                                 .discogsOnlineAlbumEditionMbid(
