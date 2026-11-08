@@ -43,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LibraryPage
@@ -148,7 +150,9 @@ fun LibraryScreen(
                 item {
                     Text(
                         text = stringResource(Res.string.library),
-                        style = MaterialTheme.typography.displayLarge,
+                        style = if (navigationHome) MaterialTheme.typography.headlineLarge.copy(
+                            fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                        ) else MaterialTheme.typography.displayLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(
                             start = PAGE_GUTTER,
@@ -160,19 +164,27 @@ fun LibraryScreen(
                 }
             }
             if (navigationHome) {
-                pinnedSection?.let { section ->
-                    item(key = "canonical-library-pins") { section() }
-                }
-                if (links.isNotEmpty()) {
-                    item(key = "library-navigation") {
-                        LibraryLinkList(links = links, onClick = onShelfItemClick, compact = true)
+                // Compose the observed Apple Library order from existing real
+                // Bitchord data and routes, never a second library screen.
+                appleLibraryLandingSections(
+                    hasPins = pinnedSection != null,
+                    hasCategories = links.isNotEmpty(),
+                    hasRecent = localAdditions != null,
+                ).forEach { section ->
+                    when (section) {
+                        AppleLibraryLandingSection.PINS -> item(key = "canonical-library-pins") {
+                            pinnedSection?.invoke()
+                        }
+                        AppleLibraryLandingSection.CATEGORIES -> item(key = "library-navigation") {
+                            LibraryLinkList(links = links, onClick = onShelfItemClick, compact = true)
+                        }
+                        AppleLibraryLandingSection.RECENT -> item(key = "recent-local-additions") {
+                            localAdditions?.invoke()
+                        }
                     }
                 }
-                localAdditions?.let { section ->
-                    item(key = "recent-local-additions") { section() }
-                }
-                // The category pages own their shelves; do not render the old
-                // Replay/rediscovery/playlists blocks underneath the home links.
+                // Existing category destinations own search, rating/source
+                // filters, ordering, batch selection, and actual media rows.
                 return@LazyColumn
             }
             item(key = "replay") { replay() }
@@ -304,7 +316,7 @@ private fun LibraryLinkList(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 54.dp)
+                     .heightIn(min = if (compact) 44.dp else 54.dp)
                     .clickable(enabled = link.enabled) {
                         link.onClick?.invoke() ?: onClick(link.item)
                     }
@@ -324,22 +336,25 @@ private fun LibraryLinkList(
                     Icon(
                         imageVector = link.icon,
                         contentDescription = null,
-                        tint = if (link.enabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(LINK_ICON_SIZE),
+                        tint = if (!link.enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                            else if (compact) MaterialTheme.colorScheme.onBackground
+                            else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(if (compact) 22.dp else LINK_ICON_SIZE),
                     )
                 }
                 Spacer(Modifier.width(LINK_ICON_GAP))
                 Text(
                     text = link.item.title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = if (compact) MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 17.sp, fontWeight = FontWeight.Normal,
+                    ) else MaterialTheme.typography.bodyLarge,
                     color = if (link.enabled) MaterialTheme.colorScheme.onBackground
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Icon(
+                if (!compact) Icon(
                     imageVector = BitChordIcons.ChevronRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .6f),
