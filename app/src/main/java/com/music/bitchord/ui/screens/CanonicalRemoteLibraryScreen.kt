@@ -2021,16 +2021,16 @@ internal fun NativeUnifiedLibraryCategoryHeader(
 ) {
     Column(
         Modifier.fillMaxWidth()
-            .padding(top = topBarContentPadding(), bottom = 12.dp),
+            .padding(top = topBarContentPadding() + 8.dp, bottom = 12.dp),
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
             color = palette.onBackground,
-            modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            modifier = Modifier.padding(start = PAGE_GUTTER + 16.dp, end = PAGE_GUTTER),
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(8.dp))
         NativeDetailSearchField(
             query = query,
             onQueryChange = onQueryChange,
@@ -2039,7 +2039,7 @@ internal fun NativeUnifiedLibraryCategoryHeader(
             onFocused = {},
             palette = palette,
             placeholder = "Buscar em $title",
-            horizontalInset = PAGE_GUTTER,
+            horizontalInset = PAGE_GUTTER + 4.dp,
             appleLibraryCategoryStyle = true,
         )
         if (shouldShowCanonicalLibraryCategoryPlayback(
