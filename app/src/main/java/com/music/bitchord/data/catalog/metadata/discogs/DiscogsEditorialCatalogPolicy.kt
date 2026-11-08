@@ -161,10 +161,10 @@ internal object DiscogsShadowCatalog {
     // A version/edition suffix identifies a physical variant of the same
     // grouping title for absence checks only. Never use this relaxed check
     // for exact Release identity, playback, or Discogs verification.
-    private val editionSuffix = Regex("""\\s*[\\(\\[]([^\\(\\)\\[\\]]{1,72})[\\)\\]]$""")
-    private val versionTag = Regex("""(?:\\bversion\\b|\\bedition\\b|\\bver\\.?(?=\\s|$))""")
+    private val editionSuffix = Regex("""\s*[\(\[]([^\(\)\[\]]{1,72})[\)\]]$""")
+    private val versionTag = Regex("""(?:\bversion\b|\bedition\b|\bver\.?(?=\s|$))""")
     private val distinctArrangement = Regex(
-        """\\b(?:remix|live|acoustic|instrumental|sped\\s+up|slowed)\\b""",
+        """\b(?:remix|live|acoustic|instrumental|sped\s+up|slowed)\b""",
     )
 
     private fun isKnownGroupTitle(
