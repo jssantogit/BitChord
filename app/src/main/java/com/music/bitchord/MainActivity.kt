@@ -144,9 +144,8 @@ import com.music.bitchord.data.TrackLog
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LikeStatus
-import com.music.bitchord.data.library.NativeTrackFavorites
-import com.music.bitchord.data.library.nativeTrackFavoriteKey
 import com.music.bitchord.data.library.shouldUseAppleQueueSongActions
+import com.music.bitchord.data.library.shouldShowRatingEditorInSongActions
 import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.SearchResult
@@ -550,7 +549,6 @@ private fun BitChordApp(
     viewModel: MainViewModel = viewModel(),
 ) {
     val context = LocalContext.current
-    val nativeTrackFavorites = remember(context) { NativeTrackFavorites(context.applicationContext) }
     val clipboard = LocalClipboardManager.current
     val hazeState = remember { HazeState() }
     // Recording the backdrop layer costs a draw pass, so it only runs when a
@@ -2439,7 +2437,6 @@ private fun BitChordApp(
                     }?.displayName?.takeIf(String::isNotBlank)
             }
         var localRatingDialogOpen by remember(displayedSong.videoId) { mutableStateOf(false) }
-        val favoriteKeys by nativeTrackFavorites.favoriteKeys.collectAsStateWithLifecycle()
         val openMenuFromPlayer: (Any?, Boolean) -> Unit = { loadedArtworkModel, appleQueue ->
             menuFromPlayer = true
             menuFromAppleQueue = appleQueue
@@ -2518,8 +2515,6 @@ private fun BitChordApp(
             signedIn = signedIn,
             onEditCanonicalRating = { localRatingDialogOpen = true },
             appleQueueStyle = true,
-            isFavorite = nativeTrackFavoriteKey(displayedSong)?.let { it in favoriteKeys } == true,
-            onToggleFavorite = { nativeTrackFavorites.toggle(displayedSong) },
             // The service owns both the queue and the Shuffle state. Keeping
             // the toggle on that side prevents the UI from changing the icon
             // before its asynchronous reorder command has actually landed.
@@ -4992,7 +4987,6 @@ private fun BitChordApp(
                 // tablet the player is visible whatever the menu was opened from.
                 val fromPlayer = menuFromPlayer
                 val fromAppleQueue = shouldUseAppleQueueSongActions(fromPlayer, menuFromAppleQueue)
-                val favoriteKeys by nativeTrackFavorites.favoriteKeys.collectAsStateWithLifecycle()
                 val share: () -> Unit = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -5026,14 +5020,11 @@ private fun BitChordApp(
                     } else null,
                     signedIn = signedIn,
                     appleQueuePlayerMenu = fromAppleQueue,
-                    isFavorite = nativeTrackFavoriteKey(song)?.let { it in favoriteKeys } == true,
-                    onToggleFavorite = if (fromAppleQueue) {
-                        {
-                            nativeTrackFavorites.toggle(song)
-                            songActions = null
-                        }
+                    // The player-wide star now owns rating edits.
+                    // Other track-list menus retain the existing first-rating entry.
+                    canonicalRatingContent = if (shouldShowRatingEditorInSongActions(fromPlayer)) {
+                        ({ CanonicalSongMenuRating(song) })
                     } else null,
-                    canonicalRatingContent = { CanonicalSongMenuRating(song) },
                     onPlayNext = { playNext(song); songActions = null },
                     onAddToQueue = { addToQueue(song); songActions = null },
                     onStartRadio = { startRadio(song); songActions = null },

@@ -69,9 +69,9 @@ import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.painter.Painter
+import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import org.jetbrains.compose.resources.painterResource
 import androidx.compose.material3.MaterialTheme
-import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -643,7 +643,7 @@ private fun SlidingPlayerDeck(
  * glyphs, a volume capsule flanked by speaker icons, and lyrics / AirPlay /
  * queue along the bottom.
  */
-/** Original Apple 7.0 vector buttons, scoped to the queue experiment. */
+/** Original Apple 7.0 vector button for the queue overflow. */
 @Composable
 private fun AppleQueueHeaderAction(painter: Painter, description: String, onClick: () -> Unit) {
     Box(Modifier.size(40.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
@@ -681,8 +681,6 @@ fun NowPlayingScreen(
     accountName: String?,
     onEditCanonicalRating: () -> Unit = {},
     appleQueueStyle: Boolean = false,
-    isFavorite: Boolean = false,
-    onToggleFavorite: () -> Unit = {},
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -1919,6 +1917,7 @@ fun NowPlayingScreen(
                                 LandscapeCredits(
                                     song = song,
                                     onEditCanonicalRating = onEditCanonicalRating,
+                                    showPlayerRatingStar = appleQueueStyle,
                                     onOpenMenu = openMenuWithArtwork,
                                     onOpenAlbum = onOpenAlbum,
                                     onOpenArtist = onOpenArtist,
@@ -1988,6 +1987,13 @@ fun NowPlayingScreen(
                         )
                     },
                     lyricsPane = {
+                        Column(Modifier.fillMaxSize()) {
+                        if (appleQueueStyle) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(Modifier.weight(1f))
+                                PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
+                            }
+                        }
                         LandscapeLyricsPane(
                             hasLyrics = lyricsTranslation.displayedLyrics.isNotEmpty(),
                             placeholder = if (lyricsUnavailable) {
@@ -2022,6 +2028,7 @@ fun NowPlayingScreen(
                                     onClick = lyricsTranslation.toggleTranslation,
                                 )
                             },
+                            modifier = Modifier.weight(1f),
                         ) { panelModifier ->
                             LyricsTranslationMotion(
                                 trigger = lyricsTranslation.transition,
@@ -2055,8 +2062,21 @@ fun NowPlayingScreen(
                                 )
                             }
                         }
+                        }
                     },
                     queuePane = {
+                        Column(Modifier.fillMaxSize()) {
+                            if (appleQueueStyle) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Spacer(Modifier.weight(1f))
+                                    PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
+                                    AppleQueueHeaderAction(
+                                        painter = painterResource(Res.drawable.apple_queue_more),
+                                        description = stringResource(Res.string.more),
+                                        onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                    )
+                                }
+                            }
                         InlineQueue(
                             queue = queue,
                             currentIndex = queueIndex,
@@ -2067,8 +2087,11 @@ fun NowPlayingScreen(
                             onMove = onMoveInQueue,
                             onClear = onClearQueue,
                             onDragActiveChange = onQueueDragActiveChange,
-                            modifier = Modifier.fillMaxSize(),
+                            appleStyle = appleQueueStyle,
+                            onClearHistory = onClearQueueHistory,
+                            modifier = Modifier.weight(1f),
                         )
+                        }
                     },
                 )
                 playerOverlays()
@@ -3270,20 +3293,11 @@ fun NowPlayingScreen(
                                     }
                                 }
                             }
-                            // The favorite star is independent of 1–5-star ratings.
-                            // The native rating editor remains in the ⋮ sheet.
-                            if (queueOpen && appleQueueStyle) {
-                                AppleQueueHeaderAction(
-                                    painter = painterResource(
-                                        if (isFavorite) Res.drawable.apple_queue_favorited
-                                        else Res.drawable.apple_queue_favorite
-                                    ),
-                                    description = stringResource(
-                                        if (isFavorite) Res.string.apple_queue_remove_favorite
-                                        else Res.string.apple_queue_mark_favorite
-                                    ),
-                                    onClick = onToggleFavorite,
-                                )
+                            // One first-party rating button on the experimental
+                            // player, even before a first native score. Other
+                            // shared-platform hosts retain their old rating strip.
+                            if (appleQueueStyle) {
+                                PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
                             } else if (!queueOpen) {
                                 CanonicalSongRatingStars(
                                     song = song,

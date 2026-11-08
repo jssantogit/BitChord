@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.player
 
+
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 
 import com.music.bitchord.sharedui.resources.*
@@ -414,6 +415,7 @@ internal fun LandscapeMainPane(
 internal fun LandscapeCredits(
     song: Song,
     onEditCanonicalRating: () -> Unit,
+    showPlayerRatingStar: Boolean = false,
     onOpenMenu: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     /** Null browse id for anyone but the lead credit — see [NowPlayingScreen]. */
@@ -456,12 +458,16 @@ internal fun LandscapeCredits(
                 )
             }
         }
-        CanonicalSongRatingStars(
-            song = song,
-            modifier = Modifier.padding(start = 8.dp),
-            color = Color.White.copy(alpha = 0.84f),
-            onClick = onEditCanonicalRating,
-        )
+        if (showPlayerRatingStar) {
+            PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
+        } else {
+            CanonicalSongRatingStars(
+                song = song,
+                modifier = Modifier.padding(start = 8.dp),
+                color = Color.White.copy(alpha = 0.84f),
+                onClick = onEditCanonicalRating,
+            )
+        }
         Spacer(Modifier.width(10.dp))
         CircleGlyph(
             icon = Icons.Rounded.MoreHoriz,

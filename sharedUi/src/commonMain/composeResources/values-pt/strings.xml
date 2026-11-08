@@ -303,6 +303,4 @@
     <string name="apple_queue_history">Histórico</string>
     <string name="apple_queue_continue">Continuar Reproduzindo</string>
     <string name="apple_queue_similar">Reprodução automática de músicas similares</string>
-    <string name="apple_queue_mark_favorite">Favorito</string>
-    <string name="apple_queue_remove_favorite">Remover dos favoritos</string>
 </resources>
