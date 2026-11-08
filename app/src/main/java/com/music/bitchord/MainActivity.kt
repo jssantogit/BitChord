@@ -1369,6 +1369,31 @@ private fun BitChordApp(
     }
 
     val exploreListState = rememberLazyListState()
+    // Genre discovery and genre-detail shelves share the same limited Coil
+    // warmup policy; avoid decoding all of Explore below the fold.
+    LaunchedEffect(
+        selectedTab, activeCanonicalGenre?.tag, canonicalGenreState,
+        canonicalExploreGenreCovers,
+    ) {
+        if (selectedTab == TAB_EXPLORE) {
+            val artwork = if (activeCanonicalGenre == null) {
+                canonicalExploreGenreCovers.values.asSequence()
+            } else {
+                (canonicalGenreState as? UiState.Success)?.data.orEmpty()
+                    .asSequence().take(3).flatMap { shelf ->
+                        shelf.items.asSequence().take(5).map { it.thumbnailUrl }
+                    }
+            }
+            val targets = artwork.filterNotNull().filter(String::isNotBlank)
+                .distinct().take(12).map { url ->
+                    com.music.bitchord.data.canvas.VisualArtworkCandidate(
+                        url, com.music.bitchord.data.canvas.VisualArtworkPriority.VISIBLE,
+                        com.music.bitchord.data.model.CARD_ART_PX,
+                    )
+                }.toList()
+            com.music.bitchord.data.canvas.VisualArtworkPrefetch.warm(context, targets)
+        }
+    }
     // Preserve the native genre-grid scroll when visiting an editorial detail.
     val genreListState = rememberLazyListState()
     LaunchedEffect(activeCanonicalGenre?.tag) {
