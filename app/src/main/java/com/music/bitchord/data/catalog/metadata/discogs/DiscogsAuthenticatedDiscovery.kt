@@ -222,7 +222,10 @@ internal class DiscogsAuthenticatedDiscovery(
             }
         }
         if (ids.isEmpty()) return DiscogsAuthenticatedMatch.NoMatch
-        return when (val match = DiscogsUnlinkedMatch.select(canonical, hydrate(ids.take(8)))) {
+        // The hydration budget is deliberately 8 Release details. If either
+        // index returned more than that, we cannot prove uniqueness.
+        if (ids.size > 8) return DiscogsAuthenticatedMatch.Ambiguous(ids.size)
+        return when (val match = DiscogsUnlinkedMatch.select(canonical, hydrate(ids.toList()))) {
             is DiscogsUnlinkedMatch.Verified ->
                 DiscogsAuthenticatedMatch.Verified(match.record)
             is DiscogsUnlinkedMatch.Ambiguous ->
