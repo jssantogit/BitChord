@@ -375,7 +375,7 @@ internal fun InlineQueue(
                 if (tracks.user.isNotEmpty()) {
                     item(key = "header-user-queue") {
                         QueueHeading(
-                            title = stringResource(Res.string.next_in_queue),
+                            title = stringResource(if (appleStyle) Res.string.apple_queue_continue else Res.string.next_in_queue),
                             modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).then(queueMotion()),
                             appleStyle = appleStyle,
                             trailing = {
