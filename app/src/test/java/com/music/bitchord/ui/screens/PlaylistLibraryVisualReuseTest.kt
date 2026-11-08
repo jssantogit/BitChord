@@ -402,6 +402,23 @@ class PlaylistLibraryVisualReuseTest {
         }
     }
 
+    @Test fun libraryRootGridCardOmitsInlineOverflowWithoutLosingNavigation() {
+        var opened = 0
+        compose.setContent {
+            NativeLibraryEntityCard(
+                title = "Get Up",
+                subtitle = "NewJeans",
+                imageUrl = null,
+                isArtist = false,
+                onClick = { opened++ },
+                onMore = null, // The category root has no ellipsis.
+            )
+        }
+        compose.onAllNodesWithContentDescription("Opções de Get Up").assertCountEquals(0)
+        compose.onNodeWithText("Get Up").performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
+    }
+
     @Test fun longPressSelectsNativeGridCardWithoutPlayingAndClickStillPlays() {
         var plays = 0
         var selections = 0
