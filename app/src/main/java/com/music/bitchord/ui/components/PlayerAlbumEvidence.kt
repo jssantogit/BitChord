@@ -67,6 +67,38 @@ internal suspend fun verifiedPlayerAlbumTitle(context: Context, song: Song): Str
         sharedVerifiedReleaseTitle(ids, rows, song.albumId)
     }
 
+/**
+ * A queue context may contain stripped-down track rows even when the playing
+ * track's exact album has already been resolved for the ⋯ action sheet.
+ * Use that same evidence only when every next track is from the original
+ * context and agrees with the cover/artist or an explicit release identity.
+ * This is never applied to the user queue or auto-generated recommendations.
+ */
+internal fun contextualAlbumFromCurrent(
+    current: Song,
+    upcoming: List<Song>,
+    verifiedCurrentAlbum: String?,
+): String? {
+    val album = verifiedCurrentAlbum?.trim()?.takeIf(String::isNotBlank) ?: return null
+    if (current.queueTier != QueueTier.CONTEXT || upcoming.isEmpty() ||
+        upcoming.any { it.queueTier != QueueTier.CONTEXT }
+    ) return null
+    val currentAlbumId = current.albumId?.takeIf(String::isNotBlank)
+    val currentArt = current.thumbnailUrl?.takeIf(String::isNotBlank)
+    if (upcoming.any { next ->
+            val nextAlbumId = next.albumId?.takeIf(String::isNotBlank)
+            val explicitMatch = currentAlbumId != null && nextAlbumId == currentAlbumId
+            val artworkMatch = currentArt != null && currentArt == next.thumbnailUrl &&
+                current.artist.equals(next.artist, ignoreCase = true)
+            (nextAlbumId != null && nextAlbumId != currentAlbumId) ||
+                (next.albumName?.isNotBlank() == true &&
+                    !next.albumName.equals(album, ignoreCase = true)) ||
+                (!explicitMatch && !artworkMatch)
+        }
+    ) return null
+    return album
+}
+
 /** Only active, context-tier tracks may supply album provenance. AutoPlay is
  * never relabeled as an album just because one recommendation is on a release. */
 internal suspend fun verifiedQueueAlbumTitle(
@@ -90,6 +122,11 @@ internal suspend fun verifiedQueueAlbumTitle(
             return@withContext title
         }
     }
+    // The same playing song may already have a verified album in its menu.
+    // Retain that provenance for matching context rows whose RecordingId lookup
+    // is still unavailable, before attempting to verify the entire queue.
+    val currentAlbum = verifiedPlayerAlbumTitle(context, current)
+    contextualAlbumFromCurrent(current, upcoming, currentAlbum)?.let { return@withContext it }
     val ids = try { verifiedRecordings(context, selected) }
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { null }
