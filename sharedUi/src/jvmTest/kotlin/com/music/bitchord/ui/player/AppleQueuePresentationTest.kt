@@ -76,4 +76,12 @@ class AppleQueuePresentationTest {
         val pending = queueTracksForPresentation(listOf(song("current"), song("next")), 0, appleStyle = true)
         assertFalse(appleQueueShouldShowEmpty(pending))
     }
+
+    @Test fun appleSwipeRemovalAcceptsBothDirectionsAndRejectsShortDrags() {
+        assertFalse(appleQueueShouldCommitSwipe(-71f, 72f))
+        assertFalse(appleQueueShouldCommitSwipe(71f, 72f))
+        assertTrue(appleQueueShouldCommitSwipe(-72f, 72f))
+        assertTrue(appleQueueShouldCommitSwipe(72f, 72f))
+        assertFalse(appleQueueShouldCommitSwipe(999f, 0f))
+    }
 }
