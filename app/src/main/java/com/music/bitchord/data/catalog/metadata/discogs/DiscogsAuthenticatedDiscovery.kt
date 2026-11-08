@@ -46,7 +46,7 @@ internal data class DiscogsSearchRequest(
 }
 
 internal sealed interface DiscogsSearchResult {
-    data class Found(val ids: List<Long>) : DiscogsSearchResult
+    data class Found(val ids: List<Long>, val nextPage: Int? = null) : DiscogsSearchResult
     data object Empty : DiscogsSearchResult
     data object AuthRequired : DiscogsSearchResult
     data object Disabled : DiscogsSearchResult
@@ -150,7 +150,7 @@ internal class DiscogsDatabaseSearchClient(
             return DiscogsSearchResult.Unavailable
         }
         return when (response.status) {
-            200 -> parseResult(response.body)
+            200 -> parseResult(response.body, query.page)
             401, 403 -> DiscogsSearchResult.AuthRequired
             404 -> DiscogsSearchResult.Empty
             429 -> DiscogsSearchResult.Throttled(response.retryAfterSeconds)
@@ -158,7 +158,7 @@ internal class DiscogsDatabaseSearchClient(
         }
     }
 
-    private fun parseResult(raw: String): DiscogsSearchResult {
+    private fun parseResult(raw: String, requestedPage: Int): DiscogsSearchResult {
         if (raw.length > 131_072) return DiscogsSearchResult.Malformed
         return try {
             val obj = json.parseToJsonElement(raw) as? JsonObject
@@ -174,8 +174,15 @@ internal class DiscogsDatabaseSearchClient(
                 (row["id"] as? JsonPrimitive)?.longOrNull
                     ?.takeIf { it in 1..999_999_999_999L }
             }.distinct().take(20)
+            val paging = obj["pagination"] as? JsonObject
+            val page = (paging?.get("page") as? JsonPrimitive)?.longOrNull
+            val pages = (paging?.get("pages") as? JsonPrimitive)?.longOrNull
+            val nextPage = if (page == requestedPage.toLong() &&
+                pages != null && pages in 1..10_000 &&
+                page < pages && page in 1..2
+            ) (page + 1).toInt() else null
             if (ids.isEmpty()) DiscogsSearchResult.Empty
-            else DiscogsSearchResult.Found(ids)
+            else DiscogsSearchResult.Found(ids, nextPage)
         } catch (_: Exception) {
             DiscogsSearchResult.Malformed
         }
@@ -248,11 +255,23 @@ internal class DiscogsAuthenticatedDiscovery(
         knownMusicBrainzTitles: Set<String> = emptySet(),
     ): List<DiscogsShadowRelease> {
         if (!mbCatalogChecked) return emptyList()
-        val searchResult = search.search(DiscogsSearchRequest(artist = artistName))
-        val ids = (searchResult as? DiscogsSearchResult.Found)?.ids ?: return emptyList()
-        val fetchedAt = nowMillis()
-        val records = hydrate(ids).map { DiscogsPublicEditionSnapshot(it, fetchedAt) }
-        return DiscogsShadowCatalog.select(records, artistName, mbCatalogChecked,
+        val first = search.search(DiscogsSearchRequest(artist = artistName))
+            as? DiscogsSearchResult.Found ?: return emptyList()
+        val firstRecords = hydrate(first.ids).map {
+            DiscogsPublicEditionSnapshot(it, nowMillis())
+        }
+        val current = DiscogsShadowCatalog.select(firstRecords, artistName, true,
+            nowMillis(), knownDiscogsReleaseIds, knownMusicBrainzTitles)
+        if (current.isNotEmpty()) return current
+        // Only spend the second-page budget when the first page is entirely
+        // unusable. Artist detail loading must not launch 20+ requests.
+        val next = first.nextPage?.takeIf { it == 2 } ?: return emptyList()
+        val second = search.search(DiscogsSearchRequest(artist = artistName, page = next))
+            as? DiscogsSearchResult.Found ?: return emptyList()
+        val secondRecords = hydrate(second.ids).map {
+            DiscogsPublicEditionSnapshot(it, nowMillis())
+        }
+        return DiscogsShadowCatalog.select(secondRecords, artistName, true,
             nowMillis(), knownDiscogsReleaseIds, knownMusicBrainzTitles)
     }
 
