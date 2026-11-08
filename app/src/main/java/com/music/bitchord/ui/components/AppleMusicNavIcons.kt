@@ -15,6 +15,32 @@ import androidx.compose.ui.unit.dp
 internal object AppleMusicNavIcons {
     private val ink = SolidColor(Color.Black) // Icon's tint supplies the actual color.
 
+    /** Four solid rounded tiles, matching the screenshot rather than outline grid icons. */
+    val Explore: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "apple_music_tab_explore",
+            defaultWidth = 24.dp, defaultHeight = 24.dp,
+            viewportWidth = 24f, viewportHeight = 24f,
+        ).apply {
+            path(fill = ink) {
+                for (x in listOf(3.8f, 13f)) {
+                    for (y in listOf(3.8f, 13f)) {
+                        moveTo(x + 1.6f, y)
+                        lineTo(x + 6.4f, y)
+                        quadTo(x + 8f, y, x + 8f, y + 1.6f)
+                        lineTo(x + 8f, y + 6.4f)
+                        quadTo(x + 8f, y + 8f, x + 6.4f, y + 8f)
+                        lineTo(x + 1.6f, y + 8f)
+                        quadTo(x, y + 8f, x, y + 6.4f)
+                        lineTo(x, y + 1.6f)
+                        quadTo(x, y, x + 1.6f, y)
+                        close()
+                    }
+                }
+            }
+        }.build()
+    }
+
     val Radio: ImageVector by lazy {
         ImageVector.Builder(
             name = "apple_music_future_radio",
