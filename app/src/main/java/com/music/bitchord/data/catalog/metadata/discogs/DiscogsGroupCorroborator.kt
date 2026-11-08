@@ -56,13 +56,15 @@ internal object DiscogsGroupCorroborator {
             val hits = (result as? MusicBrainzCatalogGraphResult.Success)?.value?.items
                 ?: return@withLock
             val additional = discogsCorroborationEditionIds(selected, hits)
-            checked[group] = now
-            while (checked.size > 64) checked.remove(checked.keys.first())
             for (editionMbid in additional) {
                 // Every result is independently checked for complete tracklist,
                 // official status, group membership and verified Discogs release.
                 DiscogsEditionAccess.coordinator.observeRelease(editionMbid)
             }
+            // Only mark the group after completed attempts. Cancellation while
+            // leaving the page must not suppress all subsequent corroboration.
+            checked[group] = now
+            while (checked.size > 64) checked.remove(checked.keys.first())
         }
     }
 

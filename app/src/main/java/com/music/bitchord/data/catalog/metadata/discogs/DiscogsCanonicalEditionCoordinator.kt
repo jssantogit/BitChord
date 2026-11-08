@@ -84,12 +84,16 @@ internal class DiscogsCanonicalEditionCoordinator(
     private val entries = linkedMapOf<String, Cached>()
 
     /** Rollback clears all source-scoped caches, never MusicBrainz or Room. */
-    suspend fun clear() = lock.withLock {
-        entries.clear()
-        editions.clearCachedEvidence()
-        DiscogsGroupEditorialEvidence.store.clear()
-        DiscogsSourceOnlyDiscovery.store.clear()
+    suspend fun clear() {
+        // Avoid coordinator-lock -> corroborator-lock inversion: corroboration
+        // can legitimately hold its own mutex while observing an edition.
         DiscogsGroupCorroborator.clear()
+        lock.withLock {
+            entries.clear()
+            editions.clearCachedEvidence()
+            DiscogsGroupEditorialEvidence.store.clear()
+            DiscogsSourceOnlyDiscovery.store.clear()
+        }
     }
 
     suspend fun observeRelease(musicBrainzReleaseMbid: String): DiscogsEditionEnrichment {
