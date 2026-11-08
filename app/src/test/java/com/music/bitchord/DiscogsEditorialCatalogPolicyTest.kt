@@ -127,6 +127,42 @@ class DiscogsEditorialCatalogPolicyTest {
         ).isEmpty())
     }
 
+    @Test fun knownMusicBrainzGroupIsNotReintroducedByDiscogsArtistTitlePrefix() {
+        val snapshot = DiscogsPublicEditionSnapshot(
+            edition(109, master = null).copy(title = "ILLIT - SUPER REAL ME"), 1_000,
+        )
+        val found = DiscogsShadowCatalog.select(
+            listOf(snapshot), expectedArtist = "ILLIT",
+            mbCatalogChecked = true, nowMillis = 1_200,
+            knownMusicBrainzTitles = setOf("SUPER REAL ME"),
+        )
+        assertTrue(found.isEmpty())
+    }
+
+    @Test fun knownMusicBrainzGroupIsNotReintroducedByUnicodeOrSafeCaseVariation() {
+        val snapshot = DiscogsPublicEditionSnapshot(
+            edition(110, master = null).copy(title = "ＳＵＰＥＲ  ＲＥＡＬ　ＭＥ"), 1_000,
+        )
+        assertTrue(DiscogsShadowCatalog.select(
+            listOf(snapshot), expectedArtist = "ILLIT",
+            mbCatalogChecked = true, nowMillis = 1_200,
+            knownMusicBrainzTitles = setOf("SUPER REAL ME"),
+        ).isEmpty())
+    }
+
+    @Test fun differentArtistPrefixMustNotBeStrippedAsAnIdentityShortcut() {
+        val snapshot = DiscogsPublicEditionSnapshot(
+            edition(111, master = null).copy(title = "OTHER - SUPER REAL ME"), 1_000,
+        )
+        val result = DiscogsShadowCatalog.select(
+            listOf(snapshot), expectedArtist = "ILLIT",
+            mbCatalogChecked = true, nowMillis = 1_200,
+            knownMusicBrainzTitles = setOf("SUPER REAL ME"),
+        )
+        assertEquals(1, result.size)
+        assertEquals("OTHER - SUPER REAL ME", result.single().title)
+    }
+
     @Test fun recoveredCatalogRejectsUnofficialStaleAndAlreadyLinkedEditions() {
         val inputs = listOf(
             DiscogsPublicEditionSnapshot(edition(101, unofficial = true), 1_000),
