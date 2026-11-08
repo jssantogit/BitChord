@@ -173,6 +173,7 @@ fun FrostedTopBar(
     accessory: (@Composable () -> Unit)? = null,
     /** No empty action capsule on the Home root when its menu lives in the header. */
     showActions: Boolean = true,
+    separateActions: Boolean = false,
     /** Only Home opts in: other pages retain their own large page headings. */
     showScrolledTitle: Boolean = false,
     actions: @Composable () -> Unit = {},
@@ -346,7 +347,11 @@ fun FrostedTopBar(
                     }
                     if (showActions) {
                         if (useFloatingChrome) {
-                            ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
+                            if (separateActions) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
+                            } else {
+                                ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
+                            }
                         } else {
                             actions()
                         }
@@ -388,6 +393,21 @@ internal fun ArtworkPageBackButton(
             tint = contentColor,
         )
     }
+}
+
+/** One independently surfaced circular action on the Apple Library root/category chrome.
+ * The normal grouped pill remains unchanged on every other route.
+ */
+@Composable
+internal fun FloatingLibraryTopBarCircle(
+    hazeState: HazeState?,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier.size(48.dp)
+            .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState)),
+        contentAlignment = Alignment.Center,
+    ) { content() }
 }
 
 /** One shared pill for every action at the right of a floating top bar. */
