@@ -28,6 +28,36 @@ class CanonicalExploreGridTest {
     @get:Rule val compose = createComposeRule()
 
     @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun exploreKeepsOnlyCatalogGenresWithoutSearchOrEditorialEntries() {
+        val genres = listOf(
+            ShelfItem("Metal", "", null, null, "catalog:GENRE:metal"),
+            ShelfItem("K-pop", "", null, null, "catalog:GENRE:k-pop"),
+        )
+        compose.setContent {
+            MaterialTheme {
+                ExploreScreen(
+                    state = UiState.Success(emptyList<MoodGenreSection>()),
+                    listState = rememberLazyListState(),
+                    onCategoryClick = {},
+                    onRetry = {},
+                    refreshing = false,
+                    onRefresh = {},
+                    pullState = rememberPullToRefreshState(),
+                    contentPadding = PaddingValues(),
+                    canonicalGenres = genres,
+                )
+            }
+        }
+        compose.onNodeWithText("Explorar").assertExists()
+        compose.onNodeWithText("Metal").assertExists()
+        compose.onNodeWithText("K-pop").assertExists()
+        compose.onNodeWithText("Essenciais").assertDoesNotExist()
+        compose.onNodeWithText("Shows").assertDoesNotExist()
+        compose.onNodeWithText("Cantar").assertDoesNotExist()
+        compose.onNodeWithText("Artistas, Músicas, Letras e mais").assertDoesNotExist()
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
     @Test fun exploreRootOnlyShowsGenresAndOpensCanonicalGenreId() {
         val opened = mutableListOf<String>()
         val genres = listOf(
