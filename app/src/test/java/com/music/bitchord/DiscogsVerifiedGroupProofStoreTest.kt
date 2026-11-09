@@ -36,6 +36,19 @@ class DiscogsVerifiedGroupProofStoreTest {
         assertTrue(store.proofs.value.isEmpty())
     }
 
+    @Test fun storeRetainsMasterScopeForIndependentVoteThreshold() {
+        val store = DiscogsVerifiedGroupProofStore()
+        store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_000,
+            masterId = 55)
+        store.record(group, 102, DiscogsEditorialKind.EP, true, 10_000, 1_001,
+            masterId = 55)
+        assertEquals(listOf(55L, 55L),
+            store.activeProofs(1_002)[group]?.map { it.masterId })
+        assertTrue(DiscogsTypeConsensus.resolve(
+            "Album", store.activeProofs(1_002)[group].orEmpty()
+        ) is DiscogsTypeResolution.Disputed)
+    }
+
     @Test fun reobservingSameReleaseCannotInventTwoIndependentVotes() {
         val store = DiscogsVerifiedGroupProofStore()
         store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_000)

@@ -173,6 +173,7 @@ internal class DiscogsCanonicalEditionCoordinator(
                 verified = true,
                 expiresAtMillis = result.observation.fetchedAtMillis + DiscogsObservation.TTL_MILLIS,
                 nowMillis = now,
+                masterId = result.observation.record.masterId,
             )
         }
         return result

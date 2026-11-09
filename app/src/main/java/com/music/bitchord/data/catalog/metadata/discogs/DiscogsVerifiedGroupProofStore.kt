@@ -28,6 +28,7 @@ internal class DiscogsVerifiedGroupProofStore {
         verified: Boolean,
         expiresAtMillis: Long,
         nowMillis: Long,
+        masterId: Long? = null,
     ) {
         val group = releaseGroupMbid?.trim()?.lowercase(Locale.ROOT)
             ?.takeIf(groupId::matches) ?: return
@@ -43,7 +44,8 @@ internal class DiscogsVerifiedGroupProofStore {
                 .filter { it.expiresAtMillis > nowMillis && it.proof.releaseId != discogsReleaseId }
             (snapshot.filterValues { it.isNotEmpty() } + (
                 group to (current + Record(
-                    DiscogsGroupTypeProof(discogsReleaseId, kind, verified = true),
+                    DiscogsGroupTypeProof(discogsReleaseId, kind, verified = true,
+                        masterId = masterId?.takeIf { it in 1..999_999_999_999L }),
                     expiresAtMillis,
                 )).takeLast(24)
             )).takeLastGroups(64)
