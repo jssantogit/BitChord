@@ -1429,4 +1429,5 @@
     <string name="apple_player_add_to_playlist">הוספה לרשימת השמעה…</string>
     <string name="apple_player_share_song">שיתוף שיר</string>
     <string name="apple_player_share_lyrics">שיתוף מילים…</string>
+    <string name="apple_library_search_in_category">חיפוש ב%1$s</string>
 </resources>
