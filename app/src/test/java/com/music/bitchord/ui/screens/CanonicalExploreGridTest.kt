@@ -66,7 +66,7 @@ class CanonicalExploreGridTest {
         compose.runOnIdle { assertEquals(1, backs) }
     }
 
-    @Test fun appleSearchOriginTabsPreserveAllThreeNativeSources() {
+    @Test fun appleSearchOriginTabsSupportCatalogAndAvailableLocalWithoutServer() {
         var selected = -1
         var backs = 0
         var submits = 0
@@ -74,7 +74,7 @@ class CanonicalExploreGridTest {
             MaterialTheme {
                 androidx.compose.foundation.layout.Column {
                     AppleSearchOriginTabs(
-                        options = listOf("Geral", "Servidor", "Sua biblioteca"),
+                        options = listOf("Catálogo", "Local"),
                         selectedIndex = 0,
                         onSelect = { selected = it },
                     )
@@ -90,9 +90,9 @@ class CanonicalExploreGridTest {
             }
         }
         // The Apple search origin row intentionally renders localized labels in uppercase.
-        compose.onNodeWithText("GERAL").assertExists()
-        compose.onNodeWithText("SERVIDOR").performClick()
-        compose.onNodeWithText("SUA BIBLIOTECA").assertExists()
+        compose.onNodeWithText("CATÁLOGO").assertExists()
+        compose.onNodeWithText("LOCAL").performClick()
+        compose.onNodeWithText("SERVIDOR").assertDoesNotExist()
         compose.runOnIdle { assertEquals(1, selected) }
         compose.onNodeWithTag("apple-search-back").performClick()
         compose.runOnIdle {
