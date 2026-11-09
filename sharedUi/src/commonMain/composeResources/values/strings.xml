@@ -286,6 +286,7 @@
     <string name="smart_collection_batch_failed">Collection unavailable or queue action rejected</string>
     <string name="canonical_filter_all">All</string>
     <string name="apple_search_top_results">Top Results</string>
+    <string name="apple_search_view_details">View details</string>
     <string name="canonical_filter_songs">Songs</string>
     <string name="canonical_filter_videos">Videos</string>
     <string name="canonical_search_hint">Search the music catalog. Metadata alone does not provide audio.</string>
