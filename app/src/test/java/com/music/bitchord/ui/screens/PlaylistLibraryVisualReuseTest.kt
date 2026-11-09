@@ -382,6 +382,30 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
+    @Test fun librarySearchUsesSearchImeWithoutClearingTheActiveFilter() {
+        var query by mutableStateOf("")
+        compose.setContent {
+            PlaylistLibrarySearchField(
+                query = query,
+                onQueryChange = { query = it },
+            )
+        }
+        val hint = org.robolectric.RuntimeEnvironment.getApplication().resources.let {
+            it.getString(com.music.bitchord.R.string.apple_library_search_in_category,
+                it.getString(com.music.bitchord.R.string.playlists))
+        }
+        val field = compose.onNodeWithContentDescription(hint)
+        field.assert(
+            androidx.compose.ui.test.SemanticsMatcher.expectValue(
+                androidx.compose.ui.semantics.SemanticsProperties.ImeAction,
+                androidx.compose.ui.text.input.ImeAction.Search,
+            ),
+        )
+        field.performTextInput("newjeans")
+        field.performImeAction()
+        compose.runOnIdle { assertEquals("newjeans", query) }
+    }
+
     @Test fun unifiedSongGridCanReuseAlbumAndArtistCardActionsWithoutAnotherCard() {
         var plays = 0
         var overflow = 0
