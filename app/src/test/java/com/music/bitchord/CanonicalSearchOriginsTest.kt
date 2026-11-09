@@ -4,6 +4,7 @@ import com.music.bitchord.data.sources.SourceConfig
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.SearchOrigin
+import com.music.bitchord.ui.availableSearchProviderTabs
 import com.music.bitchord.ui.searchOriginOf
 import com.music.bitchord.ui.searchSourceForOrigin
 import com.music.bitchord.ui.screens.canonicalSearchEditing
@@ -15,6 +16,56 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalSearchOriginsTest {
+    @Test fun catalogIsOnlyVisibleOriginWithoutVerifiedLocalOrConfiguredApis() {
+        val tabs = availableSearchProviderTabs(
+            configs = emptyList(),
+            remoteProviderKeys = listOf("local-mediastore"),
+            hasLocalTracks = false,
+            catalogLabel = "Catálogo",
+            localLabel = "Local",
+        )
+        assertEquals(listOf("Catálogo"), tabs.map { it.label })
+        assertEquals(listOf(SearchSource.CANONICAL), tabs.map { it.source })
+    }
+
+    @Test fun localOnlyAppearsWithVerifiedDeviceTracksAndNoGenericServerOrigin() {
+        val tabs = availableSearchProviderTabs(
+            configs = emptyList(),
+            remoteProviderKeys = listOf("local-mediastore"),
+            hasLocalTracks = true,
+            catalogLabel = "Catálogo",
+            localLabel = "Local",
+        )
+        assertEquals(listOf("Catálogo", "Local"), tabs.map { it.label })
+        assertEquals(listOf("catalog", "local"), tabs.map { it.key })
+    }
+
+    @Test fun configuredApisOwnSeparateTabsAndDisabledApisDoNotAppear() {
+        val tabs = availableSearchProviderTabs(
+            configs = listOf(
+                SourceConfig(id = "ember", kind = SourceKind.ADDON, label = "Ember",
+                    baseUrl = "https://ember.example", enabled = true),
+                SourceConfig(id = "disabled", kind = SourceKind.ADDON, label = "Other",
+                    baseUrl = "https://other.example", enabled = false),
+            ),
+            remoteProviderKeys = listOf("opensubsonic:accountA", "local-mediastore",
+                "opensubsonic:accountB", "jellyfin:accountC"),
+            hasLocalTracks = false,
+            catalogLabel = "Catálogo",
+            localLabel = "Local",
+        )
+        assertEquals(
+            listOf("Catálogo", "Navidrome 1", "Navidrome 2", "Jellyfin", "Ember"),
+            tabs.map { it.label },
+        )
+        assertEquals(
+            listOf("catalog", "remote:opensubsonic:accountA", "remote:opensubsonic:accountB",
+                "remote:jellyfin:accountC", "addon:ember"),
+            tabs.map { it.key },
+        )
+        assertTrue(tabs.drop(1).all { it.source == SearchSource.ADDONS })
+    }
+
     @Test fun appleSearchEditingOnlyShowsSuggestionsBeforeSubmission() {
         assertTrue(canonicalSearchEditing("newjeans", searchCommitted = false, detailOpen = false))
         assertFalse(canonicalSearchEditing("", searchCommitted = false, detailOpen = false))
