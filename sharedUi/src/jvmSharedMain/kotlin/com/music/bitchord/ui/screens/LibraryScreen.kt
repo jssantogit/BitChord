@@ -159,7 +159,8 @@ fun LibraryScreen(
                         style = if (navigationHome) MaterialTheme.typography.headlineLarge.copy(
                             fontSize = 36.sp, fontWeight = FontWeight.Bold,
                         ) else MaterialTheme.typography.displayLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = if (navigationHome) androidx.compose.ui.graphics.Color.White
+                            else MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(
                             start = if (navigationHome) 18.dp else PAGE_GUTTER,
                             end = if (navigationHome) 18.dp else PAGE_GUTTER,
