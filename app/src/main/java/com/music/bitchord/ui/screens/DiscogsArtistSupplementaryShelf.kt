@@ -56,6 +56,12 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
         if (artistMbid == null || !DiscogsEditionAccess.ENABLED) return@produceState
         value = try {
             withContext(Dispatchers.IO) {
+                // A prior exact-artist source-only snapshot was already
+                // validated against a completed MusicBrainz discography.
+                // Reopen the page without repeating provider calls during TTL.
+                DiscogsSourceOnlyDiscovery.store.activeForArtist(
+                    artistMbid, System.currentTimeMillis(),
+                )?.let { return@withContext it }
                 // The initial MusicBrainz page is not complete for large artists.
                 // Never identify source-only releases until a bounded, exact
                 // artist-MBID browse has checked every relevant group.
