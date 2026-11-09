@@ -4424,8 +4424,11 @@ private fun BitChordApp(
                     rootActionsOffset = when {
                         appleExploreRootChrome -> 20.dp
                         appleLibraryLandingChrome -> 10.dp
+                        appleLibraryCategoryChrome || applePlaylistCategoryChrome -> 12.dp
                         else -> 0.dp
                     },
+                    categoryBackButton = appleLibraryCategoryChrome || applePlaylistCategoryChrome,
+                    backButtonOffset = if (appleLibraryCategoryChrome || applePlaylistCategoryChrome) 12.dp else 0.dp,
                     // The generic top bar scroll flag flips after 24px,
                     // while the large Home heading is still fully legible.
                     // Only show its compact replacement when item 0 has left
