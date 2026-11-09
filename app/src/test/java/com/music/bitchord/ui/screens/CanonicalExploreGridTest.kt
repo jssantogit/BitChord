@@ -8,6 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.model.MoodGenreSection
 import com.music.bitchord.data.model.ShelfItem
@@ -26,6 +30,27 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class CanonicalExploreGridTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun exploreAndLibraryShareCompactSettingsOnlyOverflow() {
+        var openedSettings = 0
+        compose.setContent {
+            MaterialTheme {
+                com.music.bitchord.ui.components.AppleRootSettingsOverflow(
+                    hazeState = null,
+                    description = "Mais opções de Explorar",
+                    onSettings = { openedSettings++ },
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Mais opções de Explorar").performClick()
+        compose.onNodeWithTag("apple-root-settings-popup").assertExists()
+        compose.onNodeWithTag("apple-root-settings-item").assertExists()
+        compose.onNodeWithText("Editar Fixadas").assertDoesNotExist()
+        compose.onNodeWithText("Conta").assertDoesNotExist()
+        compose.onNodeWithTag("apple-root-settings-item").performClick()
+        compose.runOnIdle { assertEquals(1, openedSettings) }
+        compose.onNodeWithTag("apple-root-settings-popup").assertDoesNotExist()
+    }
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Test fun exploreKeepsOnlyCatalogGenresWithoutSearchOrEditorialEntries() {
