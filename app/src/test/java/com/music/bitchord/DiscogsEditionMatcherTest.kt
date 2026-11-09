@@ -185,7 +185,9 @@ class DiscogsEditionMatcherTest {
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(expected, linked,
                 english.copy(tracklist = english.tracklist.toMutableList().also {
-                    it[0] = "1" to "Wrong Latin Title"
+                    // A Latin-to-Latin disagreement cannot be excused
+                    // as Korean-to-English translation on the same Release.
+                    it[1] = "2" to "Wrong Latin Title"
                 }), explicitReleaseRelation = true))
     }
 
