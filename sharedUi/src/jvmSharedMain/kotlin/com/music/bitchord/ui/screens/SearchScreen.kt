@@ -1689,7 +1689,7 @@ private fun SearchFilterTabs(
                 ) {
                     Text(
                         text = when (entry) {
-                            SearchFilter.ALL -> stringResource(Res.string.canonical_filter_all)
+                            SearchFilter.ALL -> stringResource(Res.string.apple_search_top_results)
                             SearchFilter.SONGS -> stringResource(Res.string.canonical_filter_songs)
                             SearchFilter.ALBUMS -> stringResource(Res.string.albums)
                             SearchFilter.ARTISTS -> stringResource(Res.string.artists)
