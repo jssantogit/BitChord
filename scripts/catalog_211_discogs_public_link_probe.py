@@ -18,7 +18,7 @@ MBID = "5f600fc6-5c84-4c84-838e-eb87bd7363c7"
 DISCOGS_RELEASE_ID = 36297418
 USER_AGENT = "BitChordPersonalEditorialProbe/1.0 (+https://github.com/jssantogit/BitChord)"
 MB_URL = "https://musicbrainz.org/ws/2/release/" + MBID + "?" + urllib.parse.urlencode({
-    "fmt": "json", "inc": "artist-credits+release-groups+url-rels",
+    "fmt": "json", "inc": "recordings+artist-credits+release-groups+url-rels",
 })
 DISCOGS_URL = f"https://api.discogs.com/releases/{DISCOGS_RELEASE_ID}"
 MAX_BYTES = 131_072
@@ -60,6 +60,113 @@ def exact_discogs_relationship(mb: dict) -> bool:
             return True
     return False
 
+def normalized(value: str) -> str:
+    import unicodedata
+    return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+
+def explicit_discogs_type(formats: list) -> str:
+    mapping = {
+        "album": "Album", "mini-album": "EP", "ep": "EP",
+        "single": "Single", "maxi-single": "Single",
+    }
+    kinds = {
+        mapping[normalized(desc)]
+        for entry in formats if isinstance(entry, dict)
+        for desc in (entry.get("descriptions") or [])
+        if isinstance(desc, str) and normalized(desc) in mapping
+    }
+    return "ambiguous" if len(kinds) > 1 else next(iter(kinds), "unknown")
+
+def country_code(value: str | None) -> str | None:
+    lookup = {
+        "kr": "kr", "south korea": "kr",
+        "us": "us", "united states": "us",
+        "gb": "gb", "uk": "gb", "united kingdom": "gb",
+        "jp": "jp", "japan": "jp",
+    }
+    return lookup.get(normalized(value or ""))
+
+def musicbrainz_tracks(mb: dict) -> tuple[list[str], bool]:
+    media = mb.get("media")
+    if not isinstance(media, list) or not media:
+        return [], False
+    group_count = mb.get("media-count")
+    complete = group_count is None or group_count == len(media)
+    titles = []
+    for medium in media:
+        if not isinstance(medium, dict):
+            return [], False
+        tracks = medium.get("tracks")
+        if not isinstance(tracks, list) or not tracks:
+            return [], False
+        if medium.get("track-count") != len(tracks):
+            complete = False
+        for item in tracks:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                complete = False
+                continue
+            title = item.get("title") or (item.get("recording") or {}).get("title")
+            if not isinstance(title, str) or not title.strip():
+                complete = False
+                continue
+            titles.append(normalized(title))
+    return titles, bool(complete and titles)
+
+def compare_edition(mb: dict, release: dict) -> dict:
+    mb_names = [
+        (credit.get("name") or (credit.get("artist") or {}).get("name"))
+        for credit in mb.get("artist-credit", [])
+        if isinstance(credit, dict)
+    ]
+    external = [
+        artist.get("name")
+        for artist in release.get("artists", [])
+        if isinstance(artist, dict)
+    ]
+    expected = sorted(normalized(name) for name in mb_names if isinstance(name, str))
+    actual = sorted(normalized(name) for name in external if isinstance(name, str))
+    title = normalized(str(release.get("title") or ""))
+    expected_title = normalized(str(mb.get("title") or ""))
+    artist_prefixes = [name + " - " for name in expected]
+    without_prefix = next((title[len(p):] for p in artist_prefixes
+                           if title.startswith(p)), title)
+    titles, complete = musicbrainz_tracks(mb)
+    raw_tracks = release.get("tracklist")
+    discogs_titles = [
+        normalized(entry["title"])
+        for entry in raw_tracks
+        if isinstance(entry, dict) and
+        entry.get("type_", "track") == "track" and
+        isinstance(entry.get("title"), str)
+    ] if isinstance(raw_tracks, list) else []
+    mb_barcode = "".join(ch for ch in str(mb.get("barcode") or "") if ch.isdigit())
+    other_barcodes = {
+        "".join(ch for ch in str(row.get("value") or "") if ch.isdigit())
+        for row in release.get("identifiers", [])
+        if isinstance(row, dict) and row.get("type") == "Barcode"
+    }
+    other_barcodes.discard("")
+    mb_country = country_code(mb.get("country"))
+    external_country = country_code(release.get("country"))
+    formats = release.get("formats")
+    return {
+        "artist_matches": bool(expected and expected == actual),
+        "title_matches": bool(expected_title and expected_title == without_prefix),
+        "tracklist_complete": complete,
+        "tracklist_matches": bool(complete and titles == discogs_titles),
+        "track_count": len(titles),
+        "year_matches": bool(str(mb.get("date") or "")[:4].isdigit() and
+                             str(mb.get("date") or "")[:4] ==
+                             str(release.get("year") or "")),
+        "country_compatible": (mb_country is None or external_country is None or
+                               mb_country == external_country),
+        "barcode_compatible": (not mb_barcode or not other_barcodes or
+                               mb_barcode in other_barcodes),
+        "discogs_explicit_type": explicit_discogs_type(
+            formats if isinstance(formats, list) else [],
+        ),
+    }
+
 def main() -> int:
     began = time.monotonic()
     observation = {
@@ -98,6 +205,16 @@ def main() -> int:
                 isinstance(fmt.get("descriptions"), list) and
                 bool(fmt["descriptions"])
                 for fmt in formats
+            )
+        )
+        observation.update(compare_edition(mb, release))
+        # The observation labels only field compatibility. The app's VERIFIED
+        # verdict requires its own complete matcher, source state and TTL.
+        observation["public_edition_facts_compatible"] = all(
+            observation[field] for field in (
+                "artist_matches", "title_matches", "tracklist_complete",
+                "tracklist_matches", "year_matches",
+                "country_compatible", "barcode_compatible",
             )
         )
         observation["result"] = (
