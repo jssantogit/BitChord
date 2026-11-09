@@ -125,6 +125,65 @@ class DiscogsEditionMatcherTest {
             DiscogsEditionMatcher.assess(exact.copy(releaseYear = null), linked, record))
     }
 
+    @Test fun directReleaseLinkCanCorroborateOrderedCrossScriptTrackTitles() {
+        // Observed in ENHYPEN's 2026 release: the same 11 ordered tracks,
+        // five Korean vs English titles and six exact shared Latin titles.
+        val musicBrainz = canon.copy(
+            country = "KR", releaseYear = 2024,
+            trackTitles = listOf(
+                "사건의 발단", "No Way Back", "도망자들", "Knife",
+                "Stealer", "우리가 찾던 목소리", "목격자",
+                "Big Girls Don't Cry", "Lost Island", "Sleep Tight", "사건의 너머",
+            ),
+        )
+        val observed = record.copy(
+            country = "South Korea",
+            tracklist = listOf(
+                "The Beginning", "No Way Back", "The Fugitives", "Knife",
+                "Stealer", "The Voice", "Witnesses", "Big Girls Don't Cry",
+                "Lost Island", "Sleep Tight", "The Beyond",
+            ).mapIndexed { i, title -> "${i + 1}" to title },
+        )
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(musicBrainz, linked, observed))
+        // A search result or Master-derived edition has no direct Release URL
+        // anchor and must NEVER benefit from this narrow exception.
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assessUnlinked(musicBrainz, observed))
+    }
+
+    @Test fun crossScriptLinkCannotHideWrongTrackOrderOrIncompleteEdition() {
+        val original = listOf("첫번째", "Track B", "세번째", "Track D", "Track E")
+        val expected = canon.copy(
+            country = "KR", releaseYear = 2024, trackTitles = original,
+        )
+        val english = record.copy(
+            country = "South Korea",
+            tracklist = listOf("First", "Track B", "Third", "Track D", "Track E")
+                .mapIndexed { i, title -> "${i+1}" to title },
+        )
+        // Five tracks, three exact comparisons, two cross-script substitutions.
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(expected, linked, english))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(expected, linked,
+                english.copy(tracklist = english.tracklist.reversed())))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(expected, linked,
+                english.copy(tracklist = english.tracklist.dropLast(1))))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(expected.copy(country = "XW"), linked, english))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(expected.copy(barcodes = emptyList()), linked, english))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(expected.copy(releaseYear = null), linked, english))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(expected, linked,
+                english.copy(tracklist = english.tracklist.toMutableList().also {
+                    it[0] = "1" to "Wrong Latin Title"
+                })))
+    }
+
     @Test fun separateMastersOrNameOnlyMatchesNeverCreateAnEdition() {
         assertEquals(DiscogsEditionVerdict.CONFLICT,
             DiscogsEditionMatcher.assess(canon, DiscogsLink(DiscogsKind.MASTER,12001),record))
