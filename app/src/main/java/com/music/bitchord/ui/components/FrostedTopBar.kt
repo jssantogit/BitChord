@@ -402,6 +402,7 @@ internal fun ArtworkPageBackButton(
         onClick = onClick,
         modifier = modifier
             .size(size)
+            .then(if (size == 40.dp) Modifier.testTag("apple-category-back-button") else Modifier)
             .then(artworkPageSurface(shape = shape, hazeState = hazeState)),
     ) {
         Icon(
