@@ -393,6 +393,35 @@ fun SearchScreen(
                                 onClick = { onSuggestionClick(term) },
                             )
                         }
+                        // The ViewModel already resolves cached MusicBrainz
+                        // artists/recordings while typing. Reuse those real
+                        // identities without any new network requests.
+                        val cachedMatches = (canonicalResults as? UiState.Success)
+                            ?.data.orEmpty()
+                        itemsIndexed(
+                            canonicalRowsForQuery(
+                                cachedMatches, query, SearchFilter.ALL,
+                            ).take(5),
+                            key = { _, row ->
+                                "canonical:cached:" + row.kind + ":" +
+                                    (row.trackMbid ?: row.musicBrainzId)
+                            },
+                        ) { _, row ->
+                            val kind = when (row.kind) {
+                                CanonicalSearchKind.RECORDING -> stringResource(Res.string.canonical_recording_kind)
+                                CanonicalSearchKind.RELEASE_GROUP -> stringResource(Res.string.canonical_group_kind)
+                                CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
+                                CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
+                            }
+                            NativeSearchResultRow(
+                                row = canonicalNativeSearchRowUi(row, kind),
+                                onClick = when {
+                                    row.kind != CanonicalSearchKind.RECORDING -> ({ onCanonicalOpen(row) })
+                                    row.hasCatalogedAsset -> ({ onCanonicalPlay(row.musicBrainzId) })
+                                    else -> null
+                                },
+                            )
+                        }
                     }
                     if (query.isBlank() &&
                         canonicalResults == null && canonicalDetail == null
