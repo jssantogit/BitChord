@@ -4421,6 +4421,11 @@ private fun BitChordApp(
                     // beside the large Início title.
                     showActions = true,
                     separateActions = appleLibraryRoundChrome,
+                    rootActionsOffset = when {
+                        appleExploreRootChrome -> 20.dp
+                        appleLibraryLandingChrome -> 10.dp
+                        else -> 0.dp
+                    },
                     // The generic top bar scroll flag flips after 24px,
                     // while the large Home heading is still fully legible.
                     // Only show its compact replacement when item 0 has left
@@ -4590,7 +4595,7 @@ private fun BitChordApp(
                                     }
                                 }
                             }
-                            LibrarySettingsOverflowCircle(
+                            com.music.bitchord.ui.components.AppleRootSettingsOverflow(
                                 hazeState = hazeState,
                                 description = if (appleExploreRootChrome) "Mais opções de Explorar"
                                     else "Mais opções da biblioteca",
@@ -6398,30 +6403,6 @@ private fun ConnectionEditors(
         }
 
 
-}
-
-/** Only Settings belongs to the undrilled Library overflow; detail pages retain actions. */
-@Composable
-private fun LibrarySettingsOverflowCircle(
-    hazeState: HazeState,
-    description: String = "Mais opções da biblioteca",
-    onSettings: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
-            IconButton(onClick = { expanded = true }) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = description,
-                    tint = MaterialTheme.colorScheme.onSurface)
-            }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.settings)) },
-                onClick = { expanded = false; onSettings() },
-            )
-        }
-    }
 }
 
 /** Native toolbar actions shared by library and canonical playlist details. */
