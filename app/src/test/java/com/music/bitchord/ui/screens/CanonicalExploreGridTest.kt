@@ -70,7 +70,7 @@ class CanonicalExploreGridTest {
         }
         compose.onNodeWithText("Servidor").performClick()
         compose.runOnIdle { assertEquals(1, selected) }
-        compose.onNodeWithContentDescription("Voltar da pesquisa").performClick()
+        compose.onNodeWithTag("apple-search-back").performClick()
         compose.runOnIdle {
             assertEquals(1, backs)
             assertEquals(0, submits)
