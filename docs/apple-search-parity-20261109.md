@@ -45,3 +45,5 @@ A visible pre-submit bug was found during code review: canonical typed-query sug
 The user-facing three-source selector remains Geral / Servidor / Sua Biblioteca. It is shown during query editing, the result-type tabs after submission. Server and local sources are not relabeled as Apple Music services; no fictional autocomplete/network suggestions. No alternate search screen or new backend, no merge or smoke triggered in this checkpoint.
 
 - Server search, like General, now has a distinct pre-submit stage: the typed-query Search action plus up to two matching **stored server terms** are shown. No server request or unverified network autocomplete is triggered merely by editing. Server result-empty messaging is deferred until a submitted request. `serverSearchEditing` has tests for empty, whitespace, editing, and committed states.
+
+- Root Search now explicitly excludes the top-bar account avatar and download manager action while the inline Back/Search/Clear field is displayed. This corrects a wiring gap between the documented design and the actual MainActivity condition; Home, Library and opened detail routes retain their former controls.
