@@ -4367,8 +4367,19 @@ private fun BitChordApp(
                 val applePlaylistCategoryChrome = showPlaylistLibrary &&
                     openedCanonicalPlaylist == null && !showSmartPlaylistBuilder &&
                     detail == null && !showSettings
+                // Explore keeps its own genre-only page, not Apple's search field.
+                // Only its top overflow reuses the already-native Settings menu.
+                val appleExploreRootChrome = selectedTab == TAB_EXPLORE &&
+                    activeCanonicalGenre == null && detail == null &&
+                    libraryShowAll == null && unifiedLibraryCategory == null &&
+                    !showPlaylistLibrary && !showSettings && !showHistory &&
+                    !showReplay && !showSpotify && !showDiscord &&
+                    !showAccountScrobbling && !showSources && !showListenTogether &&
+                    !showWearOs && !showEqualizer && !showSmartPlaylistBuilder &&
+                    openedPublicPlaylist == null
                 val appleLibraryRoundChrome = appleLibraryLandingChrome ||
-                    appleLibraryCategoryChrome || applePlaylistCategoryChrome
+                    appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
+                    appleExploreRootChrome
 
                 FrostedTopBar(
                     title = when {
@@ -4579,7 +4590,12 @@ private fun BitChordApp(
                                     }
                                 }
                             }
-                            LibrarySettingsOverflowCircle(hazeState) { showSettings = true }
+                            LibrarySettingsOverflowCircle(
+                                hazeState = hazeState,
+                                description = if (appleExploreRootChrome) "Mais opções de Explorar"
+                                    else "Mais opções da biblioteca",
+                                onSettings = { showSettings = true },
+                            )
                         } else {
                         UnifiedLibraryRouteToolbar(
                             recentPage = showAllLocalRecentAdditions,
@@ -6388,13 +6404,14 @@ private fun ConnectionEditors(
 @Composable
 private fun LibrarySettingsOverflowCircle(
     hazeState: HazeState,
+    description: String = "Mais opções da biblioteca",
     onSettings: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
         com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
             IconButton(onClick = { expanded = true }) {
-                Icon(Icons.Rounded.MoreVert, contentDescription = "Mais opções da biblioteca",
+                Icon(Icons.Rounded.MoreVert, contentDescription = description,
                     tint = MaterialTheme.colorScheme.onSurface)
             }
         }
