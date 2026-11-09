@@ -2170,6 +2170,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Every track in the Local Music folder, read when the Library source is picked. */
     private val _librarySongs = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
+    /** Exposes *unfiltered* local availability for the optional Local source tab. */
+    val availableLocalSongs: StateFlow<UiState<List<Song>>> = _librarySongs.asStateFlow()
 
     /**
      * The Library source's answer for the current query: the Local Music
