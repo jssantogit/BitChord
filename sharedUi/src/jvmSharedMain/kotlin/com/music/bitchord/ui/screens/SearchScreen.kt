@@ -232,6 +232,7 @@ fun SearchScreen(
     onCanonicalPlaylistOpen: (CanonicalPublicPlaylistSearchRow) -> Unit = {},
     canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
     onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
+    onCanonicalRecordingInfo: (CanonicalCatalogSearchRow) -> Unit = {},
     onCanonicalBack: () -> Unit = {},
     onCanonicalLoadMore: () -> Unit = {},
     canonicalLoadingMore: Boolean = false,
@@ -353,8 +354,8 @@ fun SearchScreen(
                     filter = filter,
                     onFilterChange = onFilterChange,
                     available = if (searchingCanonical) listOf(
-                        SearchFilter.ALL, SearchFilter.SONGS,
-                        SearchFilter.ALBUMS, SearchFilter.ARTISTS,
+                        SearchFilter.ALL, SearchFilter.ARTISTS,
+                        SearchFilter.ALBUMS, SearchFilter.SONGS,
                         SearchFilter.PLAYLISTS,
                     ) else SearchFilter.entries,
                 )
@@ -428,6 +429,13 @@ fun SearchScreen(
                                     row.hasCatalogedAsset -> ({ onCanonicalPlay(row.musicBrainzId) })
                                     else -> null
                                 },
+                                onMoreActions = listOf(
+                                    NativeSearchRowAction(stringResource(Res.string.apple_search_view_details)) {
+                                        if (row.kind == CanonicalSearchKind.RECORDING)
+                                            onCanonicalRecordingInfo(row)
+                                        else onCanonicalOpen(row)
+                                    },
+                                ),
                             )
                         }
                     }
@@ -466,6 +474,7 @@ fun SearchScreen(
                     onCanonicalSearchLoadMore, canonicalSearchHasMore,
                     canonicalSearchLoadingMore,
                     onCanonicalPlay, onCanonicalAddToQueue,
+                    onCanonicalRecordingInfo, appleResultTabs,
                 )
                 }
                 searchingAddons && serverSearchEditing(query, searchCommitted) -> {
@@ -522,6 +531,7 @@ fun SearchScreen(
                     onSongClick = if (searchingAddons) onAddonSongClick else onLibrarySongClick,
                     onSongLongPress = onSongLongPress,
                     onSongSwipe = onSongSwipe,
+                    appleStyle = appleResultTabs,
                 )
                 suggesting -> {
                     searchSuggestions(
@@ -584,7 +594,7 @@ fun SearchScreen(
                         }
                     }
                     searchSections(results.data, filter).forEach { section ->
-                        section.title?.let { title ->
+                        if (!appleResultTabs) section.title?.let { title ->
                             item(key = "search-section:$title") {
                                 Text(
                                     text = title,
@@ -629,7 +639,7 @@ fun SearchScreen(
                                     onLongPress = onBrowseLongPress?.let { { it(row.item) } },
                                 )
                             }
-                            if (index < section.rows.lastIndex) {
+                            if (!appleResultTabs && index < section.rows.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                                     thickness = 0.5.dp,
@@ -1099,6 +1109,7 @@ private fun LazyListScope.librarySearchResults(
     onSongClick: (List<Song>, Int) -> Unit,
     onSongLongPress: (Song) -> Unit,
     onSongSwipe: (Song) -> Unit,
+    appleStyle: Boolean = false,
 ) {
     when (results) {
         null -> if (addons && query.isEmpty() && addonHistory.isNotEmpty()) {
@@ -1135,7 +1146,7 @@ private fun LazyListScope.librarySearchResults(
                     activeTint = PlayingAccent,
                     showSourceQuality = addons,
                 )
-                if (index < tracks.lastIndex) {
+                if (!appleStyle && index < tracks.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
@@ -1288,7 +1299,7 @@ private fun SuggestionRow(
             // The first row is the deliberate action to search the exact text
             // in the field, not a server-provided completion. Naming it makes
             // the otherwise duplicated wording read as intentional.
-            text = if (isQueryAction) """${stringResource(Res.string.search)} "$term"""" else term,
+            text = term,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
@@ -1689,7 +1700,10 @@ private fun SearchFilterTabs(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = PAGE_GUTTER, vertical = 6.dp),
+            .padding(
+                horizontal = if (appleStyle) 0.dp else PAGE_GUTTER,
+                vertical = if (appleStyle) 4.dp else 6.dp,
+            ),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -1713,14 +1727,14 @@ private fun SearchFilterTabs(
                             SearchFilter.PLAYLISTS -> stringResource(Res.string.playlists)
                         }).uppercase(Locale.getDefault()),
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) MaterialTheme.colorScheme.primary
+                        color = if (selected) AppleSearchBlue
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
                     )
                     Box(
-                        Modifier.fillMaxWidth().height(2.dp).background(
-                            if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        Modifier.fillMaxWidth().height(3.dp).background(
+                            if (selected) AppleSearchBlue else Color.Transparent,
                         ),
                     )
                 }
@@ -1771,27 +1785,31 @@ fun AppleSearchOriginTabs(
     onSelect: (Int) -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth().then(
+            if (options.size <= 2) Modifier else Modifier.horizontalScroll(rememberScrollState()),
+        ),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEachIndexed { index, label ->
             val selected = index == selectedIndex
             Column(
-                modifier = Modifier.clickable { if (!selected) onSelect(index) },
+                modifier = Modifier
+                    .then(if (options.size <= 2) Modifier.weight(1f) else Modifier)
+                    .clickable { if (!selected) onSelect(index) },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     text = label.uppercase(Locale.getDefault()),
                     style = MaterialTheme.typography.titleSmall,
-                    color = if (selected) MaterialTheme.colorScheme.primary
+                    color = if (selected) AppleSearchBlue
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
                 )
                 Box(
-                    Modifier.fillMaxWidth().height(2.dp).background(
-                        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    Modifier.fillMaxWidth().height(3.dp).background(
+                        if (selected) AppleSearchBlue else Color.Transparent,
                     ),
                 )
             }
@@ -1800,4 +1818,7 @@ fun AppleSearchOriginTabs(
 }
 
 /** Rounded, but well short of a capsule — the corner reads as a cut, not a curve. */
+/** Apple-style selected tabs are blue independently of the dynamic artwork theme. */
+private val AppleSearchBlue = Color(0xFF009CFF)
+
 private val FILTER_PILL_SHAPE = RoundedCornerShape(12.dp)
