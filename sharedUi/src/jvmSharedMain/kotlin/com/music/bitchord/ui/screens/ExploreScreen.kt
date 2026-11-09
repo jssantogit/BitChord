@@ -82,12 +82,7 @@ fun ExploreScreen(
             val columns = moodColumns(maxWidth)
             LazyColumn(
                 state = listState,
-                contentPadding = PaddingValues(
-                    start = 0.dp, end = 0.dp,
-                    top = (contentPadding.calculateTopPadding() - if (showTitle) 40.dp else 0.dp)
-                        .coerceAtLeast(0.dp),
-                    bottom = contentPadding.calculateBottomPadding(),
-                ),
+                contentPadding = contentPadding,
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (showTitle) {
@@ -320,7 +315,7 @@ private fun fallbackMoodColor(title: String): Color = when ((title.hashCode() an
 /** Gap between mood cards, in both directions. */
 private val MOOD_SPACING = 12.dp
 
-private val MOOD_CARD_SHAPE = RoundedCornerShape(10.dp)
+private val MOOD_CARD_SHAPE = RoundedCornerShape(18.dp)
 
 /** Width over height; a two-column phone row lands at about 100dp tall. */
 const val MOOD_CARD_ASPECT = 1.72f
