@@ -1,6 +1,9 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.discogs.*
+import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
+import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -48,6 +51,76 @@ class DiscogsPublicArtistDiscoveryTest {
             """{"pagination":{"page":9,"pages":2},"releases":[]}""", 1))
         assertNull(DiscogsPublicArtistParsing.page(
             """{"pagination":{"page":1,"pages":3},"releases":null}""", 1))
+    }
+
+    @Test fun anonymousLinkedArtistCanRecoverTypedMetadataWithoutSearchToken() = runBlocking {
+        val requested = mutableListOf<Int>()
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String {
+                assertEquals("artist/$mbid", path)
+                return relation()
+            }
+        })
+        val artist = object : DiscogsPublicArtistTransport {
+            override suspend fun list(
+                artistId: Long, page: Int, userAgent: String,
+            ): DiscogsHttpResponse {
+                assertEquals(8303009L, artistId)
+                requested += page
+                return DiscogsHttpResponse(200, """{
+                    "pagination":{"page":1,"pages":1},
+                    "releases":[{"id":12001,"type":"release","role":"Main",
+                      "title":"NOT ON MUSICBRAINZ"}]}""")
+            }
+        }
+        val editions = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/12001", path)
+                return DiscogsHttpResponse(200, """{
+                    "id":12001,"title":"NOT ON MUSICBRAINZ",
+                    "artists":[{"name":"ENHYPEN"}],
+                    "country":"South Korea","year":2026,
+                    "labels":[{"name":"BELIFT LAB","catno":"ABC-1"}],
+                    "formats":[{"name":"CD","descriptions":["EP"]}],
+                    "tracklist":[{"position":"1","title":"Song One"}]
+                }""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        val discovery = DiscogsPublicArtistDiscovery(
+            musicBrainz = mb, transport = artist, editions = editions,
+            enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+            nowMillis = { 1_000L },
+        )
+        val recovered = discovery.findForArtist(
+            musicBrainzArtistMbid = mbid,
+            artistName = "ENHYPEN",
+            completedMusicBrainzTitles = setOf("KNOWN TITLE"),
+        )
+        assertEquals(listOf(1), requested)
+        assertEquals(listOf("NOT ON MUSICBRAINZ"), recovered.map { it.title })
+        assertEquals(DiscogsEditorialShelf.EPS, recovered.single().shelf)
+        assertNull(recovered.single().musicBrainzId)
+        assertFalse(recovered.single().canPlay)
+    }
+
+    @Test fun noExactArtistRelationMeansNoAnonymousDiscogsHttpRequest() = runBlocking {
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$mbid","relations":[]}"""
+        })
+        val discovery = DiscogsPublicArtistDiscovery(
+            musicBrainz = mb,
+            transport = object : DiscogsPublicArtistTransport {
+                override suspend fun list(
+                    artistId: Long, page: Int, userAgent: String,
+                ): DiscogsHttpResponse = error("No artist relation: no public Discogs request")
+            },
+            enabled = true,
+        )
+        assertTrue(discovery.findForArtist(mbid, "ENHYPEN", emptySet()).isEmpty())
     }
 
     @Test fun withoutExactArtistLinkNoCatalogDiscoveryShouldBeAuthorized() {
