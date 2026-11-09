@@ -3905,8 +3905,10 @@ private fun BitChordApp(
                             // General routes to canonical search (or legacy
                             // YouTube if explicitly in legacy mode) and also
                             // includes indexed server assets and enabled addons.
+                            searchCommitted = viewModel.searchCommitted.collectAsStateWithLifecycle().value,
+                            appleResultTabs = true,
                             sourceSwitcher = {
-                                SegmentedControl(
+                                com.music.bitchord.ui.screens.AppleSearchOriginTabs(
                                     options = listOf(
                                         stringResource(R.string.search_origin_general),
                                         stringResource(R.string.search_origin_server),
@@ -4377,6 +4379,12 @@ private fun BitChordApp(
                     !showAccountScrobbling && !showSources && !showListenTogether &&
                     !showWearOs && !showEqualizer && !showSmartPlaylistBuilder &&
                     openedPublicPlaylist == null
+                val appleSearchRootChrome = selectedTab == TAB_SEARCH &&
+                    detail == null && libraryShowAll == null &&
+                    unifiedLibraryCategory == null && !showSettings &&
+                    !showAccountScrobbling && !showSources && !showListenTogether &&
+                    !showWearOs && !showEqualizer && !showDiscord &&
+                    !showHistory && !showReplay
                 val appleLibraryRoundChrome = appleLibraryLandingChrome ||
                     appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
                     appleExploreRootChrome
@@ -4419,7 +4427,7 @@ private fun BitChordApp(
                     // Home uses this existing frosted action pill from the first frame.
                     // Never render a second profile button or Material3 overflow
                     // beside the large Início title.
-                    showActions = true,
+                    showActions = !appleSearchRootChrome,
                     separateActions = appleLibraryRoundChrome,
                     rootActionsOffset = when {
                         appleExploreRootChrome -> 20.dp
@@ -4520,13 +4528,7 @@ private fun BitChordApp(
                     },
                     modifier = Modifier.align(Alignment.TopCenter),
                     // Only on the Search tab itself, not on anything pushed over it.
-                    accessory = if (
-                        selectedTab == TAB_SEARCH && detail == null &&
-                        libraryShowAll == null && unifiedLibraryCategory == null &&
-                        !showSettings && !showAccountScrobbling &&
-                        !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showDiscord &&
-                        !showHistory && !showReplay
-                    ) {
+                    accessory = if (appleSearchRootChrome) {
                         {
                             // The search field lives up here in the bar, beside the
                             // account photo, so it answers the nav bar's Search tap
@@ -4539,11 +4541,17 @@ private fun BitChordApp(
                                     searchFocusRequested = false
                                 }
                             }
+                            val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
                             SearchField(
                                 query = query,
                                 onQueryChange = viewModel::onQueryChange,
                                 onSubmit = viewModel::submitSearch,
                                 focusRequester = searchFieldFocus,
+                                appleSearchChrome = true,
+                                onBack = {
+                                    if (query.isNotEmpty()) viewModel.onQueryChange("")
+                                    focusManager.clearFocus()
+                                },
                                 placeholder = org.jetbrains.compose.resources.stringResource(
                                     if (searchSource == SearchSource.LIBRARY) {
                                         SharedRes.string.search_library_hint
