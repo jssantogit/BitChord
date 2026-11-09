@@ -185,6 +185,8 @@ fun FrostedTopBar(
     separateActions: Boolean = false,
     /** Only root tabs with large in-list titles need the actions lowered to match. */
     rootActionsOffset: Dp = 0.dp,
+    categoryBackButton: Boolean = false,
+    backButtonOffset: Dp = 0.dp,
     /** Only Home opts in: other pages retain their own large page headings. */
     showScrolledTitle: Boolean = false,
     actions: @Composable () -> Unit = {},
@@ -319,12 +321,14 @@ fun FrostedTopBar(
                     ArtworkPageBackButton(
                         onClick = onBack,
                         hazeState = backButtonHazeState,
+                        size = if (categoryBackButton) 40.dp else 44.dp,
                         // The surface edge aligns with the floating navbar. The
                         // padding belongs outside the circle; its icon remains
                         // centred in the same 44dp control in every material.
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .padding(start = BAR_GUTTER),
+                            .padding(start = BAR_GUTTER)
+                            .offset(y = backButtonOffset),
                     )
                 } else {
                     IconButton(
@@ -383,6 +387,7 @@ internal fun ArtworkPageBackButton(
     onClick: () -> Unit,
     hazeState: HazeState?,
     modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
 ) {
     val shape = CircleShape
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
@@ -396,7 +401,7 @@ internal fun ArtworkPageBackButton(
     IconButton(
         onClick = onClick,
         modifier = modifier
-            .size(44.dp)
+            .size(size)
             .then(artworkPageSurface(shape = shape, hazeState = hazeState)),
     ) {
         Icon(
@@ -430,7 +435,7 @@ internal fun FloatingLibraryTopBarCircle(
  *
  * am-descomp/docs/components/overflow-menu.md confirms a dark rounded popup
  * anchored near the top-right, but leaves exact dimensions and placement
- * unknown. The 236dp width, 22dp corner radius and 38dp offset are explicitly
+ * unknown. The compact 180dp width, 17dp corner radius and 38dp offset are
  * screenshot-guided Bitchord values, not recovered Apple constants.
  *
  * Only Settings is exposed: Edit Pins remains blocked by am-descomp #1 and
@@ -444,7 +449,7 @@ internal fun AppleRootSettingsOverflow(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val offsetPx = with(LocalDensity.current) { 38.dp.roundToPx() }
-    val shape = RoundedCornerShape(22.dp)
+    val shape = RoundedCornerShape(17.dp)
     Box {
         FloatingLibraryTopBarCircle(hazeState) {
             IconButton(onClick = { expanded = true }) {
@@ -464,28 +469,26 @@ internal fun AppleRootSettingsOverflow(
             ) {
                 Box(
                     modifier = Modifier
-                        .width(236.dp)
-                        .shadow(12.dp, shape)
-                        .clip(shape)
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .98f))
-                        .border(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = .20f), shape)
+                        .width(180.dp)
+                        .then(artworkPageSurface(shape = shape, hazeState = hazeState))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .18f))
                         .testTag("apple-root-settings-popup"),
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(68.dp)
+                            .height(52.dp)
                             .clickable {
                                 expanded = false
                                 onSettings()
                             }
                             .testTag("apple-root-settings-item")
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = stringResource(R.string.settings),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                     }
