@@ -15,12 +15,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material3.Icon
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,6 +36,7 @@ import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.contextClick
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -48,6 +56,12 @@ data class NativeSearchRowUi(
     val durationLabel: String? = null,
 )
 
+/** User actions are supplied by the source adapter, never inferred from an MBID. */
+data class NativeSearchRowAction(
+    val label: String,
+    val onClick: () -> Unit,
+)
+
 /**
  * Original 52dp native search row, now shared by legacy Search, MusicBrainz
  * public metadata search and server/local search. The caller decides whether
@@ -60,7 +74,9 @@ fun NativeSearchResultRow(
     onClick: (() -> Unit)?,
     onLongPress: (() -> Unit)? = null,
     horizontalPadding: androidx.compose.ui.unit.Dp = PAGE_GUTTER,
+    onMoreActions: List<NativeSearchRowAction> = emptyList(),
 ) {
+    var moreExpanded by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -117,13 +133,30 @@ fun NativeSearchResultRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        row.durationLabel?.let { duration ->
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        // Apple-style search places contextual actions here, never a duration.
+        // An action only appears when the owning source supplies a real callback.
+        if (onMoreActions.isNotEmpty()) {
+            Box(Modifier.testTag("search-row-more-actions")) {
+                RowMoreButton(
+                    onClick = { moreExpanded = true },
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    iconSize = 22.dp,
+                )
+                DropdownMenu(
+                    expanded = moreExpanded,
+                    onDismissRequest = { moreExpanded = false },
+                ) {
+                    onMoreActions.forEach { action ->
+                        DropdownMenuItem(
+                            text = { Text(action.label) },
+                            onClick = {
+                                moreExpanded = false
+                                action.onClick()
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }
