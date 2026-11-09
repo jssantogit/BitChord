@@ -157,7 +157,7 @@ fun LibraryScreen(
                     Text(
                         text = stringResource(Res.string.library),
                         style = if (navigationHome) MaterialTheme.typography.headlineLarge.copy(
-                            fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                            fontSize = 26.sp, fontWeight = FontWeight.Bold,
                         ) else MaterialTheme.typography.displayLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(
