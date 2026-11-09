@@ -169,10 +169,10 @@ class DiscogsEditionMatcherTest {
                 explicitReleaseRelation = true))
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(expected, linked,
-                english.copy(tracklist = english.tracklist.reversed())), explicitReleaseRelation = true)
+                english.copy(tracklist = english.tracklist.reversed()), explicitReleaseRelation = true))
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(expected, linked,
-                english.copy(tracklist = english.tracklist.dropLast(1))), explicitReleaseRelation = true)
+                english.copy(tracklist = english.tracklist.dropLast(1)), explicitReleaseRelation = true))
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(expected.copy(country = "XW"), linked, english,
                 explicitReleaseRelation = true))
@@ -186,7 +186,7 @@ class DiscogsEditionMatcherTest {
             DiscogsEditionMatcher.assess(expected, linked,
                 english.copy(tracklist = english.tracklist.toMutableList().also {
                     it[0] = "1" to "Wrong Latin Title"
-                })), explicitReleaseRelation = true)
+                }), explicitReleaseRelation = true))
     }
 
     @Test fun separateMastersOrNameOnlyMatchesNeverCreateAnEdition() {
