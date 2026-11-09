@@ -36,6 +36,11 @@ import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SavedCollection
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.spotify_logo
+import com.music.bitchord.sharedui.resources.ic_apple_library_playlists
+import com.music.bitchord.sharedui.resources.ic_apple_library_artists
+import com.music.bitchord.sharedui.resources.ic_apple_library_albums
+import com.music.bitchord.sharedui.resources.ic_apple_library_songs
+import com.music.bitchord.sharedui.resources.ic_apple_library_downloads
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ReplayCardRowSkeleton
 import com.music.bitchord.ui.replay.ReplayCardRow
@@ -188,27 +193,29 @@ fun libraryNavigationLinks(
     onOpenPlaylists: () -> Unit,
     onOpenLocalCategory: (LocalFolderTab) -> Unit,
 ): List<LibraryLink> {
-    fun destination(title: String, icon: ImageVector, onClick: () -> Unit) =
+    fun destination(title: String, icon: ImageVector, logo: org.jetbrains.compose.resources.DrawableResource, onClick: () -> Unit) =
         LibraryLink(
             item = ShelfItem(
                 title = title, subtitle = "", thumbnailUrl = null,
                 browseId = null, videoId = null,
             ),
             icon = icon,
+            logo = logo,
             onClick = onClick,
         )
     return listOf(
-        destination(labels.playlists, Icons.Rounded.QueueMusic, onOpenPlaylists),
-        destination(labels.artists, Icons.Rounded.Mic) {
+        destination(labels.playlists, Icons.Rounded.QueueMusic, Res.drawable.ic_apple_library_playlists, onOpenPlaylists),
+        destination(labels.artists, Icons.Rounded.Mic, Res.drawable.ic_apple_library_artists) {
             onOpenLocalCategory(LocalFolderTab.ARTISTS)
         },
-        destination(labels.albums, Icons.Rounded.Collections) {
+        destination(labels.albums, Icons.Rounded.Collections, Res.drawable.ic_apple_library_albums) {
             onOpenLocalCategory(LocalFolderTab.ALBUMS)
         },
-        destination(labels.songs, Icons.Rounded.MusicNote) {
+        destination(labels.songs, Icons.Rounded.MusicNote, Res.drawable.ic_apple_library_songs) {
             onOpenLocalCategory(LocalFolderTab.SONGS)
         },
     ) + deviceLinks.filter { it.item.browseId == "local:downloads" }
+        .map { it.copy(logo = Res.drawable.ic_apple_library_downloads) }
 }
 
 /**
