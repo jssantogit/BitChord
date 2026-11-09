@@ -145,7 +145,8 @@ class DiscogsEditionMatcherTest {
             ).mapIndexed { i, title -> "${i + 1}" to title },
         )
         assertEquals(DiscogsEditionVerdict.VERIFIED,
-            DiscogsEditionMatcher.assess(musicBrainz, linked, observed))
+            DiscogsEditionMatcher.assess(musicBrainz, linked, observed,
+                explicitReleaseRelation = true))
         // A search result or Master-derived edition has no direct Release URL
         // anchor and must NEVER benefit from this narrow exception.
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
@@ -164,24 +165,28 @@ class DiscogsEditionMatcherTest {
         )
         // Five tracks, three exact comparisons, two cross-script substitutions.
         assertEquals(DiscogsEditionVerdict.VERIFIED,
-            DiscogsEditionMatcher.assess(expected, linked, english))
+            DiscogsEditionMatcher.assess(expected, linked, english,
+                explicitReleaseRelation = true))
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(expected, linked,
-                english.copy(tracklist = english.tracklist.reversed())))
+                english.copy(tracklist = english.tracklist.reversed())), explicitReleaseRelation = true)
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(expected, linked,
-                english.copy(tracklist = english.tracklist.dropLast(1))))
+                english.copy(tracklist = english.tracklist.dropLast(1))), explicitReleaseRelation = true)
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
-            DiscogsEditionMatcher.assess(expected.copy(country = "XW"), linked, english))
+            DiscogsEditionMatcher.assess(expected.copy(country = "XW"), linked, english,
+                explicitReleaseRelation = true))
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
-            DiscogsEditionMatcher.assess(expected.copy(barcodes = emptyList()), linked, english))
+            DiscogsEditionMatcher.assess(expected.copy(barcodes = emptyList()), linked, english,
+                explicitReleaseRelation = true))
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
-            DiscogsEditionMatcher.assess(expected.copy(releaseYear = null), linked, english))
+            DiscogsEditionMatcher.assess(expected.copy(releaseYear = null), linked, english,
+                explicitReleaseRelation = true))
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assess(expected, linked,
                 english.copy(tracklist = english.tracklist.toMutableList().also {
                     it[0] = "1" to "Wrong Latin Title"
-                })))
+                })), explicitReleaseRelation = true)
     }
 
     @Test fun separateMastersOrNameOnlyMatchesNeverCreateAnEdition() {

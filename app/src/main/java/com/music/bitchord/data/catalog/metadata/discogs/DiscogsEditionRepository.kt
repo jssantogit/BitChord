@@ -65,7 +65,9 @@ internal class DiscogsEditionRepository(
                 fetchedAtMillis = nowMillis(),
             )
         }
-        return when (DiscogsEditionMatcher.assess(canonical, link, observation.record)) {
+        return when (DiscogsEditionMatcher.assess(
+            canonical, link, observation.record, explicitReleaseRelation = true,
+        )) {
             DiscogsEditionVerdict.VERIFIED -> {
                 if (!observation.isDisplayableAt(nowMillis())) {
                     DiscogsEditionEnrichment.Unavailable
