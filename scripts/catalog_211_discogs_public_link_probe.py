@@ -16,11 +16,20 @@ import urllib.request
 
 MBID = "5f600fc6-5c84-4c84-838e-eb87bd7363c7"
 DISCOGS_RELEASE_ID = 36297418
+ARTIST_MBID = "95663592-1447-4579-90f7-c94733476667"
+DISCOGS_ARTIST_ID = 8303009
 USER_AGENT = "BitChordPersonalEditorialProbe/1.0 (+https://github.com/jssantogit/BitChord)"
 MB_URL = "https://musicbrainz.org/ws/2/release/" + MBID + "?" + urllib.parse.urlencode({
     "fmt": "json", "inc": "recordings+artist-credits+release-groups+url-rels",
 })
 DISCOGS_URL = f"https://api.discogs.com/releases/{DISCOGS_RELEASE_ID}"
+ARTIST_MB_URL = (
+    f"https://musicbrainz.org/ws/2/artist/{ARTIST_MBID}?fmt=json&inc=url-rels"
+)
+ARTIST_DISCOGS_URL = (
+    f"https://api.discogs.com/artists/{DISCOGS_ARTIST_ID}/releases?"
+    "page=1&per_page=12&sort=year&sort_order=desc"
+)
 MAX_BYTES = 131_072
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -59,6 +68,98 @@ def exact_discogs_relationship(mb: dict) -> bool:
         if found and int(found.group(1)) == DISCOGS_RELEASE_ID:
             return True
     return False
+
+def exact_discogs_artist_relationship(mb: dict, artist_id: int) -> bool:
+    for relation in mb.get("relations", []):
+        if not isinstance(relation, dict) or relation.get("type") != "discogs":
+            continue
+        resource = (relation.get("url") or {}).get("resource")
+        if not isinstance(resource, str):
+            continue
+        parsed = urllib.parse.urlsplit(resource)
+        if (parsed.scheme not in ("http", "https") or
+            parsed.hostname not in ("discogs.com", "www.discogs.com") or
+            parsed.username or parsed.password or
+            parsed.query or parsed.fragment):
+            continue
+        try:
+            if parsed.port is not None:
+                continue
+        except ValueError:
+            continue
+        match = re.fullmatch(
+            r"/artist/([1-9][0-9]{0,11})(?:-[A-Za-z0-9_-]+)?/?", parsed.path,
+        )
+        if match and int(match.group(1)) == artist_id:
+            return True
+    return False
+
+def parse_public_artist_page(payload: dict, requested_page: int) -> dict | None:
+    pagination = payload.get("pagination")
+    releases = payload.get("releases")
+    if not isinstance(pagination, dict) or not isinstance(releases, list):
+        return None
+    page = pagination.get("page")
+    pages = pagination.get("pages")
+    if (type(page) is not int or page != requested_page or
+        type(pages) is not int or not 1 <= pages <= 10_000 or
+        page > pages or len(releases) > 20):
+        return None
+    identities = set()
+    for record in releases:
+        if not isinstance(record, dict) or record.get("role") != "Main":
+            continue
+        identity = record.get("id")
+        kind = record.get("type")
+        if (type(identity) is int and 1 <= identity <= 999_999_999_999 and
+            kind in ("release", "master")):
+            identities.add((kind, identity))
+    return {"source_ids": sorted(identities),
+            "page": page, "total_pages": pages}
+
+def observe_public_artist_index() -> dict:
+    finding = {
+        "artist_musicbrainz_mbid": ARTIST_MBID,
+        "artist_discogs_id": DISCOGS_ARTIST_ID,
+        "artist_musicbrainz_status": None,
+        "artist_discogs_status": None,
+        "artist_relation_verified": False,
+        "artist_release_page_valid": False,
+        "artist_source_ids_main_count": 0,
+        "artist_total_pages": None,
+        "artist_result": "unavailable",
+    }
+    try:
+        mb_status, mb = read_json(ARTIST_MB_URL)
+        finding["artist_musicbrainz_status"] = mb_status
+        finding["artist_relation_verified"] = (
+            mb.get("id") == ARTIST_MBID and
+            exact_discogs_artist_relationship(mb, DISCOGS_ARTIST_ID)
+        )
+        if not finding["artist_relation_verified"]:
+            finding["artist_result"] = "artist_identity_not_confirmed"
+            return finding
+        status, payload = read_json(ARTIST_DISCOGS_URL)
+        finding["artist_discogs_status"] = status
+        listing = parse_public_artist_page(payload, 1)
+        if listing is None:
+            finding["artist_result"] = "invalid_artist_page"
+            return finding
+        finding["artist_release_page_valid"] = True
+        finding["artist_source_ids_main_count"] = len(listing["source_ids"])
+        finding["artist_total_pages"] = listing["total_pages"]
+        finding["artist_result"] = "public_artist_index_observed"
+    except urllib.error.HTTPError as exc:
+        finding["artist_result"] = "source_http_unavailable"
+        if finding["artist_musicbrainz_status"] is None:
+            finding["artist_musicbrainz_status"] = exc.code
+        else:
+            finding["artist_discogs_status"] = exc.code
+    except (urllib.error.URLError, TimeoutError, OSError):
+        finding["artist_result"] = "network_unavailable"
+    except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
+        finding["artist_result"] = "invalid_response"
+    return finding
 
 def normalized(value: str) -> str:
     import unicodedata
@@ -259,6 +360,9 @@ def main() -> int:
         observation["result"] = "network_unavailable"
     except (ValueError, TypeError, AttributeError, json.JSONDecodeError):
         observation["result"] = "invalid_or_oversized_response"
+    # Separate artist and release observations; a successful listing does
+    # not by itself prove that any Discogs-only release is absent in MB.
+    observation.update(observe_public_artist_index())
     observation["elapsed_ms"] = round((time.monotonic() - began) * 1000)
     pathlib.Path("discogs-211-public-link-observation.json").write_text(
         json.dumps(observation, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
