@@ -449,6 +449,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** True while a committed search is in flight — gates suggestion/media callbacks. */
     private var searchSubmitted = false
+        _searchCommitted.value = false
+    // Compose observes the same submit gate as the existing search pipelines:
+    // origin choices before submit, result-type tabs after submit.
+    private val _searchCommitted = MutableStateFlow(false)
+    val searchCommitted: StateFlow<Boolean> = _searchCommitted.asStateFlow()
 
     /**
      * What the search page offers while a query is being typed, led by the
@@ -4133,6 +4138,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val allowed = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
         if (allowed != _searchSource.value) switchSearchSource(allowed, rerunCurrentQuery = false)
         searchSubmitted = true
+        _searchCommitted.value = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
         // A saved search/suggestion must stay in its selected namespace.
@@ -4165,6 +4171,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (newValue.isBlank()) {
             searchSubmitted = false
+        _searchCommitted.value = false
             _suggestions.value = emptyList()
             _typeaheadResults.value = emptyList()
             _results.value = null
@@ -4190,6 +4197,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         addonSearchJob?.cancel()
         _addonResults.value = null
         searchSubmitted = false
+        _searchCommitted.value = false
         if (_searchSource.value == SearchSource.CANONICAL) {
             // A stale metadata result must not appear under a new query.
             canonicalSearchJob?.cancel()
@@ -4217,6 +4225,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val q = _query.value.trim()
         if (q.isEmpty() || _searchSource.value == SearchSource.LIBRARY) return
         searchSubmitted = true
+        _searchCommitted.value = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
         if (_searchSource.value == SearchSource.ADDONS) {
@@ -4888,6 +4897,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         searchSubmitted = true
+        _searchCommitted.value = true
         runSearch()
     }
 
