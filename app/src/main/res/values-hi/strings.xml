@@ -1424,4 +1424,5 @@
     <string name="apple_player_add_to_playlist">प्लेलिस्ट में जोड़ें…</string>
     <string name="apple_player_share_song">गीत साझा करें</string>
     <string name="apple_player_share_lyrics">बोल साझा करें…</string>
+    <string name="apple_library_search_in_category">%1$s में खोजें</string>
 </resources>
