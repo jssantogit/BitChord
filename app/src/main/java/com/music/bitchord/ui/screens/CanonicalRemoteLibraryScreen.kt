@@ -2038,7 +2038,7 @@ internal fun NativeUnifiedLibraryCategoryHeader(
             autoFocus = searching,
             onFocused = {},
             palette = palette,
-            placeholder = "Buscar em $title",
+            placeholder = stringResource(R.string.apple_library_search_in_category, title),
             horizontalInset = PAGE_GUTTER + 4.dp,
             appleLibraryCategoryStyle = true,
         )
