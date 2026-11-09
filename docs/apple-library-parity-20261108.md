@@ -162,3 +162,14 @@ The reference `am-descomp/docs/components/library-category-behavior.md` document
 Native `NativeDetailSearchField` already filters in-memory rows on every keystroke. Both the 48dp library-category variant and the native 46dp detail variant now request `ImeAction.Search`; submitting the keyboard action clears focus and closes the software keyboard without dropping the current query, starting playback, or triggering any remote request. `PlaylistLibraryVisualReuseTest.librarySearchUsesSearchImeWithoutClearingTheActiveFilter` covers the IME semantics and preserved query state on the existing playlist library collection field.
 
 **Provenance boundary:** `am-descomp` documents static search-view layout for library categories but does not prove focus/IME behavior at runtime. This is an explicitly Bitchord-native usability refinement rather than a claimed Apple Music 1:1 behavioral reconstruction. On-device keyboard behavior still requires physical verification.
+
+## Physical screenshots — solid Library heading and Downloads controls (2026-11-09)
+
+The user's devDebug screenshots show the large Biblioteca title affected by a gray-toned theme appearance and the Downloads destination retaining a combined legacy pill with an account avatar. This is a BitChord-specific discrepancy, not proof of a final Apple token.
+
+- Library landing's large title now uses solid `Color.White` in the Android Apple landing variant only; other native Library title variants retain their existing theme tint. This does not modify the underlying artwork gradient/backdrop.
+- The existing `local:downloads` detail route now opts into independent floating round top controls: Back, Sort/Filter (same existing `folderMenuOpen` / `FrostedFolderMenu` actions), and the shared Settings-only three-dot popup. The old account avatar is not shown on this destination. Its download collection, delete, upload, sort, grid/list preference and actual MediaStore/Downloads data remain owned by the original folder route.
+- `AppleDownloadsChromePolicyTest` guards that only the Downloads folder uses this treatment and Settings itself does not.
+- Values such as the 12dp vertical offset follow screenshot-informed experiments on the existing native component, not recovered Apple Music runtime geometry. Validate blur, insets and button circles on the physical Android build.
+
+The unresolved REA issues for Edit Pins and comprehensive icon runtime parity remain independent and were not bypassed.
