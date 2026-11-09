@@ -367,9 +367,36 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
-                searchingCanonical -> if (query.isBlank() &&
-                    canonicalResults == null && canonicalDetail == null
-                ) {
+                searchingCanonical -> {
+                    if (!searchCommitted && query.isNotBlank() && canonicalDetail == null) {
+                        // Only locally known text, not invented Apple/server completions:
+                        // an explicit action for the typed query plus matching history.
+                        val known = canonicalRecentSearchEntries(history)
+                            .map { it.title }
+                            .filter { it.startsWith(query, ignoreCase = true) &&
+                                !it.equals(query, ignoreCase = true) }
+                            .distinct()
+                            .take(2)
+                        item(key = "canonical:typed-query-suggestion") {
+                            SuggestionRow(
+                                term = query.trim(),
+                                isQueryAction = true,
+                                onFill = null,
+                                onClick = onSubmit,
+                            )
+                        }
+                        itemsIndexed(known, key = { _, term -> "canonical:completion:$term" }) { _, term ->
+                            SuggestionRow(
+                                term = term,
+                                isQueryAction = false,
+                                onFill = { onQueryChange(term) },
+                                onClick = { onSuggestionClick(term) },
+                            )
+                        }
+                    }
+                    if (query.isBlank() &&
+                        canonicalResults == null && canonicalDetail == null
+                    ) {
                     // Same recent-search row, clear/remove actions, and persisted
                     // list as the original Search; never route legacy video IDs
                     // through a MusicBrainz-only history entry.
@@ -399,6 +426,7 @@ fun SearchScreen(
                     canonicalSearchLoadingMore,
                     onCanonicalPlay, onCanonicalAddToQueue,
                 )
+                }
                 searchingLibrary || searchingAddons -> if (
                     searchingLibrary ||
                     serverResults !is UiState.Success || serverResults.data.isEmpty() ||
