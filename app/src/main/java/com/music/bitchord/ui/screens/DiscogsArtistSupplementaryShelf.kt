@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsArtistDiscoveryMode
+import com.music.bitchord.data.catalog.metadata.discogs.discogsArtistDiscoveryMode
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditorialShelf
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowCatalog
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowRelease
@@ -51,9 +53,7 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
         artistName,
     ) {
         value = emptyList()
-        if (artistMbid == null ||
-            !DiscogsEditionAccess.ENABLED || !DiscogsEditionAccess.isSearchConfigured()
-        ) return@produceState
+        if (artistMbid == null || !DiscogsEditionAccess.ENABLED) return@produceState
         value = try {
             withContext(Dispatchers.IO) {
                 // The initial MusicBrainz page is not complete for large artists.
@@ -62,17 +62,30 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
                 val completedTitles = if (musicBrainzCatalogComplete) knownNames
                     else loadCompleteMusicBrainzArtistGroupTitles(artistMbid)
                         ?: return@withContext emptyList<DiscogsShadowRelease>()
-                DiscogsEditionAccess.discovery.findForArtist(
-                    artistName = artistName,
-                    mbCatalogChecked = true,
-                    knownMusicBrainzTitles = completedTitles,
-                ).also { safe ->
-                    // These are already compared against a complete artist
-                    // catalog and carry no invented MusicBrainz identity.
-                    DiscogsSourceOnlyDiscovery.store.update(
-                        artistMbid, safe, System.currentTimeMillis(),
-                    )
+                val safe = when (discogsArtistDiscoveryMode(
+                    enabled = DiscogsEditionAccess.ENABLED,
+                    tokenConfigured = DiscogsEditionAccess.isSearchConfigured(),
+                )) {
+                    DiscogsArtistDiscoveryMode.AUTHENTICATED_SEARCH ->
+                        DiscogsEditionAccess.discovery.findForArtist(
+                            artistName = artistName,
+                            mbCatalogChecked = true,
+                            knownMusicBrainzTitles = completedTitles,
+                        )
+                    DiscogsArtistDiscoveryMode.PUBLIC_ARTIST_LINK ->
+                        DiscogsEditionAccess.publicArtistDiscovery.findForArtist(
+                            musicBrainzArtistMbid = artistMbid,
+                            artistName = artistName,
+                            completedMusicBrainzTitles = completedTitles,
+                        )
+                    DiscogsArtistDiscoveryMode.DISABLED -> emptyList()
                 }
+                // Independently compared against a complete MB artist
+                // catalog; never invent a source release-group identifier.
+                DiscogsSourceOnlyDiscovery.store.update(
+                    artistMbid, safe, System.currentTimeMillis(),
+                )
+                safe
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

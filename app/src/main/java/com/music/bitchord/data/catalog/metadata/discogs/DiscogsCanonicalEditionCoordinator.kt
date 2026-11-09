@@ -220,6 +220,14 @@ internal object DiscogsEditionAccess {
         DiscogsAuthenticatedDiscovery(searchClient, publicClient)
     }
 
+    /** Anonymous, exact Artist relation-only index; no credential is sent. */
+    val publicArtistDiscovery: DiscogsPublicArtistDiscovery by lazy {
+        DiscogsPublicArtistDiscovery(
+            editions = publicClient,
+            enabled = ENABLED,
+        )
+    }
+
     val coordinator: DiscogsCanonicalEditionCoordinator by lazy {
         DiscogsCanonicalEditionCoordinator(
             editions = DiscogsEditionRepository(
