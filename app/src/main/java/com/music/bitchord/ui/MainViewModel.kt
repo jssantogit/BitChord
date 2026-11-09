@@ -491,6 +491,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         SourceRegistry.configs.value,
     ))
     val searchSource: StateFlow<SearchSource> = _searchSource.asStateFlow()
+    // A dedicated search tab names one configured API/indexed provider. Never
+    // reuse the previous blended ADDONS namespace for unrelated servers.
+    private val _selectedSearchProviderKey = MutableStateFlow<String?>(null)
+    val selectedSearchProviderKey: StateFlow<String?> = _selectedSearchProviderKey.asStateFlow()
 
     /**
      * The Addons source's answer for the submitted query: every enabled addon
@@ -1540,8 +1544,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         clearCanonicalCatalogNavigation()
     }
 
-    private fun switchSearchSource(source: SearchSource, rerunCurrentQuery: Boolean = true) {
-        if (_searchSource.value == source) return
+    private fun switchSearchSource(
+        source: SearchSource,
+        rerunCurrentQuery: Boolean = true,
+        force: Boolean = false,
+    ) {
+        if (_searchSource.value == source && !force) return
         val wasSubmitted = searchSubmitted
         searchSubmitted = false
         _searchCommitted.value = false
@@ -4154,7 +4162,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             SearchSource.CANONICAL -> {
                 SearchHistory.recordCanonicalQuery(term)
                 runCanonicalCatalogSearch(term.trim())
-                runAddonSearch(term.trim(), recordHistory = false)
             }
             SearchSource.ADDONS -> runAddonSearch(term.trim())
             SearchSource.LIBRARY -> loadLibrarySongs()
@@ -4237,7 +4244,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_searchSource.value == SearchSource.CANONICAL) {
             SearchHistory.recordCanonicalQuery(q)
             runCanonicalCatalogSearch(q)
-            runAddonSearch(q, recordHistory = false)
             return
         }
         runSearch(anonymous = false)
@@ -4791,10 +4797,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun runAddonSearch(q: String, recordHistory: Boolean = true) {
         if (recordHistory) SearchHistory.recordAddonQuery(q)
-        runServerAssetSearch(q)
+        val selected = _selectedSearchProviderKey.value
+            .takeIf { _searchSource.value == SearchSource.ADDONS }
+        if (selected?.startsWith("remote:") == true || selected == null) {
+            runServerAssetSearch(q)
+        } else {
+            serverSearchJob?.cancel()
+            _serverResults.value = UiState.Success(emptyList())
+        }
         addonSearchJob?.cancel()
+        if (selected?.startsWith("remote:") == true) {
+            // This is an indexed OpenSubsonic/Jellyfin account. Never query
+            // unrelated network addons from its dedicated tab.
+            _addonResults.value = UiState.Success(emptyList())
+            return
+        }
         if (recordHistory) _searchScrollReset.value += 1
         val addons = SourceRegistry.active().filterIsInstance<AddonSource>()
+            .filter { selected == null || selected == "addon:${it.configId}" }
         if (addons.isEmpty()) {
             _addonResults.value = UiState.Success(emptyList())
             return
@@ -4821,6 +4841,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Read-only persisted remote search. Playback revalidates account access. */
     private fun runServerAssetSearch(query: String) {
         serverSearchJob?.cancel()
+        val selected = _selectedSearchProviderKey.value
+            .takeIf { _searchSource.value == SearchSource.ADDONS }
+        if (selected?.startsWith("addon:") == true) {
+            _serverResults.value = UiState.Success(emptyList())
+            return
+        }
+        val scopedProvider = selected?.removePrefix("remote:")
         _serverResults.value = UiState.Loading
         serverSearchJob = viewModelScope.launch {
             val result: UiState<List<CanonicalServerSearchRow>> = try {
@@ -4828,7 +4855,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     CanonicalCatalogDatabase.get(getApplication<Application>())
                         .catalogDao().searchCanonicalRemoteServerAssets(query, limit = 250)
                 }
-                UiState.Success(rows.distinctBy { it.recordingId to it.providerKey }.map { row ->
+                UiState.Success(rows.asSequence()
+                    .filter { scopedProvider == null || it.providerKey == scopedProvider }
+                    .distinctBy { it.recordingId to it.providerKey }.map { row ->
                     CanonicalServerSearchRow(
                         recordingId = row.recordingId,
                         mediaAssetId = row.mediaAssetId,
@@ -4837,7 +4866,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         artistDisplay = row.artistDisplay,
                         artworkUri = row.artworkUri,
                     )
-                })
+                }.toList())
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -4861,7 +4890,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setSearchSource(source: SearchSource) {
         val allowed = effectiveSearchSource(source, SourceRegistry.configs.value)
         searchSourceExplicitlySelected = true
+        if (allowed != SearchSource.ADDONS) _selectedSearchProviderKey.value = null
         switchSearchSource(allowed)
+    }
+
+    /** An API tab binds one provider, including when switching between two APIs. */
+    fun selectSearchProvider(providerKey: String) {
+        if (!providerKey.startsWith("addon:") && !providerKey.startsWith("remote:")) return
+        if (providerKey == _selectedSearchProviderKey.value &&
+            _searchSource.value == SearchSource.ADDONS
+        ) return
+        _selectedSearchProviderKey.value = providerKey
+        searchSourceExplicitlySelected = true
+        switchSearchSource(SearchSource.ADDONS, force = true)
     }
 
     /**
