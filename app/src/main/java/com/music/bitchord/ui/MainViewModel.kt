@@ -1543,6 +1543,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun switchSearchSource(source: SearchSource, rerunCurrentQuery: Boolean = true) {
         if (_searchSource.value == source) return
+        val wasSubmitted = searchSubmitted
+        searchSubmitted = false
+        _searchCommitted.value = false
         _searchSource.value = source
         if (source == SearchSource.CANONICAL &&
             _filter.value !in setOf(
@@ -1557,7 +1560,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             SearchSource.LIBRARY -> loadLibrarySongs()
             SearchSource.YOUTUBE,
             SearchSource.ADDONS,
-            SearchSource.CANONICAL -> if (rerunCurrentQuery && _query.value.isNotBlank()) submitSearch()
+            SearchSource.CANONICAL -> if (rerunCurrentQuery && wasSubmitted && _query.value.isNotBlank()) submitSearch()
         }
         if (source == SearchSource.YOUTUBE) {
             suggestPipelineJob = startSuggestPipeline()
