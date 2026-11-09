@@ -657,7 +657,7 @@ fun SearchScreen(
                     }
                 }
             }
-            if (!searchingLibrary && query.isNotBlank() &&
+            if (!appleResultTabs && !searchingLibrary && query.isNotBlank() &&
                 (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
                 (!searchingCanonical || canonicalDetail == null) &&
                 (searchingCanonical || (!searchingAddons && results != null))
@@ -668,9 +668,9 @@ fun SearchScreen(
                 canonicalServerSearchRows(serverResults, onServerPlay)
             }
             if (searchingAddons && query.isNotBlank()) {
-                canonicalServerSearchRows(serverResults, onServerPlay)
+                canonicalServerSearchRows(serverResults, onServerPlay, appleStyle = appleResultTabs)
             }
-            if (searchingCanonical && canonicalDetail == null &&
+            if (!appleResultTabs && searchingCanonical && canonicalDetail == null &&
                 (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
                 (addonResults as? UiState.Success)?.data?.isNotEmpty() == true
             ) {
@@ -722,6 +722,11 @@ private fun LazyListScope.canonicalPublicPlaylistSearchResults(
                     artistPortrait = false,
                 ),
                 onClick = { onOpen(playlist) },
+                onMoreActions = listOf(
+                    NativeSearchRowAction(stringResource(Res.string.apple_search_view_details)) {
+                        onOpen(playlist)
+                    },
+                ),
             )
         }
     }
@@ -741,6 +746,8 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     searchLoadingMore: Boolean,
     onPlay: (String) -> Unit,
     onAddToQueue: (String) -> Unit,
+    onRecordingInfo: (CanonicalCatalogSearchRow) -> Unit,
+    appleStyle: Boolean,
 ) {
     if (detail != null) {
         item(key = "musicbrainz:navigation") {
@@ -788,7 +795,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
             // Artists lead General, then Songs, then Albums. Switching a
             // filter removes the headers rather than duplicating that UI.
             canonicalSearchDisplaySections(rows.data, filter).forEach { section ->
-                section.first?.let { type ->
+                if (!appleStyle) section.first?.let { type ->
                     item(key = "musicbrainz:section:${type.name}") {
                         Text(
                             text = stringResource(when (type) {
@@ -825,8 +832,20 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                         row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
                         else -> null
                     },
+                    onMoreActions = listOf(
+                        NativeSearchRowAction(stringResource(Res.string.apple_search_view_details)) {
+                            if (row.kind == CanonicalSearchKind.RECORDING) onRecordingInfo(row)
+                            else onOpen(row)
+                        },
+                    ) + if (row.kind == CanonicalSearchKind.RECORDING &&
+                        row.hasCatalogedAsset
+                    ) listOf(
+                        NativeSearchRowAction(stringResource(Res.string.smart_collection_batch_queue)) {
+                            onAddToQueue(row.musicBrainzId)
+                        },
+                    ) else emptyList(),
                 )
-                if (index < section.second.lastIndex) {
+                if (!appleStyle && index < section.second.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
@@ -1051,10 +1070,11 @@ fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String):
 private fun LazyListScope.canonicalServerSearchRows(
     rows: UiState<List<CanonicalServerSearchRow>>?,
     onPlay: (CanonicalServerSearchRow) -> Unit,
+    appleStyle: Boolean = false,
 ) {
     val results = (rows as? UiState.Success)?.data.orEmpty()
     if (results.isEmpty()) return
-    item(key = "server:heading") {
+    if (!appleStyle) item(key = "server:heading") {
         Text(
             text = stringResource(Res.string.canonical_server_heading),
             modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 14.dp),
@@ -1068,8 +1088,11 @@ private fun LazyListScope.canonicalServerSearchRows(
         NativeSearchResultRow(
             row = canonicalServerNativeSearchRowUi(row),
             onClick = { onPlay(row) },
+            onMoreActions = listOf(
+                NativeSearchRowAction(stringResource(Res.string.play)) { onPlay(row) },
+            ),
         )
-        HorizontalDivider(
+        if (!appleStyle) HorizontalDivider(
             modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
             thickness = 0.5.dp,
             color = MaterialTheme.colorScheme.outline,
