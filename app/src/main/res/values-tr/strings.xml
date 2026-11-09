@@ -1381,4 +1381,5 @@
     <string name="apple_player_add_to_playlist">Çalma listesine ekle…</string>
     <string name="apple_player_share_song">Şarkıyı paylaş</string>
     <string name="apple_player_share_lyrics">Şarkı sözlerini paylaş…</string>
+    <string name="apple_library_search_in_category">%1$s içinde ara</string>
 </resources>
