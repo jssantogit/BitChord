@@ -199,49 +199,58 @@ internal class DiscogsPublicArtistDiscovery(
         val artistId = DiscogsPublicArtistParsing.artistId(
             musicBrainzArtistMbid, relation,
         ) ?: return emptyList()
-        val response = try {
-            limiter.runHttpLimited { transport.list(artistId, 1, userAgent) }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            return emptyList()
+        suspend fun checkedPage(number: Int): DiscogsArtistIndexPage? {
+            val response = try {
+                limiter.runHttpLimited { transport.list(artistId, number, userAgent) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                return null
+            }
+            if (response.status != 200) return null
+            return DiscogsPublicArtistParsing.page(response.body, number)
         }
-        if (response.status != 200) return emptyList()
-        val page = DiscogsPublicArtistParsing.page(response.body, 1)
-            ?: return emptyList()
-        // Listing titles are search hints only. Never infer a canonical ID or
-        // type from them. Skip obviously known groups to save HTTP requests.
+        val first = checkedPage(1) ?: return emptyList()
+        // Public Artist release index titles are hints only. Hydrate at most
+        // four release candidates per page and never fabricate an MBID.
         fun key(value: String) = value.trim().lowercase(Locale.ROOT)
         val known = completedMusicBrainzTitles.mapTo(HashSet(), ::key)
-        val candidates = page.entries.filter { entry ->
-            val title = key(entry.title)
-            title.isEmpty() || title !in known
-        }.take(4)
-        val observations = mutableListOf<DiscogsPublicEditionSnapshot>()
-        val used = HashSet<Long>()
-        for (entry in candidates) {
-            val releaseId = when (entry.kind) {
-                DiscogsKind.RELEASE -> entry.id
-                DiscogsKind.MASTER -> {
-                    val result = editions.fetchMaster(entry.id)
-                    (result as? DiscogsLookupResult.FoundMaster)?.record
-                        ?.mainReleaseId ?: continue
+        suspend fun select(page: DiscogsArtistIndexPage): List<DiscogsShadowRelease> {
+            val candidates = page.entries.filter { entry ->
+                val title = key(entry.title)
+                title.isEmpty() || title !in known
+            }.take(4)
+            val observations = mutableListOf<DiscogsPublicEditionSnapshot>()
+            val used = HashSet<Long>()
+            for (entry in candidates) {
+                val releaseId = when (entry.kind) {
+                    DiscogsKind.RELEASE -> entry.id
+                    DiscogsKind.MASTER -> {
+                        val result = editions.fetchMaster(entry.id)
+                        (result as? DiscogsLookupResult.FoundMaster)?.record
+                            ?.mainReleaseId ?: continue
+                    }
                 }
+                if (!used.add(releaseId)) continue
+                val record = (editions.fetchRelease(releaseId) as?
+                    DiscogsLookupResult.Found)?.record ?: continue
+                if (entry.kind == DiscogsKind.MASTER &&
+                    record.masterId != entry.id
+                ) continue
+                observations += DiscogsPublicEditionSnapshot(record, nowMillis())
             }
-            if (!used.add(releaseId)) continue
-            val record = (editions.fetchRelease(releaseId) as?
-                DiscogsLookupResult.Found)?.record ?: continue
-            if (entry.kind == DiscogsKind.MASTER &&
-                record.masterId != entry.id
-            ) continue
-            observations += DiscogsPublicEditionSnapshot(record, nowMillis())
+            return DiscogsShadowCatalog.select(
+                observations = observations,
+                expectedArtist = artistName,
+                mbCatalogChecked = true,
+                nowMillis = nowMillis(),
+                knownMusicBrainzTitles = completedMusicBrainzTitles,
+            )
         }
-        return DiscogsShadowCatalog.select(
-            observations = observations,
-            expectedArtist = artistName,
-            mbCatalogChecked = true,
-            nowMillis = nowMillis(),
-            knownMusicBrainzTitles = completedMusicBrainzTitles,
-        )
+        val firstResult = select(first)
+        if (firstResult.isNotEmpty() || first.totalPages < 2) return firstResult
+        // Page 2 is optional and only used when page 1 provided no new
+        // eligible release. Never scan an artist's entire provider catalog.
+        return checkedPage(2)?.let { select(it) } ?: emptyList()
     }
 }
