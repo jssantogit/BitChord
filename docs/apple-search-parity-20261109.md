@@ -35,3 +35,11 @@ Consulted `jssantogit/am-descomp` research branch `fase-3-investigacao-visual`:
 The REA does not prove the result/source selector's final geometry, transition timing, all autocomplete callbacks, theme tint, or input focus behavior on all devices. Bitchord's field height and underline styling are therefore **visual candidates**, not measurements of Apple pixels. Do not convert a capture's screen px to dp without density.
 
 Further physical comparison should confirm keyboard/inset behavior, history entry interactions, source switching without submission, accessibility and the search-result category list under loaded results.
+
+## Resumption checkpoint — 2026-11-09
+
+The original Search implementation remained published through commit `369311f`, with Android CI, Desktop, TV/Wear and YouTube audit green. This is the resumed state, not a second implementation.
+
+A visible pre-submit bug was found during code review: canonical typed-query suggestions were followed by the unrelated generic catalog start hint because `canonicalMusicBrainzResults` was called without a committed result state. `canonicalSearchEditing(query, searchCommitted, detailOpen)` now gates the edit stage: typed text shows actionable suggestions and matching stored terms without the result hint; submission hands off to the canonical results/categories; blank query still shows recent history and opened detail is unaffected. The helper has regression cases for blank, whitespace, editing, submitted and detail state in `CanonicalSearchOriginsTest`.
+
+The user-facing three-source selector remains Geral / Servidor / Sua Biblioteca. It is shown during query editing, the result-type tabs after submission. Server and local sources are not relabeled as Apple Music services; no fictional autocomplete/network suggestions. No alternate search screen or new backend, no merge or smoke triggered in this checkpoint.
