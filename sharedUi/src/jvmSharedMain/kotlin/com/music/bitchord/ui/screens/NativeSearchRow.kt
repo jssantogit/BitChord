@@ -136,9 +136,10 @@ fun NativeSearchResultRow(
         // Apple-style search places contextual actions here, never a duration.
         // An action only appears when the owning source supplies a real callback.
         if (onMoreActions.isNotEmpty()) {
-            Box(Modifier.testTag("search-row-more-actions")) {
+            Box {
                 RowMoreButton(
                     onClick = { moreExpanded = true },
+                    modifier = Modifier.testTag("search-row-more-actions"),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     iconSize = 22.dp,
                 )
