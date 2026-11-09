@@ -1396,4 +1396,5 @@
     <string name="apple_player_add_to_playlist">Añadir a una lista de reproducción…</string>
     <string name="apple_player_share_song">Compartir canción</string>
     <string name="apple_player_share_lyrics">Compartir letra…</string>
+    <string name="apple_library_search_in_category">Buscar en %1$s</string>
 </resources>
