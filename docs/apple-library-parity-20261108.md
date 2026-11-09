@@ -138,3 +138,15 @@ Source: `jssantogit/am-descomp`, branch `fase-3-investigacao-visual`, `docs/comp
 **Bitchord implementation boundary:** Retain the real native category routes, per-category filter/search state, 48dp category search variant and separate playlist-detail controls; existing Bitchord-specific screen geometry remains provisional. Do not change Downloads routing on an unproven Apple linkage or treat the 40dp intrinsic SVG viewport as a 40dp rendered icon.
 
 **Validation:** The 2026-11-09 Android CI failure on the previous HEAD was a UI test searching `Servidor` while the Apple origin tabs intentionally render uppercase. The test has been updated to assert all three uppercase origin labels and selection/back behavior. New CI and device visual acceptance remain pending; this research handoff does not imply that library pixels are now exact.
+
+## Library category icon implementation — 2026-11-09
+
+After the REA issue #2 partial recovery, five `LibrarySections` vector drawables are now versioned in Bitchord's shared Compose resources: `ic_apple_library_{playlists,artists,albums,songs,downloads}.xml`. Source references: `am-descomp/ui-assets/private-reference/library/ic_library_link_icon_{playlists,artists,album,songs,downloads}.xml`, branch `fase-3-investigacao-visual`; matching static object-to-resource associations in `docs/components/library-iconography.md`.
+
+- `LibraryPhoneParts.libraryNavigationLinks` selects the reference glyphs through the existing `LibraryLink.logo` render slot. The old Material icons remain only as fallback values on the same native links. The downloaded category retains the original `local:downloads` browse ID and original callback behavior.
+- `LibraryScreen.LibraryLinkList` renders the compact source icon with its 40dp intrinsic viewport, including the inset glyph, rather than shrinking the entire 40dp drawing to the old 22/24dp Material icon slot. Text spacing stays tied to the native compact list geometry. Noncompact link rendering and unrelated source-folder rows are unchanged.
+- The vectors use white path fill with theme tint supplied by the existing `Icon` composable; the path geometry is preserved. Reference resource availability and DEX links are static evidence, **not** proof of runtime tint, size, touch bounds or pixel-perfect equivalence.
+- `LibraryNavigationLinksTest` now asserts resource choice and preservation of Downloads routing, complementing the existing localized order/navigation tests. Physical rendering on dark/light themes and A54 font scale is still required.
+- No implementation of Edit Pins was inferred from its unresolved gestures or persistence; no extra Apple destinations were fabricated. Rights for redistributing third-party vector geometry remain a separate consideration before making the fork public.
+
+All changes remain on draft PR #212, without a merge into #209/main.
