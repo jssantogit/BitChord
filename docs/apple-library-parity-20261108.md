@@ -150,3 +150,9 @@ After the REA issue #2 partial recovery, five `LibrarySections` vector drawables
 - No implementation of Edit Pins was inferred from its unresolved gestures or persistence; no extra Apple destinations were fabricated. Rights for redistributing third-party vector geometry remain a separate consideration before making the fork public.
 
 All changes remain on draft PR #212, without a merge into #209/main.
+
+## Library search localization — 2026-11-09
+
+The previous Android categories used Portuguese-only `"Buscar em $title"` and `"Buscar em Playlists"` even with English-language category titles. The native Android search inputs now share `R.string.apple_library_search_in_category`, with `%1$s` title substitution and default English / Portuguese Android translations. Other locales fall back to the default English resource until dedicated translations are provided. `AppleLibrarySearchHintTest` covers the category format with English and Brazilian Portuguese resources.
+
+The reference `am-descomp/docs/components/library-category-behavior.md` documents distinct per-section search hint resources and the 48dp inner category search background; it does **not** prove the text displayed at runtime, focus events, or that playlist-item 42dp search belongs to the root Playlists collection. The change therefore keeps Bitchord's existing 48dp root collection field, filtering, callback, and focus policy. It does not introduce a new search screen or Apple backend behavior.
