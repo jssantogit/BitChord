@@ -368,7 +368,7 @@ fun SearchScreen(
         ) {
             when {
                 searchingCanonical -> {
-                    if (!searchCommitted && query.isNotBlank() && canonicalDetail == null) {
+                    if (canonicalSearchEditing(query, searchCommitted, canonicalDetail != null)) {
                         // Only locally known text, not invented Apple/server completions:
                         // an explicit action for the typed query plus matching history.
                         val known = canonicalRecentSearchEntries(history)
@@ -415,7 +415,7 @@ fun SearchScreen(
                             onClear = onHistoryClear,
                         )
                     }
-                } else if (!searchCommitted && query.isNotBlank() && canonicalDetail == null) {
+                } else if (canonicalSearchEditing(query, searchCommitted, canonicalDetail != null)) {
                     // The pre-submit surface above owns text suggestions. Do not
                     // append the generic catalog "start searching" hint beneath them.
                     // On submit, the existing result renderer takes over.
@@ -781,6 +781,13 @@ private fun LazyListScope.canonicalMusicBrainzResults(
         }
     }
 }
+
+/** Pre-submit suggestions must not share space with a submitted result or its empty hint. */
+internal fun canonicalSearchEditing(
+    query: String,
+    searchCommitted: Boolean,
+    detailOpen: Boolean,
+): Boolean = query.isNotBlank() && !searchCommitted && !detailOpen
 
 /** Show only terms, not YouTube media IDs, in the canonical empty-query surface. */
 fun canonicalRecentSearchEntries(history: List<SearchHistoryEntity>): List<SearchHistoryEntity> =
