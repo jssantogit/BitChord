@@ -336,7 +336,10 @@ private fun LibraryLinkList(
                         contentDescription = null,
                         tint = if (link.enabled) MaterialTheme.colorScheme.onBackground
                             else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(LINK_ICON_SIZE),
+                        // The traced category vector has a 40dp viewport with its
+                        // glyph inset inside that viewport. Drawing it at the old
+                        // 24dp Material slot would shrink the actual glyph.
+                        modifier = Modifier.size(if (compact) 40.dp else LINK_ICON_SIZE),
                     )
                 } else {
                     Icon(
@@ -348,7 +351,7 @@ private fun LibraryLinkList(
                         modifier = Modifier.size(if (compact) 22.dp else LINK_ICON_SIZE),
                     )
                 }
-                Spacer(Modifier.width(LINK_ICON_GAP))
+                Spacer(Modifier.width(if (compact && link.logo != null) 0.dp else LINK_ICON_GAP))
                 Text(
                     text = link.item.title,
                     style = if (compact) MaterialTheme.typography.bodyLarge.copy(
