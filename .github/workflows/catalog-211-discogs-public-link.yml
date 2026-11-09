@@ -8,6 +8,7 @@ on:
       - catalog/210-discogs-provider-evidence-20261107
     paths:
       - scripts/catalog_211_discogs_public_link_probe.py
+      - scripts/test_catalog_211_discogs_public_link_probe.py
       - .github/workflows/catalog-211-discogs-public-link.yml
   workflow_dispatch:
 
@@ -27,8 +28,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Check syntax without network
-        run: python -m py_compile scripts/catalog_211_discogs_public_link_probe.py
+      - name: Check syntax and public contract fixtures without network
+        run: |
+          python -m py_compile scripts/catalog_211_discogs_public_link_probe.py
+          python -m unittest discover -s scripts -p 'test_catalog_211_discogs_public_link_probe.py' -v
       - name: Observe one public MusicBrainz and Discogs Release relationship
         run: python scripts/catalog_211_discogs_public_link_probe.py
       - name: Preserve bounded anonymous finding
