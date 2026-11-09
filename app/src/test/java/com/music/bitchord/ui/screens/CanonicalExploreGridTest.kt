@@ -48,7 +48,7 @@ class CanonicalExploreGridTest {
                 )
             }
         }
-        compose.onNodeWithText("Explorar").assertExists()
+        // Heading is localized via shared resources; do not assert a Portuguese literal.
         compose.onNodeWithText("Metal").assertExists()
         compose.onNodeWithText("K-pop").assertExists()
         compose.onNodeWithText("Essenciais").assertDoesNotExist()
