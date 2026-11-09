@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +54,9 @@ fun SearchField(
     /** What the empty field says it is for — the one part that changes per screen. */
     placeholder: String = stringResource(Res.string.search_hint),
     modifier: Modifier = Modifier,
+    /** Only the Android search root opts into the Apple-inspired inline back field. */
+    appleSearchChrome: Boolean = false,
+    onBack: () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -66,7 +70,7 @@ fun SearchField(
         modifier = modifier
             .fillMaxWidth()
             // Fixed height prevents the row from growing when text is entered
-            .height(46.dp)
+            .height(if (appleSearchChrome) 48.dp else 46.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp))
             // Asymmetric: the magnifier is a button now and wants a real touch
             // target, so it's given the room by pulling the field's own start
@@ -79,13 +83,18 @@ fun SearchField(
         // pressing it is the only thing that runs a search, leaving it
         // decorative would mean the keyboard's own key was the single way in.
         Icon(
-            Icons.Rounded.Search,
-            contentDescription = stringResource(Res.string.search),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            if (appleSearchChrome) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Search,
+            contentDescription = if (appleSearchChrome) "Voltar da pesquisa"
+                else stringResource(Res.string.search),
+            tint = if (appleSearchChrome) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
-                .size(32.dp)
+                .size(if (appleSearchChrome) 36.dp else 32.dp)
                 .clip(CircleShape)
-                .clickable(enabled = query.isNotBlank(), onClick = submit)
+                .clickable(
+                    enabled = appleSearchChrome || query.isNotBlank(),
+                    onClick = if (appleSearchChrome) onBack else submit,
+                )
                 .padding(6.dp),
         )
         Spacer(Modifier.width(4.dp))
