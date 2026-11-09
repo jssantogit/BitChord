@@ -16,6 +16,13 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +44,7 @@ import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -415,6 +423,76 @@ internal fun FloatingLibraryTopBarCircle(
             .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState)),
         contentAlignment = Alignment.Center,
     ) { content() }
+}
+
+/**
+ * Root Explore and Library share this compact Apple-style menu.
+ *
+ * am-descomp/docs/components/overflow-menu.md confirms a dark rounded popup
+ * anchored near the top-right, but leaves exact dimensions and placement
+ * unknown. The 236dp width, 22dp corner radius and 38dp offset are explicitly
+ * screenshot-guided Bitchord values, not recovered Apple constants.
+ *
+ * Only Settings is exposed: Edit Pins remains blocked by am-descomp #1 and
+ * account actions are intentionally not copied.
+ */
+@Composable
+internal fun AppleRootSettingsOverflow(
+    hazeState: HazeState?,
+    description: String,
+    onSettings: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val offsetPx = with(LocalDensity.current) { 38.dp.roundToPx() }
+    val shape = RoundedCornerShape(22.dp)
+    Box {
+        FloatingLibraryTopBarCircle(hazeState) {
+            IconButton(onClick = { expanded = true }) {
+                Icon(
+                    imageVector = Icons.Rounded.MoreVert,
+                    contentDescription = description,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        if (expanded) {
+            Popup(
+                alignment = Alignment.TopEnd,
+                offset = IntOffset(0, offsetPx),
+                onDismissRequest = { expanded = false },
+                properties = PopupProperties(focusable = true),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(236.dp)
+                        .shadow(12.dp, shape)
+                        .clip(shape)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .98f))
+                        .border(0.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = .20f), shape)
+                        .testTag("apple-root-settings-popup"),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(68.dp)
+                            .clickable {
+                                expanded = false
+                                onSettings()
+                            }
+                            .testTag("apple-root-settings-item")
+                            .padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** One shared pill for every action at the right of a floating top bar. */
