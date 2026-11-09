@@ -74,3 +74,22 @@ Current state: first visual and architectural pass. **Do not assert device-level
 - User clarified that the screenshot with the larger Apple Music heading is the reference and requested a 36sp candidate. Root heading moved 32sp → 36sp in `b1a410a`, provisional until physical smoke.
 - The `am-descomp/docs/components/library-toolbar.md` DEX trace verifies the *conditional* Edit Pins menu entry: `getLibraryPins()` non-empty guard, icon `actionsheet_pin`, and the callback `scrollToTop()` + `LibraryViewModel.notifyModeChanged(false,false,false,true)`. It does **not** prove the pin editor’s layout, drag gesture, drop persistence, or delete affordance. Do not claim 1:1 Apple editor parity from this trace.
 - Bitchord already stores pins in three independent native repositories (`CanonicalLibraryPinRepository`, `LibraryPlaylistPinRepository`, `CatalogMetadataPinRepository`) with a combined shelf. Any edit-mode UI must operate on their real identity/order, not a visual-only temporary list; support removal and persistent cross-family reorder safely. No edit UI was added in this evidence checkpoint.
+
+## REA evidence gating — safe implementation cut, 2026-11-08
+
+The outstanding investigation is tracked in [am-descomp #3](https://github.com/jssantogit/am-descomp/issues/3) (category geometry/typography/search/state), alongside [#2](https://github.com/jssantogit/am-descomp/issues/2) (iconography) and [#1](https://github.com/jssantogit/am-descomp/issues/1) (Edit Pins gestures). This PR remains a draft and does not claim 1:1 visual parity.
+
+| UI item | Verified reference | Implementation decision |
+| --- | --- | --- |
+| Root sections | A captured state shows title, pinned artwork, vertical category links and Recent Additions | Retain native Bitchord sections, real pin sources and existing navigation; no hardcoded cover contents |
+| Root pinned layout | 3-column cover arrangement observed in a reference frame, not proof of universal device layout | Retain existing three-column shelf with up to six initially shown |
+| Create playlist action | `toolbar_new_playlist` has 24dp vector and a conditional DEX connection to `new_playlist_button` | Use source-traced resource, preserve Bitchord's real create flow |
+| Top action circles | A `profile_foryou=40dp` modifier path and rounded shape are statically traced; final bounds/status inset unknown | 40dp surface remains a candidate, not verified final hit target |
+| Category glyphs | `LibrarySections` resource IDs and 40dp intrinsic viewports traced, but source vector path data are not in clean Git | Retain explicitly non-original stand-ins until #2; never label as Apple icons |
+| Category row positions | Pixel contrast measurement of 709×1536 screenshot, density/font-scale unknown | Keep provisional screen-specific insets; no fabricated px→dp |
+| Typography | Generic Body/Subhead/Title2 tokens, no proven link to all Library rows | 36sp Library heading remains a user-requested visual candidate; no verified Apple font size |
+| Search control | Different XML resources declare 48dp internal background or 42dp playlist-individual field; actual category binding unknown | Keep 48dp *only* in Bitchord Library collection variant; restore pre-migration 46dp on other native detail pages, tested in `PlaylistLibraryVisualReuseTest`; 48dp is a candidate, not parity |
+| Category destinations | Partial DEX navigation and conditional states | Preserve existing native actions, source filters, ratings and category destinations |
+| Edit Pins | Menu condition and mode notification confirmed, drag/remove/persistence not | **Not implemented**, blocked by #1 |
+
+Validation before acceptance: Android CI + shared JVM/desktop gates, a smoke APK from a green commit, then paired physical Android screenshots at identical density/font scale. Leave draft and avoid merge.
