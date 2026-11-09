@@ -44,6 +44,14 @@ internal class DiscogsSourceOnlyShelfStore {
         }
     }
 
+    /** Null means no reusable evidence; empty is never a cached success. */
+    fun activeForArtist(artistMbid: String, nowMillis: Long): List<DiscogsShadowRelease>? {
+        val key = artistMbid.trim().lowercase(Locale.ROOT)
+            .takeIf(artistId::matches) ?: return null
+        return mutable.value[key]?.takeIf { it.expiresAtMillis > nowMillis }
+            ?.releases
+    }
+
     fun active(nowMillis: Long): List<DiscogsShadowRelease> =
         mutable.value.values.asSequence().filter { nowMillis < it.expiresAtMillis }
             .flatMap { it.releases.asSequence() }
