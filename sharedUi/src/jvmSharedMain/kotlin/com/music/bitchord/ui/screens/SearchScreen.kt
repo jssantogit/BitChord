@@ -263,6 +263,9 @@ fun SearchScreen(
      * about the results, and the switcher would just push them down.
      */
     sourceSwitcher: (@Composable () -> Unit)? = null,
+    /** Mirrors the actual ViewModel submit state; Local remains live while typing. */
+    searchCommitted: Boolean = false,
+    appleResultTabs: Boolean = false,
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -325,7 +328,7 @@ fun SearchScreen(
                     modifier = Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 4.dp),
                 )
             }
-            if (sourceSwitcher != null) {
+            if (sourceSwitcher != null && !searchCommitted) {
                 // Source origins remain selectable while a query is visible,
                 // so changing General ↔ Server ↔ Local does not require the
                 // user to clear and retype the same artist or release.
@@ -340,11 +343,13 @@ fun SearchScreen(
             // Catalog searches have artist/album/recording types too. The
             // underlying source is metadata, not a separate user-facing tab.
             // YouTube-only video/playlist filters are never offered there.
-            if (!suggesting && !searchingLibrary && !searchingAddons &&
+            if ((if (appleResultTabs) searchCommitted else !suggesting) &&
+                !searchingLibrary && !searchingAddons &&
                 (!searchingCanonical || canonicalDetail == null) &&
                 (results != null || (searchingCanonical && canonicalResults != null))
             ) {
                 SearchFilterTabs(
+                    appleStyle = appleResultTabs,
                     filter = filter,
                     onFilterChange = onFilterChange,
                     available = if (searchingCanonical) listOf(
@@ -1557,6 +1562,7 @@ fun canonicalDurationLabel(durationMs: Long?): String? {
  */
 @Composable
 private fun SearchFilterTabs(
+    appleStyle: Boolean = false,
     filter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
     available: List<SearchFilter> = SearchFilter.entries,
@@ -1572,7 +1578,36 @@ private fun SearchFilterTabs(
     ) {
         available.forEach { entry ->
             val selected = entry == filter
-            Box(
+            if (appleStyle) {
+                Column(
+                    modifier = Modifier.clickable {
+                        if (!selected) haptics.play(Haptic.Select)
+                        onFilterChange(entry)
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = when (entry) {
+                            SearchFilter.ALL -> stringResource(Res.string.canonical_filter_all)
+                            SearchFilter.SONGS -> stringResource(Res.string.canonical_filter_songs)
+                            SearchFilter.ALBUMS -> stringResource(Res.string.albums)
+                            SearchFilter.ARTISTS -> stringResource(Res.string.artists)
+                            SearchFilter.VIDEOS -> stringResource(Res.string.canonical_filter_videos)
+                            SearchFilter.PLAYLISTS -> stringResource(Res.string.playlists)
+                        },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    )
+                    Box(
+                        Modifier.fillMaxWidth().height(2.dp).background(
+                            if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                        ),
+                    )
+                }
+            } else Box(
                 modifier = Modifier
                     .clip(FILTER_PILL_SHAPE)
                     .background(
@@ -1601,6 +1636,46 @@ private fun SearchFilterTabs(
                     color = if (selected) MaterialTheme.colorScheme.background
                     else MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Root-search origins are a pre-submit step, just as Apple shows its catalog
+ * selector before the category tabs. Bitchord must keep its third Server
+ * source rather than mislabel MusicBrainz as an Apple Music subscription.
+ */
+@Composable
+fun AppleSearchOriginTabs(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            Column(
+                modifier = Modifier.clickable { if (!selected) onSelect(index) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (selected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+                )
+                Box(
+                    Modifier.fillMaxWidth().height(2.dp).background(
+                        if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    ),
                 )
             }
         }
