@@ -1401,4 +1401,5 @@
     <string name="apple_player_add_to_playlist">Tambahkan ke playlist…</string>
     <string name="apple_player_share_song">Bagikan lagu</string>
     <string name="apple_player_share_lyrics">Bagikan lirik…</string>
+    <string name="apple_library_search_in_category">Cari di %1$s</string>
 </resources>
