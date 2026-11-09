@@ -403,8 +403,11 @@ internal fun FloatingLibraryTopBarCircle(
     hazeState: HazeState?,
     content: @Composable () -> Unit,
 ) {
+    // The original APK's Library More Options path passes 40dp into its
+    // rounded modifier (am-descomp: library-toolbar.md). This is the surface
+    // dimension, not proof of the original final tap target or inset.
     Box(
-        modifier = Modifier.size(48.dp)
+        modifier = Modifier.size(40.dp)
             .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState)),
         contentAlignment = Alignment.Center,
     ) { content() }
