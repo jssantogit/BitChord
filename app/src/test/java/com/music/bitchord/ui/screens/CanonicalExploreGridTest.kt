@@ -45,6 +45,38 @@ class CanonicalExploreGridTest {
         compose.runOnIdle { assertEquals(1, backs) }
     }
 
+    @Test fun appleSearchOriginTabsPreserveAllThreeNativeSources() {
+        var selected = -1
+        var backs = 0
+        var submits = 0
+        compose.setContent {
+            MaterialTheme {
+                androidx.compose.foundation.layout.Column {
+                    AppleSearchOriginTabs(
+                        options = listOf("Geral", "Servidor", "Sua biblioteca"),
+                        selectedIndex = 0,
+                        onSelect = { selected = it },
+                    )
+                    com.music.bitchord.ui.components.SearchField(
+                        query = "newjeans",
+                        onQueryChange = {},
+                        onSubmit = { submits++ },
+                        placeholder = "Artistas, músicas e mais",
+                        appleSearchChrome = true,
+                        onBack = { backs++ },
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText("Servidor").performClick()
+        compose.runOnIdle { assertEquals(1, selected) }
+        compose.onNodeWithContentDescription("Voltar da pesquisa").performClick()
+        compose.runOnIdle {
+            assertEquals(1, backs)
+            assertEquals(0, submits)
+        }
+    }
+
     @Test fun exploreAndLibraryShareCompactSettingsOnlyOverflow() {
         var openedSettings = 0
         compose.setContent {
