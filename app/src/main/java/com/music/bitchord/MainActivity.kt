@@ -4546,9 +4546,14 @@ private fun BitChordApp(
                                         editingNormalPlaylistId = null
                                         showSmartPlaylistBuilder = true
                                     }) {
-                                        Icon(Icons.Rounded.PlaylistAdd,
+                                        Icon(
+                                            painter = androidx.compose.ui.res.painterResource(
+                                                com.music.bitchord.R.drawable.ic_apple_library_new_playlist,
+                                            ),
                                             contentDescription = "Criar playlist",
-                                            tint = MaterialTheme.colorScheme.onSurface)
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.size(24.dp),
+                                        )
                                     }
                                 }
                             }
