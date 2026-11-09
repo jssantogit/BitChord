@@ -382,7 +382,11 @@ fun SearchScreen(
                                 term = query.trim(),
                                 isQueryAction = true,
                                 onFill = null,
-                                onClick = onSubmit,
+                                onClick = {
+                                    onSubmit()
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                },
                             )
                         }
                         itemsIndexed(known, key = { _, term -> "canonical:completion:$term" }) { _, term ->
@@ -390,7 +394,11 @@ fun SearchScreen(
                                 term = term,
                                 isQueryAction = false,
                                 onFill = { onQueryChange(term) },
-                                onClick = { onSuggestionClick(term) },
+                                onClick = {
+                                    onSuggestionClick(term)
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                },
                             )
                         }
                         // The ViewModel already resolves cached MusicBrainz
@@ -469,7 +477,11 @@ fun SearchScreen(
                             term = query.trim(),
                             isQueryAction = true,
                             onFill = null,
-                            onClick = onSubmit,
+                            onClick = {
+                                onSubmit()
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            },
                         )
                     }
                     val knownTerms = addonHistory
@@ -485,7 +497,11 @@ fun SearchScreen(
                             term = term,
                             isQueryAction = false,
                             onFill = { onQueryChange(term) },
-                            onClick = { onAddonHistoryClick(term) },
+                            onClick = {
+                                onAddonHistoryClick(term)
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            },
                         )
                     }
                 }
