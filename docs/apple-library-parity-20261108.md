@@ -93,3 +93,13 @@ The outstanding investigation is tracked in [am-descomp #3](https://github.com/j
 | Edit Pins | Menu condition and mode notification confirmed, drag/remove/persistence not | **Not implemented**, blocked by #1 |
 
 Validation before acceptance: Android CI + shared JVM/desktop gates, a smoke APK from a green commit, then paired physical Android screenshots at identical density/font scale. Leave draft and avoid merge.
+
+## Explore genre cards — Apple Search visual evidence, 2026-11-08
+
+User scope: retain Bitchord **Explorar** as a genre-only destination; adopt ONLY the visual treatment of the illustrated Apple Search cards, large native Explore heading and a single circular three-dot overflow to Settings. **Do not** add the Apple Search field or introduce its editorial/mood shortcuts (Shows, Essenciais, Cantar, etc.). Use only catalog genre identities and their real existing destinations.
+
+Evidence consulted: `am-descomp/docs/DESIGN.md`, `docs/design-system.md`, `docs/screens/top_level_search_page.md`, `docs/design/{typography,radius,spacing}.json`. A runtime frame shows a 2-column grid of illustrated tiles and overlaid lower title. The decoded candidate `search_landing_tile.xml` has a rounded image with constrained aspect and bottom title, but its direct use in the rendered landing list is not proven. The XML remains local-only and full layout values are not demonstrated; generic radius tokens do not prove which radius belongs to the tile.
+
+Implementation on existing shared `ExploreScreen`/`NativeExploreCategorySleeve`: full-bleed tinted artwork instead of the former left stripe, title anchored bottom-left, no new category route or additional search. Original Bitchord `MOOD_CARD_ASPECT`, `MOOD_SPACING`, `MOOD_CARD_SHAPE` and padding are retained as **native provisional geometry**; the proposed speculative -40dp top inset and 10dp radius change were explicitly reverted. Source image and category content remain catalog-derived and are not Apple editorial assets. One standalone round overflow on undrilled Explore root reuses the already implemented Settings-only menu; no account pill and no search field. Tests guard genre-only content and existing navigation.
+
+Neither exact Apple tile geometry, font face, measured color overlay, nor editorial imagery is claimed reproduced 1:1. Acceptance is subject to CI and physical screenshots.
