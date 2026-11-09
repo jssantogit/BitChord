@@ -11,6 +11,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onChildren
+import androidx.compose.ui.test.filterToOne
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.MoodGenreSection
 import com.music.bitchord.data.model.ShelfItem
@@ -48,7 +51,10 @@ class CanonicalExploreGridTest {
         }
         compose.onNodeWithText("How Sweet").assertExists()
         compose.onNodeWithText("3:20").assertDoesNotExist()
-        compose.onNodeWithTag("search-row-more-actions").assertExists()
+        compose.onNodeWithTag("search-row-more-actions", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("search-row-more-actions", useUnmergedTree = true)
+            .onChildren().filterToOne(androidx.compose.ui.test.hasClickAction()).performClick()
+        compose.onNodeWithText("Ver detalhes").assertExists()
     }
 
     @Test fun libraryCategoryBackIsIndependentlyCompactAndKeepsItsAction() {
