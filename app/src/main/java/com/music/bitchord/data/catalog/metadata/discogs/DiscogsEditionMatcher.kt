@@ -51,6 +51,8 @@ internal object DiscogsEditionMatcher {
         canonical: CanonicalEditionEvidence,
         linked: DiscogsLink,
         record: DiscogsRecord,
+        /** Only a typed MB Release -> Discogs Release URL, never search/Master. */
+        explicitReleaseRelation: Boolean = false,
     ): DiscogsEditionVerdict {
         if (!mbid.matches(canonical.musicBrainzReleaseId) ||
             linked.kind != DiscogsKind.RELEASE ||
@@ -104,8 +106,19 @@ internal object DiscogsEditionMatcher {
         val externalTracks = record.tracklist.map { normalized(it.second) }
         val bothHaveTracks = mbTracks.isNotEmpty() && externalTracks.isNotEmpty()
         val trackMatches = bothHaveTracks && mbTracks == externalTracks
-        // A conflicting tracklist can signal a different pressing, remix or bonus edition.
-        if (bothHaveTracks && !trackMatches) return DiscogsEditionVerdict.CANDIDATE
+        // A genuine typed MB Release -> Discogs Release relationship can carry
+        // translated track names. This is deliberately NOT available to fuzzy
+        // search, Master associations, or unknown-country/year/barcode editions.
+        val linkedCrossScriptMatch = !trackMatches && explicitReleaseRelation &&
+            barcodeMatches && canonical.releaseYear != null &&
+            canonical.releaseYear == record.year &&
+            mbCountry != null && mbCountry == discogsCountry &&
+            record.labels.isNotEmpty() &&
+            conservativeCrossScriptTracks(mbTracks, externalTracks)
+        // A conflicting tracklist can signal a pressing, remix or bonus edition.
+        if (bothHaveTracks && !trackMatches && !linkedCrossScriptMatch) {
+            return DiscogsEditionVerdict.CANDIDATE
+        }
 
         // A contradictory edition year prevents VERIFIED status even if
         // the tracklist matches; a different pressing may carry the same songs.
@@ -123,10 +136,35 @@ internal object DiscogsEditionMatcher {
         // Barcodes are shared by variants or entered incorrectly. A curated
         // MusicBrainz URL association plus artist/title and matching barcode
         // is not enough to prove the exact edition without track evidence.
-        return if (trackMatches) {
+        return if (trackMatches || linkedCrossScriptMatch) {
             DiscogsEditionVerdict.VERIFIED
         } else {
             DiscogsEditionVerdict.CANDIDATE
+        }
+    }
+
+    private fun conservativeCrossScriptTracks(
+        canonical: List<String>,
+        external: List<String>,
+    ): Boolean {
+        // Fewer than five positions or less than half of the tracks matching
+        // exactly cannot prove an edition despite a linked barcode.
+        if (canonical.size < 5 || canonical.size != external.size) return false
+        val exact = canonical.indices.count { canonical[it] == external[it] }
+        if (exact < maxOf(3, (canonical.size + 1) / 2) ||
+            exact == canonical.size
+        ) return false
+        fun hangulOnly(text: String) =
+            text.any { it in '가'..'힣' } &&
+                text.none { it in 'a'..'z' || it in 'A'..'Z' }
+        fun latinOnly(text: String) =
+            text.any { it in 'a'..'z' || it in 'A'..'Z' } &&
+                text.none { it in '가'..'힣' }
+        return canonical.indices.all { index ->
+            val a = canonical[index]
+            val b = external[index]
+            a == b || (hangulOnly(a) && latinOnly(b)) ||
+                (latinOnly(a) && hangulOnly(b))
         }
     }
 
