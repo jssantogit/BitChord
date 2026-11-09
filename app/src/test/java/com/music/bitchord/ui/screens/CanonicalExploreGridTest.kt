@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.MoodGenreSection
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.UiState
@@ -28,6 +29,21 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class CanonicalExploreGridTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun libraryCategoryBackIsIndependentlyCompactAndKeepsItsAction() {
+        var backs = 0
+        compose.setContent {
+            MaterialTheme {
+                com.music.bitchord.ui.components.ArtworkPageBackButton(
+                    onClick = { backs++ },
+                    hazeState = null,
+                    size = 40.dp,
+                )
+            }
+        }
+        compose.onNodeWithTag("apple-category-back-button").assertExists().performClick()
+        compose.runOnIdle { assertEquals(1, backs) }
+    }
 
     @Test fun exploreAndLibraryShareCompactSettingsOnlyOverflow() {
         var openedSettings = 0
