@@ -42,8 +42,9 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /** Source-independent search surface shared by native artist, album and playlist details. */
-// 48dp search background is documented in am-descomp/design/spacing.json.
-// The category and playlist headers reuse this native control.
+// The Apple Library REA confirms a 48dp background in specific search resources,
+// but does not establish their use in every category. Preserve the existing
+// 46dp native detail control and scope the 48dp candidate to library collections.
 private val NativeSearchShape = RoundedCornerShape(12.dp)
 
 /**
@@ -86,7 +87,7 @@ internal fun NativeDetailSearchField(
             .fillMaxWidth()
             .padding(horizontal = horizontalInset)
             .padding(bottom = 10.dp)
-            .height(48.dp)
+            .height(if (appleLibraryCategoryStyle) 48.dp else 46.dp)
             .testTag("native-detail-search-field")
             .clip(NativeSearchShape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = if (appleLibraryCategoryStyle) 1f else 0.6f))
