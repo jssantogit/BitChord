@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Icon
@@ -27,6 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -74,6 +79,8 @@ internal fun NativeDetailSearchField(
     // the keyboard is going to get — so it comes up with the field rather than
     // making the tap land twice. Once only: see [autoFocus]'s owner.
     val focus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val searchHint = placeholder ?: stringResource(R.string.search_this_list)
     LaunchedEffect(autoFocus) {
         if (autoFocus) {
@@ -119,6 +126,13 @@ internal fun NativeDetailSearchField(
                 value = query,
                 onValueChange = onQueryChange,
                 singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = {
+                    // This is an in-memory live filter; submitting must not
+                    // discard the query or trigger a remote search.
+                    keyboardController?.hide()
+                    focusManager.clearFocus()
+                }),
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = palette.onBackground),
                 cursorBrush = SolidColor(palette.accent),
                 modifier = Modifier
