@@ -158,7 +158,7 @@ internal fun PlaylistLibrarySearchField(
         autoFocus = autoFocus,
         onFocused = {},
         palette = themeArtworkPalette(),
-        placeholder = "Buscar em Playlists",
+        placeholder = stringResource(R.string.apple_library_search_in_category, stringResource(R.string.playlists)),
         appleLibraryCategoryStyle = true,
     )
 }
