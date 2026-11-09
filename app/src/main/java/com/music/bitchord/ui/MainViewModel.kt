@@ -449,7 +449,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** True while a committed search is in flight — gates suggestion/media callbacks. */
     private var searchSubmitted = false
-        _searchCommitted.value = false
     // Compose observes the same submit gate as the existing search pipelines:
     // origin choices before submit, result-type tabs after submit.
     private val _searchCommitted = MutableStateFlow(false)
