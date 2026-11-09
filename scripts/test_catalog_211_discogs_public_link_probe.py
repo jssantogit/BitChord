@@ -1,5 +1,8 @@
 import unittest
-from catalog_211_discogs_public_link_probe import compare_edition, explicit_discogs_type
+from catalog_211_discogs_public_link_probe import (
+    compare_edition, explicit_discogs_type, exact_discogs_artist_relationship,
+    parse_public_artist_page,
+)
 
 MB = {
     "id": "5f600fc6-5c84-4c84-838e-eb87bd7363c7",
@@ -65,6 +68,37 @@ class PublicLinkProbeTests(unittest.TestCase):
         self.assertEqual("Single", explicit_discogs_type([
             {"descriptions": ["Maxi-Single"]},
         ]))
+
+class ArtistCatalogProbeTests(unittest.TestCase):
+    def test_must_have_exact_typed_artist_relation_for_anonymous_discography(self):
+        artist = {"relations": [{"type": "discogs", "url": {
+            "resource": "https://www.discogs.com/artist/8303009-ENHYPEN",
+        }}]}
+        self.assertTrue(exact_discogs_artist_relationship(artist, 8303009))
+        self.assertFalse(exact_discogs_artist_relationship(artist, 8303010))
+        self.assertFalse(exact_discogs_artist_relationship({
+            "relations": [{"type": "discogs", "url": {
+                "resource": "https://evil.example/artist/8303009",
+            }}]
+        }, 8303009))
+
+    def test_artist_discography_requires_valid_pagination_and_main_role(self):
+        page = parse_public_artist_page({
+            "pagination": {"page": 1, "pages": 2},
+            "releases": [
+                {"id": 101, "type": "master", "role": "Main"},
+                {"id": 102, "type": "release", "role": "Main"},
+                {"id": 103, "type": "release", "role": "Producer"},
+                {"id": 104, "type": "release", "role": "Main"},
+            ],
+        }, 1)
+        self.assertEqual([("master", 101), ("release", 102),
+                          ("release", 104)], page["source_ids"])
+        self.assertEqual(2, page["total_pages"])
+        self.assertIsNone(parse_public_artist_page({
+            "pagination": {"page": 9, "pages": 2},
+            "releases": [],
+        }, 1))
 
 if __name__ == "__main__":
     unittest.main()
