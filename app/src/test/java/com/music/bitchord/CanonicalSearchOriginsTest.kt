@@ -6,6 +6,7 @@ import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.SearchOrigin
 import com.music.bitchord.ui.searchOriginOf
 import com.music.bitchord.ui.searchSourceForOrigin
+import com.music.bitchord.ui.screens.canonicalSearchEditing
 import com.music.bitchord.data.catalog.isCatalogRemoteServerProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -13,6 +14,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalSearchOriginsTest {
+    @Test fun appleSearchEditingOnlyShowsSuggestionsBeforeSubmission() {
+        assertTrue(canonicalSearchEditing("newjeans", searchCommitted = false, detailOpen = false))
+        assertFalse(canonicalSearchEditing("", searchCommitted = false, detailOpen = false))
+        assertFalse(canonicalSearchEditing("  ", searchCommitted = false, detailOpen = false))
+        assertFalse(canonicalSearchEditing("newjeans", searchCommitted = true, detailOpen = false))
+        assertFalse(canonicalSearchEditing("newjeans", searchCommitted = false, detailOpen = true))
+    }
     @Test fun oneGeneralOriginHidesMetadataProviderSplit() {
         assertEquals(SearchOrigin.GENERAL, searchOriginOf(SearchSource.YOUTUBE))
         assertEquals(SearchOrigin.GENERAL, searchOriginOf(SearchSource.CANONICAL))
