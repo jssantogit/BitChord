@@ -415,6 +415,10 @@ fun SearchScreen(
                             onClear = onHistoryClear,
                         )
                     }
+                } else if (!searchCommitted && query.isNotBlank() && canonicalDetail == null) {
+                    // The pre-submit surface above owns text suggestions. Do not
+                    // append the generic catalog "start searching" hint beneath them.
+                    // On submit, the existing result renderer takes over.
                 } else if (filter == SearchFilter.PLAYLISTS && canonicalDetail == null) {
                     canonicalPublicPlaylistSearchResults(
                         canonicalPublicPlaylists, onCanonicalPlaylistOpen,
