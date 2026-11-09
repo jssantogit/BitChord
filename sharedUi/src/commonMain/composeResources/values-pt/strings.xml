@@ -279,6 +279,7 @@
     <string name="smart_collection_batch_failed">Coleção indisponível ou ação de fila recusada</string>
     <string name="canonical_filter_all">Tudo</string>
     <string name="apple_search_top_results">Principais resultados</string>
+    <string name="apple_search_view_details">Ver detalhes</string>
     <string name="canonical_filter_songs">Músicas</string>
     <string name="canonical_filter_videos">Vídeos</string>
     <string name="canonical_search_hint">Pesquise no catálogo musical. Metadados não representam áudio disponível.</string>
