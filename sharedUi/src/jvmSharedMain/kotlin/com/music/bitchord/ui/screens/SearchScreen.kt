@@ -841,14 +841,14 @@ private fun LazyListScope.canonicalMusicBrainzResults(
 }
 
 /** Pre-submit suggestions must not share space with a submitted result or its empty hint. */
-internal fun canonicalSearchEditing(
+fun canonicalSearchEditing(
     query: String,
     searchCommitted: Boolean,
     detailOpen: Boolean,
 ): Boolean = query.isNotBlank() && !searchCommitted && !detailOpen
 
 /** No server lookup occurs until the user explicitly submits the query. */
-internal fun serverSearchEditing(query: String, searchCommitted: Boolean): Boolean =
+fun serverSearchEditing(query: String, searchCommitted: Boolean): Boolean =
     query.isNotBlank() && !searchCommitted
 
 /** Show only terms, not YouTube media IDs, in the canonical empty-query surface. */
