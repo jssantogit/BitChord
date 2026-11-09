@@ -431,6 +431,35 @@ fun SearchScreen(
                     onCanonicalPlay, onCanonicalAddToQueue,
                 )
                 }
+                searchingAddons && serverSearchEditing(query, searchCommitted) -> {
+                    // Server search is explicit; the backend has no verified
+                    // live-suggestion API. The typed action and stored terms
+                    // are the only pre-submit suggestions.
+                    item(key = "server:typed-query-suggestion") {
+                        SuggestionRow(
+                            term = query.trim(),
+                            isQueryAction = true,
+                            onFill = null,
+                            onClick = onSubmit,
+                        )
+                    }
+                    val knownTerms = addonHistory
+                        .filter { it.startsWith(query, ignoreCase = true) &&
+                            !it.equals(query, ignoreCase = true) }
+                        .distinct()
+                        .take(2)
+                    itemsIndexed(
+                        knownTerms,
+                        key = { _, term -> "server:known-completion:$term" },
+                    ) { _, term ->
+                        SuggestionRow(
+                            term = term,
+                            isQueryAction = false,
+                            onFill = { onQueryChange(term) },
+                            onClick = { onAddonHistoryClick(term) },
+                        )
+                    }
+                }
                 searchingLibrary || searchingAddons -> if (
                     searchingLibrary ||
                     serverResults !is UiState.Success || serverResults.data.isEmpty() ||
@@ -788,6 +817,10 @@ internal fun canonicalSearchEditing(
     searchCommitted: Boolean,
     detailOpen: Boolean,
 ): Boolean = query.isNotBlank() && !searchCommitted && !detailOpen
+
+/** No server lookup occurs until the user explicitly submits the query. */
+internal fun serverSearchEditing(query: String, searchCommitted: Boolean): Boolean =
+    query.isNotBlank() && !searchCommitted
 
 /** Show only terms, not YouTube media IDs, in the canonical empty-query surface. */
 fun canonicalRecentSearchEntries(history: List<SearchHistoryEntity>): List<SearchHistoryEntity> =
