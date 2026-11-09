@@ -40,8 +40,8 @@ class DiscogsPublicArtistDiscoveryTest {
             ]}""", 1)
         assertNotNull(page)
         assertEquals(listOf(
-            DiscogsArtistIndexEntry(DiscogsKind.MASTER, 10),
-            DiscogsArtistIndexEntry(DiscogsKind.RELEASE, 11),
+            DiscogsArtistIndexEntry(DiscogsKind.MASTER, 10, "Album"),
+            DiscogsArtistIndexEntry(DiscogsKind.RELEASE, 11, "Single"),
         ), page?.entries)
         assertEquals(3, page?.totalPages)
         assertNull(DiscogsPublicArtistParsing.page(
