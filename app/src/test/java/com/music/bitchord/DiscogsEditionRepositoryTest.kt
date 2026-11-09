@@ -210,6 +210,70 @@ class DiscogsEditionRepositoryTest {
         assertEquals(2, searches)
     }
 
+    @Test fun exactDirectLinkCanVerifyRealWorldCrossScriptTrackEvidence() = runBlocking {
+        val realReleaseMbid = "5f600fc6-5c84-4c84-838e-eb87bd7363c7"
+        val releaseId = 36297418L
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String {
+                assertEquals("release/$realReleaseMbid", path)
+                return """{"id":"$realReleaseMbid","relations":[{
+                  "type":"discogs","type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                  "url":{"resource":"https://www.discogs.com/release/$releaseId"}
+                }]}"""
+            }
+        })
+        val discogs = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/$releaseId", path)
+                return DiscogsHttpResponse(200, """{
+                  "id":$releaseId,"title":"THE SIN : VANISH",
+                  "artists":[{"name":"ENHYPEN"}],
+                  "country":"South Korea","year":2026,
+                  "labels":[{"name":"BELIFT LAB","catno":"YH-251116-01"}],
+                  "identifiers":[{"type":"Barcode","value":"198704835247"}],
+                  "formats":[{"name":"CD","descriptions":["EP"]}],
+                  "tracklist":[
+                    {"position":"1","title":"The Beginning"},
+                    {"position":"2","title":"No Way Back"},
+                    {"position":"3","title":"The Fugitives"},
+                    {"position":"4","title":"Knife"},
+                    {"position":"5","title":"Stealer"},
+                    {"position":"6","title":"The Voice"},
+                    {"position":"7","title":"Witnesses"},
+                    {"position":"8","title":"Big Girls Don't Cry"},
+                    {"position":"9","title":"Lost Island"},
+                    {"position":"10","title":"Sleep Tight"},
+                    {"position":"11","title":"The Beyond"}
+                  ]}""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = realReleaseMbid,
+            title = "THE SIN : VANISH",
+            creditedArtist = "ENHYPEN",
+            creditedArtistNames = listOf("ENHYPEN"),
+            status = "Official",
+            barcodes = listOf("198704835247"),
+            country = "KR", releaseYear = 2026,
+            trackTitles = listOf(
+                "사건의 발단", "No Way Back", "도망자들", "Knife", "Stealer",
+                "우리가 찾던 목소리", "목격자", "Big Girls Don't Cry",
+                "Lost Island", "Sleep Tight", "사건의 너머",
+            ),
+        )
+        val repository = DiscogsEditionRepository(
+            links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
+            enabled = true, nowMillis = { 1_000L },
+        )
+        val result = repository.observe(canonical)
+        assertTrue("Direct linked Release with five cross-script titles must verify",
+            result is DiscogsEditionEnrichment.Verified)
+        assertEquals("https://www.discogs.com/release/$releaseId",
+            (result as DiscogsEditionEnrichment.Verified).attributionUrl)
+    }
+
     @Test fun mismatchedEditionDoesNotShowDiscogsAsVerified() = runBlocking {
         val links = DiscogsMusicBrainzLinks(MusicBrainzClient(transport = object : MusicBrainzTransport {
             override suspend fun get(path: String, parameters: Map<String, String>,
