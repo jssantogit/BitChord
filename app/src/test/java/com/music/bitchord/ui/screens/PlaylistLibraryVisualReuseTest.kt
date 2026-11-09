@@ -333,7 +333,9 @@ class PlaylistLibraryVisualReuseTest {
                 placeholder = "Buscar faixas",
             )
         }
-        compose.onNodeWithTag("native-detail-search-field").assertExists()
+        // A Library search background token does not prove geometry on detail pages.
+        // Keep the pre-migration native detail height independently of collection search.
+        compose.onNodeWithTag("native-detail-search-field").assertHeightIsEqualTo(46.dp)
         compose.onNodeWithContentDescription("Buscar faixas").performTextInput("Magnetic")
         compose.onNodeWithText("Magnetic").assertExists()
     }
