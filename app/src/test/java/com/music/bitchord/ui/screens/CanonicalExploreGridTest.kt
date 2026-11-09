@@ -30,6 +30,27 @@ import org.robolectric.annotation.ConscryptMode
 class CanonicalExploreGridTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun searchResultsUseMoreMenuRatherThanDurationText() {
+        compose.setContent {
+            MaterialTheme {
+                NativeSearchResultRow(
+                    row = NativeSearchRowUi(
+                        title = "How Sweet",
+                        subtitle = "Música · NewJeans",
+                        artworkUri = null,
+                        artistPortrait = false,
+                        durationLabel = "3:20",
+                    ),
+                    onClick = {},
+                    onMoreActions = listOf(NativeSearchRowAction("Ver detalhes") {}),
+                )
+            }
+        }
+        compose.onNodeWithText("How Sweet").assertExists()
+        compose.onNodeWithText("3:20").assertDoesNotExist()
+        compose.onNodeWithTag("search-row-more-actions").assertExists()
+    }
+
     @Test fun libraryCategoryBackIsIndependentlyCompactAndKeepsItsAction() {
         var backs = 0
         compose.setContent {
