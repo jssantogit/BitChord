@@ -371,9 +371,14 @@ class PlaylistLibraryVisualReuseTest {
                 onQueryChange = { query = it },
             )
         }
-        compose.onNodeWithText("Buscar em Playlists").assertExists()
+        val resources = org.robolectric.RuntimeEnvironment.getApplication().resources
+        val expectedHint = resources.getString(
+            com.music.bitchord.R.string.apple_library_search_in_category,
+            resources.getString(com.music.bitchord.R.string.playlists),
+        )
+        compose.onNodeWithText(expectedHint).assertExists()
         compose.onNodeWithTag("native-detail-search-field").assertHeightIsEqualTo(48.dp)
-        compose.onNodeWithContentDescription("Buscar em Playlists").performTextInput("newjeans")
+        compose.onNodeWithContentDescription(expectedHint).performTextInput("newjeans")
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
