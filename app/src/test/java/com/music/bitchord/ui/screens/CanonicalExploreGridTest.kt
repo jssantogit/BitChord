@@ -68,7 +68,10 @@ class CanonicalExploreGridTest {
                 }
             }
         }
-        compose.onNodeWithText("Servidor").performClick()
+        // The Apple search origin row intentionally renders localized labels in uppercase.
+        compose.onNodeWithText("GERAL").assertExists()
+        compose.onNodeWithText("SERVIDOR").performClick()
+        compose.onNodeWithText("SUA BIBLIOTECA").assertExists()
         compose.runOnIdle { assertEquals(1, selected) }
         compose.onNodeWithTag("apple-search-back").performClick()
         compose.runOnIdle {
