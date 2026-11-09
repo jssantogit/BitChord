@@ -248,6 +248,7 @@ import com.music.bitchord.playback.retryCanonicalFailure
 import com.music.bitchord.ui.components.PlaybackRecoveryBanner
 import com.music.bitchord.playback.setQueueDragActive
 import com.music.bitchord.ui.MainViewModel
+import com.music.bitchord.ui.availableSearchProviderTabs
 import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.SearchOrigin
 import com.music.bitchord.ui.searchOriginOf
@@ -846,6 +847,39 @@ private fun BitChordApp(
     val libraryState by viewModel.library.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val searchSource by viewModel.searchSource.collectAsStateWithLifecycle()
+    val selectedSearchProviderKey by viewModel.selectedSearchProviderKey.collectAsStateWithLifecycle()
+    val configuredSearchApis by SourceRegistry.configs.collectAsStateWithLifecycle()
+    val unfilteredLocalSearchSongs by viewModel.availableLocalSongs.collectAsStateWithLifecycle()
+    val indexedSearchProviderKeys by produceState(initialValue = emptyList<String>()) {
+        val accounts = com.music.bitchord.data.catalog.provider.opensubsonic
+            .SharedPrefsOpenSubsonicAccountPersistence(context.applicationContext)
+        accounts.observe().collectLatest {
+            value = withContext(Dispatchers.IO) {
+                com.music.bitchord.ui.screens.canonicalAvailablePlaylistSourceKeys(
+                    context.applicationContext,
+                )
+            }
+        }
+    }
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == TAB_SEARCH) viewModel.loadLibrarySongs()
+    }
+    val visibleSearchSources = availableSearchProviderTabs(
+        configs = configuredSearchApis,
+        remoteProviderKeys = indexedSearchProviderKeys,
+        hasLocalTracks = (unfilteredLocalSearchSongs as? UiState.Success)?.data?.isNotEmpty() == true,
+        catalogLabel = stringResource(R.string.search_origin_general),
+        localLabel = stringResource(R.string.search_origin_local),
+    )
+    LaunchedEffect(visibleSearchSources, searchSource, selectedSearchProviderKey, selectedTab) {
+        if (selectedTab != TAB_SEARCH) return@LaunchedEffect
+        val validSelection = visibleSearchSources.any { tab -> when (searchSource) {
+            SearchSource.CANONICAL, SearchSource.YOUTUBE -> tab.key == "catalog"
+            SearchSource.LIBRARY -> tab.key == "local"
+            SearchSource.ADDONS -> tab.key == selectedSearchProviderKey
+        } }
+        if (!validSelection) viewModel.setSearchSource(SearchSource.CANONICAL)
+    }
     val libraryResults by viewModel.libraryResults.collectAsStateWithLifecycle()
     val addonResults by viewModel.addonResults.collectAsStateWithLifecycle()
     val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()
@@ -3909,29 +3943,24 @@ private fun BitChordApp(
                             appleResultTabs = true,
                             sourceSwitcher = {
                                 com.music.bitchord.ui.screens.AppleSearchOriginTabs(
-                                    options = listOf(
-                                        stringResource(R.string.search_origin_general),
-                                        stringResource(R.string.search_origin_server),
-                                        stringResource(R.string.search_origin_local),
-                                    ),
-                                    selectedIndex = when (searchOriginOf(searchSource)) {
-                                        SearchOrigin.GENERAL -> 0
-                                        SearchOrigin.SERVER -> 1
-                                        SearchOrigin.LOCAL -> 2
-                                    },
-                                    onSelect = { index ->
-                                        val origin = when (index) {
-                                            1 -> SearchOrigin.SERVER
-                                            2 -> SearchOrigin.LOCAL
-                                            else -> SearchOrigin.GENERAL
+                                    options = visibleSearchSources.map { it.label },
+                                    selectedIndex = visibleSearchSources.indexOfFirst { tab ->
+                                        when (searchSource) {
+                                            SearchSource.CANONICAL, SearchSource.YOUTUBE ->
+                                                tab.key == "catalog"
+                                            SearchSource.LIBRARY -> tab.key == "local"
+                                            SearchSource.ADDONS ->
+                                                tab.key == selectedSearchProviderKey
                                         }
-                                        onSearchSourceChange(
-                                            searchSourceForOrigin(
-                                                origin,
-                                                canonicalMode = true,
-                                                configs = SourceRegistry.configs.value,
-                                            ),
-                                        )
+                                    }.coerceAtLeast(0),
+                                    onSelect = { index ->
+                                        visibleSearchSources.getOrNull(index)?.let { tab ->
+                                            if (tab.source == SearchSource.ADDONS) {
+                                                viewModel.selectSearchProvider(tab.key)
+                                            } else {
+                                                onSearchSourceChange(tab.source)
+                                            }
+                                        }
                                     },
                                 )
                             },
