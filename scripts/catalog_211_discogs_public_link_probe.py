@@ -91,12 +91,14 @@ def main() -> int:
         observation["source_ids_match"] = (
             mb.get("id") == MBID and release.get("id") == DISCOGS_RELEASE_ID
         )
-        observation["discogs_format_descriptions_present"] = any(
-            isinstance(fmt, dict) and
-            isinstance(fmt.get("descriptions"), list) and
-            bool(fmt.get("descriptions"))
-            for fmt in release.get("formats", [])
-            if isinstance(release.get("formats"), list)
+        formats = release.get("formats")
+        observation["discogs_format_descriptions_present"] = (
+            isinstance(formats, list) and any(
+                isinstance(fmt, dict) and
+                isinstance(fmt.get("descriptions"), list) and
+                bool(fmt["descriptions"])
+                for fmt in formats
+            )
         )
         observation["result"] = (
             "public_link_observed"
