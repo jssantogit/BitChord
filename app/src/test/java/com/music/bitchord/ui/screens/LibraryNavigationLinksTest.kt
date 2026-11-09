@@ -5,6 +5,12 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Folder
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.settings.LibraryViewType
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.ic_apple_library_playlists
+import com.music.bitchord.sharedui.resources.ic_apple_library_artists
+import com.music.bitchord.sharedui.resources.ic_apple_library_albums
+import com.music.bitchord.sharedui.resources.ic_apple_library_songs
+import com.music.bitchord.sharedui.resources.ic_apple_library_downloads
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -61,11 +67,11 @@ class LibraryNavigationLinksTest {
         )
         assertEquals(
             listOf(
-                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_playlists,
-                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_artists,
-                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_albums,
-                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_songs,
-                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_downloads,
+                Res.drawable.ic_apple_library_playlists,
+                Res.drawable.ic_apple_library_artists,
+                Res.drawable.ic_apple_library_albums,
+                Res.drawable.ic_apple_library_songs,
+                Res.drawable.ic_apple_library_downloads,
             ),
             links.map { it.logo },
         )
