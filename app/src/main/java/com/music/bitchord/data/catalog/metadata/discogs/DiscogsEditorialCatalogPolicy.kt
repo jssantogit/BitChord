@@ -43,6 +43,8 @@ internal data class DiscogsGroupTypeProof(
     val releaseId: Long,
     val kind: DiscogsEditorialKind?,
     val verified: Boolean,
+    /** Discogs Master groups variants; variants do not represent separate votes. */
+    val masterId: Long? = null,
 )
 
 internal enum class DiscogsTypeSource {
@@ -109,7 +111,14 @@ internal object DiscogsTypeConsensus {
                 canonical, DiscogsTypeSource.DISCOGS_CORROBORATED, ids,
             )
         }
-        return if (ids.size >= 2) {
+        // A Master groups versions of the same release, not independent
+        // editorial assertions. Count all its physical editions as ONE vote.
+        // Without a valid Master ID, only the exact edition ID can be grouped.
+        val independentEvidence = verified.map { proof ->
+            proof.masterId?.takeIf { it in 1..999_999_999_999L }
+                ?.let { "master:$it" } ?: "release:${proof.releaseId}"
+        }.distinct().size
+        return if (independentEvidence >= 2) {
             DiscogsTypeResolution.Decided(
                 external, DiscogsTypeSource.DISCOGS_CORRECTION, ids,
             )
