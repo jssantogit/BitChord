@@ -155,6 +155,17 @@ def compare_edition(mb: dict, release: dict) -> dict:
         "tracklist_complete": complete,
         "tracklist_matches": bool(complete and titles == discogs_titles),
         "track_count": len(titles),
+        "discogs_track_count": len(discogs_titles),
+        "track_positions_equal": len(titles) == len(discogs_titles),
+        "exact_matching_track_positions": sum(
+            expected == observed
+            for expected, observed in zip(titles, discogs_titles)
+        ),
+        "first_title_mismatch_position": next(
+            (index for index, (expected, observed) in enumerate(
+                zip(titles, discogs_titles), start=1
+            ) if expected != observed), None,
+        ),
         "year_matches": bool(str(mb.get("date") or "")[:4].isdigit() and
                              str(mb.get("date") or "")[:4] ==
                              str(release.get("year") or "")),
