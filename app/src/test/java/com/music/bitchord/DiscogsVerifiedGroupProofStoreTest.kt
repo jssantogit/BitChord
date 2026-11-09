@@ -49,6 +49,29 @@ class DiscogsVerifiedGroupProofStoreTest {
         ) is DiscogsTypeResolution.Disputed)
     }
 
+    @Test fun miniAlbumCanFillMissingEpTypeAndMaxiSingleCanFillSingleType() {
+        val store = DiscogsVerifiedGroupProofStore()
+        val group2 = "00000000-0000-4000-8000-000000000888"
+        store.record(group, 701, DiscogsEditorialKind.MINI_ALBUM,
+            true, 10_000, 1_000, masterId = 700)
+        store.record(group2, 801, DiscogsEditorialKind.MAXI_SINGLE,
+            true, 10_000, 1_000, masterId = 800)
+        val proofs = store.activeProofs(1_001)
+        assertEquals(DiscogsEditorialKind.EP,
+            (DiscogsTypeConsensus.resolve("Other", proofs[group].orEmpty())
+                as DiscogsTypeResolution.Decided).kind)
+        assertEquals(DiscogsEditorialKind.SINGLE,
+            (DiscogsTypeConsensus.resolve("Other", proofs[group2].orEmpty())
+                as DiscogsTypeResolution.Decided).kind)
+    }
+
+    @Test fun mixtapeIsNotAutomaticallyReclassifiedAsAlbum() {
+        val store = DiscogsVerifiedGroupProofStore()
+        store.record(group, 900, DiscogsEditorialKind.MIXTAPE,
+            true, 10_000, 1_000)
+        assertTrue(store.activeProofs(1_001).isEmpty())
+    }
+
     @Test fun reobservingSameReleaseCannotInventTwoIndependentVotes() {
         val store = DiscogsVerifiedGroupProofStore()
         store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_000)
