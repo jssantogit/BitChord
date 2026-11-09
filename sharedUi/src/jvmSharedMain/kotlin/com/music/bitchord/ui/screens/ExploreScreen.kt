@@ -82,7 +82,16 @@ fun ExploreScreen(
             val columns = moodColumns(maxWidth)
             LazyColumn(
                 state = listState,
-                contentPadding = contentPadding,
+                // Match the observed Apple genre grid position under the large
+                // heading; this 40dp correction is screenshot-informed, not a
+                // statically verified Apple layout dimension.
+                contentPadding = PaddingValues(
+                    start = contentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    end = contentPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    top = (contentPadding.calculateTopPadding() - if (showTitle) 40.dp else 0.dp)
+                        .coerceAtLeast(0.dp),
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (showTitle) {
@@ -315,7 +324,7 @@ private fun fallbackMoodColor(title: String): Color = when ((title.hashCode() an
 /** Gap between mood cards, in both directions. */
 private val MOOD_SPACING = 12.dp
 
-private val MOOD_CARD_SHAPE = RoundedCornerShape(18.dp)
+private val MOOD_CARD_SHAPE = RoundedCornerShape(10.dp)
 
 /** Width over height; a two-column phone row lands at about 100dp tall. */
 const val MOOD_CARD_ASPECT = 1.72f
