@@ -92,6 +92,41 @@ class DiscogsEditorialCatalogPolicyTest {
         )) is DiscogsTypeResolution.Unknown)
     }
 
+    @Test fun twoEditionsFromSameDiscogsMasterAreOnlyOneEditorialTypeVote() {
+        val variants = listOf(
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true, masterId = 500),
+            DiscogsGroupTypeProof(212, DiscogsEditorialKind.EP, true, masterId = 500),
+        )
+        assertTrue(DiscogsTypeConsensus.resolve("Album", variants)
+            is DiscogsTypeResolution.Disputed)
+        assertEquals(DiscogsTypeSource.DISCOGS_FILL,
+            (DiscogsTypeConsensus.resolve("Other", variants)
+                as DiscogsTypeResolution.Decided).source)
+    }
+
+    @Test fun differentVerifiedMastersCanCorroborateTypeWithoutCountingVariantsTwice() {
+        val evidence = listOf(
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true, masterId = 500),
+            DiscogsGroupTypeProof(212, DiscogsEditorialKind.EP, true, masterId = 500),
+            DiscogsGroupTypeProof(301, DiscogsEditorialKind.EP, true, masterId = 600),
+        )
+        val changed = DiscogsTypeConsensus.resolve("Album", evidence)
+            as DiscogsTypeResolution.Decided
+        assertEquals(DiscogsTypeSource.DISCOGS_CORRECTION, changed.source)
+        assertEquals(DiscogsEditorialKind.EP, changed.kind)
+        assertEquals(listOf(211L, 212L, 301L), changed.releaseIds)
+    }
+
+    @Test fun conflictingKindsWithinOneMasterMustStayDisputedEvenWithOtherVotes() {
+        val evidence = listOf(
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true, masterId = 500),
+            DiscogsGroupTypeProof(212, DiscogsEditorialKind.ALBUM, true, masterId = 500),
+            DiscogsGroupTypeProof(301, DiscogsEditorialKind.EP, true, masterId = 600),
+        )
+        assertTrue(DiscogsTypeConsensus.resolve("Album", evidence)
+            is DiscogsTypeResolution.Disputed)
+    }
+
     @Test fun recoveredDiscogsReleaseHasTypedIndependentIdentityAndNoPlayback() {
         val observations = listOf(
             DiscogsPublicEditionSnapshot(edition(101, master = 987), fetchedAtMillis = 1_000),
