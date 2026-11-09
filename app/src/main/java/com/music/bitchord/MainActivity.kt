@@ -3985,6 +3985,7 @@ private fun BitChordApp(
                             },
                             canonicalDetail = viewModel.canonicalDetail.collectAsStateWithLifecycle().value,
                             onCanonicalOpen = viewModel::openCanonicalNativeDetail,
+                            onCanonicalRecordingInfo = { communityMetadataRecording = it },
                             onCanonicalBack = viewModel::backCanonicalCatalogEntry,
                             onCanonicalLoadMore = viewModel::loadMoreCanonicalDetail,
                             canonicalLoadingMore = viewModel.canonicalLoadingMore.collectAsStateWithLifecycle().value,
