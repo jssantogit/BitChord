@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,13 +85,14 @@ fun SearchField(
         // decorative would mean the keyboard's own key was the single way in.
         Icon(
             if (appleSearchChrome) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Search,
-            contentDescription = if (appleSearchChrome) "Voltar da pesquisa"
+            contentDescription = if (appleSearchChrome) stringResource(Res.string.canonical_back)
                 else stringResource(Res.string.search),
             tint = if (appleSearchChrome) MaterialTheme.colorScheme.onSurface
                 else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
                 .size(if (appleSearchChrome) 36.dp else 32.dp)
                 .clip(CircleShape)
+                .then(if (appleSearchChrome) Modifier.testTag("apple-search-back") else Modifier)
                 .clickable(
                     enabled = appleSearchChrome || query.isNotBlank(),
                     onClick = if (appleSearchChrome) onBack else submit,
