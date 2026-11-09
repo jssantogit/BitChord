@@ -328,7 +328,7 @@ fun SearchScreen(
                     modifier = Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 4.dp),
                 )
             }
-            if (sourceSwitcher != null && !searchCommitted) {
+            if (sourceSwitcher != null && !searchCommitted && query.isNotBlank()) {
                 // Source origins remain selectable while a query is visible,
                 // so changing General ↔ Server ↔ Local does not require the
                 // user to clear and retype the same artist or release.
