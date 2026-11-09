@@ -180,8 +180,12 @@ def compare_edition(mb: dict, release: dict) -> dict:
                              str(release.get("year") or "")),
         "country_compatible": (mb_country is None or external_country is None or
                                mb_country == external_country),
+        "country_explicit_on_both": mb_country is not None and external_country is not None,
         "barcode_compatible": (not mb_barcode or not other_barcodes or
                                mb_barcode in other_barcodes),
+        "barcode_identical_on_both": bool(mb_barcode and
+                                          mb_barcode in other_barcodes),
+        "discogs_label_present": bool(release.get("labels")),
         "discogs_explicit_type": explicit_discogs_type(
             formats if isinstance(formats, list) else [],
         ),
