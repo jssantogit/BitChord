@@ -1407,4 +1407,5 @@
     <string name="apple_player_add_to_playlist">เพิ่มลงในเพลย์ลิสต์…</string>
     <string name="apple_player_share_song">แชร์เพลง</string>
     <string name="apple_player_share_lyrics">แชร์เนื้อเพลง…</string>
+    <string name="apple_library_search_in_category">ค้นหาใน %1$s</string>
 </resources>
