@@ -52,6 +52,26 @@ class LibraryNavigationLinksTest {
         assertEquals("local:downloads", result.last().item.browseId)
         assertEquals(true, result.all { it.enabled })
     }
+    @Test fun libraryCategoriesUseTracedAppleReferenceVectorsWithoutChangingRoutes() {
+        val links = libraryNavigationLinks(
+            labels = LibraryCategoryLabels("Playlists", "Artists", "Albums", "Songs"),
+            deviceLinks = listOf(deviceLink("Downloads", "local:downloads")),
+            onOpenPlaylists = {},
+            onOpenLocalCategory = {},
+        )
+        assertEquals(
+            listOf(
+                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_playlists,
+                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_artists,
+                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_albums,
+                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_songs,
+                com.music.bitchord.sharedui.resources.Res.drawable.ic_apple_library_downloads,
+            ),
+            links.map { it.logo },
+        )
+        assertEquals("local:downloads", links.last().item.browseId)
+    }
+
     @Test fun localizedCategoryNamesKeepTheSameNavigationAndDownloadRoute() {
         val destinations = mutableListOf<LocalFolderTab>()
         var playlistOpened = 0
