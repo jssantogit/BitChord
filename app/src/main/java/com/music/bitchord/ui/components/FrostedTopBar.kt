@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -174,6 +175,8 @@ fun FrostedTopBar(
     /** No empty action capsule on the Home root when its menu lives in the header. */
     showActions: Boolean = true,
     separateActions: Boolean = false,
+    /** Only root tabs with large in-list titles need the actions lowered to match. */
+    rootActionsOffset: Dp = 0.dp,
     /** Only Home opts in: other pages retain their own large page headings. */
     showScrolledTitle: Boolean = false,
     actions: @Composable () -> Unit = {},
@@ -337,6 +340,7 @@ fun FrostedTopBar(
                 Row(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
+                        .offset(y = rootActionsOffset)
                         .then(if (accessory != null) Modifier.fillMaxWidth().padding(start = edge) else Modifier)
                         .padding(end = edge),
                     verticalAlignment = Alignment.CenterVertically,
