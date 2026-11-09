@@ -49,6 +49,21 @@ class DiscogsSourceOnlyShelfStoreTest {
         })
     }
 
+    @Test fun reuseUnexpiredArtistEvidenceWithoutCrossArtistLeaksOrExpiredResults() {
+        val store = DiscogsSourceOnlyShelfStore()
+        val artist = "00000000-0000-4000-8000-000000000010"
+        val other = "00000000-0000-4000-8000-000000000011"
+        val item = release(31, "AN EP")
+        assertNull(store.activeForArtist(artist, 100))
+        store.update(artist, listOf(item), nowMillis = 1_000)
+        assertEquals(listOf(item), store.activeForArtist(artist, 1_001))
+        assertNull(store.activeForArtist(other, 1_001))
+        assertNull(store.activeForArtist(artist,
+            1_000L + DiscogsObservation.TTL_MILLIS))
+        store.clear()
+        assertNull(store.activeForArtist(artist, 1_001))
+    }
+
     @Test fun rejectsMalformedAttributionAndDoesNotDuplicateArtistSnapshots() {
         val store = DiscogsSourceOnlyShelfStore()
         val bad = release(21, "Bad").copy(attributionUrl = "https://evil.example/release/21")
