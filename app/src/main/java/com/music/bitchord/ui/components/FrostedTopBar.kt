@@ -348,7 +348,7 @@ fun FrostedTopBar(
                     if (showActions) {
                         if (useFloatingChrome) {
                             if (separateActions) {
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() }
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { actions() }
                             } else {
                                 ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
                             }
