@@ -1456,4 +1456,5 @@
     <string name="apple_player_add_to_playlist">Добавить в плейлист…</string>
     <string name="apple_player_share_song">Поделиться песней</string>
     <string name="apple_player_share_lyrics">Поделиться текстом…</string>
+    <string name="apple_library_search_in_category">Поиск в %1$s</string>
 </resources>
