@@ -1394,4 +1394,5 @@
     <string name="apple_player_add_to_playlist">加入播放清單…</string>
     <string name="apple_player_share_song">分享歌曲</string>
     <string name="apple_player_share_lyrics">分享歌詞…</string>
+    <string name="apple_library_search_in_category">在%1$s中搜尋</string>
 </resources>
