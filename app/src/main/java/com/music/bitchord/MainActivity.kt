@@ -4385,9 +4385,12 @@ private fun BitChordApp(
                     !showAccountScrobbling && !showSources && !showListenTogether &&
                     !showWearOs && !showEqualizer && !showDiscord &&
                     !showHistory && !showReplay
+                val appleDownloadsChrome = shouldUseAppleDownloadsChrome(
+                    detail?.browseId, settingsOpen = showSettings,
+                ) && !showHistory && !showReplay
                 val appleLibraryRoundChrome = appleLibraryLandingChrome ||
                     appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
-                    appleExploreRootChrome
+                    appleExploreRootChrome || appleDownloadsChrome
 
                 FrostedTopBar(
                     title = when {
@@ -4432,11 +4435,14 @@ private fun BitChordApp(
                     rootActionsOffset = when {
                         appleExploreRootChrome -> 20.dp
                         appleLibraryLandingChrome -> 10.dp
-                        appleLibraryCategoryChrome || applePlaylistCategoryChrome -> 12.dp
+                        appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
+                            appleDownloadsChrome -> 12.dp
                         else -> 0.dp
                     },
-                    categoryBackButton = appleLibraryCategoryChrome || applePlaylistCategoryChrome,
-                    backButtonOffset = if (appleLibraryCategoryChrome || applePlaylistCategoryChrome) 12.dp else 0.dp,
+                    categoryBackButton = appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
+                        appleDownloadsChrome,
+                    backButtonOffset = if (appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
+                        appleDownloadsChrome) 12.dp else 0.dp,
                     // The generic top bar scroll flag flips after 24px,
                     // while the large Home heading is still fully legible.
                     // Only show its compact replacement when item 0 has left
@@ -4606,10 +4612,24 @@ private fun BitChordApp(
                                     }
                                 }
                             }
+                            if (appleDownloadsChrome) {
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                    IconButton(onClick = { folderMenuOpen = true }) {
+                                        Icon(
+                                            Icons.Rounded.Sort,
+                                            contentDescription = "Filtros de Downloads",
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                        )
+                                    }
+                                }
+                            }
                             com.music.bitchord.ui.components.AppleRootSettingsOverflow(
                                 hazeState = hazeState,
-                                description = if (appleExploreRootChrome) "Mais opções de Explorar"
-                                    else "Mais opções da biblioteca",
+                                description = when {
+                                    appleExploreRootChrome -> "Mais opções de Explorar"
+                                    appleDownloadsChrome -> "Mais opções de Downloads"
+                                    else -> "Mais opções da biblioteca"
+                                },
                                 onSettings = { showSettings = true },
                             )
                         } else {
@@ -7197,6 +7217,10 @@ private fun SongSort.localizedLabel(): String = when (this) {
  * every other release page gets. See [Downloads.PLAYLIST_PREFIX] and
  * [LocalGroups.PREFIX] for why they share a namespace at all.
  */
+/** Downloads is a native Library category, not an account/profile page. */
+internal fun shouldUseAppleDownloadsChrome(browseId: String?, settingsOpen: Boolean): Boolean =
+    browseId == "local:downloads" && !settingsOpen
+
 private fun String?.isDeviceFolder(): Boolean =
     this != null && startsWith("local:") &&
         !startsWith(Downloads.PLAYLIST_PREFIX) && !startsWith(LocalGroups.PREFIX)
