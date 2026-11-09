@@ -1305,4 +1305,5 @@
     <string name="apple_player_add_to_playlist">Add to a playlist…</string>
     <string name="apple_player_share_song">Share song</string>
     <string name="apple_player_share_lyrics">Share lyrics…</string>
+    <string name="apple_library_search_in_category">Search in %1$s</string>
 </resources>
