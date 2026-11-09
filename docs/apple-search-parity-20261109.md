@@ -67,3 +67,13 @@ The user provided side-by-side reference screenshots of Apple Music and the devD
 **New regression coverage:** `CanonicalSearchOriginsTest` checks Catalog-only, Catalog+Local and multiple distinct active APIs; `CanonicalExploreGridTest` checks the origin selection without Server and the presence of the trailing result menu without duration. API source changes and menu dismissals still require physical checks. Android CI is authoritative for compilation and unit gates; pixel equivalence is not claimed.
 
 **Reference:** `am-descomp/docs/screens/top_level_search_page.md`, `docs/components/search-field.md`, `docs/components/search-result-tabs.md`, and `docs/motion/search-and-library.md`. The source confirms the separate typed/results flows and result tab behavior in runtime evidence, but not final tint, pixel geometry, complete network suggestion behavior or API policy; the dynamic API tabs are a deliberate BitChord product choice.
+
+## CI follow-up — search-row overflow and GitHub Actions execution (2026-11-09)
+
+The physical screenshot improvements described above were already implemented on PR #212 by `174c1567`, but [Android CI #42665014045](https://github.com/jssantogit/BitChord/actions/runs/42665014045) reported a single UI regression among 3,184 tests: `CanonicalExploreGridTest.searchResultsUseMoreMenuRatherThanDurationText` could not find `search-row-more-actions` in the merged Compose semantics tree. The user-facing three-dot menu itself existed, and the duration was absent. The wrapper `Box` held the test tag but not the click action.
+
+The correction moves the tag onto the actual clickable `RowMoreButton` modifier, and tests opening its existing `Ver detalhes` menu item through the merged semantics tree. No media IDs, playback behavior, search ranking, per-provider filtering or visual spacing are changed by this fix.
+
+The first follow-up run [#42673240189](https://github.com/jssantogit/BitChord/actions/runs/42673240189) was cancelled when a newer correction was pushed. The next set of runs on `0094aaad` failed **before generating any jobs** across Android CI, Desktop, TV/Wear and YouTube audit. API responses returned `jobs: []`, so these executions provide no code-test verdict. An unrelated GitHub Actions/Webhooks incident was reported on the same date, but causality for these particular failures remains unverified. Do not claim red unit tests or green CI on this HEAD without a new successfully dispatched run.
+
+Keep PR #212 draft, leave #209/main untouched, and obtain a genuinely executed Android CI plus physical Android side-by-side screenshots before 1:1 acceptance. This handoff update is also a fresh workflow trigger; it does not justify generating a new APK automatically.
