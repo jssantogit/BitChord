@@ -166,6 +166,15 @@ def compare_edition(mb: dict, release: dict) -> dict:
                 zip(titles, discogs_titles), start=1
             ) if expected != observed), None,
         ),
+        "cross_script_mismatch_positions": sum(
+            expected != observed and (
+                (any("\uac00" <= ch <= "\ud7af" for ch in expected) and
+                 any("a" <= ch <= "z" for ch in observed)) or
+                (any("\uac00" <= ch <= "\ud7af" for ch in observed) and
+                 any("a" <= ch <= "z" for ch in expected))
+            )
+            for expected, observed in zip(titles, discogs_titles)
+        ),
         "year_matches": bool(str(mb.get("date") or "")[:4].isdigit() and
                              str(mb.get("date") or "")[:4] ==
                              str(release.get("year") or "")),
