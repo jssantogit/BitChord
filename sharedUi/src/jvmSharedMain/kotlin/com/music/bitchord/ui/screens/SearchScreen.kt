@@ -1688,14 +1688,14 @@ private fun SearchFilterTabs(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        text = when (entry) {
+                        text = (when (entry) {
                             SearchFilter.ALL -> stringResource(Res.string.apple_search_top_results)
                             SearchFilter.SONGS -> stringResource(Res.string.canonical_filter_songs)
                             SearchFilter.ALBUMS -> stringResource(Res.string.albums)
                             SearchFilter.ARTISTS -> stringResource(Res.string.artists)
                             SearchFilter.VIDEOS -> stringResource(Res.string.canonical_filter_videos)
                             SearchFilter.PLAYLISTS -> stringResource(Res.string.playlists)
-                        },
+                        }).uppercase(Locale.getDefault()),
                         style = MaterialTheme.typography.labelLarge,
                         color = if (selected) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1766,7 +1766,7 @@ fun AppleSearchOriginTabs(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    text = label,
+                    text = label.uppercase(Locale.getDefault()),
                     style = MaterialTheme.typography.titleSmall,
                     color = if (selected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
