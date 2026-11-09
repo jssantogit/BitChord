@@ -49,3 +49,5 @@ The user-facing three-source selector remains Geral / Servidor / Sua Biblioteca.
 - Root Search now explicitly excludes the top-bar account avatar and download manager action while the inline Back/Search/Clear field is displayed. This corrects a wiring gap between the documented design and the actual MainActivity condition; Home, Library and opened detail routes retain their former controls.
 
 - General pre-submit now also shows up to five verified cached MusicBrainz artist/release/recording rows beneath text suggestions. It reuses `showCachedCanonicalTypeahead`, `canonicalRowsForQuery`, `NativeSearchResultRow` and existing evidence-gated click actions, with no new network requests. This matches the observed *shape* of Apple pre-submit matches without claiming the same recommendation algorithm.
+
+- The observed Apple labels use uppercase text for both pre-submit origins and submitted result types. The Apple-style presentation now uppercases localized labels without affecting Bitchord's existing non-Apple filter pills; the first submitted tab uses localized `Top Results` / `Principais resultados` instead of the generic `All` / `Tudo`.
