@@ -32,11 +32,18 @@ internal class DiscogsVerifiedGroupProofStore {
     ) {
         val group = releaseGroupMbid?.trim()?.lowercase(Locale.ROOT)
             ?.takeIf(groupId::matches) ?: return
-        if (!verified || kind !in setOf(
-                DiscogsEditorialKind.ALBUM,
-                DiscogsEditorialKind.EP,
-                DiscogsEditorialKind.SINGLE,
-            ) || discogsReleaseId !in 1..999_999_999_999L ||
+        // Source-specific format descriptions map to our three existing
+        // native shelf categories. Mixtape does NOT imply an album.
+        val nativeKind = when (kind) {
+            DiscogsEditorialKind.ALBUM -> DiscogsEditorialKind.ALBUM
+            DiscogsEditorialKind.MINI_ALBUM, DiscogsEditorialKind.EP ->
+                DiscogsEditorialKind.EP
+            DiscogsEditorialKind.MAXI_SINGLE, DiscogsEditorialKind.SINGLE ->
+                DiscogsEditorialKind.SINGLE
+            else -> null
+        }
+        if (!verified || nativeKind == null ||
+            discogsReleaseId !in 1..999_999_999_999L ||
             expiresAtMillis <= nowMillis
         ) return
         mutable.update { snapshot ->
@@ -44,7 +51,7 @@ internal class DiscogsVerifiedGroupProofStore {
                 .filter { it.expiresAtMillis > nowMillis && it.proof.releaseId != discogsReleaseId }
             (snapshot.filterValues { it.isNotEmpty() } + (
                 group to (current + Record(
-                    DiscogsGroupTypeProof(discogsReleaseId, kind, verified = true,
+                    DiscogsGroupTypeProof(discogsReleaseId, nativeKind, verified = true,
                         masterId = masterId?.takeIf { it in 1..999_999_999_999L }),
                     expiresAtMillis,
                 )).takeLast(24)
