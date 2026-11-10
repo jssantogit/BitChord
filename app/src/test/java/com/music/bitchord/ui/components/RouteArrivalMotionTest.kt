@@ -27,6 +27,20 @@ class RouteArrivalMotionTest {
         assertFalse(shouldAnimateRouteArrival("picker", "create", reduced = true))
     }
 
+    @Test fun frostedFilterMenuOpensFromCornerWithoutChangingMeasuredSurface() {
+        val first = frostedMenuEntranceFrame(progress = 0f, reducedMotion = false)
+        assertEquals(0.3f, first.alpha, 0.0001f)
+        assertEquals(0.94f, first.scale, 0.0001f)
+        val mid = frostedMenuEntranceFrame(progress = 0.5f, reducedMotion = false)
+        assertEquals(0.65f, mid.alpha, 0.0001f)
+        assertEquals(0.97f, mid.scale, 0.0001f)
+        val settled = frostedMenuEntranceFrame(progress = 1f, reducedMotion = false)
+        assertEquals(1f, settled.alpha, 0.0001f)
+        assertEquals(1f, settled.scale, 0.0001f)
+        assertEquals(settled, frostedMenuEntranceFrame(0f, reducedMotion = true))
+        assertEquals(settled, frostedMenuEntranceFrame(Float.NaN, reducedMotion = false))
+    }
+
     @Test fun incomingPageUsesBoundedSubtleOffsetWithoutBlackCrossfade() {
         val entry = routeArrivalFrame(progress = 0f, forward = true)
         assertEquals(0.96f, entry.alpha, 0.0001f)
