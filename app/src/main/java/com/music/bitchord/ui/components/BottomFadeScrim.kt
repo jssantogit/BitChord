@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import com.music.bitchord.ui.LocalReduceAnimations
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -46,6 +47,18 @@ private val FADE_HEIGHT_WITH_MINI_PLAYER = 254.dp
 private const val STOPS = 16
 
 /**
+ * The background wash changes height with the mini-player visibility.
+ * Align each side of the transition with the same pill's entry/exit
+ * durations; reduced motion must be instant in every route.
+ */
+internal fun miniPlayerBackdropTransitionMillis(withMiniPlayer: Boolean, reduced: Boolean): Int =
+    AppleMusicChromeMotion.duration(
+        if (withMiniPlayer) AppleMusicChromeMotion.miniAppearMillis
+        else AppleMusicChromeMotion.miniDisappearMillis,
+        reduced,
+    )
+
+/**
  * The floor the floating bars sit on: the page's own colour, faded in from
  * nothing at the top to solid at the very bottom.
  *
@@ -78,11 +91,12 @@ fun BottomFadeScrim(
     // The gesture bar sits below the tab pill and wants covering too, so it is
     // added on rather than being part of the fade's own run.
     val inset = floatingBarInsets.asPaddingValues().calculateBottomPadding()
+    val reduceMotion = LocalReduceAnimations.current
     val height by animateDpAsState(
         targetValue = inset + if (withMiniPlayer) FADE_HEIGHT_WITH_MINI_PLAYER else FADE_HEIGHT,
-        // Matches the beat the mini player takes to appear, so the floor grows
-        // with it instead of snapping ahead of it.
-        animationSpec = tween(220),
+        // Sync the wash with the mini-player on both entry and exit, or
+        // switch immediately when Reduce animations is enabled.
+        animationSpec = tween(miniPlayerBackdropTransitionMillis(withMiniPlayer, reduceMotion)),
         label = "bottomScrimHeight",
     )
 

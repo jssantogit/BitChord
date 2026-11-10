@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -156,6 +157,20 @@ internal object AppleMusicChromeMotion {
         GlobalMotionPolicy.duration(baseMillis, reduced)
 }
 
+/**
+ * A real queue-entry change animates artwork and byline together.
+ * Changing artwork URL, quality, artist metadata, source or download flags
+ * on the *same* queue entry must not replay two crossfades or decode an
+ * outgoing duplicate image. Those fields still update inside that slot.
+ *
+ * The fallback handles historical queues without assigned queueEntryId.
+ */
+internal fun appleMiniPlayerContentKey(song: Song): String =
+    song.queueEntryId?.takeIf { it.isNotBlank() }?.let { "queue:$it" }
+        ?: song.videoId.takeIf { it.isNotBlank() }?.let { "media:$it" }
+        ?: song.localUri?.takeIf { it.isNotBlank() }?.let { "local:$it" }
+        ?: "unresolved:${song.title}:${song.artist}"
+
 /** A disabled slot (Radio) never reacts to press or selection animations. */
 internal fun appleMusicTabScaleTarget(enabled: Boolean, selected: Boolean, pressed: Boolean): Float =
     when {
@@ -168,7 +183,7 @@ internal fun appleMusicTabScaleTarget(enabled: Boolean, selected: Boolean, press
 @Composable
 private fun appleMusicPressScale(pressed: Boolean, reduced: Boolean): Float {
     val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.9f else 1f,
+        targetValue = GlobalMotionPolicy.pressedScale(pressed, reduced, activeScale = 0.9f),
         animationSpec = if (reduced) snap() else spring(dampingRatio = 0.80f, stiffness = 510f),
         label = "appleMusicTransportPress",
     )
@@ -369,6 +384,9 @@ fun AppleMusicMiniPlayer(
     val controlFade = AppleMusicChromeMotion.duration(
         AppleMusicChromeMotion.transportCrossfadeMillis, reduceMotion,
     )
+    // One transition coordinates the outgoing artwork and metadata, with a
+    // content key bound to the queue item, not every changing Song field.
+    val trackTransition = updateTransition(targetState = song, label = "appleMusicMiniTrack")
     val playInteraction = remember { MutableInteractionSource() }
     val nextInteraction = remember { MutableInteractionSource() }
     val playPressed by playInteraction.collectIsPressedAsState()
@@ -434,10 +452,9 @@ fun AppleMusicMiniPlayer(
                     .thumbnailBorder(artCorner)
                     .background(AppleNightSurface),
             ) {
-                Crossfade(
-                    targetState = song,
+                trackTransition.Crossfade(
                     animationSpec = tween(trackFade),
-                    label = "appleMusicMiniArtwork",
+                    contentKey = ::appleMiniPlayerContentKey,
                 ) { displayedSong ->
                     AsyncImage(
                         model = rememberPlaybackArtworkImageModel(displayedSong, ROW_ART_PX),
@@ -447,11 +464,10 @@ fun AppleMusicMiniPlayer(
                 }
             }
             Spacer(Modifier.width(8.dp))
-            Crossfade(
-                targetState = song,
+            trackTransition.Crossfade(
                 animationSpec = tween(trackFade),
                 modifier = Modifier.weight(1f),
-                label = "appleMusicMiniMetadata",
+                contentKey = ::appleMiniPlayerContentKey,
             ) { displayedSong ->
                 Column(verticalArrangement = Arrangement.Center) {
                     ExplicitSongTitle(

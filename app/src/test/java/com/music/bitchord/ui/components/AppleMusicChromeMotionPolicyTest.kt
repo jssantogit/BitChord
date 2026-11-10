@@ -19,6 +19,21 @@ class AppleMusicChromeMotionPolicyTest {
     }
 
     @Test
+    fun miniplayerPressNeverScalesWhenReducedMotionIsEnabled() {
+        assertEquals(0.9f, GlobalMotionPolicy.pressedScale(pressed = true, reduced = false, activeScale = 0.9f), 0.0001f)
+        assertEquals(1f, GlobalMotionPolicy.pressedScale(pressed = true, reduced = true, activeScale = 0.9f), 0.0001f)
+        assertEquals(1f, GlobalMotionPolicy.pressedScale(pressed = false, reduced = false, activeScale = 0.9f), 0.0001f)
+    }
+
+    @Test
+    fun miniplayerBottomScrimFollowsAppearingAndDisappearingPill() {
+        assertEquals(AppleMusicChromeMotion.miniAppearMillis, miniPlayerBackdropTransitionMillis(withMiniPlayer = true, reduced = false))
+        assertEquals(AppleMusicChromeMotion.miniDisappearMillis, miniPlayerBackdropTransitionMillis(withMiniPlayer = false, reduced = false))
+        assertEquals(0, miniPlayerBackdropTransitionMillis(withMiniPlayer = true, reduced = true))
+        assertEquals(0, miniPlayerBackdropTransitionMillis(withMiniPlayer = false, reduced = true))
+    }
+
+    @Test
     fun reduceAnimationSwitchesEveryTimedMotionToInstantState() {
         val specs = listOf(
             AppleMusicChromeMotion.tabTintMillis,
