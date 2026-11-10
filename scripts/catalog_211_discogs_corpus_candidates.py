@@ -33,7 +33,7 @@ OUTPUT = Path("discogs-211-corpus-candidates.json")
 
 def normalized(value: str) -> str:
     text = " ".join(unicodedata.normalize("NFKC", value).casefold().split())
-    return re.sub(r"\\s*:\\s*", ": ", text.replace("’", "'").replace("‘", "'"))
+    return re.sub(r"\s*:\s*", ": ", text.replace("’", "'").replace("‘", "'"))
 
 
 def comparable_title(value: str, artist: str) -> str:
@@ -46,12 +46,12 @@ def known_group_title(title: str, artist: str, known: set[str]) -> bool:
     value = comparable_title(title, artist)
     if value in known:
         return True
-    ending = re.search(r"\\s*[\\(\\[]([^\\(\\)\\[\\]]{1,72})[\\)\\]]$", value)
+    ending = re.search(r"\s*[\(\[]([^\(\)\[\]]{1,72})[\)\]]$", value)
     if not ending:
         return False
     suffix = ending.group(1)
-    if (not re.search(r"\\b(?:version|edition|ver\\.?|explicit|clean)\\b", suffix) or
-        re.search(r"\\b(?:remix|live|acoustic|instrumental|sped\\s+up|slowed)\\b", suffix)):
+    if (not re.search(r"\b(?:version|edition|ver\.?|explicit|clean)\b", suffix) or
+        re.search(r"\b(?:remix|live|acoustic|instrumental|sped\s+up|slowed)\b", suffix)):
         return False
     return value[:ending.start()].strip() in known
 
