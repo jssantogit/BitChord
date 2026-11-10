@@ -163,6 +163,25 @@ class GlobalAppleTopBarChromeTest {
         ).assertCountEquals(1)
     }
 
+    @Test fun reducedMotionRefreshPuckNeverAnnouncesInventedEightyPercentCompletion() {
+        compose.setContent {
+            BitChordTheme {
+                RefreshPuck(
+                    refreshing = true,
+                    pullFraction = { 1f },
+                    reduceMotion = true,
+                )
+            }
+        }
+        compose.onAllNodes(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.ProgressBarRangeInfo,
+                ProgressBarRangeInfo.Indeterminate,
+            ),
+            useUnmergedTree = true,
+        ).assertCountEquals(1)
+    }
+
     @Test fun detailOnlyCircularActionAlsoUsesFortyDp() {
         compose.setContent {
             BitChordTheme {
