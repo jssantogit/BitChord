@@ -18,13 +18,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.DeleteForever
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +51,10 @@ import com.music.bitchord.download.Downloads
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import java.util.Locale
+
+/** Original, shared vector identities for rating and playlist destructive actions. */
+internal fun browseRatingActionIcon() = PlaylistEditorIcons.Ratings
+internal fun browsePlaylistDeleteIcon() = PlaylistEditorIcons.Delete
 
 /**
  * The album or playlist a long-press is acting on.
@@ -247,7 +247,7 @@ fun BrowseActionsSheet(
                     "Adicionar à playlist", onClick = add)
             }
             onEditRating?.let { edit ->
-                ActionRow(Icons.Rounded.Star, "Editar avaliação", onClick = edit)
+                ActionRow(browseRatingActionIcon(), "Editar avaliação", onClick = edit)
             }
             onSelect?.let { select ->
                 ActionRow(Icons.Rounded.CheckCircle, "Selecionar", onClick = select)
@@ -328,25 +328,25 @@ fun BrowseActionsSheet(
             if (onDelete != null) {
                 if (confirmingDelete) {
                     ActionRow(
-                        icon = Icons.Rounded.DeleteForever,
+                        icon = browsePlaylistDeleteIcon(),
                         label = stringResource(R.string.delete_playlist_confirmation, target.title),
                         tint = MaterialTheme.colorScheme.error,
                         onClick = onDelete,
                     )
                 } else {
-                    ActionRow(Icons.Rounded.Delete, stringResource(R.string.delete_playlist)) { confirmingDelete = true }
+                    ActionRow(browsePlaylistDeleteIcon(), stringResource(R.string.delete_playlist)) { confirmingDelete = true }
                 }
             }
             if (onDeleteDownload != null) {
                 if (confirmingDeleteDownload) {
                     ActionRow(
-                        icon = Icons.Rounded.DeleteForever,
+                        icon = browsePlaylistDeleteIcon(),
                         label = stringResource(R.string.delete_download_confirmation, target.title),
                         tint = MaterialTheme.colorScheme.error,
                         onClick = onDeleteDownload,
                     )
                 } else {
-                    ActionRow(Icons.Rounded.Delete, stringResource(R.string.delete_download)) {
+                    ActionRow(browsePlaylistDeleteIcon(), stringResource(R.string.delete_download)) {
                         confirmingDeleteDownload = true
                     }
                 }
