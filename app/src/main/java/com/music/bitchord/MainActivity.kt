@@ -4457,9 +4457,9 @@ private fun BitChordApp(
                     // circles over the shared gradient — no full-width pane.
                     transparentBackdrop = true,
                     artworkPageChrome = true,
-                    // Home uses this existing frosted action pill from the first frame.
-                    // Never render a second profile button or Material3 overflow
-                    // beside the large Início title.
+                    // Root and detail toolbar actions share independent circular
+                    // surfaces; only Search's editable root field uses this slot.
+                    // The global ⋮ owns Settings rather than an account avatar.
                     showActions = !appleSearchRootChrome,
                     separateActions = appleLibraryRoundChrome,
                     rootActionsOffset = when {
@@ -4855,10 +4855,9 @@ private fun BitChordApp(
                                 )
                             ) TopBarAccountButton(
                                 account = account,
-                                // The account glyph is the single entrance to Settings.
-                                // Home has no redundant overflow menu.
+                                // Shared three-dot overflow opens a compact Settings
+                                // menu. Profile switching stays in Settings itself.
                                 onClick = { showSettings = true },
-                                onSwipeProfile = { forward -> viewModel.stepProfile(forward) },
                             )
                         }
                         }
