@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.ActionRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Radio
@@ -131,7 +133,7 @@ class CanonicalRecordingFeedbackControlsTest {
                 )
             }
         }
-        compose.onNodeWithTag("rating-editor-star-0-full").assertExists()
+        compose.onNodeWithTag("rating-editor-star-0-full").assertExists().assertWidthIsEqualTo(28.dp)
         compose.onNodeWithTag("rating-editor-star-1-full").assertExists()
         compose.onNodeWithTag("rating-editor-star-2-half").assertExists()
         compose.onNodeWithTag("rating-editor-star-3-empty").assertExists()
