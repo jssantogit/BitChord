@@ -84,9 +84,10 @@ import com.music.bitchord.sharedui.resources.smart_collection_batch_play
 import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import org.jetbrains.compose.resources.stringResource
 
-// Respect DESIGN.md: SF Pro Display and semantic ColorScheme from BitChordTheme,
-// the shared 16.dp PAGE_GUTTER, and locally rounded neutral cards.
-// Do not invent new global color or shape tokens for this flow.
+// The am-descomp docs/DESIGN.md and new-surface-patterns.md take priority for
+// Apple Music-inspired composition. Form geometry and callbacks remain unknown
+// there, so existing BitChord theme, components and tokens are documented
+// fallbacks — never evidence of Apple parity.
 /** Shared singular/plural copy for the editor and saved-filter manager. */
 internal fun smartConditionCountLabel(count: Int, configured: Boolean = false): String {
     val label = "$count ${if (count == 1) "condição" else "condições"}"
