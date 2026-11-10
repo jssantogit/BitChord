@@ -157,9 +157,16 @@ internal object DiscogsShadowCatalog {
     // common in Discogs titles; never strip arbitrary dash-separated text.
     private val whitespace = Regex("\\s+")
 
+    // Comparison-only typography and colon spacing; do not infer translations
+    // or change exact edition identity matching.
+    private val colonSpacing = Regex("""\s*:\s*""")
+
     private fun normalizedTitle(raw: String): String =
         Normalizer.normalize(raw, Normalizer.Form.NFKC).trim()
-            .lowercase(Locale.ROOT).replace(whitespace, " ")
+            .lowercase(Locale.ROOT)
+            .replace("’", "'").replace("‘", "'")
+            .replace(whitespace, " ")
+            .replace(colonSpacing, ": ")
 
     private fun comparisonTitle(raw: String, artist: String): String {
         val title = normalizedTitle(raw)
@@ -171,7 +178,9 @@ internal object DiscogsShadowCatalog {
     // grouping title for absence checks only. Never use this relaxed check
     // for exact Release identity, playback, or Discogs verification.
     private val editionSuffix = Regex("""\s*[\(\[]([^\(\)\[\]]{1,72})[\)\]]$""")
-    private val versionTag = Regex("""(?:\bversion\b|\bedition\b|\bver\.?(?=\s|$))""")
+    private val versionTag = Regex(
+        """(?:\bversion\b|\bedition\b|\bver\.?(?=\s|$)|\bexplicit\b|\bclean\b)""",
+    )
     private val distinctArrangement = Regex(
         """\b(?:remix|live|acoustic|instrumental|sped\s+up|slowed)\b""",
     )
