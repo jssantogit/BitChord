@@ -59,6 +59,8 @@ class GlobalAppleTopBarChromeTest {
                     // AnimatedVisibility and other absent toolbar slots must not
                     // leave an empty glass circle behind.
                     Spacer(Modifier.size(0.dp))
+                    // A compact non-icon indicator is not a toolbar action.
+                    Spacer(Modifier.size(20.dp))
                     IconButton(onClick = {}) { Icon(Icons.Rounded.Sort, contentDescription = "Sort") }
                 }
             }
