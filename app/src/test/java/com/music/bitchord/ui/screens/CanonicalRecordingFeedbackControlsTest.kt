@@ -133,7 +133,7 @@ class CanonicalRecordingFeedbackControlsTest {
                 )
             }
         }
-        compose.onNodeWithTag("rating-editor-star-0-full").assertExists().assertWidthIsEqualTo(28.dp)
+        compose.onNodeWithTag("rating-editor-star-0-full").assertExists().assertWidthIsEqualTo(48.dp)
         compose.onNodeWithTag("rating-editor-star-1-full").assertExists()
         compose.onNodeWithTag("rating-editor-star-2-half").assertExists()
         compose.onNodeWithTag("rating-editor-star-3-empty").assertExists()
