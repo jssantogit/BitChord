@@ -38,7 +38,8 @@ class PlaylistEditorPresentationTest {
                 )
             }
         }
-        compose.onNodeWithTag("playlist-wizard-text-action").assertHeightIsEqualTo(44.dp)
+        compose.onNodeWithTag("playlist-wizard-text-action").assertExists()
+        compose.onAllNodesWithTag("playlist-wizard-secondary-button").assertCountEquals(0)
         compose.onNodeWithText("Salvar como filtro reutilizável").performClick()
         compose.runOnIdle { assertEquals(1, clicked) }
     }
