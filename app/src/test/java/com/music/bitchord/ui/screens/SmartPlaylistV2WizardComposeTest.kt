@@ -762,8 +762,8 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Revisar playlist").performClick()
         compose.onNodeWithText("Revisar e criar").assertExists()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
-        compose.onNodeWithText("Músicas selecionadas").assertExists()
-        compose.onNodeWithText("Preparando prévia automaticamente…").assertExists()
+        compose.onNodeWithText("Prévia").assertExists()
+        compose.onNodeWithText("Buscando músicas…").assertExists()
         compose.onNodeWithText("Criar playlist").assertIsNotEnabled()
     }
 
@@ -880,8 +880,8 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Revisar playlist").performClick()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
-        compose.onNodeWithText("Músicas selecionadas").assertExists()
-        compose.onNodeWithText("1 música na prévia").assertExists()
+        compose.onNodeWithText("Prévia").assertExists()
+        compose.onNodeWithText("1 música encontrada").assertExists()
         compose.onNodeWithText("Prévia atualizada após aplicar regras, limite e ordenação.")
             .assertDoesNotExist()
         compose.onAllNodesWithText("Reproduzir").assertCountEquals(0)
