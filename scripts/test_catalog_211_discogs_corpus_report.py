@@ -4,11 +4,29 @@ from pathlib import Path
 from catalog_211_discogs_corpus_report import report
 
 def case(cohort, i):
+    index = i + {"type": 0, "unlinked": 100, "source_only": 200}[cohort]
+    group = "00000000-0000-4000-8000-" + f"{index:012d}"
+    release = "00000000-0000-4000-8000-" + f"{index + 1000:012d}"
+    artist = "00000000-0000-4000-8000-" + f"{index + 2000:012d}"
+    discogs_id = 1000 + index
+    links = {
+        "discogs_release": f"https://www.discogs.com/release/{discogs_id}",
+        # Synthetic link for validator tests; the test does not assert live truth.
+        "independent_editorial": "https://example.org/discography/official",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120",
+        "musicbrainz_release": f"https://musicbrainz.org/release/{release}",
+        "musicbrainz_release_group": f"https://musicbrainz.org/release-group/{group}",
+        "musicbrainz_artist": f"https://musicbrainz.org/artist/{artist}",
+    }
     return dict(id=f"{cohort}-{i}", cohort=cohort, reviewed=True,
-                musicbrainz_group_mbid=("00000000-0000-4000-8000-"
-                    + f"{i + {'type': 0, 'unlinked': 100, 'source_only': 200}[cohort]:012d}"),
-                discogs_release_id=(1000
-                    + {'type': 0, 'unlinked': 100, 'source_only': 200}[cohort] + i),
+                musicbrainz_group_mbid=group,
+                musicbrainz_release_mbid=release,
+                musicbrainz_artist_mbid=artist,
+                artist_browse_complete=True,
+                discogs_release_id=discogs_id,
+                evidence_links=links,
+                reviewed_at_utc="2026-11-10T00:00:00Z",
+                review_notes="Independent editorial source checked alongside public source IDs; synthetic validator test case.",
                 sources=["artist", "discogs"], reference_type="EP",
                 musicbrainz_type="Album", app_type="EP",
                 match_state="verified", match_correct=True,
@@ -82,6 +100,36 @@ class CorpusReportTests(unittest.TestCase):
         cases[7]["sources"] = ["label"]
         cases[7]["discogs_release_id"] = None
         self.assertIsNone(report({"schema_version": 1, "cases": cases})["metrics"])
+
+    def test_review_requires_typed_source_urls_independent_date_and_notes(self):
+        cases = [case(c, i) for c in ("type", "unlinked", "source_only")
+                 for i in range(10)]
+        valid = report({"schema_version": 1, "cases": cases})
+        self.assertTrue(valid["complete"])
+        for changes in (
+            {"reviewed_at_utc": "sometime"},
+            {"review_notes": "ok"},
+            {"evidence_links": {**cases[0]["evidence_links"],
+                                "independent_editorial": "https://discogs.com/release/1000"}},
+            {"evidence_links": {**cases[0]["evidence_links"],
+                                "discogs_release": "https://www.discogs.com/release/999"}},
+            {"evidence_links": {**cases[0]["evidence_links"],
+                                "musicbrainz_release_group": "https://musicbrainz.org/release-group/invalid"}},
+        ):
+            item = dict(cases[0])
+            item.update(changes)
+            result = report({"schema_version": 1, "cases": [item] + cases[1:]})
+            self.assertFalse(result["complete"], changes)
+            self.assertIsNone(result["metrics"])
+            self.assertTrue(any("independent, dated review evidence" in e for e in result["errors"]))
+        for cohort, index, field in (("unlinked", 10, "musicbrainz_release"),
+                                    ("source_only", 20, "musicbrainz_artist")):
+            changed = [dict(x) for x in cases]
+            changed[index]["evidence_links"] = {
+                **changed[index]["evidence_links"], field: "https://evil.example/p"}
+            result = report({"schema_version": 1, "cases": changed})
+            self.assertFalse(result["complete"], cohort)
+            self.assertIsNone(result["metrics"])
 
     def test_unknown_type_fill_is_not_counted_as_correction(self):
         cases = [case(c, i) for c in ("type", "unlinked", "source_only")

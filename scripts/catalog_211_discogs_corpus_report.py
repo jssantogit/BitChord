@@ -15,6 +15,84 @@ SOURCES = {"artist", "label", "release_notes", "discogs", "musicbrainz"}
 MBID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 WORKFLOW_URL = re.compile(r"https://github\.com/jssantogit/BitChord/actions/runs/[1-9][0-9]*")
 
+
+def _public_https(url: object) -> str | None:
+    if not isinstance(url, str) or len(url) not in range(9, 2049):
+        return None
+    try:
+        parsed = urlsplit(url)
+        if (parsed.scheme != "https" or not parsed.hostname or
+            parsed.username or parsed.password or parsed.port is not None or
+            parsed.query or parsed.fragment or not parsed.path.startswith("/")):
+            return None
+        return parsed.hostname.lower()
+    except ValueError:
+        return None
+
+
+def reviewed_evidence(case: dict) -> bool:
+    """Evidence locator validity, not automatic confirmation of its factual claim.
+
+    Reviewers must check source contents and the native app themselves. A
+    human-readable source category or UUID alone never certifies a case.
+    """
+    cohort = case["cohort"]
+    release_id = case.get("discogs_release_id")
+    if type(release_id) is not int or not 1 <= release_id <= 999_999_999_999:
+        return False
+    links = case.get("evidence_links")
+    if not isinstance(links, dict):
+        return False
+    if links.get("discogs_release") != f"https://www.discogs.com/release/{release_id}":
+        return False
+    editorial_host = _public_https(links.get("independent_editorial"))
+    if (editorial_host is None or editorial_host in {
+        "discogs.com", "www.discogs.com", "api.discogs.com",
+        "musicbrainz.org", "www.musicbrainz.org", "github.com",
+        "api.github.com",
+    } or editorial_host.endswith(".discogs.com") or
+        editorial_host.endswith(".musicbrainz.org")):
+        return False
+    if cohort == "type":
+        gid = case.get("musicbrainz_group_mbid")
+        expected = f"https://musicbrainz.org/release-group/{gid}"
+        if not isinstance(gid, str) or not MBID.fullmatch(gid) or (
+            links.get("musicbrainz_release_group") != expected
+        ):
+            return False
+    elif cohort == "unlinked":
+        edition = case.get("musicbrainz_release_mbid")
+        if (not isinstance(edition, str) or not MBID.fullmatch(edition) or
+            links.get("musicbrainz_release") !=
+                f"https://musicbrainz.org/release/{edition}"):
+            return False
+    elif cohort == "source_only":
+        artist = case.get("musicbrainz_artist_mbid")
+        if (not isinstance(artist, str) or not MBID.fullmatch(artist) or
+            case.get("artist_browse_complete") is not True or
+            links.get("musicbrainz_artist") !=
+                f"https://musicbrainz.org/artist/{artist}" or
+            not WORKFLOW_URL.fullmatch(str(links.get("observed_workflow", "")))):
+            return False
+    else:
+        return False
+    notes, reviewed_at = case.get("review_notes"), case.get("reviewed_at_utc")
+    if not isinstance(notes, str) or not 40 <= len(notes.strip()) <= 2000:
+        return False
+    if not isinstance(reviewed_at, str) or (
+        re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", reviewed_at) is None
+    ):
+        return False
+    try:
+        from datetime import datetime
+        if datetime.strptime(reviewed_at, "%Y-%m-%dT%H:%M:%SZ").strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ) != reviewed_at:
+            return False
+    except ValueError:
+        return False
+    return True
+
 def selected_identity(case: dict) -> str | None:
     """Validate a seeded, non-adjudicated case and return a duplicate key.
 
@@ -98,6 +176,9 @@ def report(document: dict) -> dict:
             isinstance(src, str) and src in SOURCES for src in case["sources"]
         ) or not any(src in {"artist", "label", "release_notes"} for src in case["sources"]):
             errors.append(f"case {cid}: independent editorial adjudication is required")
+            continue
+        if not reviewed_evidence(case):
+            errors.append(f"case {cid}: missing public, independent, dated review evidence")
             continue
         # A reviewed result must be reproducible from public release identities;
         # a confident boolean without the underlying source is not evidence.

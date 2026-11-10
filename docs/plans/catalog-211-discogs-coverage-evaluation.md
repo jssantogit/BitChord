@@ -108,7 +108,17 @@ workflow: `discogs-211-edition-pair-evidence.json`.
 
 O manifesto JSON usa exatamente: `id`, `cohort` (`type`, `unlinked`, `source_only`), `reviewed` (booleano), `sources` (rótulos de fontes; ao menos uma fonte independente: `artist`, `label` ou `release_notes`), `musicbrainz_group_mbid` (obrigatório nos coortes A e B), `discogs_release_id` (obrigatório quando `match_state=verified` e no coorte C), `musicbrainz_type`, `reference_type`, `app_type` (`Album`, `EP`, `Single`, `Unknown`), `match_state`, `match_correct`, `visible`, `absent_in_musicbrainz`.
 
-Os booleanos precisam ser explícitos e os IDs devem corresponder a entidades públicas reais. Casos repetidos por ReleaseGroup (A) ou identidade de edição (B/C) são rejeitados. URLs de evidências, data da revisão e detalhes da adjudicação devem acompanhar as notas públicas do corpus, embora o script ainda não audite automaticamente essas URLs. Uma marcação humana `reviewed=true` **não é prova automática** de que a classificação esteja correta.
+Os booleanos precisam ser explícitos e os IDs devem corresponder a entidades públicas reais. Casos repetidos por ReleaseGroup (A) ou identidade de edição (B/C) são rejeitados. URLs de evidências, data da revisão e detalhes da adjudicação devem acompanhar as notas públicas do corpus, embora o script ainda não audite automaticamente essas URLs. A partir de 10/11/2026, `reviewed=true` exige também:
+`reviewed_at_utc` (ISO UTC), `review_notes` substantivas,
+`discogs_release_id` com URL exata `https://www.discogs.com/release/ID`
+e `evidence_links.independent_editorial` (HTTPS, domínio diferente
+de Discogs, MusicBrainz e GitHub). Para A, URL MusicBrainz do
+ReleaseGroup exato; para B, URL MusicBrainz Release MBID exato; para C,
+Artist MBID, URL do artista, `artist_browse_complete=true` e URL do
+workflow observador. URLs são **localizadores**, não prova automática de
+que o conteúdo corrobora o julgamento. O revisor ainda precisa ler as
+fontes, conferir data/edição, avaliar a UI e registrar a decisão.
+Uma marcação humana `reviewed=true` **não é prova automática** de que a classificação esteja correta.
 
 Para executar: `python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_report.py'`; depois `python3 scripts/catalog_211_discogs_corpus_report.py docs/plans/catalog-211-discogs-corpus-manifest.json --output discogs-coverage.json`. O avaliador retorna código 2 se o corpus estiver incompleto ou houver falso positivo, para impedir o uso do relatório como gate aprovado.
 
