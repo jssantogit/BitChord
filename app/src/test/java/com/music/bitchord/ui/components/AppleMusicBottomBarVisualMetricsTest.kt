@@ -11,7 +11,7 @@ import org.junit.Test
  *
  * 62dp navigation / 30dp tab icons / 48dp mini player are XML tokens
  * documented in am-descomp (docs/components and design/spacing.json).
- * Label and text sizes are screenshot-calibrated, not proved runtime values.
+ * Navigation labels remain screenshot-calibrated. The miniplayer's base text\n * sizes follow the linked FootnoteEmphasized/Caption1 XML declarations; actual\n * selection and rendering on a device remain unverified.
  */
 class AppleMusicBottomBarVisualMetricsTest {
     @Test
@@ -38,8 +38,8 @@ class AppleMusicBottomBarVisualMetricsTest {
     }
 
     @Test
-    fun miniPlayerTextIsLegibleWithTwoLinesInThePill() {
-        assertEquals(15.sp, AppleMusicChromeMetrics.titleSize)
-        assertEquals(15.sp, AppleMusicChromeMetrics.artistSize)
+    fun miniPlayerBaseVariantUsesTracedAppleFootnoteAndCaptionSizes() {
+        assertEquals(13.sp, AppleMusicChromeMetrics.titleSize)
+        assertEquals(12.sp, AppleMusicChromeMetrics.artistSize)
     }
 }
