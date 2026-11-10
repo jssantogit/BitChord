@@ -1,9 +1,12 @@
 package com.music.bitchord.ui.components
 
 import android.app.Application
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
@@ -11,13 +14,18 @@ import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.R
 import com.music.bitchord.ui.theme.BitChordTheme
+import com.music.bitchord.ui.screens.CircleIconButton
+import com.music.bitchord.ui.screens.ActionPill
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -69,4 +77,47 @@ class GlobalAppleTopBarChromeTest {
         compose.onNodeWithContentDescription("Search").assertExists()
         compose.onNodeWithContentDescription("Sort").assertExists()
     }
+    @Test fun threeIconToolbarUsesFullTapTargetsAtNarrowAvailableWidth() {
+        compose.setContent {
+            BitChordTheme {
+                ArtworkPageActions(
+                    hazeState = null,
+                    modifier = Modifier.width(152.dp).testTag("narrow-action-toolbar"),
+                ) {
+                    listOf("One", "Two", "Three").forEach { label ->
+                        IconButton(onClick = {}) {
+                            Icon(Icons.Rounded.Sort, contentDescription = label)
+                        }
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("narrow-action-toolbar", useUnmergedTree = true)
+            .assertWidthIsEqualTo(152.dp)
+        compose.onAllNodesWithTag("apple-toolbar-action-circle", useUnmergedTree = true)
+            .assertCountEquals(3)
+    }
+
+    @Test fun unavailableSecondaryActionsRemainDisabledWithSharedSurface() {
+        compose.setContent {
+            BitChordTheme {
+                CircleIconButton(
+                    icon = Icons.Rounded.Search,
+                    contentDescription = "Unavailable circle",
+                    onClick = {},
+                    enabled = false,
+                )
+                ActionPill(
+                    icon = Icons.Rounded.Search,
+                    label = "Unavailable labeled action",
+                    onClick = {},
+                    filled = false,
+                    enabled = false,
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Unavailable circle").assertIsNotEnabled()
+        compose.onNodeWithText("Unavailable labeled action").assertIsNotEnabled()
+    }
+
 }
