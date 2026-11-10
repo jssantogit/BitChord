@@ -551,7 +551,7 @@ internal fun ArtworkPageActions(
         val gapPx = gap.roundToPx()
         val maxIconBounds = diameter + 4.dp.roundToPx()
         val surfaces = children.mapIndexed { index, child ->
-            if (child.width > maxIconBounds || child.height > maxIconBounds) null
+            if (child.width == 0 || child.height == 0 ||\n                child.width > maxIconBounds || child.height > maxIconBounds) null
             else subcompose("circle:$index") {
                 Box(
                     Modifier.size(circleSize)
@@ -563,21 +563,27 @@ internal fun ArtworkPageActions(
         val widths = children.indices.map { index ->
             maxOf(children[index].width, surfaces[index]?.width ?: 0)
         }
-        val naturalWidth = widths.sum() + gapPx * (children.size - 1).coerceAtLeast(0)
-        val naturalHeight = (children.indices.maxOfOrNull { index ->
+        val visibleIndices = children.indices.filter { index ->
+            children[index].width > 0 && children[index].height > 0
+        }
+        val naturalWidth = visibleIndices.sumOf { widths[it] } +
+            gapPx * (visibleIndices.size - 1).coerceAtLeast(0)
+        val naturalHeight = (visibleIndices.maxOfOrNull { index ->
             maxOf(children[index].height, surfaces[index]?.height ?: 0)
         } ?: 0)
         val width = naturalWidth.coerceIn(constraints.minWidth, constraints.maxWidth)
         val height = naturalHeight.coerceIn(constraints.minHeight, constraints.maxHeight)
         layout(width, height) {
             var x = 0
-            children.forEachIndexed { index, child ->
+            visibleIndices.forEachIndexed { order, index ->
+                if (order > 0) x += gapPx
+                val child = children[index]
                 val slotWidth = widths[index]
                 surfaces[index]?.let { surface ->
                     surface.placeRelative(x + (slotWidth - surface.width) / 2, (height - surface.height) / 2)
                 }
                 child.placeRelative(x + (slotWidth - child.width) / 2, (height - child.height) / 2)
-                x += slotWidth + gapPx
+                x += slotWidth
             }
         }
     }
