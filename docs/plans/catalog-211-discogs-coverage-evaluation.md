@@ -21,6 +21,31 @@ Os exemplos observados no A54 em 2026-11-07 (ILLIT BREAK EVEN e álbum BTS) são
 
 Estes são controles de **classificação MusicBrainz já existente**, não edições Discogs verificadas, nem prova de que há vínculo Discogs direto. Não preencher `reviewed=true` ou alegar ganho para eles sem confirmar o registro Discogs exato.
 
+## Sondagem de candidatos públicos (10/11/2026)
+
+A coleta preliminar é automatizada por
+`scripts/catalog_211_discogs_corpus_candidates.py` e pelo workflow
+`.github/workflows/catalog-211-discogs-candidate-scan.yml`.
+São observados, com orçamento de rede limitado e **sem token**, quatro artistas
+com MBIDs públicos (ENHYPEN, ILLIT, NewJeans e LE SSERAFIM).
+A relação MusicBrainz Artist → Discogs Artist precisa ser única e explícita;
+a lista de ReleaseGroups MusicBrainz precisa estar completa, íntegra e
+caber em até quatro páginas. A primeira página do índice público Discogs
+é comparada somente por título exato normalizado, sem criar vínculo entre
+ReleaseGroup e Discogs Master.
+
+O arquivo gerado `discogs-211-corpus-candidates.json` diferencia
+`no_unique_artist_relation`, `incomplete_mb_browse`,
+`network_unavailable` e `index_compared_not_adjudicated`.
+`candidate_index_hints` são **apenas títulos não idênticos no índice**:
+podem ser edições, grafias alternativas, traduções ou conteúdos já
+presentes no MusicBrainz. A sondagem **não** hidrata nem verifica
+automaticamente esses candidatos e **não** preenche nenhuma das 30 vagas
+como `reviewed=true`. Revisar manualmente identidade da edição,
+relações, créditos, tracklist, tipo, fontes editoriais independentes e
+navegação no app antes de julgar cada caso do coorte C.
+Amostragem de quatro artistas não define a taxa de recuperação global.
+
 ## Campos por caso
 
 O manifesto JSON usa exatamente: `id`, `cohort` (`type`, `unlinked`, `source_only`), `reviewed` (booleano), `sources` (rótulos de fontes; ao menos uma fonte independente: `artist`, `label` ou `release_notes`), `musicbrainz_group_mbid` (obrigatório nos coortes A e B), `discogs_release_id` (obrigatório quando `match_state=verified` e no coorte C), `musicbrainz_type`, `reference_type`, `app_type` (`Album`, `EP`, `Single`, `Unknown`), `match_state`, `match_correct`, `visible`, `absent_in_musicbrainz`.
