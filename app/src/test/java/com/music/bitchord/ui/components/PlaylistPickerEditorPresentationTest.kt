@@ -27,6 +27,63 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistPickerEditorPresentationTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun newPlaylistDoesNotDiscardAnEditedNameWithoutConfirmation() {
+        var created = 0
+        var dirty = false
+        compose.setContent {
+            MaterialTheme {
+                PlaylistPickerSheet(
+                    playlists = emptyList(),
+                    loading = false,
+                    onAdd = {},
+                    onCreate = { _, _, done -> created++; done(true) },
+                    onDraftChanged = { dirty = it },
+                )
+            }
+        }
+        compose.onNodeWithText(RuntimeEnvironment.getApplication().getString(R.string.new_playlist)).performClick()
+        compose.onNodeWithTag("playlist-editor-create-name").performTextInput("Night mix")
+        compose.runOnIdle { assertEquals(true, dirty) }
+        compose.onNodeWithContentDescription(RuntimeEnvironment.getApplication().getString(R.string.back)).performClick()
+        compose.onNodeWithText("Discard changes?").assertIsDisplayed()
+        compose.onNodeWithText("Keep editing").performClick()
+        compose.onNodeWithTag("playlist-editor-create-name").assertExists()
+        compose.onNodeWithContentDescription(RuntimeEnvironment.getApplication().getString(R.string.back)).performClick()
+        compose.onNodeWithText("Discard").performClick()
+        compose.runOnIdle {
+            assertEquals(false, dirty)
+            assertEquals(0, created)
+        }
+        compose.onNodeWithText(RuntimeEnvironment.getApplication().getString(R.string.new_playlist)).assertExists()
+    }
+
+    @Test fun failedPlaylistSaveKeepsFormAndAllowsRetry() {
+        val requests = mutableListOf<Pair<String, PlaylistPrivacy>>()
+        var success = false
+        compose.setContent {
+            MaterialTheme {
+                PlaylistPickerSheet(
+                    playlists = emptyList(),
+                    loading = false,
+                    onAdd = {},
+                    onCreate = { name, privacy, done ->
+                        requests += name to privacy
+                        done(success)
+                    },
+                    startCreating = true,
+                )
+            }
+        }
+        val save = RuntimeEnvironment.getApplication().getString(R.string.create_playlist)
+        compose.onNodeWithTag("playlist-editor-create-name").performTextInput("  Night mix  ")
+        compose.onNodeWithText(save).performClick()
+        compose.onNodeWithText("Couldn't save the playlist. Try again.").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf("Night mix" to PlaylistPrivacy.PRIVATE), requests) }
+        compose.runOnIdle { success = true }
+        compose.onNodeWithText(save).performClick()
+        compose.runOnIdle { assertEquals(2, requests.size) }
+    }
+
     @Test fun quickPlaylistEditorKeepsExplicitSaveAndPrivateDefault() {
         val created = mutableListOf<Pair<String, PlaylistPrivacy>>()
         compose.setContent {
@@ -35,7 +92,7 @@ class PlaylistPickerEditorPresentationTest {
                     playlists = emptyList(),
                     loading = false,
                     onAdd = {},
-                    onCreate = { name, privacy -> created += name to privacy },
+                    onCreate = { name, privacy, done -> created += name to privacy; done(true) },
                     startCreating = true,
                 )
             }
