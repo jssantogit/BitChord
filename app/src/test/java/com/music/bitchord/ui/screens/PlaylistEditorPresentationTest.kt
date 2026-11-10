@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
@@ -58,7 +59,7 @@ class PlaylistEditorPresentationTest {
         }
         compose.onAllNodesWithTag("playlist-category-icon-badge").assertCountEquals(2)
         compose.onAllNodesWithTag("playlist-category-icon-badge")[0].assertWidthIsEqualTo(38.dp)
-        compose.onNodeWithContentDescription("Música", substring = true).assertDoesNotExist()
-        compose.onNodeWithTag("playlist-category-icon-badge").assertExists()
+        compose.onNodeWithText("Música").performClick()
+        compose.runOnIdle { assertEquals(1, clicked) }
     }
 }
