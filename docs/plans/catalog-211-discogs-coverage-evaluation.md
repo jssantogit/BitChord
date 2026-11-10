@@ -44,6 +44,14 @@ identifica vídeo isolado ou créditos de artista incompatíveis. A revisão de
 10/11/2026 mostrou nomes desambiguados como `Ive (16)` e `TXT (5)`;
 a integração pública valida o ID Discogs de `artists[]` contra a relação
 exata MusicBrainz Artist → Discogs Artist, sem inferir equivalências por nome.
+A análise pública demonstrou que `EASY CRAZY HOT` já possui [edição
+MusicBrainz](https://musicbrainz.org/release/e6de9634-eb96-4b54-9568-755a99ec312b)
+relacionada ao [Discogs Release 35021231](https://www.discogs.com/release/35021231).
+A comparação source-only admite **somente** equivalência dos mesmos
+três ou mais termos Unicode em igual ordem com separadores diferentes,
+como `Easy-Crazy-Hot`. Ela não supõe tradução de um título,
+não colapsa versões com termos adicionais e não substitui a prova de edição.
+
 O relatório `discogs-211-corpus-edition-observations.json` é uma
 <b>ficha de inspeção</b> (não prova ausência MusicBrainz; não modifica o
 manifesto). Falhas e rate-limit são rotulados indisponíveis, nunca ausência.

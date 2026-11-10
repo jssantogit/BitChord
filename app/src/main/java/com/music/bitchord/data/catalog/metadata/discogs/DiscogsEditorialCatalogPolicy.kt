@@ -160,6 +160,11 @@ internal object DiscogsShadowCatalog {
     // Comparison-only typography and colon spacing; do not infer translations
     // or change exact edition identity matching.
     private val colonSpacing = Regex("""\s*:\s*""")
+    private val lexicalTokens = Regex("""[\p{L}\p{N}]+""")
+
+    /** Same ordered words, different separators; never a fuzzy title match. */
+    private fun lexicalSignature(value: String): List<String> =
+        lexicalTokens.findAll(value).map { it.value }.toList()
 
     private fun normalizedTitle(raw: String): String =
         Normalizer.normalize(raw, Normalizer.Form.NFKC).trim()
@@ -189,9 +194,14 @@ internal object DiscogsShadowCatalog {
         title: String,
         creditedArtist: String,
         known: Set<String>,
+        knownSignatures: Set<List<String>>,
     ): Boolean {
         val normalized = comparisonTitle(title, creditedArtist)
         if (normalized in known) return true
+        // Require at least three whole Unicode word tokens. "Love Me" and
+        // "Love-Me" are too short to merge; subtitles/remixes add new tokens.
+        val signature = lexicalSignature(normalized)
+        if (signature.size >= 3 && signature in knownSignatures) return true
         val qualifier = editionSuffix.find(normalized) ?: return false
         val suffix = qualifier.groupValues[1]
         if (!versionTag.containsMatchIn(suffix) ||
@@ -215,6 +225,9 @@ internal object DiscogsShadowCatalog {
         val knownTitles = knownMusicBrainzTitles.mapTo(HashSet()) {
             normalizedTitle(it)
         }
+        val knownSignatures = knownTitles.mapTo(HashSet()) {
+            lexicalSignature(it)
+        }.filterTo(HashSet()) { it.size >= 3 }
         val eligible = observations.take(80).mapNotNull { item ->
             val release = item.record
             val artistMatches = if (expectedDiscogsArtistId != null) {
@@ -232,7 +245,7 @@ internal object DiscogsShadowCatalog {
                 release.link.id in linkedReleaseIds ||
                 release.unofficial || release.title.isBlank() ||
                 release.artistNames.size != 1 || !artistMatches ||
-                isKnownGroupTitle(release.title, expectedArtist, knownTitles) ||
+                isKnownGroupTitle(release.title, expectedArtist, knownTitles, knownSignatures) ||
                 release.tracklist.isEmpty() ||
                 release.year == null ||
                 release.labels.isEmpty()

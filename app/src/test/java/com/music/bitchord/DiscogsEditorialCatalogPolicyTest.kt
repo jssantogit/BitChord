@@ -260,6 +260,41 @@ class DiscogsEditorialCatalogPolicyTest {
         ).size)
     }
 
+    @Test fun observedDiscogsPunctuationIsNotASecondMusicBrainzReleaseGroup() {
+        val pairs = listOf(
+            "Easy-Crazy-Hot" to "EASY CRAZY HOT",
+            "'Pureflow' Pt. 1" to "‘PUREFLOW’ pt.1",
+            "ROMANCE: UNTOLD -Daydream-" to "ROMANCE : UNTOLD Daydream",
+        )
+        pairs.forEachIndexed { i, (discogs, musicBrainz) ->
+            val snapshot = DiscogsPublicEditionSnapshot(
+                edition(200L + i, master = null).copy(title = discogs), 1_000,
+            )
+            assertTrue("Punctuation is not new music: $discogs",
+                DiscogsShadowCatalog.select(
+                    listOf(snapshot), expectedArtist = "ILLIT",
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                    knownMusicBrainzTitles = setOf(musicBrainz),
+                ).isEmpty())
+        }
+        val genuinelyDifferent = listOf(
+            "EASY CRAZY HOT (Live)" to "EASY CRAZY HOT",
+            "Love-Me" to "Love Me",
+            "Fashion / ファッション" to "Fashion",
+        )
+        genuinelyDifferent.forEachIndexed { i, (discogs, musicBrainz) ->
+            val snapshot = DiscogsPublicEditionSnapshot(
+                edition(210L + i, master = null).copy(title = discogs), 1_000,
+            )
+            assertEquals("Do not infer a translation or collapse variants: $discogs",
+                1, DiscogsShadowCatalog.select(
+                    listOf(snapshot), expectedArtist = "ILLIT",
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                    knownMusicBrainzTitles = setOf(musicBrainz),
+                ).size)
+        }
+    }
+
     @Test fun distinctRemixOrLiveReleaseIsNotSilentlyCollapsedIntoOriginalGroup() {
         val titles = listOf("Super Real Me (remix)", "Super Real Me (live)")
         titles.forEachIndexed { i, title ->

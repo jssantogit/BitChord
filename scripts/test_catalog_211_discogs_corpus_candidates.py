@@ -4,7 +4,7 @@ import unittest
 
 from catalog_211_discogs_corpus_candidates import (
     complete_mb_titles, discogs_artist_relation, public_index_hints,
-    scout_artist, normalized, comparable_title, known_group_title, ARTISTS, MBID as SCOUT_MBID,
+    scout_artist, normalized, comparable_title, known_group_title, lexical_signature, ARTISTS, MBID as SCOUT_MBID,
 )
 
 MBID = "95663592-1447-4579-90f7-c94733476667"
@@ -57,6 +57,13 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
         self.assertTrue(known_group_title("ICONIC BY MISTAKE (Explicit)",
                                           "ILLIT", {"iconic by mistake"}))
         self.assertFalse(known_group_title("KNOWN (Live)", "ENHYPEN", {"known"}))
+        self.assertTrue(known_group_title("Easy-Crazy-Hot", "LE SSERAFIM",
+                                          {"easy crazy hot"}))
+        self.assertTrue(known_group_title("'Pureflow' Pt. 1", "LE SSERAFIM",
+                                          {"‘pureflow’ pt.1"}))
+        self.assertFalse(known_group_title("Love-Me", "IVE", {"love me"}))
+        self.assertFalse(known_group_title("Fashion / ファッション", "IVE", {"fashion"}))
+        self.assertEqual(("easy", "crazy", "hot"), lexical_signature("easy-crazy-hot"))
         self.assertIsNone(complete_mb_titles(MBID, lambda _: {
             "release-group-offset": 0, "release-group-count": 2,
             "release-groups": [{"id": GROUP_A, "title": "Only One"}]

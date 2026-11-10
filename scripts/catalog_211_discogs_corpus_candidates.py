@@ -48,9 +48,17 @@ def comparable_title(value: str, artist: str) -> str:
     return title[len(prefix):] if title.startswith(prefix) else title
 
 
+def lexical_signature(value: str) -> tuple[str, ...]:
+    # Whole Unicode letter/digit tokens; no fuzzy words or translations.
+    return tuple(re.findall(r"[^\W_]+", value, re.UNICODE))
+
+
 def known_group_title(title: str, artist: str, known: set[str]) -> bool:
     value = comparable_title(title, artist)
     if value in known:
+        return True
+    signature = lexical_signature(value)
+    if len(signature) >= 3 and any(lexical_signature(item) == signature for item in known):
         return True
     ending = re.search(r"\s*[\(\[]([^\(\)\[\]]{1,72})[\)\]]$", value)
     if not ending:
