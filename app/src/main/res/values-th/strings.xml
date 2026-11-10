@@ -430,6 +430,14 @@
     <string name="pause_countdown">อีก %1$s จะหยุดเล่นชั่วคราว</string>
     <string name="play_to_preview">เล่นอะไรสักอย่างเพื่อดูตัวอย่าง</string>
     <string name="playlist_name">ชื่อเพลย์ลิสต์</string>
+    <string name="editor_discard_title">ละทิ้งการเปลี่ยนแปลงหรือไม่</string>
+    <string name="editor_discard_rating_body">ยังไม่ได้บันทึกคะแนนใหม่ของคุณ</string>
+    <string name="editor_discard_playlist_body">ยังไม่ได้บันทึกการเปลี่ยนแปลงเพลย์ลิสต์</string>
+    <string name="editor_discard_confirm">ละทิ้ง</string>
+    <string name="editor_keep_editing">แก้ไขต่อ</string>
+    <string name="playlist_editor_name_required">ป้อนชื่อเพลย์ลิสต์</string>
+    <string name="playlist_editor_name_too_long">ใช้ได้ไม่เกิน 80 อักขระ</string>
+    <string name="playlist_editor_save_failed">บันทึกเพลย์ลิสต์ไม่ได้ โปรดลองอีกครั้ง</string>
     <string name="presence">การแสดงสถานะ</string>
     <string name="preview">ตัวอย่าง</string>
     <string name="prioritize_syllable_lyrics">จัดลำดับความสำคัญเนื้อเพลงแบบพยางค์</string>

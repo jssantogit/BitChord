@@ -417,6 +417,14 @@
     <string name="pause_countdown">%1$s avant la pause de la lecture</string>
     <string name="play_to_preview">Lancez la lecture de quelque chose pour remplir l\'aperçu.</string>
     <string name="playlist_name">Nom de la playlist</string>
+    <string name="editor_discard_title">Ignorer les modifications ?</string>
+    <string name="editor_discard_rating_body">Votre nouvelle note n’a pas été enregistrée.</string>
+    <string name="editor_discard_playlist_body">Les modifications de la playlist n’ont pas été enregistrées.</string>
+    <string name="editor_discard_confirm">Ignorer</string>
+    <string name="editor_keep_editing">Continuer à modifier</string>
+    <string name="playlist_editor_name_required">Saisissez un nom de playlist.</string>
+    <string name="playlist_editor_name_too_long">Utilisez 80 caractères maximum.</string>
+    <string name="playlist_editor_save_failed">Impossible d’enregistrer la playlist. Réessayez.</string>
     <string name="presence">Présence</string>
     <string name="preview">Aperçu</string>
     <string name="prioritize_syllable_lyrics">Prioriser les paroles par syllabe</string>

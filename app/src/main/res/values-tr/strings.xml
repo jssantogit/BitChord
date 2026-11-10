@@ -445,6 +445,14 @@
     <string name="pause_countdown">Çalma duraklatılana kadar %1$s</string>
     <string name="play_to_preview">Önizlemeyi doldurmak için bir şey çal.</string>
     <string name="playlist_name">Çalma listesi adı</string>
+    <string name="editor_discard_title">Değişiklikler silinsin mi?</string>
+    <string name="editor_discard_rating_body">Yeni puanın henüz kaydedilmedi.</string>
+    <string name="editor_discard_playlist_body">Çalma listesindeki değişiklikler henüz kaydedilmedi.</string>
+    <string name="editor_discard_confirm">Sil</string>
+    <string name="editor_keep_editing">Düzenlemeye devam et</string>
+    <string name="playlist_editor_name_required">Çalma listesi adı gir.</string>
+    <string name="playlist_editor_name_too_long">En fazla 80 karakter kullan.</string>
+    <string name="playlist_editor_save_failed">Çalma listesi kaydedilemedi. Tekrar dene.</string>
     <string name="presence">Varlık</string>
     <string name="preview">Önizleme</string>
     <string name="prioritize_syllable_lyrics">Heceli sözlere öncelik ver</string>

@@ -402,6 +402,14 @@
     <string name="pause_countdown">%1$s hingga pemutaran dijeda</string>
     <string name="play_to_preview">Putar sesuatu untuk mengisi pratinjau.</string>
     <string name="playlist_name">Nama playlist</string>
+    <string name="editor_discard_title">Buang perubahan?</string>
+    <string name="editor_discard_rating_body">Penilaian baru Anda belum disimpan.</string>
+    <string name="editor_discard_playlist_body">Perubahan playlist belum disimpan.</string>
+    <string name="editor_discard_confirm">Buang</string>
+    <string name="editor_keep_editing">Lanjutkan mengedit</string>
+    <string name="playlist_editor_name_required">Masukkan nama playlist.</string>
+    <string name="playlist_editor_name_too_long">Gunakan maksimal 80 karakter.</string>
+    <string name="playlist_editor_save_failed">Playlist tidak dapat disimpan. Coba lagi.</string>
     <string name="presence">Presence</string>
     <string name="preview">Pratinjau</string>
     <string name="prioritize_syllable_lyrics">Prioritaskan lirik per suku kata</string>

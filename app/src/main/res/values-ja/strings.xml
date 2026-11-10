@@ -402,6 +402,14 @@
     <string name="pause_countdown">あと%1$sで再生が一時停止します</string>
     <string name="play_to_preview">プレビューを表示するには何かを再生してください。</string>
     <string name="playlist_name">プレイリスト名</string>
+    <string name="editor_discard_title">変更を破棄しますか？</string>
+    <string name="editor_discard_rating_body">新しい評価はまだ保存されていません。</string>
+    <string name="editor_discard_playlist_body">プレイリストの変更はまだ保存されていません。</string>
+    <string name="editor_discard_confirm">破棄</string>
+    <string name="editor_keep_editing">編集を続ける</string>
+    <string name="playlist_editor_name_required">プレイリスト名を入力してください。</string>
+    <string name="playlist_editor_name_too_long">80文字以内で入力してください。</string>
+    <string name="playlist_editor_save_failed">プレイリストを保存できませんでした。もう一度お試しください。</string>
     <string name="presence">プレゼンス</string>
     <string name="preview">プレビュー</string>
     <string name="prioritize_syllable_lyrics">音節単位の歌詞を優先</string>

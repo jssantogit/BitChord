@@ -402,6 +402,14 @@
     <string name="pause_countdown">還有 %1$s 播放將暫停</string>
     <string name="play_to_preview">播放一些內容即可填充預覽。</string>
     <string name="playlist_name">播放列表名稱</string>
+    <string name="editor_discard_title">捨棄變更？</string>
+    <string name="editor_discard_rating_body">新的評分尚未儲存。</string>
+    <string name="editor_discard_playlist_body">播放清單的變更尚未儲存。</string>
+    <string name="editor_discard_confirm">捨棄</string>
+    <string name="editor_keep_editing">繼續編輯</string>
+    <string name="playlist_editor_name_required">請輸入播放清單名稱。</string>
+    <string name="playlist_editor_name_too_long">最多輸入 80 個字元。</string>
+    <string name="playlist_editor_save_failed">無法儲存播放清單，請再試一次。</string>
     <string name="presence">狀態</string>
     <string name="preview">預覽</string>
     <string name="prioritize_syllable_lyrics">優先使用逐字歌詞</string>

@@ -446,6 +446,14 @@
     <string name="pause_countdown">%1$s cho đến khi tạm dừng phát</string>
     <string name="play_to_preview">Phát một bài hát để xem trước.</string>
     <string name="playlist_name">Tên danh sách phát</string>
+    <string name="editor_discard_title">Hủy các thay đổi?</string>
+    <string name="editor_discard_rating_body">Đánh giá mới của bạn chưa được lưu.</string>
+    <string name="editor_discard_playlist_body">Các thay đổi của danh sách phát chưa được lưu.</string>
+    <string name="editor_discard_confirm">Hủy thay đổi</string>
+    <string name="editor_keep_editing">Tiếp tục chỉnh sửa</string>
+    <string name="playlist_editor_name_required">Nhập tên danh sách phát.</string>
+    <string name="playlist_editor_name_too_long">Dùng tối đa 80 ký tự.</string>
+    <string name="playlist_editor_save_failed">Không thể lưu danh sách phát. Hãy thử lại.</string>
     <string name="presence">Trạng thái hoạt động</string>
     <string name="preview">Xem trước</string>
     <string name="prioritize_syllable_lyrics">Ưu tiên lời đồng bộ từng từ</string>

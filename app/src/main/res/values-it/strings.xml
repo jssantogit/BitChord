@@ -463,6 +463,14 @@
     <string name="pause_countdown">%1$s alla pausa della riproduzione</string>
     <string name="play_to_preview">Riproduci qualcosa per riempire l\'anteprima.</string>
     <string name="playlist_name">Nome playlist</string>
+    <string name="editor_discard_title">Scartare le modifiche?</string>
+    <string name="editor_discard_rating_body">La nuova valutazione non è stata ancora salvata.</string>
+    <string name="editor_discard_playlist_body">Le modifiche alla playlist non sono state ancora salvate.</string>
+    <string name="editor_discard_confirm">Scarta</string>
+    <string name="editor_keep_editing">Continua a modificare</string>
+    <string name="playlist_editor_name_required">Inserisci un nome per la playlist.</string>
+    <string name="playlist_editor_name_too_long">Usa al massimo 80 caratteri.</string>
+    <string name="playlist_editor_save_failed">Impossibile salvare la playlist. Riprova.</string>
     <string name="presence">Presenza</string>
     <string name="preview">Anteprima</string>
     <string name="prioritize_syllable_lyrics">Dai priorità ai testi sillabici</string>

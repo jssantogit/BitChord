@@ -435,6 +435,14 @@
     <string name="pause_countdown">%1$s до паузы</string>
     <string name="play_to_preview">Воспроизведите что-нибудь, чтобы заполнить предпросмотр.</string>
     <string name="playlist_name">Название плейлиста</string>
+    <string name="editor_discard_title">Отменить изменения?</string>
+    <string name="editor_discard_rating_body">Новая оценка ещё не сохранена.</string>
+    <string name="editor_discard_playlist_body">Изменения плейлиста ещё не сохранены.</string>
+    <string name="editor_discard_confirm">Отменить</string>
+    <string name="editor_keep_editing">Продолжить редактирование</string>
+    <string name="playlist_editor_name_required">Введите название плейлиста.</string>
+    <string name="playlist_editor_name_too_long">Используйте не более 80 символов.</string>
+    <string name="playlist_editor_save_failed">Не удалось сохранить плейлист. Повторите попытку.</string>
     <string name="presence">Presence</string>
     <string name="preview">Предпросмотр</string>
     <string name="prioritize_syllable_lyrics">Приоритизировать текст по слогам</string>

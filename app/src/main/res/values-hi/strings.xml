@@ -416,6 +416,14 @@
     <string name="pause_countdown">प्लेबैक रुकने में %1$s बाकी</string>
     <string name="play_to_preview">प्रीव्यू भरने के लिए कुछ चलाएं।</string>
     <string name="playlist_name">प्लेलिस्ट का नाम</string>
+    <string name="editor_discard_title">बदलाव हटाएँ?</string>
+    <string name="editor_discard_rating_body">आपकी नई रेटिंग अभी सहेजी नहीं गई है।</string>
+    <string name="editor_discard_playlist_body">प्लेलिस्ट में किए गए बदलाव अभी सहेजे नहीं गए हैं।</string>
+    <string name="editor_discard_confirm">हटाएँ</string>
+    <string name="editor_keep_editing">संपादन जारी रखें</string>
+    <string name="playlist_editor_name_required">प्लेलिस्ट का नाम दर्ज करें।</string>
+    <string name="playlist_editor_name_too_long">अधिकतम 80 अक्षर इस्तेमाल करें।</string>
+    <string name="playlist_editor_save_failed">प्लेलिस्ट सहेजी नहीं जा सकी। फिर से कोशिश करें।</string>
     <string name="presence">प्रेज़ेंस</string>
     <string name="preview">प्रीव्यू</string>
     <string name="prioritize_syllable_lyrics">सिलेबल लिरिक्स को प्राथमिकता दें</string>

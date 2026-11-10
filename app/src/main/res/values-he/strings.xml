@@ -381,6 +381,14 @@
     <string name="pause_countdown">%1$s עד להשהיית ההפעלה</string>
     <string name="play_to_preview">הפעל משהו כדי למלא את התצוגה המקדימה.</string>
     <string name="playlist_name">שם רשימת ההשמעה</string>
+    <string name="editor_discard_title">לבטל את השינויים?</string>
+    <string name="editor_discard_rating_body">הדירוג החדש עדיין לא נשמר.</string>
+    <string name="editor_discard_playlist_body">השינויים בפלייליסט עדיין לא נשמרו.</string>
+    <string name="editor_discard_confirm">ביטול שינויים</string>
+    <string name="editor_keep_editing">המשך עריכה</string>
+    <string name="playlist_editor_name_required">יש להזין שם לפלייליסט.</string>
+    <string name="playlist_editor_name_too_long">אפשר להשתמש ב-80 תווים לכל היותר.</string>
+    <string name="playlist_editor_save_failed">לא ניתן לשמור את הפלייליסט. יש לנסות שוב.</string>
     <string name="presence">נוכחות</string>
     <string name="preview">תצוגה מקדימה</string>
     <string name="prioritize_syllable_lyrics">תעדוף מילים לפי הברות</string>

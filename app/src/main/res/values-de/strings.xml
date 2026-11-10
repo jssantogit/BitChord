@@ -416,6 +416,14 @@
     <string name="pause_countdown">%1$s bis die Wiedergabe pausiert</string>
     <string name="play_to_preview">Spiele etwas ab, um die Vorschau zu füllen.</string>
     <string name="playlist_name">Playlist-Name</string>
+    <string name="editor_discard_title">Änderungen verwerfen?</string>
+    <string name="editor_discard_rating_body">Deine neue Bewertung wurde noch nicht gespeichert.</string>
+    <string name="editor_discard_playlist_body">Die Änderungen an der Playlist wurden noch nicht gespeichert.</string>
+    <string name="editor_discard_confirm">Verwerfen</string>
+    <string name="editor_keep_editing">Weiter bearbeiten</string>
+    <string name="playlist_editor_name_required">Gib einen Playlistnamen ein.</string>
+    <string name="playlist_editor_name_too_long">Verwende höchstens 80 Zeichen.</string>
+    <string name="playlist_editor_save_failed">Die Playlist konnte nicht gespeichert werden. Versuche es erneut.</string>
     <string name="presence">Presence</string>
     <string name="preview">Vorschau</string>
     <string name="prioritize_syllable_lyrics">Silben-Songtexte priorisieren</string>

@@ -378,6 +378,14 @@
     <string name="pause_countdown">%1$s do wstrzymania odtwarzania</string>
     <string name="play_to_preview">Odtwórz coś, aby wypełnić podgląd.</string>
     <string name="playlist_name">Nazwa playlisty</string>
+    <string name="editor_discard_title">Odrzucić zmiany?</string>
+    <string name="editor_discard_rating_body">Nowa ocena nie została jeszcze zapisana.</string>
+    <string name="editor_discard_playlist_body">Zmiany na playliście nie zostały jeszcze zapisane.</string>
+    <string name="editor_discard_confirm">Odrzuć</string>
+    <string name="editor_keep_editing">Kontynuuj edycję</string>
+    <string name="playlist_editor_name_required">Wpisz nazwę playlisty.</string>
+    <string name="playlist_editor_name_too_long">Użyj maksymalnie 80 znaków.</string>
+    <string name="playlist_editor_save_failed">Nie udało się zapisać playlisty. Spróbuj ponownie.</string>
     <string name="presence">Aktywność</string>
     <string name="preview">Podgląd</string>
     <string name="prioritize_syllable_lyrics">Preferuj teksty po sylabach</string>
