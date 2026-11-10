@@ -2,6 +2,8 @@ package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,14 +23,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -55,6 +49,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.data.model.PlaylistPrivacy
@@ -64,6 +59,8 @@ import com.music.bitchord.data.model.UserPlaylist
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.theme.AccentRed
 import java.util.Locale
 
 /**
@@ -236,10 +233,10 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
         }
         Spacer(Modifier.width(12.dp))
         Icon(
-            imageVector = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+            imageVector = if (selected) PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
             contentDescription = null,
             tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(22.dp).testTag("playlist-picker-selection-icon"),
         )
     }
 }
@@ -284,11 +281,16 @@ private fun NewPlaylistForm(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             onBack?.let {
-                IconButton(onClick = it) {
+                IconButton(
+                    onClick = it,
+                    modifier = Modifier.size(40.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                ) {
                     Icon(
-                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        PlaylistEditorIcons.Back,
                         contentDescription = stringResource(R.string.back),
                         tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
@@ -335,19 +337,20 @@ private fun NewPlaylistForm(
                     keyboardActions = KeyboardActions(onDone = { submit() }),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("playlist-editor-create-name")
                         .focusRequester(focusRequester),
                 )
             }
             if (name.isNotEmpty()) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .clickable { name = "" },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Rounded.Close,
+                        PlaylistEditorIcons.Close,
                         contentDescription = stringResource(R.string.clear_name),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
@@ -360,6 +363,7 @@ private fun NewPlaylistForm(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -379,7 +383,13 @@ private fun NewPlaylistForm(
             enabled = name.isNotBlank(),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp),
+                .padding(horizontal = 22.dp)
+                .height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = AccentRed,
+                contentColor = androidx.compose.ui.graphics.Color.White,
+            ),
         ) {
             Text(stringResource(R.string.create_playlist))
         }
@@ -425,11 +435,16 @@ internal fun RenamePlaylistForm(
                 .padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.size(40.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+            ) {
                 Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    PlaylistEditorIcons.Back,
                     contentDescription = stringResource(R.string.back),
                     tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(22.dp),
                 )
             }
             Text(
@@ -469,7 +484,13 @@ internal fun RenamePlaylistForm(
             enabled = name.isNotBlank() && name != playlist.title,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp),
+                .padding(horizontal = 22.dp)
+                .height(50.dp),
+            shape = RoundedCornerShape(25.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = AccentRed,
+                contentColor = androidx.compose.ui.graphics.Color.White,
+            ),
         ) {
             Text(stringResource(R.string.save_name))
         }
@@ -484,9 +505,9 @@ internal fun RenamePlaylistForm(
  */
 private val PlaylistPrivacy.icon: ImageVector
     get() = when (this) {
-        PlaylistPrivacy.PRIVATE -> Icons.Rounded.Lock
-        PlaylistPrivacy.UNLISTED -> Icons.Rounded.Link
-        PlaylistPrivacy.PUBLIC -> Icons.Rounded.Public
+        PlaylistPrivacy.PRIVATE -> PlaylistEditorIcons.Lock
+        PlaylistPrivacy.UNLISTED -> PlaylistEditorIcons.Link
+        PlaylistPrivacy.PUBLIC -> PlaylistEditorIcons.Globe
     }
 
 /** The search filters' pill, carrying an icon ahead of its label. */
@@ -513,14 +534,14 @@ private fun PrivacyPill(
                 },
             )
             .clickable(onClick = onClick)
-            .padding(start = 11.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+            .padding(start = 12.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = content,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(6.dp))
         Text(
