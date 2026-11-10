@@ -38,6 +38,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Test ReleaseGroup-scoped barcode lead search offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_unlinked_group_probe.py' -v
       - name: Run offline identity, completeness and candidate regression tests
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_candidates.py' -v
       - name: Observe bounded public Artist and ReleaseGroup index leads
@@ -52,8 +54,6 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_edition_pair_review.py' -v
       - name: Compare six exact MusicBrainz and Discogs Release pairs
         run: python3 scripts/catalog_211_discogs_edition_pair_review.py
-      - name: Test ReleaseGroup-scoped barcode lead search offline
-        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_unlinked_group_probe.py' -v
       - name: Observe bounded alternative editions in the same ReleaseGroup
         run: python3 scripts/catalog_211_discogs_unlinked_group_probe.py
       - name: Retain non-adjudicated source observations for manual review

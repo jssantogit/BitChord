@@ -5,7 +5,7 @@ from pathlib import Path
 import unittest
 from catalog_211_discogs_unlinked_group_probe import (
     barcode, selected, group_page, investigate, observe, MAX_REQUESTS,
-    same_year_alternatives,
+    same_year_alternatives, label_catalog_evidence,
 )
 
 GROUP = "4e219d4e-c5e0-4ed9-acec-b948c7319b37"
@@ -204,6 +204,62 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
         self.assertTrue(row["candidates"][0]["comparison"]["tracklist_matches"])
         self.assertEqual("source_unavailable", row["candidates"][1]["status"])
         self.assertFalse(row["reviewed"])
+
+    def test_exact_label_and_catalog_pair_is_evidence_not_a_verified_link(self):
+        mb = {"label-info": [{"label": {"name": "Source Label"},
+                              "catalog-number": "KR-001"}]}
+        dc = {"labels": [{"name": "  source  label ", "catno": "kr-001"}]}
+        info = label_catalog_evidence(mb, dc)
+        self.assertEqual("exact_label_catalog_pair_observed_not_verified",
+                         info["assessment"])
+        self.assertEqual([{"label": "source label", "catalog_number": "kr-001"}],
+                         info["matching_pairs"])
+        self.assertFalse(info["verified"])
+
+    def test_catalog_number_only_with_wrong_label_is_not_pressing_identity(self):
+        mb = {"label-info": [{"label": {"name": "Label A"},
+                              "catalog-number": "CD-2026-1"}]}
+        dc = {"labels": [{"name": "Label B", "catno": "CD-2026-1"}]}
+        info = label_catalog_evidence(mb, dc)
+        self.assertEqual("catalog_only_unconfirmed", info["assessment"])
+        self.assertEqual([], info["matching_pairs"])
+        self.assertFalse(info["verified"])
+
+    def test_placeholder_catalogs_malformed_and_missing_labels_never_match(self):
+        mb = {"label-info": [
+            {"label": {"name": "Not on Label"}, "catalog-number": "none"},
+            {"label": {"name": "Label A"}, "catalog-number": "N/A"},
+            {"label": {"name": "Label B"}, "catalog-number": "CD-01"}]}
+        dc = {"labels": [
+            {"name": "Not on Label (Self-released)", "catno": "none"},
+            {"name": "Label A", "catno": "-"},
+            {"name": "Label C", "catno": "CD-01"}]}
+        info = label_catalog_evidence(mb, dc)
+        self.assertEqual("catalog_only_unconfirmed", info["assessment"])
+        self.assertEqual([], info["matching_pairs"])
+        self.assertFalse(info["verified"])
+        self.assertEqual("insufficient_label_catalog_data",
+                         label_catalog_evidence({"label-info": "broken"},
+                                                {"labels": [{"name": "Label A"}]}
+                                                )["assessment"])
+
+    def test_same_group_probe_exposes_label_catalog_evidence_without_adjudication(self):
+        m, p = docs()
+        def get(url):
+            item = response(url)
+            if "api.discogs.com" in url:
+                return {**item, "labels": [{"name": "Korea Music", "catno": "AB-88"}]}
+            if f"/ws/2/release/{ALT}?" in url:
+                return {**item, "label-info": [{
+                    "label": {"name": "Korea Music"}, "catalog-number": "AB-88"}]}
+            return item
+        report = observe(m, p, get)
+        candidate = report["findings"][0]["candidates"][0]
+        self.assertEqual("exact_label_catalog_pair_observed_not_verified",
+                         candidate["label_catalog"]["assessment"])
+        self.assertEqual(0, report["reviewed_corpus_cases"])
+        self.assertEqual("barcode_candidates_inspected_not_verified",
+                         report["findings"][0]["status"])
 
     def test_checked_in_b_samples_are_joined_to_exact_control_pairs(self):
         m = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
