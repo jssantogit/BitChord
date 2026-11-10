@@ -57,8 +57,8 @@ class PlaylistEditorPresentationTest {
                 )
             }
         }
-        compose.onAllNodesWithTag("playlist-category-icon-badge").assertCountEquals(2)
-        compose.onAllNodesWithTag("playlist-category-icon-badge")[0].assertWidthIsEqualTo(38.dp)
+        compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true).assertCountEquals(2)
+        compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true)[0].assertWidthIsEqualTo(38.dp)
         compose.onNodeWithText("Música").performClick()
         compose.runOnIdle { assertEquals(1, clicked) }
     }
