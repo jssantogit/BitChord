@@ -637,6 +637,7 @@ fun TopBarAccountButton(
     onClick: () -> Unit,
     onSwipeProfile: ((forward: Boolean) -> Boolean)? = null,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
@@ -653,7 +654,7 @@ fun TopBarAccountButton(
         }
         AppleSettingsPopup(
             expanded = expanded,
-            hazeState = null,
+            hazeState = hazeState,
             onDismiss = { expanded = false },
             onSettings = {
                 expanded = false
