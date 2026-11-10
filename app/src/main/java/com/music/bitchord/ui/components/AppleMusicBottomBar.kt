@@ -52,6 +52,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
@@ -109,6 +111,34 @@ internal object AppleMusicChromeMetrics {
     val titleSize = 13.sp
     val artistSize = 12.sp
 }
+
+/**
+ * Layout qualifiers in am-descomp: base mini_player.xml uses
+ * FootnoteEmphasized 13sp / Caption1 12sp; layout-w675dp, -w735dp and
+ * -w830dp use SubheadSemiBold/Subhead 15sp. These are XML inputs rather
+ * than measurements of the reference device or typeface resolution.
+ *
+ * Android Configuration.screenWidthDp follows the available-width family
+ * used to select wNNNdp resources; no invented pixel-density conversion.
+ */
+internal data class AppleMiniPlayerTextSpec(
+    val titleSize: TextUnit,
+    val artistSize: TextUnit,
+    val titleWeight: FontWeight,
+)
+
+internal fun appleMiniPlayerTextForWidthDp(availableWidthDp: Int): AppleMiniPlayerTextSpec =
+    if (availableWidthDp >= 675) {
+        AppleMiniPlayerTextSpec(15.sp, 15.sp, FontWeight.SemiBold)
+    } else {
+        // The bundled font's nearest supported weight to the Apple
+        // variable font's declared 510 is Medium (500).
+        AppleMiniPlayerTextSpec(
+            AppleMusicChromeMetrics.titleSize,
+            AppleMusicChromeMetrics.artistSize,
+            FontWeight.Medium,
+        )
+    }
 
 /**
  * Experimental motion values, not extracted Apple Music animation timings.
@@ -329,6 +359,9 @@ fun AppleMusicMiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val haptics = rememberHaptics()
+    val miniText = appleMiniPlayerTextForWidthDp(
+        LocalConfiguration.current.screenWidthDp,
+    )
     val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val trackFade = AppleMusicChromeMotion.duration(
         AppleMusicChromeMotion.trackCrossfadeMillis, reduceMotion,
@@ -424,16 +457,16 @@ fun AppleMusicMiniPlayer(
                     ExplicitSongTitle(
                         song = displayedSong,
                         style = MaterialTheme.typography.titleMedium.copy(
-                            fontSize = AppleMusicChromeMetrics.titleSize,
+                            fontSize = miniText.titleSize,
                             lineHeight = 18.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = miniText.titleWeight,
                         ),
                         color = AppleWhite,
                     )
                     Text(
                         text = displayedSong.artist,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = AppleMusicChromeMetrics.artistSize,
+                            fontSize = miniText.artistSize,
                             lineHeight = 18.sp,
                             fontWeight = FontWeight.Normal,
                         ),
