@@ -97,6 +97,14 @@ fun PlaylistPickerSheet(
     // By id rather than by value: the list is re-fetched under an open sheet,
     // and a refreshed row must stay ticked.
     var selected by remember { mutableStateOf(emptySet<String>()) }
+    // The picker and its creation form are two states of the same sheet.
+    // Animate only the arriving state; keeping the outgoing form mounted
+    // would compete with the new name field's automatic keyboard focus.
+    val routeArrival = rememberRouteArrivalModifier(
+        routeKey = if (creating) "playlist-create" else "playlist-picker",
+        reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current,
+        forward = creating,
+    )
 
     if (creating) {
         NewPlaylistForm(
@@ -104,12 +112,12 @@ fun PlaylistPickerSheet(
             // form; the sheet's own dismiss is the way out.
             onBack = if (startCreating) null else ({ creating = false }),
             onCreate = onCreate,
-            modifier = modifier,
+            modifier = modifier.then(routeArrival),
         )
         return
     }
 
-    Column(modifier.fillMaxWidth()) {
+    Column(modifier.then(routeArrival).fillMaxWidth()) {
         if (song != null) {
             SheetTrackHeader(song)
             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
