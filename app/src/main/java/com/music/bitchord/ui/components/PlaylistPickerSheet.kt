@@ -50,6 +50,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.data.model.PlaylistPrivacy
@@ -178,7 +181,13 @@ fun PlaylistPickerSheet(
                     enabled = selected.isNotEmpty(),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 22.dp),
+                        .padding(horizontal = 22.dp)
+                        .height(50.dp),
+                    shape = RoundedCornerShape(25.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = AccentRed,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                    ),
                 ) {
                     Text(
                         if (selected.isEmpty()) {
@@ -199,7 +208,8 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick, role = Role.Checkbox)
+            .semantics { this.selected = selected }
             .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -533,7 +543,8 @@ private fun PrivacyPill(
                     MaterialTheme.colorScheme.surfaceVariant
                 },
             )
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick, role = Role.RadioButton)
+            .semantics { this.selected = selected }
             .padding(start = 12.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
