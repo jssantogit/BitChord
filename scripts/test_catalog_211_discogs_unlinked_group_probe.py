@@ -33,7 +33,8 @@ def docs():
 def release_index():
     return {"release-count": 2, "release-offset": 0, "releases": [
         {"id": RELEASE, "barcode": "000000000000"},
-        {"id": ALT, "barcode": BARCODE, "release-group": {"id": GROUP}}]}
+        {"id": ALT, "barcode": BARCODE, "status": "Official", "date": "2024-05-13",
+         "release-group": {"id": GROUP}}]}
 
 def response(url):
     if url == f"https://api.discogs.com/releases/{DID}":
@@ -123,7 +124,12 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
             if "api.discogs.com" in url:
                 return {**doc, "identifiers": []}
             return doc
-        self.assertEqual("discogs_barcode_unavailable", observe(m, p, get)["findings"][0]["status"])
+        no_barcode = observe(m, p, get)
+        self.assertEqual("year_only_content_candidates_not_verified",
+                         no_barcode["findings"][0]["status"])
+        self.assertEqual("same_year_official_content_only",
+                         no_barcode["findings"][0]["candidates"][0]["selection_basis"])
+        self.assertEqual(3, no_barcode["provider_requests"])
         def bad(url):
             doc = response(url)
             if "api.discogs.com" in url:
@@ -131,6 +137,36 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
             return doc
         self.assertEqual("discogs_artist_or_release_identity_conflict",
                          observe(m, p, bad)["findings"][0]["status"])
+
+    def test_no_barcode_and_no_year_is_not_negative_evidence(self):
+        m, p = docs()
+        def get(url):
+            item = response(url)
+            return {**item, "year": None, "identifiers": []} if (
+                "api.discogs.com" in url
+            ) else item
+        report = observe(m, p, get)
+        self.assertEqual("no_same_year_official_candidate_in_complete_group_index",
+                         report["findings"][0]["status"])
+        self.assertEqual([], report["findings"][0]["candidates"])
+        self.assertEqual(0, report["reviewed_corpus_cases"])
+
+    def test_barcode_conflict_does_not_become_verified_through_year_hint(self):
+        m, p = docs()
+        def get(url):
+            item = response(url)
+            if "api.discogs.com" in url:
+                return {**item, "identifiers": [
+                    {"type": "Barcode", "value": "000000000000"}]}
+            if "release/?" in url:
+                return {**release_index(), "releases": [
+                    {**release_index()["releases"][0], "barcode": None},
+                    {**release_index()["releases"][1], "barcode": None}]}
+            return item
+        row = observe(m, p, get)["findings"][0]
+        self.assertEqual("year_only_content_candidates_not_verified", row["status"])
+        self.assertEqual("same_year_official_content_only", row["selection_basis"])
+        self.assertFalse(row["candidates"][0]["comparison"]["barcode_identical_on_both"])
 
     def test_checked_in_b_samples_are_joined_to_exact_control_pairs(self):
         m = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())

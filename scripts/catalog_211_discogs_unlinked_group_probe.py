@@ -129,9 +129,8 @@ def investigate(case: dict, get) -> dict:
             return result
         barcodes = discogs_barcodes(discogs)
         result["discogs_has_valid_barcode"] = bool(barcodes)
-        if not barcodes:
-            result["status"] = "discogs_barcode_unavailable"
-            return result
+        # Missing UPC does not preclude a same-group, same-year content
+        # comparison. It can never validate the same edition or pressing.
         url = "https://musicbrainz.org/ws/2/release/?" + urlencode({
             "release-group": group, "fmt": "json", "limit": MAX_RELEASES, "offset": 0,
         })
@@ -144,10 +143,25 @@ def investigate(case: dict, get) -> dict:
         matches = [r["id"] for r in rows if barcode(r.get("barcode")) in barcodes]
         result["matching_barcode_release_ids"] = matches
         result["group_rows_without_barcode"] = sum(r.get("barcode") is None for r in rows)
-        if not matches:
-            result["status"] = "no_matching_barcode_in_complete_group_index"
+        if matches:
+            candidates = matches[:MAX_DETAILS]
+            result["selection_basis"] = "exact_valid_barcode_in_same_release_group"
+        else:
+            # Same release year and Official status are only weak evidence.
+            # This fallback is NOT eligible for Verified, even if tracks match.
+            year = discogs.get("year")
+            year = year if type(year) is int and 1800 <= year <= 2200 else None
+            candidates = [
+                r["id"] for r in rows if year is not None and
+                r.get("status") == "Official" and
+                isinstance(r.get("date"), str) and
+                r["date"][:4] == str(year)
+            ][:MAX_DETAILS]
+            result["selection_basis"] = "same_year_official_content_only"
+        if not candidates:
+            result["status"] = "no_same_year_official_candidate_in_complete_group_index"
             return result
-        for mbid in matches[:MAX_DETAILS]:
+        for mbid in candidates:
             full = get(f"https://musicbrainz.org/ws/2/release/{mbid}"
                        "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels")
             parent = full.get("release-group")
@@ -164,13 +178,17 @@ def investigate(case: dict, get) -> dict:
             relations = release_relations(full)
             result["candidates"].append({
                 "mbid": mbid, "status": "edition_facts_compared_not_adjudicated",
+                "selection_basis": result["selection_basis"],
                 "direct_discogs_relation": (
                     "unknown" if relations is None else
                     "this_release" if did in relations else
                     "another_release" if relations else "none"),
                 "comparison": compare_edition(full, discogs),
             })
-        result["status"] = "barcode_candidates_inspected_not_verified"
+        result["status"] = (
+            "barcode_candidates_inspected_not_verified" if matches else
+            "year_only_content_candidates_not_verified"
+        )
     except (HTTPError, URLError, OSError, TimeoutError):
         result["status"] = "source_unavailable"
     except (ValueError, TypeError, KeyError, AttributeError):
