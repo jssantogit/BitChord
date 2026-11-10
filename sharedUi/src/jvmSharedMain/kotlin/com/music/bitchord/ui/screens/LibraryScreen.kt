@@ -56,6 +56,7 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.components.LIBRARY_GRID_SPACING
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.AppleTextRoles
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.libraryGrid
@@ -156,8 +157,8 @@ fun LibraryScreen(
                 item {
                     Text(
                         text = stringResource(Res.string.library),
-                        style = if (navigationHome) MaterialTheme.typography.headlineLarge.copy(
-                            fontSize = 36.sp, fontWeight = FontWeight.Bold,
+                        style = if (navigationHome) AppleTextRoles.libraryLandingTitle(
+                            MaterialTheme.typography.headlineLarge,
                         ) else MaterialTheme.typography.displayLarge,
                         color = if (navigationHome) androidx.compose.ui.graphics.Color.White
                             else MaterialTheme.colorScheme.onBackground,
@@ -355,9 +356,7 @@ private fun LibraryLinkList(
                 Spacer(Modifier.width(if (compact && link.logo != null) 0.dp else LINK_ICON_GAP))
                 Text(
                     text = link.item.title,
-                    style = if (compact) MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = 17.sp, fontWeight = FontWeight.Normal,
-                    ) else MaterialTheme.typography.bodyLarge,
+                    style = AppleTextRoles.categoryLabel(MaterialTheme.typography.bodyLarge),
                     color = if (link.enabled) MaterialTheme.colorScheme.onBackground
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
