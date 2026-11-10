@@ -282,8 +282,8 @@ internal fun CanonicalRecordingFeedbackPanel(
                 },
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(22.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
@@ -325,7 +325,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                         val wholeDescription = stringResource(Res.string.recording_feedback_stars_value, (index + 1.0).toString().removeSuffix(".0"))
                         val starFill = appleRatingStarFill(selected, i)
                         Box(
-                            modifier = Modifier.weight(1f).height(52.dp),
+                            modifier = Modifier.weight(1f).height(48.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             // The expanded player uses the exact same 28-unit
@@ -335,7 +335,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                                 fill = starFill,
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
-                                    .size(36.dp)
+                                    .size(28.dp)
                                     .testTag("rating-editor-star-$i-${starFill.name.lowercase()}")
                                     .graphicsLayer {
                                         scaleX = starPulse.value
@@ -380,22 +380,24 @@ internal fun CanonicalRecordingFeedbackPanel(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = requestDismiss, enabled = !saving,
-                        modifier = Modifier.weight(1f).height(46.dp),
-                        shape = RoundedCornerShape(23.dp),
-                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    ) { Text(stringResource(Res.string.cancel)) }
+                    TextButton(
+                        onClick = requestDismiss,
+                        enabled = !saving,
+                        modifier = Modifier.height(44.dp),
+                    ) {
+                        Text(
+                            stringResource(Res.string.cancel),
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
                     androidx.compose.material3.Button(
                         onClick = { onSave(selected) },
                         enabled = selected in 1.0..5.0 && !saving,
-                        modifier = Modifier.weight(1f).height(46.dp),
-                        shape = RoundedCornerShape(23.dp),
+                        modifier = Modifier.height(44.dp),
+                        shape = RoundedCornerShape(22.dp),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                             containerColor = com.music.bitchord.ui.theme.AccentRed,
                             contentColor = androidx.compose.ui.graphics.Color.White,
