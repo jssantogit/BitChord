@@ -17,10 +17,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.rounded.StarHalf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -40,6 +36,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.music.bitchord.ui.components.ActionRow
+import com.music.bitchord.ui.components.ConfirmationAlert
+import com.music.bitchord.ui.player.AppleQueueVectors
+import com.music.bitchord.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
@@ -100,11 +99,14 @@ internal fun CanonicalRecordingFeedbackEntry(recordingId: String) {
 @Composable
 internal fun CanonicalRecordingFeedbackAction(onClick: () -> Unit) {
     ActionRow(
-        icon = Icons.Rounded.Star,
+        icon = ratingActionIcon(),
         label = stringResource(Res.string.recording_feedback_edit),
         onClick = onClick,
     )
 }
+
+/** One icon identity across the expanded player, rating picker and action menus. */
+internal fun ratingActionIcon() = AppleQueueVectors.Favorite
 
 /** The player never guesses a provider-native ID or track title for a local rating. */
 private data class RatingTargetResolution(val pending: Boolean, val recordingId: String?)
@@ -234,6 +236,7 @@ internal fun CanonicalRecordingFeedbackPanel(
 ) {
     var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
     var touched by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     // Room may deliver the persisted rating after the dialog opens. Hydrate
     // untouched selections, but never erase the user's pending choice.
     LaunchedEffect(rating) {
@@ -242,6 +245,15 @@ internal fun CanonicalRecordingFeedbackPanel(
     val selectedDescription = stringResource(Res.string.recording_feedback_stars_selected, selected.toString())
     val reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current
     val pulseIndex = ratingSelectionPulseIndex(selected, touched, reduceMotion)
+    // Dismissing an edited value must not silently throw it away. A late Room
+    // emission cannot erase the pending selection, and saving stays modal.
+    val original = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
+    val requestDismiss: () -> Unit = {
+        if (!saving) {
+            if (touched && selected != original) confirmDiscard = true
+            else onDismiss()
+        }
+    }
     // The dialog previously appeared in one frame. Entrance affects only
     // its drawing, never star hit targets, the save path, or the dialog window.
     val dialogEntrance = remember { Animatable(0f) }
@@ -256,7 +268,7 @@ internal fun CanonicalRecordingFeedbackPanel(
     // one canonical sheet-like dialog, a labeled selection, explicit actions
     // and untouched persistence. No claim of an Apple rating editor.
     androidx.compose.ui.window.Dialog(
-        onDismissRequest = { if (!saving) onDismiss() },
+        onDismissRequest = requestDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
         SettingsGroupSurface(
@@ -372,7 +384,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     androidx.compose.material3.OutlinedButton(
-                        onClick = onDismiss, enabled = !saving,
+                        onClick = requestDismiss, enabled = !saving,
                         modifier = Modifier.weight(1f).height(46.dp),
                         shape = RoundedCornerShape(23.dp),
                         colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
@@ -397,4 +409,19 @@ internal fun CanonicalRecordingFeedbackPanel(
         }
     }
 
+    if (confirmDiscard) {
+        ConfirmationAlert(
+            hazeState = null,
+            title = androidx.compose.ui.res.stringResource(R.string.editor_discard_title),
+            description = androidx.compose.ui.res.stringResource(R.string.editor_discard_rating_body),
+            confirmLabel = androidx.compose.ui.res.stringResource(R.string.editor_discard_confirm),
+            dismissLabel = androidx.compose.ui.res.stringResource(R.string.editor_keep_editing),
+            destructive = true,
+            onConfirm = {
+                confirmDiscard = false
+                onDismiss()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
+    }
 }
