@@ -257,7 +257,9 @@ internal fun CanonicalRecordingFeedbackPanel(
                     repeat(5) { i ->
                         val index = i.toDouble()
                         val starPulse = remember { Animatable(1f) }
-                        LaunchedEffect(pulseIndex, reduceMotion) {
+                        // Re-trigger for half→whole on the same star, not
+                        // only when the chosen star index changes.
+                        LaunchedEffect(selected, touched, reduceMotion) {
                             if (pulseIndex == i && !reduceMotion) {
                                 starPulse.snapTo(0.88f)
                                 starPulse.animateTo(
