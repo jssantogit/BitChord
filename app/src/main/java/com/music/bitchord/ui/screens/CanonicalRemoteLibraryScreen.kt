@@ -978,11 +978,19 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
+    // Nested category/detail navigation had an immediate replacement even
+    // while the parent Library tab already used the new route arrival.
+    // One current page moves; no extra content copy or repository re-query.
+    val nestedLibraryArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
+        routeKey = "library:${selectedContext.name}:${selectedEntity?.id ?: "shelf"}",
+        reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current,
+        forward = selectedEntity != null,
+    )
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(nestedLibraryArrival)) {
         if (unified) {
             // Selected albums/artists keep the exact native page chrome.
             // Only their revalidated RecordingId membership changes.
