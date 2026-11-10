@@ -276,6 +276,7 @@ private fun iconForConditionCategory(id: String) = when (id) {
     "dates" -> PlaylistEditorIcons.Calendar
     "library" -> PlaylistEditorIcons.Folder
     "audio" -> PlaylistEditorIcons.Audio
+    "advanced" -> PlaylistEditorIcons.Artwork
     else -> PlaylistEditorIcons.Filters
 }
 
