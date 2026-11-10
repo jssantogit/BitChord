@@ -74,7 +74,11 @@ class GlobalAppleTopBarChromeTest {
         }
         val res = RuntimeEnvironment.getApplication().resources
         compose.onNodeWithContentDescription(res.getString(R.string.more)).performClick()
-        compose.mainClock.advanceTimeByFrame()
+        // AnimatedVisibility starts from its pre-enter state; in a manually
+        // controlled frame clock the first frame schedules composition but
+        // does not guarantee the popup's content node already exists.
+        compose.mainClock.advanceTimeBy(85L)
+        compose.waitForIdle()
         compose.onNodeWithTag("apple-root-settings-popup", useUnmergedTree = true).assertExists()
         compose.onNodeWithText(res.getString(R.string.settings)).performClick()
         compose.runOnIdle { assertEquals(1, settingsOpened) }
