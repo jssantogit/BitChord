@@ -210,6 +210,24 @@ internal object DiscogsShadowCatalog {
         return normalized.removeRange(qualifier.range).trim() in known
     }
 
+    /**
+     * A DVD/Blu-ray containing album tracks must not become a music album
+     * simply because its Discogs format description also says "Album".
+     * Keep mixed audio+video products only when an audio medium is explicit.
+     */
+    private fun isVideoOnlyFormat(formats: List<String>): Boolean {
+        val names = formats.map { it.trim().lowercase(Locale.ROOT) }.toSet()
+        val video = setOf(
+            "dvd", "dvd-video", "blu-ray", "vhs", "laserdisc", "video",
+            "vcd", "video cd",
+        )
+        val audio = setOf(
+            "cd", "vinyl", "file", "digital media", "cassette", "sacd",
+            "shellac", "minidisc", "8-track cartridge", "blu-ray audio",
+        )
+        return names.any { it in video } && names.none { it in audio }
+    }
+
     /** A precomputed predicate shared between the index and hydrated edition. */
     internal fun knownTitlePredicate(
         expectedArtist: String,
@@ -250,6 +268,7 @@ internal object DiscogsShadowCatalog {
                 release.link.kind != DiscogsKind.RELEASE ||
                 release.link.id in linkedReleaseIds ||
                 release.unofficial || release.title.isBlank() ||
+                isVideoOnlyFormat(release.formats) ||
                 release.artistNames.size != 1 || !artistMatches ||
                 knownTitle(release.title) ||
                 release.tracklist.isEmpty() ||

@@ -56,6 +56,10 @@ A comparação source-only admite **somente** equivalência dos mesmos
 três ou mais termos Unicode em igual ordem com separadores diferentes,
 como `Easy-Crazy-Hot`. Ela não supõe tradução de um título,
 não colapsa versões com termos adicionais e não substitui a prova de edição.
+A estante source-only rejeita formatos exclusivamente DVD, Blu-ray ou
+vídeo ainda que a descrição Discogs inclua "Album" ou "Single";
+edições que também declaram CD/File/Vinyl mantêm elegibilidade e exigem
+as demais verificações.
 
 O relatório `discogs-211-corpus-edition-observations.json` é uma
 <b>ficha de inspeção</b> (não prova ausência MusicBrainz; não modifica o

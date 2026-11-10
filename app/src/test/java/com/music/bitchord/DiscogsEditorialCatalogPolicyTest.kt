@@ -295,6 +295,32 @@ class DiscogsEditorialCatalogPolicyTest {
         }
     }
 
+    @Test fun videoOnlyAlbumOrSingleLabelsCannotCreateAudioArtistShelves() {
+        val videoCases = listOf(
+            listOf("DVD", "DVD-Video", "Album"),
+            listOf("Blu-ray", "Album"),
+            listOf("DVD", "Single"),
+        )
+        videoCases.forEachIndexed { i, formats ->
+            val snapshot = DiscogsPublicEditionSnapshot(
+                edition(230L + i, formats = formats, master = null), 1_000,
+            )
+            assertTrue("Video-only must not become a music shelf: $formats",
+                DiscogsShadowCatalog.select(
+                    listOf(snapshot), expectedArtist = "ILLIT",
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                ).isEmpty())
+        }
+        val mixed = DiscogsPublicEditionSnapshot(
+            edition(240L, formats = listOf("CD", "DVD", "Album"), master = null),
+            1_000,
+        )
+        assertEquals(1, DiscogsShadowCatalog.select(
+            listOf(mixed), expectedArtist = "ILLIT",
+            mbCatalogChecked = true, nowMillis = 1_200,
+        ).size)
+    }
+
     @Test fun distinctRemixOrLiveReleaseIsNotSilentlyCollapsedIntoOriginalGroup() {
         val titles = listOf("Super Real Me (remix)", "Super Real Me (live)")
         titles.forEachIndexed { i, title ->
