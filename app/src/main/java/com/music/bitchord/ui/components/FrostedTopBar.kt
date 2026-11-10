@@ -323,7 +323,7 @@ fun FrostedTopBar(
                     ArtworkPageBackButton(
                         onClick = onBack,
                         hazeState = backButtonHazeState,
-                        size = if (categoryBackButton) 40.dp else 44.dp,
+                        size = if (categoryBackButton) AppleFloatingControlMetrics.libraryDiameter else 44.dp,
                         // The surface edge aligns with the floating navbar. The
                         // padding belongs outside the circle; its icon remains
                         // centred in the same 44dp control in every material.
@@ -404,7 +404,7 @@ internal fun ArtworkPageBackButton(
         onClick = onClick,
         modifier = modifier
             .size(size)
-            .then(if (size == 40.dp) Modifier.testTag("apple-category-back-button") else Modifier)
+            .then(if (size == AppleFloatingControlMetrics.libraryDiameter) Modifier.testTag("apple-category-back-button") else Modifier)
             .then(artworkPageSurface(shape = shape, hazeState = hazeState)),
     ) {
         Icon(
@@ -427,7 +427,7 @@ internal fun FloatingLibraryTopBarCircle(
     // rounded modifier (am-descomp: library-toolbar.md). This is the surface
     // dimension, not proof of the original final tap target or inset.
     Box(
-        modifier = Modifier.size(40.dp)
+        modifier = Modifier.size(AppleFloatingControlMetrics.libraryDiameter)
             .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState)),
         contentAlignment = Alignment.Center,
     ) { content() }
@@ -535,8 +535,8 @@ internal fun ArtworkPageActions(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val circleSize = 48.dp
-    val gap = 10.dp
+    val circleSize = AppleFloatingControlMetrics.toolbarDiameter
+    val gap = AppleFloatingControlMetrics.preferredGap
     SubcomposeLayout(
         modifier = modifier.animateContentSize(
             animationSpec = spring(
@@ -570,8 +570,13 @@ internal fun ArtworkPageActions(
         val visibleIndices = children.indices.filter { index ->
             children[index].width > 0 && children[index].height > 0
         }
+        val fittedGapPx = fittingToolbarActionGapPx(
+            itemWidths = visibleIndices.map { widths[it] },
+            availableWidthPx = constraints.maxWidth,
+            preferredGapPx = gapPx,
+        )
         val naturalWidth = visibleIndices.sumOf { widths[it] } +
-            gapPx * (visibleIndices.size - 1).coerceAtLeast(0)
+            fittedGapPx * (visibleIndices.size - 1).coerceAtLeast(0)
         val naturalHeight = (visibleIndices.maxOfOrNull { index ->
             maxOf(children[index].height, surfaces[index]?.height ?: 0)
         } ?: 0)
@@ -580,7 +585,7 @@ internal fun ArtworkPageActions(
         layout(width, height) {
             var x = 0
             visibleIndices.forEachIndexed { order, index ->
-                if (order > 0) x += gapPx
+                if (order > 0) x += fittedGapPx
                 val child = children[index]
                 val slotWidth = widths[index]
                 surfaces[index]?.let { surface ->
@@ -643,13 +648,14 @@ fun TopBarAccountButton(
     Box(modifier = modifier) {
         IconButton(
             onClick = { expanded = true },
-            modifier = Modifier.size(48.dp).testTag("apple-global-more-options"),
+            modifier = Modifier.size(AppleFloatingControlMetrics.toolbarDiameter)
+                .testTag("apple-global-more-options"),
         ) {
             Icon(
                 imageVector = Icons.Rounded.MoreVert,
                 contentDescription = stringResource(R.string.more),
                 tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(AppleFloatingControlMetrics.toolbarGlyphSize),
             )
         }
         AppleSettingsPopup(
