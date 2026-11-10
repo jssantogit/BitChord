@@ -26,8 +26,9 @@ Estes são controles de **classificação MusicBrainz já existente**, não edi�
 A coleta preliminar é automatizada por
 `scripts/catalog_211_discogs_corpus_candidates.py` e pelo workflow
 `.github/workflows/catalog-211-discogs-candidate-scan.yml`.
-São observados, com orçamento de rede limitado e **sem token**, quatro artistas
-com MBIDs públicos (ENHYPEN, ILLIT, NewJeans e LE SSERAFIM).
+São observados, com orçamento de rede limitado e **sem token**, dez artistas
+com MBIDs públicos (ENHYPEN, ILLIT, NewJeans, LE SSERAFIM, IVE, aespa,
+NMIXX, TOMORROW X TOGETHER, BABYMONSTER e Stray Kids).
 A relação MusicBrainz Artist → Discogs Artist precisa ser única e explícita;
 a lista de ReleaseGroups MusicBrainz precisa estar completa, íntegra e
 caber em até quatro páginas. A primeira página do índice público Discogs
@@ -44,7 +45,9 @@ automaticamente esses candidatos e **não** preenche nenhuma das 30 vagas
 como `reviewed=true`. Revisar manualmente identidade da edição,
 relações, créditos, tracklist, tipo, fontes editoriais independentes e
 navegação no app antes de julgar cada caso do coorte C.
-Amostragem de quatro artistas não define a taxa de recuperação global.
+Amostragem de dez artistas não define a taxa de recuperação global.
+Ausência de relação Discogs, paginação incompleta, falhas de rede e zero pistas
+são resultados válidos que devem permanecer registrados sem imputação.
 
 ## Campos por caso
 
