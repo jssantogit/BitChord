@@ -1,7 +1,9 @@
 package com.music.bitchord.ui.components
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** State and accessibility policy for the experimental chrome animations. */
@@ -44,6 +46,14 @@ class AppleMusicChromeMotionPolicyTest {
         assertEquals(0f, miniPlayerLiftForMotion(120f, 72f, reduced = true), 0.0001f)
         assertEquals(0f, miniPlayerLiftForMotion(Float.POSITIVE_INFINITY, 72f, reduced = true), 0.0001f)
         org.junit.Assert.assertTrue(miniPlayerLiftForMotion(120f, 72f, reduced = false) > 0f)
+    }
+
+    @Test
+    fun cancelledPullNeverSpringsOldMiniplayerLiftAcrossTrackReplacement() {
+        assertFalse(miniPlayerShouldAnimateLiftSettle(completedNormally = false, reducedMotion = false))
+        assertFalse(miniPlayerShouldAnimateLiftSettle(completedNormally = false, reducedMotion = true))
+        assertFalse(miniPlayerShouldAnimateLiftSettle(completedNormally = true, reducedMotion = true))
+        assertTrue(miniPlayerShouldAnimateLiftSettle(completedNormally = true, reducedMotion = false))
     }
 
     @Test
