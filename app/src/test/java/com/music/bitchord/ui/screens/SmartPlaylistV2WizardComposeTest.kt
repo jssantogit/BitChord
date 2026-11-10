@@ -222,7 +222,7 @@ class SmartPlaylistV2WizardComposeTest {
             .fetchSemanticsNodes().isNotEmpty())
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
-        compose.onNodeWithText("+ Adicionar primeira condição").performClick()
+        compose.onNodeWithText("Adicionar primeira condição").performClick()
         compose.onNodeWithTag("native-detail-search-field").assertExists()
     }
 
@@ -881,6 +881,9 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Revisar playlist").performClick()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Músicas selecionadas").assertExists()
+        compose.onNodeWithText("1 músicas na prévia").assertExists()
+        compose.onNodeWithText("Prévia atualizada após aplicar regras, limite e ordenação.")
+            .assertDoesNotExist()
         compose.onAllNodesWithText("Reproduzir").assertCountEquals(0)
         compose.onAllNodesWithText("Adicionar à fila").assertCountEquals(0)
     }
@@ -926,7 +929,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Grupo 1").performClick()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
-        compose.onNodeWithText("+ Adicionar condição").performClick()
+        compose.onNodeWithText("Adicionar condição").performClick()
         compose.onNodeWithText("Adicionar condição").assertExists()
         // This category used to be offscreen because GROUP's scroll index
         // was retained in the newly opened CATEGORIES page.
