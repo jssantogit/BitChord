@@ -43,7 +43,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.RadioButton
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import androidx.compose.runtime.Composable
@@ -55,6 +54,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -341,8 +342,17 @@ internal fun <T> WizardChoiceDialog(
                     title = label(option),
                     onClick = { onChosen(option); onClose() },
                     reserveIconSpace = false,
+                    modifier = if (radioSelected == null) Modifier else
+                        Modifier.semantics { selected = radioSelected(option) },
                     trailing = if (radioSelected != null) ({
-                        RadioButton(selected = radioSelected(option), onClick = null)
+                        Icon(
+                            imageVector = if (radioSelected(option))
+                                PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
+                            contentDescription = null,
+                            tint = if (radioSelected(option)) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(22.dp),
+                        )
                     }) else null,
                 )
                 RowDivider()
