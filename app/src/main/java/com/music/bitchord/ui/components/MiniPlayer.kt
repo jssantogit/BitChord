@@ -293,35 +293,41 @@ internal fun Modifier.miniPlayerGestures(
             val tracker = VelocityTracker()
             tracker.addPointerInputChange(down)
             tracker.addPointerInputChange(slopped)
-            // The player gets all of it from the touch down, slop included, so
-            // it starts out level with the finger. The bar starts from here,
-            // from nothing: lifted by the slop as well, it jumped a few pixels
-            // in one frame before it began to follow.
-            target.drag(slopped.position.y - down.position.y)
-            var pulled = 0f
-            val finished = drag(pointer) { change ->
-                val delta = change.positionChange().y
-                change.consume()
-                tracker.addPointerInputChange(change)
-                pulled -= delta
-                target.drag(delta)
-                lift.floatValue = pullLift(pulled, liftEase)
-            }
-            target.release(
-                if (finished) tracker.calculateVelocity().y.coerceIn(-maxVelocity, maxVelocity) else 0f,
-            )
-            // Let go, the bar springs home: under the player on its way up, or
-            // in full view if the pull fell short and the player went back.
-            val from = lift.floatValue
-            settle[0] = scope.launch {
-                animate(
-                    initialValue = from,
-                    targetValue = 0f,
-                    animationSpec = spring(
-                        dampingRatio = 0.65f,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                ) { value, _ -> lift.floatValue = value }
+            var completedNormally = false
+            try {
+                // The player gets all of the touch slop; the bar's visual
+                // lift only starts after the gesture direction is resolved.
+                target.drag(slopped.position.y - down.position.y)
+                var pulled = 0f
+                completedNormally = drag(pointer) { change ->
+                    val delta = change.positionChange().y
+                    change.consume()
+                    tracker.addPointerInputChange(change)
+                    pulled -= delta
+                    target.drag(delta)
+                    lift.floatValue = pullLift(pulled, liftEase)
+                }
+            } finally {
+                // A queue change restarts pointerInput. Cancellation must
+                // release the sheet and settle the lifted mini, not leave it
+                // held halfway open with no finger to finish the gesture.
+                target.release(
+                    if (completedNormally) {
+                        tracker.calculateVelocity().y.coerceIn(-maxVelocity, maxVelocity)
+                    } else 0f,
+                )
+                settle[0]?.cancel()
+                val from = lift.floatValue
+                settle[0] = scope.launch {
+                    animate(
+                        initialValue = from,
+                        targetValue = 0f,
+                        animationSpec = spring(
+                            dampingRatio = 0.65f,
+                            stiffness = Spring.StiffnessMediumLow,
+                        ),
+                    ) { value, _ -> lift.floatValue = value }
+                }
             }
         }
     }.graphicsLayer { translationY = -lift.floatValue }

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -59,6 +60,41 @@ class MiniPlayerGestureIdentityTest {
         compose.runOnIdle {
             assertEquals(0, nextCalls)
             assertEquals(0, previousCalls)
+        }
+    }
+
+    @Test fun replacingQueueEntryDuringVerticalPullAlwaysReleasesThePlayerSheet() {
+        val queueEntry = mutableStateOf("queue-first")
+        val deltas = mutableListOf<Float>()
+        val releases = mutableListOf<Float>()
+        val pull = object : MiniPlayerPull {
+            override fun drag(delta: Float) { deltas += delta }
+            override fun release(velocity: Float) { releases += velocity }
+        }
+        compose.setContent {
+            MaterialTheme {
+                Box(
+                    Modifier.size(width = 320.dp, height = 120.dp)
+                        .miniPlayerGestures(
+                            pull = pull,
+                            onNext = {},
+                            onPrevious = {},
+                            gestureIdentity = queueEntry.value,
+                        )
+                        .testTag("vertical-gesture-zone"),
+                )
+            }
+        }
+        compose.onNodeWithTag("vertical-gesture-zone").performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -center.y * 0.85f))
+        }
+        compose.runOnIdle { queueEntry.value = "queue-second" }
+        compose.waitForIdle()
+        compose.onNodeWithTag("vertical-gesture-zone").performTouchInput { up() }
+        compose.runOnIdle {
+            assertTrue("The player received the initial upward drag", deltas.isNotEmpty())
+            assertEquals("A cancelled pull must release exactly once", listOf(0f), releases)
         }
     }
 
