@@ -22,4 +22,20 @@ object NativeMediaCardMetrics {
     val discoveryCornerRadius = 7.dp
     val discoveryShape = RoundedCornerShape(discoveryCornerRadius)
     val discoveryTitleInset = 10.dp
+
+    // Existing Bitchord effect roles, not original Apple pixel measurements.
+    // Hero contrast belongs only behind titles over cover art.
+    val heroShape = RoundedCornerShape(18.dp)
+    const val heroScrimAlpha = 0.78f
+
+    // Discovery cards use a lighter overlay and text shadow over their duotone.
+    const val discoveryScrimAlpha = 0.34f
+    const val discoveryTitleShadowAlpha = 0.30f
+
+    // The featured-release glass panel is a separate card family, not a cover.
+    val featuredShape = RoundedCornerShape(28.dp)
+    val featuredArtworkSize = 88.dp
+    val featuredArtworkGap = 14.dp
+    const val featuredFillAlpha = 0.07f
+    const val featuredEdgeAlpha = 0.215f
 }

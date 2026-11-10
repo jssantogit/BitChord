@@ -46,3 +46,9 @@ Fonte: `jssantogit/am-descomp`, `fase-3-investigacao-visual` HEAD `7200e849`, pr
 - Aferir dimensões de Home editorial, artista destaque e cartões de playlists sem copiar candidatos XML como fatos de runtime; abrir investigação no `am-descomp` se faltarem fontes.
 
 Nenhum smoke APK foi solicitado ou disparado. CI automática valida código, não pixel matching.
+
+### Segunda consolidação: efeitos existentes por família
+
+O `NativeMediaCardMetrics` também centraliza os valores **já usados no fork**, sem alterar visualmente o resultado: `heroShape=18dp` e scrim de 0,78; descoberta com scrim 0,34 e sombra de texto 0,30; destaque de lançamento do artista com contêiner 28dp, arte 88dp, gap 14dp, preenchimento 0,07 e borda 0,215. São **tokens Bitchord**, não constantes recuperadas do Apple Music.
+
+`HeroCard`, `NativeExploreCategorySleeve` e `NativeArtistTopReleaseCard` agora consomem os mesmos papéis visuais compartilhados, mas continuam com tratamentos **diferentes** porque exibem tipos diferentes de conteúdo. O funcionamento e a intensidade dos efeitos não mudaram; o benefício é permitir uma futura calibração a partir de screenshot ou nova REA com um ajuste central por família. Testes fixam a preservação dos parâmetros.

@@ -250,7 +250,7 @@ private fun NativeExploreCategorySleeve(
                 Brush.verticalGradient(
                     0f to Color.Transparent,
                     .56f to Color.Transparent,
-                    1f to Color.Black.copy(alpha = .34f),
+                    1f to Color.Black.copy(alpha = NativeMediaCardMetrics.discoveryScrimAlpha),
                 ),
             ),
         )
@@ -258,7 +258,7 @@ private fun NativeExploreCategorySleeve(
             text = title,
             style = titleStyle.copy(
                 shadow = Shadow(
-                    Color.Black.copy(alpha = .30f),
+                    Color.Black.copy(alpha = NativeMediaCardMetrics.discoveryTitleShadowAlpha),
                     offset = Offset(0f, 1f), blurRadius = 4f,
                 ),
             ),
