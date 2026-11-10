@@ -160,6 +160,9 @@ def inspect(row: dict, get, pause=lambda: None) -> dict:
             if isinstance(f, dict) and isinstance(f.get("name"), str)
         ]
         result["comparison"] = compare_edition(mb, discogs)
+        # This is separate from artist_matches (display names). The
+        # exact public Artist link and two typed credit IDs were checked above.
+        result["artist_identity_confirmed_by_source_ids"] = True
         result["status"] = "edition_facts_compared_not_reviewed"
     except (HTTPError, URLError, OSError, TimeoutError):
         result["status"] = "source_unavailable"

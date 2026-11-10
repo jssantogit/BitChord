@@ -96,7 +96,11 @@ Requer a relação MB Artist→Discogs Artist explícita e idêntica ao
 MB, seu tipo primário e os fatos de tracklist, barcode e relação direta
 Release→Discogs. Máximo 18 GETs públicos, sem token; resultados indisponíveis
 não geram inferência negativa. O comparador apresenta evidências
-pontuais e *nunca* retorna Verified, ausência MB ou `reviewed=true`.
+pontuais, incluindo o primeiro par de títulos de faixa divergentes
+(limitado a 120 caracteres cada), as posições que diferem apenas na
+pontuação e a identidade de artista por ID do provedor validada
+independentemente dos nomes desambiguados. O relatório *nunca*
+retorna Verified, ausência MB ou `reviewed=true`.
 Esse controle revela diferença de pontuação no título de
 `EASY CRAZY HOT` e um título de faixa diferente, apesar do vínculo direto
 e barcode coincidente. O matcher Android pode aceitar apenas variações

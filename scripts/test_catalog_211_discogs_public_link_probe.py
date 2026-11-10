@@ -48,6 +48,28 @@ class PublicLinkProbeTests(unittest.TestCase):
         altered = {**DISCOGS, "tracklist": DISCOGS["tracklist"][:-1]}
         self.assertFalse(compare_edition(MB, altered)["tracklist_matches"])
 
+    def test_title_mismatch_diagnostics_are_bounded_and_do_not_verify(self):
+        altered = {**DISCOGS, "tracklist": [
+            DISCOGS["tracklist"][0],
+            DISCOGS["tracklist"][1],
+            {**DISCOGS["tracklist"][2], "title": "No-Way Back"},
+        ]}
+        result = compare_edition(MB, altered)
+        self.assertFalse(result["tracklist_matches"])
+        self.assertEqual(2, result["first_title_mismatch_position"])
+        self.assertEqual({"musicbrainz": "no way back",
+                          "discogs": "no-way back"},
+                         result["first_title_mismatch_titles"])
+        self.assertEqual([2], result["punctuation_only_track_mismatch_positions"])
+        unrelated = {**DISCOGS, "tracklist": [
+            DISCOGS["tracklist"][0],
+            DISCOGS["tracklist"][1],
+            {**DISCOGS["tracklist"][2], "title": "New Remix"},
+        ]}
+        self.assertEqual([], compare_edition(MB, unrelated)[
+            "punctuation_only_track_mismatch_positions"])
+        self.assertIsNone(compare_edition(MB, DISCOGS)["first_title_mismatch_titles"])
+
     def test_conflicting_barcode_is_never_compatible(self):
         altered = {**DISCOGS, "identifiers": [
             {"type": "Barcode", "value": "12345678"},

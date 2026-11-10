@@ -250,7 +250,28 @@ def compare_edition(mb: dict, release: dict) -> dict:
     mb_country = country_code(mb.get("country"))
     external_country = country_code(release.get("country"))
     formats = release.get("formats")
+    # Public title-level diagnostics only; no lyrics, audio, artworks or
+    # listener data. A mismatch is a clue, never a verified identity.
+    mismatches = [
+        (i, a, b)
+        for i, (a, b) in enumerate(zip(titles, discogs_titles), start=1)
+        if a != b
+    ]
+    punctuation_positions = [
+        i for i, a, b in mismatches if (
+            len(re.findall(r"[^\W_]+", a, re.UNICODE)) >= 2 and
+            re.findall(r"[^\W_]+", a, re.UNICODE) ==
+                re.findall(r"[^\W_]+", b, re.UNICODE)
+        )
+    ]
+    first_mismatch = mismatches[0] if mismatches else None
     return {
+        "first_title_mismatch_titles": (
+            {"musicbrainz": first_mismatch[1][:120],
+             "discogs": first_mismatch[2][:120]}
+            if first_mismatch is not None else None
+        ),
+        "punctuation_only_track_mismatch_positions": punctuation_positions[:8],
         "artist_matches": bool(expected and expected == actual),
         "title_matches": bool(expected_title and expected_title == without_prefix),
         "tracklist_complete": complete,

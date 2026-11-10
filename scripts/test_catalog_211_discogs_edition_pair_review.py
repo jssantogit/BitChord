@@ -80,6 +80,7 @@ class EditionPairReviewTest(unittest.TestCase):
         self.assertEqual("edition_facts_compared_not_reviewed", entry["status"])
         self.assertEqual("no_direct_release_link", entry["direct_release_relation"])
         self.assertEqual(MB_GROUP, entry["musicbrainz_group_mbid"])
+        self.assertTrue(entry["artist_identity_confirmed_by_source_ids"])
         self.assertTrue(entry["comparison"]["tracklist_matches"])
         self.assertTrue(entry["comparison"]["barcode_identical_on_both"])
         self.assertEqual(0, report["reviewed_corpus_cases"])
