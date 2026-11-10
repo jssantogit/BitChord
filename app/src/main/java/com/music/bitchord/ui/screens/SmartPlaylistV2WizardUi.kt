@@ -741,7 +741,15 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         }
                         if (page == WizardStep.IDENTITY) item {
-                            WizardCard("Tipo de playlist", "") {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    "Tipo de playlist",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                                 if (editingId != null || filterMode || editingNormalId != null) {
                                     Text(if (normalMode) "Normal" else "Inteligente",
                                         style = MaterialTheme.typography.bodyMedium)
