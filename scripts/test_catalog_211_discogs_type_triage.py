@@ -12,7 +12,7 @@ MB = "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10"
 DID = 31008160
 
 def seed():
-    return {"id": "CTRL-A", "artist": "ENHYPEN",
+    return {"id": "CTRL-A-TYPE", "artist": "ENHYPEN",
             "musicbrainz_artist_mbid": "95663592-1447-4579-90f7-c94733476667",
             "discogs_artist_id": 8303009,
             "musicbrainz_release_mbid": MB, "discogs_release_id": DID,
