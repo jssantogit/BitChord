@@ -157,7 +157,7 @@ internal fun PlaylistWizardPrimaryAction(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier.fillMaxWidth().height(50.dp),
-        shape = GroupShape,
+        shape = RoundedCornerShape(25.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = AccentRed,
             contentColor = androidx.compose.ui.graphics.Color.White,
