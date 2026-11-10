@@ -23,6 +23,12 @@ ARTISTS = (
     ("ILLIT", "6b128dd7-e998-4edb-a4f5-400fef190445"),
     ("NewJeans", "49204a7a-ed85-407a-828f-6fd46f1d8126"),
     ("LE SSERAFIM", "1ee37742-1e3d-4e61-84d2-bc85f4c1459a"),
+    ("IVE", "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196"),
+    ("aespa", "b51c672b-85e0-48fe-8648-470a2422229f"),
+    ("NMIXX", "2d623e82-73e2-4179-9c44-e963980f2d58"),
+    ("TOMORROW X TOGETHER", "9d027d72-790e-40ec-bbb7-61aa613457de"),
+    ("BABYMONSTER", "5829cd4f-e693-4b03-abe5-1226243c23d6"),
+    ("Stray Kids", "142b343d-bf5a-428c-a64f-6d1a7566bbe9"),
 )
 MBID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", re.I)
 DISCOGS_PATH = re.compile(r"/artist/([1-9][0-9]{0,11})(?:-[A-Za-z0-9_-]+)?/?")
