@@ -8,6 +8,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.onAllNodes
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
@@ -142,6 +147,21 @@ class GlobalAppleTopBarChromeTest {
         compose.onNodeWithTag("apple-toolbar-back-button", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("apple-library-floating-circle", useUnmergedTree = true)
             .assertWidthIsEqualTo(40.dp)
+    }
+
+    @Test fun reducedMotionMiniLoadingIsIndeterminateToScreenReader() {
+        compose.setContent {
+            BitChordTheme {
+                MiniPlayerLoadingIndicator(color = Color.White, size = 22.dp, reduceMotion = true)
+            }
+        }
+        compose.onAllNodes(
+            SemanticsMatcher.expectValue(
+                SemanticsProperties.ProgressBarRangeInfo,
+                ProgressBarRangeInfo.Indeterminate,
+            ),
+            useUnmergedTree = true,
+        ).assertCountEquals(1)
     }
 
     @Test fun detailOnlyCircularActionAlsoUsesFortyDp() {

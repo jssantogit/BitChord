@@ -42,3 +42,7 @@ Agora o deslocamento `miniPlayerSwipeVisualOffset` é consultado apenas dentro d
 O spinner indeterminado rodava continuamente no miniplayer Apple ativo, no MiniPlayer legado e no GlassNowPlaying alternativo, mesmo com Reduzir animações habilitado. O helper MiniPlayerLoadingIndicator compartilhado mantém o carregamento visível: normal = spinner existente, reduzido = arco determinate fixo 0,75, sem rotação. Não altera isLoading, tempos do áudio nem controla avanço de downloads. O arco fixo é decisão BitChord, não mecanismo recuperado do Apple.
 
 O miniplayer Apple continua único no fluxo MainActivity. Testes unitários confirmam a opção de indicador e a regressão no modo reduzido.
+
+## Acessibilidade do arco estático
+
+Um arco de 0,75 é apenas **desenho**; não existe medição percentual do progresso da faixa. Como o `CircularProgressIndicator(progress={0.75f})` reportaria 75% em semântica padrão, aplica-se `clearAndSetSemantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }` apenas ao modo reduzido. O leitor de tela continua sabendo que está carregando, sem afirmar conclusão fictícia. Teste Compose Robolectric verifica a semântica.

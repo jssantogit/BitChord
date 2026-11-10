@@ -41,6 +41,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -536,7 +539,12 @@ internal fun MiniPlayerLoadingIndicator(
             color = color,
             strokeWidth = 2.dp,
             gapSize = 0.dp,
-            modifier = Modifier.size(size),
+            // The arc is a stationary loading affordance, NOT measured 75%
+            // completion. Prevent a screen reader from announcing fake
+            // progress while preserving the indeterminate loading role.
+            modifier = Modifier.size(size).clearAndSetSemantics {
+                progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+            },
         )
     }
 }
