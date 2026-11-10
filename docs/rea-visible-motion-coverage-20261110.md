@@ -17,6 +17,7 @@ Fonte principal: `jssantogit/am-descomp`, branch `fase-3-investigacao-visual`, H
 | Superfície | Anterior | Agora | Garantia |
 |---|---|---|---|
 | Popup de ⋮ compartilhado na barra superior (Home, Biblioteca, detalhes, etc.) | `Popup` montado/desmontado por `if (expanded)` sem transição | `AnimatedVisibility`: 170ms entrada fade+scale a partir de 0,96; 125ms saída fade+scale até 0,98; origem no canto direito superior | Mesma posição, shape, haze, 180dp, ação de Ajustes. `MutableTransitionState` permite manter janela até terminar a saída. Sem cliques durante saída |
+| Menus auxiliares de ordenação/filtro na Biblioteca | `FrostedMenuPanel` aparecia instantaneamente, com scrim e cartão estáticos | Entrada somente do painel: alpha 0,30→1, escala 0,94→1 em 160ms a partir do canto superior direito | Mantém scrim, blur Haze, disposição, seleção e callbacks; desativado em Reduzir animações; saída ainda instantânea e não apresentada como cópia Apple |
 | Abas principais | `AnimatedContent` deliberadamente com `None` para evitar dip escuro de crossfade (telas transparentes) | Novo *arrival* de 185ms na superfície inteira da aba entrante (0,96→1 de alpha; 12dp→0 deslocamento lateral); continua **sem duas páginas cruzando em alpha** | Rotas, backstack, conteúdos e barra inferior inalterados; não animar mudanças normais de dados/scroll |
 | Configurações → categoria e voltar | Conteúdo trocado na hora | Arrasto visual de 12dp + leve opacidade em 185ms para o conteúdo entrante, com sentido reverso no retorno | Mesmos estados `ScrollState`, callbacks e controles; não animar cada toggle ou pesquisa |
 | Biblioteca (categoria → álbum/artista e retorno) | `CanonicalRemoteLibraryScreen` troca `selectedContext`/`selectedEntity` sem resposta de entrada | Aplicada a mesma chegada de página sobre a `Box` interna, com `Surface` de fundo estável | Não duplica listas, não muda `RecordingId`, seleção, filtros, estado de back, scroll ou consultas |
@@ -35,3 +36,13 @@ Todos esses movimentos ficam **estáticos** quando `Reduzir animações` é ativ
 - Layout/IME do criador, retomada de estado na Biblioteca, interações rápidas entre abas, dispositivos lentos e temas claro/escuro precisam de inspeção física.
 - Não introduzir *card entrance* global: C1–C3 do am-descomp sustentam só aproximações; C4 permanece `unknown`.
 - Não disparar outro smoke automaticamente sem solicitação; esperar CI do novo HEAD antes de declarar verde.
+
+## Regressão CI e correção
+
+O corte `e7d9383d` terminou Android CI [#42861907393](https://github.com/jssantogit/BitChord/actions/runs/42861907393) em **failure apenas por dois testes novos** (3226 executados, 2 falhas, 1 ignorado); compilação Android passou e os gates Desktop/TV/Wear/YouTube ficaram verdes.
+
+- `RouteArrivalMotionTest` comparava `RouteArrivalFrame(alpha=1, translation=+0f)` com um frame de volta com `-0f`. A mudança `b61ffc0e` normaliza o estado final para `0f` em ambas as direções, preservando a posição dos pixels.
+- `GlobalAppleTopBarChromeTest` verificava o nó no mesmo primeiro frame agendado por `MutableTransitionState`, antes da janela `Popup` compor o conteúdo animado. `ca3c6a45` avança explicitamente o relógio Compose por 85ms e aguarda estado ocioso antes da asserção. O contrato de manter o popup durante saída continua.
+- Outro menu real sem entrada animada foi localizado: `FrostedMenuPanel` (menu de filtros/ordenação da Biblioteca), renderizado pela própria `MainActivity` sobre haze e scrim. `c1ca7807` adicionou testes do frame estático versus animado, `0bd047ce` o helper reutilizável e `525bf7b0` o consumo no painel original, sem substituir ações ou criar segunda superfície.
+
+O novo HEAD precisa de CI integral antes de ser considerado aprovado. Nenhum smoke foi solicitado nesta continuação.
