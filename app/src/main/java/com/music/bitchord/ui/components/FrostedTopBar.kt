@@ -549,9 +549,13 @@ internal fun ArtworkPageActions(
         val children = subcompose("actions", content).map { it.measure(childConstraints) }
         val diameter = circleSize.roundToPx()
         val gapPx = gap.roundToPx()
+        val minIconBounds = 40.dp.roundToPx()
         val maxIconBounds = diameter + 4.dp.roundToPx()
         val surfaces = children.mapIndexed { index, child ->
-            if (child.width == 0 || child.height == 0 ||\n                child.width > maxIconBounds || child.height > maxIconBounds) null
+            // Only genuine icon-sized slots receive a surface. Compact
+            // informational badges and collapsed animations are not buttons.
+            if (child.width < minIconBounds || child.height < minIconBounds ||
+                child.width > maxIconBounds || child.height > maxIconBounds) null
             else subcompose("circle:$index") {
                 Box(
                     Modifier.size(circleSize)
