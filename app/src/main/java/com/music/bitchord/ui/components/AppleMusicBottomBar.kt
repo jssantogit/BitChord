@@ -400,6 +400,7 @@ fun AppleMusicMiniPlayer(
     )
     // One transition coordinates the outgoing artwork and metadata, with a
     // content key bound to the queue item, not every changing Song field.
+    val trackIdentity = appleMiniPlayerContentKey(song)
     val trackTransition = updateTransition(targetState = song, label = "appleMusicMiniTrack")
     val playInteraction = remember { MutableInteractionSource() }
     val nextInteraction = remember { MutableInteractionSource() }
@@ -418,6 +419,15 @@ fun AppleMusicMiniPlayer(
     val settleScope = rememberCoroutineScope()
     val swipeLimitPx = with(LocalDensity.current) { 72.dp.toPx() }
     val swipeMaxPx = with(LocalDensity.current) { 12.dp.toPx() }
+    // A queue replacement also stops the OLD gesture and removes any old
+    // settle offset before the NEW artwork appears. Artwork/quality hydration
+    // retains the same identity and therefore does not interrupt the drag.
+    LaunchedEffect(trackIdentity) {
+        settleJob[0]?.cancel()
+        swipeActive.value = false
+        swipeDistance.floatValue = 0f
+        swipeSettle.snapTo(0f)
+    }
     // A preference toggle during settling cancels the running animation,
     // including any swipe whose pointer has not yet lifted.
     LaunchedEffect(reduceMotion) {
@@ -443,6 +453,7 @@ fun AppleMusicMiniPlayer(
                 },
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
+                gestureIdentity = trackIdentity,
                 onHorizontalSwipe = { distancePx, active ->
                     if (active) {
                         if (!swipeActive.value) {

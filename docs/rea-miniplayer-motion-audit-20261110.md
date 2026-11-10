@@ -46,3 +46,12 @@ O miniplayer Apple continua único no fluxo MainActivity. Testes unitários conf
 ## Acessibilidade do arco estático
 
 Um arco de 0,75 é apenas **desenho**; não existe medição percentual do progresso da faixa. Como o `CircularProgressIndicator(progress={0.75f})` reportaria 75% em semântica padrão, aplica-se `clearAndSetSemantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }` apenas ao modo reduzido. O leitor de tela continua sabendo que está carregando, sem afirmar conclusão fictícia. Teste Compose Robolectric verifica a semântica.
+
+
+## Quarta implementação — troca de entrada durante arrasto horizontal
+
+A auditoria posterior encontrou um caso não coberto pelos seis commits iniciais: o reconhecedor compartilhado `miniPlayerGestures` usava `pointerInput(Unit)`, conservando corretamente o gesto quando os metadados da faixa mudavam, **mas também** quando o item em reprodução era substituído por uma nova entrada na fila durante o contato do dedo. O resultado poderia aplicar `onNext/onPrevious` à nova entrada após o dedo levantar. Além disso, a acomodação `swipeSettle` da faixa anterior podia continuar visível sobre a arte seguinte.
+
+A API do detector recebeu o parâmetro `gestureIdentity` (com `Unit` por padrão para compatibilidade). Os três miniplayers — `AppleMusicMiniPlayer` ativo, `MiniPlayer` legado e `GlassNowPlaying` opcional — usam a identidade estável `appleMiniPlayerContentKey(song)` (fila em primeiro lugar, fallback por mídia/URI). O detector reinicia **somente** quando essa identidade muda; atualizações de artwork, duração, qualidade, artista ou outras propriedades do mesmo item não reiniciam o drag nem disparam outra navegação. O miniplayer Apple limpa a acomodação anterior com `LaunchedEffect(trackIdentity)`; a leitura visual continua em `graphicsLayer`.
+
+Dois testes de gesto Robolectric/Compose simulam o dedo tocando e arrastando, uma recomposição intermediária, e a soltura: **troca real de fila cancela skip antigo; simples atualização de texto preserva um único skip normal**. Essa é uma correção de concorrência/experiência do BitChord baseada no mecanismo existente, e não uma curva ou gesto inferido do Apple Music. A fonte `am-descomp/docs/motion/player-expansion.md` continua sendo a referência geométrica da expansão; não alteramos progressos, curvas ou retângulo do PlayerDock. Verificação física de skip rápido e primeiro/último frame ainda recomendada. Sem smoke.

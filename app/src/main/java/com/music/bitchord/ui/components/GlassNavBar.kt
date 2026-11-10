@@ -335,6 +335,7 @@ private fun GlassNowPlaying(
                 },
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
+                gestureIdentity = appleMiniPlayerContentKey(song),
             )
             .graphicsLayer {
                 scaleX = pressScale

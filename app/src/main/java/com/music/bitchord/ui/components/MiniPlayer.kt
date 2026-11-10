@@ -216,12 +216,19 @@ internal fun Modifier.miniPlayerGestures(
     /** Listening in a party whose host holds the controls. Swipes say so instead of skipping. */
     locked: Boolean = false,
     onBlocked: () -> Unit = {},
+    /**
+     * Stable queue/media identity. An actual track replacement cancels any
+     * still-held swipe; updated metadata for the same entry must not.
+     * Defaults to Unit for unrelated consumers of the shared recognizer.
+     */
+    gestureIdentity: Any = Unit,
     /** Optional visual drag feedback; does not alter track-skip decisions. */
     onHorizontalSwipe: (Float, Boolean) -> Unit = { _, _ -> },
 ): Modifier {
-    // Playback state updates can recompose the bar while a finger is down.
-    // Keep the gesture coroutine alive through those updates while still
-    // dispatching to the latest controller callbacks when the drag finishes.
+    // Recomposition from metadata updates must not cancel an active drag.
+    // A genuinely new queue entry must restart the detector so an old
+    // pointer cannot skip the new track or expand it unexpectedly.
+    // Updated controller callbacks remain available via rememberUpdatedState.
     val currentPull by rememberUpdatedState(pull)
     val currentOnNext by rememberUpdatedState(onNext)
     val currentOnPrevious by rememberUpdatedState(onPrevious)
@@ -233,7 +240,7 @@ internal fun Modifier.miniPlayerGestures(
     // recomposing it.
     val lift = remember { mutableFloatStateOf(0f) }
     val settle = remember { arrayOfNulls<Job>(1) }
-    return pointerInput(Unit) {
+    return pointerInput(gestureIdentity) {
         val trackThreshold = TRACK_SWIPE_THRESHOLD.toPx()
         val liftEase = PULL_LIFT_EASE.toPx()
         val maxVelocity = viewConfiguration.maximumFlingVelocity
@@ -393,6 +400,7 @@ fun MiniPlayer(
                 },
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
+                gestureIdentity = appleMiniPlayerContentKey(song),
             )
             .clip(shape)
             .then(
