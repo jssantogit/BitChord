@@ -13,6 +13,8 @@ on:
       - scripts/test_catalog_211_discogs_candidate_details.py
       - scripts/catalog_211_discogs_public_link_probe.py
       - scripts/test_catalog_211_discogs_public_link_probe.py
+      - scripts/catalog_211_discogs_type_triage.py
+      - scripts/test_catalog_211_discogs_type_triage.py
       - scripts/catalog_211_discogs_edition_pair_review.py
       - scripts/test_catalog_211_discogs_edition_pair_review.py
       - docs/plans/catalog-211-discogs-edition-pairs.json
@@ -38,6 +40,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Test strict offline A-cohort type-triage contract
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_type_triage.py' -v
       - name: Test ReleaseGroup-scoped barcode lead search offline
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_unlinked_group_probe.py' -v
       - name: Run offline identity, completeness and candidate regression tests
