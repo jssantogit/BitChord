@@ -1,6 +1,10 @@
 package com.music.bitchord.ui.components
 
 import android.app.Application
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
@@ -52,6 +56,9 @@ class GlobalAppleTopBarChromeTest {
             BitChordTheme {
                 ArtworkPageActions(hazeState = null) {
                     IconButton(onClick = {}) { Icon(Icons.Rounded.Search, contentDescription = "Search") }
+                    // AnimatedVisibility and other absent toolbar slots must not
+                    // leave an empty glass circle behind.
+                    Spacer(Modifier.size(0.dp))
                     IconButton(onClick = {}) { Icon(Icons.Rounded.Sort, contentDescription = "Sort") }
                 }
             }
