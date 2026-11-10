@@ -68,6 +68,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
@@ -499,54 +501,69 @@ internal fun AppleRootSettingsOverflow(
     }
 }
 
-/** One shared pill for every action at the right of a floating top bar. */
+/**
+ * Independent circular surfaces for top-bar icon actions across all routes.
+ *
+ * This uses the same floating material as Library's reference-backed 40dp
+ * "More Options" control (am-descomp/library-toolbar.md). The generic 48dp
+ * diameter is based on the documented alternate toolbar token, not an exact
+ * measured bound for every Apple page.
+ *
+ * Each direct action is measured on its own before a separate surface is
+ * subcomposed behind it. Text badges keep their existing width and do not
+ * become fake circular buttons. Menus, callbacks and content remain untouched.
+ */
 @Composable
-private fun ArtworkPageActions(
+internal fun ArtworkPageActions(
     hazeState: HazeState?,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    Row(
-        modifier = modifier
-            .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
-            // Keep the right edge fixed while a new action opens room to its
-            // left. The surface itself therefore grows instead of jumping to
-            // its new width in a single frame.
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow,
-                ),
-            )
-            // One 48dp profile target with no inset is a true 48x48 circle.
-            // Once another action exists, restore the navbar's PILL_INSET at
-            // both edges. This is layout padding inside the surface, not an
-            // outer margin, so BAR_GUTTER remains unchanged.
-            .artworkActionEdgePadding(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        content()
-    }
-}
-
-/**
- * Navbar edge padding that collapses only for the profile-only state.
- *
- * Invisible/animating action slots can measure between zero and 48dp, so the
- * natural content width—not the number of emitted composables—is the reliable
- * source of truth. At exactly one icon target the pill stays circular; above
- * that it gains the same inset as the navbar while retaining fully round ends.
- */
-private fun Modifier.artworkActionEdgePadding(): Modifier = layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints.copy(minWidth = 0))
-    val oneActionWidth = 48.dp.roundToPx()
-    val extraActionFraction = ((placeable.width - oneActionWidth).toFloat() / oneActionWidth)
-        .coerceIn(0f, 1f)
-    val edgePadding = (PILL_INSET.roundToPx() * extraActionFraction).roundToInt()
-    val width = (placeable.width + edgePadding * 2).coerceIn(constraints.minWidth, constraints.maxWidth)
-
-    layout(width, placeable.height) {
-        placeable.placeRelative(edgePadding, 0)
+    val circleSize = 48.dp
+    val gap = 10.dp
+    SubcomposeLayout(
+        modifier = modifier.animateContentSize(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        ),
+    ) { constraints ->
+        val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+        val children = subcompose("actions", content).map { it.measure(childConstraints) }
+        val diameter = circleSize.roundToPx()
+        val gapPx = gap.roundToPx()
+        val maxIconBounds = diameter + 4.dp.roundToPx()
+        val surfaces = children.mapIndexed { index, child ->
+            if (child.width > maxIconBounds || child.height > maxIconBounds) null
+            else subcompose("circle:$index") {
+                Box(
+                    Modifier.size(circleSize)
+                        .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
+                        .testTag("apple-toolbar-action-circle"),
+                )
+            }.first().measure(Constraints.fixed(diameter, diameter))
+        }
+        val widths = children.indices.map { index ->
+            maxOf(children[index].width, surfaces[index]?.width ?: 0)
+        }
+        val naturalWidth = widths.sum() + gapPx * (children.size - 1).coerceAtLeast(0)
+        val naturalHeight = (children.indices.maxOfOrNull { index ->
+            maxOf(children[index].height, surfaces[index]?.height ?: 0)
+        } ?: 0)
+        val width = naturalWidth.coerceIn(constraints.minWidth, constraints.maxWidth)
+        val height = naturalHeight.coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            var x = 0
+            children.forEachIndexed { index, child ->
+                val slotWidth = widths[index]
+                surfaces[index]?.let { surface ->
+                    surface.placeRelative(x + (slotWidth - surface.width) / 2, (height - surface.height) / 2)
+                }
+                child.placeRelative(x + (slotWidth - child.width) / 2, (height - child.height) / 2)
+                x += slotWidth + gapPx
+            }
+        }
     }
 }
 
