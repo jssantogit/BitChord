@@ -176,10 +176,15 @@ internal fun appleMiniPlayerContentKey(song: Song): String =
         ?: song.localUri?.takeIf { it.isNotBlank() }?.let { "local:$it" }
         ?: "unresolved:${song.title}:${song.artist}"
 
-/** A disabled slot (Radio) never reacts to press or selection animations. */
-internal fun appleMusicTabScaleTarget(enabled: Boolean, selected: Boolean, pressed: Boolean): Float =
+/** Disabled Radio and reduced-motion tabs never scale on selection or press. */
+internal fun appleMusicTabScaleTarget(
+    enabled: Boolean,
+    selected: Boolean,
+    pressed: Boolean,
+    reducedMotion: Boolean = false,
+): Float =
     when {
-        !enabled -> 1f
+        !enabled || reducedMotion -> 1f
         pressed -> 0.91f
         selected -> 1.04f
         else -> 1f
@@ -308,7 +313,7 @@ fun AppleMusicBottomBar(
             val interaction = remember { MutableInteractionSource() }
             val pressed by interaction.collectIsPressedAsState()
             val scale by animateFloatAsState(
-                targetValue = appleMusicTabScaleTarget(enabled, selected, pressed),
+                targetValue = appleMusicTabScaleTarget(enabled, selected, pressed, reduceMotion),
                 animationSpec = if (reduceMotion) snap() else spring(
                     dampingRatio = 0.82f, stiffness = 500f,
                 ),
