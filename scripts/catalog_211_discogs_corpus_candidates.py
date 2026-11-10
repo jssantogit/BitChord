@@ -35,6 +35,12 @@ def normalized(value: str) -> str:
     return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
 
 
+def comparable_title(value: str, artist: str) -> str:
+    title = normalized(value)
+    prefix = normalized(artist) + " - "
+    return title[len(prefix):] if title.startswith(prefix) else title
+
+
 def discogs_artist_relation(payload: dict, expected_mbid: str) -> int | None:
     if not MBID.fullmatch(expected_mbid) or not isinstance(payload, dict) or (
         str(payload.get("id", "")).lower() != expected_mbid.lower()
@@ -89,7 +95,7 @@ def complete_mb_titles(artist_mbid: str, get, pause=lambda: None) -> set[str] | 
             return None
         groups = raw.get("release-groups")
         server_total = raw.get("release-group-count")
-        server_offset = raw.get("release-group-offset", offset)
+        server_offset = raw.get("release-group-offset")
         if (not isinstance(groups, list) or type(server_total) is not int or
             type(server_offset) is not int or server_offset != offset or
             server_total < 0 or server_total > MAX_GROUPS or
@@ -126,7 +132,7 @@ def public_index_hints(payload: dict, page: int = 1) -> list[dict] | None:
             continue
         kind, rid, title = row.get("type"), row.get("id"), row.get("title")
         if (kind not in ("release", "master") or
-            type(rid) is not int or rid not in range(1, 1_000_000_000_000) or
+            type(rid) is not int or not 1 <= rid <= 999_999_999_999 or
             not isinstance(title, str) or not 1 <= len(title) <= 240):
             continue
         key = (kind, rid)
@@ -141,7 +147,7 @@ def public_index_hints(payload: dict, page: int = 1) -> list[dict] | None:
 def scout_artist(name: str, mbid: str, get, pause=lambda: None) -> dict:
     finding = {"artist": name, "musicbrainz_artist_mbid": mbid,
                "status": "unavailable", "discogs_artist_id": None,
-               "complete_mb_group_count": None, "indexed_rows": 0,
+               "distinct_mb_titles_count": None, "indexed_rows": 0,
                "exact_title_matches": 0, "candidate_index_hints": []}
     try:
         pause()
@@ -156,7 +162,7 @@ def scout_artist(name: str, mbid: str, get, pause=lambda: None) -> dict:
         if known is None:
             finding["status"] = "incomplete_mb_browse"
             return finding
-        finding["complete_mb_group_count"] = len(known)
+        finding["distinct_mb_titles_count"] = len(known)
         pause()
         url = f"https://api.discogs.com/artists/{artist_id}/releases?" + urlencode({
             "page": 1, "per_page": 12, "sort": "year", "sort_order": "desc",
@@ -168,10 +174,10 @@ def scout_artist(name: str, mbid: str, get, pause=lambda: None) -> dict:
             return finding
         finding["indexed_rows"] = len(hints)
         finding["exact_title_matches"] = sum(
-            normalized(hint["title"]) in known for hint in hints)
+            comparable_title(hint["title"], name) in known for hint in hints)
         finding["candidate_index_hints"] = [
             {**hint, "assessment": "index_title_not_exact_mb_group_title"}
-            for hint in hints if normalized(hint["title"]) not in known
+            for hint in hints if comparable_title(hint["title"], name) not in known
         ]
         finding["status"] = "index_compared_not_adjudicated"
     except (HTTPError, URLError, TimeoutError, OSError):
