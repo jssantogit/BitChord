@@ -28,6 +28,11 @@ object GlobalMotionPolicy {
     fun indeterminateRefreshEnabled(refreshing: Boolean, reduced: Boolean): Boolean =
         refreshing && !reduced
 
+    /** Feedback follows the finger only when animation is permitted. */
+    fun refreshPuckRotationDegrees(pullFraction: Float, reduced: Boolean): Float =
+        if (reduced || !pullFraction.isFinite()) 0f
+        else pullFraction.coerceIn(0f, 2f) * 180f
+
     /**
      * Only a finished, actual refresh can retain the puck during the
      * optional 400ms exit. A drag that never triggered refresh must not
