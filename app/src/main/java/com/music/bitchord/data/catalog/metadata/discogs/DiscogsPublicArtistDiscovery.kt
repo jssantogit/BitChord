@@ -108,7 +108,14 @@ internal object DiscogsPublicArtistParsing {
                 ?.takeIf { it in 1..999_999_999_999L } ?: continue
             val title = (row["title"] as? JsonPrimitive)?.contentOrNull
                 ?.takeIf { it.length in 1..240 }.orEmpty()
-            results[kind to id] = DiscogsArtistIndexEntry(kind, id, title)
+            val identity = kind to id
+            // A repeated index row must not erase a usable title. A later
+            // named row may enrich an earlier title-less row, but neither
+            // creates a second candidate nor changes the source identity.
+            val existing = results[identity]
+            if (existing == null || (existing.title.isBlank() && title.isNotBlank())) {
+                results[identity] = DiscogsArtistIndexEntry(kind, id, title)
+            }
         }
         return DiscogsArtistIndexPage(results.values.take(12), pages)
     }
