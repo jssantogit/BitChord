@@ -11,6 +11,7 @@ class PlaylistEditorIconsTest {
         val native = listOf(
             PlaylistEditorIcons.Back, PlaylistEditorIcons.Close,
             PlaylistEditorIcons.Filters, PlaylistEditorIcons.Delete,
+            PlaylistEditorIcons.Edit,
             PlaylistEditorIcons.ChevronUp,
             PlaylistEditorIcons.ChevronDown, PlaylistEditorIcons.Calendar,
             PlaylistEditorIcons.Audio, PlaylistEditorIcons.Lock,
