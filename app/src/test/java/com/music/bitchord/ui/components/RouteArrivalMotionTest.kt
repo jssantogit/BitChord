@@ -20,6 +20,9 @@ class RouteArrivalMotionTest {
         assertTrue(shouldAnimateRouteArrival("picker", "create", reduced = false))
         assertTrue(shouldAnimateRouteArrival("wizard:IDENTITY", "wizard:SONGS", reduced = false))
         assertTrue(shouldAnimateRouteArrival("wizard:REVIEW", "wizard:SONGS", reduced = false))
+        assertTrue(shouldAnimateRouteArrival("library:ALBUMS:shelf", "library:ALBUMS:album-id", reduced = false))
+        assertTrue(shouldAnimateRouteArrival("library:ALBUMS:album-id", "library:ALBUMS:shelf", reduced = false))
+        assertFalse(shouldAnimateRouteArrival("library:ARTISTS:shelf", "library:ARTISTS:shelf", reduced = false))
         assertFalse(shouldAnimateRouteArrival("create", "create", reduced = false))
         assertFalse(shouldAnimateRouteArrival("picker", "create", reduced = true))
     }
