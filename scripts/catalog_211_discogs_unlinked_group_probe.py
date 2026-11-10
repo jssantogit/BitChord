@@ -113,6 +113,23 @@ def group_page(payload: dict, group: str) -> tuple[list[dict], str]:
             return [], "release_group_identity_conflict"
     return rows, "complete_group_browse"
 
+def same_year_alternatives(
+    rows: list[dict], year: object, reference_mbid: str,
+) -> list[str]:
+    """Inspect distinct alternatives before repeating the selected MB edition."""
+    if type(year) is not int or not 1800 <= year <= 2200:
+        return []
+    candidates = [
+        row["id"] for row in rows
+        if row.get("status") == "Official" and
+        isinstance(row.get("date"), str) and
+        row["date"][:4] == str(year)
+    ]
+    return sorted(candidates, key=lambda mbid: (
+        mbid == reference_mbid, mbid,
+    ))[:MAX_DETAILS]
+
+
 def investigate(case: dict, get) -> dict:
     result = {**case, "status": "source_unavailable", "group_browse_count": None,
               "discogs_has_valid_barcode": False, "matching_barcode_release_ids": [],
@@ -149,14 +166,9 @@ def investigate(case: dict, get) -> dict:
         else:
             # Same release year and Official status are only weak evidence.
             # This fallback is NOT eligible for Verified, even if tracks match.
-            year = discogs.get("year")
-            year = year if type(year) is int and 1800 <= year <= 2200 else None
-            candidates = [
-                r["id"] for r in rows if year is not None and
-                r.get("status") == "Official" and
-                isinstance(r.get("date"), str) and
-                r["date"][:4] == str(year)
-            ][:MAX_DETAILS]
+            candidates = same_year_alternatives(
+                rows, discogs.get("year"), case["reference_musicbrainz_release_mbid"],
+            )
             result["selection_basis"] = "same_year_official_content_only"
         if not candidates:
             result["status"] = "no_same_year_official_candidate_in_complete_group_index"

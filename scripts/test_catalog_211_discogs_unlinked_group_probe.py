@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 from catalog_211_discogs_unlinked_group_probe import (
     barcode, selected, group_page, investigate, observe, MAX_REQUESTS,
+    same_year_alternatives,
 )
 
 GROUP = "4e219d4e-c5e0-4ed9-acec-b948c7319b37"
@@ -167,6 +168,22 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
         self.assertEqual("year_only_content_candidates_not_verified", row["status"])
         self.assertEqual("same_year_official_content_only", row["selection_basis"])
         self.assertFalse(row["candidates"][0]["comparison"]["barcode_identical_on_both"])
+
+    def test_non_seed_official_year_alternatives_have_priority(self):
+        rows = [
+            {"id": RELEASE, "status": "Official", "date": "2024-01-01"},
+            {"id": ALT, "status": "Official", "date": "2024-12-01"},
+            {"id": "00000000-0000-4000-8000-000000000020",
+             "status": "Official", "date": "2024-04-15"},
+            {"id": "00000000-0000-4000-8000-000000000021",
+             "status": "Bootleg", "date": "2024-07-01"},
+        ]
+        picked = same_year_alternatives(rows, 2024, RELEASE)
+        self.assertEqual(2, len(picked))
+        self.assertNotIn(RELEASE, picked)
+        self.assertIn(ALT, picked)
+        self.assertEqual([], same_year_alternatives(rows, None, RELEASE))
+        self.assertEqual([], same_year_alternatives(rows, 2025, RELEASE))
 
     def test_checked_in_b_samples_are_joined_to_exact_control_pairs(self):
         m = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
