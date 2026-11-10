@@ -1,7 +1,7 @@
 package com.music.bitchord.ui.components
 
 import android.app.Application
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -101,19 +101,21 @@ class GlobalAppleTopBarChromeTest {
     @Test fun unavailableSecondaryActionsRemainDisabledWithSharedSurface() {
         compose.setContent {
             BitChordTheme {
-                CircleIconButton(
-                    icon = Icons.Rounded.Search,
-                    contentDescription = "Unavailable circle",
-                    onClick = {},
-                    enabled = false,
-                )
-                ActionPill(
-                    icon = Icons.Rounded.Search,
-                    label = "Unavailable labeled action",
-                    onClick = {},
-                    filled = false,
-                    enabled = false,
-                )
+                Row {
+                    CircleIconButton(
+                        icon = Icons.Rounded.Search,
+                        contentDescription = "Unavailable circle",
+                        onClick = {},
+                        enabled = false,
+                    )
+                    ActionPill(
+                        icon = Icons.Rounded.Search,
+                        label = "Unavailable labeled action",
+                        onClick = {},
+                        filled = false,
+                        enabled = false,
+                    )
+                }
             }
         }
         compose.onNodeWithContentDescription("Unavailable circle").assertIsNotEnabled()
