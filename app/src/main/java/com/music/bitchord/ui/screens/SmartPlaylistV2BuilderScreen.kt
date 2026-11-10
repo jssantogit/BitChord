@@ -1188,15 +1188,15 @@ internal fun SmartPlaylistV2BuilderScreen(
                 if (filtersFailure) {
                     Text("Não foi possível ler os filtros salvos.",
                         color = MaterialTheme.colorScheme.error)
-                } else if (savedFilters.isEmpty()) {
-                    SettingsGroupSurface {
-                        SettingsRow(
-                            title = "Nenhum filtro salvo",
-                            subtitle = "Crie um filtro para reutilizar suas regras.",
-                            reserveIconSpace = false,
-                            trailing = {},
-                        )
-                    }
+                }
+            }
+            if (!filtersFailure && savedFilters.isEmpty()) {
+                item(key = "v2-saved-filter-empty-state") {
+                    PlaylistManagerEmptyState(
+                        title = "Nenhum filtro salvo",
+                        message = "Guarde regras para aplicá-las em outras playlists.",
+                        icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Filters,
+                    )
                 }
             }
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
@@ -1264,9 +1264,18 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             if (manageTab == SmartPlaylistManageTab.PLAYLISTS) {
             item(key = "v2-saved-title") {
-                Text("Playlists avançadas salvas", style = MaterialTheme.typography.titleMedium)
-                if (savedFailure) Text("Não foi possível carregar as definições")
-                else if (saved.isEmpty()) Text("Nenhuma playlist avançada salva")
+                Text("Playlists inteligentes", style = MaterialTheme.typography.titleMedium)
+                if (savedFailure) Text("Não foi possível carregar as definições",
+                    color = MaterialTheme.colorScheme.error)
+            }
+            if (!savedFailure && saved.isEmpty()) {
+                item(key = "v2-saved-smart-empty-state") {
+                    PlaylistManagerEmptyState(
+                        title = "Nenhuma playlist inteligente",
+                        message = "Crie uma playlist com regras para vê-la aqui.",
+                        icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Music,
+                    )
+                }
             }
             items(saved, key = { "v2-saved-" + it.id }) { item ->
                 var more by remember(item.id) { mutableStateOf(false) }
@@ -1342,6 +1351,15 @@ internal fun SmartPlaylistV2BuilderScreen(
                 }
                 if (legacyFailure) Text("Não foi possível carregar as playlists clássicas",
                     color = MaterialTheme.colorScheme.error)
+            }
+            if (!legacyFailure && legacySaved.isEmpty()) {
+                item(key = "v2-classic-empty-state") {
+                    PlaylistManagerEmptyState(
+                        title = "Nenhuma playlist clássica",
+                        message = "As playlists do formato anterior aparecerão aqui.",
+                        icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Library,
+                    )
+                }
             }
             items(legacySaved, key = { "v2-classic-" + it.id }) { original ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
