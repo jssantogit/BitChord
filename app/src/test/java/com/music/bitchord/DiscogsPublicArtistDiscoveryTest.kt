@@ -53,6 +53,21 @@ class DiscogsPublicArtistDiscoveryTest {
             """{"pagination":{"page":1,"pages":3},"releases":null}""", 1))
     }
 
+    @Test fun duplicatePublicIndexIdKeepsFirstNamedTitleOrEnrichesEmptyTitle() {
+        val page = DiscogsPublicArtistParsing.page("""
+            {"pagination":{"page":1,"pages":1},"releases":[
+              {"id":50,"type":"master","role":"Main","title":""},
+              {"id":50,"type":"master","role":"Main","title":"Named Master"},
+              {"id":50,"type":"master","role":"Main","title":""},
+              {"id":60,"type":"release","role":"Main","title":"First Name"},
+              {"id":60,"type":"release","role":"Main","title":"Other Name"}
+            ]}""", 1)
+        assertEquals(listOf(
+            DiscogsArtistIndexEntry(DiscogsKind.MASTER, 50, "Named Master"),
+            DiscogsArtistIndexEntry(DiscogsKind.RELEASE, 60, "First Name"),
+        ), page?.entries)
+    }
+
     @Test fun anonymousLinkedArtistCanRecoverTypedMetadataWithoutSearchToken() = runBlocking {
         val requested = mutableListOf<Int>()
         val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
