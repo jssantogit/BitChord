@@ -1173,25 +1173,28 @@ internal fun SmartPlaylistV2BuilderScreen(
                     ) {
             if (manageTab == SmartPlaylistManageTab.FILTERS) {
             item(key = "v2-saved-filter-heading") {
-                Text("Seus filtros", style = MaterialTheme.typography.titleMedium)
-                Text("Filtros guardam somente regras. Aplicar copia as regras; não vincula alterações futuras.",
-                    style = MaterialTheme.typography.bodySmall)
-                PlaylistWizardSecondaryAction(
-                    label = "Criar filtro",
-                    onClick = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Text("Seus filtros", style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = {
                         requestEditorDestination(PendingEditorNavigation(
                             "", EditorDestination.CREATE_FILTER,
                         ))
-                    },
-                )
+                    }) { Text("Criar filtro") }
+                }
                 if (filtersFailure) {
-                    Text("Não foi possível ler os filtros salvos.")
+                    Text("Não foi possível ler os filtros salvos.",
+                        color = MaterialTheme.colorScheme.error)
                 } else if (savedFilters.isEmpty()) {
                     SettingsGroupSurface {
                         SettingsRow(
                             title = "Nenhum filtro salvo",
-                            subtitle = "Use Criar filtro acima para configurar e guardar suas primeiras regras.",
+                            subtitle = "Crie um filtro para reutilizar suas regras.",
                             reserveIconSpace = false,
+                            trailing = {},
                         )
                     }
                 }
@@ -1329,14 +1332,16 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             if (manageTab == SmartPlaylistManageTab.CLASSIC) {
             item(key = "v2-classic-heading") {
-                PlaylistWizardSecondaryAction(
-                    label = "Abrir editor clássico",
-                    onClick = onClassic,
-                )
-                Text("Playlists clássicas", style = MaterialTheme.typography.titleMedium)
-                Text("Você pode converter uma cópia sem alterar a playlist original.",
-                    style = MaterialTheme.typography.bodySmall)
-                if (legacyFailure) Text("Não foi possível carregar as playlists clássicas")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                ) {
+                    Text("Playlists clássicas", style = MaterialTheme.typography.titleMedium)
+                    TextButton(onClick = onClassic) { Text("Editor clássico") }
+                }
+                if (legacyFailure) Text("Não foi possível carregar as playlists clássicas",
+                    color = MaterialTheme.colorScheme.error)
             }
             items(legacySaved, key = { "v2-classic-" + it.id }) { original ->
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
