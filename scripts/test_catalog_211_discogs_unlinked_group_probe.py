@@ -261,6 +261,38 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
         self.assertEqual("barcode_candidates_inspected_not_verified",
                          report["findings"][0]["status"])
 
+    def test_same_year_exact_label_catalog_ranks_a_later_musicbrainz_release_first(self):
+        late = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        early = "00000000-0000-4000-8000-000000000002"
+        rows = [
+            {"id": early, "status": "Official", "date": "2026-04-13",
+             "label-info": [{"label": {"name": "Other Company"},
+                             "catalog-number": "BHE0779"}]},
+            {"id": late, "status": "Official", "date": "2026-04-13",
+             "label-info": [{"label": {"name": "BIGHIT MUSIC"},
+                             "catalog-number": "BHE0779"}]},
+            {"id": RELEASE, "status": "Official", "date": "2026-04-13"},
+        ]
+        discogs = {"labels": [{"name": "bighit music", "catno": "BHE0779"}]}
+        chosen = same_year_alternatives(rows, 2026, RELEASE, discogs)
+        self.assertEqual(late, chosen[0])
+        self.assertEqual(2, len(chosen))
+
+    def test_catalog_number_without_matching_label_does_not_take_precedence(self):
+        late = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        early = "00000000-0000-4000-8000-000000000002"
+        rows = [
+            {"id": late, "status": "Official", "date": "2026-04-13",
+             "label-info": [{"label": {"name": "Other Company"},
+                             "catalog-number": "BHE0779"}]},
+            {"id": early, "status": "Official", "date": "2026-04-13"},
+        ]
+        chosen = same_year_alternatives(
+            rows, 2026, RELEASE,
+            {"labels": [{"name": "BIGHIT MUSIC", "catno": "BHE0779"}]},
+        )
+        self.assertEqual([early, late], chosen)
+
     def test_checked_in_b_samples_are_joined_to_exact_control_pairs(self):
         m = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
         p = json.loads(Path("docs/plans/catalog-211-discogs-edition-pairs.json").read_text())
