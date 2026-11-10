@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
@@ -369,6 +370,7 @@ fun AppleMusicBottomBar(
  * dock modifiers retain swipe-to-expand/skip and the player's artwork landing
  * without altering playback, queue, or player-sheet state.
  */
+@OptIn(ExperimentalAnimationApi::class)
 @Composable
 fun AppleMusicMiniPlayer(
     song: Song,
