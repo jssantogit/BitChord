@@ -455,6 +455,14 @@ fun AppleMusicMiniPlayer(
                 onBlocked = onBlockedControl,
                 reduceMotion = reduceMotion,
                 gestureIdentity = trackIdentity,
+                onHorizontalCancel = {
+                    // Cancellation has no release animation: the drag belongs
+                    // to a queue entry that may already have disappeared.
+                    settleJob[0]?.cancel()
+                    swipeActive.value = false
+                    swipeDistance.floatValue = 0f
+                    settleJob[0] = settleScope.launch { swipeSettle.snapTo(0f) }
+                },
                 onHorizontalSwipe = { distancePx, active ->
                     if (active) {
                         if (!swipeActive.value) {
