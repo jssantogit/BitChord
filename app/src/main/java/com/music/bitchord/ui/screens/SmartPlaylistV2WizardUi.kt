@@ -542,6 +542,15 @@ internal fun SmartPlaylistV2WizardUi(
         }
     }
 
+    // The wizard keeps a stationary toolbar and primary action while its
+    // actual step content enters. No second LazyColumn is kept alive, so
+    // keyboard focus, selections and scroll state retain single ownership.
+    val wizardStepArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
+        routeKey = "wizard:${page.name}",
+        reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current,
+        forward = page != WizardStep.EDIT && page != WizardStep.IDENTITY,
+    )
+
     // Do not mix the editor with the app's own scrollable library screen.
     // The caller hosts this in a full-width Dialog over the library tab bar.
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
@@ -574,6 +583,7 @@ internal fun SmartPlaylistV2WizardUi(
             LazyColumn(
                 state = pageListState,
                 modifier = Modifier.weight(1f).fillMaxWidth()
+                    .then(wizardStepArrival)
                     .testTag("smart-playlist-wizard-list"),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(
                     start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 28.dp,
