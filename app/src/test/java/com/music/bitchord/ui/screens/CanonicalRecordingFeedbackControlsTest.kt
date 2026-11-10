@@ -202,6 +202,42 @@ class CanonicalRecordingFeedbackControlsTest {
         compose.runOnIdle { assertEquals(listOf(4.0), values) }
     }
 
+    @Test fun changedRatingAsksBeforeDiscardingAndNeverWritesOnCancellation() {
+        val values = mutableListOf<Double>()
+        var dismissals = 0
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 3.0,
+                    onSave = { values += it },
+                    onDismiss = { dismissals++ },
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("4 stars").performClick()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Discard changes?").assertIsDisplayed()
+        compose.runOnIdle {
+            assertEquals(0, dismissals)
+            assertEquals(emptyList<Double>(), values)
+        }
+        compose.onNodeWithText("Keep editing").performClick()
+        compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Discard").performClick()
+        compose.runOnIdle {
+            assertEquals(1, dismissals)
+            assertEquals(emptyList<Double>(), values)
+        }
+    }
+
+    @Test fun ratingActionUsesTheExactPlayerOutlineVector() {
+        assertEquals(
+            com.music.bitchord.ui.player.AppleQueueVectors.Favorite,
+            ratingActionIcon(),
+        )
+    }
+
     @Test fun latestRoomScoreIsPreselectedWhenTheUserHasNotEditedAnything() {
         val incoming = androidx.compose.runtime.mutableStateOf<Double?>(null)
         compose.setContent {
