@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.sp
  * Bitchord exception. am-descomp's 28sp Title1 describes Library *details*,
  * not this landing title; never conflate the two.
  */
-internal object AppleTextRoles {
+object AppleTextRoles {
     fun libraryLandingTitle(base: TextStyle): TextStyle =
         base.copy(fontSize = 36.sp, fontWeight = FontWeight.W700)
 
