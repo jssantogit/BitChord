@@ -25,6 +25,9 @@ internal data class RouteArrivalFrame(val alpha: Float, val translationDp: Float
 
 internal fun routeArrivalFrame(progress: Float, forward: Boolean): RouteArrivalFrame {
     val p = if (progress.isFinite()) progress.coerceIn(0f, 1f) else 1f
+    // +0 and -0 compare differently in a Float-backed data class. At rest
+    // there must be one canonical frame regardless of entry direction.
+    if (p == 1f) return RouteArrivalFrame(alpha = 1f, translationDp = 0f)
     return RouteArrivalFrame(
         alpha = 0.96f + 0.04f * p,
         translationDp = (if (forward) 1f else -1f) * 12f * (1f - p),
