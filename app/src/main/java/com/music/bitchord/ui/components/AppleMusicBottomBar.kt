@@ -453,6 +453,7 @@ fun AppleMusicMiniPlayer(
                 },
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
+                reduceMotion = reduceMotion,
                 gestureIdentity = trackIdentity,
                 onHorizontalSwipe = { distancePx, active ->
                     if (active) {

@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -174,6 +175,10 @@ private fun pullLift(pulled: Float, ease: Float): Float =
         PULL_LIFT_RATE * 2f * ease * (sqrt(1f + pulled / ease) - 1f)
     }
 
+/** Preserve pull dispatch while suppressing elastic visual motion. */
+internal fun miniPlayerLiftForMotion(pulled: Float, ease: Float, reduced: Boolean): Float =
+    if (reduced) 0f else pullLift(pulled, ease)
+
 /**
  * Pulling the mini player up into the full player, the way the full player is
  * pulled back down into it: the player follows the finger the whole way, and
@@ -216,6 +221,8 @@ internal fun Modifier.miniPlayerGestures(
     /** Listening in a party whose host holds the controls. Swipes say so instead of skipping. */
     locked: Boolean = false,
     onBlocked: () -> Unit = {},
+    /** Turns off the mini's own elastic lift and settle, not sheet drag input. */
+    reduceMotion: Boolean = false,
     /**
      * Stable queue/media identity. An actual track replacement cancels any
      * still-held swipe; updated metadata for the same entry must not.
@@ -234,12 +241,19 @@ internal fun Modifier.miniPlayerGestures(
     val currentOnPrevious by rememberUpdatedState(onPrevious)
     val currentLocked by rememberUpdatedState(locked)
     val currentOnBlocked by rememberUpdatedState(onBlocked)
+    val currentReduceMotion by rememberUpdatedState(reduceMotion)
     val currentOnHorizontalSwipe by rememberUpdatedState(onHorizontalSwipe)
     val scope = rememberCoroutineScope()
     // Read at draw only, in the layer below: a pull moves the bar without
     // recomposing it.
     val lift = remember { mutableFloatStateOf(0f) }
     val settle = remember { arrayOfNulls<Job>(1) }
+    LaunchedEffect(reduceMotion) {
+        if (reduceMotion) {
+            settle[0]?.cancel()
+            lift.floatValue = 0f
+        }
+    }
     return pointerInput(gestureIdentity) {
         val trackThreshold = TRACK_SWIPE_THRESHOLD.toPx()
         val liftEase = PULL_LIFT_EASE.toPx()
@@ -305,7 +319,7 @@ internal fun Modifier.miniPlayerGestures(
                     tracker.addPointerInputChange(change)
                     pulled -= delta
                     target.drag(delta)
-                    lift.floatValue = pullLift(pulled, liftEase)
+                    lift.floatValue = miniPlayerLiftForMotion(pulled, liftEase, currentReduceMotion)
                 }
             } finally {
                 // A queue change restarts pointerInput. Cancellation must
@@ -317,16 +331,20 @@ internal fun Modifier.miniPlayerGestures(
                     } else 0f,
                 )
                 settle[0]?.cancel()
-                val from = lift.floatValue
-                settle[0] = scope.launch {
-                    animate(
-                        initialValue = from,
-                        targetValue = 0f,
-                        animationSpec = spring(
-                            dampingRatio = 0.65f,
-                            stiffness = Spring.StiffnessMediumLow,
-                        ),
-                    ) { value, _ -> lift.floatValue = value }
+                if (currentReduceMotion) {
+                    lift.floatValue = 0f
+                } else {
+                    val from = lift.floatValue
+                    settle[0] = scope.launch {
+                        animate(
+                            initialValue = from,
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = 0.65f,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        ) { value, _ -> lift.floatValue = value }
+                    }
                 }
             }
         }
@@ -406,6 +424,7 @@ fun MiniPlayer(
                 },
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
+                reduceMotion = reduceMotion,
                 gestureIdentity = appleMiniPlayerContentKey(song),
             )
             .clip(shape)

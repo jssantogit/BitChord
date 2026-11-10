@@ -39,6 +39,14 @@ class AppleMusicChromeMotionPolicyTest {
     }
 
     @Test
+    fun reducedMotionDisablesMiniPullElasticDisplacementButNotGestureDispatch() {
+        assertEquals(0f, miniPlayerLiftForMotion(0f, 72f, reduced = false), 0.0001f)
+        assertEquals(0f, miniPlayerLiftForMotion(120f, 72f, reduced = true), 0.0001f)
+        assertEquals(0f, miniPlayerLiftForMotion(Float.POSITIVE_INFINITY, 72f, reduced = true), 0.0001f)
+        org.junit.Assert.assertTrue(miniPlayerLiftForMotion(120f, 72f, reduced = false) > 0f)
+    }
+
+    @Test
     fun miniplayerPressNeverScalesWhenReducedMotionIsEnabled() {
         assertEquals(0.9f, GlobalMotionPolicy.pressedScale(pressed = true, reduced = false, activeScale = 0.9f), 0.0001f)
         assertEquals(1f, GlobalMotionPolicy.pressedScale(pressed = true, reduced = true, activeScale = 0.9f), 0.0001f)

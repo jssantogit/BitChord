@@ -64,3 +64,10 @@ A alteração de chave de `pointerInput` por item da fila permite cancelar swipe
 O caminho vertical agora delimita o arrasto em `try/finally` e garante `target.release(0f)` no cancelamento, ou velocidade real quando o dedo termina normalmente; o settle visual é lançado pela corrotina de composição após a liberação. Assim, troca de faixa/saída do detector não mantém um pull órfão. O código mantém os mesmos parâmetros de spring e não altera o gesto/callback de expansão do player.
 
 Teste Robolectric Compose em `MiniPlayerGestureIdentityTest`: inicia pull vertical, troca a identidade da faixa antes de levantar o dedo e exige uma única liberação com velocidade zero. O teste reproduziria o bug em código anterior ao `finally`. Monitorar no dispositivo a trajetória da sheet sob troca de faixa durante o pull; nenhum efeito Apple novo foi presumido.
+
+
+## Sexta implementação — reduzir movimento também no pull vertical
+
+`miniPlayerGestures` tinha preferência de movimento reduzido nas camadas do miniplayer, mas seu próprio `lift` e spring vertical permaneciam sempre animados. O detector compartilhado agora recebe `reduceMotion` fornecido pelos três composables de miniplayer. A preferência é lida por `rememberUpdatedState` durante o gesto sem reiniciar `pointerInput`: com redução ativa o deslocamento visual é sempre 0, e a liberação da sheet continua a receber drag/release normalmente, porém o mini volta instantaneamente ao repouso. Se a preferência for ligada enquanto a spring está em andamento, a corrotina é cancelada e a barra volta a zero.
+
+O helper `miniPlayerLiftForMotion` permite testar matematicamente o mesmo cálculo normal/régua reduzida sem mudar a curva elástica já existente. Esta é uma correção de acessibilidade BitChord; não atribuímos ao Apple Music um comportamento não evidenciado.
