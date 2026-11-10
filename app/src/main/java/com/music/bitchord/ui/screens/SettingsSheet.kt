@@ -404,8 +404,17 @@ internal fun SettingsScreen(
         if (selectedSection != null) sectionScrollState.scrollTo(0)
     }
 
+    // Keep the category/home scroll states and real preference controls.
+    // Only the newly selected page's drawing moves a few dp on navigation;
+    // ordinary switch/search/scroll updates do not animate the whole list.
+    val routeArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
+        routeKey = "settings:${selectedSection?.name ?: "home"}",
+        reduceMotion = reduceAnimation,
+        forward = selectedSection != null,
+    )
     Column(
         modifier = modifier
+            .then(routeArrival)
             .fillMaxWidth()
             .verticalScroll(scrollState)
             .padding(contentPadding),
