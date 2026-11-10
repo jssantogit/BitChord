@@ -416,7 +416,7 @@ internal fun ArtworkPageBackButton(
 }
 
 /** One independently surfaced circular action on the Apple Library root/category chrome.
- * The normal grouped pill remains unchanged on every other route.
+ * The generic header also uses independent actions, with its separate 48dp role.
  */
 @Composable
 internal fun FloatingLibraryTopBarCircle(
@@ -549,7 +549,7 @@ internal fun ArtworkPageActions(
         val children = subcompose("actions", content).map { it.measure(childConstraints) }
         val diameter = circleSize.roundToPx()
         val gapPx = gap.roundToPx()
-        val minIconBounds = 40.dp.roundToPx()
+        val minIconBounds = AppleFloatingControlMetrics.libraryDiameter.roundToPx()
         val maxIconBounds = diameter + 4.dp.roundToPx()
         val surfaces = children.mapIndexed { index, child ->
             // Only genuine icon-sized slots receive a surface. Compact
