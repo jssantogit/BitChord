@@ -22,6 +22,28 @@ class AppleMusicChromeMotionPolicyTest {
     }
 
     @Test
+    fun reducedMotionKeepsNavigationIconAtUnitScaleWithoutDisablingTabSelection() {
+        for (selected in listOf(false, true)) {
+            for (pressed in listOf(false, true)) {
+                assertEquals(
+                    1f,
+                    appleMusicTabScaleTarget(
+                        enabled = true, selected = selected, pressed = pressed, reducedMotion = true,
+                    ),
+                    0.0001f,
+                )
+            }
+        }
+        assertEquals(
+            1f,
+            appleMusicTabScaleTarget(
+                enabled = false, selected = true, pressed = true, reducedMotion = true,
+            ),
+            0.0001f,
+        )
+    }
+
+    @Test
     fun loadingIndicatorRemainsVisibleButStaticWhenMotionIsReduced() {
         assertNull(miniPlayerStaticLoadingArc(reducedMotion = false))
         assertEquals(0.75f, miniPlayerStaticLoadingArc(reducedMotion = true)!!, 0.0001f)
