@@ -881,7 +881,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Revisar playlist").performClick()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Músicas selecionadas").assertExists()
-        compose.onNodeWithText("1 músicas na prévia").assertExists()
+        compose.onNodeWithText("1 música na prévia").assertExists()
         compose.onNodeWithText("Prévia atualizada após aplicar regras, limite e ordenação.")
             .assertDoesNotExist()
         compose.onAllNodesWithText("Reproduzir").assertCountEquals(0)
