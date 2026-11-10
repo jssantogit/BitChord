@@ -4858,6 +4858,7 @@ private fun BitChordApp(
                                 // Shared three-dot overflow opens a compact Settings
                                 // menu. Profile switching stays in Settings itself.
                                 onClick = { showSettings = true },
+                                hazeState = hazeState,
                             )
                         }
                         }
