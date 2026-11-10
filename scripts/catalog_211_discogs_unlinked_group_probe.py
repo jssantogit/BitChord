@@ -179,19 +179,26 @@ def group_page(payload: dict, group: str) -> tuple[list[dict], str]:
 
 def same_year_alternatives(
     rows: list[dict], year: object, reference_mbid: str,
+    discogs: dict | None = None,
 ) -> list[str]:
-    """Inspect distinct alternatives before repeating the selected MB edition."""
+    """Prioritize exact label+catalog pairs; same year stays *content only*."""
     if type(year) is not int or not 1800 <= year <= 2200:
         return []
     candidates = [
-        row["id"] for row in rows
+        row for row in rows
         if row.get("status") == "Official" and
         isinstance(row.get("date"), str) and
         row["date"][:4] == str(year)
     ]
-    return sorted(candidates, key=lambda mbid: (
-        mbid == reference_mbid, mbid,
-    ))[:MAX_DETAILS]
+    # No name guessing: the complete provider pair outranks chronological
+    # ambiguity; an isolated catalog number never receives this priority.
+    def rank(row: dict) -> tuple[bool, bool, str]:
+        exact_pair = (
+            bool(label_catalog_evidence(row, discogs)["matching_pairs"])
+            if isinstance(discogs, dict) else False
+        )
+        return (not exact_pair, row["id"] == reference_mbid, row["id"])
+    return [row["id"] for row in sorted(candidates, key=rank)[:MAX_DETAILS]]
 
 
 def investigate(case: dict, get) -> dict:
@@ -213,7 +220,8 @@ def investigate(case: dict, get) -> dict:
         # Missing UPC does not preclude a same-group, same-year content
         # comparison. It can never validate the same edition or pressing.
         url = "https://musicbrainz.org/ws/2/release/?" + urlencode({
-            "release-group": group, "fmt": "json", "limit": MAX_RELEASES, "offset": 0,
+            "release-group": group, "fmt": "json", "inc": "labels",
+            "limit": MAX_RELEASES, "offset": 0,
         })
         page = get(url)
         rows, status = group_page(page, group)
@@ -232,6 +240,7 @@ def investigate(case: dict, get) -> dict:
             # This fallback is NOT eligible for Verified, even if tracks match.
             candidates = same_year_alternatives(
                 rows, discogs.get("year"), case["reference_musicbrainz_release_mbid"],
+                discogs,
             )
             result["selection_basis"] = "same_year_official_content_only"
         if not candidates:
