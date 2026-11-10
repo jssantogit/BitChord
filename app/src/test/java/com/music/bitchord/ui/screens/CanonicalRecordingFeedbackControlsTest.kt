@@ -9,9 +9,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Radio
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -117,6 +119,44 @@ class CanonicalRecordingFeedbackControlsTest {
         compose.onNodeWithText("3.5 / 5").assertDoesNotExist()
         compose.onNodeWithText("— / 5").assertDoesNotExist()
         compose.onNodeWithText("Clear rating").assertDoesNotExist()
+    }
+
+    @Test fun editorRendersPlayerVectorStatesIncludingExactHalf() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 2.5,
+                    onSave = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("rating-editor-star-0-full").assertExists()
+        compose.onNodeWithTag("rating-editor-star-1-full").assertExists()
+        compose.onNodeWithTag("rating-editor-star-2-half").assertExists()
+        compose.onNodeWithTag("rating-editor-star-3-empty").assertExists()
+        compose.onNodeWithTag("rating-editor-star-4-empty").assertExists()
+        compose.onNodeWithContentDescription("4 stars").performClick()
+        compose.onNodeWithTag("rating-editor-star-3-full").assertExists()
+        compose.onNodeWithTag("rating-editor-star-4-empty").assertExists()
+    }
+
+    @Test fun loadingDisablesRatingChangesAndSaveButKeepsSelectionVisible() {
+        val values = mutableListOf<Double>()
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 3.5,
+                    onSave = { values += it },
+                    onDismiss = {},
+                    saving = true,
+                )
+            }
+        }
+        compose.onNodeWithTag("rating-editor-star-3-half").assertExists()
+        compose.onNodeWithTag("rating-editor-star-4-empty").assertExists()
+        compose.onNodeWithContentDescription("4 stars").assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(emptyList<Double>(), values) }
     }
 
     @Test fun editRatingUsesSameMenuTextAlignmentAsOtherActions() {
