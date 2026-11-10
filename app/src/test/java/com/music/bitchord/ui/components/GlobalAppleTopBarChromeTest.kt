@@ -64,6 +64,26 @@ class GlobalAppleTopBarChromeTest {
         compose.runOnIdle { assertTrue(enteredSettings) }
     }
 
+    @Test fun sharedOverflowRemainsMountedDuringCloseTransitionAndThenExits() {
+        var settingsOpened = 0
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            BitChordTheme {
+                TopBarAccountButton(account = null, onClick = { settingsOpened++ })
+            }
+        }
+        val res = RuntimeEnvironment.getApplication().resources
+        compose.onNodeWithContentDescription(res.getString(R.string.more)).performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("apple-root-settings-popup", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText(res.getString(R.string.settings)).performClick()
+        compose.runOnIdle { assertEquals(1, settingsOpened) }
+        // The popup used to disappear immediately as soon as expanded=false.
+        compose.onNodeWithTag("apple-root-settings-popup", useUnmergedTree = true).assertExists()
+        compose.mainClock.advanceTimeBy(350L)
+        compose.onNodeWithTag("apple-root-settings-popup", useUnmergedTree = true).assertDoesNotExist()
+    }
+
     @Test fun globalTopBarActionsHaveIndependentCircleSurfaces() {
         compose.setContent {
             BitChordTheme {
