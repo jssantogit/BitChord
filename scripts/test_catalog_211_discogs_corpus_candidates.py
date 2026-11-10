@@ -4,7 +4,7 @@ import unittest
 
 from catalog_211_discogs_corpus_candidates import (
     complete_mb_titles, discogs_artist_relation, public_index_hints,
-    scout_artist, normalized,
+    scout_artist, normalized, comparable_title,
 )
 
 MBID = "95663592-1447-4579-90f7-c94733476667"
@@ -45,9 +45,14 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
         self.assertEqual({"known", "another"}, complete_mb_titles(MBID, fetch))
         self.assertEqual(2, len(seen))
         self.assertEqual("the sin : vanish", normalized("THE SIN : VANISH"))
+        self.assertEqual("known", comparable_title("ENHYPEN - KNOWN", "ENHYPEN"))
         self.assertIsNone(complete_mb_titles(MBID, lambda _: {
             "release-group-offset": 0, "release-group-count": 2,
             "release-groups": [{"id": GROUP_A, "title": "Only One"}]
+        }))
+        self.assertIsNone(complete_mb_titles(MBID, lambda _: {
+            "release-group-count": 1,
+            "release-groups": [{"id": GROUP_A, "title": "Known"}]
         }))
         self.assertIsNone(complete_mb_titles(MBID, lambda _: {
             "release-group-offset": 0, "release-group-count": 301,
@@ -79,7 +84,7 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
                 return {"release-group-offset": 0, "release-group-count": 1,
                         "release-groups": [{"id": GROUP_A, "title": "Known"}]}
             return {"pagination": {"page": 1, "pages": 1}, "releases": [
-                {"id": 10, "type": "release", "role": "Main", "title": "Known"},
+                {"id": 10, "type": "release", "role": "Main", "title": "ENHYPEN - Known"},
                 {"id": 11, "type": "release", "role": "Main", "title": "Possible"},
             ]}
         result = scout_artist("ENHYPEN", MBID, fetch)
