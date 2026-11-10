@@ -451,8 +451,6 @@ internal fun AppleRootSettingsOverflow(
     onSettings: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val offsetPx = with(LocalDensity.current) { 38.dp.roundToPx() }
-    val shape = RoundedCornerShape(17.dp)
     Box {
         FloatingLibraryTopBarCircle(hazeState) {
             IconButton(onClick = { expanded = true }) {
@@ -463,39 +461,57 @@ internal fun AppleRootSettingsOverflow(
                 )
             }
         }
-        if (expanded) {
-            Popup(
-                alignment = Alignment.TopEnd,
-                offset = IntOffset(0, offsetPx),
-                onDismissRequest = { expanded = false },
-                properties = PopupProperties(focusable = true),
+        AppleSettingsPopup(
+            expanded = expanded,
+            hazeState = hazeState,
+            onDismiss = { expanded = false },
+            onSettings = {
+                expanded = false
+                onSettings()
+            },
+        )
+    }
+}
+
+/**
+ * One shared menu across root tabs and pushed screens: the same compact
+ * Settings action, not a per-screen fake account shortcut.
+ * The 180dp/17dp/38dp measurements are screenshot-calibrated Bitchord
+ * approximations; REA confirms popup content/placement class, not exact size.
+ */
+@Composable
+private fun AppleSettingsPopup(
+    expanded: Boolean,
+    hazeState: HazeState?,
+    onDismiss: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    if (!expanded) return
+    val offsetPx = with(LocalDensity.current) { 38.dp.roundToPx() }
+    Popup(
+        alignment = Alignment.TopEnd,
+        offset = IntOffset(0, offsetPx),
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true),
+    ) {
+        Box(
+            Modifier.width(180.dp)
+                .then(artworkPageSurface(shape = RoundedCornerShape(17.dp), hazeState = hazeState))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = .18f))
+                .testTag("apple-root-settings-popup"),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(52.dp)
+                    .clickable(onClick = onSettings)
+                    .testTag("apple-root-settings-item")
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier
-                        .width(180.dp)
-                        .then(artworkPageSurface(shape = shape, hazeState = hazeState))
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = .18f))
-                        .testTag("apple-root-settings-popup"),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .clickable {
-                                expanded = false
-                                onSettings()
-                            }
-                            .testTag("apple-root-settings-item")
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
+                Text(
+                    text = stringResource(R.string.settings),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
             }
         }
     }
@@ -597,16 +613,14 @@ private fun artworkPageSurface(
 }
 
 /**
- * The account affordance at the right end of the bar.
+ * Shared Settings overflow on every pushed screen and root outside the special
+ * Library chrome. Old account-photo entry is intentionally retired: ⋮ opens a
+ * small popup and Settings remains the existing destination. Account switching
+ * stays available from Settings, not by a hidden gesture on a different glyph.
  *
- * It is the signed-in Google account's own photo — the same one YouTube Music
- * shows there — and tapping it opens Settings, where the account lives. Signed
- * out, or before the account menu has come back, it falls back to a person
- * glyph on a filled circle so the tap target never disappears.
- *
- * The hairline ring is what keeps a photo with light edges from dissolving into
- * the bar's glass; it is the same one thumbnails elsewhere carry.
+ * Keep the legacy parameters for callers while the toolbar routes are unified.
  */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun TopBarAccountButton(
     account: Account?,
@@ -614,57 +628,28 @@ fun TopBarAccountButton(
     onSwipeProfile: ((forward: Boolean) -> Boolean)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val translation = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    // Wrapped in an IconButton so it keeps the 48dp target, the ripple and the
-    // spacing every other action in this bar has.
-    IconButton(
-        onClick = onClick,
-        modifier = modifier
-            .graphicsLayer { translationY = translation.value }
-            .pointerInput(onSwipeProfile) {
-                if (onSwipeProfile == null) return@pointerInput
-                var drag = 0f
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, amount -> change.consume(); drag += amount },
-                    onDragEnd = {
-                        if (kotlin.math.abs(drag) < 28f) return@detectVerticalDragGestures
-                        if (!onSwipeProfile.invoke(drag > 0f)) scope.launch {
-                            translation.snapTo(if (drag > 0f) 9f else -9f)
-                            translation.animateTo(0f, spring())
-                        }
-                    },
-                )
-            },
-    ) {
-        val photo = account?.thumbnailUrl
-        if (photo != null) {
-            AsyncImage(
-                model = photo,
-                contentDescription = stringResource(R.string.switch_account),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(AVATAR_SIZE)
-                    .clip(CircleShape)
-                    .thumbnailBorder(CircleShape),
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(48.dp).testTag("apple-global-more-options"),
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MoreVert,
+                contentDescription = stringResource(R.string.more),
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp),
             )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(AVATAR_SIZE)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .thumbnailBorder(CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.Person,
-                    contentDescription = stringResource(R.string.switch_account),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
         }
+        AppleSettingsPopup(
+            expanded = expanded,
+            hazeState = null,
+            onDismiss = { expanded = false },
+            onSettings = {
+                expanded = false
+                onClick()
+            },
+        )
     }
 }
 
