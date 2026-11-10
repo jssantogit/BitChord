@@ -640,6 +640,14 @@
     <string name="pause_countdown">%1$s until playback pauses</string>
     <string name="play_to_preview">Play something to fill in the preview.</string>
     <string name="playlist_name">Playlist name</string>
+    <string name="editor_discard_title">Discard changes?</string>
+    <string name="editor_discard_rating_body">Your new rating has not been saved.</string>
+    <string name="editor_discard_playlist_body">Your playlist changes have not been saved.</string>
+    <string name="editor_discard_confirm">Discard</string>
+    <string name="editor_keep_editing">Keep editing</string>
+    <string name="playlist_editor_name_required">Enter a playlist name.</string>
+    <string name="playlist_editor_name_too_long">Use at most 80 characters.</string>
+    <string name="playlist_editor_save_failed">Couldn\'t save the playlist. Try again.</string>
     <string name="presence">Presence</string>
     <string name="preview">Preview</string>
     <string name="prioritize_syllable_lyrics">Prioritize syllable lyrics</string>
