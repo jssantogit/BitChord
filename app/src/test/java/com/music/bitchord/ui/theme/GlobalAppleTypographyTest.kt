@@ -1,6 +1,10 @@
 package com.music.bitchord.ui.theme
 
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.runtime.Composable
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.text.TextStyle
+import com.music.bitchord.ui.components.AppleTextRoles
 import androidx.compose.ui.unit.sp
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -16,5 +20,20 @@ class GlobalAppleTypographyTest {
         assertEquals(17.sp, BitChordTypography.titleMedium.fontSize)
         assertEquals(17.sp, BitChordTypography.bodyLarge.fontSize)
         assertEquals(FontWeight.W700, BitChordTypography.headlineLarge.fontWeight)
+    }
+
+    @Test fun sharedTextRolesReuseTheGlobalThemeWithoutHardcodedDuplicatedInputs() {
+        val body = BitChordTypography.bodyMedium
+        val category = BitChordTypography.bodyLarge
+        // Ordinary fields and library category names must follow the one theme
+        // scale. The root Library title remains a deliberate 36sp role.
+        assertEquals(body, AppleTextRoles.formInput(body))
+        assertEquals(category, AppleTextRoles.categoryLabel(category))
+        assertEquals(36.sp, AppleTextRoles.libraryLandingTitle(
+            BitChordTypography.headlineLarge,
+        ).fontSize)
+        assertEquals(FontWeight.W700, AppleTextRoles.libraryLandingTitle(
+            BitChordTypography.headlineLarge,
+        ).fontWeight)
     }
 }
