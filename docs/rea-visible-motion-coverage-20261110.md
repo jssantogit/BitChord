@@ -24,6 +24,18 @@ reutilizar as superfícies existentes e respeitar Back, foco, IME, acessibilidad
 e redução de movimento; ele **não justifica** substituir componentes que já
 possuem comportamento nativo.
 
+## Experimento de validação da receita #4 — editor de avaliação (10/11/2026)
+
+Escopo: reconstrução **apenas da apresentação** de `CanonicalRecordingFeedbackPanel`, compartilhado por música, álbum, artista e seleção, conforme a [receita de escolha/avaliação](https://github.com/jssantogit/am-descomp/blob/bf8322cb24efc1d14ee0223e793eee0cce98f887/docs/design/new-surface-patterns.md). A receita não alega que este editor existe no Apple Music: o visual é uma **adaptação BitChord**.
+
+- Ícones: `sharedUi/.../components/AppleRatingStarGlyph.kt` reutiliza diretamente os **mesmos** `AppleQueueVectors.Favorite` e `AppleQueueVectors.Favorited` já usados pelo `PlayerRatingStar` do player expandido. A variante `HALF` recorta o preenchimento do *mesmo vetor* à metade da largura, sobre o vetor vazio; não emprega `Icons.Rounded.StarHalf`, raster/SVG de runtime ou novo traço de estrela.
+- Composição: superfície compartilhada `SettingsGroupSurface`, título centralizado, cinco slots de largura adaptativa com glifos de 36dp, botões de 46dp com raio 23dp; não cria menu paralelo nem troca de `Dialog` por `ModalBottomSheet`.
+- Fluxos: valores de 1 a 5 em passos de 0,5; metades esquerda/direita continuam clicáveis e descritas para acessibilidade; pré-seleção e chegada tardia do Room preservadas. Salvar é explícito, cancelar ou Back não escreve, e `saving` desativa entradas; falhas de gravação continuam informadas pela mesma mensagem. Não foi acrescentada opção de zerar.
+- Movimento: entrada do painel e pulso apenas da estrela tocada continuam condicionados a `LocalReduceAnimations`; nenhuma curva é atribuída ao aplicativo da Apple.
+- Regressão: `AppleRatingStarGlyphTest` exercita EMPTY/HALF/FULL, valores não finitos, limites de índice; `CanonicalRecordingFeedbackControlsTest` exercita ícones do novo editor, meia estrela e bloqueio de edição durante salvamento. Persistência `CanonicalRecordingFeedbackEditor` e alvos canônicos não foram alterados.
+
+Validação de código via CI da PR #212; *não* equivale a comparação de pixels em dispositivo ou smoke solicitado.
+
 ## Implementação visual BitChord — isolada na PR #212
 
 | Superfície | Anterior | Agora | Garantia |
