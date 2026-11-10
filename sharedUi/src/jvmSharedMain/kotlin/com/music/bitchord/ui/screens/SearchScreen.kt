@@ -5,6 +5,8 @@ import androidx.compose.ui.unit.Dp
 import com.music.bitchord.sharedui.resources.*
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -87,6 +89,8 @@ import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.ui.components.SongRow
 import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import com.music.bitchord.ui.components.SearchPlayingBars
+import com.music.bitchord.ui.LocalReduceAnimations
+import com.music.bitchord.ui.components.GlobalMotionPolicy
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.components.songListSkeleton
 import com.music.bitchord.ui.haptics.Haptic
@@ -1721,6 +1725,8 @@ private fun SearchFilterTabs(
     available: List<SearchFilter> = SearchFilter.entries,
 ) {
     val haptics = rememberHaptics()
+    val reduceMotion = LocalReduceAnimations.current
+    val selectionDuration = GlobalMotionPolicy.duration(GlobalMotionPolicy.selectionTintMillis, reduceMotion)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1735,6 +1741,18 @@ private fun SearchFilterTabs(
         available.forEach { entry ->
             val selected = entry == filter
             if (appleStyle) {
+                // Bitchord-only tint feedback. AM-DECOMP verifies selection
+                // colors but does not establish a timing for the indicator.
+                val textTint by animateColorAsState(
+                    targetValue = if (selected) AppleSearchBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                    animationSpec = tween(durationMillis = selectionDuration),
+                    label = "appleResultTabTextTint",
+                )
+                val lineTint by animateColorAsState(
+                    targetValue = if (selected) AppleSearchBlue else Color.Transparent,
+                    animationSpec = tween(durationMillis = selectionDuration),
+                    label = "appleResultTabUnderlineTint",
+                )
                 Column(
                     // Horizontal scrolling supplies unbounded width; use intrinsic
                     // label width so the fillMaxWidth bar cannot collapse.
@@ -1754,8 +1772,7 @@ private fun SearchFilterTabs(
                             SearchFilter.PLAYLISTS -> stringResource(Res.string.playlists)
                         }).uppercase(Locale.getDefault()),
                         style = MaterialTheme.typography.labelLarge,
-                        color = if (selected) AppleSearchBlue
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = textTint,
                         maxLines = 1,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
                     )
@@ -1763,7 +1780,7 @@ private fun SearchFilterTabs(
                         Modifier.fillMaxWidth()
                             .height(3.dp)
                             .testTag(if (selected) "apple-selected-result-indicator" else "apple-result-indicator")
-                            .background(if (selected) AppleSearchBlue else Color.Transparent),
+                            .background(lineTint),
                     )
                 }
             } else Box(
@@ -1812,6 +1829,8 @@ fun AppleSearchOriginTabs(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
 ) {
+    val reduceMotion = LocalReduceAnimations.current
+    val selectionDuration = GlobalMotionPolicy.duration(GlobalMotionPolicy.selectionTintMillis, reduceMotion)
     Row(
         modifier = Modifier.fillMaxWidth().then(
             if (options.size <= 2) Modifier else Modifier.horizontalScroll(rememberScrollState()),
@@ -1821,6 +1840,16 @@ fun AppleSearchOriginTabs(
     ) {
         options.forEachIndexed { index, label ->
             val selected = index == selectedIndex
+            val textTint by animateColorAsState(
+                targetValue = if (selected) AppleSearchBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = tween(durationMillis = selectionDuration),
+                label = "appleOriginTabTextTint",
+            )
+            val lineTint by animateColorAsState(
+                targetValue = if (selected) AppleSearchBlue else Color.Transparent,
+                animationSpec = tween(durationMillis = selectionDuration),
+                label = "appleOriginTabUnderlineTint",
+            )
             Column(
                 modifier = Modifier
                     .then(if (options.size <= 2) Modifier.weight(1f) else Modifier.width(IntrinsicSize.Max))
@@ -1830,8 +1859,7 @@ fun AppleSearchOriginTabs(
                 Text(
                     text = label.uppercase(Locale.getDefault()),
                     style = MaterialTheme.typography.titleSmall,
-                    color = if (selected) AppleSearchBlue
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = textTint,
                     maxLines = 1,
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
                 )
@@ -1839,7 +1867,7 @@ fun AppleSearchOriginTabs(
                     Modifier.fillMaxWidth()
                         .height(3.dp)
                         .testTag(if (selected) "apple-selected-origin-indicator" else "apple-origin-indicator")
-                        .background(if (selected) AppleSearchBlue else Color.Transparent),
+                        .background(lineTint),
                 )
             }
         }

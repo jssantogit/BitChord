@@ -146,7 +146,7 @@ internal fun appleMiniPlayerTextForWidthDp(availableWidthDp: Int): AppleMiniPlay
  * NOT establish tab-selection, transport or mini-player crossfade durations.
  */
 internal object AppleMusicChromeMotion {
-    const val tabTintMillis = 180
+    const val tabTintMillis = GlobalMotionPolicy.selectionTintMillis
     const val trackCrossfadeMillis = 220
     const val transportCrossfadeMillis = 150
     const val miniAppearMillis = 220

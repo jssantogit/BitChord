@@ -29,6 +29,19 @@ class GlobalMotionPolicyTest {
         assertEquals(1f, GlobalMotionPolicy.pressedScale(pressed = false, reduced = false), 0.0001f)
     }
 
+    @Test fun searchSelectionSharesDockTintTimingAndAlwaysObeysReduction() {
+        assertEquals(180, GlobalMotionPolicy.selectionTintMillis)
+        assertEquals(180, GlobalMotionPolicy.duration(GlobalMotionPolicy.selectionTintMillis, reduced = false))
+        assertEquals(0, GlobalMotionPolicy.duration(GlobalMotionPolicy.selectionTintMillis, reduced = true))
+    }
+
+    @Test fun refreshSpinnerOnlyRunsWhenRefreshingAndAnimationAllowed() {
+        assertTrue(GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing = true, reduced = false))
+        assertFalse(GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing = true, reduced = true))
+        assertFalse(GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing = false, reduced = false))
+        assertFalse(GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing = false, reduced = true))
+    }
+
     @Test fun invalidDurationIsRejectedRatherThanSilentlyAnimatingBackwards() {
         assertThrows(IllegalArgumentException::class.java) {
             GlobalMotionPolicy.duration(-1, reduced = false)

@@ -3,6 +3,11 @@ package com.music.bitchord.ui.screens
 import android.app.Application
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import com.music.bitchord.ui.LocalReduceAnimations
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -149,6 +154,25 @@ class CanonicalExploreGridTest {
         val indicator = compose.onNodeWithTag("apple-selected-result-indicator", useUnmergedTree = true)
             .fetchSemanticsNode()
         assertTrue("Submitted result underline must have width", indicator.boundsInRoot.width > 1f)
+    }
+
+    @Test fun reducedMotionSourceTabsStillChangeSelectionWithoutAnimation() {
+        compose.setContent {
+            var selected by androidx.compose.runtime.remember { mutableIntStateOf(0) }
+            CompositionLocalProvider(LocalReduceAnimations provides true) {
+                MaterialTheme {
+                    AppleSearchOriginTabs(
+                        options = listOf("Catálogo", "Local", "Servidor"),
+                        selectedIndex = selected,
+                        onSelect = { selected = it },
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText("LOCAL").performClick()
+        compose.onNodeWithTag("apple-selected-origin-indicator", useUnmergedTree = true).assertExists()
+        compose.onNodeWithText("SERVIDOR").performClick()
+        compose.onNodeWithTag("apple-selected-origin-indicator", useUnmergedTree = true).assertExists()
     }
 
     @Test fun threeOrMoreSearchSourcesKeepTheirSelectedUnderline() {

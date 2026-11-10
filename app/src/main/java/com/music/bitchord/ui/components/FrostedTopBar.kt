@@ -379,7 +379,7 @@ fun FrostedTopBar(
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-        RefreshPuck(refreshing = refreshing, pullFraction = pullFraction)
+        RefreshPuck(refreshing = refreshing, pullFraction = pullFraction, reduceMotion = reduceMotion)
     }
 }
 
@@ -698,7 +698,12 @@ fun TopBarAccountButton(
  * the content without taking any touches from it.
  */
 @Composable
-private fun RefreshPuck(refreshing: Boolean, pullFraction: () -> Float, modifier: Modifier = Modifier) {
+private fun RefreshPuck(
+    refreshing: Boolean,
+    pullFraction: () -> Float,
+    reduceMotion: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val currentFraction by rememberUpdatedState(pullFraction)
     val pulling by remember { derivedStateOf { currentFraction() > 0f } }
     if (!refreshing && !pulling) return
@@ -731,7 +736,7 @@ private fun RefreshPuck(refreshing: Boolean, pullFraction: () -> Float, modifier
             contentAlignment = Alignment.Center,
         ) {
             val indicatorModifier = Modifier.size(22.dp)
-            if (refreshing) {
+            if (GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing, reduceMotion)) {
                 CircularProgressIndicator(
                     modifier = indicatorModifier,
                     color = MaterialTheme.colorScheme.primary,
@@ -740,7 +745,9 @@ private fun RefreshPuck(refreshing: Boolean, pullFraction: () -> Float, modifier
                 )
             } else {
                 CircularProgressIndicator(
-                    progress = { (currentFraction() * 0.8f).coerceIn(0f, 0.8f) },
+                    // When Reduced animations is on, show a fixed visible arc
+                    // while refreshing rather than an endlessly spinning one.
+                    progress = { if (refreshing) 0.8f else (currentFraction() * 0.8f).coerceIn(0f, 0.8f) },
                     modifier = indicatorModifier.graphicsLayer {
                         rotationZ = currentFraction().coerceIn(0f, 2f) * 180f
                     },

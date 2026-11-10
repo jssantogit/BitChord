@@ -27,3 +27,12 @@ Fonte principal: `jssantogit/am-descomp` branch `fase-3-investigacao-visual`, HE
 - Pendente: aplicar a saída de 400ms ao loader **somente em superfícies que provem ter aquele loader**, investigar condições de tokens de motion para outras superfícies, validar performance/estados Android. A issue #4 é a fonte das futuras animações **dos cards**.
 
 Sem gerar novo smoke. PR #209 não alterada; PR #212 continua isolada em draft. Não declarar paridade pixel/motion 1:1 sem validação em aparelho.
+
+
+## Segunda rodada — seletores e atualização por gesto
+
+- **Evidência e limite:** o `am-descomp/docs/motion/bars-and-indicators.md` liga a cor selecionada ao recurso de tint do menu inferior, mas registra como **unknown** a animação/duração dessa seleção. `docs/motion/search-and-library.md` não prova interpolação de seleção de filtros. Portanto esta rodada NÃO apresenta 180ms como um timing recuperado do Apple.
+- **Implementação BitChord:** `GlobalMotionPolicy.selectionTintMillis=180` reutiliza a duração de transição de cor **já existente** na barra inferior do BitChord. `SearchFilterTabs` (resultados confirmados) e `AppleSearchOriginTabs` (fontes pré-busca) suavizam somente cor do rótulo e da linha inferior. Não alteram geometria, filtros, callbacks, posição, cor-alvo, pesquisa ou carregamento. Com **Reduzir animações** a duração é zero.
+- **Atualização por gesto:** o `RefreshPuck` compartilhado preserva a trajetória ligada ao arrasto e a indicação visual de atualização, mas desativa o giro infinito de `CircularProgressIndicator` quando **Reduzir animações** está ativo; usa arco estático de 80%. Isto é uma escolha de acessibilidade BitChord, **não** uma reprodução de animação Apple identificada.
+- **Regressões:** testes de contrato (tempo de seleção normal/reduzido e spinner) e teste de seleção entre fontes com redução ativa; testes existentes continuam cobrindo o indicador de largura positiva. Não usar animadores para listas/cards sem evidência adicional e sem teste de performance.
+- **Issue #4 fechada:** HEAD `d074855e` do am-descomp publicou `evidence/media-card-closure.json`, mas C1–C3 sustentam apenas aproximação e C4 é `unknown/no_proven_equivalent`; nenhuma duração/efeito global de card ficou comprovada por ela.

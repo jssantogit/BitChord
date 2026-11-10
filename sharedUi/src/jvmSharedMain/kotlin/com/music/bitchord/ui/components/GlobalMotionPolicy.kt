@@ -14,6 +14,8 @@ package com.music.bitchord.ui.components
 object GlobalMotionPolicy {
     const val loaderExitMillis = 400
     const val headerChromeMillis = 220
+    // Existing BitChord bottom-bar tint duration, reused by search selectors.
+    const val selectionTintMillis = 180
     const val skeletonSweepMillis = 1400
 
     fun duration(baseMillis: Int, reduced: Boolean): Int {
@@ -22,6 +24,9 @@ object GlobalMotionPolicy {
     }
 
     fun shimmerEnabled(reduced: Boolean): Boolean = !reduced
+
+    fun indeterminateRefreshEnabled(refreshing: Boolean, reduced: Boolean): Boolean =
+        refreshing && !reduced
 
     /** No pressed scale is displayed when Reduce animations is enabled. */
     fun pressedScale(pressed: Boolean, reduced: Boolean, activeScale: Float = 0.98f): Float =
