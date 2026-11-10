@@ -257,6 +257,13 @@ class PlayerSheetMotion(
         held = (held + delta).coerceIn(0f, travel())
     }
 
+    override fun cancel() {
+        // Called when a mini-player drag is interrupted by a queue or pointer
+        // change. close() deliberately skips the average-drag flick heuristic
+        // in release(velocity), avoiding accidental expansion on cancellation.
+        if (holding) close()
+    }
+
     override fun release(velocity: Float) {
         if (!holding) return
         val travel = travel()

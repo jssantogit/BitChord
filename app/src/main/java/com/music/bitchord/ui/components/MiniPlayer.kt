@@ -193,6 +193,13 @@ interface MiniPlayerPull {
 
     /** The finger lifted, moving this fast in pixels a second. */
     fun release(velocity: Float)
+
+    /**
+     * The gesture was interrupted (track replacement or pointer cancellation).
+     * Unlike release(0), cancellation must not infer a flick from prior travel.
+     * Hosts that implement only legacy release remain source-compatible.
+     */
+    fun cancel() { release(0f) }
 }
 
 /**
@@ -322,14 +329,15 @@ internal fun Modifier.miniPlayerGestures(
                     lift.floatValue = miniPlayerLiftForMotion(pulled, liftEase, currentReduceMotion)
                 }
             } finally {
-                // A queue change restarts pointerInput. Cancellation must
-                // release the sheet and settle the lifted mini, not leave it
-                // held halfway open with no finger to finish the gesture.
-                target.release(
-                    if (completedNormally) {
-                        tracker.calculateVelocity().y.coerceIn(-maxVelocity, maxVelocity)
-                    } else 0f,
-                )
+                // A real finger-up can choose open/closed from velocity.
+                // Cancelling pointerInput on a queue change must *not* call
+                // release(0): PlayerSheetMotion still infers average velocity
+                // from the earlier drag and could open the sheet unexpectedly.
+                if (completedNormally) {
+                    target.release(tracker.calculateVelocity().y.coerceIn(-maxVelocity, maxVelocity))
+                } else {
+                    target.cancel()
+                }
                 settle[0]?.cancel()
                 if (currentReduceMotion) {
                     lift.floatValue = 0f

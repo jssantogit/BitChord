@@ -63,13 +63,15 @@ class MiniPlayerGestureIdentityTest {
         }
     }
 
-    @Test fun replacingQueueEntryDuringVerticalPullAlwaysReleasesThePlayerSheet() {
+    @Test fun replacingQueueEntryDuringVerticalPullCancelsWithoutInferringAFling() {
         val queueEntry = mutableStateOf("queue-first")
         val deltas = mutableListOf<Float>()
         val releases = mutableListOf<Float>()
+        var cancellations = 0
         val pull = object : MiniPlayerPull {
             override fun drag(delta: Float) { deltas += delta }
             override fun release(velocity: Float) { releases += velocity }
+            override fun cancel() { cancellations++ }
         }
         compose.setContent {
             MaterialTheme {
@@ -94,7 +96,8 @@ class MiniPlayerGestureIdentityTest {
         compose.onNodeWithTag("vertical-gesture-zone").performTouchInput { up() }
         compose.runOnIdle {
             assertTrue("The player received the initial upward drag", deltas.isNotEmpty())
-            assertEquals("A cancelled pull must release exactly once", listOf(0f), releases)
+            assertEquals("A cancelled pull must invoke cancel exactly once", 1, cancellations)
+            assertTrue("Cancellation must not be interpreted as a fling release", releases.isEmpty())
         }
     }
 
