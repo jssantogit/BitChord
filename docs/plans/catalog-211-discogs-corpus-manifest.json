@@ -79,11 +79,12 @@
       "musicbrainz_group_mbid": "cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
       "discogs_release_id": 38302455,
       "direct_release_relation": "no_direct_release_link",
-      "selection_note": "3/4 track titles, artist display alias, no direct Release link; edition unresolved",
+      "selection_note": "4/4 tracks in MB alternative 91c4d2eb; official Universal lists HYBJ-02085 / POCS-30033 CD; missing direct Release link/barcode; pressing unconfirmed",
       "evidence_links": {
         "musicbrainz_release": "https://musicbrainz.org/release/6770b265-719a-463b-af5e-50ac5aeac1e5",
         "discogs_release": "https://www.discogs.com/release/38302455",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42921028437",
+        "independent_editorial": "https://www.universal-music.co.jp/txt/news/2026-07-23/"
       }
     },
     {
@@ -130,11 +131,12 @@
       "musicbrainz_group_mbid": "dc4cfe5f-d5b9-4d18-b281-0691e93d40c8",
       "discogs_release_id": 37110012,
       "direct_release_relation": "no_direct_release_link",
-      "selection_note": "4/6 track titles, nonidentical barcode; edition unresolved",
+      "selection_note": "BIGHIT MUSIC / BHE0779 label+catalog confirmed in MB edition 562a42ed and Discogs; retailer confirms MB UPC; cross-provider barcode differs, 4/6 literal tracks; pressing unconfirmed",
       "evidence_links": {
         "musicbrainz_release": "https://musicbrainz.org/release/562a42ed-de56-4282-99f4-e9f7da270098",
         "discogs_release": "https://www.discogs.com/release/37110012",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42921028437",
+        "independent_catalog_reference": "https://kpopb2b.com/product/txt-7th-year-a-moment-of-stillness-in-the-thorns/"
       }
     },
     {

@@ -49,3 +49,12 @@ grupo como prova de edição ou ausência. Todos permanecem `reviewed=false`.
 - Requisito de observação futura da UI: Android Galaxy A54, rota do artista, shelf nativa, atribuição e ausência de reprodução para source-only. Não disparar APK/smoke até os gates CI e evidência autorizarem.
 
 Esta triagem é uma **evidência negativa útil sobre o risco de falsa recuperação**: indexar o Discogs por título sem as proteções implementadas geraria estantes duplicadas ou falsas.
+
+## Evidência independente de catálogo — B-02 e B-05 (10/11/2026)
+
+A [sondagem de alternativas #42921028437](https://github.com/jssantogit/BitChord/actions/runs/42921028437) terminou SUCCESS (17 testes offline do B-coorte, 18 GETs públicos). Com a consulta `inc=labels` na lista de Releases do mesmo grupo e priorização de pares exatos de gravadora e catálogo, identificou-se:
+
+- **B-02 — TXT / Setsuna Hanabi:** a edição MusicBrainz alternativa [91c4d2eb](https://musicbrainz.org/release/91c4d2eb-d34f-427a-b489-44411063c131) permanece 4/4 faixas coincidentes e ano/país compatíveis; sem catálogo MusicBrainz comparável nem URL Release→Discogs. A [Universal Music Japan](https://www.universal-music.co.jp/txt/news/2026-07-23/) confirma documentalmente o produto CD japonês de 19/08/2026 com códigos `HYBJ-02085 / POCS-30033` encontrados no Discogs. Isso documenta o **produto físico divulgado**, mas não identifica a edição MusicBrainz com a prensagem Discogs.
+- **B-05 — TXT / 7TH YEAR:** a edição MusicBrainz [562a42ed](https://musicbrainz.org/release/562a42ed-de56-4282-99f4-e9f7da270098) informa `BIGHIT MUSIC / BHE0779`, **par exato** também presente no Discogs Release [37110012](https://www.discogs.com/release/37110012). Um [catálogo varejista independente](https://kpopb2b.com/product/txt-7th-year-a-moment-of-stillness-in-the-thorns/) registra `BHE0779` e UPC `8800357999260` (como no MusicBrainz). Contudo, o código de barras não é coincidente com o Discogs examinado e apenas 4/6 títulos de faixa são literalmente iguais. **Não promover Verified, não corrigir EP para Album e não inventar vínculo de edição.**
+
+Os links foram acrescentados apenas às linhas **pré-selecionadas** do manifesto, mantendo `reviewed=false` e `metrics=null`. O campo `independent_editorial` em B-02 identifica a página oficial; `independent_catalog_reference` em B-05 é evidência de revendedor, não adjudicação editorial oficial. São duas pistas adicionais para a futura análise humana do coorte B, não progresso artificial no numerador de 30 homologados.
