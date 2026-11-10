@@ -85,7 +85,8 @@ class CandidateDetailsTest(unittest.TestCase):
         self.assertEqual(2, result["provider_requests"])
         self.assertLessEqual(result["provider_requests"], MAX_REQUESTS)
         self.assertFalse(any("token" in url or "evil" in url for url in urls))
-        self.assertNotIn("verified", str(result).lower())
+        self.assertTrue(all(row["status"] != "verified" for row in result["observations"]))
+        self.assertIn("no MusicBrainz absence", result["warning"])
         self.assertNotIn("absent_in_musicbrainz", str(result))
 
 if __name__ == "__main__":
