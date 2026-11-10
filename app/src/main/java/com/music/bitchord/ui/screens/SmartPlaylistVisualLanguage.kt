@@ -292,6 +292,33 @@ internal fun PlaylistWizardSegmented(
     )
 }
 
+/** Actions in rule groups are navigation commands, not large form buttons. */
+internal data class PlaylistWizardRuleAction(
+    val label: String,
+    val icon: ImageVector,
+    val enabled: Boolean = true,
+    val onClick: () -> Unit,
+)
+
+@Composable
+internal fun PlaylistWizardRuleActions(options: List<PlaylistWizardRuleAction>) {
+    if (options.isEmpty()) return
+    SettingsGroupSurface {
+        options.forEachIndexed { index, option ->
+            SettingsRow(
+                title = option.label,
+                icon = option.icon,
+                iconTint = MaterialTheme.colorScheme.onSurface,
+                enabled = option.enabled,
+                onClick = option.onClick,
+                reserveIconSpace = false,
+                minHeight = 48.dp,
+            )
+            if (index < options.lastIndex) RowDivider()
+        }
+    }
+}
+
 internal data class PlaylistWizardNavOption(
     val title: String,
     val description: String = "",
