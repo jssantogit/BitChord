@@ -25,6 +25,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ArtworkPageBackButton
@@ -41,6 +43,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.themeArtworkPalette
 
@@ -65,24 +68,72 @@ internal fun PlaylistManagerChrome(
             .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        // Match the library's drill-down rhythm: a native floating back
+        // above the section title, rather than an administration toolbar.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ArtworkPageBackButton(onClick = onBack, hazeState = null)
-            Text(
-                "Gerenciar coleções",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.weight(1f).padding(start = 12.dp),
-            )
         }
+        Text(
+            "Gerenciar coleções",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
         SegmentedControl(
             options = listOf("Filtros", "Inteligentes", "Clássicas"),
             selectedIndex = selectedIndex,
             onSelect = onSelect,
         )
      }
+}
+
+/**
+ * Library-style empty state for collections. A non-clickable SettingsRow looked
+ * like a broken preference and left the page without a visual focal point.
+ * Keeping this outside a card also avoids suggesting that the empty state
+ * itself can be tapped.
+ */
+@Composable
+internal fun PlaylistManagerEmptyState(
+    title: String,
+    message: String,
+    icon: ImageVector,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .padding(top = 72.dp, bottom = 48.dp, start = 20.dp, end = 20.dp)
+            .testTag("playlist-manager-empty-state"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier.size(60.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(28.dp),
+            )
+        }
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+    }
 }
 
 @Composable
@@ -249,22 +300,35 @@ internal data class PlaylistWizardNavOption(
 )
 
 @Composable
+private fun PlaylistWizardNavigationSubtitle(description: String) {
+    Text(
+        description,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** Native library/settings rows, not independent Material3 action cards. */
+@Composable
 internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>) {
     val categories = options.isNotEmpty() && options.all { it.icon != null }
-    if (categories) {
-        // Settings-style contiguous rows, not a stack of oversized cards.
-        // Smaller native badges retain clear category affordances and a
-        // minimum 64dp row target without wasting a screen per seven options.
-        SettingsGroupSurface(modifier = Modifier.testTag("playlist-category-group")) {
-            options.forEachIndexed { index, option ->
-                SettingsRow(
-                    title = option.title,
-                    subtitle = option.description.ifBlank { null },
-                    onClick = option.onClick,
-                    reserveIconSpace = false,
-                    minHeight = 64.dp,
-                    trailing = {},
-                    leading = {
+    SettingsGroupSurface(
+        modifier = if (categories) Modifier.testTag("playlist-category-group")
+            else Modifier,
+    ) {
+        options.forEachIndexed { index, option ->
+            SettingsRow(
+                title = option.title,
+                subtitleContent = if (option.description.isNotBlank()) {
+                    { PlaylistWizardNavigationSubtitle(option.description) }
+                } else null,
+                onClick = option.onClick,
+                reserveIconSpace = false,
+                minHeight = if (categories) 64.dp else 52.dp,
+                leading = if (categories) {
+                    {
                         Box(
                             modifier = Modifier.size(32.dp)
                                 .clip(CircleShape)
@@ -279,26 +343,19 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
                                 modifier = Modifier.size(20.dp),
                             )
                         }
-                    },
-                )
-                if (index < options.lastIndex) RowDivider()
-            }
-        }
-    } else {
-        // Drill-down rows remain the same contiguous settings list used
-        // throughout the application, including their native dividers.
-        SettingsGroupSurface {
-            options.forEachIndexed { index, option ->
-                SettingsRow(
-                    icon = option.icon,
-                    title = option.title,
-                    subtitle = option.description.ifBlank { null },
-                    onClick = option.onClick,
-                    reserveIconSpace = false,
-                    trailing = {},
-                )
-                if (index < options.lastIndex) RowDivider()
-            }
+                    }
+                } else null,
+                trailing = {
+                    Icon(
+                        imageVector = BitChordIcons.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                            .testTag("playlist-navigation-chevron"),
+                    )
+                },
+            )
+            if (index < options.lastIndex) RowDivider()
         }
     }
 }
