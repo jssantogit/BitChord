@@ -1,7 +1,6 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -52,7 +51,11 @@ fun AppleRatingStarGlyph(
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier.matchParentSize().drawWithContent {
-                    clipRect(right = size.width / 2f) { drawContent() }
+                    // clipRect changes the implicit DrawScope receiver.
+                    // Keep the enclosing ContentDrawScope to draw the icon.
+                    clipRect(right = size.width / 2f) {
+                        this@drawWithContent.drawContent()
+                    }
                 },
             )
         }
