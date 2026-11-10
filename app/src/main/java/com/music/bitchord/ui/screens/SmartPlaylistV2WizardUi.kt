@@ -655,27 +655,29 @@ internal fun SmartPlaylistV2WizardUi(
                                                 contentScale = ContentScale.Crop,
                                             )
                                         }
+                                        // The cover itself owns its edit affordance, as
+                                        // native media artwork does. No full-width form
+                                        // button competing with the playlist title.
+                                        Box(
+                                            modifier = Modifier.align(Alignment.BottomEnd)
+                                                .padding(8.dp)
+                                                .testTag("playlist-cover-edit-action"),
+                                        ) {
+                                            CircleIconButton(
+                                                icon = PlaylistEditorIcons.Edit,
+                                                contentDescription = "Escolher capa",
+                                                onClick = onChooseCover,
+                                                size = 40.dp,
+                                            )
+                                        }
                                     }
                                 }
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                                ) {
+                                if (coverUri != null) {
                                     TextButton(
-                                        onClick = onChooseCover,
-                                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                                            .heightIn(min = 44.dp),
+                                        onClick = onClearCover,
+                                        modifier = Modifier.heightIn(min = 44.dp),
                                     ) {
-                                        Text("Escolher capa", color = MaterialTheme.colorScheme.onBackground)
-                                    }
-                                    if (coverUri != null) {
-                                        TextButton(
-                                            onClick = onClearCover,
-                                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                                                .heightIn(min = 44.dp),
-                                        ) {
-                                            Text("Remover capa", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
+                                        Text("Remover capa", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
