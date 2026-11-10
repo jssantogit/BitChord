@@ -233,7 +233,7 @@ class CanonicalRecordingFeedbackControlsTest {
 
     @Test fun ratingActionUsesTheExactPlayerOutlineVector() {
         assertEquals(
-            com.music.bitchord.ui.player.AppleQueueVectors.Favorite,
+            com.music.bitchord.ui.icons.PlaylistEditorIcons.Ratings,
             ratingActionIcon(),
         )
     }
