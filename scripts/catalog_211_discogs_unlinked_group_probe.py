@@ -174,8 +174,17 @@ def investigate(case: dict, get) -> dict:
             result["status"] = "no_same_year_official_candidate_in_complete_group_index"
             return result
         for mbid in candidates:
-            full = get(f"https://musicbrainz.org/ws/2/release/{mbid}"
-                       "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels")
+            # A failed second Release must not erase a successfully observed
+            # first alternative; report every candidate's availability.
+            try:
+                full = get(f"https://musicbrainz.org/ws/2/release/{mbid}"
+                           "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels")
+            except (HTTPError, URLError, OSError, TimeoutError):
+                result["candidates"].append({"mbid": mbid, "status": "source_unavailable"})
+                continue
+            except (ValueError, TypeError, KeyError, AttributeError):
+                result["candidates"].append({"mbid": mbid, "status": "invalid_provider_response"})
+                continue
             parent = full.get("release-group")
             if (full.get("id") != mbid or not isinstance(parent, dict) or
                 parent.get("id") != group):
@@ -197,7 +206,13 @@ def investigate(case: dict, get) -> dict:
                     "another_release" if relations else "none"),
                 "comparison": compare_edition(full, discogs),
             })
+        compared = sum(x["status"] == "edition_facts_compared_not_adjudicated"
+                       for x in result["candidates"])
+        unavailable = sum(x["status"] in ("source_unavailable", "invalid_provider_response")
+                          for x in result["candidates"])
         result["status"] = (
+            "partial_candidate_details_not_verified" if unavailable and compared else
+            "all_candidate_details_unavailable" if unavailable and not compared else
             "barcode_candidates_inspected_not_verified" if matches else
             "year_only_content_candidates_not_verified"
         )

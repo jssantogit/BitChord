@@ -185,6 +185,26 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
         self.assertEqual([], same_year_alternatives(rows, None, RELEASE))
         self.assertEqual([], same_year_alternatives(rows, 2025, RELEASE))
 
+    def test_one_failed_release_does_not_erase_successful_alternative(self):
+        m, p = docs()
+        def get(url):
+            if "release/?" in url:
+                index = release_index()
+                index["releases"][0].update(
+                    {"status": "Official", "date": "2024-05-13"})
+                index["releases"][1]["barcode"] = None
+                return index
+            if f"/ws/2/release/{RELEASE}?" in url:
+                raise TimeoutError("second edition temporarily unavailable")
+            return response(url)
+        row = observe(m, p, get)["findings"][0]
+        self.assertEqual("partial_candidate_details_not_verified", row["status"])
+        self.assertEqual(2, len(row["candidates"]))
+        self.assertEqual(ALT, row["candidates"][0]["mbid"])
+        self.assertTrue(row["candidates"][0]["comparison"]["tracklist_matches"])
+        self.assertEqual("source_unavailable", row["candidates"][1]["status"])
+        self.assertFalse(row["reviewed"])
+
     def test_checked_in_b_samples_are_joined_to_exact_control_pairs(self):
         m = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
         p = json.loads(Path("docs/plans/catalog-211-discogs-edition-pairs.json").read_text())
