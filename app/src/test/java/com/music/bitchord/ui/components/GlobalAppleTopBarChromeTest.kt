@@ -66,7 +66,6 @@ class GlobalAppleTopBarChromeTest {
 
     @Test fun sharedOverflowRemainsMountedDuringCloseTransitionAndThenExits() {
         var settingsOpened = 0
-        compose.mainClock.autoAdvance = false
         compose.setContent {
             BitChordTheme {
                 TopBarAccountButton(account = null, onClick = { settingsOpened++ })
@@ -74,12 +73,11 @@ class GlobalAppleTopBarChromeTest {
         }
         val res = RuntimeEnvironment.getApplication().resources
         compose.onNodeWithContentDescription(res.getString(R.string.more)).performClick()
-        // Popup uses a separate window. With a manually controlled clock,
-        // allow the full 170ms enter + a frame for that window's composition
-        // before asserting its node. This test targets exit persistence.
-        compose.mainClock.advanceTimeBy(220L)
-        compose.waitForIdle()
+        // Popup owns an independent window: its initial composition must
+        // complete with Compose's normal auto-advancing clock. We control
+        // time only while checking the subsequent *exit* transition.
         compose.onNodeWithTag("apple-root-settings-popup", useUnmergedTree = true).assertExists()
+        compose.mainClock.autoAdvance = false
         compose.onNodeWithText(res.getString(R.string.settings)).performClick()
         compose.runOnIdle { assertEquals(1, settingsOpened) }
         // The popup used to disappear immediately as soon as expanded=false.
