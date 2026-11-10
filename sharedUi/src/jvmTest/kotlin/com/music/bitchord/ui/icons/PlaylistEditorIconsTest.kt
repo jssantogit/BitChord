@@ -20,6 +20,7 @@ class PlaylistEditorIconsTest {
         )
         assertEquals(native.size, native.map { it.name }.toSet().size)
         assertEquals(AppleQueueVectors.More, PlaylistEditorIcons.More)
+        assertEquals(AppleQueueVectors.Favorite, PlaylistEditorIcons.Ratings)
         native.forEach {
             assertEquals(24f, it.viewportWidth, 0.0001f)
             assertEquals(24f, it.viewportHeight, 0.0001f)
