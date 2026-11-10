@@ -1548,7 +1548,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 else if (normalMode) onSaveNormal else onSave,
                         )
                         if (!normalMode && !filterMode) {
-                            PlaylistWizardSecondaryAction(
+                            PlaylistWizardTextAction(
                                 label = if (hasExportedFilter)
                                     "Atualizar filtro reutilizável" else
                                     "Salvar como filtro reutilizável",
@@ -1559,8 +1559,9 @@ internal fun SmartPlaylistV2WizardUi(
                         if (!filterMode &&
                             (editingNormalId != null || editingId != null)
                         ) {
-                            PlaylistWizardSecondaryAction(
+                            PlaylistWizardTextAction(
                                 label = "Excluir playlist",
+                                destructive = true,
                                 enabled = !loading,
                                 onClick = {
                                     if (normalMode) confirmDeleteNormal = true
@@ -1635,7 +1636,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (!normalMode) PlaylistWizardSecondaryAction(
+                        if (!normalMode) PlaylistWizardTextAction(
                             label = if (editingFilterId != null || hasExportedFilter)
                                 "Atualizar filtro reutilizável" else "Salvar como filtro reutilizável",
                             enabled = canReview && !loading,
