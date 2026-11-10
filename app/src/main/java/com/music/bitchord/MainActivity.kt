@@ -7177,6 +7177,9 @@ private fun FrostedMenuPanel(
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val shape = MaterialTheme.shapes.extraLarge
+    val entrance = com.music.bitchord.ui.components.rememberFrostedMenuEntranceModifier(
+        reduceMotion = LocalReduceAnimations.current,
+    )
     Box(
         Modifier
             .fillMaxSize()
@@ -7191,6 +7194,7 @@ private fun FrostedMenuPanel(
             modifier = Modifier
                 .padding(top = 56.dp, end = 20.dp)
                 .width(IntrinsicSize.Max)
+                .then(entrance)
                 .clip(shape)
                 .then(
                     if (reduceDynamicBlur) {
