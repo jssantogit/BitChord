@@ -762,7 +762,7 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("history", opened) }
     }
 
-    @Test fun conditionCategoriesUseSevenNativeCardsInsteadOfOneCompactBlock() {
+    @Test fun conditionCategoriesUseOneNativeGroupedListWithSevenAccessibleBadges() {
         compose.setContent {
             PlaylistWizardNavigationList(
                 (1..7).map { n ->
@@ -775,7 +775,9 @@ class PlaylistLibraryVisualReuseTest {
                 },
             )
         }
-        compose.onAllNodesWithTag("native-settings-group-surface").assertCountEquals(7)
+        compose.onAllNodesWithTag("native-settings-group-surface").assertCountEquals(1)
+        compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true)
+            .assertCountEquals(7)
         compose.onNodeWithText("Categoria 7").assertExists()
     }
 
