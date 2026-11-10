@@ -94,6 +94,13 @@ object PlaylistEditorIcons {
         moveTo(16f, 7f); lineTo(16f, 17f)
         moveTo(20f, 10f); lineTo(20f, 14f)
     } }
+    val Artwork by lazy { outlined("playlist_artwork") {
+        moveTo(4f, 5f); lineTo(20f, 5f); lineTo(20f, 19f)
+        lineTo(4f, 19f); close()
+        moveTo(6f, 16.5f); lineTo(10f, 12f); lineTo(13f, 15f)
+        lineTo(15.5f, 12f); lineTo(18f, 15f)
+        moveTo(15.5f, 8.5f); lineTo(16f, 8.5f)
+    } }
     val Folder by lazy { outlined("playlist_folder") {
         moveTo(3.5f, 7f); lineTo(3.5f, 19f); lineTo(20.5f, 19f)
         lineTo(20.5f, 9f); lineTo(12f, 9f); lineTo(9.5f, 6f)
