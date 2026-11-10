@@ -45,6 +45,40 @@ class PlaylistEditorPresentationTest {
         compose.runOnIdle { assertEquals(1, clicks) }
     }
 
+    @Test fun collectionEmptyStateUsesEditorialLayoutWithoutInactiveSettingsCard() {
+        compose.setContent {
+            MaterialTheme {
+                PlaylistManagerEmptyState(
+                    title = "Nenhum filtro salvo",
+                    message = "Crie um filtro para reutilizar suas regras.",
+                    icon = PlaylistEditorIcons.Filters,
+                )
+            }
+        }
+        compose.onNodeWithTag("playlist-manager-empty-state").assertExists()
+        compose.onNodeWithText("Nenhum filtro salvo").assertExists()
+        compose.onNodeWithText("Crie um filtro para reutilizar suas regras.").assertExists()
+        compose.onNodeWithTag("native-settings-group-surface").assertDoesNotExist()
+    }
+
+    @Test fun conditionFieldRowsUseSharedDrilldownAffordance() {
+        var clicked = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardNavigationList(
+                    listOf(
+                        PlaylistWizardNavOption("Título", "Filtrar por título") { clicked++ },
+                        PlaylistWizardNavOption("Artista", "Filtrar por artista") { clicked++ },
+                    ),
+                )
+            }
+        }
+        compose.onAllNodesWithTag("playlist-navigation-chevron", useUnmergedTree = true)
+            .assertCountEquals(2)
+        compose.onNodeWithText("Artista").performClick()
+        compose.runOnIdle { assertEquals(1, clicked) }
+    }
+
     @Test fun ruleCategoriesUseCompactNeutralNativeBadgesAndPreserveNavigation() {
         var clicked = 0
         compose.setContent {
@@ -58,6 +92,7 @@ class PlaylistEditorPresentationTest {
             }
         }
         compose.onNodeWithTag("playlist-category-group", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithTag("playlist-navigation-chevron", useUnmergedTree = true).assertCountEquals(2)
         compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true).assertCountEquals(2)
         compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true)[0].assertWidthIsEqualTo(32.dp)
         compose.onNodeWithText("Música").performClick()
