@@ -1205,11 +1205,18 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.EDITOR -> {
                         item {
-                            WizardCard("Condição", smartConditionLabel(draft.field)) {
-                                PlaylistWizardSecondaryAction(
-                                    label = "Comparação: " + operatorUiLabel(draft.operator),
+                            SettingsGroupSurface {
+                                SettingsRow(
+                                    title = "Comparação",
+                                    subtitle = operatorUiLabel(draft.operator),
                                     onClick = { picker = "operator" },
+                                    reserveIconSpace = false,
                                 )
+                                Column(
+                                    modifier = Modifier.fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
                                 val presence = draft.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
                                     draft.operator == SmartPlaylistRuleOperator.IS_MISSING
                                 if (presence) {
@@ -1296,15 +1303,17 @@ internal fun SmartPlaylistV2WizardUi(
                                         )
                                     }
                                 }
+                                }
                             }
                         }
                         item {
-                            WizardCard("Inverter condição",
-                                "Exclui músicas que correspondem; dados desconhecidos continuam excluídos da prévia.") {
-                                PlaylistWizardSecondaryAction(
-                                    label = if (negated) "Inverter resultado · Ativado"
-                                        else "Inverter resultado · Desativado",
+                            SettingsGroupSurface {
+                                SettingsRow(
+                                    title = "Inverter resultado",
+                                    subtitle = if (negated) "Ativado · excluir correspondências"
+                                        else "Desativado",
                                     onClick = { negated = !negated },
+                                    reserveIconSpace = false,
                                 )
                             }
                         }
