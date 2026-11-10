@@ -17,6 +17,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -59,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
@@ -1734,7 +1736,9 @@ private fun SearchFilterTabs(
             val selected = entry == filter
             if (appleStyle) {
                 Column(
-                    modifier = Modifier.clickable {
+                    // Horizontal scrolling supplies unbounded width; use intrinsic
+                    // label width so the fillMaxWidth bar cannot collapse.
+                    modifier = Modifier.width(IntrinsicSize.Max).clickable {
                         if (!selected) haptics.play(Haptic.Select)
                         onFilterChange(entry)
                     },
@@ -1756,9 +1760,10 @@ private fun SearchFilterTabs(
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
                     )
                     Box(
-                        Modifier.fillMaxWidth().height(3.dp).background(
-                            if (selected) AppleSearchBlue else Color.Transparent,
-                        ),
+                        Modifier.fillMaxWidth()
+                            .height(3.dp)
+                            .testTag(if (selected) "apple-selected-result-indicator" else "apple-result-indicator")
+                            .background(if (selected) AppleSearchBlue else Color.Transparent),
                     )
                 }
             } else Box(
@@ -1818,7 +1823,7 @@ fun AppleSearchOriginTabs(
             val selected = index == selectedIndex
             Column(
                 modifier = Modifier
-                    .then(if (options.size <= 2) Modifier.weight(1f) else Modifier)
+                    .then(if (options.size <= 2) Modifier.weight(1f) else Modifier.width(IntrinsicSize.Max))
                     .clickable { if (!selected) onSelect(index) },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -1831,9 +1836,10 @@ fun AppleSearchOriginTabs(
                     modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
                 )
                 Box(
-                    Modifier.fillMaxWidth().height(3.dp).background(
-                        if (selected) AppleSearchBlue else Color.Transparent,
-                    ),
+                    Modifier.fillMaxWidth()
+                        .height(3.dp)
+                        .testTag(if (selected) "apple-selected-origin-indicator" else "apple-origin-indicator")
+                        .background(if (selected) AppleSearchBlue else Color.Transparent),
                 )
             }
         }

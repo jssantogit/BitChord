@@ -323,10 +323,10 @@ fun FrostedTopBar(
                     ArtworkPageBackButton(
                         onClick = onBack,
                         hazeState = backButtonHazeState,
-                        size = if (categoryBackButton) AppleFloatingControlMetrics.libraryDiameter else 44.dp,
+                        size = if (categoryBackButton) AppleFloatingControlMetrics.libraryDiameter else AppleFloatingControlMetrics.toolbarDiameter,
                         // The surface edge aligns with the floating navbar. The
-                        // padding belongs outside the circle; its icon remains
-                        // centred in the same 44dp control in every material.
+                        // padding belongs outside the circle; the back
+                        // surface shares the matching toolbar action diameter.
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .padding(start = BAR_GUTTER)
@@ -389,9 +389,8 @@ internal fun ArtworkPageBackButton(
     onClick: () -> Unit,
     hazeState: HazeState?,
     modifier: Modifier = Modifier,
-    size: Dp = 44.dp,
+    size: Dp = AppleFloatingControlMetrics.toolbarDiameter,
 ) {
-    val shape = CircleShape
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val useLiquidGlass = LocalLiquidGlassEnabled.current && isGlassSupported()
     val contentColor = if (useLiquidGlass && !reduceDynamicBlur) {
@@ -400,35 +399,56 @@ internal fun ArtworkPageBackButton(
         MaterialTheme.colorScheme.onSurface
     }
 
-    IconButton(
-        onClick = onClick,
-        modifier = modifier
-            .size(size)
-            .then(if (size == AppleFloatingControlMetrics.libraryDiameter) Modifier.testTag("apple-category-back-button") else Modifier)
-            .then(artworkPageSurface(shape = shape, hazeState = hazeState)),
-    ) {
-        Icon(
-            Icons.AutoMirrored.Rounded.ArrowBack,
-            contentDescription = stringResource(R.string.back),
-            tint = contentColor,
-        )
+    if (size == AppleFloatingControlMetrics.libraryDiameter) {
+        // One painted 40dp surface for Library back and trailing actions.
+        // IconButton's minimum interactive target must not size the circle.
+        FloatingLibraryTopBarCircle(hazeState = hazeState, modifier = modifier) {
+            IconButton(
+                onClick = onClick,
+                modifier = Modifier.testTag("apple-category-back-button"),
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    contentDescription = stringResource(R.string.back),
+                    tint = contentColor,
+                )
+            }
+        }
+    } else {
+        // Generic pages share the 48dp ArtworkPageActions surface instead
+        // of the former unmatched 44dp back circle.
+        IconButton(
+            onClick = onClick,
+            modifier = modifier
+                .size(size)
+                .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
+                .testTag("apple-toolbar-back-button"),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Rounded.ArrowBack,
+                contentDescription = stringResource(R.string.back),
+                tint = contentColor,
+            )
+        }
     }
 }
 
-/** One independently surfaced circular action on the Apple Library root/category chrome.
- * The generic header also uses independent actions, with its separate 48dp role.
+/**
+ * One Library floating-circle compositor for back, sources, filters and more.
+ * The am-descomp More Options chain supplies 40dp as a modifier input only;
+ * rendered runtime touch bounds remain unverified.
  */
 @Composable
 internal fun FloatingLibraryTopBarCircle(
     hazeState: HazeState?,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    // The original APK's Library More Options path passes 40dp into its
-    // rounded modifier (am-descomp: library-toolbar.md). This is the surface
-    // dimension, not proof of the original final tap target or inset.
     Box(
-        modifier = Modifier.size(AppleFloatingControlMetrics.libraryDiameter)
-            .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState)),
+        modifier = modifier
+            .size(AppleFloatingControlMetrics.libraryDiameter)
+            .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
+            .testTag("apple-library-floating-circle"),
         contentAlignment = Alignment.Center,
     ) { content() }
 }

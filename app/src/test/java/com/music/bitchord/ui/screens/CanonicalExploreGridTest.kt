@@ -14,8 +14,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.MoodGenreSection
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.SearchFilter
 import com.music.bitchord.data.model.UiState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -100,6 +102,68 @@ class CanonicalExploreGridTest {
             assertEquals(1, backs)
             assertEquals(0, submits)
         }
+    }
+
+
+    @Test fun submittedResultsHaveVisibleBlueUnderlineWithHorizontalScrolling() {
+        compose.setContent {
+            MaterialTheme {
+                SearchScreen(
+                    query = "newjeans",
+                    onQueryChange = {},
+                    filter = SearchFilter.ALL,
+                    currentSong = null,
+                    isPlaying = false,
+                    onFilterChange = {},
+                    results = null,
+                    loadingMore = false,
+                    onLoadMore = {},
+                    listState = rememberLazyListState(),
+                    scrollResetTrigger = 0,
+                    focusRequested = false,
+                    onFocusHandled = {},
+                    onSongClick = { _, _ -> },
+                    onSongLongPress = {},
+                    onSongSwipe = {},
+                    onTopResultPlay = {},
+                    onTopResultPlaylist = {},
+                    onBrowseClick = {},
+                    history = emptyList(),
+                    suggestions = emptyList(),
+                    typeaheadResults = emptyList(),
+                    onSubmit = {},
+                    onSuggestionClick = {},
+                    onHistoryClick = {},
+                    onHistoryRemove = {},
+                    onHistoryClear = {},
+                    contentPadding = PaddingValues(0.dp),
+                    topPadding = 0.dp,
+                    showField = false,
+                    searchingCanonical = true,
+                    canonicalResults = UiState.Success(emptyList<CanonicalCatalogSearchRow>()),
+                    searchCommitted = true,
+                    appleResultTabs = true,
+                )
+            }
+        }
+        val indicator = compose.onNodeWithTag("apple-selected-result-indicator", useUnmergedTree = true)
+            .fetchSemanticsNode()
+        assertTrue("Submitted result underline must have width", indicator.boundsInRoot.width > 1f)
+    }
+
+    @Test fun threeOrMoreSearchSourcesKeepTheirSelectedUnderline() {
+        compose.setContent {
+            MaterialTheme {
+                AppleSearchOriginTabs(
+                    options = listOf("Catálogo", "Local", "Servidor remoto"),
+                    selectedIndex = 2,
+                    onSelect = {},
+                )
+            }
+        }
+        val indicator = compose.onNodeWithTag("apple-selected-origin-indicator", useUnmergedTree = true)
+            .fetchSemanticsNode()
+        assertTrue("Scrollable source tabs must have width", indicator.boundsInRoot.width > 1f)
     }
 
     @Test fun exploreAndLibraryShareCompactSettingsOnlyOverflow() {

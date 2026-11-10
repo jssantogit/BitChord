@@ -26,6 +26,7 @@ import com.music.bitchord.R
 import com.music.bitchord.ui.theme.BitChordTheme
 import com.music.bitchord.ui.screens.CircleIconButton
 import com.music.bitchord.ui.screens.ActionPill
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -96,6 +97,46 @@ class GlobalAppleTopBarChromeTest {
             .assertWidthIsEqualTo(152.dp)
         compose.onAllNodesWithTag("apple-toolbar-action-circle", useUnmergedTree = true)
             .assertCountEquals(3)
+    }
+
+
+    @Test fun libraryCategoryBackAndActionsDrawEqualFortyDpCircles() {
+        var backs = 0
+        compose.setContent {
+            BitChordTheme {
+                Row {
+                    ArtworkPageBackButton(
+                        onClick = { backs++ },
+                        hazeState = null,
+                        size = AppleFloatingControlMetrics.libraryDiameter,
+                    )
+                    FloatingLibraryTopBarCircle(hazeState = null) {
+                        IconButton(onClick = {}) {
+                            Icon(Icons.Rounded.Sort, contentDescription = "Library sort")
+                        }
+                    }
+                }
+            }
+        }
+        val circles = compose.onAllNodesWithTag("apple-library-floating-circle", useUnmergedTree = true)
+        circles.assertCountEquals(2)
+        circles[0].assertWidthIsEqualTo(AppleFloatingControlMetrics.libraryDiameter)
+        circles[1].assertWidthIsEqualTo(AppleFloatingControlMetrics.libraryDiameter)
+        val bounds = circles.fetchSemanticsNodes().map { it.boundsInRoot }
+        assertEquals(bounds[0].width, bounds[1].width, 0.1f)
+        assertEquals(bounds[0].height, bounds[1].height, 0.1f)
+        compose.onNodeWithTag("apple-category-back-button").performClick()
+        compose.runOnIdle { assertEquals(1, backs) }
+    }
+
+    @Test fun genericBackMatchesGenericActionCircleDiameter() {
+        compose.setContent {
+            BitChordTheme {
+                ArtworkPageBackButton(onClick = {}, hazeState = null)
+            }
+        }
+        compose.onNodeWithTag("apple-toolbar-back-button", useUnmergedTree = true)
+            .assertWidthIsEqualTo(AppleFloatingControlMetrics.toolbarDiameter)
     }
 
     @Test fun unavailableSecondaryActionsRemainDisabledWithSharedSurface() {
