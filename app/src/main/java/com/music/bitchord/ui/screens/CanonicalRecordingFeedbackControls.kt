@@ -37,7 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.ConfirmationAlert
-import com.music.bitchord.ui.player.AppleQueueVectors
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -106,7 +106,7 @@ internal fun CanonicalRecordingFeedbackAction(onClick: () -> Unit) {
 }
 
 /** One icon identity across the expanded player, rating picker and action menus. */
-internal fun ratingActionIcon() = AppleQueueVectors.Favorite
+internal fun ratingActionIcon() = PlaylistEditorIcons.Ratings
 
 /** The player never guesses a provider-native ID or track title for a local rating. */
 private data class RatingTargetResolution(val pending: Boolean, val recordingId: String?)
