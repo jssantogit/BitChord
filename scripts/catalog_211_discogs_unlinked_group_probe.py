@@ -9,6 +9,7 @@ import datetime as dt
 import json
 from pathlib import Path
 import time
+import unicodedata
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 
@@ -39,6 +40,69 @@ def discogs_barcodes(record: dict) -> set[str]:
     return {b for item in identifiers if isinstance(item, dict)
             and item.get("type") == "Barcode"
             for b in [barcode(item.get("value"))] if b is not None}
+
+def _metadata_field(value: object, *, catalog: bool = False) -> str | None:
+    """Normalize typography only: never guess label aliases or catalog variants."""
+    if not isinstance(value, str) or not 1 <= len(value) <= 160:
+        return None
+    text = " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+    if not text or text in {
+        "none", "n/a", "na", "unknown", "?", "-", "not on label",
+        "no label", "tba", "no catalog number", "[none]",
+    } or text.startswith("not on label ("):
+        return None
+    if catalog and len(text) > 100:
+        return None
+    return text
+
+
+def _label_catalog_pairs(record: dict, *, musicbrainz: bool) -> list[tuple[str, str]]:
+    entries = record.get("label-info") if musicbrainz else record.get("labels")
+    # Malformed, missing or oversized arrays provide no pair evidence.
+    if not isinstance(entries, list) or len(entries) > 64:
+        return []
+    output: set[tuple[str, str]] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        label = entry.get("label") if musicbrainz else entry
+        if not isinstance(label, dict):
+            continue
+        name = _metadata_field(label.get("name"))
+        number = _metadata_field(
+            entry.get("catalog-number" if musicbrainz else "catno"),
+            catalog=True,
+        )
+        if name and number:
+            output.add((name, number))
+    return sorted(output)[:16]
+
+
+def label_catalog_evidence(mb: dict, discogs: dict) -> dict:
+    """Same *pair* is a source observation, never proof of a physical edition."""
+    mb_pairs = _label_catalog_pairs(mb, musicbrainz=True)
+    discogs_pairs = _label_catalog_pairs(discogs, musicbrainz=False)
+    shared = sorted(set(mb_pairs) & set(discogs_pairs))
+    common_numbers = sorted(
+        {number for _, number in mb_pairs} &
+        {number for _, number in discogs_pairs}
+    )
+    assessment = (
+        "exact_label_catalog_pair_observed_not_verified" if shared else
+        "catalog_only_unconfirmed" if common_numbers else
+        "insufficient_label_catalog_data"
+    )
+    def details(pairs):
+        return [{"label": label, "catalog_number": number} for label, number in pairs]
+    return {
+        "assessment": assessment,
+        "verified": False,
+        "musicbrainz_pairs": details(mb_pairs),
+        "discogs_pairs": details(discogs_pairs),
+        "matching_pairs": details(shared),
+        "shared_catalog_numbers": common_numbers,
+    }
+
 
 def selected(manifest: dict, controls: dict) -> list[dict]:
     if not isinstance(manifest, dict) or manifest.get("schema_version") != 1 or (
@@ -178,7 +242,7 @@ def investigate(case: dict, get) -> dict:
             # first alternative; report every candidate's availability.
             try:
                 full = get(f"https://musicbrainz.org/ws/2/release/{mbid}"
-                           "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels")
+                           "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
             except (HTTPError, URLError, OSError, TimeoutError):
                 result["candidates"].append({"mbid": mbid, "status": "source_unavailable"})
                 continue
@@ -205,6 +269,7 @@ def investigate(case: dict, get) -> dict:
                     "this_release" if did in relations else
                     "another_release" if relations else "none"),
                 "comparison": compare_edition(full, discogs),
+                "label_catalog": label_catalog_evidence(full, discogs),
             })
         compared = sum(x["status"] == "edition_facts_compared_not_adjudicated"
                        for x in result["candidates"])
