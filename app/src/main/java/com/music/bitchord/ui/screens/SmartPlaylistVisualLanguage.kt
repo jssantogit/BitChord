@@ -159,6 +159,28 @@ internal fun PlaylistWizardSecondaryAction(
     }
 }
 
+/** Secondary actions belong to the footer, but must not compete with Save. */
+@Composable
+internal fun PlaylistWizardTextAction(
+    label: String,
+    enabled: Boolean = true,
+    destructive: Boolean = false,
+    onClick: () -> Unit,
+) {
+    TextButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
+            .testTag("playlist-wizard-text-action"),
+        colors = ButtonDefaults.textButtonColors(
+            contentColor = if (destructive) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurface,
+        ),
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
 /** Compact variant of the same neutral outlined action for sheets and row tools. */
 @Composable
 internal fun PlaylistWizardCompactAction(
