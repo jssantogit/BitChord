@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import org.junit.Assert.assertEquals
+import com.music.bitchord.ui.player.AppleQueueVectors
 import org.junit.Test
 
 /**
@@ -18,6 +19,17 @@ class AppleRatingStarGlyphTest {
         assertEquals(AppleRatingStarFill.EMPTY, appleRatingStarFill(2.5, 3))
         assertEquals(AppleRatingStarFill.HALF, appleRatingStarFill(4.5, 4))
         assertEquals(AppleRatingStarFill.FULL, appleRatingStarFill(5.0, 4))
+    }
+
+    @Test fun ratingEditorUsesStandalonePlayerStarContoursWithoutCircularPlatter() {
+        val outline = AppleQueueVectors.RatingStarOutline
+        val filled = AppleQueueVectors.RatingStarFilled
+        assertEquals("apple_queue_rating_star_outline", outline.name)
+        assertEquals("apple_queue_rating_star_filled", filled.name)
+        assertEquals(28f, outline.viewportWidth, 0.0001f)
+        assertEquals(28f, outline.viewportHeight, 0.0001f)
+        assertEquals(28f, filled.viewportWidth, 0.0001f)
+        assertEquals(28f, filled.viewportHeight, 0.0001f)
     }
 
     @Test fun invalidAndNonfiniteRatingsCannotPaintAnySelectedStars() {
