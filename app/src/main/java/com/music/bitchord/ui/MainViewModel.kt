@@ -2698,10 +2698,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         title: String,
         @Suppress("UNUSED_PARAMETER") privacy: PlaylistPrivacy,
         song: Song? = null,
+        onResult: (Boolean) -> Unit = {},
     ) {
         val name = title.trim().ifBlank { text(R.string.new_playlist) }
         viewModelScope.launch {
-            com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, listOfNotNull(song))
+            try {
+                com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, listOfNotNull(song))
+                onResult(true)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                onResult(false)
+            }
         }
     }
 
