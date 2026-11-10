@@ -260,13 +260,8 @@ private fun WizardJoinPicker(
         onSelectFirst = { onChange(SmartPlaylistRuleJoin.ALL) },
         onSelectSecond = { onChange(SmartPlaylistRuleJoin.ANY) },
     )
-    Text(
-        if (value == SmartPlaylistRuleJoin.ALL)
-            "A música deve satisfazer todas as condições deste nível."
-        else "Basta a música satisfazer pelo menos uma condição deste nível.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    // E/OU are already explicit in the segmented labels. A second paragraph
+    // on every nested group turns the editor into technical documentation.
 }
 
 private fun iconForConditionCategory(id: String) = when (id) {
@@ -594,14 +589,12 @@ internal fun SmartPlaylistV2WizardUi(
                             "Configure o nome e as regras deste filtro reutilizável."
                         else "Atualize a capa, a descrição e as faixas ou regras desta playlist."
                         WizardStep.SONGS -> "Escolha as faixas que farão parte desta playlist, na ordem desejada."
-                        WizardStep.RULES -> "Organize condições em grupos. As opções avançadas ficam dentro de cada grupo."
-                        WizardStep.GROUP -> "Ajuste as condições, a combinação e a ordem deste grupo."
+                        WizardStep.RULES -> ""
+                        WizardStep.GROUP -> ""
                         WizardStep.CATEGORIES -> ""
                         WizardStep.FIELDS -> ""
                         WizardStep.EDITOR -> ""
-                        WizardStep.REVIEW -> if (normalMode)
-                            "Confira as músicas escolhidas antes de salvar." else
-                            "Confira fontes, regras e músicas antes de salvar."
+                        WizardStep.REVIEW -> ""
                     }
                     WizardHeading(header, headingDetail)
                 }
@@ -859,115 +852,164 @@ internal fun SmartPlaylistV2WizardUi(
                         val root = if (hasConfiguredRules)
                             rule as? SmartPlaylistRule.Group else null
                         item {
-                            WizardCard("Combinação entre grupos",
-                                "Como os blocos abaixo se relacionam") {
-                                if (root != null) WizardJoinPicker(root.join) {
-                                    onRuleChange(root.copy(join = it))
-                                } else Text(
-                                    if (!hasConfiguredRules)
-                                        "Escolha sua primeira condição para configurar as combinações."
-                                    else "A playlist contém uma condição principal.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                            if (root != null && root.children.size > 1) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                        "Combinar condições",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onBackground,
+                                    )
+                                    WizardJoinPicker(root.join) {
+                                        onRuleChange(root.copy(join = it))
+                                    }
+                                }
                             }
                         }
                         val children = if (!hasConfiguredRules) emptyList()
                             else root?.children ?: listOf(rule)
                         if (!hasConfiguredRules) item {
-                            WizardCard(
-                                "Nenhuma condição adicionada",
-                                "Escolha a primeira regra para começar a playlist.",
-                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    "Nenhuma condição adicionada",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "Adicione uma regra para começar.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                         itemsIndexed(children, key = { index, _ -> "group-$index" }) { index, child ->
                             val path = if (root == null) emptyList() else listOf(index)
                             val core = if (child is SmartPlaylistRule.Not) child.child else child
                             val named = (core as? SmartPlaylistRule.Group)?.name.orEmpty()
                             val expanded = index in expandedGroups
-                            WizardCard(
-                                named.ifBlank { "Grupo ${index + 1}" },
-                                ruleUiSummary(child, names),
-                                onClick = {
-                                    selectedPath = path
-                                    page = WizardStep.GROUP
-                                },
-                                showChevron = false,
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()) {
-                                    Text(smartConditionCountLabel(smartRuleLeafCount(child)),
-                                        style = MaterialTheme.typography.labelMedium)
-                                    Spacer(Modifier.weight(1f))
-                                    PlaylistWizardCompactAction(
-                                        label = if (expanded) "Recolher" else "Expandir",
-                                        icon = if (expanded) PlaylistEditorIcons.ChevronUp
-                                            else PlaylistEditorIcons.ChevronDown,
-                                        onClick = {
-                                            expandedGroups = if (expanded) expandedGroups - index
-                                                else expandedGroups + index
-                                        },
-                                    )
-                                    PlaylistWizardCompactAction(
-                                        label = if (core is SmartPlaylistRule.Group)
-                                            "Excluir grupo" else "Excluir condição",
-                                        icon = PlaylistEditorIcons.Delete,
-                                        onClick = {
-                                            pendingRuleDeletion = path
-                                            pendingRuleDeletionIsGroup =
-                                                core is SmartPlaylistRule.Group
-                                        },
-                                    )
-                                }
+                            SettingsGroupSurface {
+                                SettingsRow(
+                                    title = named.ifBlank { "Grupo ${index + 1}" },
+                                    subtitleContent = {
+                                        Text(
+                                            ruleUiSummary(child, names),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    },
+                                    onClick = {
+                                        selectedPath = path
+                                        page = WizardStep.GROUP
+                                    },
+                                    reserveIconSpace = false,
+                                    trailing = {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            PlaylistWizardCompactAction(
+                                                label = if (expanded) "Recolher" else "Expandir",
+                                                icon = if (expanded) PlaylistEditorIcons.ChevronUp
+                                                    else PlaylistEditorIcons.ChevronDown,
+                                                onClick = {
+                                                    expandedGroups = if (expanded) expandedGroups - index
+                                                        else expandedGroups + index
+                                                },
+                                            )
+                                            PlaylistWizardCompactAction(
+                                                label = if (core is SmartPlaylistRule.Group)
+                                                    "Excluir grupo" else "Excluir condição",
+                                                icon = PlaylistEditorIcons.Delete,
+                                                onClick = {
+                                                    pendingRuleDeletion = path
+                                                    pendingRuleDeletionIsGroup =
+                                                        core is SmartPlaylistRule.Group
+                                                },
+                                            )
+                                        }
+                                    },
+                                )
                                 if (expanded) {
                                     val conditions = (core as? SmartPlaylistRule.Group)?.children
                                         ?: listOf(child)
-                                    conditions.forEachIndexed { i, condition ->
-                                        Text("${i + 1}. " + ruleUiSummary(condition, names),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(
+                                            start = ROW_INSET, end = ROW_INSET, bottom = 12.dp,
+                                        ),
+                                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                                    ) {
+                                        conditions.forEachIndexed { i, condition ->
+                                            Text(
+                                                "${i + 1}. " + ruleUiSummary(condition, names),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                         item {
-                            PlaylistWizardSecondaryAction(
-                                label = if (hasConfiguredRules)
-                                    "+ Adicionar grupo" else "+ Adicionar primeira condição",
-                                enabled = !hasConfiguredRules ||
-                                    (root != null && root.children.size < 64),
-                                onClick = {
-                                    targetGroupPath = emptyList()
-                                    addingGroup = hasConfiguredRules
-                                    search = ""
-                                    page = WizardStep.CATEGORIES
-                                },
+                            PlaylistWizardRuleActions(
+                                listOf(
+                                    PlaylistWizardRuleAction(
+                                        label = if (hasConfiguredRules) "Adicionar grupo"
+                                            else "Adicionar primeira condição",
+                                        icon = PlaylistEditorIcons.Add,
+                                        enabled = !hasConfiguredRules ||
+                                            (root != null && root.children.size < 64),
+                                        onClick = {
+                                            targetGroupPath = emptyList()
+                                            addingGroup = hasConfiguredRules
+                                            search = ""
+                                            page = WizardStep.CATEGORIES
+                                        },
+                                    ),
+                                ),
                             )
                         }
                         if (!filterMode) item {
-                            WizardCard("Limite e ordenação",
-                                "Aplicados depois de avaliar todas as condições") {
-                                PlaylistWizardSecondaryAction(
-                                    label = "Ordenar: " + sortUiLabel(sort),
-                                    onClick = { picker = "sort" },
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(
+                                    "Limite e ordenação",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                 )
-                                PlaylistWizardTextEntry(
-                                    value = limit,
-                                    onValueChange = onLimitChange,
-                                    label = "Máximo de músicas",
-                                    hint = "De 1 a 10.000",
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    emphasized = true,
-                                )
-                                if (sort == SmartPlaylistV2Sort.STABLE_RANDOM ||
-                                    sort == SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS) {
-                                    PlaylistWizardTextEntry(
-                                        value = seed,
-                                        onValueChange = onSeedChange,
-                                        label = "Semente aleatória",
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        emphasized = true,
+                                SettingsGroupSurface {
+                                    SettingsRow(
+                                        title = "Ordenar por",
+                                        value = sortUiLabel(sort),
+                                        onClick = { picker = "sort" },
+                                        reserveIconSpace = false,
                                     )
+                                    RowDivider()
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(
+                                            horizontal = ROW_INSET, vertical = 12.dp,
+                                        ),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        PlaylistWizardTextEntry(
+                                            value = limit,
+                                            onValueChange = onLimitChange,
+                                            label = "Máximo de músicas",
+                                            hint = "De 1 a 10.000",
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            emphasized = true,
+                                        )
+                                        if (sort == SmartPlaylistV2Sort.STABLE_RANDOM ||
+                                            sort == SmartPlaylistV2Sort.STABLE_RANDOM_ALBUMS) {
+                                            PlaylistWizardTextEntry(
+                                                value = seed,
+                                                onValueChange = onSeedChange,
+                                                label = "Semente aleatória",
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                                emphasized = true,
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
