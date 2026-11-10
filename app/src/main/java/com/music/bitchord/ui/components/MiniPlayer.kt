@@ -238,6 +238,8 @@ internal fun Modifier.miniPlayerGestures(
     gestureIdentity: Any = Unit,
     /** Optional visual drag feedback; does not alter track-skip decisions. */
     onHorizontalSwipe: (Float, Boolean) -> Unit = { _, _ -> },
+    /** Reset visual swipe state immediately when a pointer is interrupted. */
+    onHorizontalCancel: () -> Unit = {},
 ): Modifier {
     // Recomposition from metadata updates must not cancel an active drag.
     // A genuinely new queue entry must restart the detector so an old
@@ -250,6 +252,7 @@ internal fun Modifier.miniPlayerGestures(
     val currentOnBlocked by rememberUpdatedState(onBlocked)
     val currentReduceMotion by rememberUpdatedState(reduceMotion)
     val currentOnHorizontalSwipe by rememberUpdatedState(onHorizontalSwipe)
+    val currentOnHorizontalCancel by rememberUpdatedState(onHorizontalCancel)
     val scope = rememberCoroutineScope()
     // Read at draw only, in the layer below: a pull moves the bar without
     // recomposing it.
@@ -292,13 +295,21 @@ internal fun Modifier.miniPlayerGestures(
             if (!vertical) {
                 var dragged = slopped.position.x - down.position.x
                 currentOnHorizontalSwipe(dragged, true)
-                // Read before consuming: a consumed change reports no movement.
-                val finished = drag(pointer) { change ->
-                    dragged += change.positionChange().x
-                    currentOnHorizontalSwipe(dragged, true)
-                    change.consume()
+                // A queue replacement cancels pointerInput while drag() is
+                // suspended. Always end feedback, but never let a cancelled
+                // drag animate the old swipe over the new queue entry.
+                var finished = false
+                try {
+                    // Read before consuming: a consumed change reports no movement.
+                    finished = drag(pointer) { change ->
+                        dragged += change.positionChange().x
+                        currentOnHorizontalSwipe(dragged, true)
+                        change.consume()
+                    }
+                } finally {
+                    if (!finished) currentOnHorizontalCancel()
+                    currentOnHorizontalSwipe(0f, false)
                 }
-                currentOnHorizontalSwipe(0f, false)
                 if (!finished) return@awaitEachGesture
                 val crossed = dragged <= -trackThreshold || dragged >= trackThreshold
                 when {
