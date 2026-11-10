@@ -32,13 +32,28 @@ OUTPUT = Path("discogs-211-corpus-candidates.json")
 
 
 def normalized(value: str) -> str:
-    return " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+    text = " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+    return re.sub(r"\\s*:\\s*", ": ", text.replace("’", "'").replace("‘", "'"))
 
 
 def comparable_title(value: str, artist: str) -> str:
     title = normalized(value)
     prefix = normalized(artist) + " - "
     return title[len(prefix):] if title.startswith(prefix) else title
+
+
+def known_group_title(title: str, artist: str, known: set[str]) -> bool:
+    value = comparable_title(title, artist)
+    if value in known:
+        return True
+    ending = re.search(r"\\s*[\\(\\[]([^\\(\\)\\[\\]]{1,72})[\\)\\]]$", value)
+    if not ending:
+        return False
+    suffix = ending.group(1)
+    if (not re.search(r"\\b(?:version|edition|ver\\.?|explicit|clean)\\b", suffix) or
+        re.search(r"\\b(?:remix|live|acoustic|instrumental|sped\\s+up|slowed)\\b", suffix)):
+        return False
+    return value[:ending.start()].strip() in known
 
 
 def discogs_artist_relation(payload: dict, expected_mbid: str) -> int | None:
@@ -174,10 +189,10 @@ def scout_artist(name: str, mbid: str, get, pause=lambda: None) -> dict:
             return finding
         finding["indexed_rows"] = len(hints)
         finding["exact_title_matches"] = sum(
-            comparable_title(hint["title"], name) in known for hint in hints)
+            known_group_title(hint["title"], name, known) for hint in hints)
         finding["candidate_index_hints"] = [
             {**hint, "assessment": "index_title_not_exact_mb_group_title"}
-            for hint in hints if comparable_title(hint["title"], name) not in known
+            for hint in hints if not known_group_title(hint["title"], name, known)
         ]
         finding["status"] = "index_compared_not_adjudicated"
     except (HTTPError, URLError, TimeoutError, OSError):
