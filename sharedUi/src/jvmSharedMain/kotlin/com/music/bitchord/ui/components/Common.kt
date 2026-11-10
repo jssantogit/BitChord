@@ -358,8 +358,7 @@ fun SignInBanner(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = stringResource(Res.string.sign_in_with_google),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.W700,
                     color = Color.Black,
                 )
@@ -441,7 +440,7 @@ fun PillTextField(
         if (value.isEmpty()) {
             Text(
                 text = placeholder,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                style = AppleTextRoles.formInput(MaterialTheme.typography.bodyMedium),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (multiline) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
@@ -454,8 +453,7 @@ fun PillTextField(
             singleLine = !multiline,
             minLines = if (multiline) 3 else 1,
             maxLines = if (multiline) 8 else 1,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 15.sp,
+            textStyle = AppleTextRoles.formInput(MaterialTheme.typography.bodyMedium).copy(
                 color = MaterialTheme.colorScheme.onBackground,
             ),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
