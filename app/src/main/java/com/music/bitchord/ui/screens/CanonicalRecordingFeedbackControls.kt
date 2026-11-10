@@ -1,5 +1,8 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -35,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.music.bitchord.ui.components.ActionRow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -61,6 +65,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
+import kotlin.math.ceil
 
 /**
  * Both song actions and My Ratings use this *same* local rating dialog.
@@ -191,6 +196,14 @@ internal fun CanonicalRecordingRatingDialog(recordingId: String, onDismiss: () -
 }
 
 /**
+ * Only an explicit, valid selection gets one star's restrained pulse.
+ * Loading a persisted rating never pulses; Reduce animations stays static.
+ */
+internal fun ratingSelectionPulseIndex(selected: Double, touched: Boolean, reducedMotion: Boolean): Int? =
+    if (!touched || reducedMotion || !selected.isFinite() || selected !in 1.0..5.0) null
+    else ceil(selected).toInt() - 1
+
+/**
  * Icon-based, locally editable 1–5 star modal. Each star has a left (half)
  * and right (whole) touch target; every increment is explicit and accessible.
  * Neither opening nor changing selection persists anything until Save.
@@ -213,6 +226,8 @@ internal fun CanonicalRecordingFeedbackPanel(
         if (!touched) selected = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
     }
     val selectedDescription = stringResource(Res.string.recording_feedback_stars_selected, selected.toString())
+    val reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current
+    val pulseIndex = ratingSelectionPulseIndex(selected, touched, reduceMotion)
     // Native Settings-group design, keeping the same explicit half-star editor.
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { if (!saving) onDismiss() },
@@ -241,6 +256,21 @@ internal fun CanonicalRecordingFeedbackPanel(
                 ) {
                     repeat(5) { i ->
                         val index = i.toDouble()
+                        val starPulse = remember { Animatable(1f) }
+                        LaunchedEffect(pulseIndex, reduceMotion) {
+                            if (pulseIndex == i && !reduceMotion) {
+                                starPulse.snapTo(0.88f)
+                                starPulse.animateTo(
+                                    1f,
+                                    spring(
+                                        dampingRatio = 0.70f,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                )
+                            } else {
+                                starPulse.snapTo(1f)
+                            }
+                        }
                         val half = (index + 0.5).coerceAtLeast(1.0)
                         val halfDescription = stringResource(Res.string.recording_feedback_stars_value, half.toString())
                         val wholeDescription = stringResource(Res.string.recording_feedback_stars_value, (index + 1.0).toString().removeSuffix(".0"))
@@ -256,7 +286,10 @@ internal fun CanonicalRecordingFeedbackPanel(
                                 },
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(38.dp),
+                                modifier = Modifier.size(38.dp).graphicsLayer {
+                                    scaleX = starPulse.value
+                                    scaleY = starPulse.value
+                                },
                             )
                             Row(Modifier.fillMaxSize()) {
                                 Box(
