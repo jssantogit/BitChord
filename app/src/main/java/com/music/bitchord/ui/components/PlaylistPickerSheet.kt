@@ -98,8 +98,11 @@ fun PlaylistPickerSheet(
     song: Song? = null,
     startCreating: Boolean = false,
     onDraftChanged: (Boolean) -> Unit = {},
+    onSavingChanged: (Boolean) -> Unit = {},
+    onRequestDismiss: (() -> Unit)? = null,
 ) {
     var creating by remember { mutableStateOf(startCreating) }
+    var formSaving by remember { mutableStateOf(false) }
     var formDirty by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     // By id rather than by value: the list is re-fetched under an open sheet,
@@ -118,18 +121,23 @@ fun PlaylistPickerSheet(
         NewPlaylistForm(
             // Nowhere to go back to when the sheet opened straight onto the
             // form; the sheet's own dismiss is the way out.
-            onBack = if (startCreating) null else ({
-                if (formDirty) confirmDiscard = true
+            onBack = if (startCreating) onRequestDismiss else ({
+                if (formSaving) Unit
+                else if (formDirty) confirmDiscard = true
                 else { onDraftChanged(false); creating = false }
             }),
             onCreate = onCreate,
+            onSavingChanged = { saving ->
+                formSaving = saving
+                onSavingChanged(saving)
+            },
             onDraftChanged = { changed ->
                 formDirty = changed
                 onDraftChanged(changed)
             },
             modifier = modifier.then(routeArrival),
         )
-        if (confirmDiscard) {
+        if (confirmDiscard && !formSaving) {
             ConfirmationAlert(
                 hazeState = null,
                 title = stringResource(R.string.editor_discard_title),
@@ -292,6 +300,7 @@ private fun NewPlaylistForm(
     onBack: (() -> Unit)?,
     onCreate: (String, PlaylistPrivacy, (Boolean) -> Unit) -> Unit,
     onDraftChanged: (Boolean) -> Unit,
+    onSavingChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var name by remember { mutableStateOf("") }
@@ -317,9 +326,11 @@ private fun NewPlaylistForm(
         attempted = true
         if (validName && !saving) {
             saving = true
+            onSavingChanged(true)
             saveFailed = false
             onCreate(name.trim(), privacy) { succeeded ->
                 saving = false
+                onSavingChanged(false)
                 if (!succeeded) saveFailed = true
                 else focusManager.clearFocus()
             }
@@ -368,10 +379,16 @@ private fun NewPlaylistForm(
         }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
+        Text(
+            nameLabel,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 16.dp)
+                .padding(horizontal = 22.dp, vertical = 8.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp))
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
