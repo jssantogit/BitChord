@@ -53,6 +53,7 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.download.DownloadState
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import java.util.Locale
 
 /**
@@ -310,7 +311,7 @@ fun BrowseActionsSheet(
                 )
             }
             if (onRename != null) {
-                ActionRow(Icons.Rounded.Edit, stringResource(R.string.rename)) {
+                ActionRow(PlaylistEditorIcons.Edit, stringResource(R.string.rename)) {
                     if (menu && onRenameInSheet != null) {
                         onRenameInSheet()
                     } else {
@@ -319,7 +320,7 @@ fun BrowseActionsSheet(
                 }
             }
             onEdit?.let { edit ->
-                ActionRow(Icons.Rounded.Edit, "Editar playlist", onClick = edit)
+                ActionRow(PlaylistEditorIcons.Edit, "Editar playlist", onClick = edit)
             }
             onReorder?.let {
                 ActionRow(Icons.Rounded.SwapVert, stringResource(R.string.reorder_songs), onClick = it)
