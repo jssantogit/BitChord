@@ -13,22 +13,12 @@ import androidx.compose.ui.unit.dp
  * Preserve fill alpha, path fill rules and 28-unit geometry exactly.
  */
 internal object AppleQueueVectors {
-    val Favorite: ImageVector by lazy {
-        ImageVector.Builder(
-            name = "apple_queue_favorite", defaultWidth = 28.dp, defaultHeight = 28.dp,
-            viewportWidth = 28f, viewportHeight = 28f,
-        ).apply {
-            addPath(
-                pathData = addPathNodes(
-                    "M14,14m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0"
-                ),
-                fill = SolidColor(Color.Black),
-                fillAlpha = 0.19f,
-                pathFillType = PathFillType.EvenOdd,
-            )
-            addPath(
-                pathData = addPathNodes(
-                    "M9.225,20.866C9.421,21.017 9.638,21.072 9.876,21.034C10.114,20.995 10.364,20.88 10.626,20.688L14" +
+
+    // These are the EXACT star contours within the expanded player's icons.
+    // Sharing the path strings keeps a five-star editor from accidentally
+    // recreating a different silhouette while dropping the circular platter.
+    private val starOutlinePath =
+        "M9.225,20.866C9.421,21.017 9.638,21.072 9.876,21.034C10.114,20.995 10.364,20.88 10.626,20.688L14" +
                     ".075,18.152L17.521,20.688C17.785,20.88 18.036,20.995 18.274,21.034C18.512,21.072 18.729,21.017 1" +
                     "8.925,20.866C19.119,20.72 19.236,20.529 19.277,20.292C19.318,20.055 19.286,19.785 19.182,19.482L" +
                     "17.818,15.435L21.294,12.94C21.561,12.751 21.747,12.549 21.854,12.335C21.962,12.121 21.975,11.897" +
@@ -49,6 +39,36 @@ internal object AppleQueueVectors {
                     ".246 16.157,15.394L17.346,18.641C17.353,18.666 17.352,18.683 17.343,18.692C17.336,18.701 17.32,1" +
                     "8.698 17.295,18.682L14.574,16.542C14.383,16.394 14.216,16.32 14.075,16.32C13.934,16.32 13.768,16" +
                     ".394 13.576,16.542L10.855,18.682C10.83,18.698 10.814,18.701 10.808,18.692Z"
+    private val favoritedCompoundPath =
+        "M14,0C21.732,0 28,6.268 28,14C28,21.732 21.732,28 14,28C6.268,28 0,21.732 0,14C0,6.268 6.268,0 1" +
+                    "4,0ZM14.077,5.797C13.66,5.797 13.66,5.797 13.367,6.077C13.074,6.358 13.074,6.358 12.909,6.875L11" +
+                    ".649,10.844L7.496,10.811C6.969,10.804 6.969,10.804 6.609,10.996C6.249,11.187 6.249,11.187 6.114," +
+                    "11.58C5.975,11.979 5.975,11.979 6.158,12.347C6.341,12.715 6.341,12.715 6.778,13.029L10.161,15.45" +
+                    "5L8.832,19.393C8.66,19.893 8.66,19.893 8.734,20.296C8.807,20.699 8.807,20.699 9.134,20.95C9.472," +
+                    "21.208 9.472,21.208 9.877,21.147C10.283,21.085 10.283,21.085 10.718,20.765L14.077,18.295L17.428," +
+                    "20.765C17.868,21.085 17.868,21.085 18.273,21.147C18.679,21.208 18.679,21.208 19.016,20.95C19.349" +
+                    ",20.699 19.349,20.699 19.42,20.296C19.49,19.893 19.49,19.893 19.318,19.393L17.989,15.455L21.372," +
+                    "13.029C21.814,12.715 21.814,12.715 21.995,12.35C22.176,11.985 22.176,11.985 22.036,11.585C21.901" +
+                    ",11.187 21.901,11.187 21.542,10.996C21.182,10.804 21.182,10.804 20.649,10.811L16.502,10.844L15.2" +
+                    "41,6.875C15.076,6.358 15.076,6.358 14.783,6.077C14.49,5.797 14.49,5.797 14.077,5.797Z"
+    private val starFilledPath = favoritedCompoundPath.substringAfter("Z")
+
+    val Favorite: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "apple_queue_favorite", defaultWidth = 28.dp, defaultHeight = 28.dp,
+            viewportWidth = 28f, viewportHeight = 28f,
+        ).apply {
+            addPath(
+                pathData = addPathNodes(
+                    "M14,14m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0"
+                ),
+                fill = SolidColor(Color.Black),
+                fillAlpha = 0.19f,
+                pathFillType = PathFillType.EvenOdd,
+            )
+            addPath(
+                pathData = addPathNodes(
+                    starOutlinePath
                 ),
                 fill = SolidColor(Color.Black),
                 fillAlpha = 1f,
@@ -64,20 +84,40 @@ internal object AppleQueueVectors {
         ).apply {
             addPath(
                 pathData = addPathNodes(
-                    "M14,0C21.732,0 28,6.268 28,14C28,21.732 21.732,28 14,28C6.268,28 0,21.732 0,14C0,6.268 6.268,0 1" +
-                    "4,0ZM14.077,5.797C13.66,5.797 13.66,5.797 13.367,6.077C13.074,6.358 13.074,6.358 12.909,6.875L11" +
-                    ".649,10.844L7.496,10.811C6.969,10.804 6.969,10.804 6.609,10.996C6.249,11.187 6.249,11.187 6.114," +
-                    "11.58C5.975,11.979 5.975,11.979 6.158,12.347C6.341,12.715 6.341,12.715 6.778,13.029L10.161,15.45" +
-                    "5L8.832,19.393C8.66,19.893 8.66,19.893 8.734,20.296C8.807,20.699 8.807,20.699 9.134,20.95C9.472," +
-                    "21.208 9.472,21.208 9.877,21.147C10.283,21.085 10.283,21.085 10.718,20.765L14.077,18.295L17.428," +
-                    "20.765C17.868,21.085 17.868,21.085 18.273,21.147C18.679,21.208 18.679,21.208 19.016,20.95C19.349" +
-                    ",20.699 19.349,20.699 19.42,20.296C19.49,19.893 19.49,19.893 19.318,19.393L17.989,15.455L21.372," +
-                    "13.029C21.814,12.715 21.814,12.715 21.995,12.35C22.176,11.985 22.176,11.985 22.036,11.585C21.901" +
-                    ",11.187 21.901,11.187 21.542,10.996C21.182,10.804 21.182,10.804 20.649,10.811L16.502,10.844L15.2" +
-                    "41,6.875C15.076,6.358 15.076,6.358 14.783,6.077C14.49,5.797 14.49,5.797 14.077,5.797Z"
+                    favoritedCompoundPath
                 ),
                 fill = SolidColor(Color.Black),
                 fillAlpha = 1f,
+                pathFillType = PathFillType.NonZero,
+            )
+        }.build()
+    }
+
+    /** Standalone star: same player contour, without the single-action platter. */
+    val RatingStarOutline: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "apple_queue_rating_star_outline",
+            defaultWidth = 28.dp, defaultHeight = 28.dp,
+            viewportWidth = 28f, viewportHeight = 28f,
+        ).apply {
+            addPath(
+                pathData = addPathNodes(starOutlinePath),
+                fill = SolidColor(Color.Black),
+                pathFillType = PathFillType.NonZero,
+            )
+        }.build()
+    }
+
+    /** The filled star is precisely the cutout contour of player Favorited. */
+    val RatingStarFilled: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "apple_queue_rating_star_filled",
+            defaultWidth = 28.dp, defaultHeight = 28.dp,
+            viewportWidth = 28f, viewportHeight = 28f,
+        ).apply {
+            addPath(
+                pathData = addPathNodes(starFilledPath),
+                fill = SolidColor(Color.Black),
                 pathFillType = PathFillType.NonZero,
             )
         }.build()
