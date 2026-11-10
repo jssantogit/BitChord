@@ -4,7 +4,7 @@ import unittest
 
 from catalog_211_discogs_corpus_candidates import (
     complete_mb_titles, discogs_artist_relation, public_index_hints,
-    scout_artist, normalized, comparable_title,
+    scout_artist, normalized, comparable_title, known_group_title,
 )
 
 MBID = "95663592-1447-4579-90f7-c94733476667"
@@ -46,6 +46,11 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
         self.assertEqual(2, len(seen))
         self.assertEqual("the sin : vanish", normalized("THE SIN : VANISH"))
         self.assertEqual("known", comparable_title("ENHYPEN - KNOWN", "ENHYPEN"))
+        self.assertEqual("romance: untold", normalized("ROMANCE : UNTOLD"))
+        self.assertEqual("i'll like you", normalized("I’LL LIKE YOU"))
+        self.assertTrue(known_group_title("ICONIC BY MISTAKE (Explicit)",
+                                          "ILLIT", {"iconic by mistake"}))
+        self.assertFalse(known_group_title("KNOWN (Live)", "ENHYPEN", {"known"}))
         self.assertIsNone(complete_mb_titles(MBID, lambda _: {
             "release-group-offset": 0, "release-group-count": 2,
             "release-groups": [{"id": GROUP_A, "title": "Only One"}]
