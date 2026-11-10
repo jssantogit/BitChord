@@ -12,6 +12,18 @@ Fonte principal: `jssantogit/am-descomp`, branch `fase-3-investigacao-visual`, H
 - Os recursos gerais `nav_default_*` (150ms), `abc_popup_enter/exit` (150ms) e Material3 sheets (400/350ms etc.) **não estão vinculados ao fluxo observado**. Não transplantar esses números para toda a interface, nem chamar o resultado de réplica 1:1 Apple.
 - A animação de busca inline dentro de playlist possui um fluxo próprio comprovado no Apple e **não** é uma duração geral de navegação.
 
+## Nova referência de composição do am-descomp (issue #5 encerrada)
+
+A branch `fase-3-investigacao-visual` passou a conter
+[`docs/design/new-surface-patterns.md`](https://github.com/jssantogit/am-descomp/blob/bf8322cb24efc1d14ee0223e793eee0cce98f887/docs/design/new-surface-patterns.md)
+no commit `bf8322cb`. É a fonte documental mínima e delimitada para cinco famílias:
+popup overflow, folha/confirmar, formulário/editor, escolha/avaliação e página agrupada/navegação.
+Ela **não comprova** métricas nem tempos para esses fluxos e classifica novos editores de nota
+como **adaptação BitChord**. Neste trabalho, o documento passa a orientar como
+reutilizar as superfícies existentes e respeitar Back, foco, IME, acessibilidade
+e redução de movimento; ele **não justifica** substituir componentes que já
+possuem comportamento nativo.
+
 ## Implementação visual BitChord — isolada na PR #212
 
 | Superfície | Anterior | Agora | Garantia |
