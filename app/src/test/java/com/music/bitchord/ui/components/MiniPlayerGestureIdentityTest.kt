@@ -37,6 +37,7 @@ class MiniPlayerGestureIdentityTest {
         var nextCalls = 0
         var previousCalls = 0
         val horizontalFeedback = mutableListOf<Pair<Float, Boolean>>()
+        var horizontalCancels = 0
         compose.setContent {
             MaterialTheme {
                 Box(
@@ -49,6 +50,7 @@ class MiniPlayerGestureIdentityTest {
                             onHorizontalSwipe = { distance, active ->
                                 horizontalFeedback += distance to active
                             },
+                            onHorizontalCancel = { horizontalCancels++ },
                         )
                         .testTag("gesture-zone"),
                 )
@@ -71,6 +73,7 @@ class MiniPlayerGestureIdentityTest {
                 horizontalFeedback.last(),
             )
             assertEquals("The gesture ends feedback exactly once", 1, horizontalFeedback.count { !it.second })
+            assertEquals("The interrupted gesture must reset rather than settle", 1, horizontalCancels)
         }
     }
 
@@ -115,6 +118,7 @@ class MiniPlayerGestureIdentityTest {
     @Test fun updatingDisplayMetadataKeepsOneInFlightSwipeForSameQueueEntry() {
         val displayArtist = mutableStateOf("Original artist")
         var nextCalls = 0
+        var horizontalCancels = 0
         compose.setContent {
             MaterialTheme {
                 Box(
@@ -124,6 +128,7 @@ class MiniPlayerGestureIdentityTest {
                             onNext = { nextCalls++ },
                             onPrevious = {},
                             gestureIdentity = "queue-first",
+                            onHorizontalCancel = { horizontalCancels++ },
                         )
                         .testTag("gesture-zone"),
                 ) {
@@ -138,6 +143,9 @@ class MiniPlayerGestureIdentityTest {
         compose.runOnIdle { displayArtist.value = "Updated artist" }
         compose.waitForIdle()
         compose.onNodeWithTag("gesture-zone").performTouchInput { up() }
-        compose.runOnIdle { assertEquals(1, nextCalls) }
+        compose.runOnIdle {
+            assertEquals(1, nextCalls)
+            assertEquals("A normal release must not trigger cancellation", 0, horizontalCancels)
+        }
     }
 }
