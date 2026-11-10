@@ -44,7 +44,7 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
                     "release-groups": [{"id": GROUP_B, "title": "Another"}]}
         self.assertEqual({"known", "another"}, complete_mb_titles(MBID, fetch))
         self.assertEqual(2, len(seen))
-        self.assertEqual("the sin : vanish", normalized("THE SIN : VANISH"))
+        self.assertEqual("the sin: vanish", normalized("THE SIN : VANISH"))
         self.assertEqual("known", comparable_title("ENHYPEN - KNOWN", "ENHYPEN"))
         self.assertEqual("romance: untold", normalized("ROMANCE : UNTOLD"))
         self.assertEqual("i'll like you", normalized("I’LL LIKE YOU"))
