@@ -14,7 +14,7 @@ class PlaylistEditorIconsTest {
             PlaylistEditorIcons.Edit,
             PlaylistEditorIcons.ChevronUp,
             PlaylistEditorIcons.ChevronDown, PlaylistEditorIcons.Calendar,
-            PlaylistEditorIcons.Audio, PlaylistEditorIcons.Lock,
+            PlaylistEditorIcons.Audio, PlaylistEditorIcons.Artwork, PlaylistEditorIcons.Lock,
             PlaylistEditorIcons.Link, PlaylistEditorIcons.Globe,
             PlaylistEditorIcons.Selected, PlaylistEditorIcons.Unselected,
         )
