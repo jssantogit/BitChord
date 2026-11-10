@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
@@ -33,10 +34,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +70,8 @@ import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.player.PlayerDock
 import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
@@ -179,6 +184,14 @@ internal fun appleMusicTabScaleTarget(enabled: Boolean, selected: Boolean, press
         selected -> 1.04f
         else -> 1f
 }
+
+/**
+ * The pointer drives a bounded visual displacement, not a composition state
+ * transition for every pixel. Drag position is only read in graphicsLayer.
+ */
+internal fun miniPlayerSwipeVisualOffset(distancePx: Float, thresholdPx: Float, maxPx: Float): Float =
+    if (!distancePx.isFinite() || thresholdPx <= 0f || maxPx <= 0f) 0f
+    else (distancePx / thresholdPx).coerceIn(-1f, 1f) * maxPx
 
 @Composable
 private fun appleMusicPressScale(pressed: Boolean, reduced: Boolean): Float {
@@ -394,20 +407,26 @@ fun AppleMusicMiniPlayer(
     val playScale = appleMusicPressScale(playPressed, reduceMotion)
     val nextScale = appleMusicPressScale(nextPressed, reduceMotion)
 
-    // Horizontal swipes already skip tracks in the native gesture recognizer.
-    // Give only the experimental bar a small, clipped drag and spring-back.
+    // The shared recognizer already owns the skip/expand decision.
+    // Pointer updates should invalidate ONLY this row's graphics layer,
+    // not recompose artwork/text or restart a crossfade for every drag pixel.
     val swipeDistance = remember { mutableFloatStateOf(0f) }
-    var swipeActive by remember { mutableStateOf(false) }
+    val swipeActive = remember { mutableStateOf(false) }
+    val swipeSettle = remember { Animatable(0f) }
+    val settleJob = remember { arrayOfNulls<Job>(1) }
+    val settleScope = rememberCoroutineScope()
     val swipeLimitPx = with(LocalDensity.current) { 72.dp.toPx() }
     val swipeMaxPx = with(LocalDensity.current) { 12.dp.toPx() }
-    val swipeOffset by animateFloatAsState(
-        targetValue = if (swipeActive && !reduceMotion) {
-            (swipeDistance.floatValue / swipeLimitPx).coerceIn(-1f, 1f) * swipeMaxPx
-        } else 0f,
-        animationSpec = if (reduceMotion || swipeActive) snap()
-            else spring(dampingRatio = 0.78f, stiffness = 400f),
-        label = "appleMusicMiniSwipeSettle",
-    )
+    // A preference toggle during settling cancels the running animation,
+    // including any swipe whose pointer has not yet lifted.
+    LaunchedEffect(reduceMotion) {
+        if (reduceMotion) {
+            settleJob[0]?.cancel()
+            swipeActive.value = false
+            swipeDistance.floatValue = 0f
+            swipeSettle.snapTo(0f)
+        }
+    }
     Box(
         modifier = modifier
             .padding(horizontal = AppleMusicChromeMetrics.pillHorizontalInset)
@@ -424,8 +443,35 @@ fun AppleMusicMiniPlayer(
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
                 onHorizontalSwipe = { distancePx, active ->
-                    swipeDistance.floatValue = distancePx
-                    swipeActive = active
+                    if (active) {
+                        if (!swipeActive.value) {
+                            settleJob[0]?.cancel()
+                            swipeActive.value = true
+                        }
+                        swipeDistance.floatValue = distancePx
+                    } else if (swipeActive.value) {
+                        val releaseOffset = miniPlayerSwipeVisualOffset(
+                            swipeDistance.floatValue, swipeLimitPx, swipeMaxPx,
+                        )
+                        settleJob[0]?.cancel()
+                        if (reduceMotion) {
+                            swipeActive.value = false
+                            swipeDistance.floatValue = 0f
+                        } else {
+                            settleJob[0] = settleScope.launch {
+                                // Snap to the last finger position *before*
+                                // switching the draw layer to its settling
+                                // state, avoiding a one-frame jump to zero.
+                                swipeSettle.snapTo(releaseOffset)
+                                swipeActive.value = false
+                                swipeDistance.floatValue = 0f
+                                swipeSettle.animateTo(
+                                    0f,
+                                    spring(dampingRatio = 0.78f, stiffness = 400f),
+                                )
+                            }
+                        }
+                    }
                 },
             )
             .fillMaxWidth()
@@ -438,7 +484,15 @@ fun AppleMusicMiniPlayer(
                 .fillMaxWidth()
                 .height(AppleMusicChromeMetrics.miniPlayerHeight)
                 .padding(horizontal = 12.dp)
-                .graphicsLayer { translationX = swipeOffset },
+                .graphicsLayer {
+                    translationX = when {
+                        reduceMotion -> 0f
+                        swipeActive.value -> miniPlayerSwipeVisualOffset(
+                            swipeDistance.floatValue, swipeLimitPx, swipeMaxPx,
+                        )
+                        else -> swipeSettle.value
+                    }
+                },
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val artCorner = RoundedCornerShape(6.dp)

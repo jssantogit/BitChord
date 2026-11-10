@@ -28,3 +28,11 @@ O BitChord usa **`AppleMusicMiniPlayer` ativo**, não o legado `MiniPlayer` nem 
 ## Auditoria restante, não confundida com esta entrega
 
 Acompanhar performance do feedback por gesto horizontal (estado de offset atualizado por pointer), hit targets de 48dp de acessibilidade com affordances visuais 40dp, interrupção de crossfade em skips muito rápidos, alinhamento de insets e o arco real da sheet. Não trocar por valores Apple não documentados. Também investigar temporalidade da restauração de arte no retorno do player para o miniplayer, se reproduzível no aparelho.
+
+## Segunda implementação: feedback horizontal sem recomposição por pixel
+
+A barra Apple ativa tinha `swipeDistance` como alvo lido em `animateFloatAsState` durante a composição. Cada evento de ponteiro alterava o estado observado no corpo de `AppleMusicMiniPlayer`, podendo recompor Crossfade, AsyncImage, texto e transporte **para mover somente a linha de conteúdo em ±12px/dp** (cálculo real em px). A cadeia compartilhada `miniPlayerGestures` já decide eixo e um único skip por gesto e não foi reescrita.
+
+Agora o deslocamento `miniPlayerSwipeVisualOffset` é consultado apenas dentro de `graphicsLayer`, e a acomodação usa `Animatable`/corrotina após soltar, cancelável por novo arrasto. Isso remove a dependência de composição por amostra de pointer, sem alterar threshold de skip, haptics, callbacks, PlayerDock ou posição de pill/artwork. A redução de movimento zera o offset mesmo durante o gesto e cancela a acomodação. Contratos unitários testam clamp, simetria e valores inválidos.
+
+É otimização Bitchord, não afirmação sobre a implementação original da UI Apple. Monitorar abertura com gesto rápido e mudança de faixa no mesmo frame em aparelho.

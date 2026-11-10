@@ -19,6 +19,19 @@ class AppleMusicChromeMotionPolicyTest {
     }
 
     @Test
+    fun dragVisualOffsetIsBoundedIndependentOfRepeatedPointerUpdates() {
+        // Offset is computed only inside graphicsLayer during the actual
+        // gesture; the same 72dp threshold is used for skip decisions.
+        assertEquals(0f, miniPlayerSwipeVisualOffset(0f, 72f, 12f), 0.0001f)
+        assertEquals(-6f, miniPlayerSwipeVisualOffset(-36f, 72f, 12f), 0.0001f)
+        assertEquals(6f, miniPlayerSwipeVisualOffset(36f, 72f, 12f), 0.0001f)
+        assertEquals(12f, miniPlayerSwipeVisualOffset(500f, 72f, 12f), 0.0001f)
+        assertEquals(-12f, miniPlayerSwipeVisualOffset(-500f, 72f, 12f), 0.0001f)
+        assertEquals(0f, miniPlayerSwipeVisualOffset(Float.NaN, 72f, 12f), 0.0001f)
+        assertEquals(0f, miniPlayerSwipeVisualOffset(100f, 0f, 12f), 0.0001f)
+    }
+
+    @Test
     fun miniplayerPressNeverScalesWhenReducedMotionIsEnabled() {
         assertEquals(0.9f, GlobalMotionPolicy.pressedScale(pressed = true, reduced = false, activeScale = 0.9f), 0.0001f)
         assertEquals(1f, GlobalMotionPolicy.pressedScale(pressed = true, reduced = true, activeScale = 0.9f), 0.0001f)
