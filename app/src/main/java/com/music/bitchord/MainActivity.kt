@@ -5403,6 +5403,7 @@ private fun BitChordApp(
             if (playlistTarget != null || creatingPlaylist) {
                 val target = playlistTarget
                 var playlistDraftDirty by remember { mutableStateOf(false) }
+                var playlistFormSaving by remember { mutableStateOf(false) }
                 var confirmPlaylistDismiss by remember { mutableStateOf(false) }
                 val dismiss = {
                     playlistTarget = null
@@ -5411,7 +5412,9 @@ private fun BitChordApp(
                 val playlistSheetState = rememberModalBottomSheetState(
                     skipPartiallyExpanded = true,
                     confirmValueChange = { destination ->
-                        if (destination == androidx.compose.material3.SheetValue.Hidden && playlistDraftDirty) {
+                        if (destination == androidx.compose.material3.SheetValue.Hidden && playlistFormSaving) {
+                            false
+                        } else if (destination == androidx.compose.material3.SheetValue.Hidden && playlistDraftDirty) {
                             confirmPlaylistDismiss = true
                             false
                         } else true
@@ -5419,7 +5422,8 @@ private fun BitChordApp(
                 )
                 ModalBottomSheet(
                     onDismissRequest = {
-                        if (playlistDraftDirty) confirmPlaylistDismiss = true
+                        if (playlistFormSaving) Unit
+                        else if (playlistDraftDirty) confirmPlaylistDismiss = true
                         else dismiss()
                     },
                     sheetState = playlistSheetState,
@@ -5431,6 +5435,12 @@ private fun BitChordApp(
                         song = target,
                         startCreating = target == null,
                         onDraftChanged = { playlistDraftDirty = it },
+                        onSavingChanged = { playlistFormSaving = it },
+                        onRequestDismiss = {
+                            if (playlistFormSaving) Unit
+                            else if (playlistDraftDirty) confirmPlaylistDismiss = true
+                            else dismiss()
+                        },
                         onAdd = { picked ->
                             target?.let { song ->
                                 viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
@@ -5461,7 +5471,7 @@ private fun BitChordApp(
                         },
                     )
                 }
-                if (confirmPlaylistDismiss) {
+                if (confirmPlaylistDismiss && !playlistFormSaving) {
                     ConfirmationAlert(
                         hazeState = null,
                         title = androidx.compose.ui.res.stringResource(R.string.editor_discard_title),
