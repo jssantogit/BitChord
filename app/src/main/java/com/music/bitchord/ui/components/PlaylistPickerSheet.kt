@@ -509,17 +509,36 @@ internal fun RenamePlaylistForm(
     onBack: () -> Unit,
     onRename: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onDraftChanged: (Boolean) -> Unit = {},
 ) {
-    var name by remember { mutableStateOf(playlist.title) }
+    var name by remember(playlist.playlistId) { mutableStateOf(playlist.title) }
+    var confirmDiscard by remember(playlist.playlistId) { mutableStateOf(false) }
+    var attempted by remember(playlist.playlistId) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val nameLabel = stringResource(R.string.playlist_name)
+    val nameError = when {
+        name.length > 80 -> stringResource(R.string.playlist_editor_name_too_long)
+        (attempted || name.isNotEmpty()) && name.isBlank() ->
+            stringResource(R.string.playlist_editor_name_required)
+        else -> null
+    }
+    val hasChanges = name != playlist.title
+    val validName = name.isNotBlank() && name.length <= 80
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    val requestBack: () -> Unit = {
+        if (hasChanges) confirmDiscard = true
+        else { onDraftChanged(false); onBack() }
+    }
+    BackHandler { requestBack() }
 
     val submit: () -> Unit = {
-        if (name.isNotBlank()) {
+        attempted = true
+        if (validName && hasChanges) {
             focusManager.clearFocus()
-            onRename(name)
+            onDraftChanged(false)
+            onRename(name.trim())
         }
     }
 
@@ -537,7 +556,7 @@ internal fun RenamePlaylistForm(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(
-                onClick = onBack,
+                onClick = requestBack,
                 modifier = Modifier.size(40.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
             ) {
@@ -557,17 +576,26 @@ internal fun RenamePlaylistForm(
         }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
+        Text(
+            nameLabel,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 16.dp)
+                .padding(horizontal = 22.dp, vertical = 8.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp))
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = {
+                    name = it
+                    onDraftChanged(it != playlist.title)
+                },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
                     color = MaterialTheme.colorScheme.onBackground,
@@ -577,12 +605,25 @@ internal fun RenamePlaylistForm(
                 keyboardActions = KeyboardActions(onDone = { submit() }),
                 modifier = Modifier
                     .weight(1f)
+                    .testTag("playlist-editor-rename-name")
+                    .semantics {
+                        contentDescription = nameLabel
+                        if (nameError != null) error(nameError)
+                    }
                     .focusRequester(focusRequester),
+            )
+        }
+        if (nameError != null) {
+            Text(
+                nameError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 22.dp),
             )
         }
         Button(
             onClick = submit,
-            enabled = name.isNotBlank() && name != playlist.title,
+            enabled = validName && hasChanges,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 22.dp)
@@ -596,6 +637,22 @@ internal fun RenamePlaylistForm(
             Text(stringResource(R.string.save_name))
         }
         Spacer(Modifier.height(28.dp))
+    }
+    if (confirmDiscard) {
+        ConfirmationAlert(
+            hazeState = null,
+            title = stringResource(R.string.editor_discard_title),
+            description = stringResource(R.string.editor_discard_playlist_body),
+            confirmLabel = stringResource(R.string.editor_discard_confirm),
+            dismissLabel = stringResource(R.string.editor_keep_editing),
+            destructive = true,
+            onConfirm = {
+                confirmDiscard = false
+                onDraftChanged(false)
+                onBack()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
     }
 }
 
