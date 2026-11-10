@@ -28,6 +28,21 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistEditorPresentationTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun secondaryEditorFooterActionIsACompactTextControl() {
+        var clicked = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardTextAction(
+                    label = "Salvar como filtro reutilizável",
+                    onClick = { clicked++ },
+                )
+            }
+        }
+        compose.onNodeWithTag("playlist-wizard-text-action").assertHeightIsEqualTo(44.dp)
+        compose.onNodeWithText("Salvar como filtro reutilizável").performClick()
+        compose.runOnIdle { assertEquals(1, clicked) }
+    }
+
     @Test fun compactEditorActionsUseTheGlobal40DpCircularControl() {
         var clicks = 0
         compose.setContent {
