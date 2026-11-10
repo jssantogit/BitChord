@@ -61,6 +61,12 @@ object PlaylistEditorIcons {
         moveTo(18f, 18f); lineTo(20f, 18f)
         moveTo(16f, 16f); lineTo(16f, 20f)
     } }
+    val Edit by lazy { outlined("playlist_edit") {
+        moveTo(4f, 20f); lineTo(9f, 19f); lineTo(19.5f, 8.5f)
+        curveTo(21f, 7f, 17f, 3f, 15.5f, 4.5f)
+        lineTo(5f, 15f); close()
+        moveTo(13.5f, 6.5f); lineTo(17.5f, 10.5f)
+    } }
     val Delete by lazy { outlined("playlist_delete") {
         moveTo(5f, 7f); lineTo(19f, 7f)
         moveTo(9f, 4.5f); lineTo(15f, 4.5f)
