@@ -204,6 +204,33 @@ class DiscogsEditorialCatalogPolicyTest {
         }
     }
 
+    @Test fun realPublicIndexPunctuationAndExplicitVariantsAreNotFalseDiscogsOnly() {
+        val knownVariants = listOf(
+            "Romance: Untold" to "ROMANCE : UNTOLD",
+            "I’LL LIKE YOU" to "I'll Like You",
+            "ICONIC BY MISTAKE (Explicit)" to "ICONIC BY MISTAKE",
+        )
+        knownVariants.forEachIndexed { index, (discogsTitle, musicBrainzTitle) ->
+            val snapshot = DiscogsPublicEditionSnapshot(
+                edition(160L + index, master = null).copy(title = discogsTitle), 1_000,
+            )
+            assertTrue("Known MusicBrainz group is not missing: $discogsTitle",
+                DiscogsShadowCatalog.select(
+                    listOf(snapshot), expectedArtist = "ILLIT",
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                    knownMusicBrainzTitles = setOf(musicBrainzTitle),
+                ).isEmpty())
+        }
+        val distinct = DiscogsPublicEditionSnapshot(
+            edition(170L, master = null).copy(title = "Easy-Crazy-Hot"), 1_000,
+        )
+        assertEquals(1, DiscogsShadowCatalog.select(
+            listOf(distinct), expectedArtist = "ILLIT",
+            mbCatalogChecked = true, nowMillis = 1_200,
+            knownMusicBrainzTitles = setOf("CRAZY", "HOT"),
+        ).size)
+    }
+
     @Test fun distinctRemixOrLiveReleaseIsNotSilentlyCollapsedIntoOriginalGroup() {
         val titles = listOf("Super Real Me (remix)", "Super Real Me (live)")
         titles.forEachIndexed { i, title ->
