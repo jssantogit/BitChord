@@ -62,6 +62,15 @@ class GlobalMotionPolicyTest {
         assertEquals(0, GlobalMotionPolicy.duration(GlobalMotionPolicy.loaderExitMillis, true))
     }
 
+    @Test fun refreshPuckNeverRotatesUnderReducedMotionOrInvalidDragValues() {
+        assertEquals(180f, GlobalMotionPolicy.refreshPuckRotationDegrees(1f, reduced = false), 0.0001f)
+        assertEquals(360f, GlobalMotionPolicy.refreshPuckRotationDegrees(3f, reduced = false), 0.0001f)
+        assertEquals(0f, GlobalMotionPolicy.refreshPuckRotationDegrees(-1f, reduced = false), 0.0001f)
+        assertEquals(0f, GlobalMotionPolicy.refreshPuckRotationDegrees(1f, reduced = true), 0.0001f)
+        assertEquals(0f, GlobalMotionPolicy.refreshPuckRotationDegrees(Float.NaN, reduced = false), 0.0001f)
+        assertEquals(0f, GlobalMotionPolicy.refreshPuckRotationDegrees(Float.POSITIVE_INFINITY, reduced = false), 0.0001f)
+    }
+
     @Test fun invalidDurationIsRejectedRatherThanSilentlyAnimatingBackwards() {
         assertThrows(IllegalArgumentException::class.java) {
             GlobalMotionPolicy.duration(-1, reduced = false)
