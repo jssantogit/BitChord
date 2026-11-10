@@ -775,7 +775,7 @@ class PlaylistLibraryVisualReuseTest {
                 },
             )
         }
-        compose.onAllNodesWithTag("native-settings-group-surface").assertCountEquals(1)
+        compose.onNodeWithTag("playlist-category-group", useUnmergedTree = true).assertExists()
         compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true)
             .assertCountEquals(7)
         compose.onNodeWithText("Categoria 7").assertExists()
