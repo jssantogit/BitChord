@@ -36,6 +36,7 @@ class MiniPlayerGestureIdentityTest {
         val queueEntry = mutableStateOf("queue-first")
         var nextCalls = 0
         var previousCalls = 0
+        val horizontalFeedback = mutableListOf<Pair<Float, Boolean>>()
         compose.setContent {
             MaterialTheme {
                 Box(
@@ -45,6 +46,9 @@ class MiniPlayerGestureIdentityTest {
                             onNext = { nextCalls++ },
                             onPrevious = { previousCalls++ },
                             gestureIdentity = queueEntry.value,
+                            onHorizontalSwipe = { distance, active ->
+                                horizontalFeedback += distance to active
+                            },
                         )
                         .testTag("gesture-zone"),
                 )
@@ -60,6 +64,13 @@ class MiniPlayerGestureIdentityTest {
         compose.runOnIdle {
             assertEquals(0, nextCalls)
             assertEquals(0, previousCalls)
+            assertTrue("The interrupted swipe must have started", horizontalFeedback.any { it.second })
+            assertEquals(
+                "A cancelled pointer must end horizontal feedback, not leave it active",
+                0f to false,
+                horizontalFeedback.last(),
+            )
+            assertEquals("The gesture ends feedback exactly once", 1, horizontalFeedback.count { !it.second })
         }
     }
 
