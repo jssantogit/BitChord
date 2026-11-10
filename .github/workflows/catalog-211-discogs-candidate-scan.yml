@@ -16,6 +16,9 @@ on:
       - scripts/catalog_211_discogs_edition_pair_review.py
       - scripts/test_catalog_211_discogs_edition_pair_review.py
       - docs/plans/catalog-211-discogs-edition-pairs.json
+      - scripts/catalog_211_discogs_unlinked_group_probe.py
+      - scripts/test_catalog_211_discogs_unlinked_group_probe.py
+      - docs/plans/catalog-211-discogs-corpus-manifest.json
       - .github/workflows/catalog-211-discogs-candidate-scan.yml
   workflow_dispatch:
 
@@ -47,8 +50,12 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_public_link_probe.py' -v
       - name: Test exact-ID cross-provider edition controls offline
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_edition_pair_review.py' -v
-      - name: Compare three exact MusicBrainz and Discogs Release pairs
+      - name: Compare six exact MusicBrainz and Discogs Release pairs
         run: python3 scripts/catalog_211_discogs_edition_pair_review.py
+      - name: Test ReleaseGroup-scoped barcode lead search offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_unlinked_group_probe.py' -v
+      - name: Observe bounded alternative editions in the same ReleaseGroup
+        run: python3 scripts/catalog_211_discogs_unlinked_group_probe.py
       - name: Retain non-adjudicated source observations for manual review
         if: always()
         uses: actions/upload-artifact@v4
@@ -58,5 +65,6 @@ jobs:
             discogs-211-corpus-candidates.json
             discogs-211-corpus-edition-observations.json
             discogs-211-edition-pair-evidence.json
+            discogs-211-unlinked-alternative-editions.json
           if-no-files-found: warn
           retention-days: 7

@@ -184,3 +184,9 @@ necessários os controles restantes do corpus e a prova de navegação no app.
 
 Status: **8 pistas reais documentadas em 30 vagas; nenhuma adjudicada**.
 Não publicar indicadores de ganho ou precisão até revisão independente.
+
+## Busca de edições alternativas do mesmo ReleaseGroup (10/11/2026)
+
+O B-coorte inclui cinco pares observados sem relação MusicBrainz Release → Discogs Release. Para evitar o erro de comparar uma edição física com uma edição digital escolhida arbitrariamente, `scripts/catalog_211_discogs_unlinked_group_probe.py` recupera a **lista completa** e limitada a 25 Releases do ReleaseGroup exato (somente 5 grupos do manifesto). A operação exige a relação de IDs tipados entre o manifesto e os controles previamente verificados, o crédito de artista Discogs, e código de barras com dígito verificador válido. Apenas edições MusicBrainz do próprio grupo com barcode idêntico podem gerar até dois GETs de evidência detalhada por caso. Máximo de 20 consultas públicas, sem token.
+
+O relatório `discogs-211-unlinked-alternative-editions.json` diferencia falta de barcode, grupo paginado incompletamente, nenhuma correspondência no índice, divergência de identidade e candidatas com evidências de tracklist, créditos e relações. **Não é uma prova de edição Verified, não prova ausência MusicBrainz, não altera o manifesto e não preenche reviewed=true.** Paginação acima de 25/fluxo incompleto não gera resultado negativo. A observação torna o B-coorte mais defensável antes de uma revisão independente e do smoke físico.
