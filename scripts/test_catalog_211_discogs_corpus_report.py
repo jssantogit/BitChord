@@ -145,6 +145,11 @@ class CorpusReportTests(unittest.TestCase):
         cases = [case(c, i) for c in ("type", "unlinked", "source_only")
                  for i in range(10)]
         cases[1]["musicbrainz_group_mbid"] = cases[0]["musicbrainz_group_mbid"]
+        # Preserve valid source URLs so this specifically exercises the
+        # duplicate ReleaseGroup guard, not the new provenance guard.
+        cases[1]["evidence_links"]["musicbrainz_release_group"] = (
+            cases[0]["evidence_links"]["musicbrainz_release_group"]
+        )
         result = report({"schema_version": 1, "cases": cases})
         self.assertFalse(result["complete"])
         self.assertIsNone(result["metrics"])
