@@ -92,6 +92,9 @@ class PlayerSheetMotion(
     // swipe can lift with no speed on its last event at all.
     private var pullStartNanos = 0L
     private var pullStartAt = 0f
+    // Holding is also true while a tap-open or close animation runs.
+    // Only a real finger pull may be released/cancelled by the mini detector.
+    private var pullingFromMini = false
 
     // How fast the sheet itself was moving under the finger, for a drag on the
     // player released low: M3 asks to hide without saying how fast, and a close
@@ -171,6 +174,7 @@ class PlayerSheetMotion(
     /** A tap on the mini player. */
     fun open() {
         if (shown()) return
+        pullingFromMini = false
         settle?.cancel()
         closing = false
         val travel = travel()
@@ -226,6 +230,7 @@ class PlayerSheetMotion(
     /** From the sheet: whatever asked for it to hide, this is how it goes. */
     fun close() {
         if (!shown() || closing) return
+        pullingFromMini = false
         closing = true
         quietWindow()
         settle?.cancel()
@@ -242,12 +247,13 @@ class PlayerSheetMotion(
     }
 
     override fun drag(delta: Float) {
-        if (!holding) {
-            // Only upwards starts one, and only from a closed player: a
-            // downward drag on the bar has nothing to pull.
+        if (!pullingFromMini) {
+            // An animation started by open() or close() may also be holding.
+            // Never let a late mini pointer take control of that animation.
             if (delta >= 0f || shown()) return
             settle?.cancel()
             closing = false
+            pullingFromMini = true
             held = travel()
             pullStartAt = held
             pullStartNanos = System.nanoTime()
@@ -258,13 +264,17 @@ class PlayerSheetMotion(
     }
 
     override fun cancel() {
-        // Called when a mini-player drag is interrupted by a queue or pointer
-        // change. close() deliberately skips the average-drag flick heuristic
-        // in release(velocity), avoiding accidental expansion on cancellation.
-        if (holding) close()
+        // A cancelled pointer only owns a sheet actually pulled from the
+        // mini. A tap-open in flight also has holding=true but is NOT ours
+        // to close, even if this callback arrives after the tap.
+        if (!pullingFromMini) return
+        pullingFromMini = false
+        close()
     }
 
     override fun release(velocity: Float) {
+        if (!pullingFromMini) return
+        pullingFromMini = false
         if (!holding) return
         val travel = travel()
         // The finger's speed as it lifted, or across the whole pull if that
@@ -292,6 +302,7 @@ class PlayerSheetMotion(
 
     /** From the host, once the sheet has left composition. */
     fun onSheetGone() {
+        pullingFromMini = false
         closing = false
         sheetSampleAt = Float.NaN
         sheetVelocity = 0f
