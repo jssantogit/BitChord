@@ -252,6 +252,7 @@ internal class DiscogsPublicArtistDiscovery(
                 mbCatalogChecked = true,
                 nowMillis = nowMillis(),
                 knownMusicBrainzTitles = completedMusicBrainzTitles,
+                expectedDiscogsArtistId = artistId,
             )
         }
         val firstResult = select(first)

@@ -95,7 +95,7 @@ class DiscogsPublicArtistDiscoveryTest {
                 assertEquals("releases/12001", path)
                 return DiscogsHttpResponse(200, """{
                     "id":12001,"title":"NOT ON MUSICBRAINZ",
-                    "artists":[{"name":"ENHYPEN"}],
+                    "artists":[{"id":8303009,"name":"ENHYPEN (12)"}],
                     "country":"South Korea","year":2026,
                     "labels":[{"name":"BELIFT LAB","catno":"ABC-1"}],
                     "formats":[{"name":"CD","descriptions":["EP"]}],
@@ -116,6 +116,7 @@ class DiscogsPublicArtistDiscoveryTest {
         assertEquals(listOf(1), requested)
         assertEquals(listOf("NOT ON MUSICBRAINZ"), recovered.map { it.title })
         assertEquals(DiscogsEditorialShelf.EPS, recovered.single().shelf)
+        assertEquals("ENHYPEN", recovered.single().artist)
         assertNull(recovered.single().musicBrainzId)
         assertFalse(recovered.single().canPlay)
     }
@@ -143,7 +144,7 @@ class DiscogsPublicArtistDiscoveryTest {
                 override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
                     assertEquals("releases/9102", path)
                     return DiscogsHttpResponse(200, """{
-                        "id":9102,"title":"MISSING EP","artists":[{"name":"ENHYPEN"}],
+                        "id":9102,"title":"MISSING EP","artists":[{"id":8303009,"name":"ENHYPEN"}],
                         "country":"South Korea","year":2026,
                         "labels":[{"name":"BELIFT LAB","catno":"BC-2"}],
                         "formats":[{"name":"CD","descriptions":["EP"]}],
@@ -156,6 +157,34 @@ class DiscogsPublicArtistDiscoveryTest {
         val results = discovery.findForArtist(mbid, "ENHYPEN", setOf("KNOWN TITLE"))
         assertEquals(listOf(1, 2), requested)
         assertEquals(listOf("MISSING EP"), results.map { it.title })
+    }
+
+    @Test fun identicalArtistNameButWrongProviderIdCannotAuthorizeSourceOnly() = runBlocking {
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String = relation()
+        })
+        val discovery = DiscogsPublicArtistDiscovery(
+            musicBrainz = mb,
+            transport = object : DiscogsPublicArtistTransport {
+                override suspend fun list(artistId: Long, page: Int,
+                    userAgent: String): DiscogsHttpResponse = DiscogsHttpResponse(200, """{
+                        "pagination":{"page":1,"pages":1},
+                        "releases":[{"id":54321,"type":"release","role":"Main","title":"NEW"}]}""")
+            },
+            editions = DiscogsClient(transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse =
+                    DiscogsHttpResponse(200, """{
+                        "id":54321,"title":"NEW","artists":[{"id":8303010,"name":"ENHYPEN"}],
+                        "country":"South Korea","year":2026,
+                        "labels":[{"name":"Label"}],
+                        "formats":[{"name":"CD","descriptions":["EP"]}],
+                        "tracklist":[{"position":"1","title":"Track"}]}""")
+            }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L)),
+            enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+            nowMillis = { 1_000L },
+        )
+        assertTrue(discovery.findForArtist(mbid, "ENHYPEN", emptySet()).isEmpty())
     }
 
     @Test fun noExactArtistRelationMeansNoAnonymousDiscogsHttpRequest() = runBlocking {

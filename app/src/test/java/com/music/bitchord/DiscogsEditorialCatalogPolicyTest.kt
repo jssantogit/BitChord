@@ -145,6 +145,35 @@ class DiscogsEditorialCatalogPolicyTest {
         assertTrue(recovered.single().attributionUrl.startsWith("https://www.discogs.com/release/"))
     }
 
+    @Test fun publicIdentityUsesRelatedProviderIdNotDisambiguatedArtistName() {
+        val source = DiscogsPublicEditionSnapshot(
+            edition(180L, artist = "Ive (16)", master = null).copy(
+                title = "Unlisted EP", artistIds = listOf(98765L),
+            ), 1_000,
+        )
+        val valid = DiscogsShadowCatalog.select(
+            listOf(source), expectedArtist = "IVE", mbCatalogChecked = true,
+            nowMillis = 1_200, expectedDiscogsArtistId = 98765L,
+        )
+        assertEquals(1, valid.size)
+        assertEquals("IVE", valid.single().artist)
+        assertNull(valid.single().musicBrainzId)
+        assertFalse(valid.single().canPlay)
+        assertTrue(DiscogsShadowCatalog.select(
+            listOf(source), expectedArtist = "IVE", mbCatalogChecked = true,
+            nowMillis = 1_200, expectedDiscogsArtistId = 98766L,
+        ).isEmpty())
+        assertTrue(DiscogsShadowCatalog.select(
+            listOf(source), expectedArtist = "IVE", mbCatalogChecked = true,
+            nowMillis = 1_200,
+        ).isEmpty())
+        assertTrue(DiscogsShadowCatalog.select(
+            listOf(source.copy(record = source.record.copy(artistIds = emptyList()))),
+            expectedArtist = "IVE", mbCatalogChecked = true,
+            nowMillis = 1_200, expectedDiscogsArtistId = 98765L,
+        ).isEmpty())
+    }
+
     @Test fun discogsOnlyShelvesNeverDuplicateKnownMusicBrainzGroups() {
         val observations = listOf(
             DiscogsPublicEditionSnapshot(edition(101, master = 987), 1_000),

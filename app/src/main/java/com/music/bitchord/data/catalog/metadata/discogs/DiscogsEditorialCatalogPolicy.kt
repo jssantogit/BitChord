@@ -207,6 +207,8 @@ internal object DiscogsShadowCatalog {
         nowMillis: Long,
         linkedReleaseIds: Set<Long> = emptySet(),
         knownMusicBrainzTitles: Set<String> = emptySet(),
+        /** Exact provider ID supplied only by MusicBrainz Artist relationship. */
+        expectedDiscogsArtistId: Long? = null,
     ): List<DiscogsShadowRelease> {
         if (!mbCatalogChecked || expectedArtist.isBlank() || nowMillis < 0L) return emptyList()
         val artist = normalizedTitle(expectedArtist)
@@ -215,13 +217,21 @@ internal object DiscogsShadowCatalog {
         }
         val eligible = observations.take(80).mapNotNull { item ->
             val release = item.record
+            val artistMatches = if (expectedDiscogsArtistId != null) {
+                expectedDiscogsArtistId in 1..999_999_999_999L &&
+                    release.artistIds.size == 1 &&
+                    release.artistIds.single() == expectedDiscogsArtistId
+            } else {
+                // Authenticated discovery without an Artist relationship still
+                // requires exact names, never heuristic suffix removal.
+                normalizedTitle(release.artistNames.singleOrNull().orEmpty()) == artist
+            }
             if (item.fetchedAtMillis !in 0..nowMillis ||
                 nowMillis - item.fetchedAtMillis >= DiscogsObservation.TTL_MILLIS ||
                 release.link.kind != DiscogsKind.RELEASE ||
                 release.link.id in linkedReleaseIds ||
                 release.unofficial || release.title.isBlank() ||
-                release.artistNames.size != 1 ||
-                normalizedTitle(release.artistNames.single()) != artist ||
+                release.artistNames.size != 1 || !artistMatches ||
                 isKnownGroupTitle(release.title, expectedArtist, knownTitles) ||
                 release.tracklist.isEmpty() ||
                 release.year == null ||
@@ -243,7 +253,8 @@ internal object DiscogsShadowCatalog {
                 key = identity,
                 discogsReleaseId = release.link.id,
                 title = release.title.trim().take(240),
-                artist = release.artistNames.single().trim(),
+                artist = if (expectedDiscogsArtistId != null) expectedArtist.trim()
+                    else release.artistNames.single().trim(),
                 year = release.year,
                 kind = kind,
                 shelf = shelf,

@@ -129,6 +129,8 @@ internal data class DiscogsRecord(
     val unofficial: Boolean,
     /** Discogs Master linkage is source-scoped; never a MusicBrainz ReleaseGroup ID. */
     val masterId: Long? = null,
+    /** All exact Discogs artist IDs, or empty when the credit identity is incomplete. */
+    val artistIds: List<Long> = emptyList(),
 ) {
     val attributionUrl: String get() = link.attributionUrl
 }
@@ -191,6 +193,11 @@ internal object DiscogsRecordParser {
             val formats = obj.objects("formats", 32) ?: return null
             val tracks = obj.objects("tracklist", 256) ?: return null
             val names = artists.mapNotNull { it.clean("name", 180) }
+            // Provider names like "Ive (16)" are not identity evidence.
+            val ids = artists.map { (it["id"] as? JsonPrimitive)?.longOrNull }
+            val artistIds = if (names.size == artists.size &&
+                ids.all { it != null && it in 1..999_999_999_999L }
+            ) ids.filterNotNull() else emptyList()
             val catalog = labels.mapNotNull { label ->
                 label.clean("name", 180)?.let { name ->
                     name to (label.clean("catno", 80) ?: "")
@@ -217,6 +224,7 @@ internal object DiscogsRecordParser {
                 link = expected,
                 title = title,
                 artistNames = names,
+                artistIds = artistIds,
                 country = obj.clean("country", 80),
                 year = (obj["year"] as? JsonPrimitive)?.intOrNull?.takeIf { it in 1800..2200 },
                 labels = catalog,

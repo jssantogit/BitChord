@@ -22,9 +22,9 @@ def document(hints=None):
         for n, (artist, mbid) in enumerate(ARTISTS)
     ]}
 
-def edition(rid=777, master=555, name="ENHYPEN", formats=None):
+def edition(rid=777, master=555, name="ENHYPEN", formats=None, artist_id=900):
     return {"id": rid, "master_id": master, "title": "Possible",
-            "artists": [{"name": name}], "year": 2026,
+            "artists": [{"id": artist_id, "name": name}], "year": 2026,
             "country": "South Korea", "labels": [{"name": "Label"}],
             "formats": formats if formats is not None else
                 [{"name": "CD", "descriptions": ["EP"]}],
@@ -71,8 +71,11 @@ class CandidateDetailsTest(unittest.TestCase):
         entry = candidate_queue(document([source(kind="release", rid=777)]))[0]
         video = hydrate(entry, lambda _: edition(formats=[{"name": "DVD"}]))
         self.assertEqual("video_only_format", video["status"])
-        wrong = hydrate(entry, lambda _: edition(name="OTHER"))
-        self.assertEqual("artist_credit_not_exact", wrong["status"])
+        alias = hydrate(entry, lambda _: edition(name="ENHYPEN (12)"))
+        self.assertEqual("edition_metadata_observed_not_adjudicated", alias["status"])
+        self.assertTrue(alias["artist_id_matches_relation"])
+        wrong = hydrate(entry, lambda _: edition(artist_id=901))
+        self.assertEqual("artist_id_disagrees_with_relation", wrong["status"])
         self.assertEqual("invalid_release", hydrate(entry, lambda _: edition(rid=1))["status"])
 
     def test_report_never_makes_corpus_claim_or_accepts_untrusted_url(self):

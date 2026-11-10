@@ -106,6 +106,12 @@ def hydrate(entry: dict, get) -> dict:
         names = [a.get("name") for a in artists if isinstance(a, dict)]
         if len(names) != len(artists) or not all(isinstance(n, str) and len(n) <= 160 for n in names):
             return {**output, "status": "invalid_artist_credits"}
+        raw_ids = [a.get("id") for a in artists]
+        artist_ids = raw_ids if all(valid_id(i) for i in raw_ids) else []
+        output["artist_ids"] = artist_ids
+        output["artist_id_matches_relation"] = (
+            len(artist_ids) == 1 and artist_ids[0] == entry["discogs_artist_id"]
+        )
         fmt_names, desc = set(), set()
         for fmt in formats:
             if not isinstance(fmt, dict):
@@ -137,8 +143,10 @@ def hydrate(entry: dict, get) -> dict:
         video = {"dvd", "blu-ray", "vhs", "laserdisc", "video", "vcd", "video cd"}
         if fmt_names and all(normalized(name) in video for name in fmt_names):
             output["status"] = "video_only_format"
-        elif len(names) != 1 or normalized(names[0]) != normalized(entry["artist"]):
-            output["status"] = "artist_credit_not_exact"
+        elif len(artist_ids) != 1:
+            output["status"] = "artist_id_unavailable_or_multiple_credits"
+        elif artist_ids[0] != entry["discogs_artist_id"]:
+            output["status"] = "artist_id_disagrees_with_relation"
         else:
             output["status"] = "edition_metadata_observed_not_adjudicated"
     except (ValueError, TypeError, KeyError, OSError, TimeoutError):

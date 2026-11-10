@@ -40,7 +40,10 @@ consulta **no máximo 8 entradas do índice por execução**, distribuídas
 entre artistas (até 2 por artista; máximo 16 requests públicos para Master e
 Release). Valida os IDs e o retorno exato de Master.main_release →
 Release.master_id, anota crédito da edição, gravadora, faixas e formato, e
-identifica vídeo isolado ou créditos de artista incompatíveis.
+identifica vídeo isolado ou créditos de artista incompatíveis. A revisão de
+10/11/2026 mostrou nomes desambiguados como `Ive (16)` e `TXT (5)`;
+a integração pública valida o ID Discogs de `artists[]` contra a relação
+exata MusicBrainz Artist → Discogs Artist, sem inferir equivalências por nome.
 O relatório `discogs-211-corpus-edition-observations.json` é uma
 <b>ficha de inspeção</b> (não prova ausência MusicBrainz; não modifica o
 manifesto). Falhas e rate-limit são rotulados indisponíveis, nunca ausência.

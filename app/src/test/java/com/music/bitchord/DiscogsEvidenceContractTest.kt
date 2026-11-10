@@ -111,6 +111,27 @@ class DiscogsEvidenceContractTest {
         assertNull(DiscogsRecordParser.parse(DiscogsLink(DiscogsKind.MASTER,12345),raw))
     }
 
+    @Test fun providerArtistIdsAreRetainedOnlyWhenEveryCreditHasValidIdentity() {
+        val link = DiscogsLink(DiscogsKind.RELEASE, 777)
+        fun payload(artists: String) = """{"id":777,"title":"New release",
+            "artists":[$artists],"labels":[{"name":"Label"}],
+            "formats":[{"name":"CD","descriptions":["EP"]}],
+            "tracklist":[{"position":"1","title":"Song"}]}"""
+        val exact = DiscogsRecordParser.parse(link,
+            payload("""{"id":98765,"name":"Ive (16)"}"""))
+        assertEquals(listOf("Ive (16)"), exact?.artistNames)
+        assertEquals(listOf(98765L), exact?.artistIds)
+        assertEquals(emptyList<Long>(),
+            DiscogsRecordParser.parse(link,
+                payload("""{"name":"Ive (16)"}"""))?.artistIds)
+        assertEquals(emptyList<Long>(),
+            DiscogsRecordParser.parse(link,
+                payload("""{"id":98765,"name":"IVE"},{"name":"Other"}"""))?.artistIds)
+        assertEquals(emptyList<Long>(),
+            DiscogsRecordParser.parse(link,
+                payload("""{"id":0,"name":"IVE"}"""))?.artistIds)
+    }
+
     @Test fun oversizedAndMalformedInputsCannotCreateEditionFacts() {
         val link = DiscogsLink(DiscogsKind.RELEASE, 3)
         assertNull(DiscogsRecordParser.parse(link, "{}"))
