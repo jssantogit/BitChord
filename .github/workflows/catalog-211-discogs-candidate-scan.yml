@@ -9,6 +9,8 @@ on:
     paths:
       - scripts/catalog_211_discogs_corpus_candidates.py
       - scripts/test_catalog_211_discogs_corpus_candidates.py
+      - scripts/catalog_211_discogs_candidate_details.py
+      - scripts/test_catalog_211_discogs_candidate_details.py
       - .github/workflows/catalog-211-discogs-candidate-scan.yml
   workflow_dispatch:
 
@@ -32,11 +34,17 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_candidates.py' -v
       - name: Observe bounded public Artist and ReleaseGroup index leads
         run: python3 scripts/catalog_211_discogs_corpus_candidates.py
+      - name: Test bounded public Release/Master detail hydration
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_candidate_details.py' -v
+      - name: Inspect bounded candidate Edition metadata, without editorial claims
+        run: python3 scripts/catalog_211_discogs_candidate_details.py
       - name: Retain non-adjudicated source observations for manual review
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: discogs-211-corpus-candidate-observations
-          path: discogs-211-corpus-candidates.json
+          path: |
+            discogs-211-corpus-candidates.json
+            discogs-211-corpus-edition-observations.json
           if-no-files-found: warn
           retention-days: 7

@@ -35,6 +35,16 @@ caber em até quatro páginas. A primeira página do índice público Discogs
 é comparada somente por título exato normalizado, sem criar vínculo entre
 ReleaseGroup e Discogs Master.
 
+Uma segunda etapa conservadora `scripts/catalog_211_discogs_candidate_details.py`
+consulta **no máximo 8 entradas do índice por execução**, distribuídas
+entre artistas (até 2 por artista; máximo 16 requests públicos para Master e
+Release). Valida os IDs e o retorno exato de Master.main_release →
+Release.master_id, anota crédito da edição, gravadora, faixas e formato, e
+identifica vídeo isolado ou créditos de artista incompatíveis.
+O relatório `discogs-211-corpus-edition-observations.json` é uma
+<b>ficha de inspeção</b> (não prova ausência MusicBrainz; não modifica o
+manifesto). Falhas e rate-limit são rotulados indisponíveis, nunca ausência.
+
 O arquivo gerado `discogs-211-corpus-candidates.json` diferencia
 `no_unique_artist_relation`, `incomplete_mb_browse`,
 `network_unavailable` e `index_compared_not_adjudicated`.
