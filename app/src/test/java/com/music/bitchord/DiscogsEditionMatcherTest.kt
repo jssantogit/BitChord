@@ -191,6 +191,52 @@ class DiscogsEditionMatcherTest {
                 }), explicitReleaseRelation = true))
     }
 
+    @Test fun exactLinkedReleaseCanCorroborateOnlySafePunctuationVariants() {
+        // Public control: EASY CRAZY HOT <-> Easy-Crazy-Hot has a typed direct
+        // Release relation, matching barcode, and 14 of 15 literal track names.
+        val canonical = canon.copy(
+            title = "EASY CRAZY HOT", creditedArtist = "LE SSERAFIM",
+            barcodes = listOf("012345678905"),
+            country = "XW", releaseYear = 2025,
+            trackTitles = (1..15).map { if (it == 9) "1‐800‐hot‐n‐fun" else "Track $it" },
+        )
+        val edition = record.copy(
+            title = "Easy-Crazy-Hot", artistNames = listOf("LE SSERAFIM"),
+            country = "South Korea", year = 2025,
+            tracklist = (1..15).map { index ->
+                index.toString() to (if (index == 9) "1-800-hot-n-fun" else "Track $index")
+            },
+        )
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(canonical, linked, edition,
+                explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(canonical, linked, edition))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assessUnlinked(canonical, edition))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(canonical.copy(barcodes = emptyList()),
+                linked, edition, explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(canonical.copy(releaseYear = null),
+                linked, edition, explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(canonical.copy(country = "JP"),
+                linked, edition, explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canonical, linked,
+                edition.copy(tracklist = edition.tracklist.toMutableList().also {
+                    it[8] = "9" to "Different Recording"
+                }), explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canonical, linked,
+                edition.copy(tracklist = edition.tracklist.toMutableList().also {
+                    it[4] = "5" to "New Remix"
+                    it[8] = "9" to "1-800-hot-n-fun"
+                    it[11] = "12" to "Changed"
+                }), explicitReleaseRelation = true))
+    }
+
     @Test fun separateMastersOrNameOnlyMatchesNeverCreateAnEdition() {
         assertEquals(DiscogsEditionVerdict.CONFLICT,
             DiscogsEditionMatcher.assess(canon, DiscogsLink(DiscogsKind.MASTER,12001),record))

@@ -1,5 +1,6 @@
 package com.music.bitchord.data.catalog.metadata.discogs
 
+import java.text.Normalizer
 import java.util.Locale
 
 /**
@@ -32,6 +33,7 @@ internal enum class DiscogsEditionVerdict {
 internal object DiscogsEditionMatcher {
     private val mbid = Regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
     private val spaces = Regex("\\s+")
+    private val unicodeWords = Regex("""[\p{L}\p{N}]+""")
     private val recognizedIsoCountries = Locale.getISOCountries().mapTo(HashSet()) {
         it.lowercase(Locale.ROOT)
     }
@@ -72,9 +74,19 @@ internal object DiscogsEditionMatcher {
         } else {
             actual.any { it == normalized(artist) }
         }
+        // A direct typed MB Release URL, corroborated by a validated barcode
+        // and matching year, can tolerate punctuation-only differences.
+        // Never give this exception to anonymous search or Master candidates.
+        val mbBarcodes = canonical.barcodes.mapNotNull(::barcode).toSet()
+        val externalBarcodes = record.barcodes.mapNotNull(::barcode).toSet()
+        val bothHaveBarcodes = mbBarcodes.isNotEmpty() && externalBarcodes.isNotEmpty()
+        val barcodeMatches = bothHaveBarcodes && mbBarcodes.any { it in externalBarcodes }
+        val linkedFormattingAllowed = explicitReleaseRelation && barcodeMatches &&
+            canonical.releaseYear != null && canonical.releaseYear == record.year &&
+            record.labels.isNotEmpty()
         if (!artistMatches ||
             !sameEditionTitle(canonical.title, record.title, artist,
-                canonical.creditedArtistNames)
+                canonical.creditedArtistNames, linkedFormattingAllowed)
         ) return DiscogsEditionVerdict.CONFLICT
 
         // The same recording sequence can be issued in several countries.
@@ -96,16 +108,23 @@ internal object DiscogsEditionMatcher {
             }
         }
 
-        val mbBarcodes = canonical.barcodes.mapNotNull(::barcode).toSet()
-        val externalBarcodes = record.barcodes.mapNotNull(::barcode).toSet()
-        val bothHaveBarcodes = mbBarcodes.isNotEmpty() && externalBarcodes.isNotEmpty()
-        val barcodeMatches = bothHaveBarcodes && mbBarcodes.any { it in externalBarcodes }
         if (bothHaveBarcodes && !barcodeMatches) return DiscogsEditionVerdict.CONFLICT
 
         val mbTracks = canonical.trackTitles.map(::normalized)
         val externalTracks = record.tracklist.map { normalized(it.second) }
         val bothHaveTracks = mbTracks.isNotEmpty() && externalTracks.isNotEmpty()
         val trackMatches = bothHaveTracks && mbTracks == externalTracks
+        // At most two punctuation-only differences in an otherwise identical
+        // ordered tracklist (five or more tracks) are presentation variants,
+        // not evidence of remixes, translations or different recordings.
+        val linkedPunctuationMatch = !trackMatches && linkedFormattingAllowed &&
+            mbTracks.size >= 5 && mbTracks.size == externalTracks.size &&
+            mbTracks.indices.count { mbTracks[it] == externalTracks[it] } >=
+                mbTracks.size - 2 &&
+            mbTracks.indices.all { i ->
+                mbTracks[i] == externalTracks[i] ||
+                    sameOrderedWords(mbTracks[i], externalTracks[i], minimumWords = 2)
+            }
         // A genuine typed MB Release -> Discogs Release relationship can carry
         // translated track names. This is deliberately NOT available to fuzzy
         // search, Master associations, or unknown-country/year/barcode editions.
@@ -116,9 +135,9 @@ internal object DiscogsEditionMatcher {
             record.labels.isNotEmpty() &&
             conservativeCrossScriptTracks(mbTracks, externalTracks)
         // A conflicting tracklist can signal a pressing, remix or bonus edition.
-        if (bothHaveTracks && !trackMatches && !linkedCrossScriptMatch) {
-            return DiscogsEditionVerdict.CANDIDATE
-        }
+        if (bothHaveTracks && !trackMatches && !linkedCrossScriptMatch &&
+            !linkedPunctuationMatch
+        ) return DiscogsEditionVerdict.CANDIDATE
 
         // A contradictory edition year prevents VERIFIED status even if
         // the tracklist matches; a different pressing may carry the same songs.
@@ -136,7 +155,7 @@ internal object DiscogsEditionMatcher {
         // Barcodes are shared by variants or entered incorrectly. A curated
         // MusicBrainz URL association plus artist/title and matching barcode
         // is not enough to prove the exact edition without track evidence.
-        return if (trackMatches || linkedCrossScriptMatch) {
+        return if (trackMatches || linkedCrossScriptMatch || linkedPunctuationMatch) {
             DiscogsEditionVerdict.VERIFIED
         } else {
             DiscogsEditionVerdict.CANDIDATE
@@ -201,6 +220,7 @@ internal object DiscogsEditionMatcher {
         discogsTitle: String,
         artistCredit: String?,
         creditedArtistNames: List<String>,
+        allowLinkedPunctuation: Boolean = false,
     ): Boolean {
         val title = normalized(album)
         val observed = normalized(discogsTitle)
@@ -214,7 +234,21 @@ internal object DiscogsEditionMatcher {
             prefixes += normalized(creditedArtistNames.joinToString(", "))
             prefixes += normalized(creditedArtistNames.joinToString(" & "))
         }
-        return prefixes.any { observed == "${it} - ${title}" }
+        val candidates = listOf(observed) + prefixes.mapNotNull { prefix ->
+            observed.removePrefix("$prefix - ").takeIf { it != observed }
+        }
+        if (title in candidates) return true
+        return allowLinkedPunctuation && candidates.any {
+            sameOrderedWords(title, it, minimumWords = 3)
+        }
+    }
+
+    private fun sameOrderedWords(a: String, b: String, minimumWords: Int): Boolean {
+        fun words(s: String) =
+            unicodeWords.findAll(Normalizer.normalize(s, Normalizer.Form.NFKC)
+                .lowercase(Locale.ROOT)).map { it.value }.toList()
+        val first = words(a)
+        return first.size >= minimumWords && first == words(b)
     }
 
     private fun normalized(s: String): String =

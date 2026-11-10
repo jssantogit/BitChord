@@ -92,6 +92,14 @@ MB, seu tipo primário e os fatos de tracklist, barcode e relação direta
 Release→Discogs. Máximo 18 GETs públicos, sem token; resultados indisponíveis
 não geram inferência negativa. O comparador apresenta evidências
 pontuais e *nunca* retorna Verified, ausência MB ou `reviewed=true`.
+Esse controle revela diferença de pontuação no título de
+`EASY CRAZY HOT` e um título de faixa diferente, apesar do vínculo direto
+e barcode coincidente. O matcher Android pode aceitar apenas variações
+Unicode de separadores com **vínculo direto de Release**, barcode validado,
+ano coincidente, gravadora presente, ao menos cinco faixas e até duas
+diferenças puramente de pontuação. Pesquisa e Master sem vínculo continuam
+sem tal exceção; ordem diferente, créditos incompatíveis ou países
+contraditórios continuam bloqueados.
 Esses pares são **controles de identidade**, não substitutos das 30 vagas
 A/B/C nem prova automática de ganho do Discogs. Artifact no mesmo
 workflow: `discogs-211-edition-pair-evidence.json`.
