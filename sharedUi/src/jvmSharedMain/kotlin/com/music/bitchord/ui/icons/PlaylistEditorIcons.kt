@@ -130,19 +130,6 @@ object PlaylistEditorIcons {
         arcToRelative(9f, 9f, 0f, true, true, 18f, 0f)
         moveTo(7.5f, 12f); lineTo(10.5f, 15f); lineTo(16.5f, 9f)
     } }
-    val More by lazy {
-        ImageVector.Builder(
-            name = "playlist_more", defaultWidth = 24.dp, defaultHeight = 24.dp,
-            viewportWidth = 24f, viewportHeight = 24f,
-        ).apply {
-            path(fill = SolidColor(Color.Black)) {
-                listOf(5f, 12f, 19f).forEach { x ->
-                    moveTo(x + 1.6f, 12f)
-                    arcToRelative(1.6f, 1.6f, 0f, true, true, -3.2f, 0f)
-                    arcToRelative(1.6f, 1.6f, 0f, true, true, 3.2f, 0f)
-                    close()
-                }
-            }
-        }.build()
-    }
+    // Same vertical three-dot glyph on a circular platter as Now Playing.
+    val More = AppleQueueVectors.More
 }
