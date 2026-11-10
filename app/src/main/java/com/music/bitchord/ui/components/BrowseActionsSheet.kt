@@ -195,6 +195,7 @@ fun BrowseActionsSheet(
      */
     onRenameInSheet: (() -> Unit)? = null,
     startRenaming: Boolean = false,
+    onRenameDraftChanged: (Boolean) -> Unit = {},
 ) {
     val menu = presentation == SongActionsPresentation.Menu
     var renaming by remember { mutableStateOf(startRenaming) }
@@ -208,6 +209,7 @@ fun BrowseActionsSheet(
             onBack = { renaming = false },
             onRename = onRename,
             modifier = modifier,
+            onDraftChanged = onRenameDraftChanged,
         )
         return
     }
