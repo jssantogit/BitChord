@@ -79,6 +79,23 @@ Amostragem de dez artistas não define a taxa de recuperação global.
 Ausência de relação Discogs, paginação incompleta, falhas de rede e zero pistas
 são resultados válidos que devem permanecer registrados sem imputação.
 
+## Controles públicos de pares exatos (10/11/2026)
+
+O roteiro `scripts/catalog_211_discogs_edition_pair_review.py` usa somente
+`docs/plans/catalog-211-discogs-edition-pairs.json` (máximo 6 pares
+por execução). Os três pares iniciais são edições específicas de
+ENHYPEN `MEMORABILIA`, TXT `Setsuna Hanabi` e LE SSERAFIM
+`EASY CRAZY HOT`, com MusicBrainz Release MBID e Discogs Release ID.
+Requer a relação MB Artist→Discogs Artist explícita e idêntica ao
+`artists[].id` da edição; identifica o ReleaseGroup real do registro
+MB, seu tipo primário e os fatos de tracklist, barcode e relação direta
+Release→Discogs. Máximo 18 GETs públicos, sem token; resultados indisponíveis
+não geram inferência negativa. O comparador apresenta evidências
+pontuais e *nunca* retorna Verified, ausência MB ou `reviewed=true`.
+Esses pares são **controles de identidade**, não substitutos das 30 vagas
+A/B/C nem prova automática de ganho do Discogs. Artifact no mesmo
+workflow: `discogs-211-edition-pair-evidence.json`.
+
 ## Campos por caso
 
 O manifesto JSON usa exatamente: `id`, `cohort` (`type`, `unlinked`, `source_only`), `reviewed` (booleano), `sources` (rótulos de fontes; ao menos uma fonte independente: `artist`, `label` ou `release_notes`), `musicbrainz_group_mbid` (obrigatório nos coortes A e B), `discogs_release_id` (obrigatório quando `match_state=verified` e no coorte C), `musicbrainz_type`, `reference_type`, `app_type` (`Album`, `EP`, `Single`, `Unknown`), `match_state`, `match_correct`, `visible`, `absent_in_musicbrainz`.
