@@ -1019,8 +1019,7 @@ internal fun SmartPlaylistV2WizardUi(
                         val core = if (selected is SmartPlaylistRule.Not) selected.child else selected
                         val group = core as? SmartPlaylistRule.Group
                         if (selected != null) item {
-                            WizardCard("Nome do grupo", "Identifique a lógica deste conjunto") {
-                                PlaylistWizardTextEntry(
+                            PlaylistWizardTextEntry(
                                     value = group?.name.orEmpty(),
                                     onValueChange = { text ->
                                         if (text.length <= 80) {
@@ -1038,161 +1037,197 @@ internal fun SmartPlaylistV2WizardUi(
                                     hint = "Até 80 caracteres",
                                     emphasized = true,
                                 )
-                            }
                         }
                         if (group != null) {
                             item {
-                                WizardCard("Combinar condições",
-                                    "Escolha a lógica somente deste grupo") {
-                                    WizardJoinPicker(group.join) {
-                                        val nextJoin = it
-                                        onRuleChange(smartRuleUpdateGroup(rule, selectedPath) { current ->
-                                            current.copy(join = nextJoin)
-                                        })
+                                if (group.children.size > 1) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            "Combinar condições",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.onBackground,
+                                        )
+                                        WizardJoinPicker(group.join) {
+                                            val nextJoin = it
+                                            onRuleChange(smartRuleUpdateGroup(
+                                                rule, selectedPath,
+                                            ) { current ->
+                                                current.copy(join = nextJoin)
+                                            })
+                                        }
                                     }
                                 }
                             }
                             itemsIndexed(group.children) { i, child ->
                                 val path = selectedPath + i
                                 var actionsOpen by remember(path) { mutableStateOf(false) }
-                                WizardCard(
-                                    "Condição ${i + 1}",
-                                    ruleUiSummary(child, names),
-                                    onClick = { editAt(path, WizardStep.GROUP) },
-                                    showChevron = false,
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.End,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Box {
-                                            PlaylistWizardCompactAction(
-                                                label = "Opções",
-                                                icon = PlaylistEditorIcons.More,
-                                                onClick = { actionsOpen = true },
+                                SettingsGroupSurface {
+                                    SettingsRow(
+                                        title = "Condição ${i + 1}",
+                                        subtitleContent = {
+                                            Text(
+                                                ruleUiSummary(child, names),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
                                             )
-                                            androidx.compose.material3.DropdownMenu(
-                                                expanded = actionsOpen,
-                                                onDismissRequest = { actionsOpen = false },
+                                        },
+                                        onClick = { editAt(path, WizardStep.GROUP) },
+                                        reserveIconSpace = false,
+                                        trailing = {
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
                                             ) {
-                                                androidx.compose.material3.DropdownMenuItem(
-                                                    text = { Text("Editar condição") },
+                                                Box {
+                                                    PlaylistWizardCompactAction(
+                                                        label = "Opções",
+                                                        icon = PlaylistEditorIcons.More,
+                                                        onClick = { actionsOpen = true },
+                                                    )
+                                                    androidx.compose.material3.DropdownMenu(
+                                                        expanded = actionsOpen,
+                                                        onDismissRequest = { actionsOpen = false },
+                                                    ) {
+                                                        androidx.compose.material3.DropdownMenuItem(
+                                                            text = { Text("Editar condição") },
+                                                            onClick = {
+                                                                actionsOpen = false
+                                                                editAt(path, WizardStep.GROUP)
+                                                            },
+                                                        )
+                                                        if (i > 0) {
+                                                            androidx.compose.material3.DropdownMenuItem(
+                                                                text = { Text("Mover para cima") },
+                                                                onClick = {
+                                                                    actionsOpen = false
+                                                                    onRuleChange(smartRuleUpdateGroup(
+                                                                        rule, selectedPath,
+                                                                    ) { it.moveChild(i, i - 1) })
+                                                                },
+                                                            )
+                                                        }
+                                                        if (i < group.children.lastIndex) {
+                                                            androidx.compose.material3.DropdownMenuItem(
+                                                                text = { Text("Mover para baixo") },
+                                                                onClick = {
+                                                                    actionsOpen = false
+                                                                    onRuleChange(smartRuleUpdateGroup(
+                                                                        rule, selectedPath,
+                                                                    ) { it.moveChild(i, i + 1) })
+                                                                },
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                PlaylistWizardCompactAction(
+                                                    label = if (child is SmartPlaylistRule.Group ||
+                                                        child is SmartPlaylistRule.Not &&
+                                                        child.child is SmartPlaylistRule.Group)
+                                                        "Excluir grupo" else "Excluir condição",
+                                                    icon = PlaylistEditorIcons.Delete,
                                                     onClick = {
-                                                        actionsOpen = false
-                                                        editAt(path, WizardStep.GROUP)
+                                                        pendingRuleDeletion = path
+                                                        pendingRuleDeletionIsGroup =
+                                                            child is SmartPlaylistRule.Group ||
+                                                            child is SmartPlaylistRule.Not &&
+                                                            child.child is SmartPlaylistRule.Group
                                                     },
                                                 )
-                                                if (i > 0) {
-                                                    androidx.compose.material3.DropdownMenuItem(
-                                                        text = { Text("Mover para cima") },
-                                                        onClick = {
-                                                            actionsOpen = false
-                                                            onRuleChange(smartRuleUpdateGroup(
-                                                                rule, selectedPath) {
-                                                                it.moveChild(i, i - 1)
-                                                            })
-                                                        },
-                                                    )
-                                                }
-                                                if (i < group.children.lastIndex) {
-                                                    androidx.compose.material3.DropdownMenuItem(
-                                                        text = { Text("Mover para baixo") },
-                                                        onClick = {
-                                                            actionsOpen = false
-                                                            onRuleChange(smartRuleUpdateGroup(
-                                                                rule, selectedPath) {
-                                                                it.moveChild(i, i + 1)
-                                                            })
-                                                        },
-                                                    )
-                                                }
                                             }
-                                        }
-                                        PlaylistWizardCompactAction(
-                                            label = if (child is SmartPlaylistRule.Group ||
-                                                child is SmartPlaylistRule.Not &&
-                                                child.child is SmartPlaylistRule.Group)
-                                                "Excluir grupo" else "Excluir condição",
-                                            icon = PlaylistEditorIcons.Delete,
-                                            onClick = {
-                                                pendingRuleDeletion = path
-                                                pendingRuleDeletionIsGroup =
-                                                    child is SmartPlaylistRule.Group ||
-                                                    child is SmartPlaylistRule.Not &&
-                                                    child.child is SmartPlaylistRule.Group
-                                            },
-                                        )
-                                    }
+                                        },
+                                    )
                                 }
                             }
                             item {
-                                PlaylistWizardSecondaryAction(
-                                    label = "+ Adicionar condição",
-                                    enabled = group.children.size < 64,
-                                    onClick = {
-                                        targetGroupPath = selectedPath
-                                        addingGroup = false
-                                        search = ""
-                                        page = WizardStep.CATEGORIES
-                                    },
-                                )
-                            }
-                            item {
-                                PlaylistWizardSecondaryAction(
-                                    label = "+ Grupo aninhado",
-                                    enabled = group.children.size < 64,
-                                    onClick = {
-                                        onRuleChange(smartRuleAddConditionAt(rule, selectedPath,
-                                            SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL,
-                                                listOf(smartRuleNewComparison(
-                                                    SmartPlaylistRuleField.AUDIBLE_COMPLETIONS)))))
-                                    },
-                                )
-                            }
-                            if (savedDefinitions.isNotEmpty()) item {
-                                PlaylistWizardSecondaryAction(
-                                    label = "Usar playlist salva como condição",
-                                    onClick = { picker = "reference" },
-                                )
-                            }
-                            if (selected is SmartPlaylistRule.Not) item {
-                                PlaylistWizardSecondaryAction(
-                                    label = "Retirar NÃO deste grupo",
-                                    onClick = {
-                                        onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
-                                    },
-                                )
+                                PlaylistWizardRuleActions(buildList {
+                                    add(PlaylistWizardRuleAction(
+                                        label = "Adicionar condição",
+                                        icon = PlaylistEditorIcons.Add,
+                                        enabled = group.children.size < 64,
+                                        onClick = {
+                                            targetGroupPath = selectedPath
+                                            addingGroup = false
+                                            search = ""
+                                            page = WizardStep.CATEGORIES
+                                        },
+                                    ))
+                                    add(PlaylistWizardRuleAction(
+                                        label = "Grupo aninhado",
+                                        icon = PlaylistEditorIcons.Folder,
+                                        enabled = group.children.size < 64,
+                                        onClick = {
+                                            onRuleChange(smartRuleAddConditionAt(
+                                                rule, selectedPath,
+                                                SmartPlaylistRule.Group(
+                                                    SmartPlaylistRuleJoin.ALL,
+                                                    listOf(smartRuleNewComparison(
+                                                        SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                                                    )),
+                                                ),
+                                            ))
+                                        },
+                                    ))
+                                    if (savedDefinitions.isNotEmpty()) {
+                                        add(PlaylistWizardRuleAction(
+                                            label = "Usar playlist salva",
+                                            icon = PlaylistEditorIcons.Library,
+                                            onClick = { picker = "reference" },
+                                        ))
+                                    }
+                                    if (selected is SmartPlaylistRule.Not) {
+                                        add(PlaylistWizardRuleAction(
+                                            label = "Remover negação",
+                                            icon = PlaylistEditorIcons.Unselected,
+                                            onClick = {
+                                                onRuleChange(smartRuleReplaceAt(
+                                                    rule, selectedPath, selected.child,
+                                                ))
+                                            },
+                                        ))
+                                    }
+                                })
                             }
                         } else if (selected != null) {
                             item {
-                                WizardCard("Condição deste grupo", ruleUiSummary(selected, names),
-                                    onClick = { editAt(selectedPath, WizardStep.GROUP) })
+                                WizardCard(
+                                    "Condição deste grupo",
+                                    ruleUiSummary(selected, names),
+                                    onClick = { editAt(selectedPath, WizardStep.GROUP) },
+                                )
                             }
                             item {
-                                PlaylistWizardSecondaryAction(
-                                    label = "+ Adicionar condição",
-                                    onClick = {
-                                        targetGroupPath = selectedPath
-                                        addingGroup = false
-                                        search = ""
-                                        page = WizardStep.CATEGORIES
-                                    },
-                                )
-                            }
-                            if (selected is SmartPlaylistRule.Not) item {
-                                PlaylistWizardSecondaryAction(
-                                    label = "Remover negação",
-                                    onClick = {
-                                        onRuleChange(smartRuleReplaceAt(rule, selectedPath, selected.child))
-                                    },
-                                )
-                            }
-                            if (core is SmartPlaylistRule.Reference) item {
-                                PlaylistWizardSecondaryAction(
-                                    label = "Trocar playlist referenciada",
-                                    onClick = { picker = "replaceReference" },
-                                )
+                                PlaylistWizardRuleActions(buildList {
+                                    add(PlaylistWizardRuleAction(
+                                        label = "Adicionar condição",
+                                        icon = PlaylistEditorIcons.Add,
+                                        onClick = {
+                                            targetGroupPath = selectedPath
+                                            addingGroup = false
+                                            search = ""
+                                            page = WizardStep.CATEGORIES
+                                        },
+                                    ))
+                                    if (selected is SmartPlaylistRule.Not) {
+                                        add(PlaylistWizardRuleAction(
+                                            label = "Remover negação",
+                                            icon = PlaylistEditorIcons.Unselected,
+                                            onClick = {
+                                                onRuleChange(smartRuleReplaceAt(
+                                                    rule, selectedPath, selected.child,
+                                                ))
+                                            },
+                                        ))
+                                    }
+                                    if (core is SmartPlaylistRule.Reference) {
+                                        add(PlaylistWizardRuleAction(
+                                            label = "Trocar playlist referenciada",
+                                            icon = PlaylistEditorIcons.Library,
+                                            onClick = { picker = "replaceReference" },
+                                        ))
+                                    }
+                                })
                             }
                         }
                     }
