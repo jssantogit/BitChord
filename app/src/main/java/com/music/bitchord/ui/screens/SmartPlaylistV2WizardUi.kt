@@ -1285,10 +1285,11 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         if (matches.isEmpty()) item { Text("Nenhuma condição encontrada.") }
                         if (selectedCategory.id == "library") item {
-                            Text("Filtros de pasta e caminho consultam somente arquivos locais " +
-                                "com localização comprovada. Disponibilidade offline de fontes remotas " +
-                                "ainda requer evidência independente.",
-                                style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Pastas e caminhos exigem arquivos locais com localização verificada.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                     WizardStep.EDITOR -> {
@@ -1309,9 +1310,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     draft.operator == SmartPlaylistRuleOperator.IS_MISSING
                                 if (presence) {
                                     Text(
-                                        "Esta opção verifica somente a presença do metadado “" +
-                                            smartConditionLabel(draft.field) +
-                                            "”. Para comparar palavras, escolha Contém ou É igual a.",
+                                        "Verifica se este metadado está presente ou ausente.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -1398,10 +1397,18 @@ internal fun SmartPlaylistV2WizardUi(
                             SettingsGroupSurface {
                                 SettingsRow(
                                     title = "Inverter resultado",
-                                    subtitle = if (negated) "Ativado · excluir correspondências"
-                                        else "Desativado",
+                                    subtitle = if (negated) "Ativado" else "Desativado",
                                     onClick = { negated = !negated },
                                     reserveIconSpace = false,
+                                    trailing = {
+                                        Icon(
+                                            imageVector = if (negated) PlaylistEditorIcons.Selected
+                                                else PlaylistEditorIcons.Unselected,
+                                            contentDescription = if (negated) "Ativado" else "Desativado",
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier.size(22.dp),
+                                        )
+                                    },
                                 )
                             }
                         }
@@ -1443,7 +1450,11 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             }
                             if (normalSelectedIds.isEmpty()) item {
-                                WizardCard("Sem músicas", "Você pode salvar uma playlist vazia e adicionar músicas depois.")
+                                Text(
+                                    "Nenhuma música selecionada. Você poderá adicionar faixas depois.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                             items(normalSelectedRows, key = { it.id }) { row ->
                                 PlaylistReviewRatedRow(row)
@@ -1461,21 +1472,36 @@ internal fun SmartPlaylistV2WizardUi(
                             )
                         }
                         item {
-                            WizardCard("Regras aplicadas",
-                                ruleUiSummary(rule, names),
-                                onClick = { page = WizardStep.RULES })
+                            SettingsGroupSurface {
+                                SettingsRow(
+                                    title = "Regras aplicadas",
+                                    subtitleContent = {
+                                        Text(
+                                            ruleUiSummary(rule, names),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    },
+                                    onClick = { page = WizardStep.RULES },
+                                    reserveIconSpace = false,
+                                )
+                            }
                         }
                         item {
-                            WizardCard("Músicas selecionadas",
-                                when (preview) {
-                                    null -> "Ainda não calculada para estas regras"
-                                    else -> "${preview.size} músicas após ordenação e limite"
-                                }) {
-                                Text(if (preview == null) "Preparando prévia automaticamente…"
-                                    else "Prévia atualizada após aplicar regras, limite e ordenação.",
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    "Músicas selecionadas",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                )
+                                Text(
+                                    if (preview == null) "Preparando prévia automaticamente…"
+                                    else "${preview.size} músicas na prévia",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                         items(preview.orEmpty().take(24), key = { it.id }) { row ->
@@ -1504,8 +1530,12 @@ internal fun SmartPlaylistV2WizardUi(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 if (page == WizardStep.SONGS) {
-                    WizardCard("Selecionadas: ${normalSelectedIds.size}",
-                        if (normalAddingAlbumId != null) "Adicionando músicas do álbum…" else "")
+                    Text(
+                        if (normalAddingAlbumId != null) "Adicionando músicas do álbum…"
+                        else "Selecionadas: ${normalSelectedIds.size}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 when (page) {
                     WizardStep.EDIT -> {
