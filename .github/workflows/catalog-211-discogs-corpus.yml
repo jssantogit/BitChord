@@ -38,5 +38,10 @@ jobs:
           assert not result["complete"], "Unreviewed cases must never count as measured coverage"
           assert result["metrics"] is None, "No metric may be invented before adjudication"
           assert len(manifest["cases"]) == 30
-          print("30 evaluation slots: pending independent editorial review; no fabricated metrics.")
+          assert not result["errors"], result["errors"]
+          assert result["slots"]["unlinked"]["selected_unreviewed"] == 5
+          assert result["slots"]["source_only"]["selected_unreviewed"] == 3
+          assert sum(row["reviewed"] for row in result["slots"].values()) == 0
+          print("30 slots: 5 unlinked editions and 3 excluded public-index leads seeded;"
+                " zero independently adjudicated; no coverage metrics.")
           PY

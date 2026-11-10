@@ -139,4 +139,29 @@ Não registrar tokens, imagens, títulos pessoais, atividade privada ou URLs com
 - As páginas de gênero não devem presumir gênero a partir de Discogs se ele não foi verificado. Descobertas Discogs-only ficam separadas por tipo sob Explore, não como charts ou lançamentos recentes mundiais.
 - A ausência de vínculo no MusicBrainz não é prova de que a edição não existe no Discogs.
 
-Status: **protocolo definido; amostra e resultados reais pendentes**. Não publicar números até coleta.
+## Pré-seleção rastreável (10/11/2026)
+
+O manifesto agora distingue **`selected_unreviewed`** de **`reviewed`**.
+Cinco das dez vagas **B** contêm edições reais sem URL direta
+MB Release→Discogs Release na [sondagem de seis pares #42818809120](https://github.com/jssantogit/BitChord/actions/runs/42818809120):
+ENHYPEN `MEMORABILIA`, TXT `Setsuna Hanabi`, IVE `Fashion`,
+IVE `DARE ME` e TXT `7TH YEAR` em CD. MBID exato, ReleaseGroup e
+Release Discogs estão fixados individualmente, sem alegar identidade da
+mesma edição.
+
+Três vagas **C** são **controles negativos preliminares** do índice
+Discogs: aespa `World Tour In Cinemas` (Blu-ray), Stray Kids
+`The DominATE Experience` (DVD) e ENHYPEN `Confessions`
+(créditos múltiplos). As três possuem URLs públicas tipadas e
+[observação #42807755689](https://github.com/jssantogit/BitChord/actions/runs/42807755689);
+estão marcadas `excluded_by_provider_metadata`, mas **não revisadas**
+por uma segunda fonte editorial ou testadas na UI do aparelho.
+
+O relatório valida IDs, URLs públicas tipadas, unicidade e estados dessa
+pré-seleção. Retorna `reviewed=0`, `metrics=null` e
+`complete=false` enquanto faltarem as avaliações independentes.
+É progresso de seleção, **não** medida de cobertura, e ainda são
+necessários os controles restantes do corpus e a prova de navegação no app.
+
+Status: **8 pistas reais documentadas em 30 vagas; nenhuma adjudicada**.
+Não publicar indicadores de ganho ou precisão até revisão independente.

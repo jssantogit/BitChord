@@ -1,4 +1,6 @@
 import unittest
+import json
+from pathlib import Path
 from catalog_211_discogs_corpus_report import report
 
 def case(cohort, i):
@@ -13,6 +15,44 @@ def case(cohort, i):
                 visible=True, absent_in_musicbrainz=cohort == "source_only")
 
 class CorpusReportTests(unittest.TestCase):
+    def test_real_staged_manifest_reports_selected_but_no_reviewed_or_metrics(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        result = report(manifest)
+        self.assertEqual([], result["errors"])
+        self.assertFalse(result["complete"])
+        self.assertIsNone(result["metrics"])
+        self.assertEqual(5, result["slots"]["unlinked"]["selected_unreviewed"])
+        self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
+        self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
+        self.assertEqual(0, sum(x["reviewed"] for x in result["slots"].values()))
+
+    def test_wrong_provider_links_and_duplicate_seeded_editions_fail_closed(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        first = manifest["cases"][10]
+        self.assertEqual("B-01", first["id"])
+        first["evidence_links"]["discogs_release"] = "https://www.discogs.com/release/123"
+        result = report(manifest)
+        self.assertTrue(any("invalid unreviewed selection evidence" in s
+                            for s in result["errors"]))
+        self.assertEqual(4, result["slots"]["unlinked"]["selected_unreviewed"])
+        self.assertIsNone(result["metrics"])
+        first["evidence_links"]["discogs_release"] = (
+            f"https://www.discogs.com/release/{first['discogs_release_id']}"
+        )
+        second = manifest["cases"][11]
+        second["discogs_release_id"] = first["discogs_release_id"]
+        second["evidence_links"]["discogs_release"] = (
+            f"https://www.discogs.com/release/{second['discogs_release_id']}"
+        )
+        result = report(manifest)
+        self.assertTrue(any("duplicate unreviewed source edition" in s
+                            for s in result["errors"]))
+        self.assertIsNone(result["metrics"])
+
     def test_missing_cases_cannot_invent_coverage(self):
         result = report({"schema_version": 1, "cases": []})
         self.assertFalse(result["complete"])

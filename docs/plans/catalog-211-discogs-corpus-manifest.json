@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211 evaluation manifest — unreviewed slots; not evidence or measured coverage",
+  "description": "Discogs #211 evaluation manifest: five exact-ID unlinked edition candidates and three excluded source-only index leads; zero adjudicated, no measured coverage",
   "cases": [
     {
       "id": "A-01",
@@ -55,27 +55,87 @@
     {
       "id": "B-01",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "identity_observed",
+      "label": "ENHYPEN · MEMORABILIA",
+      "musicbrainz_release_mbid": "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
+      "musicbrainz_group_mbid": "4e219d4e-c5e0-4ed9-acec-b948c7319b37",
+      "discogs_release_id": 31008160,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "6/6 track titles but country contradiction and nonidentical barcode; exact edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
+        "discogs_release": "https://www.discogs.com/release/31008160",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
+      }
     },
     {
       "id": "B-02",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "identity_observed",
+      "label": "TXT · Setsuna Hanabi",
+      "musicbrainz_release_mbid": "6770b265-719a-463b-af5e-50ac5aeac1e5",
+      "musicbrainz_group_mbid": "cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
+      "discogs_release_id": 38302455,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "3/4 track titles, artist display alias, no direct Release link; edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/6770b265-719a-463b-af5e-50ac5aeac1e5",
+        "discogs_release": "https://www.discogs.com/release/38302455",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
+      }
     },
     {
       "id": "B-03",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "identity_observed",
+      "label": "IVE · Fashion",
+      "musicbrainz_release_mbid": "f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
+      "musicbrainz_group_mbid": "c8ddddd3-db0d-460e-8cce-ccfad9c1170c",
+      "discogs_release_id": 37253067,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "different Japanese bilingual title, 0/1 literal track title; edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
+        "discogs_release": "https://www.discogs.com/release/37253067",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
+      }
     },
     {
       "id": "B-04",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "identity_observed",
+      "label": "IVE · DARE ME",
+      "musicbrainz_release_mbid": "5df7296a-92e2-48ae-a69e-eaed1f74d066",
+      "musicbrainz_group_mbid": "7bd8d871-8f1e-4dff-99c2-386097d98910",
+      "discogs_release_id": 34121731,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "different Japanese bilingual title, 0/1 literal track title; edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/5df7296a-92e2-48ae-a69e-eaed1f74d066",
+        "discogs_release": "https://www.discogs.com/release/34121731",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
+      }
     },
     {
       "id": "B-05",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "identity_observed",
+      "label": "TXT · 7TH YEAR CD",
+      "musicbrainz_release_mbid": "562a42ed-de56-4282-99f4-e9f7da270098",
+      "musicbrainz_group_mbid": "dc4cfe5f-d5b9-4d18-b281-0691e93d40c8",
+      "discogs_release_id": 37110012,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "4/6 track titles, nonidentical barcode; edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/562a42ed-de56-4282-99f4-e9f7da270098",
+        "discogs_release": "https://www.discogs.com/release/37110012",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
+      }
     },
     {
       "id": "B-06",
@@ -105,17 +165,41 @@
     {
       "id": "C-01",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "aespa · World Tour in Cinemas",
+      "discogs_release_id": 35180680,
+      "selection_note": "video-only Blu-ray, not evidence of a new audio album",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/35180680",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      }
     },
     {
       "id": "C-02",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "Stray Kids · The DominATE Experience",
+      "discogs_release_id": 38613330,
+      "selection_note": "video-only DVD, not evidence of a new audio album",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/38613330",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      }
     },
     {
       "id": "C-03",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "ENHYPEN · Confessions",
+      "discogs_release_id": 33375572,
+      "selection_note": "three credited artists, not an exclusive ENHYPEN release",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/33375572",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      }
     },
     {
       "id": "C-04",
