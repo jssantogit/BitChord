@@ -3,6 +3,8 @@ package com.music.bitchord.ui.screens
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -203,6 +205,12 @@ internal fun ratingSelectionPulseIndex(selected: Double, touched: Boolean, reduc
     if (!touched || reducedMotion || !selected.isFinite() || selected !in 1.0..5.0) null
     else ceil(selected).toInt() - 1
 
+internal data class RatingDialogEntranceFrame(val alpha: Float, val scale: Float)
+internal fun ratingDialogEntranceFrame(progress: Float, reducedMotion: Boolean): RatingDialogEntranceFrame {
+    val p = if (reducedMotion || !progress.isFinite()) 1f else progress.coerceIn(0f, 1f)
+    return RatingDialogEntranceFrame(alpha = 0.96f + 0.04f * p, scale = 0.97f + 0.03f * p)
+}
+
 /**
  * Icon-based, locally editable 1–5 star modal. Each star has a left (half)
  * and right (whole) touch target; every increment is explicit and accessible.
@@ -228,13 +236,30 @@ internal fun CanonicalRecordingFeedbackPanel(
     val selectedDescription = stringResource(Res.string.recording_feedback_stars_selected, selected.toString())
     val reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current
     val pulseIndex = ratingSelectionPulseIndex(selected, touched, reduceMotion)
+    // The dialog previously appeared in one frame. Entrance affects only
+    // its drawing, never star hit targets, the save path, or the dialog window.
+    val dialogEntrance = remember { Animatable(0f) }
+    LaunchedEffect(reduceMotion) {
+        if (reduceMotion) dialogEntrance.snapTo(1f)
+        else dialogEntrance.animateTo(
+            1f,
+            tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        )
+    }
     // Native Settings-group design, keeping the same explicit half-star editor.
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { if (!saving) onDismiss() },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {
         SettingsGroupSurface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
+            modifier = Modifier.fillMaxWidth()
+                .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER)
+                .graphicsLayer {
+                    val entrance = ratingDialogEntranceFrame(dialogEntrance.value, reduceMotion)
+                    alpha = entrance.alpha
+                    scaleX = entrance.scale
+                    scaleY = entrance.scale
+                },
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(22.dp),
