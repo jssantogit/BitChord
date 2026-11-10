@@ -55,6 +55,35 @@ class PlayerSheetMotionPullOwnershipTest {
         }
     }
 
+    @Test fun releasingUnownedPointerCannotOverrideTapOpenAnimation() {
+        val shown = mutableStateOf(false)
+        val dock = PlayerDock()
+        lateinit var motion: PlayerSheetMotion
+        compose.setContent {
+            val scope = rememberCoroutineScope()
+            motion = remember {
+                PlayerSheetMotion(
+                    scope = scope,
+                    dock = dock,
+                    shown = { shown.value },
+                    setShown = { shown.value = it },
+                )
+            }
+        }
+        compose.runOnIdle {
+            dock.sheetTravel = 600f
+            motion.laidOut = true
+            motion.open()
+            motion.drag(-80f)
+            motion.release(2_000f)
+        }
+        compose.mainClock.advanceTimeBy(3_000L)
+        compose.waitForIdle()
+        compose.runOnIdle {
+            assertTrue("A late finger-up must not override an independent tap-open", shown.value)
+        }
+    }
+
     @Test fun cancellingActualMiniPullStillClosesTheSheet() {
         val shown = mutableStateOf(false)
         val dock = PlayerDock()
