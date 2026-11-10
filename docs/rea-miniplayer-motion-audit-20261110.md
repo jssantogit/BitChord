@@ -87,3 +87,12 @@ O reconhecedor compartilhado tinha proteção de identidade e `finally` no pull 
 Agora o segmento horizontal também usa `try/finally`: em qualquer saída, publica `onHorizontalSwipe(0f, false)`; se o gesto **não** terminou normalmente, sinaliza antes `onHorizontalCancel()`, método opcional e sem efeito nos consumidores legados. No `AppleMusicMiniPlayer` ativo, esse cancelamento interrompe qualquer settle antigo, limpa o estado de arrasto e recoloca o `Animatable` no offset zero sem a spring de liberação normal. Isso evita animar o swipe interrompido sobre a entrada seguinte. Uma conclusão normal conserva **um único** skip, haptic e spring atuais. O reconhecedor não altera thresholds, decisão de eixo, tap para expandir, velocidade nem `PlayerDock`.
 
 Regressões no `MiniPlayerGestureIdentityTest` verificam troca de entrada durante swipe: houve feedback ativo, não houve skip posterior, há **exatamente um** evento de encerramento, e o callback de cancelamento ocorre **uma vez**. A atualização simples de metadados continua permitindo um skip e **não** emite cancelamento. O teste de reprodução foi publicado antes da correção para exercitar a lacuna. Verificação de toque/offset no aparelho permanece pendente; não houve smoke, merge nem alteração geométrica.
+
+
+## Nona implementação — zerar lift vertical no cancelamento ou troca de faixa
+
+A correção anterior do `try/finally` liberava a sheet corretamente via `MiniPlayerPull.cancel()`, mas ainda iniciava a spring do `lift` do miniplayer sobre a música seguinte quando `pointerInput(gestureIdentity)` era cancelado. Um settle iniciado por uma liberação **anterior** também podia atravessar a mudança de entrada.
+
+O detector agora zera `lift` imediatamente se o drag vertical terminou por cancelamento; apenas a liberação normal, sem Reduzir animações, mantém a spring de retorno. `LaunchedEffect(gestureIdentity)` também cancela e zera um settle anterior ao receber uma nova identidade, mesmo se não houver dedo na tela. `PlayerSheetMotion.cancel()` segue independente e fecha a sheet interrompida sem inferir fling. As regras são explicitadas por `miniPlayerShouldAnimateLiftSettle` e testadas em `AppleMusicChromeMotionPolicyTest` para cancelamento, conclusão normal e preferência reduzida.
+
+Nenhum threshold, velocidade do gesto normal, curva de spring de liberação legítima, geometria da sheet ou `PlayerDock` foi alterado. Fidelidade do primeiro/último frame, Haze/blur e skips consecutivos permanecem dependentes de aparelho.
