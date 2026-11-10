@@ -76,6 +76,9 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -792,9 +795,17 @@ internal fun RefreshPuck(
                         if (refreshing || fading) 0.8f
                         else (currentFraction() * 0.8f).coerceIn(0f, 0.8f)
                     },
-                    modifier = indicatorModifier.graphicsLayer {
-                        rotationZ = currentFraction().coerceIn(0f, 2f) * 180f
-                    },
+                    modifier = indicatorModifier
+                        .graphicsLayer {
+                            rotationZ = GlobalMotionPolicy.refreshPuckRotationDegrees(
+                                currentFraction(), reduced = reduceMotion,
+                            )
+                        }
+                        .clearAndSetSemantics {
+                            // The 80% arc represents a loading/drag affordance,
+                            // NOT measured progress of the network request.
+                            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                        },
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = Color.Transparent,
                     strokeWidth = 2.5.dp,
