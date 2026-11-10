@@ -2,6 +2,13 @@ package com.music.bitchord.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -66,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -498,7 +506,15 @@ private fun AppleSettingsPopup(
     onDismiss: () -> Unit,
     onSettings: () -> Unit,
 ) {
-    if (!expanded) return
+    // Keep the Popup window alive just long enough to draw its exit.
+    // A normal if (!expanded) return drops the whole window in one frame.
+    // The measured Apple popup animation is unknown; these are restrained
+    // BitChord timings, shared by the root and pushed-screen ⋮ actions.
+    val reduced by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val visibility = remember { MutableTransitionState(false) }
+    visibility.targetState = expanded
+    if (!visibility.currentState && !visibility.targetState) return
+
     val offsetPx = with(LocalDensity.current) { 38.dp.roundToPx() }
     Popup(
         alignment = Alignment.TopEnd,
@@ -506,24 +522,40 @@ private fun AppleSettingsPopup(
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
-        Box(
-            Modifier.width(180.dp)
-                .then(artworkPageSurface(shape = RoundedCornerShape(17.dp), hazeState = hazeState))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = .18f))
-                .testTag("apple-root-settings-popup"),
+        AnimatedVisibility(
+            visibleState = visibility,
+            enter = if (reduced) EnterTransition.None else
+                fadeIn(tween(170)) + scaleIn(
+                    animationSpec = tween(170),
+                    initialScale = 0.96f,
+                    transformOrigin = TransformOrigin(1f, 0f),
+                ),
+            exit = if (reduced) ExitTransition.None else
+                fadeOut(tween(125)) + scaleOut(
+                    animationSpec = tween(125),
+                    targetScale = 0.98f,
+                    transformOrigin = TransformOrigin(1f, 0f),
+                ),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(52.dp)
-                    .clickable(onClick = onSettings)
-                    .testTag("apple-root-settings-item")
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Box(
+                Modifier.width(180.dp)
+                    .then(artworkPageSurface(shape = RoundedCornerShape(17.dp), hazeState = hazeState))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = .18f))
+                    .testTag("apple-root-settings-popup"),
             ) {
-                Text(
-                    text = stringResource(R.string.settings),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                        .clickable(enabled = expanded, onClick = onSettings)
+                        .testTag("apple-root-settings-item")
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
         }
     }
