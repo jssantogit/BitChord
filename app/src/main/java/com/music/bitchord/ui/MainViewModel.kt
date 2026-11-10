@@ -2702,14 +2702,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     ) {
         val name = title.trim().ifBlank { text(R.string.new_playlist) }
         viewModelScope.launch {
-            try {
+            val saved = try {
                 com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, listOfNotNull(song))
-                onResult(true)
+                true
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                onResult(false)
+                false
             }
+            onResult(saved)
         }
     }
 
