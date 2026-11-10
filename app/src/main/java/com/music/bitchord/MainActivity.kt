@@ -5402,12 +5402,27 @@ private fun BitChordApp(
             // straight onto the form, which is what the Library tile means.
             if (playlistTarget != null || creatingPlaylist) {
                 val target = playlistTarget
+                var playlistDraftDirty by remember { mutableStateOf(false) }
+                var confirmPlaylistDismiss by remember { mutableStateOf(false) }
                 val dismiss = {
                     playlistTarget = null
                     creatingPlaylist = false
                 }
+                val playlistSheetState = rememberModalBottomSheetState(
+                    skipPartiallyExpanded = true,
+                    confirmValueChange = { destination ->
+                        if (destination == androidx.compose.material3.SheetValue.Hidden && playlistDraftDirty) {
+                            confirmPlaylistDismiss = true
+                            false
+                        } else true
+                    },
+                )
                 ModalBottomSheet(
-                    onDismissRequest = dismiss,
+                    onDismissRequest = {
+                        if (playlistDraftDirty) confirmPlaylistDismiss = true
+                        else dismiss()
+                    },
+                    sheetState = playlistSheetState,
                     containerColor = MaterialTheme.colorScheme.background,
                 ) {
                     PlaylistPickerSheet(
@@ -5415,6 +5430,7 @@ private fun BitChordApp(
                         loading = playlistsLoading,
                         song = target,
                         startCreating = target == null,
+                        onDraftChanged = { playlistDraftDirty = it },
                         onAdd = { picked ->
                             target?.let { song ->
                                 viewModel.addToPlaylists(picked, song) { added, alreadyThere, failed ->
@@ -5437,10 +5453,28 @@ private fun BitChordApp(
                             }
                             dismiss()
                         },
-                        onCreate = { title, privacy ->
-                            viewModel.createPlaylist(title, privacy, target)
+                        onCreate = { title, privacy, onResult ->
+                            viewModel.createPlaylist(title, privacy, target) { succeeded ->
+                                onResult(succeeded)
+                                if (succeeded) dismiss()
+                            }
+                        },
+                    )
+                }
+                if (confirmPlaylistDismiss) {
+                    ConfirmationAlert(
+                        hazeState = null,
+                        title = androidx.compose.ui.res.stringResource(R.string.editor_discard_title),
+                        description = androidx.compose.ui.res.stringResource(R.string.editor_discard_playlist_body),
+                        confirmLabel = androidx.compose.ui.res.stringResource(R.string.editor_discard_confirm),
+                        dismissLabel = androidx.compose.ui.res.stringResource(R.string.editor_keep_editing),
+                        destructive = true,
+                        onConfirm = {
+                            confirmPlaylistDismiss = false
+                            playlistDraftDirty = false
                             dismiss()
                         },
+                        onDismiss = { confirmPlaylistDismiss = false },
                     )
                 }
             }
@@ -5466,6 +5500,8 @@ private fun BitChordApp(
             // overflow. What a track's long-press menu is to one song, this is to
             // the whole release — the queue rows above all.
             // One body for the sheet and the popup alike — see songMenuBody.
+            var browseRenameDirty by remember { mutableStateOf(false) }
+            var confirmBrowseDismiss by remember { mutableStateOf(false) }
             val browseMenuBody: @Composable (BrowseTarget, SongActionsPresentation) -> Unit = { target, presentation ->
                 LegacyBrowseActionsMenuBody(
                     target = target,
@@ -5475,6 +5511,7 @@ private fun BitChordApp(
                     signedIn = signedIn,
                     playlists = playlists,
                     startRenaming = browseRenameInSheet,
+                    onRenameDraftChanged = { browseRenameDirty = it },
                     onBeginRename = {
                         browseRenameInSheet = true
                         browseMenuOrigin = null
@@ -5502,12 +5539,41 @@ private fun BitChordApp(
                 )
             }
             browseActions?.takeIf { browseMenuOrigin == null }?.let { target ->
+                val browseSheetState = rememberModalBottomSheetState(
+                    skipPartiallyExpanded = true,
+                    confirmValueChange = { destination ->
+                        if (destination == androidx.compose.material3.SheetValue.Hidden && browseRenameDirty) {
+                            confirmBrowseDismiss = true
+                            false
+                        } else true
+                    },
+                )
                 ModalBottomSheet(
-                    onDismissRequest = { browseActions = null },
+                    onDismissRequest = {
+                        if (browseRenameDirty) confirmBrowseDismiss = true
+                        else browseActions = null
+                    },
+                    sheetState = browseSheetState,
                     containerColor = MaterialTheme.colorScheme.background,
                 ) {
                     browseMenuBody(target, SongActionsPresentation.Sheet)
                 }
+            }
+            if (confirmBrowseDismiss) {
+                ConfirmationAlert(
+                    hazeState = null,
+                    title = androidx.compose.ui.res.stringResource(R.string.editor_discard_title),
+                    description = androidx.compose.ui.res.stringResource(R.string.editor_discard_playlist_body),
+                    confirmLabel = androidx.compose.ui.res.stringResource(R.string.editor_discard_confirm),
+                    dismissLabel = androidx.compose.ui.res.stringResource(R.string.editor_keep_editing),
+                    destructive = true,
+                    onConfirm = {
+                        confirmBrowseDismiss = false
+                        browseRenameDirty = false
+                        browseActions = null
+                    },
+                    onDismiss = { confirmBrowseDismiss = false },
+                )
             }
             HeldContextMenu(
                 item = browseActions,
@@ -5535,6 +5601,7 @@ private fun BitChordApp(
                 if (browseActions == null) {
                     browseMenuOrigin = null
                     browseRenameInSheet = false
+                    browseRenameDirty = false
                 }
             }
 
@@ -6104,6 +6171,7 @@ private fun LegacyBrowseActionsMenuBody(
     playlists: List<UserPlaylist>,
     startRenaming: Boolean,
     onBeginRename: () -> Unit,
+    onRenameDraftChanged: (Boolean) -> Unit,
     onDismissBrowse: () -> Unit,
     withBrowseSongs: (BrowseTarget, (List<Song>) -> Unit) -> Unit,
     playSongsNext: (List<Song>) -> Unit,
@@ -6155,6 +6223,7 @@ private fun LegacyBrowseActionsMenuBody(
             onBeginRename()
         },
         startRenaming = startRenaming,
+        onRenameDraftChanged = onRenameDraftChanged,
         onPlayNext = act(playSongsNext),
         onAddToQueue = act(addSongsToQueue),
         onPlay = act { songs -> play(songs, 0) }.takeIf { target.fromCard },
