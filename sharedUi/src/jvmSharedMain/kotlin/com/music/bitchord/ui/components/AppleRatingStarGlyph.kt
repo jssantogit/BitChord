@@ -14,9 +14,10 @@ import com.music.bitchord.ui.player.AppleQueueVectors
  * Same 28-unit native vectors as the expanded player; not the unrelated
  * Material Star / StarHalf / StarBorder silhouette.
  *
- * HALF composes the normal (unrated) vector and clips a second instance of
- * the EXACT filled player vector to its left half. Clipping is done in vector
- * draw space, with no rasterized SVG, path copy or a different star outline.
+ * HALF composes the unrated contour and clips the EXACT matching filled
+ * contour at its midpoint. When standalone=true the same player star
+ * geometry is used without its circular button platter. Clipping remains
+ * vector based; no bitmap, unrelated Material star or altered silhouette.
  */
 enum class AppleRatingStarFill { EMPTY, HALF, FULL }
 
@@ -36,18 +37,23 @@ fun AppleRatingStarGlyph(
     fill: AppleRatingStarFill,
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.onSurface,
+    /** Five-star editors need standalone silhouettes, not five player platters. */
+    standalone: Boolean = false,
 ) {
+    val empty = if (standalone) AppleQueueVectors.RatingStarOutline
+        else AppleQueueVectors.Favorite
+    val filled = if (standalone) AppleQueueVectors.RatingStarFilled
+        else AppleQueueVectors.Favorited
     Box(modifier) {
         Icon(
-            imageVector = if (fill == AppleRatingStarFill.FULL)
-                AppleQueueVectors.Favorited else AppleQueueVectors.Favorite,
+            imageVector = if (fill == AppleRatingStarFill.FULL) filled else empty,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.matchParentSize(),
         )
         if (fill == AppleRatingStarFill.HALF) {
             Icon(
-                imageVector = AppleQueueVectors.Favorited,
+                imageVector = filled,
                 contentDescription = null,
                 tint = tint,
                 modifier = Modifier.matchParentSize().drawWithContent {
