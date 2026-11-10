@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -53,6 +54,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.data.model.PlaylistPrivacy
@@ -88,12 +93,15 @@ fun PlaylistPickerSheet(
     playlists: List<UserPlaylist>,
     loading: Boolean,
     onAdd: (List<UserPlaylist>) -> Unit,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, (Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     song: Song? = null,
     startCreating: Boolean = false,
+    onDraftChanged: (Boolean) -> Unit = {},
 ) {
     var creating by remember { mutableStateOf(startCreating) }
+    var formDirty by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     // By id rather than by value: the list is re-fetched under an open sheet,
     // and a refreshed row must stay ticked.
     var selected by remember { mutableStateOf(emptySet<String>()) }
@@ -110,10 +118,34 @@ fun PlaylistPickerSheet(
         NewPlaylistForm(
             // Nowhere to go back to when the sheet opened straight onto the
             // form; the sheet's own dismiss is the way out.
-            onBack = if (startCreating) null else ({ creating = false }),
+            onBack = if (startCreating) null else ({
+                if (formDirty) confirmDiscard = true
+                else { onDraftChanged(false); creating = false }
+            }),
             onCreate = onCreate,
+            onDraftChanged = { changed ->
+                formDirty = changed
+                onDraftChanged(changed)
+            },
             modifier = modifier.then(routeArrival),
         )
+        if (confirmDiscard) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.editor_discard_title),
+                description = stringResource(R.string.editor_discard_playlist_body),
+                confirmLabel = stringResource(R.string.editor_discard_confirm),
+                dismissLabel = stringResource(R.string.editor_keep_editing),
+                destructive = true,
+                onConfirm = {
+                    confirmDiscard = false
+                    formDirty = false
+                    onDraftChanged(false)
+                    creating = false
+                },
+                onDismiss = { confirmDiscard = false },
+            )
+        }
         return
     }
 
@@ -130,7 +162,7 @@ fun PlaylistPickerSheet(
         ActionRow(
             icon = BitChordIcons.Plus,
             label = stringResource(R.string.new_playlist),
-            onClick = { creating = true },
+            onClick = { formDirty = false; onDraftChanged(false); creating = true },
         )
 
         when {
@@ -258,22 +290,39 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
 @Composable
 private fun NewPlaylistForm(
     onBack: (() -> Unit)?,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, (Boolean) -> Unit) -> Unit,
+    onDraftChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var name by remember { mutableStateOf("") }
     var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
+    var saving by remember { mutableStateOf(false) }
+    var saveFailed by remember { mutableStateOf(false) }
+    var attempted by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val nameLabel = stringResource(R.string.playlist_name)
+    val nameError = when {
+        name.length > 80 -> stringResource(R.string.playlist_editor_name_too_long)
+        (attempted || name.isNotEmpty()) && name.isBlank() ->
+            stringResource(R.string.playlist_editor_name_required)
+        else -> null
+    }
+    val validName = name.isNotBlank() && name.length <= 80
 
-    // The form exists to be typed into; opening it with the keyboard already
-    // up saves the tap that would otherwise always follow.
+    // Preserve the active input/IME; only an accepted save clears focus.
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     val submit: () -> Unit = {
-        if (name.isNotBlank()) {
-            focusManager.clearFocus()
-            onCreate(name, privacy)
+        attempted = true
+        if (validName && !saving) {
+            saving = true
+            saveFailed = false
+            onCreate(name.trim(), privacy) { succeeded ->
+                saving = false
+                if (!succeeded) saveFailed = true
+                else focusManager.clearFocus()
+            }
         }
     }
 
@@ -337,7 +386,13 @@ private fun NewPlaylistForm(
                 }
                 BasicTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = {
+                        if (!saving) {
+                            name = it
+                            saveFailed = false
+                            onDraftChanged(it.isNotEmpty() || privacy != PlaylistPrivacy.PRIVATE)
+                        }
+                    },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onBackground,
@@ -348,6 +403,10 @@ private fun NewPlaylistForm(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("playlist-editor-create-name")
+                        .semantics {
+                            contentDescription = nameLabel
+                            if (nameError != null) error(nameError)
+                        }
                         .focusRequester(focusRequester),
                 )
             }
@@ -356,7 +415,11 @@ private fun NewPlaylistForm(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { name = "" },
+                        .clickable(enabled = !saving) {
+                            name = ""
+                            saveFailed = false
+                            onDraftChanged(privacy != PlaylistPrivacy.PRIVATE)
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -369,6 +432,24 @@ private fun NewPlaylistForm(
             }
         }
 
+        if (nameError != null) {
+            Text(
+                nameError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 22.dp),
+            )
+        }
+        if (saveFailed) {
+            Text(
+                stringResource(R.string.playlist_editor_save_failed),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 22.dp)
+                    .testTag("playlist-editor-save-error")
+                    .semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
         SheetHeading(stringResource(R.string.who_can_see_it).uppercase(Locale.getDefault()))
         Row(
             modifier = Modifier
@@ -382,7 +463,12 @@ private fun NewPlaylistForm(
                     icon = option.icon,
                     label = option.label,
                     selected = option == privacy,
-                    onClick = { privacy = option },
+                    onClick = {
+                        if (!saving) {
+                            privacy = option
+                            onDraftChanged(name.isNotEmpty() || option != PlaylistPrivacy.PRIVATE)
+                        }
+                    },
                 )
             }
         }
@@ -390,7 +476,7 @@ private fun NewPlaylistForm(
         Spacer(Modifier.height(20.dp))
         Button(
             onClick = submit,
-            enabled = name.isNotBlank(),
+            enabled = validName && !saving,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 22.dp)
@@ -401,7 +487,12 @@ private fun NewPlaylistForm(
                 contentColor = androidx.compose.ui.graphics.Color.White,
             ),
         ) {
-            Text(stringResource(R.string.create_playlist))
+            if (saving) CircularProgressIndicator(
+                modifier = Modifier.size(20.dp).testTag("playlist-editor-saving"),
+                strokeWidth = 2.dp,
+                color = androidx.compose.ui.graphics.Color.White,
+            )
+            else Text(stringResource(R.string.create_playlist))
         }
         Spacer(Modifier.height(28.dp))
     }
