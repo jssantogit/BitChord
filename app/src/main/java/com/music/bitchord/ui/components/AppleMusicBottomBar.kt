@@ -103,8 +103,11 @@ internal object AppleMusicChromeMetrics {
     val controlTouchSize = 40.dp
     val playGlyphSize = 32.dp
     val nextGlyphSize = 32.dp
-    val titleSize = 15.sp
-    val artistSize = 15.sp
+    // XML base: mini_player_title = FootnoteEmphasized (13sp),
+    // mini_player_artist = Caption1 (12sp). Wider variants use 15sp,
+    // but their active resource qualifier was not observed in the reference.
+    val titleSize = 13.sp
+    val artistSize = 12.sp
 }
 
 /**
