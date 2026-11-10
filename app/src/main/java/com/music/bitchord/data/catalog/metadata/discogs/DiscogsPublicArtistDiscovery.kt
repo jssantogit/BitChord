@@ -220,12 +220,12 @@ internal class DiscogsPublicArtistDiscovery(
         val first = checkedPage(1) ?: return emptyList()
         // Public Artist release index titles are hints only. Hydrate at most
         // four release candidates per page and never fabricate an MBID.
-        fun key(value: String) = value.trim().lowercase(Locale.ROOT)
-        val known = completedMusicBrainzTitles.mapTo(HashSet(), ::key)
+        val knownTitle = DiscogsShadowCatalog.knownTitlePredicate(
+            artistName, completedMusicBrainzTitles,
+        )
         suspend fun select(page: DiscogsArtistIndexPage): List<DiscogsShadowRelease> {
             val candidates = page.entries.filter { entry ->
-                val title = key(entry.title)
-                title.isEmpty() || title !in known
+                entry.title.isBlank() || !knownTitle(entry.title)
             }.take(4)
             val observations = mutableListOf<DiscogsPublicEditionSnapshot>()
             val used = HashSet<Long>()

@@ -36,6 +36,9 @@ duas páginas: a segunda só é consultada quando a primeira não gera nenhuma
 pista de título novo, espelhando a política de descoberta do app. Não cria
 vínculo entre ReleaseGroup e Discogs Master e registra `pages_checked`.
 Uma segunda página inválida não vira uma alegação de ausência.
+O app compartilha o mesmo comparador conservador de títulos conhecidos
+entre o filtro do índice e a inspeção final, evitando hidratações
+Discogs desnecessárias de grupos MusicBrainz já completos.
 
 Uma segunda etapa conservadora `scripts/catalog_211_discogs_candidate_details.py`
 consulta **no máximo 8 entradas do índice por execução**, distribuídas

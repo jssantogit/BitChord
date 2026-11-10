@@ -210,6 +210,17 @@ internal object DiscogsShadowCatalog {
         return normalized.removeRange(qualifier.range).trim() in known
     }
 
+    /** A precomputed predicate shared between the index and hydrated edition. */
+    internal fun knownTitlePredicate(
+        expectedArtist: String,
+        knownMusicBrainzTitles: Set<String>,
+    ): (String) -> Boolean {
+        val known = knownMusicBrainzTitles.mapTo(HashSet()) { normalizedTitle(it) }
+        val signatures = known.mapTo(HashSet()) { lexicalSignature(it) }
+            .filterTo(HashSet()) { it.size >= 3 }
+        return { title -> isKnownGroupTitle(title, expectedArtist, known, signatures) }
+    }
+
     fun select(
         observations: List<DiscogsPublicEditionSnapshot>,
         expectedArtist: String,
@@ -222,12 +233,7 @@ internal object DiscogsShadowCatalog {
     ): List<DiscogsShadowRelease> {
         if (!mbCatalogChecked || expectedArtist.isBlank() || nowMillis < 0L) return emptyList()
         val artist = normalizedTitle(expectedArtist)
-        val knownTitles = knownMusicBrainzTitles.mapTo(HashSet()) {
-            normalizedTitle(it)
-        }
-        val knownSignatures = knownTitles.mapTo(HashSet()) {
-            lexicalSignature(it)
-        }.filterTo(HashSet()) { it.size >= 3 }
+        val knownTitle = knownTitlePredicate(expectedArtist, knownMusicBrainzTitles)
         val eligible = observations.take(80).mapNotNull { item ->
             val release = item.record
             val artistMatches = if (expectedDiscogsArtistId != null) {
@@ -245,7 +251,7 @@ internal object DiscogsShadowCatalog {
                 release.link.id in linkedReleaseIds ||
                 release.unofficial || release.title.isBlank() ||
                 release.artistNames.size != 1 || !artistMatches ||
-                isKnownGroupTitle(release.title, expectedArtist, knownTitles, knownSignatures) ||
+                knownTitle(release.title) ||
                 release.tracklist.isEmpty() ||
                 release.year == null ||
                 release.labels.isEmpty()

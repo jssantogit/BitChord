@@ -187,6 +187,48 @@ class DiscogsPublicArtistDiscoveryTest {
         assertTrue(discovery.findForArtist(mbid, "ENHYPEN", emptySet()).isEmpty())
     }
 
+    @Test fun knownPunctuationTitleSkipsHydrationAndChecksSecondPage() = runBlocking {
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String = relation()
+        })
+        val pages = mutableListOf<Int>()
+        val fetched = mutableListOf<String>()
+        val discovery = DiscogsPublicArtistDiscovery(
+            musicBrainz = mb,
+            transport = object : DiscogsPublicArtistTransport {
+                override suspend fun list(artistId: Long, page: Int,
+                    userAgent: String): DiscogsHttpResponse {
+                    pages += page
+                    val sourceId = if (page == 1) 900 else 999
+                    val title = if (page == 1) "EASY-CRAZY-HOT" else "NEW EP"
+                    return DiscogsHttpResponse(200, """{
+                        "pagination":{"page":$page,"pages":2},
+                        "releases":[{"id":$sourceId,"type":"release","role":"Main",
+                            "title":"$title"}]}""")
+                }
+            },
+            editions = DiscogsClient(transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                    fetched += path
+                    return DiscogsHttpResponse(200, """{
+                        "id":999,"title":"NEW EP",
+                        "artists":[{"id":8303009,"name":"ENHYPEN (12)"}],
+                        "country":"South Korea","year":2026,
+                        "labels":[{"name":"Label"}],
+                        "formats":[{"name":"CD","descriptions":["EP"]}],
+                        "tracklist":[{"position":"1","title":"One"}]}""")
+                }
+            }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L)),
+            enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+            nowMillis = { 1_000L },
+        )
+        val releases = discovery.findForArtist(mbid, "ENHYPEN", setOf("EASY CRAZY HOT"))
+        assertEquals(listOf(1, 2), pages)
+        assertEquals(listOf("releases/999"), fetched)
+        assertEquals(listOf("NEW EP"), releases.map { it.title })
+    }
+
     @Test fun noExactArtistRelationMeansNoAnonymousDiscogsHttpRequest() = runBlocking {
         val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
             override suspend fun get(
