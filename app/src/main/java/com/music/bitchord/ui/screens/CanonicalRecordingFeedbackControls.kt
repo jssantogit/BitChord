@@ -328,14 +328,17 @@ internal fun CanonicalRecordingFeedbackPanel(
                             modifier = Modifier.weight(1f).height(48.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            // The expanded player uses the exact same 28-unit
-                            // Favorite/Favorited vectors. Half uses a clipped
-                            // filled vector, not Material StarHalf or a bitmap.
+                            // Retain the player's exact original star
+                            // contours but drop the circular *button* platter.
+                            // Five repeated platters looked like generic chips.
+                            // A 48dp glyph viewport keeps the visible star
+                            // near 28dp while maintaining generous touch slots.
                             AppleRatingStarGlyph(
                                 fill = starFill,
+                                standalone = true,
                                 tint = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
-                                    .size(28.dp)
+                                    .size(48.dp)
                                     .testTag("rating-editor-star-$i-${starFill.name.lowercase()}")
                                     .graphicsLayer {
                                         scaleX = starPulse.value
