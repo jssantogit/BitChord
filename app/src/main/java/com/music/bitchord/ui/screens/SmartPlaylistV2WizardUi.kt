@@ -170,7 +170,7 @@ private fun WizardCard(
             subtitle = subtitle.ifBlank { null },
             onClick = onClick,
             reserveIconSpace = false,
-            trailing = if (showChevron) null else ({}),
+            trailing = if (onClick != null && showChevron) null else ({}),
         )
         if (content != null) {
             Column(
@@ -186,17 +186,19 @@ private fun WizardCard(
 
 @Composable
 private fun WizardHeading(title: String, detail: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             title,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        Text(
-            detail,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (detail.isNotBlank()) {
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -581,21 +583,21 @@ internal fun SmartPlaylistV2WizardUi(
                     start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 28.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(
-                    if (page == WizardStep.SONGS) 0.dp else 15.dp,
+                    if (page == WizardStep.SONGS) 0.dp else 12.dp,
                 ),
             ) {
                 item {
                     val headingDetail = when (page) {
-                        WizardStep.IDENTITY -> "Dê um nome e escolha como a biblioteca será organizada."
+                        WizardStep.IDENTITY -> ""
                         WizardStep.EDIT -> if (filterMode)
                             "Configure o nome e as regras deste filtro reutilizável."
                         else "Atualize a capa, a descrição e as faixas ou regras desta playlist."
                         WizardStep.SONGS -> "Escolha as faixas que farão parte desta playlist, na ordem desejada."
                         WizardStep.RULES -> "Organize condições em grupos. As opções avançadas ficam dentro de cada grupo."
                         WizardStep.GROUP -> "Ajuste as condições, a combinação e a ordem deste grupo."
-                        WizardStep.CATEGORIES -> "Explore os tipos de condição disponíveis ou pesquise diretamente."
-                        WizardStep.FIELDS -> "Escolha uma condição compatível com o catálogo atual."
-                        WizardStep.EDITOR -> smartConditionDescription(draft.field)
+                        WizardStep.CATEGORIES -> ""
+                        WizardStep.FIELDS -> ""
+                        WizardStep.EDITOR -> ""
                         WizardStep.REVIEW -> if (normalMode)
                             "Confira as músicas escolhidas antes de salvar." else
                             "Confira fontes, regras e músicas antes de salvar."
@@ -627,11 +629,10 @@ internal fun SmartPlaylistV2WizardUi(
                                 // as the Library's own playlist page does.
                                 val automaticCoverRows = if (normalMode)
                                     normalSelectedRows else preview.orEmpty()
-                                // Mirror the native Detail release hero (76% of available
-                                // width). The sleeve is measured independently of action
-                                // buttons, so adding "Remover capa" cannot shrink it.
+                                // In a form, the cover is an editable preview, not a release
+                                // detail hero. Keep it subordinate to the name field.
                                 BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                                    val coverDimension = maxWidth * 0.76f
+                                    val coverDimension = (maxWidth * 0.56f).coerceAtMost(196.dp)
                                     Box(
                                         modifier = Modifier.size(coverDimension)
                                             .align(Alignment.Center)
@@ -656,18 +657,24 @@ internal fun SmartPlaylistV2WizardUi(
                                     }
                                 }
                                 Column(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
-                                    PlaylistWizardSecondaryAction(
-                                        label = "Escolher capa",
+                                    TextButton(
                                         onClick = onChooseCover,
-                                    )
+                                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                                            .heightIn(min = 44.dp),
+                                    ) {
+                                        Text("Escolher capa", color = MaterialTheme.colorScheme.onBackground)
+                                    }
                                     if (coverUri != null) {
-                                        PlaylistWizardSecondaryAction(
-                                            label = "Remover capa",
+                                        TextButton(
                                             onClick = onClearCover,
-                                        )
+                                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                                                .heightIn(min = 44.dp),
+                                        ) {
+                                            Text("Remover capa", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                     }
                                 }
                             }
@@ -698,47 +705,42 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         }
                         item {
+                            val selected = if (normalMode) normalSourceProviderKey
+                                else if (hasConfiguredRules) smartRuleGlobalSource(rule)
+                                else null
+                            val label = if (normalMode) when {
+                                selected == null -> "Todas as fontes disponíveis"
+                                selected == "local-mediastore" -> "Música local"
+                                selected in availableSourceKeys -> "Navidrome"
+                                else -> "Fonte desconectada"
+                            } else when (selected) {
+                                "local" -> "Música local"
+                                "opensubsonic" -> "Navidrome"
+                                else -> "Todas as fontes disponíveis"
+                            }
                             WizardCard(
-                                "Fontes de origem",
-                                "Escolha onde procurar músicas. Toque para alterar.",
-                            ) {
-                                val selected = if (normalMode) normalSourceProviderKey
-                                    else if (hasConfiguredRules) smartRuleGlobalSource(rule)
-                                    else null
-                                val label = if (normalMode) when {
-                                    selected == null -> "Todas as fontes disponíveis"
-                                    selected == "local-mediastore" -> "Música local"
-                                    selected in availableSourceKeys -> "Navidrome"
-                                    else -> "Fonte desconectada"
-                                } else when (selected) {
-                                    "local" -> "Música local"
-                                    "opensubsonic" -> "Navidrome"
-                                    else -> "Todas as fontes disponíveis"
-                                }
-                                PlaylistWizardSecondaryAction(
-                                    label = "Origem: $label",
-                                    onClick = { picker = "source" },
+                                title = "Fontes de origem",
+                                subtitle = label,
+                                onClick = { picker = "source" },
+                            )
+                            if (normalMode && selected != null && selected !in availableSourceKeys) {
+                                Text(
+                                    "A fonte salva está desconectada; as músicas continuam na playlist.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
                                 )
-                                if (normalMode && selected != null &&
-                                    selected !in availableSourceKeys) {
-                                    Text(
-                                        "A fonte salva está desconectada; as músicas continuam na playlist.",
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                                if (!normalMode && selected == "opensubsonic" &&
-                                    availableSourceKeys.none { it.startsWith("opensubsonic:") }) {
-                                    Text(
-                                        "Nenhum servidor Navidrome está conectado.",
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
+                            }
+                            if (!normalMode && selected == "opensubsonic" &&
+                                availableSourceKeys.none { it.startsWith("opensubsonic:") }) {
+                                Text(
+                                    "Nenhum servidor Navidrome está conectado.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                         }
                         if (page == WizardStep.IDENTITY) item {
-                            WizardCard("Tipo de playlist", "Normal: escolha manual de músicas. Inteligente: seleção por regras.") {
+                            WizardCard("Tipo de playlist", "") {
                                 if (editingId != null || filterMode || editingNormalId != null) {
                                     Text(if (normalMode) "Normal" else "Inteligente",
                                         style = MaterialTheme.typography.bodyMedium)
