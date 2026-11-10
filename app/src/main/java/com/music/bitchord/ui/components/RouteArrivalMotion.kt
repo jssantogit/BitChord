@@ -21,6 +21,32 @@ import androidx.compose.ui.unit.dp
  * switches: no outgoing copy, no two-page translucent crossfade, no new
  * destination and no animation on ordinary data/scroll recomposition.
  */
+/** The secondary Library filter/sort popup has a single stable size.
+ * Only its drawn content enters; dismissal and outside-tap remain immediate.
+ * No Apple timing is inferred from the generic popup resource inventory. */
+internal data class FrostedMenuEntranceFrame(val alpha: Float, val scale: Float)
+
+internal fun frostedMenuEntranceFrame(progress: Float, reducedMotion: Boolean): FrostedMenuEntranceFrame {
+    val p = if (reducedMotion || !progress.isFinite()) 1f else progress.coerceIn(0f, 1f)
+    return FrostedMenuEntranceFrame(alpha = 0.3f + 0.7f * p, scale = 0.94f + 0.06f * p)
+}
+
+@Composable
+internal fun rememberFrostedMenuEntranceModifier(reduceMotion: Boolean): Modifier {
+    val progress = remember { Animatable(if (reduceMotion) 1f else 0f) }
+    LaunchedEffect(reduceMotion) {
+        if (reduceMotion) progress.snapTo(1f)
+        else progress.animateTo(1f, tween(durationMillis = 160, easing = FastOutSlowInEasing))
+    }
+    return Modifier.graphicsLayer {
+        val frame = frostedMenuEntranceFrame(progress.value, reduceMotion)
+        alpha = frame.alpha
+        scaleX = frame.scale
+        scaleY = frame.scale
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(1f, 0f)
+    }
+}
+
 internal data class RouteArrivalFrame(val alpha: Float, val translationDp: Float)
 
 internal fun routeArrivalFrame(progress: Float, forward: Boolean): RouteArrivalFrame {
