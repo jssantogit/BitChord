@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -40,6 +41,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.music.bitchord.ui.components.ActionRow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.music.bitchord.ui.components.AppleRatingStarGlyph
+import com.music.bitchord.ui.components.appleRatingStarFill
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -246,7 +252,9 @@ internal fun CanonicalRecordingFeedbackPanel(
             tween(durationMillis = 180, easing = FastOutSlowInEasing),
         )
     }
-    // Native Settings-group design, keeping the same explicit half-star editor.
+    // The new-surface-patterns recipe treats this as a BitChord choice/editor:
+    // one canonical sheet-like dialog, a labeled selection, explicit actions
+    // and untouched persistence. No claim of an Apple rating editor.
     androidx.compose.ui.window.Dialog(
         onDismissRequest = { if (!saving) onDismiss() },
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
@@ -262,19 +270,21 @@ internal fun CanonicalRecordingFeedbackPanel(
                 },
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
                     title ?: stringResource(Res.string.recording_feedback_dialog_title),
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("native-rating-editor-star-row")
                         .semantics { contentDescription = selectedDescription },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
@@ -301,22 +311,24 @@ internal fun CanonicalRecordingFeedbackPanel(
                         val half = (index + 0.5).coerceAtLeast(1.0)
                         val halfDescription = stringResource(Res.string.recording_feedback_stars_value, half.toString())
                         val wholeDescription = stringResource(Res.string.recording_feedback_stars_value, (index + 1.0).toString().removeSuffix(".0"))
+                        val starFill = appleRatingStarFill(selected, i)
                         Box(
-                            modifier = Modifier.size(width = 42.dp, height = 48.dp),
+                            modifier = Modifier.weight(1f).height(52.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = when {
-                                    selected >= index + 1.0 -> Icons.Rounded.Star
-                                    selected >= index + 0.5 -> Icons.Rounded.StarHalf
-                                    else -> Icons.Rounded.StarBorder
-                                },
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(38.dp).graphicsLayer {
-                                    scaleX = starPulse.value
-                                    scaleY = starPulse.value
-                                },
+                            // The expanded player uses the exact same 28-unit
+                            // Favorite/Favorited vectors. Half uses a clipped
+                            // filled vector, not Material StarHalf or a bitmap.
+                            AppleRatingStarGlyph(
+                                fill = starFill,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .testTag("rating-editor-star-$i-${starFill.name.lowercase()}")
+                                    .graphicsLayer {
+                                        scaleX = starPulse.value
+                                        scaleY = starPulse.value
+                                    },
                             )
                             Row(Modifier.fillMaxSize()) {
                                 Box(
@@ -361,7 +373,8 @@ internal fun CanonicalRecordingFeedbackPanel(
                 ) {
                     androidx.compose.material3.OutlinedButton(
                         onClick = onDismiss, enabled = !saving,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        shape = RoundedCornerShape(23.dp),
                         colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.onSurface,
                         ),
@@ -369,7 +382,8 @@ internal fun CanonicalRecordingFeedbackPanel(
                     androidx.compose.material3.Button(
                         onClick = { onSave(selected) },
                         enabled = selected in 1.0..5.0 && !saving,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).height(46.dp),
+                        shape = RoundedCornerShape(23.dp),
                         colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                             containerColor = com.music.bitchord.ui.theme.AccentRed,
                             contentColor = androidx.compose.ui.graphics.Color.White,
