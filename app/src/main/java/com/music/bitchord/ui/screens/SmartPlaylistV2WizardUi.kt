@@ -28,26 +28,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.AddCircleOutline
-import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Event
-import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.KeyboardArrowUp
-import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.DeleteOutline
 import com.music.bitchord.ui.components.ConfirmationAlert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -88,6 +68,7 @@ import com.music.bitchord.data.listening.SmartPlaylistV2Sort
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import com.music.bitchord.data.listening.moveChild
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ArtworkPageBackButton
@@ -253,7 +234,7 @@ private fun WizardReviewHeader(
                     SmartPlaylistPreviewArtwork(cover, Modifier.fillMaxSize())
                 } else {
                     CoverPlaceholder(
-                        icon = Icons.Rounded.LibraryMusic,
+                        icon = PlaylistEditorIcons.Music,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -285,13 +266,13 @@ private fun WizardJoinPicker(
 }
 
 private fun iconForConditionCategory(id: String) = when (id) {
-    "music" -> Icons.Rounded.LibraryMusic
-    "ratings" -> Icons.Rounded.Star
-    "history" -> Icons.Rounded.History
-    "dates" -> Icons.Rounded.Event
-    "library" -> Icons.Rounded.Folder
-    "audio" -> Icons.Rounded.GraphicEq
-    else -> Icons.Rounded.Tune
+    "music" -> PlaylistEditorIcons.Music
+    "ratings" -> PlaylistEditorIcons.Ratings
+    "history" -> PlaylistEditorIcons.History
+    "dates" -> PlaylistEditorIcons.Calendar
+    "library" -> PlaylistEditorIcons.Folder
+    "audio" -> PlaylistEditorIcons.Audio
+    else -> PlaylistEditorIcons.Filters
 }
 
 
@@ -334,7 +315,7 @@ internal fun PlaylistWizardSheetChrome(
                     label = "Fechar",
                     onClick = onClose,
                     enabled = canClose,
-                    icon = Icons.Rounded.Close,
+                    icon = PlaylistEditorIcons.Close,
                 )
             }
             SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
@@ -572,10 +553,10 @@ internal fun SmartPlaylistV2WizardUi(
                 if (page == WizardStep.IDENTITY || page == WizardStep.EDIT) {
                     Box(modifier = Modifier.align(Alignment.CenterEnd)) {
                         CircleIconButton(
-                            icon = Icons.Rounded.Tune,
+                            icon = PlaylistEditorIcons.Filters,
                             contentDescription = "Filtros reutilizáveis",
                             onClick = onManage,
-                            size = 50.dp,
+                            size = 40.dp,
                         )
                     }
                 }
@@ -896,8 +877,8 @@ internal fun SmartPlaylistV2WizardUi(
                                     Spacer(Modifier.weight(1f))
                                     PlaylistWizardCompactAction(
                                         label = if (expanded) "Recolher" else "Expandir",
-                                        icon = if (expanded) Icons.Rounded.KeyboardArrowUp
-                                            else Icons.Rounded.KeyboardArrowDown,
+                                        icon = if (expanded) PlaylistEditorIcons.ChevronUp
+                                            else PlaylistEditorIcons.ChevronDown,
                                         onClick = {
                                             expandedGroups = if (expanded) expandedGroups - index
                                                 else expandedGroups + index
@@ -906,7 +887,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     PlaylistWizardCompactAction(
                                         label = if (core is SmartPlaylistRule.Group)
                                             "Excluir grupo" else "Excluir condição",
-                                        icon = Icons.Rounded.DeleteOutline,
+                                        icon = PlaylistEditorIcons.Delete,
                                         onClick = {
                                             pendingRuleDeletion = path
                                             pendingRuleDeletionIsGroup =
@@ -1022,7 +1003,7 @@ internal fun SmartPlaylistV2WizardUi(
                                         Box {
                                             PlaylistWizardCompactAction(
                                                 label = "Opções",
-                                                icon = Icons.Rounded.MoreVert,
+                                                icon = PlaylistEditorIcons.More,
                                                 onClick = { actionsOpen = true },
                                             )
                                             androidx.compose.material3.DropdownMenu(
@@ -1067,7 +1048,7 @@ internal fun SmartPlaylistV2WizardUi(
                                                 child is SmartPlaylistRule.Not &&
                                                 child.child is SmartPlaylistRule.Group)
                                                 "Excluir grupo" else "Excluir condição",
-                                            icon = Icons.Rounded.DeleteOutline,
+                                            icon = PlaylistEditorIcons.Delete,
                                             onClick = {
                                                 pendingRuleDeletion = path
                                                 pendingRuleDeletionIsGroup =
@@ -1763,9 +1744,13 @@ private fun CanonicalPlaylistPickerGroupRow(
             )
         },
         actions = {
-            IconButton(onClick = onToggleGroup, enabled = !loading) {
+            IconButton(
+                onClick = onToggleGroup,
+                enabled = !loading,
+                modifier = Modifier.size(40.dp),
+            ) {
                 Icon(
-                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                    if (selected) PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
                     contentDescription = when {
                         album && selected -> "Remover álbum selecionado"
                         album -> "Adicionar álbum inteiro"
@@ -1774,6 +1759,7 @@ private fun CanonicalPlaylistPickerGroupRow(
                     },
                     tint = if (selected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp).testTag("playlist-wizard-group-selection"),
                 )
             }
         },
@@ -1818,12 +1804,13 @@ private fun NormalPlaylistTrackPickerRow(
             )
         },
         actions = {
-            IconButton(onClick = { onToggle(row.id) }) {
+            IconButton(onClick = { onToggle(row.id) }, modifier = Modifier.size(40.dp)) {
                 Icon(
-                    if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.AddCircleOutline,
+                    if (selected) PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
                     contentDescription = if (selected) "Remover música" else "Adicionar música",
                     tint = if (selected) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp).testTag("playlist-wizard-track-selection"),
                 )
             }
         },
