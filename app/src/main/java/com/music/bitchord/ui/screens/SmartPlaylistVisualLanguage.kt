@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
@@ -44,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.themeArtworkPalette
 
@@ -135,8 +132,8 @@ internal fun PlaylistWizardCompactAction(
         onClick = onClick,
         enabled = enabled,
         modifier = if (icon == null) modifier.heightIn(min = 42.dp)
-            else modifier.size(48.dp),
-        shape = GroupShape,
+            else modifier.size(40.dp).testTag("playlist-editor-icon-action"),
+        shape = if (icon == null) GroupShape else CircleShape,
         contentPadding = if (icon == null) ButtonDefaults.ContentPadding
             else PaddingValues(0.dp),
         colors = ButtonDefaults.outlinedButtonColors(
@@ -145,7 +142,7 @@ internal fun PlaylistWizardCompactAction(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         if (icon != null) Icon(icon, contentDescription = label,
-            modifier = Modifier.size(22.dp))
+            modifier = Modifier.size(20.dp))
         else Text(label, style = MaterialTheme.typography.bodyMedium)
     }
 }
@@ -277,13 +274,10 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
         // The native Settings surface stays the source of truth, but each
         // category gets its own row-sized card. This avoids one dense block
         // followed by a large empty lower half on tall phones.
-        val badgeColors = listOf(
-            AccentRed, Color(0xFF6544E9), Color(0xFF43BD55),
-            Color(0xFF1887EF), Color(0xFFF49A13),
-            Color(0xFFEC287F), Color(0xFF00A9A8),
-        )
+        // A single neutral palette, unlike the former rainbow category
+        // badges. These are semantic icons, not arbitrary category colors.
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEachIndexed { index, option ->
+            options.forEach { option ->
                 SettingsGroupSurface {
                     SettingsRow(
                         title = option.title,
@@ -294,17 +288,17 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
                         trailing = {},
                         leading = {
                             Box(
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(38.dp)
                                     .clip(CircleShape)
-                                    .background(badgeColors[index % badgeColors.size])
+                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                     .testTag("playlist-category-icon-badge"),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
-                                    imageVector = option.icon ?: Icons.Rounded.LibraryMusic,
+                                    imageVector = option.icon ?: PlaylistEditorIcons.Music,
                                     contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(26.dp),
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(22.dp),
                                 )
                             }
                         },
@@ -353,7 +347,7 @@ internal fun PlaylistWizardSelectionRow(
         trailing = {
             if (selected) {
                 Icon(
-                    Icons.Rounded.Check,
+                    PlaylistEditorIcons.Check,
                     contentDescription = "Selecionado",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp),
@@ -375,7 +369,7 @@ internal fun PlaylistWizardArtworkPlaceholder(
 ) {
     // The normal release/folder placeholder already defines this treatment.
     CoverPlaceholder(
-        icon = Icons.Rounded.LibraryMusic,
+        icon = PlaylistEditorIcons.Music,
         modifier = Modifier.size(dimension).clip(SLEEVE_SHAPE)
             .semantics { contentDescription = "Capa padrão da playlist" },
         iconFraction = 0.39f,
