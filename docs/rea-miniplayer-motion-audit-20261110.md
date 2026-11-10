@@ -36,3 +36,9 @@ A barra Apple ativa tinha `swipeDistance` como alvo lido em `animateFloatAsState
 Agora o deslocamento `miniPlayerSwipeVisualOffset` é consultado apenas dentro de `graphicsLayer`, e a acomodação usa `Animatable`/corrotina após soltar, cancelável por novo arrasto. Isso remove a dependência de composição por amostra de pointer, sem alterar threshold de skip, haptics, callbacks, PlayerDock ou posição de pill/artwork. A redução de movimento zera o offset mesmo durante o gesto e cancela a acomodação. Contratos unitários testam clamp, simetria e valores inválidos.
 
 É otimização Bitchord, não afirmação sobre a implementação original da UI Apple. Monitorar abertura com gesto rápido e mudança de faixa no mesmo frame em aparelho.
+
+## Terceira implementação: indicador de carga acessível nas variantes
+
+O spinner indeterminado rodava continuamente no miniplayer Apple ativo, no MiniPlayer legado e no GlassNowPlaying alternativo, mesmo com Reduzir animações habilitado. O helper MiniPlayerLoadingIndicator compartilhado mantém o carregamento visível: normal = spinner existente, reduzido = arco determinate fixo 0,75, sem rotação. Não altera isLoading, tempos do áudio nem controla avanço de downloads. O arco fixo é decisão BitChord, não mecanismo recuperado do Apple.
+
+O miniplayer Apple continua único no fluxo MainActivity. Testes unitários confirmam a opção de indicador e a regressão no modo reduzido.

@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -566,10 +565,10 @@ fun AppleMusicMiniPlayer(
                     label = "appleMusicMiniPlaybackState",
                 ) { (loading, playing) ->
                     if (loading) {
-                        CircularProgressIndicator(
+                        MiniPlayerLoadingIndicator(
                             color = AppleWhite,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp),
+                            size = 20.dp,
+                            reduceMotion = reduceMotion,
                         )
                     } else {
                         Icon(

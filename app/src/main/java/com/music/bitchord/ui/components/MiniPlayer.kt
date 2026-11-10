@@ -367,6 +367,7 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val haptics = rememberHaptics()
     // percent rather than a dp figure, so the corner stays exactly half the
     // height if the row's contents ever change it — which is what keeps a pill
@@ -443,10 +444,10 @@ fun MiniPlayer(
             }
             if (isLoading) {
                 Box(Modifier.size(GLYPH_SLOT), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
+                    MiniPlayerLoadingIndicator(
                         color = MaterialTheme.colorScheme.onBackground,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(SPINNER_SIZE),
+                        size = SPINNER_SIZE,
+                        reduceMotion = reduceMotion,
                     )
                 }
             } else {
@@ -506,3 +507,36 @@ internal fun MiniPlayerNextGlyph(tint: Color, glyphSize: Dp = NEXT_GLYPH_SIZE) {
 }
 
 private val NEXT_GLYPH_SIZE = 25.dp
+
+
+/**
+ * The loading state remains visible under Reduce animations, but the
+ * indeterminate rotation stops. This is BitChord's accessibility policy.
+ * Null requests the existing continuous spinner; otherwise use a static arc.
+ */
+internal fun miniPlayerStaticLoadingArc(reducedMotion: Boolean): Float? =
+    if (reducedMotion) 0.75f else null
+
+@Composable
+internal fun MiniPlayerLoadingIndicator(
+    color: Color,
+    size: Dp,
+    reduceMotion: Boolean,
+) {
+    val fixedArc = miniPlayerStaticLoadingArc(reduceMotion)
+    if (fixedArc == null) {
+        CircularProgressIndicator(
+            color = color,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(size),
+        )
+    } else {
+        CircularProgressIndicator(
+            progress = { fixedArc },
+            color = color,
+            strokeWidth = 2.dp,
+            gapSize = 0.dp,
+            modifier = Modifier.size(size),
+        )
+    }
+}

@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /** State and accessibility policy for the experimental chrome animations. */
@@ -16,6 +17,12 @@ class AppleMusicChromeMotionPolicyTest {
         assertEquals(1f, appleMusicTabScaleTarget(enabled = true, selected = false, pressed = false), 0.0001f)
         assertEquals(1.04f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = false), 0.0001f)
         assertEquals(0.91f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = true), 0.0001f)
+    }
+
+    @Test
+    fun loadingIndicatorRemainsVisibleButStaticWhenMotionIsReduced() {
+        assertNull(miniPlayerStaticLoadingArc(reducedMotion = false))
+        assertEquals(0.75f, miniPlayerStaticLoadingArc(reducedMotion = true)!!, 0.0001f)
     }
 
     @Test
