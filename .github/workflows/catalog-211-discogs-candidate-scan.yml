@@ -1,0 +1,42 @@
+name: Catalog #211 — Discogs corpus candidate scouting
+
+# Public metadata only. Candidates are not adjudicated corpus results.
+# No token, APK, emulator or physical smoke.
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - scripts/catalog_211_discogs_corpus_candidates.py
+      - scripts/test_catalog_211_discogs_corpus_candidates.py
+      - .github/workflows/catalog-211-discogs-candidate-scan.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-211-candidate-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scout-public-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run offline identity, completeness and candidate regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_candidates.py' -v
+      - name: Observe bounded public Artist and ReleaseGroup index leads
+        run: python3 scripts/catalog_211_discogs_corpus_candidates.py
+      - name: Retain non-adjudicated source observations for manual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-corpus-candidate-observations
+          path: discogs-211-corpus-candidates.json
+          if-no-files-found: warn
+          retention-days: 7
