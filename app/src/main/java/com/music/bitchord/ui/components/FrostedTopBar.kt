@@ -7,6 +7,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -194,11 +195,12 @@ fun FrostedTopBar(
     actions: @Composable () -> Unit = {},
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val useFloatingChrome = artworkPageChrome ||
         (LocalLiquidGlassEnabled.current && isGlassSupported())
     val titleAlpha by animateFloatAsState(
         targetValue = if (scrolled || trailingTitle != null) 1f else 0f,
-        animationSpec = tween(220),
+        animationSpec = tween(GlobalMotionPolicy.duration(GlobalMotionPolicy.headerChromeMillis, reduceMotion)),
         label = "topBarTitleAlpha",
     )
     // Every bounded bar uses the same hairline, whether its pane is blurred or
@@ -210,7 +212,7 @@ fun FrostedTopBar(
                 else -> 0.6f
             },
         ),
-        animationSpec = tween(220),
+        animationSpec = tween(GlobalMotionPolicy.duration(GlobalMotionPolicy.headerChromeMillis, reduceMotion)),
         label = "topBarDivider",
     )
 
@@ -541,9 +543,10 @@ internal fun ArtworkPageActions(
 ) {
     val circleSize = AppleFloatingControlMetrics.toolbarDiameter
     val gap = AppleFloatingControlMetrics.preferredGap
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     SubcomposeLayout(
         modifier = modifier.animateContentSize(
-            animationSpec = spring(
+            animationSpec = if (reduceMotion) snap() else spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMediumLow,
             ),

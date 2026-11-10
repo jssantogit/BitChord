@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import com.music.bitchord.ui.LocalPullToRefreshEnabled
 import com.music.bitchord.ui.AppUiHost
 import com.music.bitchord.ui.AppUi
+import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.sharedui.resources.*
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -11,6 +12,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.semantics.contentDescription
@@ -313,7 +315,12 @@ fun PullToRefresh(
 fun SignInBanner(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.98f else 1f, spring(stiffness = 900f), label = "signInScale")
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val scale by animateFloatAsState(
+        targetValue = GlobalMotionPolicy.pressedScale(pressed, reduceMotion),
+        animationSpec = if (reduceMotion) snap() else spring(stiffness = 900f),
+        label = "signInScale",
+    )
     Box(
         modifier = modifier
             .fillMaxWidth()

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +35,8 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.music.bitchord.data.settings.AppSettings
 
 /**
  * Grey stand-ins for content still on the wire, laid out to the same metrics as
@@ -41,7 +44,7 @@ import androidx.compose.ui.unit.dp
  */
 
 /** How long one highlight sweep takes to cross a placeholder. */
-private const val SHIMMER_PERIOD_MS = 1400
+private const val SHIMMER_PERIOD_MS = GlobalMotionPolicy.skeletonSweepMillis
 
 private val BlockShape = RoundedCornerShape(6.dp)
 private val LineShape = RoundedCornerShape(4.dp)
@@ -63,6 +66,13 @@ fun ShimmerBox(modifier: Modifier = Modifier, shape: Shape = BlockShape) {
     val highlight = MaterialTheme.colorScheme.onSurfaceVariant
         .copy(alpha = 0.16f)
         .compositeOver(base)
+    // Shared by Home, Explore, Library, Search and details. Do not keep an
+    // infinite draw animation alive when the user enables Reduce animations.
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    if (!GlobalMotionPolicy.shimmerEnabled(reduceMotion)) {
+        Box(modifier.clip(shape).background(base))
+        return
+    }
     val sweep = rememberInfiniteTransition(label = "skeleton").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -73,9 +83,7 @@ fun ShimmerBox(modifier: Modifier = Modifier, shape: Shape = BlockShape) {
         modifier
             .clip(shape)
             .drawWithCache {
-                // The band travels from fully off one edge to fully off the
-                // other, which leaves a beat of flat grey between passes rather
-                // than a highlight permanently parked somewhere on the block.
+                // Remains a draw-only sweep, no per-frame recomposition.
                 val band = size.width * 0.5f
                 val startX = -band + sweep.value * (size.width + band * 2)
                 val brush = Brush.horizontalGradient(

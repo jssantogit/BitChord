@@ -153,7 +153,7 @@ internal object AppleMusicChromeMotion {
     const val miniDisappearMillis = 180
 
     fun duration(baseMillis: Int, reduced: Boolean): Int =
-        if (reduced) 0 else baseMillis
+        GlobalMotionPolicy.duration(baseMillis, reduced)
 }
 
 /** A disabled slot (Radio) never reacts to press or selection animations. */
