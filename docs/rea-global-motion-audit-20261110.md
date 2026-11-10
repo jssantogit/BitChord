@@ -45,3 +45,12 @@ A `FrostedTopBar.RefreshPuck` é utilizada em múltiplas rotas. Antes, a saída 
 **Fonte e ressalva:** `am-descomp/docs/motion/home-and-content.md` e `docs/motion/search-and-library.md` vinculam `Loader.c` a fade condicional de 400ms com DecelerateInterpolator em Início/Busca. Eles **não** identificam a mesma classe como `RefreshPuck`; esta saída é portanto **adaptação BitChord**, não paridade recuperada. A curva Compose `LinearOutSlowInEasing` é aproximação controlada; fator exato do interpolador original não foi determinado.
 
 Adicionada cobertura de estado e dois testes Compose para término da atualização normal/reduzida. A migração não cria animações de listas, menus ou cards sem evidência e não altera PR #209. Nenhum smoke APK foi disparado.
+
+
+## Quarta rodada — rotação e semântica acessível do indicador global de refresh
+
+Auditoria do `FrostedTopBar.RefreshPuck` (Home, Explorar, Biblioteca e demais rotas): o `CircularProgressIndicator` giratório já era substituído por um arco fixo com `reduceAnimation`, mas o próprio `graphicsLayer.rotationZ` **continuava acompanhando o dedo** mesmo nesse modo. Além disso, o arco desenhado em `0.8f` era exposto como **80% de progresso** pelo Material, apesar de não ser percentual de progresso da atualização de rede (o próprio `pullFraction` só controla a affordance gestual).
+
+A política compartilhada agora calcula `refreshPuckRotationDegrees`: mantém rotação limitada de 0 a 360 graus durante o arrasto normal, zera sob Reduzir animações e neutraliza NaN/infinito. O indicador determinate **meramente visual** recebe `clearAndSetSemantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }`, igual ao precedente do miniplayer: TalkBack pode sinalizar carregamento, sem anunciar conclusão inexistente. A rotação normal, o arrasto, o tamanho 40dp, a saída alpha de 400ms e os callbacks de refresh não mudam.
+
+Primeiro foram publicados testes da função (normal, reduzido, entradas inválidas) e teste Robolectric Compose que exige semântica indeterminada em modo reduzido. A implementação não introduz tempo/curva Apple e não promove efeito para cards; é correção de acessibilidade e robustez do BitChord. Nenhum smoke APK solicitado, PR #209 intocada.
