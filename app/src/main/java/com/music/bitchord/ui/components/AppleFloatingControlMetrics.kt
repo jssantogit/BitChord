@@ -14,16 +14,22 @@ import androidx.compose.ui.unit.dp
  * for transport buttons, text filters or SearchLanding cards.
  *
  * 40dp comes from the traced Library More Options modifier in
- * am-descomp/docs/components/library-toolbar.md. Toolbar 48dp and detail
- * 50dp keep their existing Bitchord roles; neither is asserted to be the
- * measured size of every Apple Music button.
+ * am-descomp/docs/components/library-toolbar.md. The user explicitly chose
+ * 40dp as the Bitchord-wide floating/icon-only circle diameter. This does
+ * not claim Apple measured every toolbar's runtime bounds at 40dp.
+ * Touch target and labeled action pills remain separate design roles.
  */
 internal object AppleFloatingControlMetrics {
-    val libraryDiameter = 40.dp
-    val toolbarDiameter = 48.dp
+    val floatingCircleDiameter = 40.dp
+    val libraryDiameter = floatingCircleDiameter
+    val toolbarDiameter = floatingCircleDiameter
+    val detailDiameter = floatingCircleDiameter
     val toolbarGlyphSize = 24.dp
     val preferredGap = 10.dp
-    val detailDiameter = 50.dp
+    // Material icon buttons can measure 48dp despite a 40dp painted surface.
+    val minimumActionTouchTarget = 48.dp
+    // Text-labeled Play/Shuffle actions are pills, not icon-only circles.
+    val labeledPillHeight = 50.dp
     const val secondaryFillAlpha = 0.07f
     const val secondaryEdgeAlpha = 0.10f
     const val disabledAlpha = 0.38f
@@ -31,7 +37,7 @@ internal object AppleFloatingControlMetrics {
 
 /**
  * Use every pixel of remaining space for separation before dropping below
- * the preferred gap. Never shrink the 48dp interaction targets to cram them
+ * the preferred gap. Never shrink interaction targets to cram them
  * into an unknown device width. An overfull layout still needs route-level
  * decisions about which actions should appear in overflow.
  *

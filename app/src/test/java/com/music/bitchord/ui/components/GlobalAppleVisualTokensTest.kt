@@ -10,12 +10,14 @@ import org.junit.Test
  * are kept as explicit Bitchord values rather than copied across every screen.
  */
 class GlobalAppleVisualTokensTest {
-    @Test fun categoryAndGenericActionCirclesPreserveDistinctReferenceInputs() {
+    @Test fun globalFloatingCircularActionsShareFortyDpSurface() {
         assertEquals(40.dp, AppleFloatingControlMetrics.libraryDiameter)
-        assertEquals(48.dp, AppleFloatingControlMetrics.toolbarDiameter)
+        assertEquals(40.dp, AppleFloatingControlMetrics.toolbarDiameter)
         assertEquals(24.dp, AppleFloatingControlMetrics.toolbarGlyphSize)
         assertEquals(10.dp, AppleFloatingControlMetrics.preferredGap)
-        assertEquals(50.dp, AppleFloatingControlMetrics.detailDiameter)
+        assertEquals(40.dp, AppleFloatingControlMetrics.detailDiameter)
+        assertEquals(48.dp, AppleFloatingControlMetrics.minimumActionTouchTarget)
+        assertEquals(50.dp, AppleFloatingControlMetrics.labeledPillHeight)
     }
 
     @Test fun toolbarSpacingContractsOnlyWhenAvailableWidthRequiresIt() {

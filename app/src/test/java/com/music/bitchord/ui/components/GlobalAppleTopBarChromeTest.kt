@@ -73,8 +73,10 @@ class GlobalAppleTopBarChromeTest {
                 }
             }
         }
-        compose.onAllNodesWithTag("apple-toolbar-action-circle", useUnmergedTree = true)
-            .assertCountEquals(2)
+        val circles = compose.onAllNodesWithTag("apple-toolbar-action-circle", useUnmergedTree = true)
+        circles.assertCountEquals(2)
+        circles[0].assertWidthIsEqualTo(40.dp)
+        circles[1].assertWidthIsEqualTo(40.dp)
         compose.onNodeWithContentDescription("Search").assertExists()
         compose.onNodeWithContentDescription("Sort").assertExists()
     }
@@ -95,8 +97,9 @@ class GlobalAppleTopBarChromeTest {
         }
         compose.onNodeWithTag("narrow-action-toolbar", useUnmergedTree = true)
             .assertWidthIsEqualTo(152.dp)
-        compose.onAllNodesWithTag("apple-toolbar-action-circle", useUnmergedTree = true)
-            .assertCountEquals(3)
+        val circles = compose.onAllNodesWithTag("apple-toolbar-action-circle", useUnmergedTree = true)
+        circles.assertCountEquals(3)
+        (0..2).forEach { circles[it].assertWidthIsEqualTo(40.dp) }
     }
 
 
@@ -108,7 +111,7 @@ class GlobalAppleTopBarChromeTest {
                     ArtworkPageBackButton(
                         onClick = { backs++ },
                         hazeState = null,
-                        size = AppleFloatingControlMetrics.libraryDiameter,
+                        isCategory = true,
                     )
                     FloatingLibraryTopBarCircle(hazeState = null) {
                         IconButton(onClick = {}) {
@@ -135,8 +138,23 @@ class GlobalAppleTopBarChromeTest {
                 ArtworkPageBackButton(onClick = {}, hazeState = null)
             }
         }
-        compose.onNodeWithTag("apple-toolbar-back-button", useUnmergedTree = true)
-            .assertWidthIsEqualTo(AppleFloatingControlMetrics.toolbarDiameter)
+        compose.onNodeWithTag("apple-toolbar-back-button", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("apple-library-floating-circle", useUnmergedTree = true)
+            .assertWidthIsEqualTo(40.dp)
+    }
+
+    @Test fun detailOnlyCircularActionAlsoUsesFortyDp() {
+        compose.setContent {
+            BitChordTheme {
+                CircleIconButton(
+                    icon = Icons.Rounded.Search,
+                    contentDescription = "Detail action",
+                    onClick = {},
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Detail action")
+            .assertWidthIsEqualTo(40.dp)
     }
 
     @Test fun unavailableSecondaryActionsRemainDisabledWithSharedSurface() {

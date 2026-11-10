@@ -323,10 +323,9 @@ fun FrostedTopBar(
                     ArtworkPageBackButton(
                         onClick = onBack,
                         hazeState = backButtonHazeState,
-                        size = if (categoryBackButton) AppleFloatingControlMetrics.libraryDiameter else AppleFloatingControlMetrics.toolbarDiameter,
-                        // The surface edge aligns with the floating navbar. The
-                        // padding belongs outside the circle; the back
-                        // surface shares the matching toolbar action diameter.
+                        isCategory = categoryBackButton,
+                        // Navigation and all floating actions now draw the same
+                        // 40dp circle; route offsets and hit targets stay intact.
                         modifier = Modifier
                             .align(Alignment.CenterStart)
                             .padding(start = BAR_GUTTER)
@@ -382,14 +381,18 @@ fun FrostedTopBar(
     }
 }
 
-/** Circular floating back affordance, material-matched to the navbar. */
+/**
+ * One visually identical 40dp back surface across Library, Downloads, recent
+ * additions, artist/album detail, Home and Explore. Preserve Android's
+ * accessible click target and the route-specific back action.
+ */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun ArtworkPageBackButton(
     onClick: () -> Unit,
     hazeState: HazeState?,
     modifier: Modifier = Modifier,
-    size: Dp = AppleFloatingControlMetrics.toolbarDiameter,
+    isCategory: Boolean = false,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val useLiquidGlass = LocalLiquidGlassEnabled.current && isGlassSupported()
@@ -399,30 +402,12 @@ internal fun ArtworkPageBackButton(
         MaterialTheme.colorScheme.onSurface
     }
 
-    if (size == AppleFloatingControlMetrics.libraryDiameter) {
-        // One painted 40dp surface for Library back and trailing actions.
-        // IconButton's minimum interactive target must not size the circle.
-        FloatingLibraryTopBarCircle(hazeState = hazeState, modifier = modifier) {
-            IconButton(
-                onClick = onClick,
-                modifier = Modifier.testTag("apple-category-back-button"),
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
-                    contentDescription = stringResource(R.string.back),
-                    tint = contentColor,
-                )
-            }
-        }
-    } else {
-        // Generic pages share the 48dp ArtworkPageActions surface instead
-        // of the former unmatched 44dp back circle.
+    FloatingLibraryTopBarCircle(hazeState = hazeState, modifier = modifier) {
         IconButton(
             onClick = onClick,
-            modifier = modifier
-                .size(size)
-                .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
-                .testTag("apple-toolbar-back-button"),
+            modifier = Modifier.testTag(
+                if (isCategory) "apple-category-back-button" else "apple-toolbar-back-button",
+            ),
         ) {
             Icon(
                 Icons.AutoMirrored.Rounded.ArrowBack,
@@ -540,10 +525,9 @@ private fun AppleSettingsPopup(
 /**
  * Independent circular surfaces for top-bar icon actions across all routes.
  *
- * This uses the same floating material as Library's reference-backed 40dp
- * "More Options" control (am-descomp/library-toolbar.md). The generic 48dp
- * diameter is based on the documented alternate toolbar token, not an exact
- * measured bound for every Apple page.
+ * All icon-only floating controls use the same 40dp Bitchord diameter as
+ * Library's reference-backed More Options control. The source supports the
+ * Library 40dp modifier, while app-wide parity is the user's product decision.
  *
  * Each direct action is measured on its own before a separate surface is
  * subcomposed behind it. Text badges keep their existing width and do not
@@ -570,7 +554,12 @@ internal fun ArtworkPageActions(
         val diameter = circleSize.roundToPx()
         val gapPx = gap.roundToPx()
         val minIconBounds = AppleFloatingControlMetrics.libraryDiameter.roundToPx()
-        val maxIconBounds = diameter + 4.dp.roundToPx()
+        // Material3 IconButton commonly measures 48dp for accessibility.
+        // Accept its larger measured slot, but paint only a 40dp circle.
+        val maxIconBounds = maxOf(
+            diameter + 4.dp.roundToPx(),
+            AppleFloatingControlMetrics.minimumActionTouchTarget.roundToPx(),
+        )
         val surfaces = children.mapIndexed { index, child ->
             // Only genuine icon-sized slots receive a surface. Compact
             // informational badges and collapsed animations are not buttons.

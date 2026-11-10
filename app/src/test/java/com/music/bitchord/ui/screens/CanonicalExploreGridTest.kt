@@ -61,7 +61,7 @@ class CanonicalExploreGridTest {
                 com.music.bitchord.ui.components.ArtworkPageBackButton(
                     onClick = { backs++ },
                     hazeState = null,
-                    size = 40.dp,
+                    isCategory = true,
                 )
             }
         }

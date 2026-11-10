@@ -46,7 +46,7 @@ internal fun ActionPill(
     filled: Boolean,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
-    size: Dp = AppleFloatingControlMetrics.detailDiameter,
+    size: Dp = AppleFloatingControlMetrics.labeledPillHeight,
 ) {
     // Resume rather than a flat tap: both start a queue, and the rising pair
     // says so.
