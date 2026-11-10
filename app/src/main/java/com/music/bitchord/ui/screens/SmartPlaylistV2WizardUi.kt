@@ -1492,13 +1492,14 @@ internal fun SmartPlaylistV2WizardUi(
                         item {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
-                                    "Músicas selecionadas",
+                                    "Prévia",
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onBackground,
                                 )
                                 Text(
-                                    if (preview == null) "Preparando prévia automaticamente…"
-                                    else if (preview.size == 1) "1 música na prévia" else "${preview.size} músicas na prévia",
+                                    if (preview == null) "Buscando músicas…"
+                                    else if (preview.size == 1) "1 música encontrada"
+                                    else "${preview.size} músicas encontradas",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
