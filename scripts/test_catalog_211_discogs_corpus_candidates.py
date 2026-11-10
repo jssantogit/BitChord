@@ -64,6 +64,14 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
         self.assertFalse(known_group_title("Love-Me", "IVE", {"love me"}))
         self.assertFalse(known_group_title("Fashion / ファッション", "IVE", {"fashion"}))
         self.assertEqual(("easy", "crazy", "hot"), lexical_signature("easy-crazy-hot"))
+        self.assertTrue(known_group_title("HOP", "Stray Kids", {"合 (hop)"}))
+        self.assertTrue(known_group_title("Jewelry", "LE SSERAFIM",
+                                          {"ジュエリー (jewelry)"}))
+        self.assertFalse(known_group_title("HOP (Remix)", "Stray Kids",
+                                           {"合 (hop)"}))
+        self.assertFalse(known_group_title("Live", "ENHYPEN", {"공연 (live)"}))
+        self.assertFalse(known_group_title("Fashion / ファッション", "IVE",
+                                           {"fashion"}))
         self.assertIsNone(complete_mb_titles(MBID, lambda _: {
             "release-group-offset": 0, "release-group-count": 2,
             "release-groups": [{"id": GROUP_A, "title": "Only One"}]

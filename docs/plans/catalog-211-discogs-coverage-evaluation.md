@@ -52,7 +52,12 @@ exata MusicBrainz Artist → Discogs Artist, sem inferir equivalências por nome
 A análise pública demonstrou que `EASY CRAZY HOT` já possui [edição
 MusicBrainz](https://musicbrainz.org/release/e6de9634-eb96-4b54-9568-755a99ec312b)
 relacionada ao [Discogs Release 35021231](https://www.discogs.com/release/35021231).
-A comparação source-only admite **somente** equivalência dos mesmos
+A comparação source-only também reconhece **apenas aliases bilíngues
+explicitamente grafados no título do próprio MusicBrainz** (ex.:
+`合 (HOP)` → `HOP`, `ジュエリー (Jewelry)` → `Jewelry`).
+Isso não permite adivinhar traduções, versões Live/Remix ou títulos com
+barra `/`; filtra pistas aparentes do índice tanto no scanner quanto
+na biblioteca Android. Além disso, admite equivalência dos mesmos
 três ou mais termos Unicode em igual ordem com separadores diferentes,
 como `Easy-Crazy-Hot`. Ela não supõe tradução de um título,
 não colapsa versões com termos adicionais e não substitui a prova de edição.

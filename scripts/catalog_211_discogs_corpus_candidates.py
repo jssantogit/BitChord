@@ -53,9 +53,31 @@ def lexical_signature(value: str) -> tuple[str, ...]:
     return tuple(re.findall(r"[^\W_]+", value, re.UNICODE))
 
 
+def bilingual_aliases(value: str) -> set[str]:
+    # Only MB's explicit "合 (HOP)" / "ジュエリー (Jewelry)" form,
+    # never inferred cross-script synonyms, remixes or generic qualifiers.
+    match = re.fullmatch(r"(.+?)\s+\(([a-z][a-z0-9 &'’!.\-]{2,65})\)", value)
+    if not match:
+        return set()
+    native, alias = match.group(1), match.group(2).strip()
+    if not any(
+        "\uac00" <= ch <= "\ud7a3" or
+        "\u3040" <= ch <= "\u30ff" or
+        "\u4e00" <= ch <= "\u9fff"
+        for ch in native
+    ):
+        return set()
+    if sum("a" <= ch <= "z" for ch in alias) < 3 or alias in {
+        "live", "remix", "demo", "acoustic", "instrumental",
+        "version", "english", "japanese", "korean", "explicit", "clean",
+    }:
+        return set()
+    return {alias}
+
+
 def known_group_title(title: str, artist: str, known: set[str]) -> bool:
     value = comparable_title(title, artist)
-    if value in known:
+    if value in known or any(value in bilingual_aliases(group) for group in known):
         return True
     signature = lexical_signature(value)
     if len(signature) >= 3 and any(lexical_signature(item) == signature for item in known):

@@ -162,6 +162,30 @@ internal object DiscogsShadowCatalog {
     private val colonSpacing = Regex("""\s*:\s*""")
     private val lexicalTokens = Regex("""[\p{L}\p{N}]+""")
 
+    // MusicBrainz itself sometimes writes the second-script title as
+    // "合 (HOP)" or "ジュエリー (Jewelry)". This is a source-asserted alias,
+    // not an inferred translation. Never treat "(Live)" or "(Remix)" as one.
+    private val explicitBilingualAlias = Regex(
+        """^(.+?)\s+\(([a-z][a-z0-9 &'’!.\-]{2,65})\)$""",
+    )
+    private val misleadingAlias = setOf(
+        "live", "remix", "demo", "acoustic", "instrumental",
+        "version", "english", "japanese", "korean", "explicit", "clean",
+    )
+
+    private fun bilingualAliases(title: String): Set<String> {
+        val parsed = explicitBilingualAlias.matchEntire(title) ?: return emptySet()
+        val original = parsed.groupValues[1]
+        if (original.none {
+                it in '가'..'힣' || it in 'ぁ'..'ヿ' || it in '一'..'鿿'
+            }) return emptySet()
+        val alias = parsed.groupValues[2].trim()
+        if (alias.count { it in 'a'..'z' } < 3 ||
+            alias in misleadingAlias
+        ) return emptySet()
+        return setOf(alias)
+    }
+
     /** Same ordered words, different separators; never a fuzzy title match. */
     private fun lexicalSignature(value: String): List<String> =
         lexicalTokens.findAll(value).map { it.value }.toList()
@@ -195,9 +219,10 @@ internal object DiscogsShadowCatalog {
         creditedArtist: String,
         known: Set<String>,
         knownSignatures: Set<List<String>>,
+        explicitAliases: Set<String>,
     ): Boolean {
         val normalized = comparisonTitle(title, creditedArtist)
-        if (normalized in known) return true
+        if (normalized in known || normalized in explicitAliases) return true
         // Require at least three whole Unicode word tokens. "Love Me" and
         // "Love-Me" are too short to merge; subtitles/remixes add new tokens.
         val signature = lexicalSignature(normalized)
@@ -236,7 +261,8 @@ internal object DiscogsShadowCatalog {
         val known = knownMusicBrainzTitles.mapTo(HashSet()) { normalizedTitle(it) }
         val signatures = known.mapTo(HashSet()) { lexicalSignature(it) }
             .filterTo(HashSet()) { it.size >= 3 }
-        return { title -> isKnownGroupTitle(title, expectedArtist, known, signatures) }
+        val aliases = known.flatMapTo(HashSet()) { bilingualAliases(it) }
+        return { title -> isKnownGroupTitle(title, expectedArtist, known, signatures, aliases) }
     }
 
     fun select(

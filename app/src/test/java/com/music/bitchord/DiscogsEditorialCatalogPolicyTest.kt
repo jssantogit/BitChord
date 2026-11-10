@@ -295,6 +295,45 @@ class DiscogsEditorialCatalogPolicyTest {
         }
     }
 
+    @Test fun explicitBilingualMusicBrainzGroupAliasesPreventFalseSourceOnly() {
+        val examples = listOf(
+            "HOP" to "合 (HOP)",
+            "Jewelry" to "ジュエリー (Jewelry)",
+        )
+        examples.forEachIndexed { index, (discogs, musicBrainz) ->
+            val record = DiscogsPublicEditionSnapshot(
+                edition(275L + index, master = null).copy(title = discogs), 1_000,
+            )
+            assertTrue("Exact MB bilingual alias is already a known group",
+                DiscogsShadowCatalog.select(
+                    listOf(record), expectedArtist = "ILLIT",
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                    knownMusicBrainzTitles = setOf(musicBrainz),
+                ).isEmpty())
+            assertTrue(DiscogsShadowCatalog.knownTitlePredicate(
+                "ILLIT", setOf(musicBrainz),
+            )(discogs))
+        }
+        val unsafe = listOf(
+            "HOP (Remix)" to "合 (HOP)",
+            "Love" to "Love (Live)",
+            "Remix" to "합창 (Remix)",
+            "HOP" to "합창 (Hope)",
+            "Fashion / ファッション" to "Fashion",
+        )
+        unsafe.forEachIndexed { index, (discogs, mb) ->
+            val record = DiscogsPublicEditionSnapshot(
+                edition(280L + index, master = null).copy(title = discogs), 1_000,
+            )
+            assertEquals("Do not infer arbitrary translation or remix equivalence",
+                1, DiscogsShadowCatalog.select(
+                    listOf(record), expectedArtist = "ILLIT",
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                    knownMusicBrainzTitles = setOf(mb),
+                ).size)
+        }
+    }
+
     @Test fun videoOnlyAlbumOrSingleLabelsCannotCreateAudioArtistShelves() {
         val videoCases = listOf(
             listOf("DVD", "DVD-Video", "Album"),
