@@ -14,6 +14,8 @@ import androidx.compose.ui.test.performClick
 import com.music.bitchord.R
 import com.music.bitchord.data.model.PlaylistPrivacy
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,6 +30,11 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class PlaylistPickerEditorPresentationTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun contextualRatingAndPlaylistDeleteReuseOriginalEditorVectors() {
+        assertSame(PlaylistEditorIcons.Ratings, browseRatingActionIcon())
+        assertSame(PlaylistEditorIcons.Delete, browsePlaylistDeleteIcon())
+    }
 
     @Test fun newPlaylistDoesNotDiscardAnEditedNameWithoutConfirmation() {
         var created = 0
