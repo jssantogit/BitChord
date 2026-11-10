@@ -1498,7 +1498,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                                 Text(
                                     if (preview == null) "Preparando prévia automaticamente…"
-                                    else "${preview.size} músicas na prévia",
+                                    else if (preview.size == 1) "1 música na prévia" else "${preview.size} músicas na prévia",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
