@@ -79,6 +79,37 @@ class PlaylistEditorPresentationTest {
         compose.runOnIdle { assertEquals(1, clicked) }
     }
 
+    @Test fun ruleActionsShareOneNativeGroupAndPreserveAllDestinations() {
+        var additions = 0
+        var nested = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardRuleActions(
+                    listOf(
+                        PlaylistWizardRuleAction(
+                            label = "Adicionar condição",
+                            icon = PlaylistEditorIcons.Add,
+                            onClick = { additions++ },
+                        ),
+                        PlaylistWizardRuleAction(
+                            label = "Grupo aninhado",
+                            icon = PlaylistEditorIcons.Folder,
+                            onClick = { nested++ },
+                        ),
+                    ),
+                )
+            }
+        }
+        compose.onAllNodesWithTag("native-settings-group-surface", useUnmergedTree = true)
+            .assertCountEquals(1)
+        compose.onNodeWithText("Adicionar condição").performClick()
+        compose.onNodeWithText("Grupo aninhado").performClick()
+        compose.runOnIdle {
+            assertEquals(1, additions)
+            assertEquals(1, nested)
+        }
+    }
+
     @Test fun ruleCategoriesUseCompactNeutralNativeBadgesAndPreserveNavigation() {
         var clicked = 0
         compose.setContent {
