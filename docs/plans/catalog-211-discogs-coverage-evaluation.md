@@ -202,3 +202,19 @@ Falhas isoladas de consulta de uma edição alternativa agora ficam no próprio 
 ### Gravadora + número de catálogo em pares públicos (10/11/2026)
 
 A segunda análise B-coorte coleta agora `MusicBrainz Release.label-info[].label.name` + `catalog-number` (consulta `inc=labels`, sem GET adicional) e `Discogs Release.labels[].name` + `catno` da edição exata. O relatório preserva pares normalizados com Unicode NFKC/casefold e espaços equivalentes, **sem retirar hífens, prefixos ou traduzir nomes de gravadoras**. Valores-placeholder, sem catálogo ou arrays malformados não autorizam correspondência. O número de catálogo igual com gravadora divergente é sinal **fraco**, explícito como `catalog_only_unconfirmed`; só a coincidência **do par inteiro** recebe `exact_label_catalog_pair_observed_not_verified`. Em ambos os casos, `verified=false` permanece, pois gravadora e catálogo não bastam para provar prensagem, barcode ou vínculo Release→Discogs. Não altera nem homologa automaticamente nenhum caso do manifesto.
+
+## Grupo A — triagem de tipo editorial sem inferência (10/11/2026)
+
+`scripts/catalog_211_discogs_type_triage.py` toma o relatório já obtido com seis
+**pares Release/Discogs de ID exato** e classifica, sem GETs adicionais, os
+tipos `Album`, `EP`, `Single` explicitamente informados pelo
+MusicBrainz ReleaseGroup e nas descrições de formato Discogs. Um par sem
+vínculo Release→Discogs é somente `unlinked_type_context_only`: não
+autoriza correção de categoria. Mesmo uma discordância em um Release
+diretamente vinculado gera apenas `linked_type_disagreement_needs_review`,
+**não** `Verified`, `DISCOGS_CORRECTION` ou `reviewed=true`. Estados
+`unknown`/`ambiguous`, fonte indisponível, artista não confirmado e
+edição MB não oficial permanecem inelegíveis. O artefato
+`discogs-211-type-disagreement-triage.json` é verificável no mesmo
+workflow de sondagem. O corpus A preserva dez vagas sem seleção até
+surgirem casos realmente divergentes com evidência independente.
