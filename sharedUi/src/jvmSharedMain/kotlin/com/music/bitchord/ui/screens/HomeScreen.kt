@@ -86,6 +86,7 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
+import com.music.bitchord.ui.components.NativeMediaCardMetrics
 import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.SignInBanner
 import com.music.bitchord.ui.components.feedMoreSkeleton
@@ -1025,7 +1026,7 @@ internal fun NewShelfCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(NativeMediaCardMetrics.squareCoverShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
@@ -1047,7 +1048,7 @@ internal fun NewShelfCard(
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(NativeMediaCardMetrics.shelfCaptionGap))
         Text(
             text = label,
             style = MaterialTheme.typography.titleMedium,
@@ -1077,7 +1078,7 @@ private fun ServiceCard(colors: List<Color>, trackKey: String, icon: ImageVector
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(12.dp)),
+            .clip(NativeMediaCardMetrics.squareCoverShape),
         contentAlignment = Alignment.Center,
     ) {
         MeshGradientBackground(
@@ -1125,7 +1126,7 @@ internal fun ShelfCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp)),
+                        .clip(NativeMediaCardMetrics.squareCoverShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     MeshGradientBackground(
@@ -1175,7 +1176,7 @@ internal fun ShelfCard(
                     val index = (item.browseId.orEmpty().hashCode() and Int.MAX_VALUE) % palettes.size
                     Box(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(NativeMediaCardMetrics.squareCoverShape)
                             .background(Brush.linearGradient(palettes[index]))
                             .testTag("explore-genre-card"),
                         contentAlignment = Alignment.CenterStart,
@@ -1193,8 +1194,8 @@ internal fun ShelfCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .thumbnailBorder(RoundedCornerShape(12.dp))
+                        .clip(NativeMediaCardMetrics.squareCoverShape)
+                        .thumbnailBorder(NativeMediaCardMetrics.squareCoverShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true

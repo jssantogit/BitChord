@@ -159,7 +159,7 @@ val FLOATING_BAR_MAX_WIDTH = 440.dp
  * Sized so a phone-width row shows two cards whole with the edge of a third
  * showing: enough to say the row scrolls without a card being half a card.
  */
-val SHELF_CARD_WIDTH = 150.dp
+val SHELF_CARD_WIDTH = NativeMediaCardMetrics.shelfWidth
 
 /** Share of the row a lead-shelf card takes, so the next one peeks in past it. */
 private const val HERO_CARD_FRACTION = 0.70f

@@ -48,6 +48,7 @@ import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ShelfRow
+import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -360,7 +361,7 @@ internal fun CanonicalRecentAdditionsShelf(
             items(recent, key = { it.id }) { track ->
                 CanonicalRecentAdditionCard(
                     track = track,
-                    modifier = Modifier.width(142.dp),
+                    modifier = Modifier.width(SHELF_CARD_WIDTH),
                     onClick = { onPlayTrack(track.id) },
                 )
             }
@@ -376,7 +377,9 @@ private fun CanonicalRecentAdditionCard(
     onClick: () -> Unit,
 ) {
     Column(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier
+            .testTag("canonical-recent-card")
+            .clickable(onClick = onClick),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         androidx.compose.foundation.layout.Box(

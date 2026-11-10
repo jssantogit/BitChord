@@ -50,6 +50,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.NativeMediaCardMetrics
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.ShimmerBox
 import com.music.bitchord.ui.components.feedSkeleton
@@ -266,7 +267,7 @@ private fun NativeExploreCategorySleeve(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.align(Alignment.BottomStart)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = NativeMediaCardMetrics.discoveryTitleInset, vertical = 10.dp),
         )
     }
 }
@@ -324,10 +325,14 @@ private fun fallbackMoodColor(title: String): Color = when ((title.hashCode() an
 /** Gap between mood cards, in both directions. */
 private val MOOD_SPACING = 12.dp
 
-private val MOOD_CARD_SHAPE = RoundedCornerShape(10.dp)
+private val MOOD_CARD_SHAPE = NativeMediaCardMetrics.discoveryShape
 
-/** Width over height; a two-column phone row lands at about 100dp tall. */
-const val MOOD_CARD_ASPECT = 1.72f
+/**
+ * A card geometry role adapted from the Apple search landing tile's
+ * declared 1.777 ratio. Layout selection in the original capture is not
+ * verified; this is not an app-wide album cover aspect ratio.
+ */
+const val MOOD_CARD_ASPECT = NativeMediaCardMetrics.discoveryAspect
 
 /**
  * The narrowest a mood card is let get before the row drops a column.
