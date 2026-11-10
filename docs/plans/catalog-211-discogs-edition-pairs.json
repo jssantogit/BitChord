@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Three public identity controls; neither Verified claims nor 30-case corpus adjudication",
+  "description": "Six exact public edition controls; not verified matches or adjudicated 30-case corpus",
   "pairs": [
     {
       "id": "CTRL-ENHYPEN-MEMORABILIA",
@@ -27,6 +27,33 @@
       "discogs_artist_id": 11171795,
       "musicbrainz_release_mbid": "e6de9634-eb96-4b54-9568-755a99ec312b",
       "discogs_release_id": 35021231,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-IVE-FASHION",
+      "artist": "IVE",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "discogs_artist_id": 7122521,
+      "musicbrainz_release_mbid": "f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
+      "discogs_release_id": 37253067,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-IVE-DARE-ME",
+      "artist": "IVE",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "discogs_artist_id": 7122521,
+      "musicbrainz_release_mbid": "5df7296a-92e2-48ae-a69e-eaed1f74d066",
+      "discogs_release_id": 34121731,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-TXT-SEVENTH-YEAR-CD",
+      "artist": "TOMORROW X TOGETHER",
+      "musicbrainz_artist_mbid": "9d027d72-790e-40ec-bbb7-61aa613457de",
+      "discogs_artist_id": 7164941,
+      "musicbrainz_release_mbid": "562a42ed-de56-4282-99f4-e9f7da270098",
+      "discogs_release_id": 37110012,
       "reviewed": false
     }
   ]

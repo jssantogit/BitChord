@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Offline RED/GREEN regressions for case-scoped Discogs/MB exact-ID comparison."""
 import unittest
+import json
+from pathlib import Path
 
 from catalog_211_discogs_edition_pair_review import (
     case_list, inspect, observe, release_relations, MAX_REQUESTS,
@@ -61,6 +63,16 @@ class EditionPairReviewTest(unittest.TestCase):
                 case_list({"schema_version": 1, "pairs": [invalid]})
         with self.assertRaises(ValueError):
             case_list({"schema_version": 1, "pairs": [row(), row()]})
+
+    def test_checked_in_public_controls_have_six_unique_exact_id_pairs(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-edition-pairs.json"
+        ).read_text(encoding="utf-8"))
+        cases = case_list(manifest)
+        self.assertEqual(6, len(cases))
+        self.assertEqual(6, len({c["id"] for c in cases}))
+        self.assertTrue(all(c["reviewed"] is False for c in cases))
+        self.assertTrue(all(isinstance(c["discogs_release_id"], int) for c in cases))
 
     def test_comparison_is_factual_even_if_all_fields_match(self):
         report = observe({"schema_version": 1, "pairs": [row()]}, fetch)

@@ -83,9 +83,9 @@ são resultados válidos que devem permanecer registrados sem imputação.
 
 O roteiro `scripts/catalog_211_discogs_edition_pair_review.py` usa somente
 `docs/plans/catalog-211-discogs-edition-pairs.json` (máximo 6 pares
-por execução). Os três pares iniciais são edições específicas de
-ENHYPEN `MEMORABILIA`, TXT `Setsuna Hanabi` e LE SSERAFIM
-`EASY CRAZY HOT`, com MusicBrainz Release MBID e Discogs Release ID.
+por execução). Os seis pares incluem ENHYPEN `MEMORABILIA`, TXT `Setsuna Hanabi`,
+LE SSERAFIM `EASY CRAZY HOT`, IVE `Fashion`, IVE `DARE ME` e TXT
+`7TH YEAR` em CD, com MusicBrainz Release MBID e Discogs Release ID.
 Requer a relação MB Artist→Discogs Artist explícita e idêntica ao
 `artists[].id` da edição; identifica o ReleaseGroup real do registro
 MB, seu tipo primário e os fatos de tracklist, barcode e relação direta
