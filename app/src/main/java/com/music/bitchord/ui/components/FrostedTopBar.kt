@@ -511,7 +511,10 @@ private fun AppleSettingsPopup(
     val reduced by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val visibility = remember { MutableTransitionState(false) }
     visibility.targetState = expanded
-    if (!visibility.currentState && !visibility.targetState) return
+    // A very fast second tap may reverse the entrance before currentState
+    // reaches true. Do not drop the Popup window while that reversal is
+    // still animating.
+    if (!visibility.currentState && !visibility.targetState && visibility.isIdle) return
 
     val offsetPx = with(LocalDensity.current) { 38.dp.roundToPx() }
     Popup(
