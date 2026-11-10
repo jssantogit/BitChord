@@ -179,6 +179,10 @@ private fun pullLift(pulled: Float, ease: Float): Float =
 internal fun miniPlayerLiftForMotion(pulled: Float, ease: Float, reduced: Boolean): Float =
     if (reduced) 0f else pullLift(pulled, ease)
 
+/** A cancelled pull must not keep the previous track's rubber-band offset. */
+internal fun miniPlayerShouldAnimateLiftSettle(completedNormally: Boolean, reducedMotion: Boolean): Boolean =
+    completedNormally && !reducedMotion
+
 /**
  * Pulling the mini player up into the full player, the way the full player is
  * pulled back down into it: the player follows the finger the whole way, and
@@ -258,6 +262,12 @@ internal fun Modifier.miniPlayerGestures(
     // recomposing it.
     val lift = remember { mutableFloatStateOf(0f) }
     val settle = remember { arrayOfNulls<Job>(1) }
+    LaunchedEffect(gestureIdentity) {
+        // Even a spring from a PREVIOUS completed gesture must not continue
+        // on a replacement queue entry.
+        settle[0]?.cancel()
+        lift.floatValue = 0f
+    }
     LaunchedEffect(reduceMotion) {
         if (reduceMotion) {
             settle[0]?.cancel()
@@ -350,7 +360,9 @@ internal fun Modifier.miniPlayerGestures(
                     target.cancel()
                 }
                 settle[0]?.cancel()
-                if (currentReduceMotion) {
+                if (!miniPlayerShouldAnimateLiftSettle(completedNormally, currentReduceMotion)) {
+                    // The old pull was interrupted: snap before the next
+                    // queue entry can render; only a real finger-up springs.
                     lift.floatValue = 0f
                 } else {
                     val from = lift.floatValue
