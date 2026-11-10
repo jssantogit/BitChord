@@ -162,6 +162,7 @@ import kotlinx.coroutines.withContext
 import com.music.bitchord.data.model.durationMillis
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.LocalReduceAnimations
 import com.music.bitchord.data.settings.LibrarySort
 import com.music.bitchord.data.settings.ThemeMode
 import com.music.bitchord.ui.components.AccountProfileSelector
@@ -436,6 +437,7 @@ class MainActivity : AppCompatActivity() {
             val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
             val highPerformance by AppSettings.highPerformanceMode.collectAsStateWithLifecycle()
             val liquidGlassEnabled by AppSettings.liquidGlass.collectAsStateWithLifecycle()
+            val reduceGlobalMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
             val iosOverscrollFactory = rememberIosOverscrollFactory()
             val performanceRefreshRate by AppSettings.performanceRefreshRate.collectAsStateWithLifecycle()
             val composeView = LocalView.current
@@ -468,6 +470,7 @@ class MainActivity : AppCompatActivity() {
                 val canonicalRatings = rememberCanonicalRatingDisplay()
                 CompositionLocalProvider(
                     LocalCanonicalRatingDisplay provides canonicalRatings,
+                    LocalReduceAnimations provides reduceGlobalMotion,
                     LocalOverscrollFactory provides iosOverscrollFactory,
                     LocalLiquidGlassEnabled provides liquidGlassEnabled,
                     LocalAppBackdrop provides appBackdrop,

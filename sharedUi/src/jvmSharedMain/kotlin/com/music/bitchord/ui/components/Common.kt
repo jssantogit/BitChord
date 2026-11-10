@@ -3,7 +3,7 @@ package com.music.bitchord.ui.components
 import com.music.bitchord.ui.LocalPullToRefreshEnabled
 import com.music.bitchord.ui.AppUiHost
 import com.music.bitchord.ui.AppUi
-import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.LocalReduceAnimations
 import com.music.bitchord.sharedui.resources.*
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -315,7 +315,7 @@ fun PullToRefresh(
 fun SignInBanner(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val reduceMotion = LocalReduceAnimations.current
     val scale by animateFloatAsState(
         targetValue = GlobalMotionPolicy.pressedScale(pressed, reduceMotion),
         animationSpec = if (reduceMotion) snap() else spring(stiffness = 900f),

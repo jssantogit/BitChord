@@ -25,7 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,8 +35,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.LocalReduceAnimations
 
 /**
  * Grey stand-ins for content still on the wire, laid out to the same metrics as
@@ -69,7 +67,7 @@ fun ShimmerBox(modifier: Modifier = Modifier, shape: Shape = BlockShape) {
         .compositeOver(base)
     // Shared by Home, Explore, Library, Search and details. Do not keep an
     // infinite draw animation alive when the user enables Reduce animations.
-    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val reduceMotion = LocalReduceAnimations.current
     if (!GlobalMotionPolicy.shimmerEnabled(reduceMotion)) {
         Box(modifier.clip(shape).background(base))
         return
