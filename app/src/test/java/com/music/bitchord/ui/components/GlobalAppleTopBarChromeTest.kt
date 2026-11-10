@@ -2,6 +2,7 @@ package com.music.bitchord.ui.components
 
 import android.app.Application
 import androidx.compose.foundation.layout.Row
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -155,6 +157,43 @@ class GlobalAppleTopBarChromeTest {
         }
         compose.onNodeWithContentDescription("Detail action")
             .assertWidthIsEqualTo(40.dp)
+    }
+
+    @Test fun completedRefreshRetainsPuckDuringExitAndRemovesItAfterFade() {
+        val refreshing = mutableStateOf(true)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            BitChordTheme {
+                RefreshPuck(
+                    refreshing = refreshing.value,
+                    pullFraction = { if (refreshing.value) 1f else 0f },
+                    reduceMotion = false,
+                )
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("apple-refresh-puck", useUnmergedTree = true).assertExists()
+        compose.runOnIdle { refreshing.value = false }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("apple-refresh-puck", useUnmergedTree = true).assertExists()
+        compose.mainClock.advanceTimeBy(500L)
+        compose.onNodeWithTag("apple-refresh-puck", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test fun reducedMotionRefreshEndsWithoutFade() {
+        val refreshing = mutableStateOf(true)
+        compose.setContent {
+            BitChordTheme {
+                RefreshPuck(
+                    refreshing = refreshing.value,
+                    pullFraction = { if (refreshing.value) 1f else 0f },
+                    reduceMotion = true,
+                )
+            }
+        }
+        compose.onNodeWithTag("apple-refresh-puck", useUnmergedTree = true).assertExists()
+        compose.runOnIdle { refreshing.value = false }
+        compose.onNodeWithTag("apple-refresh-puck", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test fun unavailableSecondaryActionsRemainDisabledWithSharedSurface() {

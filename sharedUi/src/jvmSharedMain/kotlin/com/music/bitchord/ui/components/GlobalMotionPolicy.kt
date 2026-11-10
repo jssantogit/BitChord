@@ -28,6 +28,18 @@ object GlobalMotionPolicy {
     fun indeterminateRefreshEnabled(refreshing: Boolean, reduced: Boolean): Boolean =
         refreshing && !reduced
 
+    /**
+     * Only a finished, actual refresh can retain the puck during the
+     * optional 400ms exit. A drag that never triggered refresh must not
+     * remain visible, and the accessible reduced-motion path is immediate.
+     */
+    fun keepRefreshPuckVisible(
+        refreshing: Boolean,
+        pulling: Boolean,
+        completedRefreshExit: Boolean,
+        reduced: Boolean,
+    ): Boolean = refreshing || pulling || (completedRefreshExit && !reduced)
+
     /** No pressed scale is displayed when Reduce animations is enabled. */
     fun pressedScale(pressed: Boolean, reduced: Boolean, activeScale: Float = 0.98f): Float =
         if (reduced || !pressed) 1f else activeScale

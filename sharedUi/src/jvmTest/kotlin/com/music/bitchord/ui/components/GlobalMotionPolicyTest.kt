@@ -42,6 +42,26 @@ class GlobalMotionPolicyTest {
         assertFalse(GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing = false, reduced = true))
     }
 
+    @Test fun refreshPuckIsMountedDuringExitOnlyForACompletedRealRefresh() {
+        assertTrue(GlobalMotionPolicy.keepRefreshPuckVisible(
+            refreshing = true, pulling = false, completedRefreshExit = false, reduced = false,
+        ))
+        assertTrue(GlobalMotionPolicy.keepRefreshPuckVisible(
+            refreshing = false, pulling = true, completedRefreshExit = false, reduced = false,
+        ))
+        assertTrue(GlobalMotionPolicy.keepRefreshPuckVisible(
+            refreshing = false, pulling = false, completedRefreshExit = true, reduced = false,
+        ))
+        assertFalse(GlobalMotionPolicy.keepRefreshPuckVisible(
+            refreshing = false, pulling = false, completedRefreshExit = true, reduced = true,
+        ))
+        assertFalse(GlobalMotionPolicy.keepRefreshPuckVisible(
+            refreshing = false, pulling = false, completedRefreshExit = false, reduced = false,
+        ))
+        assertEquals(400, GlobalMotionPolicy.duration(GlobalMotionPolicy.loaderExitMillis, false))
+        assertEquals(0, GlobalMotionPolicy.duration(GlobalMotionPolicy.loaderExitMillis, true))
+    }
+
     @Test fun invalidDurationIsRejectedRatherThanSilentlyAnimatingBackwards() {
         assertThrows(IllegalArgumentException::class.java) {
             GlobalMotionPolicy.duration(-1, reduced = false)

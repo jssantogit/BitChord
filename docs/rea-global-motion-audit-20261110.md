@@ -36,3 +36,12 @@ Sem gerar novo smoke. PR #209 não alterada; PR #212 continua isolada em draft. 
 - **Atualização por gesto:** o `RefreshPuck` compartilhado preserva a trajetória ligada ao arrasto e a indicação visual de atualização, mas desativa o giro infinito de `CircularProgressIndicator` quando **Reduzir animações** está ativo; usa arco estático de 80%. Isto é uma escolha de acessibilidade BitChord, **não** uma reprodução de animação Apple identificada.
 - **Regressões:** testes de contrato (tempo de seleção normal/reduzido e spinner) e teste de seleção entre fontes com redução ativa; testes existentes continuam cobrindo o indicador de largura positiva. Não usar animadores para listas/cards sem evidência adicional e sem teste de performance.
 - **Issue #4 fechada:** HEAD `d074855e` do am-descomp publicou `evidence/media-card-closure.json`, mas C1–C3 sustentam apenas aproximação e C4 é `unknown/no_proven_equivalent`; nenhuma duração/efeito global de card ficou comprovada por ela.
+
+
+## Terceira rodada — saída da atualização compartilhada
+
+A `FrostedTopBar.RefreshPuck` é utilizada em múltiplas rotas. Antes, a saída do indicador era imediata via `if (!refreshing && !pulling) return`, mesmo após uma atualização completa. Agora um refresh **efetivamente iniciado** mantém o indicador em repouso e realiza uma saída de alpha de 400ms, desligando o componente ao fim. O scroll, a chegada dos dados, o toque e a altura efetiva do cabeçalho não são bloqueados; gesto abandonado antes de iniciar refresh não aciona o fade. **Reduzir animações** continua imediato e não mantém spinner rodando.
+
+**Fonte e ressalva:** `am-descomp/docs/motion/home-and-content.md` e `docs/motion/search-and-library.md` vinculam `Loader.c` a fade condicional de 400ms com DecelerateInterpolator em Início/Busca. Eles **não** identificam a mesma classe como `RefreshPuck`; esta saída é portanto **adaptação BitChord**, não paridade recuperada. A curva Compose `LinearOutSlowInEasing` é aproximação controlada; fator exato do interpolador original não foi determinado.
+
+Adicionada cobertura de estado e dois testes Compose para término da atualização normal/reduzida. A migração não cria animações de listas, menus ou cards sem evidência e não altera PR #209. Nenhum smoke APK foi disparado.

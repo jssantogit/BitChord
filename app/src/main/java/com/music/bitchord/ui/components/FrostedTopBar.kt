@@ -9,6 +9,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Spring
@@ -53,6 +54,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -683,22 +685,19 @@ fun TopBarAccountButton(
 }
 
 /**
- * The refresh indicator: a round puck that slides out from under the bar's
- * bottom edge as the list is pulled, Chrome-style.
+ * Shared refresh puck in Home, Explore, Library and other frosted-bar routes.
  *
- * It is drawn by the bar rather than by the pull-to-refresh box, so it lands on
- * top of the glass instead of behind it, and it is clipped to the band just
- * below the bar so it emerges from the edge instead of appearing over the
- * status bar. Its position is the pull state's own distance fraction — which
- * the pull box holds at 1 while refreshing and animates back to 0 when done —
- * so the slide down, the rest while loading and the slide back up are all one
- * value. The arc fills with the drag, then spins once the refresh is away.
+ * Its drag position is still derived from pullFraction in graphicsLayer,
+ * avoiding full app recomposition for each pointer frame. A *completed*
+ * refresh gets a bounded, alpha-only 400ms exit. This adapts the traced
+ * conditional Loader.c exit, not an assertion that Apple's pull puck
+ * itself has the same animator (am-descomp docs/motion/home-and-content.md).
  *
- * Laid out at zero height, so the bar keeps its size and the puck overhangs
- * the content without taking any touches from it.
+ * No exit animation is played for a cancelled pull. Reduce animations hides
+ * the puck immediately. Nothing in this layer delays loaded page content.
  */
 @Composable
-private fun RefreshPuck(
+internal fun RefreshPuck(
     refreshing: Boolean,
     pullFraction: () -> Float,
     reduceMotion: Boolean,
@@ -706,7 +705,49 @@ private fun RefreshPuck(
 ) {
     val currentFraction by rememberUpdatedState(pullFraction)
     val pulling by remember { derivedStateOf { currentFraction() > 0f } }
-    if (!refreshing && !pulling) return
+
+    // Keep the visual composed while a real refresh's exit is running.
+    // A cancelled drag never sets refreshWasRunning, so it simply retracts.
+    var refreshWasRunning by remember { mutableStateOf(refreshing) }
+    var exiting by remember { mutableStateOf(false) }
+    val exitAlpha = remember { Animatable(1f) }
+    val finishing = !refreshing && refreshWasRunning
+
+    LaunchedEffect(refreshing, reduceMotion) {
+        if (refreshing) {
+            refreshWasRunning = true
+            exiting = false
+            exitAlpha.snapTo(1f)
+        } else if (refreshWasRunning) {
+            exiting = true
+            if (reduceMotion) {
+                exitAlpha.snapTo(0f)
+            } else {
+                exitAlpha.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(
+                        durationMillis = GlobalMotionPolicy.duration(
+                            GlobalMotionPolicy.loaderExitMillis, reduced = false,
+                        ),
+                        // The reference uses a DecelerateInterpolator with an
+                        // unverified factor; this is a controlled approximation.
+                        easing = LinearOutSlowInEasing,
+                    ),
+                )
+            }
+            exiting = false
+            refreshWasRunning = false
+        }
+    }
+
+    val fading = finishing || exiting
+    if (!GlobalMotionPolicy.keepRefreshPuckVisible(
+            refreshing = refreshing,
+            pulling = pulling,
+            completedRefreshExit = fading,
+            reduced = reduceMotion,
+        )
+    ) return
 
     val travel = with(LocalDensity.current) { (PUCK_REST + PUCK_SIZE).toPx() }
     Box(
@@ -723,20 +764,22 @@ private fun RefreshPuck(
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    val f = currentFraction().coerceIn(0f, 2f)
-                    // Past the threshold the puck keeps following, but
-                    // reluctantly, like the list under it.
+                    val f = if (fading) 1f else currentFraction().coerceIn(0f, 2f)
+                    // Preserve the puck's rest position during the exit, even
+                    // though the pull state has already snapped back to zero.
                     val eased = if (f <= 1f) f else 1f + (f - 1f) * 0.35f
                     translationY = travel * eased - PUCK_SIZE.toPx()
-                    alpha = (f * 3f).coerceAtMost(1f)
+                    val dragAlpha = if (fading) 1f else (f * 3f).coerceAtMost(1f)
+                    alpha = dragAlpha * if (fading) exitAlpha.value else 1f
                 }
                 .shadow(6.dp, CircleShape)
                 .size(PUCK_SIZE)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                .testTag("apple-refresh-puck"),
             contentAlignment = Alignment.Center,
         ) {
             val indicatorModifier = Modifier.size(22.dp)
-            if (GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing, reduceMotion)) {
+            if (GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing || fading, reduceMotion)) {
                 CircularProgressIndicator(
                     modifier = indicatorModifier,
                     color = MaterialTheme.colorScheme.primary,
@@ -745,9 +788,10 @@ private fun RefreshPuck(
                 )
             } else {
                 CircularProgressIndicator(
-                    // When Reduced animations is on, show a fixed visible arc
-                    // while refreshing rather than an endlessly spinning one.
-                    progress = { if (refreshing) 0.8f else (currentFraction() * 0.8f).coerceIn(0f, 0.8f) },
+                    progress = {
+                        if (refreshing || fading) 0.8f
+                        else (currentFraction() * 0.8f).coerceIn(0f, 0.8f)
+                    },
                     modifier = indicatorModifier.graphicsLayer {
                         rotationZ = currentFraction().coerceIn(0f, 2f) * 180f
                     },
