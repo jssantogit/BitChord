@@ -54,3 +54,10 @@ Auditoria do `FrostedTopBar.RefreshPuck` (Home, Explorar, Biblioteca e demais ro
 A política compartilhada agora calcula `refreshPuckRotationDegrees`: mantém rotação limitada de 0 a 360 graus durante o arrasto normal, zera sob Reduzir animações e neutraliza NaN/infinito. O indicador determinate **meramente visual** recebe `clearAndSetSemantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }`, igual ao precedente do miniplayer: TalkBack pode sinalizar carregamento, sem anunciar conclusão inexistente. A rotação normal, o arrasto, o tamanho 40dp, a saída alpha de 400ms e os callbacks de refresh não mudam.
 
 Primeiro foram publicados testes da função (normal, reduzido, entradas inválidas) e teste Robolectric Compose que exige semântica indeterminada em modo reduzido. A implementação não introduz tempo/curva Apple e não promove efeito para cards; é correção de acessibilidade e robustez do BitChord. Nenhum smoke APK solicitado, PR #209 intocada.
+
+
+## Quinta rodada — escala das abas sob redução de movimento
+
+A barra inferior Apple usava `appleMusicTabScaleTarget(enabled, selected, pressed)` com alvo de 1,04 para uma aba selecionada e 0,91 para uma pressionada. Ao habilitar **Reduzir animações**, somente a `animationSpec` mudava para `snap()`: o ícone ainda pulava **instantaneamente** de tamanho, ao contrário do transporte do miniplayer e dos controles que já retornavam `scale=1f` sob redução. Trata-se de inconsistência concreta na política de acessibilidade do BitChord, não um comportamento medido no Apple Music.
+
+O helper agora aceita `reducedMotion` (default `false` para preservar seus testes/consumidores anteriores). Abas ativas, selecionadas ou pressionadas mantêm `1f` com redução; no modo normal permanecem os mesmos valores, spring, cores e seleção. Rádio permanece sem ação e sem escala em qualquer modo. O teste foi incluído antes da correção e enumera todas as combinações de selecionada/pressionada, além de Rádio. Nenhuma mudança de rota, tamanho da barra, gesto ou duração de tint.
