@@ -18,6 +18,8 @@ class RouteArrivalMotionTest {
         assertTrue(shouldAnimateRouteArrival("settings:home", "settings:appearance", reduced = false))
         assertTrue(shouldAnimateRouteArrival("settings:appearance", "settings:home", reduced = false))
         assertTrue(shouldAnimateRouteArrival("picker", "create", reduced = false))
+        assertTrue(shouldAnimateRouteArrival("wizard:IDENTITY", "wizard:SONGS", reduced = false))
+        assertTrue(shouldAnimateRouteArrival("wizard:REVIEW", "wizard:SONGS", reduced = false))
         assertFalse(shouldAnimateRouteArrival("create", "create", reduced = false))
         assertFalse(shouldAnimateRouteArrival("picker", "create", reduced = true))
     }
