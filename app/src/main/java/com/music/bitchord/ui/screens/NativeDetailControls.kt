@@ -28,14 +28,15 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.music.bitchord.ui.components.liquidGlassRim
+import com.music.bitchord.ui.components.AppleFloatingControlMetrics
+import com.music.bitchord.ui.components.appleSecondaryActionSurface
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 
 /** Shared first-party detail buttons. No provider DTO or playlist identity. */
-internal const val LIGHT_FILL_ALPHA = 0.07f
-internal const val TOP_RELEASE_EDGE_ALPHA = 0.10f
-internal const val DISABLED_ACTION_ALPHA = 0.38f
+internal const val LIGHT_FILL_ALPHA = AppleFloatingControlMetrics.secondaryFillAlpha
+internal const val TOP_RELEASE_EDGE_ALPHA = AppleFloatingControlMetrics.secondaryEdgeAlpha
+internal const val DISABLED_ACTION_ALPHA = AppleFloatingControlMetrics.disabledAlpha
 
 @Composable
 internal fun ActionPill(
@@ -45,7 +46,7 @@ internal fun ActionPill(
     filled: Boolean,
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
-    size: Dp = 50.dp,
+    size: Dp = AppleFloatingControlMetrics.detailDiameter,
 ) {
     // Resume rather than a flat tap: both start a queue, and the rising pair
     // says so.
@@ -60,10 +61,7 @@ internal fun ActionPill(
                 if (filled) {
                     Modifier.background(Color.White)
                 } else {
-                    Modifier
-                        .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
-                        .liquidGlassRim(CircleShape)
-                        .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
+                    Modifier.appleSecondaryActionSurface()
                 },
             )
             .then(
@@ -101,7 +99,7 @@ internal fun CircleIconButton(
     contentDescription: String,
     onClick: () -> Unit,
     haptic: Haptic = Haptic.Tap,
-    size: Dp = 50.dp,
+    size: Dp = AppleFloatingControlMetrics.detailDiameter,
     /**
      * False greys the button out and stops it taking taps, for an action the
      * page offers but this user can't take — a guest's Add or Subscribe.
@@ -116,11 +114,8 @@ internal fun CircleIconButton(
             .size(size)
             .alpha(if (enabled) 1f else DISABLED_ACTION_ALPHA)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), CircleShape)
-            // The glass rim the floating bars wear, with Liquid Glass on. Rim
-            // only: over the page's flat tint a blurred fill would look the same.
-            .liquidGlassRim(CircleShape)
-            .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), CircleShape)
+            // One shared material for detailed icon and labeled actions.
+            .appleSecondaryActionSurface()
             .then(
                 if (enabled) Modifier.clickable {
                     haptics.play(haptic)
