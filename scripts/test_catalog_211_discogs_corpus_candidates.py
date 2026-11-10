@@ -4,7 +4,7 @@ import unittest
 
 from catalog_211_discogs_corpus_candidates import (
     complete_mb_titles, discogs_artist_relation, public_index_hints,
-    scout_artist, normalized, comparable_title, known_group_title,
+    scout_artist, normalized, comparable_title, known_group_title, ARTISTS, MBID,
 )
 
 MBID = "95663592-1447-4579-90f7-c94733476667"
@@ -17,6 +17,12 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
         return {"id": MBID, "relations": [
             {"type": "discogs", "url": {"resource": url}}
         ]}
+
+    def test_public_artist_scout_has_ten_distinct_exact_ids(self):
+        self.assertEqual(10, len(ARTISTS))
+        self.assertEqual(10, len({mbid for _, mbid in ARTISTS}))
+        self.assertTrue(all(MBID.fullmatch(mbid) and name.strip()
+                            for name, mbid in ARTISTS))
 
     def test_artist_anchor_requires_single_typed_exact_relation(self):
         self.assertEqual(8303009, discogs_artist_relation(self.relation(), MBID))
