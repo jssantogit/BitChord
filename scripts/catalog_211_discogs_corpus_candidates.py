@@ -177,7 +177,8 @@ def scout_artist(name: str, mbid: str, get, pause=lambda: None) -> dict:
     finding = {"artist": name, "musicbrainz_artist_mbid": mbid,
                "status": "unavailable", "discogs_artist_id": None,
                "distinct_mb_titles_count": None, "indexed_rows": 0,
-               "exact_title_matches": 0, "candidate_index_hints": []}
+               "exact_title_matches": 0, "candidate_index_hints": [],
+               "pages_checked": []}
     try:
         pause()
         artist = get("https://musicbrainz.org/ws/2/artist/" + mbid +
@@ -201,13 +202,30 @@ def scout_artist(name: str, mbid: str, get, pause=lambda: None) -> dict:
         if hints is None:
             finding["status"] = "invalid_discogs_index"
             return finding
-        finding["indexed_rows"] = len(hints)
-        finding["exact_title_matches"] = sum(
-            known_group_title(hint["title"], name, known) for hint in hints)
-        finding["candidate_index_hints"] = [
-            {**hint, "assessment": "index_title_not_exact_mb_group_title"}
-            for hint in hints if not known_group_title(hint["title"], name, known)
-        ]
+        finding["pages_checked"].append(1)
+        def record_hints(rows):
+            finding["indexed_rows"] += len(rows)
+            finding["exact_title_matches"] += sum(
+                known_group_title(hint["title"], name, known) for hint in rows)
+            finding["candidate_index_hints"] += [
+                {**hint, "assessment": "index_title_not_exact_mb_group_title"}
+                for hint in rows if not known_group_title(hint["title"], name, known)
+            ]
+        record_hints(hints)
+        # Mirror the native two-page policy, never exhaustively crawl Discogs.
+        # Page 2 is inspected only when page 1 supplies no new title hint.
+        if not finding["candidate_index_hints"] and page["pagination"]["pages"] >= 2:
+            pause()
+            second_url = f"https://api.discogs.com/artists/{artist_id}/releases?" + urlencode({
+                "page": 2, "per_page": 12, "sort": "year", "sort_order": "desc",
+            })
+            second = get(second_url)
+            second_hints = public_index_hints(second, 2)
+            if second_hints is None:
+                finding["status"] = "invalid_discogs_second_page"
+                return finding
+            finding["pages_checked"].append(2)
+            record_hints(second_hints)
         finding["status"] = "index_compared_not_adjudicated"
     except (HTTPError, URLError, TimeoutError, OSError):
         finding["status"] = "network_unavailable"

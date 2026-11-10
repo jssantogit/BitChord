@@ -114,6 +114,50 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
         self.assertEqual(3, len(calls))
         self.assertFalse(any("token=" in url for url in calls))
 
+    def test_only_inspects_second_public_page_if_first_has_no_title_leads(self):
+        seen = []
+        def fetch(url):
+            seen.append(url)
+            if "/artist/" in url and "musicbrainz.org" in url:
+                return self.relation()
+            if "/release-group/" in url:
+                return {"release-group-offset": 0, "release-group-count": 1,
+                        "release-groups": [{"id": GROUP_A, "title": "Known"}]}
+            page = 2 if "page=2" in url else 1
+            return {"pagination": {"page": page, "pages": 2}, "releases": [
+                {"id": page + 100, "type": "release", "role": "Main",
+                 "title": "Known" if page == 1 else "Possible New"}]}
+        result = scout_artist("ENHYPEN", MBID, fetch)
+        self.assertEqual("index_compared_not_adjudicated", result["status"])
+        self.assertEqual([1, 2], result["pages_checked"])
+        self.assertEqual(4, len(seen))
+        self.assertEqual([102], [x["source_id"] for x in result["candidate_index_hints"]])
+        def first_has_lead(url):
+            if "page=2" in url:
+                raise AssertionError("page two is not permitted after new page-one hint")
+            if "/artist/" in url and "musicbrainz.org" in url:
+                return self.relation()
+            if "/release-group/" in url:
+                return {"release-group-offset": 0, "release-group-count": 1,
+                        "release-groups": [{"id": GROUP_A, "title": "Known"}]}
+            return {"pagination": {"page": 1, "pages": 2}, "releases": [
+                {"id": 202, "type": "release", "role": "Main", "title": "New"}]}
+        self.assertEqual([1], scout_artist("ENHYPEN", MBID, first_has_lead)["pages_checked"])
+
+    def test_invalid_second_page_is_unavailable_not_an_empty_complete_catalog(self):
+        def fetch(url):
+            if "/artist/" in url and "musicbrainz.org" in url:
+                return self.relation()
+            if "/release-group/" in url:
+                return {"release-group-offset": 0, "release-group-count": 1,
+                        "release-groups": [{"id": GROUP_A, "title": "Known"}]}
+            return {"pagination": {"page": 1, "pages": 2}, "releases": [
+                {"id": 101, "type": "release", "role": "Main", "title": "Known"}]}
+        result = scout_artist("ENHYPEN", MBID, fetch)
+        self.assertEqual("invalid_discogs_second_page", result["status"])
+        self.assertEqual([1], result["pages_checked"])
+        self.assertEqual([], result["candidate_index_hints"])
+
     def test_missing_identity_means_no_discogs_request(self):
         calls = []
         def fetch(url):

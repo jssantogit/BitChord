@@ -31,9 +31,11 @@ com MBIDs públicos (ENHYPEN, ILLIT, NewJeans, LE SSERAFIM, IVE, aespa,
 NMIXX, TOMORROW X TOGETHER, BABYMONSTER e Stray Kids).
 A relação MusicBrainz Artist → Discogs Artist precisa ser única e explícita;
 a lista de ReleaseGroups MusicBrainz precisa estar completa, íntegra e
-caber em até quatro páginas. A primeira página do índice público Discogs
-é comparada somente por título exato normalizado, sem criar vínculo entre
-ReleaseGroup e Discogs Master.
+caber em até quatro páginas. O índice público Discogs utiliza no máximo
+duas páginas: a segunda só é consultada quando a primeira não gera nenhuma
+pista de título novo, espelhando a política de descoberta do app. Não cria
+vínculo entre ReleaseGroup e Discogs Master e registra `pages_checked`.
+Uma segunda página inválida não vira uma alegação de ausência.
 
 Uma segunda etapa conservadora `scripts/catalog_211_discogs_candidate_details.py`
 consulta **no máximo 8 entradas do índice por execução**, distribuídas
