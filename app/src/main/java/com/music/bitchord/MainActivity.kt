@@ -2901,8 +2901,9 @@ private fun BitChordApp(
                     showBuilder = showSmartPlaylistBuilder,
                     showLibrary = showPlaylistLibrary,
                 )
-                AnimatedContent(
-                    targetState = when {
+                // Preserve the existing page route and its Back stack. Only
+                // the composited arrival changes for tab-to-tab navigation.
+                val pageRouteKey = when {
                         showSpotify && detail == null -> "spotify"
                         showDiscord -> "discord"
                         showHistory -> "history"
@@ -2941,8 +2942,23 @@ private fun BitChordApp(
                         // over that category while editing or creating a playlist.
                         playlistRoute != null -> playlistRoute
                         else -> "$TAB_KEY$selectedTab"
-                    },
-                    // Tabs swap outright; everything else crossfades.
+                    }
+                val previousTabForMotion = remember { mutableIntStateOf(selectedTab) }
+                val tabMovesForward = selectedTab >= previousTabForMotion.intValue
+                LaunchedEffect(selectedTab) { previousTabForMotion.intValue = selectedTab }
+                val tabArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
+                    routeKey = pageRouteKey,
+                    reduceMotion = reducePlayerMotion,
+                    forward = tabMovesForward,
+                    rootTabPrefix = TAB_KEY,
+                )
+                AnimatedContent(
+                    targetState = pageRouteKey,
+                    // The old tab is removed rather than crossfaded through
+                    // the transparent page background. A small arrival
+                    // transform below makes the *new* page move without
+                    // darkening or stacking two entire Home/Library feeds.
+                    // Pushed pages keep their pre-existing 180ms crossfade.
                     //
                     // A tab is not a place you travel to — the bar is the whole
                     // navigation and it carries its own movement — so a fade
@@ -2974,6 +2990,7 @@ private fun BitChordApp(
                     },
                     modifier = Modifier
                         .hazeSource(hazeState)
+                        .then(tabArrival)
                         .then(
                             if (glassActive) {
                                 Modifier
