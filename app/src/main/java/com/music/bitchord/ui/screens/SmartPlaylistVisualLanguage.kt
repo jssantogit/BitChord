@@ -63,7 +63,7 @@ internal fun PlaylistManagerChrome(
     Column(
         modifier = Modifier.fillMaxWidth()
             .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -82,16 +82,7 @@ internal fun PlaylistManagerChrome(
             selectedIndex = selectedIndex,
             onSelect = onSelect,
         )
-        Text(
-            when (selectedIndex) {
-                0 -> "Filtros: regras salvas para reutilizar. Uma mudança aqui não altera playlists já criadas."
-                1 -> "Inteligentes: playlists atualizadas conforme suas condições."
-                else -> "Clássicas: playlists antigas que podem ser copiadas para o editor atual."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+     }
 }
 
 @Composable
@@ -191,27 +182,17 @@ internal fun PlaylistWizardTextEntry(
         )
         // Reuse the same field as Settings and dialogs. Only the label and
         // validation text are specific to this wizard.
-        // Reuse the native PillTextField, with the same distinct outline as
-        // the app's search surfaces when embedded in a Settings card.
-        Box(
-            modifier = Modifier.fillMaxWidth().then(
-                if (emphasized) Modifier.border(
-                    BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    GroupShape,
-                ) else Modifier,
-            ),
-        ) {
-            PillTextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = "Toque para preencher",
-                container = if (emphasized) MaterialTheme.colorScheme.surface
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                keyboardOptions = keyboardOptions,
-                accessibilityLabel = label,
-                multiline = multiline,
-            )
-        }
+        // The shared field already has a native boundary; avoid a second
+        // competing outline or a dark-on-dark inset panel.
+        PillTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = if (multiline) "Adicionar descrição" else "Digite aqui",
+            container = MaterialTheme.colorScheme.surfaceVariant,
+            keyboardOptions = keyboardOptions,
+            accessibilityLabel = label,
+            multiline = multiline,
+        )
         if (hint != null) {
             Text(
                 hint,
@@ -271,39 +252,36 @@ internal data class PlaylistWizardNavOption(
 internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>) {
     val categories = options.isNotEmpty() && options.all { it.icon != null }
     if (categories) {
-        // The native Settings surface stays the source of truth, but each
-        // category gets its own row-sized card. This avoids one dense block
-        // followed by a large empty lower half on tall phones.
-        // A single neutral palette, unlike the former rainbow category
-        // badges. These are semantic icons, not arbitrary category colors.
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { option ->
-                SettingsGroupSurface {
-                    SettingsRow(
-                        title = option.title,
-                        subtitle = option.description.ifBlank { null },
-                        onClick = option.onClick,
-                        reserveIconSpace = false,
-                        minHeight = 76.dp,
-                        trailing = {},
-                        leading = {
-                            Box(
-                                modifier = Modifier.size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                                    .testTag("playlist-category-icon-badge"),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    imageVector = option.icon ?: PlaylistEditorIcons.Music,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.size(22.dp),
-                                )
-                            }
-                        },
-                    )
-                }
+        // Settings-style contiguous rows, not a stack of oversized cards.
+        // Smaller native badges retain clear category affordances and a
+        // minimum 64dp row target without wasting a screen per seven options.
+        SettingsGroupSurface(modifier = Modifier.testTag("playlist-category-group")) {
+            options.forEachIndexed { index, option ->
+                SettingsRow(
+                    title = option.title,
+                    subtitle = option.description.ifBlank { null },
+                    onClick = option.onClick,
+                    reserveIconSpace = false,
+                    minHeight = 64.dp,
+                    trailing = {},
+                    leading = {
+                        Box(
+                            modifier = Modifier.size(32.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                .testTag("playlist-category-icon-badge"),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = option.icon ?: PlaylistEditorIcons.Music,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    },
+                )
+                if (index < options.lastIndex) RowDivider()
             }
         }
     } else {
