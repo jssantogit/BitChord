@@ -41,13 +41,14 @@ internal sealed interface DiscogsUnlinkedMatch {
             }
             val verified = assessed.filter { it.second == DiscogsEditionVerdict.VERIFIED }
                 .map { it.first }
+            val pending = assessed.filter { it.second == DiscogsEditionVerdict.CANDIDATE }
+                .map { it.first }
             return when {
-                verified.size > 1 || (verified.isNotEmpty() && contested.isNotEmpty()) ->
-                    Ambiguous((verified + contested).distinctBy { it.link.id })
+                verified.size > 1 ||
+                    (verified.isNotEmpty() && (contested.isNotEmpty() || pending.isNotEmpty())) ->
+                    Ambiguous((verified + contested + pending).distinctBy { it.link.id })
                 verified.size == 1 -> Verified(verified.single())
                 else -> {
-                    val pending = assessed.filter { it.second == DiscogsEditionVerdict.CANDIDATE }
-                        .map { it.first }
                     val unresolved = (pending + contested).distinctBy { it.link.id }
                     if (unresolved.isEmpty()) NoMatch else Candidates(unresolved)
                 }

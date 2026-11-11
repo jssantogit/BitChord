@@ -90,7 +90,17 @@ internal class DiscogsEditionRepository(
         canonical: CanonicalEditionEvidence,
     ): DiscogsEditionEnrichment {
         val masterResult = observeViaReleaseGroupMaster(canonical)
-        if (masterResult is DiscogsEditionEnrichment.Verified) return masterResult
+        // A complete Master with two plausible versions, or an incomplete
+        // Master list, cannot be made unique by a different search index.
+        // In particular, token search may omit a color/pressing variant that
+        // the typed Master already showed. Fail closed before searching.
+        if (masterResult is DiscogsEditionEnrichment.Verified ||
+            masterResult == DiscogsEditionEnrichment.Ambiguous ||
+            masterResult == DiscogsEditionEnrichment.Candidate ||
+            masterResult == DiscogsEditionEnrichment.Unavailable ||
+            masterResult == DiscogsEditionEnrichment.Invalid ||
+            masterResult == DiscogsEditionEnrichment.Disabled
+        ) return masterResult
         val discovery = authenticatedDiscovery ?: return masterResult
         return when (val match = discovery.findForEdition(canonical)) {
             is DiscogsAuthenticatedMatch.Verified -> {

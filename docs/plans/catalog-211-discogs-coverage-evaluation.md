@@ -780,3 +780,28 @@ MusicBrainz, não criar Release/Recording MBIDs, áudio ou
 dados de biblioteca do usuário. Este avanço abre o
 **caminho técnico de avaliação B sem token**, mas não
 inventa ainda um novo `Verified` no corpus A/B/C (5/30).
+
+### A busca autenticada não pode sobrescrever ambiguidade já demonstrada (11/11/2026)
+
+Mesmo depois de enumerar a lista pública completa do Master,
+a camada opcional de busca autenticada podia reconsultar uma
+seleção menor por título/barcode e transformar um `Ambiguous`
+do Master em `Verified`. Isso destruiria o consenso entre
+as fontes: a lista completa tem precedência sobre índice parcial.
+O fallback agora encerra com o resultado do Master quando há
+`Verified`, `Ambiguous`, `Candidate`, `Unavailable`,
+`Invalid` ou `Disabled`. A busca pessoal com token continua
+possível quando não existe relação Master (`NoLink`) ou quando
+a evidência de detalhe do Master foi explicitamente contraditória
+(`Conflict`), sempre sujeita aos limites de hidratação.
+
+O seletor público e autenticado de IDs exatos também exigirá
+que um resultado `Verified` seja **único entre candidaturas
+não descartadas**: uma segunda Release `Candidate` permanece
+concorrente e produz `Ambiguous`; apenas uma Release
+`Conflict` não compromete uma alternativa comprovada.
+Não converter falta de informação em ausência. Regressões
+`verifiedPlusUnresolvedDifferentReleaseMustStayAmbiguous` e
+`masterVersionsMustAllBeExaminedBeforeClaimingOneUnlinkedEdition`
+validam os dois caminhos com candidatos reais ou fixtures
+baseadas em variantes físicas.
