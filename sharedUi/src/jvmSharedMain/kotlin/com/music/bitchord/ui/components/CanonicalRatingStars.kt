@@ -90,17 +90,20 @@ fun CanonicalRatingStars(
     onClick: (() -> Unit)? = null,
     geometry: CompactRatingGeometry = CompactRatingGeometry.STANDALONE,
 ) {
+    // A malformed persisted/provider score must not leave an invisible row
+    // with a misleading "Sem avaliação · fonte" accessibility node.
     val values = rating?.visibleStarValues().orEmpty()
+        .filter { normalizedCompactRating(it) != null }
     if (values.isEmpty()) return
 
     val localName = stringResource(Res.string.my_ratings_local_source)
     val remoteName = stringResource(Res.string.my_ratings_remote_source)
     val remoteUnavailable = stringResource(Res.string.my_ratings_remote_unavailable)
     val description = listOfNotNull(
-        rating?.localValue?.let { compactRatingAccessibility(it) + " · " + localName },
-        rating?.remoteValue?.let {
-            compactRatingAccessibility(it.toDouble()) + " · " + remoteName
-        },
+        rating?.localValue?.takeIf { normalizedCompactRating(it) != null }
+            ?.let { compactRatingAccessibility(it) + " · " + localName },
+        rating?.remoteValue?.takeIf { normalizedCompactRating(it.toDouble()) != null }
+            ?.let { compactRatingAccessibility(it.toDouble()) + " · " + remoteName },
         rating?.takeIf { !it.remoteAvailable }?.let { remoteUnavailable },
     ).joinToString("; ")
     Column(

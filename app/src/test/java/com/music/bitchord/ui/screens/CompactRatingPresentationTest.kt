@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertWidthIsEqualTo
@@ -13,6 +14,8 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.CompactRatingGeometry
 import com.music.bitchord.ui.components.CompactRatingIndicator
 import com.music.bitchord.ui.components.CompactRatingStyle
+import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.LocalCompactRatingStyle
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -96,6 +99,21 @@ class CompactRatingPresentationTest {
         compose.onNodeWithContentDescription("4,5 de 5 estrelas", substring = true)
             .assertExists()
         compose.runOnIdle { assertEquals(1, opened) }
+    }
+
+    @Test fun malformedLocalOrRemoteScoresNeverCreateGhostRatingRows() {
+        compose.setContent {
+            MaterialTheme {
+                Column {
+                    CanonicalRatingStars(RatingDisplay(localValue = 2.25))
+                    CanonicalRatingStars(RatingDisplay(remoteValue = 0))
+                    CanonicalRatingStars(RatingDisplay(localValue = Double.NaN))
+                }
+            }
+        }
+        compose.onNodeWithTag("compact-rating-indicator").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Sem avaliação", substring = true)
+            .assertDoesNotExist()
     }
 
     @Test fun unverifiedSongHasNoListRatingButAnUnratedPlayerControl() {
