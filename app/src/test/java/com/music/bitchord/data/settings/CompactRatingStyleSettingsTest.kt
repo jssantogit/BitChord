@@ -9,9 +9,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.ConscryptMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
+@ConscryptMode(ConscryptMode.Mode.OFF)
 class CompactRatingStyleSettingsTest {
     @Test fun choiceWritesToExistingPreferencesAndSurvivesReload() {
         val context = ApplicationProvider.getApplicationContext<Context>()
