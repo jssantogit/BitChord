@@ -24,7 +24,7 @@ from catalog_211_discogs_master_versions_probe import (
 
 MANIFEST = Path("docs/plans/catalog-211-discogs-corpus-manifest.json")
 OUTPUT = Path("discogs-211-master-lead-scout.json")
-ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT = 10, 5, 20
+ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT = 10, 5, 25
 GROUP_PAGE_LIMIT = 25
 
 def artist_index_url(mbid: str) -> str:
@@ -92,6 +92,75 @@ def browse_page(payload: dict, artist_mbid: str) -> tuple[list[dict], dict]:
                    "exhaustive_artist_catalog": False,
                    "provider_reported_group_count": count}
 
+def release_index_url(group: str) -> str:
+    if not isinstance(group, str) or not MBID.fullmatch(group):
+        raise ValueError("invalid_release_group_id")
+    return ("https://musicbrainz.org/ws/2/release/?release-group=" + group +
+            "&fmt=json&limit=25&offset=0&inc=artist-credits%2Bmedia%2Brelease-groups")
+
+def release_browse(payload: dict, group_mbid: str,
+                   artist_mbid: str) -> tuple[list[dict], str]:
+    """Exact Official Release IDs are *leads*, never corresponding pressings.
+
+    Incomplete browses cannot prove the only possible MusicBrainz edition.
+    Artist collaboration and non-Official releases are excluded from this
+    simple solo-artist B review queue; they remain available at the source.
+    """
+    if (not isinstance(payload, dict) or not MBID.fullmatch(group_mbid) or
+        not MBID.fullmatch(artist_mbid)):
+        return [], "invalid_canonical_release_index"
+    count = payload.get("release-count")
+    offset = payload.get("release-offset")
+    rows = payload.get("releases")
+    if (type(count) is not int or count < 0 or count > 2_000 or
+        type(offset) is not int or offset != 0 or
+        not isinstance(rows, list) or len(rows) > 25 or len(rows) > count):
+        return [], "invalid_canonical_release_index"
+    if count > 25:
+        return [], "incomplete_canonical_release_index"
+    if len(rows) != count:
+        return [], "invalid_canonical_release_index"
+    observations, seen = [], set()
+    for row in rows:
+        if not isinstance(row, dict):
+            return [], "invalid_canonical_release_index"
+        mbid, title = row.get("id"), row.get("title")
+        parent = row.get("release-group")
+        if (not isinstance(mbid, str) or not MBID.fullmatch(mbid) or
+            mbid in seen or not isinstance(title, str) or
+            not 1 <= len(title.strip()) <= 240 or
+            not isinstance(parent, dict) or parent.get("id") != group_mbid):
+            return [], "invalid_canonical_release_index"
+        seen.add(mbid)
+        credits = row.get("artist-credit")
+        if not isinstance(credits, list) or len(credits) > 16:
+            return [], "invalid_canonical_release_index"
+        ids = [part.get("artist", {}).get("id") for part in credits
+               if isinstance(part, dict) and isinstance(part.get("artist"), dict)]
+        if ids != [artist_mbid] or row.get("status") != "Official":
+            continue
+        media = row.get("media", [])
+        if not isinstance(media, list) or len(media) > 32:
+            return [], "invalid_canonical_release_index"
+        formats = [x.get("format") for x in media if isinstance(x, dict)
+                   and isinstance(x.get("format"), str) and
+                   len(x["format"]) <= 80][:16]
+        barcode = row.get("barcode")
+        date = row.get("date")
+        country = row.get("country")
+        observations.append({"release_mbid": mbid, "title": title.strip(),
+            "barcode_unverified": barcode if isinstance(barcode, str) and
+                len(barcode) <= 80 else None,
+            "release_date": date if isinstance(date, str) and
+                len(date) <= 32 else None,
+            "country": country if isinstance(country, str) and
+                len(country) <= 80 else None,
+            "media_formats": formats,
+            "verified_discogs_identity": False})
+    if not observations:
+        return [], "no_eligible_official_solo_releases"
+    return observations, "complete_official_release_index"
+
 def _allowed(url: str) -> bool:
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.username or parsed.password or parsed.fragment:
@@ -99,9 +168,12 @@ def _allowed(url: str) -> bool:
     if parsed.port is not None:
         return False
     if parsed.hostname == "musicbrainz.org":
-        return (parsed.path == "/ws/2/release-group/" and
+        return ((parsed.path == "/ws/2/release-group/" and
                 re.fullmatch(r"artist=[0-9a-f-]{36}&fmt=json&limit=25&offset=0&inc=artist-credits%2Burl-rels",
-                             parsed.query, re.I) is not None)
+                             parsed.query, re.I) is not None) or
+                (parsed.path == "/ws/2/release/" and
+                re.fullmatch(r"release-group=[0-9a-f-]{36}&fmt=json&limit=25&offset=0&inc=artist-credits%2Bmedia%2Brelease-groups",
+                             parsed.query, re.I) is not None))
     if parsed.hostname == "api.discogs.com":
         return (re.fullmatch(r"/masters/[1-9][0-9]{0,11}", parsed.path) is not None and
                 not parsed.query) or (re.fullmatch(
@@ -185,6 +257,21 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
                 continue
             lead["status"] = "complete_small_master_candidate"
             lead["version_ids"] = ids
+            # A complete Discogs Master is NOT the same thing as identifying
+            # one corresponding MB Release. List exact candidate MB editions
+            # separately, with no cross-provider identity promotion.
+            try:
+                editions, state = release_browse(
+                    fetch(release_index_url(lead["group_mbid"])),
+                    lead["group_mbid"], lead["artist_mbid"])
+                lead["mb_release_browse_status"] = state
+                lead["mb_official_release_candidates"] = editions
+            except (HTTPError, URLError, OSError, TimeoutError):
+                lead["mb_release_browse_status"] = "mb_release_source_unavailable"
+                lead["mb_official_release_candidates"] = []
+            except (ValueError, KeyError, TypeError):
+                lead["mb_release_browse_status"] = "invalid_mb_release_response"
+                lead["mb_official_release_candidates"] = []
         except (HTTPError, URLError, OSError, TimeoutError):
             lead["status"] = "source_unavailable"
         except (ValueError, KeyError, TypeError):
@@ -224,8 +311,13 @@ def main():
                                  indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"requests": result["source_http_requests"],
         "artist_statuses": [x["status"] for x in result["artists"]],
-        "master_leads": [{"group": x["group_mbid"], "master": x["master_id"],
-                          "status": x["status"]} for x in result["leads"]],
+        "master_leads": [{"artist": x["artist"], "title": x["group_title"],
+                          "group": x["group_mbid"], "master": x["master_id"],
+                          "status": x["status"], "versions": x["version_ids"],
+                          "mb_status": x.get("mb_release_browse_status"),
+                          "mb_release_ids": [r["release_mbid"] for r in
+                              x.get("mb_official_release_candidates", [])]}
+                          for x in result["leads"]],
         "reviewed": 0, "verified": 0}, ensure_ascii=False))
 
 if __name__ == "__main__":
