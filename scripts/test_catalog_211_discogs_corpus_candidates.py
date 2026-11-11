@@ -95,6 +95,24 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
             "release-groups": []
         }))
 
+    def test_known_stray_kids_ep_with_superbowl_word_join_not_a_new_discogs_title(self):
+        known = {"social path / super bowl -japanese ver.-"}
+        artist = "Stray Kids"
+        self.assertTrue(known_group_title(
+            "Social Path / Superbowl (Japanese Ver.)", artist, known))
+        self.assertTrue(known_group_title(
+            "Stray Kids - Social Path / Superbowl (Japanese Ver.)", artist, known))
+        for distinct in (
+            "Social Path / Superbowl (English Ver.)",
+            "Social Path / Superbowl (Japanese Remix)",
+            "Social Path / Superbowl (Japanese Live)",
+            "Social Path / Super Bowl (Instrumental)",
+            "Another Path / Superbowl (Japanese Ver.)",
+            "Social / Superbowl (Japanese Ver.)",
+            "Social Path / Superbowl (Japanese Ver.) / Acoustic",
+        ):
+            self.assertFalse(known_group_title(distinct, artist, known), distinct)
+
     def test_duplicate_index_ids_and_non_main_roles_do_not_inflate_leads(self):
         page = {"pagination": {"page": 1, "pages": 1}, "releases": [
             {"id": 10, "type": "master", "role": "Main", "title": "Known"},
