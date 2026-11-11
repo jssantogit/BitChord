@@ -39,6 +39,39 @@ internal fun sharedVerifiedReleaseTitle(
     return titles.singleOrNull()
 }
 
+/** An album is navigable only when the actual recording-release graph
+ * identifies a unique edition, or the exact preferred ID is among its links.
+ * The title can be shared by editions, but it must never choose the route.
+ */
+internal fun sharedVerifiedReleaseId(
+    recordingIds: List<String>,
+    releaseRows: List<Triple<String, String, String>>,
+    preferredReleaseId: String? = null,
+): String? {
+    if (recordingIds.isEmpty() || recordingIds.any(String::isBlank)) return null
+    val byRecording = releaseRows.groupBy { it.first }
+    val common = recordingIds.distinct().map { id ->
+        byRecording[id].orEmpty().map { it.second }.filter(String::isNotBlank).toSet()
+    }.reduceOrNull { a, b -> a.intersect(b) }.orEmpty()
+    return preferredReleaseId?.takeIf { it in common } ?: common.singleOrNull()
+}
+
+internal suspend fun verifiedPlayerAlbumReleaseId(context: Context, song: Song): String? =
+    withContext(Dispatchers.IO) {
+        val dao = CanonicalCatalogDatabase.get(context.applicationContext).catalogDao()
+        // The presence of a provider's albumId alone is not MusicBrainz evidence.
+        song.albumId?.takeIf(String::isNotBlank)?.let { id ->
+            if (dao.releaseById(id) != null) return@withContext id
+        }
+        val ids = try { verifiedRecordings(context, listOf(song)) }
+            catch (e: CancellationException) { throw e }
+            catch (_: Exception) { null }
+            ?: return@withContext null
+        val rows = dao.recordingReleaseTitlesByIds(ids)
+            .map { Triple(it.recordingId, it.releaseId, it.releaseTitle) }
+        sharedVerifiedReleaseId(ids, rows, song.albumId)
+    }
+
 private suspend fun verifiedRecordings(context: Context, songs: List<Song>): List<String>? {
     val resolver = androidCanonicalQueueResolver(context)
     val identities = resolver.identifyAll(songs)
