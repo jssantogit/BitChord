@@ -1,0 +1,44 @@
+name: "Catalog #211 — Public typed Master lead scouting"
+
+# B-06..B-10 candidate scouting ONLY. Does not modify 30-slot corpus,
+# certify MB Release identity, authenticate, or build APK/smoke.
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - scripts/catalog_211_discogs_master_lead_scout.py
+      - scripts/test_catalog_211_discogs_master_lead_scout.py
+      - scripts/catalog_211_discogs_master_versions_probe.py
+      - docs/plans/catalog-211-discogs-corpus-manifest.json
+      - .github/workflows/catalog-211-discogs-master-leads.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-211-master-leads-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typed-master-leads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test strict artist credit, typed URL, shared Master and budget controls
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_lead_scout.py' -v
+      - name: Probe up to ten artist RG indexes and five bounded Masters
+        run: python3 scripts/catalog_211_discogs_master_lead_scout.py
+      - name: Preserve discovery evidence, never adjudicate B cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-public-typed-master-leads
+          path: discogs-211-master-lead-scout.json
+          if-no-files-found: warn
+          retention-days: 7
