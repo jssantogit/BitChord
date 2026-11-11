@@ -171,6 +171,69 @@ class MasterPairMatrixTest(unittest.TestCase):
             by_ids[(second, 100)]["competing_direct_release_owner_mbids"])
         self.assertEqual(0, result["verified_edition_count"])
 
+    def test_a_type_discrepancy_needs_direct_edition_link_and_no_conflicting_facts(self):
+        # Source format "EP" is not independent editorial proof of an
+        # Album/EP group reclassification, even when the pair is direct.
+        raw = source()
+        mb_url = (f"https://musicbrainz.org/ws/2/release/{RELEASE}"
+                  "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
+        group_url = (f"https://musicbrainz.org/ws/2/release-group/{GROUP}"
+                     "?fmt=json&inc=url-rels")
+        def get(url):
+            value = raw(url)
+            if url == group_url:
+                return {**value, "primary-type": "Album"}
+            if url == mb_url:
+                return {**value, "relations": [{
+                    "type": "discogs",
+                    "url": {"resource": "https://www.discogs.com/release/100"}}]}
+            return value
+        result = inspect(SEED, get)
+        self.assertEqual("all_pairs_compared_not_adjudicated", result["status"])
+        self.assertEqual("Album", result["musicbrainz_group_primary_type"])
+        by_id = {row["discogs_release_id"]: row for row in result["pairs"]}
+        self.assertTrue(by_id[100]["source_type_disagreement"])
+        self.assertTrue(by_id[100]["a_type_reviewer_lead_not_adjudicated"])
+        self.assertTrue(by_id[101]["source_type_disagreement"])
+        self.assertFalse(by_id[101]["a_type_reviewer_lead_not_adjudicated"])
+        self.assertEqual(0, result["verified_edition_count"])
+        self.assertFalse(result["reviewed_by_this_probe"])
+
+    def test_a_type_disagreement_rejected_if_barcode_or_tracks_disagree(self):
+        base = source()
+        mb_url = (f"https://musicbrainz.org/ws/2/release/{RELEASE}"
+                  "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
+        group_url = (f"https://musicbrainz.org/ws/2/release-group/{GROUP}"
+                     "?fmt=json&inc=url-rels")
+        def make_get(*, wrong_barcode=False, wrong_tracks=False):
+            def get(url):
+                value = base(url)
+                if url == group_url:
+                    return {**value, "primary-type": "Album"}
+                if url == mb_url:
+                    return {**value, "relations": [{
+                        "type": "discogs",
+                        "url": {"resource": "https://www.discogs.com/release/100"}}]}
+                if url.endswith("/releases/100"):
+                    update = {}
+                    if wrong_barcode:
+                        update["identifiers"] = [
+                            {"type": "Barcode", "value": "1234567890123"}]
+                    if wrong_tracks:
+                        update["tracklist"] = [
+                            {"type_": "track", "title": "Wrong"},
+                            {"type_": "track", "title": "Given-Taken"}]
+                    return {**value, **update}
+                return value
+            return get
+        for k in ("wrong_barcode", "wrong_tracks"):
+            with self.subTest(kind=k):
+                found = inspect(SEED, make_get(**{k: True}))
+                pair = next(x for x in found["pairs"]
+                            if x["discogs_release_id"] == 100)
+                self.assertTrue(pair["source_type_disagreement"])
+                self.assertFalse(pair["a_type_reviewer_lead_not_adjudicated"])
+
     def test_shared_budget_and_preserved_b_corpus_are_explicit(self):
         found = observe([SEED], source())
         self.assertEqual(0, found["reviewed_corpus_cases"])
