@@ -115,6 +115,7 @@ internal fun NativeCanonicalArtistContent(
                         onRateArtist = if (artistRatingState.target != null)
                             onRateArtist else null,
                         artistRated = artistRatingState.rated,
+                        artistRating = artistRatingState.value,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )
                 }

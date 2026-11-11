@@ -69,6 +69,7 @@ import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
+import com.music.bitchord.ui.components.CompactRatingGeometry
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -3315,6 +3316,7 @@ fun NowPlayingScreen(
                             } else if (!queueOpen) {
                                 CanonicalSongRatingStars(
                                     song = song,
+                                    geometry = CompactRatingGeometry.CIRCULAR,
                                     modifier = Modifier.padding(end = 8.dp),
                                     color = Color.White.copy(alpha = 0.84f),
                                     onClick = onEditCanonicalRating,

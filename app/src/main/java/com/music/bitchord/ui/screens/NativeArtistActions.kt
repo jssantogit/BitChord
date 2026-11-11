@@ -33,6 +33,9 @@ import com.music.bitchord.R
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.components.CompactRatingIndicator
+import com.music.bitchord.ui.components.CompactRatingGeometry
+import com.music.bitchord.ui.player.AppleQueueVectors
 
 /** Native artist star is context/capability-driven, not a legacy provider ID. */
 internal enum class NativeArtistStarKind { FOLLOW, RATE, UNAVAILABLE }
@@ -65,6 +68,7 @@ internal fun ActionRow(
     /** Only the canonical Library artist route can supply first-party rating. */
     onRateArtist: (() -> Unit)? = null,
     artistRated: Boolean = false,
+    artistRating: Double? = null,
     /** Apple's fill for the Play circle; null leaves it white. */
     playColor: Color? = null,
 ) {
@@ -105,11 +109,19 @@ internal fun ActionRow(
             )
         } else if (starKind == NativeArtistStarKind.RATE) {
             CircleIconButton(
-                icon = if (artistRated) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                icon = AppleQueueVectors.RatingStarOutline,
                 contentDescription = "Avaliar artista",
                 onClick = { onRateArtist?.invoke() },
                 haptic = Haptic.ToggleOn,
                 size = ARTIST_SIDE_BUTTON,
+                customIcon = {
+                    CompactRatingIndicator(
+                        value = artistRating,
+                        geometry = CompactRatingGeometry.STANDALONE,
+                        size = 23.dp,
+                        showUnrated = true,
+                    )
+                },
             )
         } else {
             CircleIconButton(

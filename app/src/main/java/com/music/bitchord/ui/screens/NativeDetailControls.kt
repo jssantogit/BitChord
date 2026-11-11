@@ -107,6 +107,7 @@ internal fun CircleIconButton(
      */
     enabled: Boolean = true,
     tint: Color = MaterialTheme.colorScheme.onSurface,
+    customIcon: (@Composable () -> Unit)? = null,
 ) {
     val haptics = rememberHaptics()
     Box(
@@ -127,12 +128,16 @@ internal fun CircleIconButton(
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = tint,
-            modifier = Modifier.size(size * 0.44f),
-        )
+        if (customIcon != null) {
+            customIcon()
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = tint,
+                modifier = Modifier.size(size * 0.44f),
+            )
+        }
     }
 }
 

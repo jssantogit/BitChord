@@ -2,6 +2,7 @@ package com.music.bitchord.ui.player
 
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import com.music.bitchord.ui.components.CompactRatingGeometry
+import com.music.bitchord.ui.components.CompactRatingGeometry
 
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.ExplicitSongTitle
@@ -987,13 +988,12 @@ private fun InlineQueueRow(
         }
         // The weighted credits surrender width to a fixed trailing star strip.
         // ExplicitSongTitle ellipsizes earlier instead of pushing stars away.
-        if (!appleStyle) {
-            CanonicalSongRatingStars(
-                song = song,
-                modifier = Modifier.padding(start = 8.dp, end = 6.dp),
-                color = Color.White.copy(alpha = 0.8f),
-            )
-        }
+        CanonicalSongRatingStars(
+            song = song,
+            geometry = CompactRatingGeometry.CIRCULAR,
+            modifier = Modifier.padding(start = 8.dp, end = 6.dp),
+            color = Color.White.copy(alpha = 0.8f),
+        )
         if (appleStyle && draggable) {
             Icon(
                 imageVector = AppleQueueVectors.DragHandle,
