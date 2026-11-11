@@ -57,36 +57,33 @@ import com.music.bitchord.ui.theme.themeArtworkPalette
  */
 @Composable
 internal fun PlaylistManagerChrome(
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
     onBack: () -> Unit,
+    onCreateFilter: () -> Unit,
 ) {
-    // First-party native back, typography and segmented selector. Filters
-    // are the entry point, not a legacy playlist-management dashboard.
     Column(
         modifier = Modifier.fillMaxWidth()
             .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Match the library's drill-down rhythm: a native floating back
-        // above the section title, rather than an administration toolbar.
         Row(
             modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ArtworkPageBackButton(onClick = onBack, hazeState = null)
+            CircleIconButton(
+                icon = PlaylistEditorIcons.Add,
+                contentDescription = "Criar filtro",
+                onClick = onCreateFilter,
+                size = 40.dp,
+            )
         }
         Text(
-            "Gerenciar coleções",
+            "Seus filtros",
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        SegmentedControl(
-            options = listOf("Filtros", "Inteligentes", "Clássicas"),
-            selectedIndex = selectedIndex,
-            onSelect = onSelect,
-        )
-     }
+    }
 }
 
 /**
