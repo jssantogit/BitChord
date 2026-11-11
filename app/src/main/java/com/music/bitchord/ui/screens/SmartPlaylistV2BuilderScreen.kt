@@ -1199,14 +1199,40 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 DropdownMenu(
                                     expanded = more,
                                     onDismissRequest = { more = false },
-                                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+                                    modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
                                 ) {
                                     // Tapping the row is Edit. Don't duplicate it
                                     // in the contextual menu.
                                     savedFilterActionsForDraft(normalMode, editingNormalId)
                                         .filterNot { it == "Editar filtro" }
                                         .forEach { option ->
+                                            if (option == "Excluir filtro") {
+                                                androidx.compose.material3.HorizontalDivider(
+                                                    thickness = 0.5.dp,
+                                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                                )
+                                            }
                                             DropdownMenuItem(
+                                                leadingIcon = {
+                                                    val destructive = option == "Excluir filtro"
+                                                    androidx.compose.material3.Icon(
+                                                        imageVector = when (option) {
+                                                            "Criar playlist com este filtro" ->
+                                                                com.music.bitchord.ui.icons.PlaylistEditorIcons.Music
+                                                            "Excluir filtro" ->
+                                                                com.music.bitchord.ui.icons.PlaylistEditorIcons.Delete
+                                                            "Combinar com o rascunho (E)",
+                                                            "Combinar com o rascunho (OU)" ->
+                                                                com.music.bitchord.ui.icons.PlaylistEditorIcons.Link
+                                                            else ->
+                                                                com.music.bitchord.ui.icons.PlaylistEditorIcons.Filters
+                                                        },
+                                                        contentDescription = null,
+                                                        tint = if (destructive) MaterialTheme.colorScheme.error
+                                                            else MaterialTheme.colorScheme.onSurface,
+                                                    )
+                                                },
                                                 text = {
                                                     Text(when (option) {
                                                         "Aplicar regras ao rascunho" -> "Aplicar regras"
@@ -1214,7 +1240,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                                                         "Combinar com o rascunho (OU)" -> "Combinar (OU)"
                                                         "Criar playlist com este filtro" -> "Criar playlist"
                                                         else -> option
-                                                    })
+                                                    }, color = if (option == "Excluir filtro")
+                                                        MaterialTheme.colorScheme.error
+                                                        else MaterialTheme.colorScheme.onSurface)
                                                 },
                                                 onClick = {
                                                     more = false
