@@ -179,10 +179,31 @@ class DiscogsEditionRepositoryTest {
                     }
                 }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
             )
+            var authenticatedSearchCalls = 0
+            val authenticated = DiscogsAuthenticatedDiscovery(
+                search = DiscogsDatabaseSearchClient(
+                    transport = object : DiscogsSearchTransport {
+                        override suspend fun search(
+                            query: DiscogsSearchRequest, token: String, userAgent: String,
+                        ): DiscogsHttpResponse {
+                            authenticatedSearchCalls++
+                            return DiscogsHttpResponse(200,
+                                """{"results":[{"id":101,"type":"release"}]}""")
+                        }
+                    },
+                    tokenProvider = { "A".repeat(40) },
+                    enabled = true,
+                    limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+                ),
+                editions = discogs,
+            )
             val result = DiscogsEditionRepository(
                 links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
                 enabled = true, nowMillis = { 1_000L },
+                authenticatedDiscovery = authenticated,
             ).observe(canonical)
+            assertEquals("A checked Master cannot be overridden by a partial auth index",
+                0, authenticatedSearchCalls)
             if (mainIsExact) {
                 assertEquals("Two exact-color variants may share barcode and tracks",
                     DiscogsEditionEnrichment.Ambiguous, result)

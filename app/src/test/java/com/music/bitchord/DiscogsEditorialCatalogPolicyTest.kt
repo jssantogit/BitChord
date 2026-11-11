@@ -64,6 +64,20 @@ class DiscogsEditorialCatalogPolicyTest {
             is DiscogsUnlinkedMatch.NoMatch)
     }
 
+    @Test fun verifiedPlusUnresolvedDifferentReleaseMustStayAmbiguous() {
+        val exact = edition(101)
+        val stillPossible = edition(102, tracks = mb.trackTitles.dropLast(1))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assessUnlinked(mb, exact))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assessUnlinked(mb, stillPossible))
+        val result = DiscogsUnlinkedMatch.select(mb, listOf(exact, stillPossible))
+        assertTrue("A possible competing edition blocks a unique Verified result",
+            result is DiscogsUnlinkedMatch.Ambiguous)
+        assertEquals(setOf(101L, 102L),
+            (result as DiscogsUnlinkedMatch.Ambiguous).records.map { it.link.id }.toSet())
+    }
+
     @Test fun contradictorySnapshotsForSameUnlinkedReleaseCannotBeVerifiedByFirstObservation() {
         // Public release APIs can be polled at different times. Distinct
         // records with the SAME Discogs Release ID do not form two editions;
