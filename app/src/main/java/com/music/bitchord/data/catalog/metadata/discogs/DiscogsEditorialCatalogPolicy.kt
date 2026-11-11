@@ -86,12 +86,34 @@ internal object DiscogsTypeConsensus {
             "single" -> DiscogsEditorialKind.SINGLE
             else -> null
         }
-        val verified = proofs.asSequence()
-            .filter { it.verified && it.releaseId in 1..999_999_999_999L }
-            .distinctBy { it.releaseId }
-            .filter { it.kind in setOf(DiscogsEditorialKind.ALBUM,
-                DiscogsEditorialKind.EP, DiscogsEditorialKind.SINGLE) }
-            .toList()
+        // Multiple verified observations of the same Discogs Release may
+        // disagree due to stale source snapshots or inconsistent Master links.
+        // Deduplicating first would discard that contradiction and could
+        // falsely manufacture two independent votes for a type correction.
+        val eligible = proofs.filter {
+            it.verified && it.releaseId in 1..999_999_999_999L
+        }
+        val byReleaseId = eligible.groupBy { it.releaseId }
+        val contradictoryRelease = byReleaseId.values.any { observations ->
+            observations.mapNotNull { it.kind }.distinct().size > 1 ||
+                observations.mapNotNull { proof ->
+                    proof.masterId?.takeIf { it in 1..999_999_999_999L }
+                }.distinct().size > 1
+        }
+        if (contradictoryRelease) {
+            return DiscogsTypeResolution.Disputed(
+                canonical, eligible.mapNotNull { it.kind }.toSet(),
+            )
+        }
+        // If one duplicate lacks a Master but another declares a valid one,
+        // retain the known grouping: otherwise we may count two editions
+        // from the same Master as independent assertions.
+        val verified = byReleaseId.values.mapNotNull { observations ->
+            observations.firstOrNull { proof ->
+                proof.masterId in 1..999_999_999_999L
+            } ?: observations.firstOrNull()
+        }.filter { it.kind in setOf(DiscogsEditorialKind.ALBUM,
+            DiscogsEditorialKind.EP, DiscogsEditorialKind.SINGLE) }
         val kinds = verified.mapNotNull { it.kind }.toSet()
         if (kinds.size > 1) return DiscogsTypeResolution.Disputed(canonical, kinds)
         val external = kinds.singleOrNull()

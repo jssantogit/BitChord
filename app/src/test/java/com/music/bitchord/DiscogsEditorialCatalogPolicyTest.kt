@@ -157,6 +157,24 @@ class DiscogsEditorialCatalogPolicyTest {
             is DiscogsTypeResolution.Disputed)
     }
 
+    @Test fun knownMasterMustWinOverAnUnknownMasterOnDuplicatedRelease() {
+        // The same Release is first observed without a Master and later with
+        // the real Master; both it and another edition belong to Master 500.
+        // Counting release:211 + master:500 would fabricate a second vote.
+        val incomplete = listOf(
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true),
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true, masterId = 500),
+            DiscogsGroupTypeProof(301, DiscogsEditorialKind.EP, true, masterId = 500),
+        )
+        assertTrue(DiscogsTypeConsensus.resolve("Album", incomplete)
+            is DiscogsTypeResolution.Disputed)
+        assertTrue(DiscogsTypeConsensus.resolve("Album", incomplete.reversed())
+            is DiscogsTypeResolution.Disputed)
+        assertEquals(DiscogsTypeSource.DISCOGS_FILL,
+            (DiscogsTypeConsensus.resolve("Other", incomplete)
+                as DiscogsTypeResolution.Decided).source)
+    }
+
     @Test fun recoveredDiscogsReleaseHasTypedIndependentIdentityAndNoPlayback() {
         val observations = listOf(
             DiscogsPublicEditionSnapshot(edition(101, master = 987), fetchedAtMillis = 1_000),

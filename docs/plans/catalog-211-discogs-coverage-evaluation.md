@@ -303,3 +303,32 @@ não é habilitada.
 As duas fontes oficiais não comprovam nenhuma recuperação real de C;
 corpus continua 0/30. Nenhuma modificação de tipagem ou promoção
 `Verified` foi realizada.
+
+## Integridade do consenso editorial: provas duplicadas e contraditórias (11/11/2026)
+
+O mesmo Discogs Release ID pode ser observado mais de uma vez em cache ou
+reconciliação, mas não pode representar duas afirmações independentes de tipo.
+O consenso anteriormente usava `distinctBy(releaseId)` **antes de detectar
+contradições**. Quando uma mesma Release chegava como EP e Album, ou vinculada a
+dois Masters válidos diferentes, a primeira observação podia determinar o
+resultado e permitir erroneamente um `DISCOGS_CORRECTION` do tipo canônico.
+
+A validação agora rejeita em `Disputed` qualquer conjunto de provas
+verificadas com tipos distintos ou dois Masters explícitos diferentes para o
+mesmo Release ID, em qualquer ordem. Se uma observação carece de Master e outra
+informa Master válido, mantém-se a informação positiva para não contar edições
+de um mesmo Master como evidências independentes. Não se inferem IDs faltantes.
+
+O armazenamento volátil também impede substituições silenciosas: uma
+reobservação contraditória põe apenas aquele Release ID em quarentena até o
+vencimento da evidência. Enquanto isso a edição não vota na classificação
+Album/EP/Single. Um refresco com o tipo antigo não desfaz a disputa antes da
+expiração. Isso afeta somente o modelo de leitura editorial, não modifica
+ReleaseGroups MusicBrainz, biblioteca pessoal, áudio, cache de capa ou
+atribuição de origem. Testes JUnit cobrem contradição de tipo, Master,
+ordem de leitura, Master antes desconhecido e ciclo de expiração.
+
+**Não confundir proteção de integridade com ganho mensurado:** corpus A/B/C
+continua sem homologação (0/30); nenhuma correção de tipo real ou edição
+Discogs-only foi promovida por esta mudança. APK e smoke físico seguem
+dependentes de autorização separada.

@@ -14,6 +14,9 @@ internal class DiscogsVerifiedGroupProofStore {
     private data class Record(
         val proof: DiscogsGroupTypeProof,
         val expiresAtMillis: Long,
+        // Internal quarantine: contradictory repeat observations of the same
+        // Release cannot contribute editorial votes until evidence expires.
+        val contested: Boolean = false,
     )
     private val mutable = MutableStateFlow<Map<String, List<Record>>>(emptyMap())
     val proofs: StateFlow<Map<String, List<DiscogsGroupTypeProof>>> get() = display
@@ -46,15 +49,30 @@ internal class DiscogsVerifiedGroupProofStore {
             discogsReleaseId !in 1..999_999_999_999L ||
             expiresAtMillis <= nowMillis
         ) return
+        val incomingMaster = masterId?.takeIf { it in 1..999_999_999_999L }
         mutable.update { snapshot ->
-            val current = snapshot[group].orEmpty()
-                .filter { it.expiresAtMillis > nowMillis && it.proof.releaseId != discogsReleaseId }
+            val live = snapshot[group].orEmpty().filter { it.expiresAtMillis > nowMillis }
+            val previous = live.filter { it.proof.releaseId == discogsReleaseId }
+            val disputed = previous.any { existing ->
+                existing.contested || existing.proof.kind != nativeKind ||
+                    (existing.proof.masterId != null && incomingMaster != null &&
+                        existing.proof.masterId != incomingMaster)
+            }
+            // A missing Master is unknown, not a retraction of a previously
+            // verified Master; preserve the more informative grouping.
+            val resolvedMaster = incomingMaster
+                ?: previous.firstNotNullOfOrNull { it.proof.masterId }
+            val fresh = Record(
+                DiscogsGroupTypeProof(discogsReleaseId, nativeKind, verified = true,
+                    masterId = resolvedMaster),
+                if (disputed) maxOf(expiresAtMillis,
+                    previous.maxOfOrNull { it.expiresAtMillis } ?: expiresAtMillis)
+                else expiresAtMillis,
+                contested = disputed,
+            )
+            val current = live.filter { it.proof.releaseId != discogsReleaseId }
             (snapshot.filterValues { it.isNotEmpty() } + (
-                group to (current + Record(
-                    DiscogsGroupTypeProof(discogsReleaseId, nativeKind, verified = true,
-                        masterId = masterId?.takeIf { it in 1..999_999_999_999L }),
-                    expiresAtMillis,
-                )).takeLast(24)
+                group to (current + fresh).takeLast(24)
             )).takeLastGroups(64)
         }
         display.value = activeProofs(nowMillis)
@@ -62,7 +80,8 @@ internal class DiscogsVerifiedGroupProofStore {
 
     fun activeProofs(nowMillis: Long): Map<String, List<DiscogsGroupTypeProof>> =
         mutable.value.mapValues { (_, records) ->
-            records.filter { it.expiresAtMillis > nowMillis }.map { it.proof }
+            records.filter { it.expiresAtMillis > nowMillis && !it.contested }
+                .map { it.proof }
         }.filterValues { it.isNotEmpty() }
 
     fun clear() {

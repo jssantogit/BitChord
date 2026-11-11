@@ -72,6 +72,57 @@ class DiscogsVerifiedGroupProofStoreTest {
         assertTrue(store.activeProofs(1_001).isEmpty())
     }
 
+    @Test fun conflictingReobservationsQuarantineReleaseInsteadOfOverwritingProof() {
+        val store = DiscogsVerifiedGroupProofStore()
+        store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_000,
+            masterId = 500)
+        store.record(group, 102, DiscogsEditorialKind.EP, true, 10_000, 1_000,
+            masterId = 600)
+        assertEquals(DiscogsTypeSource.DISCOGS_CORRECTION,
+            (DiscogsTypeConsensus.resolve("Album",
+                store.activeProofs(1_001)[group].orEmpty())
+                as DiscogsTypeResolution.Decided).source)
+
+        // The same Release now reports a different editorial kind. Do not
+        // allow old or new to serve as an independent proof until expiry.
+        store.record(group, 101, DiscogsEditorialKind.ALBUM, true, 10_000, 1_002,
+            masterId = 500)
+        assertEquals(listOf(102L), store.activeProofs(1_003)[group]?.map { it.releaseId })
+        assertTrue(DiscogsTypeConsensus.resolve("Album",
+            store.activeProofs(1_003)[group].orEmpty()
+        ) is DiscogsTypeResolution.Disputed)
+
+        // Re-observation must not silently unquarantine disputed evidence.
+        store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_004,
+            masterId = 500)
+        assertEquals(listOf(102L), store.activeProofs(1_005)[group]?.map { it.releaseId })
+        store.prune(10_000)
+        assertTrue(store.activeProofs(10_000).isEmpty())
+        store.record(group, 101, DiscogsEditorialKind.EP, true, 20_000, 10_000,
+            masterId = 500)
+        assertEquals(listOf(101L), store.activeProofs(10_001)[group]?.map { it.releaseId })
+    }
+
+    @Test fun conflictingMastersAreQuarantinedAndMissingMasterNeverErasesKnownMaster() {
+        val store = DiscogsVerifiedGroupProofStore()
+        store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_000,
+            masterId = 500)
+        store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_001)
+        assertEquals(500L, store.activeProofs(1_002)[group]?.single()?.masterId)
+        store.record(group, 102, DiscogsEditorialKind.EP, true, 10_000, 1_002,
+            masterId = 500)
+        assertTrue(DiscogsTypeConsensus.resolve("Album",
+            store.activeProofs(1_003)[group].orEmpty()
+        ) is DiscogsTypeResolution.Disputed)
+
+        store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_003,
+            masterId = 600)
+        assertEquals(listOf(102L), store.activeProofs(1_004)[group]?.map { it.releaseId })
+        assertTrue(DiscogsTypeConsensus.resolve("Album",
+            store.activeProofs(1_004)[group].orEmpty()
+        ) is DiscogsTypeResolution.Disputed)
+    }
+
     @Test fun reobservingSameReleaseCannotInventTwoIndependentVotes() {
         val store = DiscogsVerifiedGroupProofStore()
         store.record(group, 101, DiscogsEditorialKind.EP, true, 10_000, 1_000)
