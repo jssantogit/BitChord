@@ -630,6 +630,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Editar playlist").assertExists()
         compose.onNodeWithText("Editar músicas").assertExists()
         compose.onNodeWithText("Nova playlist").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Mais opções").performClick()
         compose.onNodeWithText("Excluir playlist").performClick()
         compose.onNodeWithText("Excluir playlist normal?").assertExists()
     }
@@ -654,6 +655,7 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Editar playlist").assertExists()
+        compose.onNodeWithContentDescription("Mais opções").performClick()
         compose.onNodeWithText("Excluir playlist").performClick()
         compose.onNodeWithText("Excluir playlist inteligente?").assertExists()
         compose.onNodeWithText(
@@ -714,6 +716,7 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Editar playlist").assertExists()
+        compose.onNodeWithContentDescription("Mais opções").performClick()
         compose.onNodeWithText("Salvar como filtro reutilizável").performClick()
         compose.runOnIdle { assertEquals(1, exports) }
         compose.onNodeWithText("Editar playlist").assertExists()
