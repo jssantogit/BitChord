@@ -33,6 +33,31 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_pair_matrix.py' -v
       - name: Recheck ENHYPEN Master after prior partial hydration
         run: python3 scripts/catalog_211_discogs_master_pair_matrix.py --target ENHYPEN
+      - name: Summarize every observed pair without a matching verdict or new requests
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          obj = json.loads(Path("discogs-211-typed-master-pair-matrix.json").read_text())
+          for finding in obj["findings"]:
+              print("Artist:", finding["artist"], "status:", finding["status"])
+              for pair in finding["pairs"]:
+                  c = pair["comparison"]
+                  print(json.dumps({
+                      "musicbrainz": pair["musicbrainz_release_mbid"],
+                      "discogs": pair["discogs_release_id"],
+                      "direct_release_relation": pair["direct_release_relation"],
+                      "tracks": [c["exact_matching_track_positions"],
+                                 c["track_count"], c["discogs_track_count"]],
+                      "full_tracks": c["tracklist_matches"],
+                      "barcode_same": c["barcode_identical_on_both"],
+                      "country_compatible": c["country_compatible"],
+                      "year_matches": c["year_matches"],
+                      "mb_formats": pair["mb_formats"],
+                      "discogs_formats": pair["discogs_formats"],
+                      "verified": False,
+                  }, ensure_ascii=False))
+          PY
       - name: Retain non-adjudicated pair evidence
         if: always()
         uses: actions/upload-artifact@v4
