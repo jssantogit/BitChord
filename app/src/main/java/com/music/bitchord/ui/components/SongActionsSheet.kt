@@ -314,7 +314,7 @@ fun SongActionsSheet(
                 Icons.Rounded.Album,
                 stringResource(R.string.open_album),
                 accent = palette.accent,
-            ) { onOpenAlbum(song.albumId) }
+            ) { song.albumId?.let(onOpenAlbum) }
             resolvingLinks -> LoadingActionRow(
                 Icons.Rounded.Album, stringResource(R.string.open_album), palette,
             )
