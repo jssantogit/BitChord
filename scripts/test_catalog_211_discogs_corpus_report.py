@@ -61,7 +61,8 @@ class CorpusReportTests(unittest.TestCase):
         first["evidence_links"]["discogs_release"] = (
             f"https://www.discogs.com/release/{first['discogs_release_id']}"
         )
-        second = manifest["cases"][11]
+        # B-02 is now reviewed; choose the next *unreviewed* source ID.
+        second = manifest["cases"][12]
         second["discogs_release_id"] = first["discogs_release_id"]
         second["evidence_links"]["discogs_release"] = (
             f"https://www.discogs.com/release/{second['discogs_release_id']}"
