@@ -64,6 +64,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
@@ -1854,7 +1856,8 @@ fun AppleSearchOriginTabs(
             Column(
                 modifier = Modifier
                     .then(if (options.size <= 2) Modifier.weight(1f) else Modifier.width(IntrinsicSize.Max))
-                    .clickable { if (!selected) onSelect(index) },
+                    .clickable { if (!selected) onSelect(index) }
+                    .semantics { this.selected = selected },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
