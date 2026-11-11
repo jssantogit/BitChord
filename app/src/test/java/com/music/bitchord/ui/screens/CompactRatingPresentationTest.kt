@@ -3,9 +3,7 @@ package com.music.bitchord.ui.screens
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertWidthIsEqualTo
@@ -30,29 +28,37 @@ import org.robolectric.annotation.ConscryptMode
 class CompactRatingPresentationTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun allRatingsAndBothStylesWorkAtFourCompactSizesForBothGeometries() {
-        // Rendering remains one scalar glyph. The artwork's numerical legibility
-        // at 24dp/28dp still requires a real-device visual smoke test.
-        for (style in CompactRatingStyle.entries) {
-            for (geometry in CompactRatingGeometry.entries) {
-                for (value in listOf(1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)) {
-                    compose.setContent {
-                        MaterialTheme {
-                            CompositionLocalProvider(LocalCompactRatingStyle provides style) {
-                                CompactRatingIndicator(value, geometry, size = 28.dp)
-                            }
-                        }
+    @Test fun allNineScoresAndFourSizesAreAccessibleInBothStylesAndGeometries() {
+        val style = mutableStateOf(CompactRatingStyle.COLOR)
+        val geometry = mutableStateOf(CompactRatingGeometry.STANDALONE)
+        val score = mutableStateOf(1.0)
+        val size = mutableStateOf(24.dp)
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalCompactRatingStyle provides style.value) {
+                    CompactRatingIndicator(score.value, geometry.value, size = size.value)
+                }
+            }
+        }
+        for (s in CompactRatingStyle.entries) for (g in CompactRatingGeometry.entries) {
+            for (v in listOf(1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)) {
+                for (dp in listOf(24.dp, 28.dp, 34.dp, 40.dp)) {
+                    compose.runOnIdle {
+                        style.value = s
+                        geometry.value = g
+                        score.value = v
+                        size.value = dp
                     }
-                    compose.onNodeWithTag("compact-rating-indicator").assertExists()
+                    compose.onNodeWithTag("compact-rating-indicator").assertWidthIsEqualTo(dp)
                     compose.onNodeWithContentDescription(
-                        "Avaliação: " + value.toString().removeSuffix(".0").replace('.', ',') + " de 5 estrelas",
+                        "Avaliação: " + v.toString().removeSuffix(".0").replace('.', ',') + " de 5 estrelas",
                     ).assertExists()
                 }
             }
         }
     }
 
-    @Test fun styleChangeTakesEffectWithoutLeavingTheComposition() {
+    @Test fun styleChangeTakesEffectWithoutRecreatingTheComposition() {
         val style = mutableStateOf(CompactRatingStyle.COLOR)
         compose.setContent {
             MaterialTheme {
@@ -67,19 +73,20 @@ class CompactRatingPresentationTest {
         compose.onNodeWithTag("compact-rating-color", useUnmergedTree = true).assertDoesNotExist()
     }
 
-    @Test fun missingRatingIsInvisibleInListsButNeutralInPlayerActions() {
-        compose.setContent {
-            MaterialTheme {
-                CompactRatingIndicator(null, CompactRatingGeometry.STANDALONE)
-            }
-        }
-        compose.onNodeWithTag("compact-rating-indicator").assertDoesNotExist()
+    @Test fun unverifiedSongHasNoListRatingButAnUnratedPlayerControl() {
+        val show = mutableStateOf(false)
+        val geometry = mutableStateOf(CompactRatingGeometry.STANDALONE)
         compose.setContent {
             MaterialTheme {
                 CompactRatingIndicator(
-                    null, CompactRatingGeometry.CIRCULAR, showUnrated = true, size = 40.dp,
+                    null, geometry.value, showUnrated = show.value, size = 40.dp,
                 )
             }
+        }
+        compose.onNodeWithTag("compact-rating-indicator").assertDoesNotExist()
+        compose.runOnIdle {
+            show.value = true
+            geometry.value = CompactRatingGeometry.CIRCULAR
         }
         compose.onNodeWithContentDescription("Sem avaliação").assertExists()
         compose.onNodeWithTag("compact-rating-indicator").assertWidthIsEqualTo(40.dp)
