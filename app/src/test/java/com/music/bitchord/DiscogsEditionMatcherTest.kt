@@ -31,6 +31,51 @@ class DiscogsEditionMatcherTest {
             DiscogsEditionMatcher.assess(canon, DiscogsLink(DiscogsKind.MASTER, 12001), record))
     }
 
+    @Test fun realEasyCrazyHotCarbonBlackDirectLinkCorroboratesPunctuationWithoutMergingVinylVariants() {
+        // Public control: MusicBrainz Release e6de9634 and Discogs Release
+        // 35021231 have a typed direct URL relationship. SOURCE MUSIC's
+        // Carbon Black 12-inch has barcode 198704525124; the Silver White
+        // edition is another Discogs Release (35025845), with barcode
+        // 198704525131. One punctuation difference in fifteen tracks.
+        val mbEdition = canon.copy(
+            musicBrainzReleaseId = "e6de9634-eb96-4b54-9568-755a99ec312b",
+            title = "EASY CRAZY HOT", creditedArtist = "LE SSERAFIM",
+            creditedArtistNames = listOf("LE SSERAFIM"),
+            country = "US", releaseYear = 2025, barcodes = listOf("198704525124"),
+            trackTitles = listOf("Good Bones", "EASY", "Swan Song", "Smart",
+                "We got so much", "Chasing Lightning", "CRAZY", "Pierrot",
+                "1‐800‐hot‐n‐fun", "미치지 못하는 이유", "Born Fire",
+                "HOT", "Come Over", "Ash", "So Cynical (Badum)"),
+        )
+        val linkedBlack = DiscogsLink(DiscogsKind.RELEASE, 35021231)
+        val carbonBlack = record.copy(
+            link = linkedBlack,
+            title = "Easy-Crazy-Hot", artistNames = listOf("LE SSERAFIM"),
+            country = "United States", year = 2025,
+            barcodes = listOf("198704525124"),
+            labels = listOf("SOURCE MUSIC" to ""),
+            formats = listOf("Vinyl", "Album", "Compilation"),
+            tracklist = mbEdition.trackTitles.mapIndexed { index, name ->
+                "${index + 1}" to if (index == 8) "1-800-hot-n-fun" else name
+            },
+        )
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(mbEdition, linkedBlack, carbonBlack,
+                explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(mbEdition, linkedBlack, carbonBlack,
+                explicitReleaseRelation = false))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(mbEdition,
+                DiscogsLink(DiscogsKind.RELEASE, 35025845),
+                carbonBlack.copy(link = DiscogsLink(DiscogsKind.RELEASE, 35025845),
+                    barcodes = listOf("198704525131")), explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(mbEdition, linkedBlack,
+                carbonBlack.copy(tracklist = carbonBlack.tracklist.dropLast(1)),
+                explicitReleaseRelation = true))
+    }
+
     @Test fun barcodeAloneOrTitleAloneIsNeverEditionProof() {
         val noTracklist = record.copy(tracklist = emptyList())
         val noBarcodes = record.copy(barcodes = emptyList())

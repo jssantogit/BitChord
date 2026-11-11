@@ -64,6 +64,29 @@ class DiscogsEditorialCatalogPolicyTest {
             is DiscogsUnlinkedMatch.NoMatch)
     }
 
+    @Test fun contradictorySnapshotsForSameUnlinkedReleaseCannotBeVerifiedByFirstObservation() {
+        // Public release APIs can be polled at different times. Distinct
+        // records with the SAME Discogs Release ID do not form two editions;
+        // the old distinctBy(id) discarded whichever contradiction came last.
+        val correct = edition(101)
+        val conflict = correct.copy(tracklist = listOf("1" to "Remix"))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assessUnlinked(mb, correct))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assessUnlinked(mb, conflict))
+        for (records in listOf(listOf(correct, conflict), listOf(conflict, correct))) {
+            assertFalse("A conflicting repeat of one Discogs ID cannot be a Verified edition",
+                DiscogsUnlinkedMatch.select(mb, records) is DiscogsUnlinkedMatch.Verified)
+        }
+        // Repeated identical provider observations remain one verified ID.
+        assertEquals(101L, (DiscogsUnlinkedMatch.select(mb, listOf(correct, correct))
+            as DiscogsUnlinkedMatch.Verified).record.link.id)
+        // A conflicting duplicated ID must not erase a *different* verified ID.
+        val another = edition(202)
+        val selected = DiscogsUnlinkedMatch.select(mb, listOf(correct, conflict, another))
+        assertEquals(202L, (selected as DiscogsUnlinkedMatch.Verified).record.link.id)
+    }
+
     @Test fun missingTypeCanBeFilledButContradictorySingleEditionCannotOverwriteMusicBrainz() {
         val one = listOf(DiscogsGroupTypeProof(101L, DiscogsEditorialKind.EP, verified = true))
         val filled = DiscogsTypeConsensus.resolve("Other", one)
