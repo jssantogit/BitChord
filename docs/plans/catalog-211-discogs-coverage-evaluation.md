@@ -683,3 +683,42 @@ cobre o caminho real JSON MB→edição Discogs→veredito.
 Isso é **correção de integridade**, não prova de lançamento
 Discogs-only recuperado nem aumento do corpus A/B/C, que
 permanece 5/30 revisados sem ganhos comprovados.
+
+## A busca B não pode certificar unicidade com hidratação incompleta (11/11/2026)
+
+**Falha na descoberta autenticada (sem vínculo direto):** o método
+`DiscogsAuthenticatedDiscovery.findForEdition` consulta dois índices
+separados (barcode e título), coleta Release IDs únicos e limita a
+oito consultas de detalhe. Entretanto usava `hydrate(ids)`, a
+mesma função *best-effort* usada na exploração de artista: um
+`404 Missing`, `503 Unavailable`, JSON Discogs malformado ou
+limitação de taxa podia ser ignorado; se outra Release fosse
+corroborada pelo matcher, o método devolvia `Verified`, apesar
+de haver um candidato concorrente **sem detalhe verificado**.
+
+A regra correta para o comparador exato é mais estrita do que
+a exploração da discografia: **todos os IDs de Release encontrados
+pelos índices completos devem ter resposta de detalhe válida** antes
+de alegar que só uma edição corresponde. O novo
+`hydrateCompleteEditionCandidates` mantém a consulta pública
+sem token, o limite de oito Releases e o mesmo orçamento de HTTP,
+mas retorna o estado `Unavailable` se qualquer detalhe falhar.
+Um 404 de índice possivelmente desatualizado também não comprova
+ausência ou a unicidade de outro Release.
+
+`findForArtist` continua usando hidratação de descoberta
+*best-effort*: uma capa ou pista de edição ausente não deve
+interromper toda a navegação do artista, pois essa via não
+certifica vínculo de identidade exato. A mudança não cria
+novas Releases, nem expande resultados C, nem usa MusicBrainz
+IDs inventados.
+
+O teste
+`DiscogsAuthenticatedDiscoveryTest.incompleteCandidateHydrationCannotVerifyOneRemainingEdition`
+cobre dois candidatos Discogs, alternando a ordem em que o
+único detalhe verificável chega e resultados adversos 404,
+503 e HTTP 200 com JSON malformado. Em nenhum caso é
+seguro promover `Verified`; o resultado esperado é
+`DiscogsAuthenticatedMatch.Unavailable` (não `NoMatch`).
+O corpus A/B/C segue 5/30 revisões, 0 correspondências
+sem vínculo confirmadas ou recuperações Discogs-only.

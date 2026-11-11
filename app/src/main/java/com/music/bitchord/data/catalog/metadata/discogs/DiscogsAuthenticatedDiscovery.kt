@@ -240,7 +240,12 @@ internal class DiscogsAuthenticatedDiscovery(
         // The hydration budget is deliberately 8 Release details. If either
         // index returned more than that, we cannot prove uniqueness.
         if (ids.size > 8) return DiscogsAuthenticatedMatch.Ambiguous(ids.size)
-        return when (val match = DiscogsUnlinkedMatch.select(canonical, hydrate(ids.toList()))) {
+        // Every search candidate must be hydrated before a verified match
+        // can be called unique. A stale index entry (404), malformed detail
+        // or transient provider error is UNKNOWN, not an eliminated rival.
+        val details = hydrateCompleteEditionCandidates(ids.toList())
+            ?: return DiscogsAuthenticatedMatch.Unavailable
+        return when (val match = DiscogsUnlinkedMatch.select(canonical, details)) {
             is DiscogsUnlinkedMatch.Verified ->
                 DiscogsAuthenticatedMatch.Verified(match.record)
             is DiscogsUnlinkedMatch.Ambiguous ->
@@ -281,6 +286,33 @@ internal class DiscogsAuthenticatedDiscovery(
         }
         return DiscogsShadowCatalog.select(secondRecords, artistName, true,
             nowMillis(), knownDiscogsReleaseIds, knownMusicBrainzTitles)
+    }
+
+    /**
+     * Exact-edition matches are stronger than source-only discovery cards:
+     * uniqueness is not established if ANY indexed Release cannot be read.
+     * Do not reuse best-effort artist hydration for verified edition IDs.
+     */
+    private suspend fun hydrateCompleteEditionCandidates(
+        ids: List<Long>,
+    ): List<DiscogsRecord>? {
+        val records = ArrayList<DiscogsRecord>(ids.size)
+        var complete = true
+        for (id in ids) {
+            when (val result = editions.fetchRelease(id)) {
+                is DiscogsLookupResult.Found -> {
+                    if (result.record.link.kind != DiscogsKind.RELEASE ||
+                        result.record.link.id != id
+                    ) complete = false
+                    else records += result.record
+                }
+                // A stale index entry (404), malformed detail or network
+                // failure is unknown, not elimination of a competing edition.
+                // Continue the bounded loop to diagnose all indexed IDs.
+                else -> complete = false
+            }
+        }
+        return records.takeIf { complete && it.size == ids.size }
     }
 
     private suspend fun hydrate(ids: List<Long>): List<DiscogsRecord> {
