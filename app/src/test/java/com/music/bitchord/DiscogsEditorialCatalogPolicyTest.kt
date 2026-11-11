@@ -308,6 +308,48 @@ class DiscogsEditorialCatalogPolicyTest {
         ).size)
     }
 
+    @Test fun knownSingleDigitalBilingualSlashCannotBeInventedAsDiscogsOnly() {
+        // Real public controls B-03/B-04: the primary source and MB already
+        // identify the single, while the Discogs one-track File title and its
+        // track are printed in two scripts. This protects the *absence* gate;
+        // it does NOT identify an exact MusicBrainz Release or recording.
+        val examples = listOf(
+            Triple(37253067L, "Fashion / ファッション", "Fashion"),
+            Triple(34121731L, "Dare Me / デアミー", "DARE ME"),
+        )
+        for ((discogsId, bilingual, knownGroup) in examples) {
+            val source = DiscogsPublicEditionSnapshot(
+                edition(discogsId, artist = "Ive (16)", master = null).copy(
+                    title = bilingual, artistIds = listOf(7122521L),
+                    formats = listOf("File", "Single"),
+                    labels = listOf("Sony Music Labels" to ""),
+                    tracklist = listOf("1" to bilingual),
+                    year = 2026,
+                ), 1_000,
+            )
+            fun select(item: DiscogsPublicEditionSnapshot, known: Set<String>) =
+                DiscogsShadowCatalog.select(
+                    listOf(item), expectedArtist = "IVE",
+                    expectedDiscogsArtistId = 7122521L,
+                    mbCatalogChecked = true, nowMillis = 1_200,
+                    knownMusicBrainzTitles = known,
+                )
+            assertEquals("A real source lead remains when no known group is supplied: $bilingual",
+                1, select(source, emptySet()).size)
+            assertTrue("Known single must not be called absent by alternate script: $bilingual",
+                select(source, setOf(knownGroup)).isEmpty())
+            assertEquals("Two-track releases are not proven to be the same single",
+                1, select(source.copy(record = source.record.copy(tracklist =
+                    listOf("1" to bilingual, "2" to "Other song"))),
+                    setOf(knownGroup)).size)
+            assertEquals("Physical CD may have edition-specific identity",
+                1, select(source.copy(record = source.record.copy(formats =
+                    listOf("CD", "Single"))), setOf(knownGroup)).size)
+            assertEquals("Unknown MusicBrainz titles are not suppressed",
+                1, select(source, setOf("Something Else")).size)
+        }
+    }
+
     @Test fun observedDiscogsPunctuationIsNotASecondMusicBrainzReleaseGroup() {
         val pairs = listOf(
             "Easy-Crazy-Hot" to "EASY CRAZY HOT",
