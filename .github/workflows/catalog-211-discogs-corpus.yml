@@ -7,6 +7,13 @@ on:
     paths:
       - scripts/catalog_211_discogs_corpus_report.py
       - scripts/test_catalog_211_discogs_corpus_report.py
+      - scripts/catalog_211_discogs_primary_baseline.py
+      - scripts/test_catalog_211_discogs_primary_baseline.py
+      - docs/plans/catalog-211-discogs-first-feasibility.md
+      - app/src/main/java/com/music/bitchord/data/catalog/metadata/discogs/DiscogsPublicArtistDiscovery.kt
+      - app/src/main/java/com/music/bitchord/data/catalog/metadata/discogs/DiscogsCanonicalEditionCoordinator.kt
+      - app/src/main/java/com/music/bitchord/data/catalog/metadata/MusicBrainzCatalogGraph.kt
+      - app/src/main/java/com/music/bitchord/data/catalog/metadata/CanonicalProviderEnrichmentPolicy.kt
       - docs/plans/catalog-211-discogs-corpus-manifest.json
       - .github/workflows/catalog-211-discogs-corpus.yml
   workflow_dispatch:
@@ -25,6 +32,10 @@ jobs:
           python-version: '3.12'
       - name: Run pure offline corpus regression tests
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_report.py' -v
+      - name: Test read-only Discogs-first feasibility baseline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_primary_baseline.py' -v
+      - name: Publish proposal-only primary provider baseline
+        run: python3 scripts/catalog_211_discogs_primary_baseline.py --output discogs-211-primary-feasibility.json
       - name: Assert unreviewed manifest does not make coverage claims
         run: |
           python3 - <<'PY'
@@ -45,3 +56,11 @@ jobs:
           print("30 slots: 5 unlinked editions and 3 excluded public-index leads seeded;"
                 " zero independently adjudicated; no coverage metrics.")
           PY
+      - name: Retain feasibility baseline for operator review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-primary-feasibility
+          path: discogs-211-primary-feasibility.json
+          if-no-files-found: warn
+          retention-days: 7
