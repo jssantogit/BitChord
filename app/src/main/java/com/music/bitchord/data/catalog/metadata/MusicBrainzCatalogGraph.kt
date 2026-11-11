@@ -209,6 +209,8 @@ internal class MusicBrainzCatalogGraph(
                 )
             }
             val tracks = parsedTracks.distinctBy(MusicBrainzCatalogTrack::trackMbid)
+            val mediaEvidence = data.videoOnlyMediaEvidence()
+            val recordingEvidence = data.videoOnlyRecordingEvidence()
             MusicBrainzCatalogGraphResult.Success(MusicBrainzCatalogReleaseDetail(
                 musicBrainzId = normalized,
                 groupMbid = (data["release-group"] as? JsonObject)?.string("id").validMbid(),
@@ -218,10 +220,12 @@ internal class MusicBrainzCatalogGraph(
                 releaseDate = data.string("date"),
                 tracks = tracks,
                 isVideoOnlyContent = when {
-                    data.videoOnlyMediaEvidence() == true -> true
-                    data.videoOnlyRecordingEvidence() == true -> true
-                    data.videoOnlyMediaEvidence() == false ||
-                        data.videoOnlyRecordingEvidence() == false -> false
+                    // Conflicting positive source fields are not proof of an
+                    // audio-only or video-only edition. Keep it unknown.
+                    mediaEvidence != null && recordingEvidence != null &&
+                        mediaEvidence != recordingEvidence -> null
+                    mediaEvidence == true || recordingEvidence == true -> true
+                    mediaEvidence == false || recordingEvidence == false -> false
                     else -> null
                 },
             ))
@@ -302,13 +306,27 @@ internal class MusicBrainzCatalogGraph(
         }
     }
 
-    /** Recording.video belongs to the Recording, not its parent ReleaseGroup. */
+    /**
+     * Recording.video is per Recording, not per ReleaseGroup.
+     * Never conclude that ALL tracks are videos if an included medium's
+     * track-count exceeds the returned rows, a medium is malformed, or one
+     * medium has no usable track array. Unknown video flags stay unknown.
+     */
     private fun JsonObject.videoOnlyRecordingEvidence(): Boolean? {
-        val flags = array("media").flatMap { medium ->
-            val tracks = (medium as? JsonObject)?.array("tracks").orEmpty()
-            tracks.map { track ->
-                val rec = (track as? JsonObject)?.get("recording") as? JsonObject
-                runCatching { rec?.get("video")?.jsonPrimitive?.booleanOrNull }.getOrNull()
+        val media = this["media"] as? JsonArray ?: return null
+        if (media.isEmpty()) return null
+        val flags = mutableListOf<Boolean?>()
+        for (medium in media) {
+            val item = medium as? JsonObject ?: return null
+            val tracks = item["tracks"] as? JsonArray ?: return null
+            if (tracks.isEmpty()) return null
+            val expectedCount = item.integer("track-count")
+            if (expectedCount != null && expectedCount != tracks.size) return null
+            for (track in tracks) {
+                val recording = (track as? JsonObject)?.get("recording") as? JsonObject
+                flags += runCatching {
+                    recording?.get("video")?.jsonPrimitive?.booleanOrNull
+                }.getOrNull()
             }
         }
         return when {
