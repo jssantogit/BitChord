@@ -69,6 +69,17 @@ def _allowed(url: str) -> bool:
                     "fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
     return False
 
+def _mb_release_once_retry_503(url: str, get) -> dict:
+    # Only a transient 503 on this exact MusicBrainz Release lookup can
+    # receive one extra attempt. The shared request limiter counts and
+    # spaces both calls; 404, 429 and invalid JSON never get masked.
+    try:
+        return get(url)
+    except HTTPError as error:
+        if error.code != 503:
+            raise
+        return get(url)
+
 def inspect(seed: dict, get) -> dict:
     validate_seed(seed)
     rgid, mid, aid = seed["group_mbid"], seed["master_id"], seed["artist_mbid"]
@@ -109,9 +120,9 @@ def inspect(seed: dict, get) -> dict:
         # Missing one source cannot turn the others into a unique pair.
         for mbid in mbids:
             try:
-                record = get(
-                    f"https://musicbrainz.org/ws/2/release/{mbid}"
+                url = (f"https://musicbrainz.org/ws/2/release/{mbid}"
                     "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
+                record = _mb_release_once_retry_503(url, get)
             except (HTTPError, URLError, OSError, TimeoutError):
                 result["status"] = "incomplete_source_hydration"
                 result["unavailable_source_id"] = "musicbrainz_release:" + mbid
