@@ -805,3 +805,58 @@ Não converter falta de informação em ausência. Regressões
 `masterVersionsMustAllBeExaminedBeforeClaimingOneUnlinkedEdition`
 validam os dois caminhos com candidatos reais ou fixtures
 baseadas em variantes físicas.
+
+## Sobrecarga do seletor de candidatos: fail closed além de 32 (11/11/2026)
+
+O seletor compartilhado `DiscogsUnlinkedMatch.select` recebia uma lista potencialmente
+maior que 32 Releases e avaliava silenciosamente apenas `take(32)`. Se uma versão
+concorrente ocupasse a posição 33 ou posterior, os primeiros 32 itens poderiam
+resultar em `Verified` falso, mesmo sem uma lista completa. Isso é uma
+lacuna no contrato reutilizável, apesar de a descoberta HTTP de hoje limitar
+a hidratação a oito Releases.
+
+A regressão `overBudgetCandidateListCannotCertifyOnlyTheFirst32Releases`
+no commit [10418811](https://github.com/jssantogit/BitChord/commit/104188113292709c6c880248f4aca20391d53b07)
+foi confirmada em RED pela [CI #43103503012](https://github.com/jssantogit/BitChord/actions/runs/43103503012):
+165 testes, **1 falha apenas na regressão nova**. A implementação
+[987d6416](https://github.com/jssantogit/BitChord/commit/987d641634b59c5e8d22616eb31e8dc2cc9702cf)
+passa a devolver `Candidates` quando recebe mais de 32 observações,
+antes de tentar verificar unicidade. Não expande a rede, não elimina
+IDs de fonte nem cria vínculos novos. A prova GREEN depende da
+conclusão da [CI focada #43104371010](https://github.com/jssantogit/BitChord/actions/runs/43104371010).
+
+## Sondagem pública independente de Masters dos cinco controles B revisados (11/11/2026)
+
+O script `scripts/catalog_211_discogs_master_versions_probe.py` foi
+introduzido em [79b6739e](https://github.com/jssantogit/BitChord/commit/79b6739e981e307e7efcc1c02c0cd6572040316c),
+com cinco regressões offline em [99a1cd7e](https://github.com/jssantogit/BitChord/commit/99a1cd7e9eb0164af8e68b62fe5fc63c171b81b7).
+O workflow independente [2fbfdebd](https://github.com/jssantogit/BitChord/commit/2fbfdebd754fbecbc372865a1034c06bf31d4032)
+consulta **somente B-01..B-05** já source-reviewed: primeiro verifica
+a relação tipada MusicBrainz ReleaseGroup→Discogs Master e só depois
+consulta Master, lista completa de até oito versões e, se possível,
+todos os detalhes das edições. Máximo global de 55 GETs, intervalo
+de 1,1 s, somente APIs públicas, sem token. Páginas incompletas,
+Master incoerente e edição com master_id contraditório são inconclusivos.
+O resultado é **observação de fonte**, nunca `Verified` por si só.
+
+A [execução real #43104720316](https://github.com/jssantogit/BitChord/actions/runs/43104720316)
+concluiu SUCCESS, inclusive **5/5 testes offline**. Foram feitos
+**5 GETs MusicBrainz**, sem GET Discogs porque o requisito de relação
+tipada não foi observado:
+
+- **B-01 ENHYPEN / MEMORABILIA:** `no_typed_master_relation`.
+- **B-02 TXT / Setsuna Hanabi:** `no_typed_master_relation`.
+- **B-03 IVE / Fashion:** `no_typed_master_relation`.
+- **B-04 IVE / DARE ME:** `no_typed_master_relation`.
+- **B-05 TXT / 7TH YEAR CD:** `source_unavailable`, **não** ausência de Master.
+
+A inexistência de relação tipada na resposta consultada **não significa**
+ausência da edição Discogs, da obra ou de outros caminhos de descoberta.
+O fluxo de Master sem token está tecnicamente válido, mas não se aplica
+a esses quatro controles na evidência atual. O próximo passo útil é
+identificar controles **B-06..B-10** com relação RG→Master comprovada
+e lista de versões dentro do teto; quando não houver tal relação,
+continuar as pistas de barcode/edição já existentes sem inventar
+vínculo ou forçar `Verified`. O corpus permanece **5/30 casos revisados,
+0 novos B sem vínculo Verified e 0 C recuperados**, sem APK, smoke físico,
+merge, novas identidades MBID ou mudança no MusicBrainz #209.
