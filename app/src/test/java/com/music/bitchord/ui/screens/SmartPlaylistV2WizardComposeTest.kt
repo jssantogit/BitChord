@@ -1016,6 +1016,37 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Condição 2").assertExists()
     }
 
+    @Test fun reopeningAConditionCategoryStartsAtTopRatherThanAnOldScrollPosition() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Teste", rule = rule, hasConfiguredRules = false,
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Adicionar primeira condição").performClick()
+        compose.onNodeWithText("Músicas e metadados").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithTag("apple-toolbar-back-button").performClick()
+        compose.onNodeWithText("Músicas e metadados").performClick()
+        // A new category visit is not a return from the editor; its title
+        // and search field should be composed at the top again.
+        compose.onNodeWithText("Músicas e metadados").assertExists()
+        compose.onNodeWithContentDescription("Buscar nesta categoria").assertExists()
+    }
+
     @Test fun categorySearchDoesNotTurnBackNavigationIntoGlobalSearchResults() {
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
