@@ -61,6 +61,33 @@ internal val smartConditionCategories = listOf(
     ),
 )
 
+/** Search-style sub-tabs partition fields without adding section headings to lists. */
+internal data class SmartConditionFieldTab(
+    val key: String,
+    val label: String,
+    val fields: List<SmartPlaylistRuleField>,
+)
+
+internal fun smartConditionFieldTabs(category: SmartConditionCategory): List<SmartConditionFieldTab> {
+    if (category.id != "music") return emptyList()
+    val identity = setOf(
+        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
+        SmartPlaylistRuleField.RELEASE_TITLE,
+    )
+    val credits = setOf(
+        SmartPlaylistRuleField.ALBUM_ARTIST, SmartPlaylistRuleField.TRACK_ARTIST,
+        SmartPlaylistRuleField.COMPOSER, SmartPlaylistRuleField.ARTIST_COUNTRY,
+    )
+    return listOf(
+        SmartConditionFieldTab("all", "Todos", category.fields),
+        SmartConditionFieldTab("identity", "Identidade", category.fields.filter { it in identity }),
+        SmartConditionFieldTab("credits", "Créditos", category.fields.filter { it in credits }),
+        SmartConditionFieldTab("organization", "Organização", category.fields.filter {
+            it !in identity && it !in credits
+        }),
+    )
+}
+
 internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (field) {
     SmartPlaylistRuleField.TITLE -> "Título da música"
     SmartPlaylistRuleField.ARTIST_DISPLAY -> "Artista"

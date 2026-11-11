@@ -442,6 +442,7 @@ internal fun SmartPlaylistV2WizardUi(
     var pendingRuleDeletionIsGroup by remember { mutableStateOf(false) }
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf(smartConditionCategories.first()) }
+    var selectedFieldTab by remember { mutableStateOf("all") }
     var search by remember { mutableStateOf("") }
     var editingPath by remember { mutableStateOf<List<Int>?>(null) }
     var addingGroup by remember { mutableStateOf(false) }
@@ -1259,6 +1260,7 @@ internal fun SmartPlaylistV2WizardUi(
                                         icon = iconForConditionCategory(category.id),
                                         onClick = {
                                             selectedCategory = category
+                                            selectedFieldTab = "all"
                                             search = ""
                                             page = WizardStep.FIELDS
                                         },
@@ -1272,7 +1274,17 @@ internal fun SmartPlaylistV2WizardUi(
                             PlaylistWizardSearchEntry(
                                 search, { search = it }, "Buscar nesta categoria")
                         }
+                        val tabs = smartConditionFieldTabs(selectedCategory)
+                        if (tabs.isNotEmpty()) item {
+                            PlaylistWizardFieldTabs(
+                                tabs = tabs,
+                                selectedKey = selectedFieldTab,
+                                onSelect = { selectedFieldTab = it },
+                            )
+                        }
+                        val selectedFields = tabs.firstOrNull { it.key == selectedFieldTab }?.fields
                         val matches = smartConditionSearch(search, selectedCategory)
+                            .filter { selectedFields == null || it in selectedFields }
                         if (matches.isNotEmpty()) item {
                             PlaylistWizardFieldList(matches.map { field ->
                                 PlaylistWizardNavOption(

@@ -1,6 +1,9 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +44,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -410,6 +414,48 @@ internal fun PlaylistWizardFieldList(options: List<PlaylistWizardNavOption>) {
                     modifier = Modifier.padding(start = 48.dp),
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The subdivisions are navigation tabs, like Search, never chips/pills or
+ * in-list section headers. Keep BitChord's native typography and palette.
+ */
+@Composable
+internal fun PlaylistWizardFieldTabs(
+    tabs: List<SmartConditionFieldTab>,
+    selectedKey: String,
+    onSelect: (String) -> Unit,
+) {
+    if (tabs.isEmpty()) return
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .testTag("playlist-field-search-tabs"),
+        horizontalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        tabs.forEach { tab ->
+            val active = tab.key == selectedKey
+            Column(
+                modifier = Modifier.clickable { onSelect(tab.key) }
+                    .testTag("playlist-field-tab-${tab.key}"),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    tab.label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (active) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 10.dp),
+                )
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(2.dp)
+                        .background(if (active) MaterialTheme.colorScheme.primary
+                            else Color.Transparent),
                 )
             }
         }

@@ -182,6 +182,44 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(1, pressed) }
     }
 
+    @Test fun musicTabsPartitionEveryFieldWithoutSectionHeadersOrPills() {
+        val category = smartConditionCategories.single { it.id == "music" }
+        val tabs = smartConditionFieldTabs(category)
+        assertEquals(listOf("Todos", "Identidade", "Créditos", "Organização"),
+            tabs.map { it.label })
+        assertEquals(category.fields, tabs.first().fields)
+        val partition = tabs.drop(1).flatMap { it.fields }
+        assertEquals(category.fields.size, partition.size)
+        assertEquals(category.fields.toSet(), partition.toSet())
+        assertEquals(emptyList<SmartConditionFieldTab>(),
+            smartConditionFieldTabs(smartConditionCategories.single { it.id == "ratings" }))
+    }
+
+    @Test fun fieldTabsAndFlatRowsAreIndependentOfSectionHeadings() {
+        var clicked = 0
+        compose.setContent {
+            androidx.compose.material3.MaterialTheme {
+                androidx.compose.foundation.layout.Column {
+                    PlaylistWizardFieldTabs(
+                        smartConditionFieldTabs(smartConditionCategories.first()),
+                        "all", onSelect = {},
+                    )
+                    PlaylistWizardFieldList(listOf(PlaylistWizardNavOption(
+                        title = "Título da música",
+                        description = "Palavras presentes no título",
+                        icon = Icons.Rounded.MusicNote,
+                        onClick = { clicked++ },
+                    )))
+                }
+            }
+        }
+        compose.onNodeWithTag("playlist-field-search-tabs").assertExists()
+        compose.onNodeWithTag("playlist-field-flat-list").assertExists()
+        compose.onAllNodesWithTag("playlist-navigation-chevron").assertCountEquals(0)
+        compose.onNodeWithText("Título da música").performClick()
+        compose.runOnIdle { assertEquals(1, clicked) }
+    }
+
     @Test fun secondaryPlaylistActionsAreExplicitNativeButtonsNotBareText() {
         var clicked = 0
         compose.setContent {
