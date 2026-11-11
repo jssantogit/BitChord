@@ -161,6 +161,7 @@ internal class DiscogsCanonicalEditionCoordinator(
             musicBrainzReleaseGroupId = detail.groupMbid,
             editionFormats = detail.editionFormats,
             editionLabelCatalogPairs = detail.editionLabelCatalogPairs,
+            editionLabelCatalogComplete = detail.editionLabelCatalogComplete,
         )
         val result = editions.observe(canonical)
         if (result is DiscogsEditionEnrichment.Verified) {
