@@ -110,6 +110,8 @@ internal fun CircleIconButton(
     customIcon: (@Composable () -> Unit)? = null,
 ) {
     val haptics = rememberHaptics()
+    // Keep the action label on the clickable parent, not an inert child node.
+    val actionLabel = contentDescription
     Box(
         modifier = Modifier
             .size(size)
@@ -117,6 +119,11 @@ internal fun CircleIconButton(
             .clip(CircleShape)
             // One shared material for detailed icon and labeled actions.
             .appleSecondaryActionSurface()
+            .then(
+                if (customIcon != null) Modifier.semantics(mergeDescendants = true) {
+                    contentDescription = actionLabel
+                } else Modifier
+            )
             .then(
                 if (enabled) Modifier.clickable {
                     haptics.play(haptic)
@@ -129,17 +136,7 @@ internal fun CircleIconButton(
         contentAlignment = Alignment.Center,
     ) {
         if (customIcon != null) {
-            // Custom indicators have their own score semantics, but the parent
-            // control must still announce its actionable purpose (e.g. rate artist).
-            // The original Icon branch already supplies its own label.
-            androidx.compose.foundation.layout.Box(
-                modifier = Modifier.semantics(mergeDescendants = true) {
-                    this.contentDescription = contentDescription
-                },
-                contentAlignment = Alignment.Center,
-            ) {
-                customIcon()
-            }
+            customIcon()
         } else {
             Icon(
                 imageVector = icon,
