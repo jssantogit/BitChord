@@ -42,6 +42,8 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val country: String?,
     val releaseDate: String?,
     val tracks: List<MusicBrainzCatalogTrack>,
+    /** Exact Release lookup only; not inferred from title or group type. */
+    val isVideoOnlyContent: Boolean? = null,
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -108,7 +110,7 @@ internal class MusicBrainzCatalogGraph(
         artistMbid: String, limit: Int = 100, offset: Int = 0,
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseHit>> =
         paged("release", "artist", artistMbid, limit, offset,
-            extraParameters = mapOf("status" to "official", "inc" to "release-groups"),
+            extraParameters = mapOf("status" to "official", "inc" to "release-groups+media"),
             countKey = "release-count", offsetKey = "release-offset", arrayKey = "releases",
             identity = MusicBrainzReleaseHit::musicBrainzId,
         ) { row ->
@@ -123,6 +125,7 @@ internal class MusicBrainzCatalogGraph(
                     ?.string("id").validMbid(),
                 hasFrontCover = (row["cover-art-archive"] as? JsonObject)
                     ?.get("front")?.jsonPrimitive?.booleanOrNull,
+                isVideoOnlyMedia = row.videoOnlyMediaEvidence(),
             )
         }
 
@@ -131,6 +134,7 @@ internal class MusicBrainzCatalogGraph(
         groupMbid: String, limit: Int = 25, offset: Int = 0,
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseHit>> =
         paged("release", "release-group", groupMbid, limit, offset,
+            extraParameters = mapOf("inc" to "media"),
             countKey = "release-count", offsetKey = "release-offset", arrayKey = "releases",
             identity = MusicBrainzReleaseHit::musicBrainzId,
         ) { row ->
@@ -143,6 +147,7 @@ internal class MusicBrainzCatalogGraph(
                 status = row.string("status"),
                 hasFrontCover = (row["cover-art-archive"] as? JsonObject)
                     ?.get("front")?.jsonPrimitive?.booleanOrNull,
+                isVideoOnlyMedia = row.videoOnlyMediaEvidence(),
             )
         }
 
@@ -212,6 +217,13 @@ internal class MusicBrainzCatalogGraph(
                 country = data.string("country"),
                 releaseDate = data.string("date"),
                 tracks = tracks,
+                isVideoOnlyContent = when {
+                    data.videoOnlyMediaEvidence() == true -> true
+                    data.videoOnlyRecordingEvidence() == true -> true
+                    data.videoOnlyMediaEvidence() == false ||
+                        data.videoOnlyRecordingEvidence() == false -> false
+                    else -> null
+                },
             ))
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
@@ -256,6 +268,53 @@ internal class MusicBrainzCatalogGraph(
             )
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
+        }
+    }
+
+    /**
+     * Official MusicBrainz releases may contain only video media. A medium
+     * format is positive evidence only when it is unambiguously video-specific;
+     * DVD-Audio, Digital Media, CD and mixed CD/DVD packages remain eligible.
+     * Omitted / ambiguous formats (e.g. Blu-ray) are inconclusive, not audio.
+     * Uses the same source-supported 'inc=media' on the existing browse GET.
+     */
+    private fun JsonObject.videoOnlyMediaEvidence(): Boolean? {
+        val mediums = this["media"] as? JsonArray ?: return null
+        if (mediums.isEmpty()) return null
+        val formats = mediums.map { (it as? JsonObject)?.string("format")
+            ?.lowercase(Locale.ROOT) }
+        val explicitlyVideo = setOf(
+            "dvd-video", "dualdisc (dvd-video side)",
+            "dvdplus (dvd-video side)", "vcd", "svcd",
+            "vhs", "betamax", "laserdisc", "8\" laserdisc", "12\" laserdisc",
+        )
+        val explicitlyAudio = setOf(
+            "digital media", "cd", "dvd-audio", "vinyl", "cassette",
+            "sacd", "minidisc", "usb flash drive",
+            "dualdisc (cd side)", "dualdisc (dvd-audio side)",
+            "dvdplus (cd side)", "dvdplus (dvd-audio side)",
+        )
+        return when {
+            formats.all { it != null && it in explicitlyVideo } -> true
+            formats.any { it != null && it in explicitlyAudio } -> false
+            else -> null
+        }
+    }
+
+    /** Recording.video belongs to the Recording, not its parent ReleaseGroup. */
+    private fun JsonObject.videoOnlyRecordingEvidence(): Boolean? {
+        val flags = array("media").flatMap { medium ->
+            val tracks = (medium as? JsonObject)?.array("tracks").orEmpty()
+            tracks.map { track ->
+                val rec = (track as? JsonObject)?.get("recording") as? JsonObject
+                runCatching { rec?.get("video")?.jsonPrimitive?.booleanOrNull }.getOrNull()
+            }
+        }
+        return when {
+            flags.isEmpty() -> null
+            flags.all { it == true } -> true
+            flags.any { it == false } -> false
+            else -> null
         }
     }
 

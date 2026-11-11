@@ -52,7 +52,7 @@ class MusicBrainzCatalogGraphTest {
                     assertEquals("release", path)
                     assertEquals(artist, parameters["artist"])
                     assertEquals("official", parameters["status"])
-                    assertEquals("release-groups", parameters["inc"])
+                    assertEquals("release-groups+media", parameters["inc"])
                     return """{"release-count":3,"release-offset":0,"releases":[
                         {"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
                          "cover-art-archive":{"front":true,"artwork":true},

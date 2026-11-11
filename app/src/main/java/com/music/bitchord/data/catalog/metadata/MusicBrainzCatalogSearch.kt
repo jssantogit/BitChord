@@ -74,6 +74,8 @@ internal data class MusicBrainzReleaseHit(
     val hasFrontCover: Boolean? = null,
     /** Linked ReleaseGroup primary type, when present; not guessed from title. */
     val releaseGroupPrimaryType: String? = null,
+    /** Positive source evidence: every declared medium is explicitly video-only. */
+    val isVideoOnlyMedia: Boolean? = null,
 )
 
 // A MusicBrainz cover-art-archive.front flag is a presence hint only.
@@ -113,6 +115,8 @@ internal data class MusicBrainzRecordingHit(
 /** Explicit edition status is required for public streaming-style Release tiles. */
 internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
     hit.status.equals("Official", ignoreCase = true) &&
+        // Official is a publication status, not proof of an audio edition.
+        hit.isVideoOnlyMedia != true &&
         canonicalStreamingTitleIsSafe(hit.title) &&
         // A legitimate Official edition may be a film/video or broadcast.
         // Reject only an explicitly unsupported primary type; unknown stays

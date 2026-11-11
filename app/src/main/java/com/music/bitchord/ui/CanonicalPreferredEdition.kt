@@ -169,7 +169,8 @@ internal suspend fun canonicalCachedOfficialGroupTracklist(
         val detail = readRelease(edition.musicBrainzId) ?: continue
         if (detail.musicBrainzId != edition.musicBrainzId ||
             detail.groupMbid != groupMbid ||
-            detail.tracks.isEmpty()
+            detail.tracks.isEmpty() ||
+            detail.isVideoOnlyContent == true
         ) continue
         return detail
     }
@@ -213,7 +214,12 @@ internal fun canonicalPreferredEditions(
     // Unknown status does not prove an official audio release, even if this is
     // the only edition in the local cache. It remains stored for verification,
     // but must never become the default "official" streaming tracklist.
-    val official = unique.filter { it.status.equals("Official", ignoreCase = true) }
+    val official = unique.filter {
+        it.status.equals("Official", ignoreCase = true) &&
+            // Video-only media may share an Official Single/EP ReleaseGroup.
+            // Do not select them as the canonical audio tracklist or cover.
+            it.isVideoOnlyMedia != true
+    }
     return official.sortedWith(
         compareBy<MusicBrainzReleaseHit> {
             when (it.status?.lowercase(Locale.ROOT)) {
