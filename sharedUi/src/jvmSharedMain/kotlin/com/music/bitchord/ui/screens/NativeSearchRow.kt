@@ -77,12 +77,19 @@ fun NativeSearchResultRow(
     onMoreActions: List<NativeSearchRowAction> = emptyList(),
 ) {
     var moreExpanded by remember { mutableStateOf(false) }
+    // A held search result opens exactly the actions shown by its ⋯ button.
+    // Metadata-only hits retain this menu without inventing a play action.
+    val rowHold: (() -> Unit)? = onLongPress ?: if (onMoreActions.isNotEmpty())
+        ({ moreExpanded = true }) else null
+    val rowClick: (() -> Unit)? = onClick ?: if (onMoreActions.isNotEmpty())
+        ({ moreExpanded = true }) else null
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) {
-                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-                    .contextClick(onLongPress)
+            .testTag("native-search-result-row")
+            .then(if (rowClick != null || rowHold != null) {
+                Modifier.longPressMenuClickable(onClick = rowClick ?: {}, onLongClick = rowHold)
+                    .contextClick(rowHold)
             } else Modifier)
             .padding(horizontal = horizontalPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
