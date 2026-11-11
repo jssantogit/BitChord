@@ -31,8 +31,8 @@ jobs:
           python-version: "3.12"
       - name: Verify exact source IDs, bounded cross-product and fail-closed regressions
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_pair_matrix.py' -v
-      - name: Recheck both exact typed Masters with complete version lists
-        run: python3 scripts/catalog_211_discogs_master_pair_matrix.py --target all
+      - name: Compare two new IVE ELEVEN typed Masters with complete source versions
+        run: python3 scripts/catalog_211_discogs_master_pair_matrix.py --target IVE
       - name: Summarize every observed pair without a matching verdict or new requests
         run: |
           python3 - <<'PY'
