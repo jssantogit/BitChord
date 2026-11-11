@@ -439,3 +439,74 @@ regressão `test_cannot_revisit_existing_b_release_as_new_c_case`
 demonstrou a quebra na [CI #43055313679](https://github.com/jssantogit/BitChord/actions/runs/43055313679)
 e protege a correção. Nenhum título ou ID novo foi inventado,
 nenhuma ausência MB afirmada e nenhum dado do usuário alterado.
+
+## B-01/B-03/B-04 — revisão independente dos três pares restantes pré-selecionados (11/11/2026)
+
+**Resultado:** os cinco pares B iniciais foram **revisados com fonte
+editorial independente e decisão de não promover**. Nenhum se tornou
+`Verified`; todos os grupos musicais já existem no MusicBrainz. O
+corpus passa de 2/30 para **5/30 revisados**, porém **B-06 a B-10
+continuam vagas em aberto**, assim como A e C. `metrics=null`,
+nenhuma taxa global de sucesso publicada e nenhuma UI aferida.
+
+### B-01 — ENHYPEN / MEMORABILIA (não é a mesma edição)
+
+A [notificação oficial BELIFT LAB / Weverse](https://weverse.io/enhypen/notice/19177)
+confirma CD físico da edição Moon, lançado em 13/05/2024
+e com encarte específico. A
+[edição MB `d0c0cfe6`](https://musicbrainz.org/release/d0c0cfe6-0d31-469e-965a-3a5c18b1eb10)
+é **Digital Media do Japão**, 13/05/2024, seis faixas e
+barcode `00602465697520`. A comparação pública dos mesmos IDs
+[no scanner #43055872997](https://github.com/jssantogit/BitChord/actions/runs/43055872997)
+mostra que o [Discogs Release 31008160](https://www.discogs.com/release/31008160)
+é um **CD da Coreia do Sul**, seis faixas em ordem idêntica, sem
+barcode compartilhado validado, com título editorial mais longo
+`Dark Moon Special Album 'Memorabilia'`. A diferença direta
+de país/formato deste **par de edições** impede `Verified`:
+`match_state=conflict`. A edição MusicBrainz alternativa
+`300beef2` não tem catalog number/barcode que permita confirmar
+a mesma prensagem Discogs; segue não aprovada.
+
+A gravadora chama o projeto de `SPECIAL ALBUM`, não confirma
+uma categorização EP independente; por isso `reference_type=Unknown`
+em B-01. `musicbrainz_type=EP` permanece o tipo existente,
+**sem correção automática Album↔EP**. A revisão não atribui tipo
+Album só por marketing ou embalagem de CD.
+
+### B-03 — IVE / Fashion (single digital conhecido; identidade exata pendente)
+
+A [comunicação primária Sony Music Japan](https://ssl.sme.co.jp/artist/IVE/info/582836)
+identifica o single digital `Fashion` de 03/04/2026, primeiro
+lançamento da faixa incluída no EP
+[LUCID DREAM](https://www.sonymusic.co.jp/artist/IVE/info/582822).
+[Apple Music](https://music.apple.com/us/album/fashion-single/1887487297)
+confirma comercialmente 1 faixa e tipo Single. A
+[sondagem #43055872997](https://github.com/jssantogit/BitChord/actions/runs/43055872997)
+indica que [Discogs 37253067](https://www.discogs.com/release/37253067)
+é `File`/Single em 2026, título `Fashion / ファッション`,
+com uma faixa, sem barcode comum verificável nem ligação direta
+Release→Discogs com a edição [MB `f9ec060a`](https://musicbrainz.org/release/f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21).
+`match_state=candidate`, não duplicar grupo Single conhecido nem
+inferir tradução para provar identidade de edição.
+
+### B-04 — IVE / DARE ME (single digital conhecido; identidade exata pendente)
+
+A [nota oficial Sony Music Japan de 21/04/2025](https://www.sonymusic.co.jp/artist/IVE/info/574055)
+confirma `DARE ME` como **single digital** japonês. A
+[sondagem #43055872997](https://github.com/jssantogit/BitChord/actions/runs/43055872997)
+confirma [Discogs 34121731](https://www.discogs.com/release/34121731)
+como `File`/Single 2025, `Dare Me / デアミー`, uma faixa,
+sem link direto Release→Discogs ou barcode comum com a edição
+[MB `5df7296a`](https://musicbrainz.org/release/5df7296a-92e2-48ae-a69e-eaed1f74d066),
+do grupo MusicBrainz Single já existente. `match_state=candidate`;
+não supor equivalência exata por grafia ou ano.
+
+### Limites da evidência
+
+`reviewed=true` significa **decisão editorial sobre estes IDs de
+fonte** com justificativa datada — **não** confirmação no Android.
+`app_type=Unknown` e `visible=false` representam ausência de ganho
+verificado em campo e **não** são testes de UI negativos. A revisão
+A/B/C completa continua pendente: A 0/10, B 5/10 (cinco vagas ainda
+sem IDs), C 0/10, três C excluídos preliminarmente. O Discogs
+continua complementar; nenhum MBID, MediaAsset ou stream é inventado.

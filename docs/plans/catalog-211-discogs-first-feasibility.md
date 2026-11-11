@@ -95,3 +95,21 @@ Discogs nem razão para mudar a autoridade do MusicBrainz.
 Corpus 2/30 revisados (ambos pares B negativos), 3 outros B pré-selecionados,
 3 C excluídos preliminarmente, 0 ganhos verificados, métricas
 globais não publicáveis.
+
+## Fechamento dos cinco pares B inicialmente pré-selecionados (11/11/2026)
+
+Com apoio de notas oficiais BELIFT LAB e Sony Music Japan,
+mais consultas públicas por ID da CI Discogs #211, foram revisados
+B-01 MEMORABILIA como `conflict` de edição digital Japão versus
+CD Coreia do Sul; B-03 Fashion e B-04 DARE ME como `candidate`
+de singles digitais com título Discogs bilíngue e sem evidência de
+mesma edição exata. B-02 permanece `candidate`, B-05
+`conflict`; **nenhum dos cinco é Verified**, e todos os
+ReleaseGroups já estão presentes no MusicBrainz.
+
+Corpus 5/30 revisados, sendo apenas 5/10 da coorte B:
+A/B/C incompletos e `metrics=null`. O resultado reforça a
+prioridade de **recuperação real comprovada**, não a troca da
+autoridade do MusicBrainz com base na maior quantidade de
+edições exibidas pelo Discogs. Não alterar status Draft nem
+autorizar Discogs-first automaticamente.

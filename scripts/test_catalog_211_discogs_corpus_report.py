@@ -85,7 +85,8 @@ class CorpusReportTests(unittest.TestCase):
             {x["id"]: x["match_state"] for x in b_cases},
         )
         self.assertTrue(all(x["musicbrainz_type"] in {"EP", "Single"}
-                            and x["reference_type"] == x["musicbrainz_type"]
+                            and x["reference_type"] == (
+                                "Unknown" if x["id"] == "B-01" else x["musicbrainz_type"])
                             and x["app_type"] == "Unknown"
                             and x["absent_in_musicbrainz"] is False
                             and x["match_correct"] is False

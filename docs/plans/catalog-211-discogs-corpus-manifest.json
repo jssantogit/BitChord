@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211 evaluation: B-02 and B-05 reviewed negative exact-edition pairs with independent labels; three B candidates unreviewed, three C exclusions; 0 verified provider gains, global metrics still unavailable",
+  "description": "Discogs #211: five independently source-reviewed non-verified B edition-pairs; five B slots and all 10 A/C slots remain unreviewed; three C source exclusions preliminary; no proven provider gains or complete metrics.",
   "cases": [
     {
       "id": "A-01",
@@ -55,8 +55,7 @@
     {
       "id": "B-01",
       "cohort": "unlinked",
-      "reviewed": false,
-      "selection_state": "identity_observed",
+      "reviewed": true,
       "label": "ENHYPEN · MEMORABILIA",
       "musicbrainz_release_mbid": "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
       "musicbrainz_group_mbid": "4e219d4e-c5e0-4ed9-acec-b948c7319b37",
@@ -66,8 +65,23 @@
       "evidence_links": {
         "musicbrainz_release": "https://musicbrainz.org/release/d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
         "discogs_release": "https://www.discogs.com/release/31008160",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
-      }
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120",
+        "independent_editorial": "https://weverse.io/enhypen/notice/19177"
+      },
+      "reviewed_at_utc": "2026-11-11T16:32:41Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Unknown",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "conflict",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "BELIFT LAB officially announced a South Korean physical CD product called DARK MOON SPECIAL ALBUM MEMORABILIA (Moon ver.) released 13 May 2024. The exact MB Release d0c0cfe6 is a Japanese Digital Media EP (2024-05-13, barcode 00602465697520); Discogs Release 31008160 in the 11 November live control is a South Korean CD with the same six ordered songs and no independently matching barcode, and its title is expanded to Dark Moon Special Album. This is NOT the same exact MB edition: country/format explicitly disagree despite matching artist, date and tracks. The independently official label calls it a special album, not an explicit EP; reference_type remains Unknown, so no claim to correct MusicBrainz EP is justified. Another MB Release in the same EP group was inspected but lacked pressing identifiers; do not promote it. Android UI was not tested, so app_type Unknown and visible false are NOT a measured rendering failure."
     },
     {
       "id": "B-02",
@@ -103,8 +117,7 @@
     {
       "id": "B-03",
       "cohort": "unlinked",
-      "reviewed": false,
-      "selection_state": "identity_observed",
+      "reviewed": true,
       "label": "IVE · Fashion",
       "musicbrainz_release_mbid": "f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
       "musicbrainz_group_mbid": "c8ddddd3-db0d-460e-8cce-ccfad9c1170c",
@@ -114,14 +127,29 @@
       "evidence_links": {
         "musicbrainz_release": "https://musicbrainz.org/release/f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
         "discogs_release": "https://www.discogs.com/release/37253067",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
-      }
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120",
+        "independent_editorial": "https://ssl.sme.co.jp/artist/IVE/info/582836",
+        "independent_catalog_reference": "https://music.apple.com/us/album/fashion-single/1887487297"
+      },
+      "reviewed_at_utc": "2026-11-11T16:32:41Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Sony Music Japan officially announced the IVE one-track digital song Fashion on 3 April 2026 as the pre-release track for the LUCID DREAM EP; the Apple Music release explicitly presents Fashion - Single dated 3 April with one track. MB Release f9ec060a belongs to a MusicBrainz Single group with exactly one track. Discogs Release 37253067 is a 2026 File Single titled Fashion / ファッション with one observed track, but the exact title and sole track are bilingual and do not literally match MusicBrainz, and no shared validated barcode or direct MB Release-to-Discogs URL was observed in the 11 November CI. Artist IDs match at the provider level, but no independent recording/edition identity proof exists. This is a source-confirmed already-known single, NOT a newly recovered group nor a Verified exact Release correspondence. Keep candidate; do not guess Japanese translation or invent an MBID. App UI not independently checked: Unknown/false fields represent no demonstrated gain, not a failed rendering."
     },
     {
       "id": "B-04",
       "cohort": "unlinked",
-      "reviewed": false,
-      "selection_state": "identity_observed",
+      "reviewed": true,
       "label": "IVE · DARE ME",
       "musicbrainz_release_mbid": "5df7296a-92e2-48ae-a69e-eaed1f74d066",
       "musicbrainz_group_mbid": "7bd8d871-8f1e-4dff-99c2-386097d98910",
@@ -131,8 +159,23 @@
       "evidence_links": {
         "musicbrainz_release": "https://musicbrainz.org/release/5df7296a-92e2-48ae-a69e-eaed1f74d066",
         "discogs_release": "https://www.discogs.com/release/34121731",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120"
-      }
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120",
+        "independent_editorial": "https://www.sonymusic.co.jp/artist/IVE/info/574055"
+      },
+      "reviewed_at_utc": "2026-11-11T16:32:41Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Sony Music Japan's official 21 April 2025 notice identifies IVE DARE ME as a new Japanese original digital single and the opening theme of a television drama. MB Release 5df7296a belongs to a Single ReleaseGroup with a one-track digital edition already present. Discogs Release 34121731 is a File Single whose observed title Dare Me / デアミー and lone track differ in text from the MusicBrainz names. The public 11 November exact-ID control confirmed the artist source identities and release year, but no common independently validated barcode, complete literal title match, or direct Release URL relation was observed. Therefore candidate NOT VERIFIED is the only justified exact-edition outcome. This is NOT an absent MusicBrainz group and not evidence of type correction; app UI was not measured, and no new playable audio or MusicBrainz identity is created."
     },
     {
       "id": "B-05",
