@@ -979,7 +979,7 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Comparação").performClick()
         // TITLE defaults to CONTAINS. The native operator picker should
         // expose which choice is currently active, not a set of blind rows.
-        compose.onNodeWithTag("playlist-choice-option-0").assertIsSelected()
+        compose.onNodeWithTag("playlist-choice-option-Contém").assertIsSelected()
     }
 
     @Test fun nestedConditionGroupBackReturnsToItsParentRatherThanRuleRoot() {
