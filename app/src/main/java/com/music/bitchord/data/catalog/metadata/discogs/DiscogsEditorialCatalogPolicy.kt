@@ -284,6 +284,35 @@ internal object DiscogsShadowCatalog {
         """\b(?:remix|live|acoustic|instrumental|sped\s+up|slowed)\b""",
     )
 
+    // C-04: MusicBrainz "Social Path / Super Bowl -Japanese ver.-"
+    // and Discogs "Social Path / Superbowl (Japanese Ver.)" describe
+    // the same literal two-part group title with different word breaks.
+    // Compare the ENTIRE normalized Latin suffix (not a shared prefix),
+    // after requiring an unchanged distinctive first component. This
+    // prevents duplicate *source-only* cards; it is NOT proof of a
+    // matching Discogs pressing, track, recording or MusicBrainz MBID.
+    private val latinPrefixToken = Regex("""[a-z0-9]{3,24}""")
+    private val latinSuffixToken = Regex("""[a-z0-9]{2,24}""")
+
+    private fun literalSlashWordBoundaryKey(title: String): Pair<String, String>? {
+        if (title.count { it == '/' } != 1 ||
+            distinctArrangement.containsMatchIn(title)
+        ) return null
+        val (leftRaw, rightRaw) = title.split('/', limit = 2)
+        val left = leftRaw.trim()
+        val prefixTokens = lexicalSignature(left)
+        if (prefixTokens.size !in 2..4 ||
+            prefixTokens.any { !latinPrefixToken.matches(it) } ||
+            left != prefixTokens.joinToString(" ")
+        ) return null
+        val suffixTokens = lexicalSignature(rightRaw.trim())
+        if (suffixTokens.size !in 2..8 ||
+            suffixTokens.any { !latinSuffixToken.matches(it) }
+        ) return null
+        val compact = suffixTokens.joinToString("")
+        return if (compact.length in 12..100) left to compact else null
+    }
+
     private fun isKnownGroupTitle(
         title: String,
         creditedArtist: String,
@@ -379,8 +408,14 @@ internal object DiscogsShadowCatalog {
             .filterTo(HashSet()) { it.size >= 3 }
         val aliases = known.flatMapTo(HashSet()) { bilingualAliases(it) }
         val pairs = known.mapNotNullTo(HashSet()) { bilingualPair(it) }
+        val slashBoundaryKeys = known.mapNotNullTo(HashSet()) {
+            literalSlashWordBoundaryKey(it)
+        }
         return { title ->
-            isKnownGroupTitle(title, expectedArtist, known, signatures, aliases, pairs)
+            isKnownGroupTitle(title, expectedArtist, known, signatures, aliases, pairs) ||
+                literalSlashWordBoundaryKey(
+                    comparisonTitle(title, expectedArtist),
+                )?.let(slashBoundaryKeys::contains) == true
         }
     }
 
