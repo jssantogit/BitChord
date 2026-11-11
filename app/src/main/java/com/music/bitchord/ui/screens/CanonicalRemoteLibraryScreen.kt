@@ -265,6 +265,7 @@ internal fun CanonicalRemoteLibraryScreen(
     detailBackToken: Int = 0,
     onDetailChanged: (Boolean) -> Unit = {},
     onNestedAlbumChanged: (Boolean) -> Unit = {},
+    onAlbumRatingTargetChanged: (CanonicalLibrarySelection?) -> Unit = {},
     initialPinnedSelection: CanonicalLibraryPin? = null,
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
     selectedSourceKey: String? = null,
@@ -476,10 +477,22 @@ internal fun CanonicalRemoteLibraryScreen(
                 artistNestedReleaseOpen,
         )
     }
+    // The floating rating button follows a verified ReleaseId. Nested
+    // artist releases publish their own selection from CanonicalArtistDetailRoute.
+    LaunchedEffect(unified, selectedContext, selectedEntity?.id) {
+        if (unified && selectedContext == CanonicalSmartFilterContext.ALBUMS) {
+            onAlbumRatingTargetChanged(selectedEntity?.let { selected ->
+                CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, selected.id)
+            })
+        } else {
+            onAlbumRatingTargetChanged(null)
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             onDetailChanged(false)
             onNestedAlbumChanged(false)
+            onAlbumRatingTargetChanged(null)
         }
     }
     var selectedFilterId by remember(providerKey, selectedContext) {
@@ -1026,6 +1039,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     searching = searchVisible,
                     nestedBackToken = artistNestedBackToken,
                     onNestedDetailChanged = { artistNestedReleaseOpen = it },
+                    onNestedAlbumRatingTargetChanged = onAlbumRatingTargetChanged,
                     albumSort = albumSort,
                     albumMenuToken = albumMenuToken,
                     albumPlaylistToken = albumPlaylistToken,

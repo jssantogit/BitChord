@@ -114,6 +114,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
@@ -2372,6 +2374,11 @@ private fun BitChordApp(
     // Put album action/sort state outside BitChordApp: it is already close
     // to the JVM Compose method-size limit, and its chrome is reused below.
     val unifiedAlbumUi = remember { UnifiedAlbumDetailUiState() }
+    // A typed ReleaseId from the actual nested/native detail, never an album
+    // guessed from text or another entity type. Used only by the top toolbar.
+    var unifiedAlbumRatingSelection by remember {
+        mutableStateOf<com.music.bitchord.ui.screens.CanonicalLibrarySelection?>(null)
+    }
     LaunchedEffect(
         unifiedLibraryCategory, unifiedLibraryDetailOpen, unifiedLibraryNestedAlbumOpen,
     ) {
@@ -3200,6 +3207,7 @@ private fun BitChordApp(
                             albumMenuToken = unifiedAlbumUi.optionsToken,
                             albumPlaylistToken = unifiedAlbumUi.playlistToken,
                             artistMenuToken = unifiedAlbumUi.artistOptionsToken,
+                            onAlbumRatingTargetChanged = { unifiedAlbumRatingSelection = it },
                             initialPinnedSelection = pinnedLibraryRequest,
                             onSourceKeysChanged = unifiedControls::updateAvailableSources,
                             searchVisible = unifiedLibrarySearching,
@@ -4702,6 +4710,7 @@ private fun BitChordApp(
                             },
                             unifiedControls = unifiedControls,
                             albumUi = unifiedAlbumUi,
+                            albumRatingSelection = unifiedAlbumRatingSelection,
                         )
                         if (openedPublicPlaylist != null && !showSettings && !showAccountScrobbling) {
                             NativePublicPlaylistTopBarActions(
@@ -4726,6 +4735,9 @@ private fun BitChordApp(
                             !showSettings && !showAccountScrobbling) {
                             CanonicalPlaylistToolbarActions(
                                 hasDetail = openedCanonicalPlaylist != null,
+                                ratingTarget = openedCanonicalPlaylist?.id?.let {
+                                    com.music.bitchord.ui.screens.canonicalOwnedPlaylistRatingTarget(it)
+                                },
                                 showCreate = com.music.bitchord.ui.screens.showPlaylistHeaderCreateAction(
                                     playlistLibraryCount,
                                 ),
@@ -6574,6 +6586,7 @@ private fun ConnectionEditors(
 private fun CanonicalPlaylistToolbarActions(
     hasDetail: Boolean,
     showCreate: Boolean,
+    ratingTarget: com.music.bitchord.ui.screens.CanonicalEntityRatingTarget? = null,
     searching: Boolean,
     onCreate: () -> Unit,
     onSearch: () -> Unit,
@@ -6594,6 +6607,9 @@ private fun CanonicalPlaylistToolbarActions(
         contentDescription = if (hasDetail) "Buscar na playlist" else "Pesquisar playlists",
         onClick = onSearch,
     )
+    if (hasDetail && ratingTarget != null) {
+        CanonicalToolbarRatingAction(ratingTarget, "playlist")
+    }
     NativeCollectionSortAction(
         contentDescription = if (hasDetail) "Ordenar músicas" else "Filtrar playlists",
         onClick = onSortOrFilter,
@@ -6632,17 +6648,70 @@ private fun NativeCollectionSortAction(contentDescription: String, onClick: () -
 }
 
 /**
- * The album action is a native icon inside the existing frosted toolbar pill,
- * distinct from the disabled + reserved for future Library pinning.
+ * The only compact rating affordance in the album/playlist header: a new
+ * top-right circular control reusing the exact standalone vector used by artists.
+ * Geometry is independent of the user's colour/numeric style preference.
  */
 @Composable
-internal fun NativeAlbumPlaylistToolbarAction(onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(
-            Icons.Rounded.PlaylistAdd,
-            contentDescription = "Adicionar álbum à playlist",
-            tint = MaterialTheme.colorScheme.onSurface,
+internal fun NativeCollectionRatingToolbarAction(
+    rating: Double?,
+    subject: String,
+    onClick: () -> Unit,
+) {
+    val label = "Avaliar $subject · " +
+        com.music.bitchord.ui.components.compactRatingAccessibility(rating)
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier.semantics(mergeDescendants = true) {
+            this.contentDescription = label
+        },
+    ) {
+        com.music.bitchord.ui.components.CompactRatingIndicator(
+            value = rating,
+            geometry = com.music.bitchord.ui.components.CompactRatingGeometry.STANDALONE,
+            showUnrated = true,
+            size = 30.dp,
+            neutralColor = MaterialTheme.colorScheme.onSurface,
         )
+    }
+}
+
+/** Existing first-party half-star dialog, with the same identity as its page. */
+@Composable
+private fun CanonicalToolbarRatingAction(
+    target: com.music.bitchord.ui.screens.CanonicalEntityRatingTarget,
+    subject: String,
+) {
+    val score by com.music.bitchord.ui.screens.rememberCanonicalCatalogEntityRating(target)
+    var editing by remember(target) { mutableStateOf(false) }
+    if (editing) {
+        com.music.bitchord.ui.screens.CanonicalCatalogEntityRatingDialog(
+            target = target, title = "Avaliar $subject", onDismiss = { editing = false },
+        )
+    }
+    NativeCollectionRatingToolbarAction(score, subject, onClick = { editing = true })
+}
+
+/** Library albums use the existing membership-verified batch/single editor. */
+@Composable
+private fun CanonicalLibraryAlbumRatingToolbarAction(
+    selection: com.music.bitchord.ui.screens.CanonicalLibrarySelection,
+    selectedSource: String?,
+) {
+    val target = remember(selection) {
+        com.music.bitchord.ui.screens.canonicalEntityRatingTarget(selection)
+    }
+    if (target != null) {
+        val score by com.music.bitchord.ui.screens.rememberCanonicalCatalogEntityRating(target)
+        var editing by remember(selection) { mutableStateOf(false) }
+        if (editing) {
+            com.music.bitchord.ui.screens.CanonicalLibraryEntityRatingDialog(
+                targets = listOf(selection),
+                selectedSource = selectedSource,
+                onDismiss = { editing = false },
+            )
+        }
+        NativeCollectionRatingToolbarAction(score, "álbum", onClick = { editing = true })
     }
 }
 
@@ -7027,6 +7096,7 @@ private fun UnifiedLibraryRouteToolbar(
     onUnifiedSearch: () -> Unit,
     unifiedControls: UnifiedLibraryUiControls,
     albumUi: UnifiedAlbumDetailUiState,
+    albumRatingSelection: com.music.bitchord.ui.screens.CanonicalLibrarySelection?,
 ) {
     if (settingsOpen || otherDetailOpen) return
     if (recentPage) {
@@ -7048,7 +7118,7 @@ private fun UnifiedLibraryRouteToolbar(
             ),
             onAlbumSort = albumUi::openSort,
             onAlbumOptions = albumUi::requestOptions,
-            onAlbumAddToPlaylist = albumUi::requestAddToPlaylist,
+            albumRatingSelection = albumRatingSelection,
             artistDetail = shouldUseUnifiedArtistDetailToolbar(
                 category, detailOpen, nestedAlbumOpen,
             ),
@@ -7067,7 +7137,7 @@ private fun UnifiedLibraryToolbarActions(
     albumDetail: Boolean = false,
     onAlbumSort: () -> Unit = {},
     onAlbumOptions: () -> Unit = {},
-    onAlbumAddToPlaylist: () -> Unit = {},
+    albumRatingSelection: com.music.bitchord.ui.screens.CanonicalLibrarySelection? = null,
     artistDetail: Boolean = false,
     onArtistOptions: () -> Unit = {},
 ) {
@@ -7082,9 +7152,13 @@ private fun UnifiedLibraryToolbarActions(
         )
     }
     if (albumDetail) {
-        // Separate from + in the hero: that control is reserved for
-        // future pin-to-Library, not repurposed as "add to playlist".
-        NativeAlbumPlaylistToolbarAction(onClick = onAlbumAddToPlaylist)
+        // The same right-hand circle as playlist and catalog album routes.
+        // Playlist addition stays in the existing verified ⋯ action sheet.
+        if (albumRatingSelection != null) {
+            CanonicalLibraryAlbumRatingToolbarAction(
+                albumRatingSelection, controls.sourceKey,
+            )
+        }
         NativeCollectionSortAction(
             contentDescription = "Ordenar faixas do álbum",
             onClick = onAlbumSort,
@@ -7488,6 +7562,7 @@ private fun NativePublicPlaylistTopBarActions(
     CanonicalPlaylistToolbarActions(
         hasDetail = true,
         showCreate = false,
+        ratingTarget = com.music.bitchord.ui.screens.canonicalPublicPlaylistRatingTarget(playlist.mbid),
         searching = searching,
         onCreate = {},
         onSearch = onToggleSearch,
@@ -7526,6 +7601,10 @@ private fun NativeDetailAlbumTopBarActions(
 ) {
     val onlineMetadata = browseId.startsWith("catalog:RELEASE:") ||
         browseId.startsWith("catalog:RELEASE_GROUP:")
+    val ratingTarget = remember(browseId, isReleaseDetail) {
+        if (isReleaseDetail) com.music.bitchord.ui.screens.canonicalCatalogEntityRatingTarget(browseId)
+        else null
+    }
     if (songs.isNotEmpty() || onlineMetadata) {
         NativeCollectionSearchAction(
             searching = searching,
@@ -7534,6 +7613,9 @@ private fun NativeDetailAlbumTopBarActions(
             ),
             onClick = onToggleSearch,
         )
+    }
+    if (ratingTarget != null) {
+        CanonicalToolbarRatingAction(ratingTarget, "álbum")
     }
     NativeCollectionSortAction(
         contentDescription = stringResource(
