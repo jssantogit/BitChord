@@ -224,6 +224,45 @@ class MusicBrainzPublicMetadataIndexTest {
         } finally { db.close() }
     }
 
+    @Test fun sparseRecordingSearchCannotErasePreviouslyVerifiedVideoFromRoom() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val mbid = "2c124b3c-e76b-4046-9980-e88c5ffa4ab2"
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistRecordings(listOf(MusicBrainzRecordingHit(
+                mbid, "New Jeans", "NewJeans", 180000,
+                hasOfficialAudioRelease = false, isVideo = true,
+            )))
+            // The search API can omit both fields, unlike a previous exact
+            // lookup. The DTO must carry null/unknown through to Room.
+            val search = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch(
+                com.music.bitchord.data.catalog.metadata.MusicBrainzClient(
+                    transport = object :
+                        com.music.bitchord.data.catalog.metadata.MusicBrainzTransport {
+                        override suspend fun get(
+                            path: String, parameters: Map<String, String>, userAgent: String,
+                        ): String = """{"count":1,"offset":0,"recordings":[
+                            {"id":"$mbid","title":"New Jeans"}
+                        ]}"""
+                    },
+                ),
+            )
+            val hit = (search.searchRecordings("New Jeans") as
+                com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult.Success<
+                    MusicBrainzRecordingHit
+                >).page.items.single()
+            assertEquals(null, hit.isVideo)
+            assertEquals(null, hit.hasOfficialAudioRelease)
+            index.persistRecordings(listOf(hit))
+            val after = db.catalogDao().searchKnownMusicBrainzRecordings("New Jeans", 20)
+                .single { it.musicBrainzId == mbid }
+            assertEquals(true, after.isVideo)
+            assertEquals(false, after.hasOfficialAudioRelease)
+            assertEquals(false, isCuratedMusicBrainzRecording(after))
+        } finally { db.close() }
+    }
+
     @Test fun offlineCuratedRecordingsRequireVerifiedAudioEvidenceAndRejectLegacyVideos() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
