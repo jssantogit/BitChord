@@ -109,6 +109,11 @@ internal object AppleQueueVectors {
     }
 
     /** The filled star is precisely the cutout contour of player Favorited. */
+    /** Same vector cutout used as a clip for numeric digits in the circular icon. */
+    internal val RatingStarContour by lazy {
+        androidx.compose.ui.graphics.vector.PathParser().parsePathString(starFilledPath).toPath()
+    }
+
     val RatingStarFilled: ImageVector by lazy {
         ImageVector.Builder(
             name = "apple_queue_rating_star_filled",
