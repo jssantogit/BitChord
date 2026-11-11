@@ -87,7 +87,21 @@ def label_catalog_evidence(mb: dict, discogs: dict) -> dict:
         {number for _, number in mb_pairs} &
         {number for _, number in discogs_pairs}
     )
+    # Two exact same-label assertions with disjoint catalog numbers are
+    # variant evidence, even when UPC and track count match. Preserve both
+    # sources as a reviewable contradiction, never infer a catalog alias.
+    mb_by_label: dict[str, set[str]] = {}
+    dc_by_label: dict[str, set[str]] = {}
+    for label, number in mb_pairs:
+        mb_by_label.setdefault(label, set()).add(number)
+    for label, number in discogs_pairs:
+        dc_by_label.setdefault(label, set()).add(number)
+    conflicting_labels = sorted(
+        label for label in mb_by_label.keys() & dc_by_label.keys()
+        if not (mb_by_label[label] & dc_by_label[label])
+    )
     assessment = (
+        "same_label_different_catalog_numbers" if conflicting_labels else
         "exact_label_catalog_pair_observed_not_verified" if shared else
         "catalog_only_unconfirmed" if common_numbers else
         "insufficient_label_catalog_data"
@@ -101,6 +115,11 @@ def label_catalog_evidence(mb: dict, discogs: dict) -> dict:
         "discogs_pairs": details(discogs_pairs),
         "matching_pairs": details(shared),
         "shared_catalog_numbers": common_numbers,
+        "conflicting_same_label_catalog_numbers": [
+            {"label": label, "musicbrainz": sorted(mb_by_label[label]),
+             "discogs": sorted(dc_by_label[label])}
+            for label in conflicting_labels
+        ],
     }
 
 
