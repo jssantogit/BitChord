@@ -243,3 +243,24 @@ A primeira execução da etapa de barcode no [scanner #43004860199](https://gith
 Para não encerrar a investigação nesse limite, `scripts/catalog_211_discogs_source_only_title_triage.py` consulta o índice `release` de ReleaseGroups MusicBrainz com filtro obrigatório `arid` (MBID do artista) para os casos sem barcode. Limita a uma busca por edição e oito buscas por workflow; utiliza somente título observado e IDs validados, nunca um link inserido no Discogs como destino de HTTP. O resultado `mb_title_index_lead_not_edition` é apenas uma pista de ReleaseGroup já indexado, não valida edição nem relação Discogs. Zero hits e falhas da API nunca são ausência provada. A identidade real de lançamento continua exigindo revisão humana e fonte editorial independente.
 
 O artefato adicional `discogs-211-source-only-title-triage.json` está conectado ao scanner público, separado do corpus 0/30. Busca Lucene usa `release` e `arid` documentados na [API MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API/Search/ReleaseGroupSearch).
+
+## Grupo C — segundo passe independente, sem reciclar casos B/C (11/11/2026)
+
+Depois do primeiro scanner público (8 edições), um segundo passe separado
+`scripts/catalog_211_discogs_fresh_c_followup.py` reusa o índice *já consultado* e
+remove todas as identidades Discogs Master/Release previamente hidratadas,
+preservando as mesmas 10 relações Artist MBID→Discogs Artist ID e o limite
+por artista. Edições com Discogs Release ID já pré-selecionado nos grupos B ou C
+do manifesto são descartadas antes da adjudicação, incluindo Masters que
+apontam para Release conhecido. O resultado é guardado no artifact
+`discogs-211-fresh-c-followup.json`. Nenhuma listagem/página adicional de
+artista é consultada; é apenas a segunda amostra da primeira página.
+Só ocorrências novas, com crédito de artista exato, faixas e metadados
+válidos, prosseguem às sondagens conservadoras por barcode/título MusicBrainz.
+Consultas negativas permanecem inconclusivas, e falhas/timeout não provam
+ausência. O manifesto, as prateleiras e o contador 0/30 ficam inalterados.
+
+Há limites independentes: máximo 8 novas entradas (2 por artista),
+16 GETs Discogs para Release/Master, até 16 buscas barcode MB e no máximo
+8 buscas por título MB. Nenhum token ou APK. Este segundo passe é
+apenas um auxílio à seleção de C, nunca valida edição ou tipo editorial.
