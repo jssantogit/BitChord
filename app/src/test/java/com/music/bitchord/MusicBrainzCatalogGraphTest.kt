@@ -248,6 +248,26 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(null, detail.isVideoOnlyContent)
     }
 
+    @Test fun invalidRecordingIdentityCannotBecomePositiveVideoOnlyEvidence() = runBlocking {
+        val trackMbid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Malformed video-only source",
+                    "release-group":{"id":"$group"},
+                    "media":[{"format":"Digital Media","track-count":1,"tracks":[{
+                        "id":"$trackMbid","title":"Unverified video",
+                        "recording":{"id":"not-an-mbid","video":true}
+                    }]}]}"""
+            },
+        ))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(0, detail.tracks.size)
+        assertEquals(null, detail.isVideoOnlyContent)
+    }
+
     @Test fun contradictoryVideoFormatAndRecordingFlagsRemainInconclusive() = runBlocking {
         val trackMbid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         val recordingMbid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"

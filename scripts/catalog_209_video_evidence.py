@@ -60,6 +60,10 @@ def evaluate_release(payload: object) -> tuple[str, dict]:
         if not isinstance(tracks, list) or not tracks:
             all_valid = False
             continue
+        expected_count = medium.get("track-count")
+        if type(expected_count) is int and expected_count != len(tracks):
+            # A subset of video flags cannot prove the omitted tracks are video.
+            all_valid = False
         for track in tracks:
             if not isinstance(track, dict):
                 all_valid = False
@@ -90,9 +94,20 @@ def evaluate_release(payload: object) -> tuple[str, dict]:
         isinstance(fmt, str) and fmt.lower() in VIDEO_FORMATS for fmt in formats)
     audio_formats = any(
         isinstance(fmt, str) and fmt.lower() in AUDIO_FORMATS for fmt in formats)
-    evidence = (True if video_formats or (flags and all(x is True for x in flags))
-                else False if audio_formats or any(x is False for x in flags)
-                else None)
+    format_evidence = True if video_formats else False if audio_formats else None
+    recording_evidence = (True if flags and all(x is True for x in flags)
+                          else False if any(x is False for x in flags)
+                          else None)
+    if (format_evidence is not None and recording_evidence is not None and
+            format_evidence != recording_evidence):
+        # Contradictory provider fields are not sufficient for video-only.
+        evidence = None
+    elif format_evidence is True or recording_evidence is True:
+        evidence = True
+    elif format_evidence is False or recording_evidence is False:
+        evidence = False
+    else:
+        evidence = None
     proof["is_video_only_content"] = evidence
     return ("PASS" if evidence is True else "FAIL" if evidence is False
             else "INCONCLUSIVE"), proof

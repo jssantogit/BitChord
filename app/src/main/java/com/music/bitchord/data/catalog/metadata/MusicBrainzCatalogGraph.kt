@@ -323,9 +323,15 @@ internal class MusicBrainzCatalogGraph(
             val expectedCount = item.integer("track-count")
             if (expectedCount != null && expectedCount != tracks.size) return null
             for (track in tracks) {
-                val recording = (track as? JsonObject)?.get("recording") as? JsonObject
+                val itemTrack = track as? JsonObject ?: return null
+                val recording = itemTrack["recording"] as? JsonObject ?: return null
+                // Without both exact Track and Recording MBIDs the source
+                // cannot corroborate a video flag for the edition graph.
+                if (itemTrack.string("id").validMbid() == null ||
+                    recording.string("id").validMbid() == null
+                ) return null
                 flags += runCatching {
-                    recording?.get("video")?.jsonPrimitive?.booleanOrNull
+                    recording["video"]?.jsonPrimitive?.booleanOrNull
                 }.getOrNull()
             }
         }

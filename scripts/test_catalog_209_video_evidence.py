@@ -56,6 +56,23 @@ class VideoEvidenceTest(unittest.TestCase):
         self.assertEqual("PASS", status)
         self.assertTrue(evidence["is_video_only_content"])
 
+    def test_partial_medium_track_count_never_proves_video_only(self):
+        payload = sample_release()
+        payload["media"][0]["track-count"] = 2
+        status, evidence = evaluate_release(payload)
+        self.assertEqual("INCONCLUSIVE", status)
+        self.assertIsNone(evidence["is_video_only_content"])
+
+    def test_conflicting_format_and_recording_video_flag_are_unknown(self):
+        for payload in (
+            sample_release(format_name="DVD-Video", video=False),
+            sample_release(format_name="CD", video=True),
+        ):
+            with self.subTest(payload=payload):
+                status, evidence = evaluate_release(payload)
+                self.assertEqual("INCONCLUSIVE", status)
+                self.assertIsNone(evidence["is_video_only_content"])
+
     def test_independent_recording_video_true(self):
         self.assertEqual(("PASS", {"recording_mbid": VIDEO_RECORDING, "video": True}),
                          evaluate_recording({"id": VIDEO_RECORDING, "video": True}))
