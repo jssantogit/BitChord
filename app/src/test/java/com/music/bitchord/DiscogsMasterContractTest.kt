@@ -25,6 +25,36 @@ class DiscogsMasterContractTest {
         assertNull(DiscogsRecordParser.parseMaster(link, """{"id":2222,"title":"Other"}"""))
     }
 
+    @Test fun masterVersionListingRejectsIncompleteOrDuplicateUntrustedResults() = runBlocking {
+        val bodies = listOf(
+            """{"pagination":{"page":1,"pages":1,"per_page":8,"items":2},
+                 "versions":[{"id":101},{"id":102}]}""",
+            """{"pagination":{"page":1,"pages":2,"per_page":8,"items":9},
+                 "versions":[{"id":101}]}""",
+            """{"pagination":{"page":1,"pages":1,"per_page":8,"items":2},
+                 "versions":[{"id":101},{"id":101}]}""",
+            """{"pagination":{"page":1,"pages":1,"per_page":8,"items":2},
+                 "versions":[{"id":101}]}""",
+        )
+        val expected = listOf("Found", "Incomplete", "Malformed", "Malformed")
+        for ((index, payload) in bodies.withIndex()) {
+            val paths = mutableListOf<String>()
+            val client = DiscogsClient(transport = object : DiscogsTransport {
+                override suspend fun get(
+                    path: String, userAgent: String,
+                ): DiscogsHttpResponse {
+                    paths += path
+                    return DiscogsHttpResponse(200, payload)
+                }
+            }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+            val result = client.fetchMasterVersions(987)
+            assertEquals(expected[index], result::class.simpleName)
+            if (index == 0) assertEquals(listOf(101L, 102L),
+                (result as DiscogsMasterVersionsResult.Found).releaseIds)
+            assertEquals(listOf("masters/987/versions?page=1&per_page=8"), paths)
+        }
+    }
+
     @Test fun masterLookupOnlyUsesReadOnlyEndpointAndNeverInventsEditionIdentity() = runBlocking {
         val paths = mutableListOf<String>()
         val client = DiscogsClient(transport = object : DiscogsTransport {

@@ -86,6 +86,9 @@ class DiscogsEditionRepositoryTest {
                     "masters/987" -> DiscogsHttpResponse(200,
                         """{"id":987,"title":"ILLIT - SUPER REAL ME",
                         "artists":[{"name":"ILLIT"}],"main_release":101}""")
+                    "masters/987/versions?page=1&per_page=8" -> DiscogsHttpResponse(200,
+                        """{"pagination":{"page":1,"pages":1,"per_page":8,"items":1},
+                            "versions":[{"id":101}]}""")
                     "releases/101" -> DiscogsHttpResponse(200,
                         """{"id":101,"master_id":987,"title":"SUPER REAL ME",
                          "artists":[{"name":"ILLIT"}],"country":"South Korea","year":2024,
@@ -119,7 +122,8 @@ class DiscogsEditionRepositoryTest {
         assertEquals("https://www.discogs.com/release/101",
             (evidence as DiscogsEditionEnrichment.Verified).attributionUrl)
         assertEquals(listOf("release/$mbid", "release-group/$group"), paths)
-        assertEquals(listOf("masters/987", "releases/101"), discogsPaths)
+        assertEquals(listOf("masters/987",
+            "masters/987/versions?page=1&per_page=8", "releases/101"), discogsPaths)
     }
 
     @Test fun masterVersionsMustAllBeExaminedBeforeClaimingOneUnlinkedEdition() = runBlocking {

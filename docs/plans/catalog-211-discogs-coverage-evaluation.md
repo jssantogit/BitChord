@@ -722,3 +722,61 @@ seguro promover `Verified`; o resultado esperado é
 `DiscogsAuthenticatedMatch.Unavailable` (não `NoMatch`).
 O corpus A/B/C segue 5/30 revisões, 0 correspondências
 sem vínculo confirmadas ou recuperações Discogs-only.
+
+## B sem token — comparar todas as versões de um Master antes de confirmar (11/11/2026)
+
+**Lacuna que impedia encontrar correspondências reais sem vínculo:**
+`DiscogsEditionRepository.observeViaReleaseGroupMaster` já reconhecia
+a relação tipada `MusicBrainz ReleaseGroup → Discogs Master`,
+mas examinava exclusivamente `master.main_release`.
+Esse campo é uma **edição representativa do Master, não um
+identificador do Release canônico nem garantia de unicidade**.
+Isso podia produzir dois resultados incorretos: ignorar a
+edição Discogs efetivamente correspondente por ser uma versão
+alternativa; ou validar a principal, embora outra variante
+Discogs também possuísse barcode, faixas e ano idênticos.
+
+O exemplo verificável
+[ILLIT / SUPER REAL ME no MusicBrainz](https://musicbrainz.org/artist/6b128dd7-e998-4edb-a4f5-400fef190445/releases)
+contém versões físicas `SUPER ME` e `REAL ME`, ambas CD da
+Coreia do Sul, data 25/03/2024, gravadora BELIFT LAB,
+catálogo `CMDC12000` e UPC `8809704427821`.
+**O mesmo UPC não distingue automaticamente essas duas embalagens.**
+
+A consulta pública Discogs
+`/masters/{id}/versions?page=1&per_page=8`
+passa a ser utilizada apenas quando existe uma relação
+ReleaseGroup→Master tipada no MusicBrainz. Há uma chamada
+para o Master, uma para a lista paginada de versões e
+até oito para os detalhes de Releases, sempre no limitador
+compartilhado, sem credencial ou buscas arbitrárias.
+A lista só é considerada completa quando a paginação
+afirma **uma página, até oito versões, IDs únicos e
+contagem coerente**, incluindo a `main_release`.
+Mais de oito versões ou paginação incompleta ⇒
+`Candidate`, **nunca** `Verified` por consultar
+só a primeira versão. API indisponível ⇒ `Unavailable`.
+
+Cada Release deve pertencer explicitamente ao Master da
+relação MusicBrainz. A comparação usa o mesmo
+`DiscogsEditionMatcher.assessUnlinked` validado
+(artistas/ReleaseGroup, barcode com dígito verificador,
+ordem completa de faixas, ano, país, meio digital/físico).
+Somente **uma edição Verified e nenhuma outra Candidate**
+autoriza o enriquecimento; duas Verified ou uma Verified
+com outra Candidate ⇒ `Ambiguous`, com nenhuma promoção;
+zero Verified e alguma Candidate ⇒ `Candidate`.
+Releases com `Conflict` confirmado não podem contar
+como outras prensagens equivalentes.
+
+As regressões Kotlin verificam: duas edições físicas com
+mesmo UPC/faixas/ano ⇒ Ambiguous; alternativa única
+verificável apesar de main_release divergente ⇒ Verified;
+mais de oito versões/paginação incompleta ⇒ Candidate;
+versões duplicadas/malformadas não podem criar prova; e
+um Master de versão única mantém a prova positiva do
+caminho antigo. Não exportar essas relações para
+MusicBrainz, não criar Release/Recording MBIDs, áudio ou
+dados de biblioteca do usuário. Este avanço abre o
+**caminho técnico de avaliação B sem token**, mas não
+inventa ainda um novo `Verified` no corpus A/B/C (5/30).

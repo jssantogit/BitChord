@@ -14,6 +14,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import java.util.Locale
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 
 /** Fixed paths only; no untrusted web link is ever used as an API URL. */
 internal interface DiscogsTransport {
@@ -38,7 +44,10 @@ internal class KtorDiscogsTransport(
         }
     },
 ) : DiscogsTransport {
-    private val allowedPath = Regex("^(releases|masters)/[1-9][0-9]{0,11}$")
+    // Query parameters are a single hardcoded constant, never provider input.
+    private val allowedPath = Regex(
+        """^(?:releases|masters)/[1-9][0-9]{0,11}$|^masters/[1-9][0-9]{0,11}/versions\?page=1&per_page=8$""",
+    )
 
     override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
         require(allowedPath.matches(path)) { "Invalid Discogs endpoint" }
@@ -182,6 +191,56 @@ internal class DiscogsClient(
         }
     }
 
+    /**
+     * Discogs Master versions are a paginated public read-only endpoint.
+     * At most eight versions are examined; when pagination exceeds that
+     * budget we return Incomplete, never a fabricated unique edition.
+     */
+    suspend fun fetchMasterVersions(id: Long): DiscogsMasterVersionsResult {
+        if (!enabled) return DiscogsMasterVersionsResult.Disabled
+        if (id !in 1..999_999_999_999L) return DiscogsMasterVersionsResult.Malformed
+        val response = try {
+            limiter.runHttpLimited {
+                transport.get("masters/$id/versions?page=1&per_page=8", userAgent)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return DiscogsMasterVersionsResult.Unavailable
+        }
+        if (response.status != 200) return DiscogsMasterVersionsResult.Unavailable
+        return try {
+            if (response.body.length > 131_072) return DiscogsMasterVersionsResult.Malformed
+            val obj = Json.parseToJsonElement(response.body) as? JsonObject
+                ?: return DiscogsMasterVersionsResult.Malformed
+            val paging = obj["pagination"] as? JsonObject
+                ?: return DiscogsMasterVersionsResult.Malformed
+            val page = (paging["page"] as? JsonPrimitive)?.intOrNull
+            val pages = (paging["pages"] as? JsonPrimitive)?.intOrNull
+            val perPage = (paging["per_page"] as? JsonPrimitive)?.intOrNull
+            val items = (paging["items"] as? JsonPrimitive)?.intOrNull
+            if (page != 1 || perPage != 8 || pages == null || pages !in 1..100_000 ||
+                items == null || items !in 1..100_000
+            ) return DiscogsMasterVersionsResult.Malformed
+            if (pages != 1 || items > 8) return DiscogsMasterVersionsResult.Incomplete
+            val rows = obj["versions"] as? JsonArray
+                ?: return DiscogsMasterVersionsResult.Malformed
+            if (rows.size != items) return DiscogsMasterVersionsResult.Malformed
+            val ids = rows.map { row ->
+                val value = ((row as? JsonObject)?.get("id") as? JsonPrimitive)?.longOrNull
+                    ?: return DiscogsMasterVersionsResult.Malformed
+                if (value !in 1..999_999_999_999L) {
+                    return DiscogsMasterVersionsResult.Malformed
+                }
+                value
+            }
+            if (ids.distinct().size != ids.size) DiscogsMasterVersionsResult.Malformed
+            else DiscogsMasterVersionsResult.Found(ids)
+        } catch (_: Exception) {
+            DiscogsMasterVersionsResult.Malformed
+        }
+    }
+
     suspend fun fetchRelease(id: Long): DiscogsLookupResult {
         if (!enabled) return DiscogsLookupResult.Disabled
         if (id !in 1..999_999_999_999L) return DiscogsLookupResult.InvalidId
@@ -206,6 +265,16 @@ internal class DiscogsClient(
             else -> DiscogsLookupResult.Unavailable
         }
     }
+}
+
+/** A complete, bounded list of versions is essential before claiming an
+ * exact edition is unique. The Main Release alone is never exhaustive. */
+internal sealed interface DiscogsMasterVersionsResult {
+    data class Found(val releaseIds: List<Long>) : DiscogsMasterVersionsResult
+    data object Incomplete : DiscogsMasterVersionsResult
+    data object Disabled : DiscogsMasterVersionsResult
+    data object Malformed : DiscogsMasterVersionsResult
+    data object Unavailable : DiscogsMasterVersionsResult
 }
 
 /**

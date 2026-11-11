@@ -146,36 +146,61 @@ internal class DiscogsEditionRepository(
             DiscogsLookupResult.Disabled -> return DiscogsEditionEnrichment.Disabled
             else -> return DiscogsEditionEnrichment.Unavailable
         }
-        val editionId = master.mainReleaseId ?: return DiscogsEditionEnrichment.Candidate
-        val editionLink = DiscogsLink(DiscogsKind.RELEASE, editionId)
-        val cached = cache.get(canonical.musicBrainzReleaseId, editionLink, nowMillis())
-        val observation = if (cached != null) cached else {
-            val record = when (val response = discogs.fetchRelease(editionId)) {
-                is DiscogsLookupResult.Found -> response.record
-                DiscogsLookupResult.Missing -> return DiscogsEditionEnrichment.NoLink
-                DiscogsLookupResult.Malformed, DiscogsLookupResult.InvalidId,
-                is DiscogsLookupResult.FoundMaster -> return DiscogsEditionEnrichment.Invalid
-                DiscogsLookupResult.Disabled -> return DiscogsEditionEnrichment.Disabled
-                else -> return DiscogsEditionEnrichment.Unavailable
-            }
-            DiscogsObservation(
-                canonicalMbid = canonical.musicBrainzReleaseId,
-                kind = DiscogsKind.RELEASE,
-                record = record,
-                fetchedAtMillis = nowMillis(),
-            )
+        // A Discogs Master groups *versions*. Its main_release is a display
+        // representative, NOT evidence that no alternate pressing can match.
+        // Only an exhaustive one-page bounded list can establish uniqueness.
+        val mainReleaseId = master.mainReleaseId ?: return DiscogsEditionEnrichment.Candidate
+        val ids = when (val versions = discogs.fetchMasterVersions(masterLink.id)) {
+            is DiscogsMasterVersionsResult.Found -> versions.releaseIds
+            DiscogsMasterVersionsResult.Incomplete -> return DiscogsEditionEnrichment.Candidate
+            DiscogsMasterVersionsResult.Disabled -> return DiscogsEditionEnrichment.Disabled
+            DiscogsMasterVersionsResult.Malformed -> return DiscogsEditionEnrichment.Invalid
+            DiscogsMasterVersionsResult.Unavailable -> return DiscogsEditionEnrichment.Unavailable
         }
-        return when (DiscogsEditionMatcher.assessUnlinked(canonical, observation.record)) {
-            DiscogsEditionVerdict.VERIFIED -> {
-                if (!observation.isDisplayableAt(nowMillis())) {
-                    DiscogsEditionEnrichment.Unavailable
-                } else {
-                    if (cached == null) cache.put(observation)
-                    DiscogsEditionEnrichment.Verified(observation)
+        if (mainReleaseId !in ids) return DiscogsEditionEnrichment.Candidate
+        val observations = ArrayList<DiscogsObservation>(ids.size)
+        for (id in ids) {
+            val editionLink = DiscogsLink(DiscogsKind.RELEASE, id)
+            val cached = cache.get(canonical.musicBrainzReleaseId, editionLink, nowMillis())
+            val observation = if (cached != null) cached else {
+                val record = when (val response = discogs.fetchRelease(id)) {
+                    is DiscogsLookupResult.Found -> response.record
+                    DiscogsLookupResult.Disabled -> return DiscogsEditionEnrichment.Disabled
+                    DiscogsLookupResult.Malformed, DiscogsLookupResult.InvalidId,
+                    is DiscogsLookupResult.FoundMaster -> return DiscogsEditionEnrichment.Invalid
+                    else -> return DiscogsEditionEnrichment.Unavailable
                 }
+                DiscogsObservation(
+                    canonicalMbid = canonical.musicBrainzReleaseId,
+                    kind = DiscogsKind.RELEASE,
+                    record = record,
+                    fetchedAtMillis = nowMillis(),
+                )
             }
-            DiscogsEditionVerdict.CANDIDATE -> DiscogsEditionEnrichment.Candidate
-            DiscogsEditionVerdict.CONFLICT -> DiscogsEditionEnrichment.Conflict
+            // Every version must explicitly belong to the linked Master.
+            // Otherwise the untrusted list cannot prove a complete set.
+            if (observation.record.link != editionLink ||
+                observation.record.masterId != masterLink.id ||
+                !observation.isDisplayableAt(nowMillis())
+            ) return DiscogsEditionEnrichment.Candidate
+            observations += observation
+        }
+        val decisions = observations.map {
+            it to DiscogsEditionMatcher.assessUnlinked(canonical, it.record)
+        }
+        val verified = decisions.filter { it.second == DiscogsEditionVerdict.VERIFIED }
+            .map { it.first }
+        val pending = decisions.any { it.second == DiscogsEditionVerdict.CANDIDATE }
+        return when {
+            verified.size > 1 || (verified.isNotEmpty() && pending) ->
+                DiscogsEditionEnrichment.Ambiguous
+            verified.size == 1 -> {
+                val chosen = verified.single()
+                cache.put(chosen)
+                DiscogsEditionEnrichment.Verified(chosen)
+            }
+            pending -> DiscogsEditionEnrichment.Candidate
+            else -> DiscogsEditionEnrichment.Conflict
         }
     }
 }
