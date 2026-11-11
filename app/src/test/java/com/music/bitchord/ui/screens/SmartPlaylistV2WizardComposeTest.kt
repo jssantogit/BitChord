@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -1088,6 +1089,9 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("CRÉDITOS").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Buscar nesta categoria")
             .performTextInput("gênero")
+        // Switching into all-fields search must not remount the editing
+        // field and close the keyboard while the user is still typing.
+        compose.onNodeWithContentDescription("Buscar nesta categoria").assertIsFocused()
         // Search belongs to the entire category, not to the old sub-tab.
         compose.onNodeWithText("Gênero musical").assertExists()
     }
