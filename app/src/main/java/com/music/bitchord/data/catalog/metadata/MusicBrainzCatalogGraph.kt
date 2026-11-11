@@ -54,6 +54,8 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val editionFormats: List<String> = emptyList(),
     /** Exact source label + catalog-number pairs; never split display labels. */
     val editionLabelCatalogPairs: List<Pair<String, String>> = emptyList(),
+    /** Oversized/malformed source label-info must not certify identity. */
+    val editionLabelCatalogComplete: Boolean = true,
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -259,7 +261,11 @@ internal class MusicBrainzCatalogGraph(
                 }.distinct().take(6),
                 // Preserve structured source pairing for pressing identity:
                 // the display string "Label (Catalog)" is not reversible.
-                editionLabelCatalogPairs = data.array("label-info").take(12)
+                editionLabelCatalogComplete = data["label-info"]?.let { raw ->
+                    raw is JsonArray && raw.size <= 64 &&
+                        raw.all { it is JsonObject }
+                } ?: true,
+                editionLabelCatalogPairs = data.array("label-info").take(64)
                     .mapNotNull { entry ->
                         val info = entry as? JsonObject ?: return@mapNotNull null
                         val label = (info["label"] as? JsonObject)?.string("name")
@@ -269,7 +275,7 @@ internal class MusicBrainzCatalogGraph(
                             ?.takeIf { it.isNotEmpty() && it.length <= 80 }
                             ?: return@mapNotNull null
                         label to catalog
-                    }.distinct().take(6),
+                    }.distinct(),
                 editionFormats = media.mapNotNull { entry ->
                     (entry as? JsonObject)?.string("format")?.trim()
                         ?.takeIf { it.isNotEmpty() && it.length <= 80 }
