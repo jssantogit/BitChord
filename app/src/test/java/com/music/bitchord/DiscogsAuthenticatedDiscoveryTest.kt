@@ -274,6 +274,64 @@ class DiscogsAuthenticatedDiscoveryTest {
         assertEquals(listOf("releases/111", "releases/112"), calls)
     }
 
+    @Test fun incompleteCandidateHydrationCannotVerifyOneRemainingEdition() = runBlocking {
+        // A two-index exact search is complete only if every returned Discogs
+        // Release ID has a usable detail response. 404, network failure, and
+        // malformed payload are NOT evidence that another edition cannot match.
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+            title = "SUPER REAL ME", creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"), status = "Official",
+            barcodes = listOf("8809704427821"), trackTitles = listOf("Magnetic"),
+            releaseYear = 2024, country = "KR", editionFormats = listOf("CD"),
+        )
+        for (unavailable in listOf(404, 503, 200)) {
+            for (goodId in listOf(111L, 112L)) {
+                val search = DiscogsDatabaseSearchClient(
+                    transport = object : DiscogsSearchTransport {
+                        override suspend fun search(
+                            query: DiscogsSearchRequest, token: String, userAgent: String,
+                        ): DiscogsHttpResponse = DiscogsHttpResponse(200,
+                            """{"pagination":{"page":1,"pages":1},
+                                "results":[{"id":111,"type":"release"},
+                                           {"id":112,"type":"release"}]}""")
+                    }, tokenProvider = { token }, enabled = true,
+                    limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+                )
+                val calls = mutableListOf<String>()
+                val editions = DiscogsClient(
+                    transport = object : DiscogsTransport {
+                        override suspend fun get(
+                            path: String, userAgent: String,
+                        ): DiscogsHttpResponse {
+                            calls += path
+                            val id = path.substringAfter("/").toLong()
+                            if (id != goodId) return if (unavailable == 200)
+                                DiscogsHttpResponse(200, """{"not":"a release"}""")
+                            else DiscogsHttpResponse(unavailable, "")
+                            return DiscogsHttpResponse(200, """{
+                                "id":$id,"title":"SUPER REAL ME",
+                                "artists":[{"name":"ILLIT"}],
+                                "country":"South Korea","year":2024,
+                                "labels":[{"name":"BELIFT LAB","catno":"CMDC12000"}],
+                                "identifiers":[{"type":"Barcode",
+                                    "value":"8809704427821"}],
+                                "formats":[{"name":"CD","descriptions":["EP"]}],
+                                "tracklist":[{"position":"1",
+                                    "title":"Magnetic"}]}""")
+                        }
+                    }, enabled = true,
+                    limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+                )
+                val result = DiscogsAuthenticatedDiscovery(search, editions)
+                    .findForEdition(canonical)
+                assertEquals("An unreadable candidate cannot prove uniqueness: " +
+                    "$unavailable / $goodId", DiscogsAuthenticatedMatch.Unavailable, result)
+                assertEquals(listOf("releases/111", "releases/112"), calls)
+            }
+        }
+    }
+
     @Test fun tokenNeverAppearsInSearchResultAndOnlyReturnedIdsAreHydrated() = runBlocking {
         val search = DiscogsDatabaseSearchClient(
             transport = object : DiscogsSearchTransport {
