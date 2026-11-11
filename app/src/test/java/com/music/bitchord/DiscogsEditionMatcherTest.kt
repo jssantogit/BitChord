@@ -28,7 +28,7 @@ class DiscogsEditionMatcherTest {
         // edition matcher; no fuzzy label aliases or catalog inference.
         val canonical = canon.copy(
             editionLabelCatalogPairs = listOf("BELIFT LAB" to "BEL-001"),
-            editionFormats = listOf("CD"),
+            editionFormats = listOf("CD"), releaseYear = 2024,
         )
         val matching = record.copy(labels = listOf("BELIFT LAB" to "BEL-001"))
         val different = record.copy(labels = listOf("Belift Lab" to "BEL-002"))
