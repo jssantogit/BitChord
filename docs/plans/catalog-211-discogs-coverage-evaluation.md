@@ -1207,3 +1207,28 @@ recuperações. **Total: 10/30 casos revisados,
 Não foram criados MBIDs, áudios, gravações locais,
 caches de usuário, APKs, smoke, merge, alterações na
 #209/main ou prioridade Discogs sobre MusicBrainz.
+
+
+### Encerramento operacional do scanner B (11/11/2026)
+
+O caso de uso do scanner não justifica novas consultas quando os dez
+slots B já foram **revisados, embora nenhum `Verified` tenha sido
+homologado**. `scout_corpus` verifica a integridade do manifest
+e só chama o scanner real se existe uma vaga B não revisada. Com
+B=10/10 retorna `b_cohort_all_slots_reviewed`, zero GET,
+zero novos IDs/candidatos `Verified` e aviso explícito de que
+uma amostra concluída não é cobertura real de catálogo.
+Regressão [290ef3f8](https://github.com/jssantogit/BitChord/commit/290ef3f8b70d2c61007acb2a1e1885c0831b5e47)
+e implementação [f2713ae7](https://github.com/jssantogit/BitChord/commit/f2713ae77da7a0581f9b1022b3e071a1022773ad).
+[CI #43118898086](https://github.com/jssantogit/BitChord/actions/runs/43118898086)
+**SUCCESS, 10/10 testes offline, zero solicitações externas**.
+
+Próximas frentes efetivas do corpus são **A (classificação Album/
+EP/Single)** e **C (descoberta Discogs-only sem duplicar MusicBrainz)**.
+Exigir fonte editorial independente e vínculo exato de grupo/edição.
+Não inverter fontes, não ampliar automaticamente a descoberta para
+Masters grandes, não transformar revisões negativas B em
+precisão/ganho de cobertura nem confundir tipo de obra com
+formato de uma embalagem. **A=0/10; B=10/10; C=0/10;
+corpus total 10/30; 0 edições B sem vínculo Verified; 0 C
+com ausência comprovada e recuperação de UI medida.**
