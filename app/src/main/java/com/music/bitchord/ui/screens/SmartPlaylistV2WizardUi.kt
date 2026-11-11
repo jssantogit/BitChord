@@ -443,7 +443,10 @@ internal fun SmartPlaylistV2WizardUi(
     var targetGroupPath by remember { mutableStateOf<List<Int>>(emptyList()) }
     var selectedCategory by remember { mutableStateOf(smartConditionCategories.first()) }
     var selectedFieldTab by remember { mutableStateOf("all") }
-    var search by remember { mutableStateOf("") }
+    // Global catalog search and in-category search have separate ownership.
+    // A query entered inside a category must never become a global query on Back.
+    var globalSearch by remember { mutableStateOf("") }
+    var categorySearch by remember { mutableStateOf("") }
     var editingPath by remember { mutableStateOf<List<Int>?>(null) }
     var addingGroup by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf(smartRuleNewComparison(SmartPlaylistRuleField.TITLE)) }
@@ -494,7 +497,10 @@ internal fun SmartPlaylistV2WizardUi(
             }
             WizardStep.SONGS -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
             WizardStep.RULES -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
-            WizardStep.GROUP -> WizardStep.RULES
+            WizardStep.GROUP -> if (selectedPath.size > 1) {
+                selectedPath = selectedPath.dropLast(1)
+                WizardStep.GROUP
+            } else WizardStep.RULES
             WizardStep.CATEGORIES -> if (addingGroup || targetGroupPath.isEmpty())
                 WizardStep.RULES else WizardStep.GROUP
             WizardStep.FIELDS -> WizardStep.CATEGORIES
@@ -517,11 +523,22 @@ internal fun SmartPlaylistV2WizardUi(
         WizardStep.EDITOR -> smartConditionLabel(draft.field)
         WizardStep.REVIEW -> "Revisar e criar"
     }
-    // Every stage has its own scroll origin. Reusing one LazyColumn state
-    // caused the condition catalog to open midway down after editing a
-    // scrolled group; the first category and header were not composed.
-    val pageListState = remember(page, selectedPath, selectedCategory.id) {
-        LazyListState()
+    // Each logical catalog route owns its scroll position. Going to an editor
+    // and backing out restores that route; switching category/tab starts at top.
+    val routeScrollStates = remember { mutableMapOf<String, LazyListState>() }
+    val routeScrollKey = when (page) {
+        WizardStep.FIELDS -> "FIELDS:${selectedCategory.id}:$selectedFieldTab"
+        WizardStep.GROUP -> "GROUP:${selectedPath.joinToString(",")}"
+        else -> page.name
+    }
+    val pageListState = remember(routeScrollKey) {
+        routeScrollStates.getOrPut(routeScrollKey) { LazyListState() }
+    }
+    LaunchedEffect(globalSearch) {
+        if (page == WizardStep.CATEGORIES) pageListState.scrollToItem(0)
+    }
+    LaunchedEffect(categorySearch) {
+        if (page == WizardStep.FIELDS) pageListState.scrollToItem(0)
     }
     val canContinue = name.trim().isNotEmpty() && name.length <= 80
     val canReview = hasConfiguredRules && canContinue && runCatching {
@@ -966,7 +983,8 @@ internal fun SmartPlaylistV2WizardUi(
                                         onClick = {
                                             targetGroupPath = emptyList()
                                             addingGroup = hasConfiguredRules
-                                            search = ""
+                                            globalSearch = ""
+                                            categorySearch = ""
                                             page = WizardStep.CATEGORIES
                                         },
                                     ),
@@ -1152,7 +1170,8 @@ internal fun SmartPlaylistV2WizardUi(
                                         onClick = {
                                             targetGroupPath = selectedPath
                                             addingGroup = false
-                                            search = ""
+                                            globalSearch = ""
+                                            categorySearch = ""
                                             page = WizardStep.CATEGORIES
                                         },
                                     ))
@@ -1208,7 +1227,8 @@ internal fun SmartPlaylistV2WizardUi(
                                         onClick = {
                                             targetGroupPath = selectedPath
                                             addingGroup = false
-                                            search = ""
+                                            globalSearch = ""
+                                            categorySearch = ""
                                             page = WizardStep.CATEGORIES
                                         },
                                     ))
@@ -1236,10 +1256,10 @@ internal fun SmartPlaylistV2WizardUi(
                     }
                     WizardStep.CATEGORIES -> {
                         item {
-                            PlaylistWizardSearchEntry(search, { search = it }, "Buscar condições")
+                            PlaylistWizardSearchEntry(globalSearch, { globalSearch = it }, "Buscar condições")
                         }
-                        if (search.isNotBlank()) {
-                            val matches = smartConditionSearch(search)
+                        if (globalSearch.isNotBlank()) {
+                            val matches = smartConditionSearch(globalSearch)
                             if (matches.isEmpty()) item {
                                 Text("Nenhuma condição encontrada.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1265,7 +1285,7 @@ internal fun SmartPlaylistV2WizardUi(
                                         onClick = {
                                             selectedCategory = category
                                             selectedFieldTab = "all"
-                                            search = ""
+                                            categorySearch = ""
                                             page = WizardStep.FIELDS
                                         },
                                     )
@@ -1276,7 +1296,7 @@ internal fun SmartPlaylistV2WizardUi(
                     WizardStep.FIELDS -> {
                         item {
                             PlaylistWizardSearchEntry(
-                                search, { search = it }, "Buscar nesta categoria")
+                                categorySearch, { categorySearch = it }, "Buscar nesta categoria")
                         }
                         val tabs = smartConditionFieldTabs(selectedCategory)
                         if (tabs.isNotEmpty()) item {
@@ -1287,7 +1307,7 @@ internal fun SmartPlaylistV2WizardUi(
                             )
                         }
                         val selectedFields = tabs.firstOrNull { it.key == selectedFieldTab }?.fields
-                        val matches = smartConditionSearch(search, selectedCategory)
+                        val matches = smartConditionSearch(categorySearch, selectedCategory)
                             .filter { selectedFields == null || it in selectedFields }
                         if (matches.isNotEmpty()) item {
                             PlaylistWizardFieldList(matches.map { field ->
