@@ -72,7 +72,10 @@ internal object DiscogsEditionMatcher {
         val artistMatches = if (expected.isNotEmpty()) {
             expected.size == actual.size && expected.sorted() == actual.sorted()
         } else {
-            actual.any { it == normalized(artist) }
+            // Display credit cannot prove a second collaborator. With no
+            // structured MusicBrainz artist list, only a single exact
+            // Discogs artist can be corroborated; extra artists are a conflict.
+            actual.size == 1 && actual.single() == normalized(artist)
         }
         // A direct typed MB Release URL, corroborated by a validated barcode
         // and matching year, can tolerate punctuation-only differences.
