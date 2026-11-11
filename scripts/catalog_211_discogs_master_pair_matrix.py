@@ -69,7 +69,7 @@ def _allowed(url: str) -> bool:
                     "fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
     return False
 
-def _mb_release_once_retry_503(url: str, get) -> dict:
+def _mb_once_retry_503(url: str, get) -> dict:
     # Only a transient 503 on this exact MusicBrainz Release lookup can
     # receive one extra attempt. The shared request limiter counts and
     # spaces both calls; 404, 429 and invalid JSON never get masked.
@@ -88,7 +88,8 @@ def inspect(seed: dict, get) -> dict:
               "reviewed_by_this_probe": False, "verified_edition_count": 0,
               "mb_release_ids": [], "discogs_release_ids": [], "pairs": []}
     try:
-        group = get(f"https://musicbrainz.org/ws/2/release-group/{rgid}?fmt=json&inc=url-rels")
+        group = _mb_once_retry_503(
+            f"https://musicbrainz.org/ws/2/release-group/{rgid}?fmt=json&inc=url-rels", get)
         state, observed_master = typed_master(group, rgid)
         if state != "typed_master_relation" or observed_master != mid:
             result["status"] = "typed_master_relation_not_confirmed"
@@ -107,7 +108,8 @@ def inspect(seed: dict, get) -> dict:
             result["status"] = "source_identity_conflict"
             return result
         result["discogs_release_ids"] = ids
-        rows, state = release_browse(get(release_index_url(rgid)), rgid, aid)
+        rows, state = release_browse(
+            _mb_once_retry_503(release_index_url(rgid), get), rgid, aid)
         if state != "complete_official_release_index":
             result["status"] = state
             return result
@@ -122,7 +124,7 @@ def inspect(seed: dict, get) -> dict:
             try:
                 url = (f"https://musicbrainz.org/ws/2/release/{mbid}"
                     "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
-                record = _mb_release_once_retry_503(url, get)
+                record = _mb_once_retry_503(url, get)
             except (HTTPError, URLError, OSError, TimeoutError):
                 result["status"] = "incomplete_source_hydration"
                 result["unavailable_source_id"] = "musicbrainz_release:" + mbid
