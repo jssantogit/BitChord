@@ -951,6 +951,40 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onAllNodesWithText("Adicionar à fila").assertCountEquals(0)
     }
 
+    @Test fun nestedConditionGroupBackReturnsToItsParentRatherThanRuleRoot() {
+        val inner = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ), name = "Interno")
+        val parent = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            inner,
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.ARTIST_DISPLAY, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ), name = "Externo")
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(parent))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Teste", rule = rule,
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithText("Externo").performClick()
+        compose.onNodeWithText("Condição 2").assertExists()
+        compose.onNodeWithText("Condição 1").performClick()
+        compose.onNodeWithText("Condição 2").assertDoesNotExist()
+        compose.onNodeWithTag("apple-toolbar-back-button").performClick()
+        compose.onNodeWithText("Condição 2").assertExists()
+    }
+
     @Test fun categorySearchDoesNotTurnBackNavigationIntoGlobalSearchResults() {
         val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
