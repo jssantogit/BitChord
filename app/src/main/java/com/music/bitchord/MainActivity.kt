@@ -6702,7 +6702,21 @@ private fun CanonicalLibraryAlbumRatingToolbarAction(
         com.music.bitchord.ui.screens.canonicalEntityRatingTarget(selection)
     }
     if (target != null) {
-        val score by com.music.bitchord.ui.screens.rememberCanonicalCatalogEntityRating(target)
+        // Library ReleaseIds can be provider-local canonical keys, not MBIDs.
+        // Observe the same exact entity row as the native Library editor,
+        // rather than applying the MBID-only online-catalog gate.
+        val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+        val dao = remember(context) {
+            com.music.bitchord.data.listening.ListeningEventDatabase.get(context)
+                .canonicalEntityRatingDao()
+        }
+        val observed = remember(dao, target) {
+            dao.observe(target.entityType, target.entityId)
+        }
+        val saved by observed.collectAsStateWithLifecycle(initialValue = null)
+        val score = saved?.ratingValue?.takeIf {
+            com.music.bitchord.ui.screens.isValidCanonicalEntityRating(it)
+        }
         var editing by remember(selection) { mutableStateOf(false) }
         if (editing) {
             com.music.bitchord.ui.screens.CanonicalLibraryEntityRatingDialog(
