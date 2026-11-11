@@ -7,6 +7,19 @@ import com.music.bitchord.data.model.QueueTier
 import org.junit.Test
 
 class PlayerAlbumEvidenceTest {
+    @Test fun albumNavigationUsesOnlyAUniqueVerifiedReleaseNotAnAmbiguousEdition() {
+        val one = listOf(Triple("recording-a", "edition-1", "Album"))
+        assertEquals("edition-1", sharedVerifiedReleaseId(listOf("recording-a"), one))
+        val ambiguous = one + Triple("recording-a", "edition-2", "Album")
+        assertNull(sharedVerifiedReleaseId(listOf("recording-a"), ambiguous))
+        assertNull(sharedVerifiedReleaseId(listOf("recording-a", "missing"), one))
+        val common = ambiguous + Triple("recording-b", "edition-1", "Album")
+        assertEquals("edition-1",
+            sharedVerifiedReleaseId(listOf("recording-a", "recording-b"), common))
+        assertEquals("edition-2",
+            sharedVerifiedReleaseId(listOf("recording-a"), ambiguous, "edition-2"))
+    }
+
     @Test fun sharedExactReleaseNameAcrossSongs() {
         val rows = listOf(
             Triple("recording-a", "release-1", "ARIRANG"),
