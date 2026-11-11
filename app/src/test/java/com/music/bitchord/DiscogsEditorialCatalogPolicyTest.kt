@@ -305,6 +305,49 @@ class DiscogsEditorialCatalogPolicyTest {
         ).isEmpty())
     }
 
+    @Test fun knownStrayKidsEpSlashTitleWithWordBoundaryDifferenceIsNotNewSourceOnly() {
+        // C-04 in the real source corpus was a false absence lead:
+        // "Superbowl" versus "Super Bowl" is the same literal sequence
+        // apart from a word boundary, with the same Social Path prefix
+        // and the same Japanese version qualifier.
+        val mbGroup = "Social Path / Super Bowl -Japanese ver.-"
+        val discogs = "Social Path / Superbowl (Japanese Ver.)"
+        val known = DiscogsShadowCatalog.knownTitlePredicate(
+            "Stray Kids", setOf(mbGroup))
+        assertTrue(known(discogs))
+        assertTrue(known("Stray Kids - $discogs"))
+        val snapshot = DiscogsPublicEditionSnapshot(
+            edition(38526540L, master = null,
+                formats = listOf("File", "EP"),
+                artist = "Stray Kids", year = 2023).copy(title = discogs),
+            1_000L,
+        )
+        assertTrue(DiscogsShadowCatalog.select(
+            listOf(snapshot), expectedArtist = "Stray Kids",
+            mbCatalogChecked = true, nowMillis = 1_200,
+            knownMusicBrainzTitles = setOf(mbGroup),
+        ).isEmpty())
+        // Not a blanket suppression of every title containing the prefix.
+        assertFalse(known("Social Path / A Completely Different Song"))
+    }
+
+    @Test fun slashJoinedWordGuardMustPreserveRemixesLiveAndDifferentVersions() {
+        val known = DiscogsShadowCatalog.knownTitlePredicate(
+            "Stray Kids", setOf("Social Path / Super Bowl -Japanese ver.-"))
+        for (title in listOf(
+            "Social Path / Superbowl (English Ver.)",
+            "Social Path / Superbowl (Japanese Remix)",
+            "Social Path / Superbowl (Japanese Live)",
+            "Social Path / Super Bowl (Instrumental)",
+            "Another Path / Superbowl (Japanese Ver.)",
+            "Social / Superbowl (Japanese Ver.)",
+            "Social Path / Superbowl (Japanese Ver.) / Acoustic",
+        )) {
+            assertFalse("Distinct arrangement, prefix or extra segments: $title",
+                known(title))
+        }
+    }
+
     @Test fun knownMusicBrainzGroupIsNotReintroducedByDiscogsArtistTitlePrefix() {
         val snapshot = DiscogsPublicEditionSnapshot(
             edition(109, master = null).copy(title = "ILLIT - SUPER REAL ME"), 1_000,
