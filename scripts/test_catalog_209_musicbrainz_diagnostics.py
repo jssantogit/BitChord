@@ -140,6 +140,41 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         self.assertEqual('PASS', group['status'])
         self.assertTrue(group['evidence']['group_credit_verified'])
 
+    def test_collaboration_credits_accept_joinphrases_but_only_exact_mbids(self):
+        class CollaborationClient(FakeClient):
+            def get(self, kind, ident, **params):
+                body = super().get(kind, ident, **params)
+                if kind == 'release-group' and ident == GROUP:
+                    body['artist-credit'] = [
+                        {'name': 'ILLIT', 'artist': {'id': ARTIST}},
+                        ' & ',
+                        {'name': 'Other artist',
+                         'artist': {'id': '11111111-1111-4111-8111-111111111111'}},
+                    ]
+                return body
+
+        rows = diagnose_case(CASE, CollaborationClient().get)
+        group = next(x for x in rows if x['check'] == 'group_identity')
+        self.assertEqual('PASS', group['status'])
+        self.assertEqual([ARTIST, '11111111-1111-4111-8111-111111111111'],
+                         group['evidence']['observed_artist_mbids'])
+
+    def test_malformed_group_credits_cannot_certify_relationship(self):
+        class BrokenCreditClient(FakeClient):
+            def get(self, kind, ident, **params):
+                body = super().get(kind, ident, **params)
+                if kind == 'release-group' and ident == GROUP:
+                    body['artist-credit'] = [
+                        {'name': 'ILLIT', 'artist': {'id': ARTIST}},
+                        {'name': 'Another', 'artist': {'id': 'invalid'}},
+                    ]
+                return body
+
+        rows = diagnose_case(CASE, BrokenCreditClient().get)
+        group = next(x for x in rows if x['check'] == 'group_identity')
+        self.assertEqual('INCONCLUSIVE', group['status'])
+        self.assertFalse(group['evidence']['group_credit_complete'])
+
     def test_network_unavailable_never_becomes_not_found(self):
         client = FakeClient(unavailable=True)
         rows = diagnose_case(CASE, client.get)
