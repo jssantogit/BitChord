@@ -44,11 +44,7 @@ class SmartPlaylistWizardModelTest {
 
     @Test fun catalogHasEveryAndOnlyAnImplementedV2FieldExactlyOnce() {
         val fields = smartConditionCategories.flatMap { it.fields }
-        assertEquals(SmartPlaylistRuleField.entries.toSet() - setOf(
-            SmartPlaylistRuleField.LOCAL_GENRE,
-            SmartPlaylistRuleField.LOCAL_FOLDER,
-            SmartPlaylistRuleField.LOCAL_FILE_PATH,
-        ), fields.toSet())
+        assertEquals(SmartPlaylistRuleField.entries.toSet(), fields.toSet())
         assertEquals(fields.size, fields.distinct().size)
         assertEquals(listOf(SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE),
             smartConditionCategories.last().fields)
@@ -120,7 +116,8 @@ class SmartPlaylistWizardModelTest {
     }
 
     @Test fun newCatalogUsesUniversalGenreAndSensibleTextDefaults() {
-        assertTrue(SmartPlaylistRuleField.LOCAL_GENRE !in smartConditionCategories.first().fields)
+        assertTrue(SmartPlaylistRuleField.LOCAL_GENRE in smartConditionCategories.first().fields)
+        assertTrue(SmartPlaylistRuleField.GENRE in smartConditionCategories.first().fields)
         assertEquals("Humor", smartConditionLabel(SmartPlaylistRuleField.MOOD))
         assertEquals("Nome do álbum ou lançamento",
             smartConditionLabel(SmartPlaylistRuleField.RELEASE_TITLE))
