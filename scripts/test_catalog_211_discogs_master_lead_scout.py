@@ -2,7 +2,7 @@
 import unittest
 
 from catalog_211_discogs_master_lead_scout import (
-    ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT, browse_page, scout,
+    ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT, browse_page, release_browse, scout,
 )
 
 A = "6b128dd7-e998-4edb-a4f5-400fef190445"
@@ -30,6 +30,19 @@ def url_artist(a):
     return ("https://musicbrainz.org/ws/2/release-group/?artist=" + a +
             "&fmt=json&limit=25&offset=0&inc=artist-credits%2Burl-rels")
 
+def url_editions(gid):
+    return ("https://musicbrainz.org/ws/2/release/?release-group=" + gid +
+            "&fmt=json&limit=25&offset=0&inc=artist-credits%2Bmedia%2Brelease-groups")
+
+def edition_page(gid=H, artist=A, *, complete=True, status="Official"):
+    return {"release-count": 1 if complete else 26,
+            "release-offset": 0,
+            "releases": [{"id": RELEASE, "title": "A real album",
+                "status": status, "barcode": "8809704427821",
+                "release-group": {"id": gid}, "country": "KR",
+                "artist-credit": [{"artist": {"id": artist}, "name": "Artist"}],
+                "date": "2024-03-25", "media": [{"format": "CD"}]}]}
+
 def url_master(mid):
     return f"https://api.discogs.com/masters/{mid}"
 
@@ -44,6 +57,8 @@ def fixtures(*, conflicting=False, large=False):
     payloads = {
         url_artist(A): page([row(), row(H, 501)]),
         url_artist(B): page([row(H, 500, B)] if conflicting else []),
+        url_editions(H): edition_page(),
+        url_editions(G): edition_page(G),
         url_master(500): {"id": 500, "main_release": 900},
         url_master(501): {"id": 501, "main_release": 901},
         url_versions(500): ({"pagination": {
@@ -93,7 +108,29 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual([901], report["leads"][0]["version_ids"])
         self.assertEqual(0, report["reviewed_corpus_cases"])
         self.assertEqual(0, report["verified_edition_count"])
-        self.assertEqual(4, report["source_http_requests"])
+        self.assertEqual(5, report["source_http_requests"])
+        self.assertEqual("complete_official_release_index",
+                         report["leads"][0]["mb_release_browse_status"])
+        self.assertEqual(RELEASE,
+            report["leads"][0]["mb_official_release_candidates"][0]["release_mbid"])
+
+    def test_exact_release_browse_has_its_own_complete_identity_gate(self):
+        info, status = release_browse(edition_page(), H, A)
+        self.assertEqual("complete_official_release_index", status)
+        self.assertEqual([RELEASE], [x["release_mbid"] for x in info])
+        self.assertFalse(info[0]["verified_discogs_identity"])
+        self.assertEqual(([], "incomplete_canonical_release_index"),
+                         release_browse(edition_page(complete=False), H, A))
+        self.assertEqual(([], "no_eligible_official_solo_releases"),
+                         release_browse(edition_page(artist=B), H, A))
+        self.assertEqual(([], "no_eligible_official_solo_releases"),
+                         release_browse(edition_page(status="Bootleg"), H, A))
+        self.assertEqual(([], "invalid_canonical_release_index"),
+                         release_browse({**edition_page(), "release-offset": 1}, H, A))
+        self.assertEqual(([], "invalid_canonical_release_index"),
+                         release_browse({**edition_page(),
+                           "releases": [dict(edition_page()["releases"][0],
+                           **{"release-group": {"id": G}})]}, H, A))
 
     def test_master_more_than_eight_is_never_eligible_for_exact_match(self):
         report = scout([("Artist A", A)], set(), fixtures(large=True))
@@ -138,6 +175,11 @@ class MasterLeadScoutTest(unittest.TestCase):
                 return pages[url]
             if "/versions?" in url:
                 return listing([900])
+            if "/ws/2/release/?" in url:
+                group_id = url.split("release-group=", 1)[1].split("&", 1)[0]
+                return {"release-count": 1, "release-offset": 0,
+                        "releases": [dict(edition_page(group_id)["releases"][0],
+                                          **{"release-group": {"id": group_id}})]}
             if "/masters/" in url:
                 mid = int(url.split("/")[-1])
                 return {"id": mid, "main_release": 900}
