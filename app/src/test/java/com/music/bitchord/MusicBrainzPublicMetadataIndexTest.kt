@@ -50,6 +50,82 @@ class MusicBrainzPublicMetadataIndexTest {
         } finally { db.close() }
     }
 
+    @Test fun artistCorrectionsUpdateMusicBrainzNameButNeverUserCanonicalAlias() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
+            var created = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-${++created}" })
+            val before = MusicBrainzArtistHit(artist, "Original source name", "Old credit", "KR")
+            val id = requireNotNull(index.persistArtists(listOf(before))[artist])
+            db.catalogDao().upsertArtist(
+                com.music.bitchord.data.catalog.ArtistEntity(id, "My local artist alias"))
+            val corrected = before.copy(
+                name = "Updated official artist", disambiguation = "Corrected profile",
+                country = "JP",
+            )
+            assertEquals(id, index.persistArtists(listOf(corrected))[artist])
+            val result = db.catalogDao().searchKnownMusicBrainzArtists("Updated official", 25)
+                .single()
+            assertEquals(artist, result.musicBrainzId)
+            assertEquals("Updated official artist", result.name)
+            assertEquals("Corrected profile", result.disambiguation)
+            assertEquals("JP", result.country)
+            assertEquals("My local artist alias", db.catalogDao().artistById(id)?.name)
+            assertEquals(artist, db.catalogDao()
+                .searchKnownMusicBrainzArtists("My local artist alias", 25)
+                .single().musicBrainzId)
+            // A later response without optional fields must preserve the proof.
+            index.persistArtists(listOf(corrected.copy(disambiguation = null, country = null)))
+            assertEquals("Corrected profile", db.catalogDao()
+                .searchKnownMusicBrainzArtists("Updated official", 25)
+                .single().disambiguation)
+            assertEquals(1, created)
+        } finally { db.close() }
+    }
+
+    @Test fun correctedGroupTitleAndArtistRefreshExactlyOneOfflineArtistDiscography() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
+            val group = "3f5eba8d-4dc1-4599-a936-21f501787f8e"
+            var created = 0
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "group-${++created}" })
+            index.persistArtists(listOf(MusicBrainzArtistHit(artist, "aespa", null, "KR")))
+            val first = MusicBrainzReleaseGroupHit(
+                group, "Original group title", "EP", "2024-01-01", "Old group artist",
+            )
+            index.persistArtistGroups(artist, listOf(first))
+            val groupId = db.catalogDao().entityIdForExternalIdentity(
+                "musicbrainz", "release-group", group)!!
+            val corrected = first.copy(
+                title = "Updated album title", artistDisplay = "Correct artist",
+                primaryType = "Album", firstReleaseDate = "2024-05-27",
+            )
+            index.persistReleaseGroups(listOf(corrected))
+            val underlying = db.catalogDao().catalogReleaseGroup(groupId)!!
+            assertEquals("Updated album title", underlying.title)
+            assertEquals("Correct artist", underlying.artistDisplay)
+            assertEquals("Album", underlying.primaryType)
+            assertEquals("2024-05-27", underlying.firstReleaseDate)
+            assertEquals(group, db.catalogDao().searchKnownMusicBrainzGroups("Updated", 25)
+                .single().musicBrainzId)
+            val discography = index.cachedArtistGroups(artist).single()
+            assertEquals(group, discography.musicBrainzId)
+            assertEquals("Updated album title", discography.title)
+            assertEquals("Correct artist", discography.artistDisplay)
+            // Missing optional type/date/credit must not regress known fields.
+            index.persistReleaseGroups(listOf(corrected.copy(
+                primaryType = null, firstReleaseDate = null, artistDisplay = null,
+            )))
+            assertEquals("Album", index.cachedArtistGroups(artist).single().primaryType)
+            assertEquals("Correct artist", index.cachedArtistGroups(artist).single().artistDisplay)
+            assertEquals(2, created) // Exactly one Artist and one ReleaseGroup identity.
+        } finally { db.close() }
+    }
+
     @Test fun artistAndReleaseGroupAreSearchableOfflineByStrongMbidsOnly() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()

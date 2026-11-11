@@ -40,6 +40,53 @@ class MusicBrainzOfflineEditionsTest {
         } finally { db.close() }
     }
 
+    @Test fun correctedEditionMetadataReachesOfflineSearchGroupAndExactCachedDetail() = runBlocking {
+        val db = database()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistReleaseGroups(listOf(MusicBrainzReleaseGroupHit(
+                group, "SUPER REAL ME", "EP", "2024-03-25", "ILLIT",
+            )))
+            val before = MusicBrainzReleaseHit(
+                worldwide, "Original edition title", "XW", "2024-03-25", "Old edition credit",
+                status = "Official",
+            )
+            index.persistGroupEditions(group, listOf(before))
+            index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
+                worldwide, group, before.title, before.artistDisplay,
+                before.country, before.releaseDate, listOf(
+                    MusicBrainzCatalogTrack(
+                        track, recording, "Magnetic", 1, 2, 160000L,
+                    ),
+                ),
+            ))
+            val localId = db.catalogDao().entityIdForExternalIdentity(
+                "musicbrainz", "release", worldwide)!!
+            val corrected = before.copy(
+                title = "Corrected edition title", artistDisplay = "ILLIT",
+                releaseDate = "2024-03-26",
+            )
+            assertEquals(localId, index.persistReleases(listOf(corrected))[worldwide])
+            val search = db.catalogDao()
+                .searchKnownMusicBrainzReleases("Corrected edition title", 25).single()
+            assertEquals("Corrected edition title", search.title)
+            assertEquals("ILLIT", search.artistDisplay)
+            assertEquals("2024-03-26", search.releaseDate)
+            val groupEdition = index.cachedGroupReleases(group).single()
+            assertEquals("Corrected edition title", groupEdition.title)
+            assertEquals("ILLIT", groupEdition.artistDisplay)
+            val detail = index.cachedRelease(worldwide)!!
+            assertEquals("Corrected edition title", detail.title)
+            assertEquals("ILLIT", detail.artistDisplay)
+            // Never rewrite unrelated user's/local canonical metadata.
+            assertEquals("Original edition title", db.catalogDao().releaseById(localId)?.title)
+            index.persistReleases(listOf(corrected.copy(
+                country = null, releaseDate = null, artistDisplay = null,
+            )))
+            assertEquals("2024-03-26", index.cachedGroupReleases(group).single().releaseDate)
+        } finally { db.close() }
+    }
+
     @Test fun cachedGraphKeepsEditionTrackIdentityAndNeverPrunesOnSparseBrowse() = runBlocking {
         val db = database()
         try {
