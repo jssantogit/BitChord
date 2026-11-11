@@ -188,6 +188,16 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(1, pressed) }
     }
 
+    @Test fun conditionCatalogIncludesSupportedLocalEvidenceFieldsExactlyOnce() {
+        val all = smartConditionCategories.flatMap { it.fields }
+        val library = smartConditionCategories.single { it.id == "library" }.fields
+        val music = smartConditionCategories.single { it.id == "music" }.fields
+        assertTrue(SmartPlaylistRuleField.LOCAL_FOLDER in library)
+        assertTrue(SmartPlaylistRuleField.LOCAL_FILE_PATH in library)
+        assertTrue(SmartPlaylistRuleField.LOCAL_GENRE in music)
+        assertEquals(all.size, all.toSet().size)
+    }
+
     @Test fun musicTabsPartitionEveryFieldWithoutSectionHeadersOrPills() {
         val category = smartConditionCategories.single { it.id == "music" }
         val tabs = smartConditionFieldTabs(category)
@@ -1051,6 +1061,35 @@ class SmartPlaylistV2WizardComposeTest {
         // and search field should be composed at the top again.
         compose.onNodeWithText("Músicas e metadados").assertExists()
         compose.onNodeWithContentDescription("Buscar nesta categoria").assertExists()
+    }
+
+    @Test fun categorySearchFindsOtherTabsWithoutKeepingAStaleTabFilter() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Teste", rule = rule, hasConfiguredRules = false,
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Adicionar primeira condição").performClick()
+        compose.onNodeWithText("Músicas e metadados").performClick()
+        compose.onNodeWithText("CRÉDITOS").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Buscar nesta categoria")
+            .performTextInput("gênero")
+        // Search belongs to the entire category, not to the old sub-tab.
+        compose.onNodeWithText("Gênero musical").assertExists()
     }
 
     @Test fun categorySearchDoesNotTurnBackNavigationIntoGlobalSearchResults() {
