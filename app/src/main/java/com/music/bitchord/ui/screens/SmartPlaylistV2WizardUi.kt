@@ -541,6 +541,9 @@ internal fun SmartPlaylistV2WizardUi(
     LaunchedEffect(categorySearch) {
         if (page == WizardStep.FIELDS) pageListState.scrollToItem(0)
     }
+    LaunchedEffect(selectedFieldTab) {
+        if (page == WizardStep.FIELDS) pageListState.scrollToItem(0)
+    }
     val canContinue = name.trim().isNotEmpty() && name.length <= 80
     val canReview = hasConfiguredRules && canContinue && runCatching {
         SmartPlaylistV2Query(rule, sort, limit.toInt(), seed.toInt())
@@ -986,6 +989,7 @@ internal fun SmartPlaylistV2WizardUi(
                                             addingGroup = hasConfiguredRules
                                             globalSearch = ""
                                             categorySearch = ""
+                                            routeScrollStates.remove(WizardStep.CATEGORIES.name)
                                             page = WizardStep.CATEGORIES
                                         },
                                     ),
@@ -1173,6 +1177,7 @@ internal fun SmartPlaylistV2WizardUi(
                                             addingGroup = false
                                             globalSearch = ""
                                             categorySearch = ""
+                                            routeScrollStates.remove(WizardStep.CATEGORIES.name)
                                             page = WizardStep.CATEGORIES
                                         },
                                     ))
@@ -1230,6 +1235,7 @@ internal fun SmartPlaylistV2WizardUi(
                                             addingGroup = false
                                             globalSearch = ""
                                             categorySearch = ""
+                                            routeScrollStates.remove(WizardStep.CATEGORIES.name)
                                             page = WizardStep.CATEGORIES
                                         },
                                     ))
@@ -1291,6 +1297,11 @@ internal fun SmartPlaylistV2WizardUi(
                                             selectedCategory = category
                                             selectedFieldTab = "all"
                                             categorySearch = ""
+                                            // A fresh visit starts at the first field, but
+                                            // editor Back retains the current visit's scroll.
+                                            routeScrollStates.keys.removeAll {
+                                                it.startsWith("FIELDS:${category.id}:")
+                                            }
                                             page = WizardStep.FIELDS
                                         },
                                     )
