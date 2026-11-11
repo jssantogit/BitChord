@@ -64,6 +64,23 @@ class DiscogsEditorialCatalogPolicyTest {
             is DiscogsUnlinkedMatch.NoMatch)
     }
 
+    @Test fun overBudgetCandidateListCannotCertifyOnlyTheFirst32Releases() {
+        // The exact-edition selector is a reusable boundary, even though
+        // today's HTTP discovery normally caps its candidates at eight.
+        // A truncated list cannot establish that one release is unique.
+        val verified = edition(101)
+        val unrelated = (102L..132L).map { edition(it, artist = "Other Artist") }
+        val unresolvedLast = edition(500, tracks = mb.trackTitles.dropLast(1))
+        for (items in listOf(
+            listOf(verified) + unrelated + unresolvedLast,
+            unrelated + listOf(verified, unresolvedLast),
+        )) {
+            val result = DiscogsUnlinkedMatch.select(mb, items)
+            assertTrue("More than 32 source records must stay non-verified",
+                result is DiscogsUnlinkedMatch.Candidates)
+        }
+    }
+
     @Test fun verifiedPlusUnresolvedDifferentReleaseMustStayAmbiguous() {
         val exact = edition(101)
         val stillPossible = edition(102, tracks = mb.trackTitles.dropLast(1))
