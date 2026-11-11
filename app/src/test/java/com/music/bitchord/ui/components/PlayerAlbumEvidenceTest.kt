@@ -7,6 +7,20 @@ import com.music.bitchord.data.model.QueueTier
 import org.junit.Test
 
 class PlayerAlbumEvidenceTest {
+    @Test fun multipleEditionsOfOneVerifiedReleaseGroupCanOpenTheirAlbum() {
+        val links = listOf(
+            "recording-a" to "group-1",
+            "recording-a" to "group-1",
+            "recording-b" to "group-1",
+        )
+        assertEquals("group-1", sharedVerifiedReleaseGroupId(listOf("recording-a"), links))
+        assertEquals("group-1",
+            sharedVerifiedReleaseGroupId(listOf("recording-a", "recording-b"), links))
+        assertNull(sharedVerifiedReleaseGroupId(listOf("recording-a"),
+            links + ("recording-a" to "group-2")))
+        assertNull(sharedVerifiedReleaseGroupId(listOf("recording-a", "recording-missing"), links))
+    }
+
     @Test fun albumNavigationUsesOnlyAUniqueVerifiedReleaseNotAnAmbiguousEdition() {
         val one = listOf(Triple("recording-a", "edition-1", "Album"))
         assertEquals("edition-1", sharedVerifiedReleaseId(listOf("recording-a"), one))
