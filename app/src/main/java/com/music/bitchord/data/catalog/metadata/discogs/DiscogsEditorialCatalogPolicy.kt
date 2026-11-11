@@ -20,8 +20,19 @@ internal sealed interface DiscogsUnlinkedMatch {
             musicBrainzEdition: CanonicalEditionEvidence,
             candidates: List<DiscogsRecord>,
         ): DiscogsUnlinkedMatch {
-            val unique = candidates.take(32).filter { it.link.kind == DiscogsKind.RELEASE }
-                .distinctBy { it.link.id }
+            // Source refreshes can supply mutually inconsistent snapshots
+            // under the SAME Discogs Release ID. distinctBy(id) would keep
+            // the first one and could falsely certify a verified edition.
+            // Only identical repeat records may be collapsed. Disputed IDs
+            // cannot be verified; unrelated independent IDs remain eligible.
+            val unique = candidates.take(32)
+                .filter { it.link.kind == DiscogsKind.RELEASE }
+                .groupBy { it.link.id }
+                .values.mapNotNull { snapshots ->
+                    snapshots.firstOrNull()?.takeIf { first ->
+                        snapshots.all { it == first }
+                    }
+                }
             val assessed = unique.map { it to DiscogsEditionMatcher.assessUnlinked(musicBrainzEdition, it) }
             val verified = assessed.filter { it.second == DiscogsEditionVerdict.VERIFIED }
                 .map { it.first }

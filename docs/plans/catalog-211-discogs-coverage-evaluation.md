@@ -572,3 +572,61 @@ mas compilou Kotlin: isso não prova que o Discogs esteja
 vermelho ou verde. A correção MusicBrainz fica no chat/PR
 separado. O gate Discogs isolado só prova essa suíte;
 não substitui a compilação/testes de integração completos.
+
+## Primeiro controle positivo **já vinculado** — EASY CRAZY HOT / CARBON BLACK (11/11/2026)
+
+Para não confundir o corpus B de relações ausentes com o fluxo de
+edições já vinculadas, adicionamos um **controle positivo distinto
+do denominador A/B/C**:
+
+- [MusicBrainz Release e6de9634-eb96-4b54-9568-755a99ec312b](https://musicbrainz.org/release/e6de9634-eb96-4b54-9568-755a99ec312b)
+  é a versão **CARBON BLACK** em 12" Vinyl de LE SSERAFIM,
+  `EASY CRAZY HOT`, **15 faixas**, barcode válido
+  `198704525124`, editora SOURCE MUSIC, US, data 05/09/2025,
+  ReleaseGroup do tipo Album+Compilation. A própria relação URL
+  do MusicBrainz aponta ao **[Discogs Release 35021231](https://www.discogs.com/release/35021231)**.
+- O [controle público de comparação na CI #43059656701](https://github.com/jssantogit/BitChord/actions/runs/43059656701)
+  observou exatamente esse Release com vínculo direto, mesma ordem
+  de 15 faixas e 14 títulos idênticos, com a diferença de hifenização
+  `1‐800‐hot‐n‐fun` vs `1-800-hot-n-fun`;
+  barcode idêntico nos provedores, ano consistente, label presente,
+  artista confirmado por identidade de fonte. A ausência de país
+  explícito em uma das respostas é **desconhecido**, não prova de
+  país coincidente; o matcher aceita essa ausência na identidade
+  **já vinculada**, desde que os outros campos batam.
+- O MusicBrainz distingue ainda a versão **SILVER WHITE**, [Release
+  281513a2-12d1-4bf5-887f-7ddfd64b9931](https://musicbrainz.org/release/281513a2-12d1-4bf5-887f-7ddfd64b9931),
+  com Discogs Release **35025845** e código de barras
+  **198704525131**. Não mesclar cores, prensas ou barcodes.
+
+Teste de contrato:
+`DiscogsEditionMatcherTest.realEasyCrazyHotCarbonBlackDirectLinkCorroboratesPunctuationWithoutMergingVinylVariants`.
+Um vínculo **tipado** MB Release→Discogs Release, com artista, ano,
+barcode válido e todas as faixas na mesma ordem permite ao matcher
+retornar `VERIFIED` mesmo com pequenas diferenças puramente
+tipográficas. Sem o vínculo tipado ou com barcode da outra cor, o
+caso **não** é Verified. Uma faixa faltante também impede Verified.
+**Isto verifica um exemplo de enriquecimento de uma edição já conhecida;
+não é uma edição recuperada, uma correção de classificação ou medição
+de interface.** O corpus B permanece 5/10 revisados e 0 candidatos
+`Verified` sem vínculo.
+
+### Respostas duplicadas contraditórias não podem provar uma edição
+
+`DiscogsUnlinkedMatch.select` antes utilizava
+`distinctBy(releaseId)` para descartar o segundo snapshot do
+mesmo Discogs Release. Com um snapshot que confirma tracklist e
+outro que contradiz o mesmo ID, a ordem das requisições poderia
+transformar o primeiro em `Verified` — ou eliminar um bom
+candidato diferente. O seletor passa a agrupar por ID e manter
+**somente observações idênticas** para aquele ID; se diferirem,
+o ID disputado fica fora da decisão de vínculo exato, mas
+**outro ID genuinamente independente** pode continuar Verified.
+Os registros de fonte originais continuam intactos; não se cria
+MBID/URL nem se executa playback, e nenhuma divergência é tratada
+como evidência de ausência MusicBrainz.
+
+O teste `DiscogsEditorialCatalogPolicyTest.contradictorySnapshotsForSameUnlinkedReleaseCannotBeVerifiedByFirstObservation`
+verifica ambas as ordens, repetição idêntica e outra edição
+independente. O gate JUnit específico do Discogs executa o
+regressionamento; Android CI geral permanece um gate à parte.
