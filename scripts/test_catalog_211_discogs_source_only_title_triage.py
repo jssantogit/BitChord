@@ -41,6 +41,54 @@ class TitleTriageTest(unittest.TestCase):
         self.assertEqual('no_title_index_hit_not_absence',r['observations'][0]['status'])
         self.assertFalse(r['observations'][0]['confirmed_missing_from_musicbrainz'])
 
+    def test_slash_separated_multiword_title_falls_back_to_literal_group_prefix(self):
+        # Live C lead #43118510232: Discogs "Social Path / Superbowl
+        # (Japanese Ver.)" was missed by exact release-title lookup, while
+        # MB has a group titled "Social Path / Super Bowl -Japanese ver.-".
+        doc = editions(barcodes=[])
+        doc["observations"][0]["title"] = "Social Path / Superbowl (Japanese Ver.)"
+        calls = []
+        def get(url):
+            calls.append(url)
+            if "releasegroup%3A" in url:
+                return response(title="Social Path / Super Bowl -Japanese ver.-")
+            return response(count=0)
+        result = triage(index(), doc, prior(), get)
+        self.assertEqual(2, result["provider_requests"])
+        self.assertEqual("mb_title_prefix_lead_not_edition",
+                         result["observations"][0]["status"])
+        self.assertEqual([GROUP], result["observations"][0]["mb_group_candidate_mbids"])
+        self.assertTrue(all("arid%3A" in u for u in calls))
+        self.assertTrue(all("release-group/" in u for u in calls))
+        self.assertFalse(result["observations"][0]["confirmed_missing_from_musicbrainz"])
+        self.assertEqual(0, result["confirmed_source_only_cases"])
+
+    def test_prefix_fallback_is_not_a_generalized_fuzzy_alias_or_absence_claim(self):
+        doc = editions(barcodes=[])
+        doc["observations"][0]["title"] = "Jewel / Japanese Version"
+        urls = []
+        def get(url):
+            urls.append(url)
+            return response(count=0)
+        result = triage(index(), doc, prior(), get)
+        self.assertEqual(1, len(urls))
+        self.assertEqual("no_title_index_hit_not_absence",
+                         result["observations"][0]["status"])
+        self.assertFalse(result["observations"][0]["confirmed_missing_from_musicbrainz"])
+
+    def test_invalid_prefix_search_is_not_a_release_group_or_missing_claim(self):
+        doc = editions(barcodes=[])
+        doc["observations"][0]["title"] = "Social Path / Superbowl (Japanese Ver.)"
+        def get(url):
+            if "releasegroup%3A" in url:
+                return response(title="Wrong Artist", artist="49204a7a-ed85-407a-828f-6fd46f1d8126")
+            return response(count=0)
+        result = triage(index(), doc, prior(), get)
+        self.assertEqual("invalid_mb_title_search",
+                         result["observations"][0]["status"])
+        self.assertEqual([], result["observations"][0]["mb_group_candidate_mbids"])
+        self.assertFalse(result["observations"][0]["confirmed_missing_from_musicbrainz"])
+
     def test_invalid_payload_is_not_evidence(self):
         for invalid in (None,response(count=20),
                         response(title='Wrong Artist',artist='49204a7a-ed85-407a-828f-6fd46f1d8126'),
