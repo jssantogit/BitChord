@@ -822,8 +822,9 @@ foi confirmada em RED pela [CI #43103503012](https://github.com/jssantogit/BitCh
 [987d6416](https://github.com/jssantogit/BitChord/commit/987d641634b59c5e8d22616eb31e8dc2cc9702cf)
 passa a devolver `Candidates` quando recebe mais de 32 observações,
 antes de tentar verificar unicidade. Não expande a rede, não elimina
-IDs de fonte nem cria vínculos novos. A prova GREEN depende da
-conclusão da [CI focada #43104371010](https://github.com/jssantogit/BitChord/actions/runs/43104371010).
+IDs de fonte nem cria vínculos novos. O [GREEN focado #43104371010](https://github.com/jssantogit/BitChord/actions/runs/43104371010)
+concluiu **SUCCESS** no commit `987d6416` (`BUILD SUCCESSFUL in 5m 50s`),
+com a suíte `Discogs*Test`. Isso não substitui Android CI geral nem smoke físico.
 
 ## Sondagem pública independente de Masters dos cinco controles B revisados (11/11/2026)
 
