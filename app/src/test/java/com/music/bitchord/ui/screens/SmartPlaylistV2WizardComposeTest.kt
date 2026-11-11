@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -237,6 +238,7 @@ class SmartPlaylistV2WizardComposeTest {
         ).assertCountEquals(1)
         compose.onAllNodesWithTag("playlist-navigation-chevron").assertCountEquals(0)
         compose.onNodeWithText("CRÉDITOS").performScrollTo().performClick()
+        compose.onNodeWithText("CRÉDITOS").assertIsSelected()
         compose.runOnIdle { assertEquals("credits", selectedKey) }
         compose.onAllNodesWithTag(
             "apple-selected-origin-indicator", useUnmergedTree = true,
