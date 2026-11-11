@@ -77,7 +77,25 @@ class PlaylistEditorPresentationTest {
         compose.onNodeWithTag("native-settings-group-surface").assertDoesNotExist()
     }
 
-    @Test fun conditionFieldRowsUseSharedDrilldownAffordance() {
+    @Test fun conditionFieldsUseOrderedNumbersInsteadOfRepeatedMusicIcons() {
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardFieldList(
+                    listOf(
+                        PlaylistWizardNavOption("Título", "Palavras no título", PlaylistEditorIcons.Music) {},
+                        PlaylistWizardNavOption("Artista", "Nome do artista", PlaylistEditorIcons.Music) {},
+                    ),
+                )
+            }
+        }
+        compose.onNodeWithText("1.").assertExists()
+        compose.onNodeWithText("2.").assertExists()
+        compose.onAllNodesWithTag("playlist-field-icon", useUnmergedTree = true)
+            .assertCountEquals(0)
+        compose.onAllNodesWithTag("playlist-field-row").assertCountEquals(2)
+    }
+
+    @Test fun conditionFieldRowsKeepNavigationWithoutDuplicatedChevrons() {
         var clicked = 0
         compose.setContent {
             MaterialTheme {
@@ -90,7 +108,7 @@ class PlaylistEditorPresentationTest {
             }
         }
         compose.onAllNodesWithTag("playlist-navigation-chevron", useUnmergedTree = true)
-            .assertCountEquals(2)
+            .assertCountEquals(0)
         compose.onNodeWithText("Artista").performClick()
         compose.runOnIdle { assertEquals(1, clicked) }
     }
