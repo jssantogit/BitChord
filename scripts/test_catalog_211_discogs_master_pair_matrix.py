@@ -99,6 +99,32 @@ class MasterPairMatrixTest(unittest.TestCase):
                     self.assertEqual("discogs_release:101",
                                      found["unavailable_source_id"])
 
+    def test_exact_label_catalog_differences_are_visible_for_each_competing_version(self):
+        base = source()
+        def get(url):
+            payload = base(url)
+            if url == (f"https://musicbrainz.org/ws/2/release/{RELEASE}"
+                       "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels"):
+                return {**payload, "label-info": [
+                    {"label": {"name": "BELIFT LAB"}, "catalog-number": "BEL-001"}]}
+            if url.endswith("/releases/100"):
+                return {**payload, "labels": [
+                    {"name": "BELIFT LAB", "catno": "BEL-001"}]}
+            if url.endswith("/releases/101"):
+                return {**payload, "labels": [
+                    {"name": "BELIFT LAB", "catno": "BEL-002"}]}
+            return payload
+        result = inspect(SEED, get)
+        self.assertEqual("all_pairs_compared_not_adjudicated", result["status"])
+        by_id = {p["discogs_release_id"]: p for p in result["pairs"]}
+        self.assertEqual("exact_label_catalog_pair_observed_not_verified",
+                         by_id[100]["label_catalog"]["assessment"])
+        self.assertEqual("same_label_different_catalog_numbers",
+                         by_id[101]["label_catalog"]["assessment"])
+        self.assertEqual(0, result["verified_edition_count"])
+        self.assertTrue(all(not x["verified_discogs_edition"]
+                            for x in result["pairs"]))
+
     def test_shared_budget_and_preserved_b_corpus_are_explicit(self):
         found = observe([SEED], source())
         self.assertEqual(0, found["reviewed_corpus_cases"])
