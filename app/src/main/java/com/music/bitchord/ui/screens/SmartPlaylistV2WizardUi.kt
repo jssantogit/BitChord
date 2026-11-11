@@ -459,7 +459,9 @@ internal fun SmartPlaylistV2WizardUi(
         draft = smartRuleNewComparison(field)
         negated = false
         editingPath = null
-        returnAfterEditor = WizardStep.FIELDS
+        // A field may be opened from global search or within a category.
+        // Back must restore that exact catalog context, including its query.
+        returnAfterEditor = page
         page = WizardStep.EDITOR
     }
     fun editAt(path: List<Int>, back: WizardStep) {
