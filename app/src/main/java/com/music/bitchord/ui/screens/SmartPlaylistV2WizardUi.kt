@@ -43,6 +43,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import androidx.compose.runtime.Composable
@@ -454,6 +456,7 @@ internal fun SmartPlaylistV2WizardUi(
     var negated by remember { mutableStateOf(false) }
     var returnAfterEditor by remember { mutableStateOf(WizardStep.GROUP) }
     var picker by remember { mutableStateOf<String?>(null) }
+    var creatorMoreOpen by remember { mutableStateOf(false) }
     var confirmDiscard by remember { mutableStateOf(false) }
     var confirmDeleteNormal by remember { mutableStateOf(false) }
     var confirmDeleteSmart by remember { mutableStateOf(false) }
@@ -589,14 +592,54 @@ internal fun SmartPlaylistV2WizardUi(
                     hazeState = null,
                     modifier = Modifier.align(Alignment.CenterStart),
                 )
-                if (page == WizardStep.IDENTITY || page == WizardStep.EDIT) {
-                    Box(modifier = Modifier.align(Alignment.CenterEnd)) {
+                if (page == WizardStep.IDENTITY || page == WizardStep.EDIT ||
+                    page == WizardStep.RULES || page == WizardStep.REVIEW) {
+                    Box(modifier = Modifier.align(Alignment.CenterEnd)
+                        .testTag("playlist-creator-overflow")) {
                         CircleIconButton(
-                            icon = PlaylistEditorIcons.Filters,
-                            contentDescription = "Filtros reutilizáveis",
-                            onClick = onManage,
+                            icon = PlaylistEditorIcons.More,
+                            contentDescription = "Mais opções",
+                            onClick = { creatorMoreOpen = true },
                             size = 40.dp,
                         )
+                        DropdownMenu(
+                            expanded = creatorMoreOpen,
+                            onDismissRequest = { creatorMoreOpen = false },
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Seus filtros") },
+                                onClick = {
+                                    creatorMoreOpen = false
+                                    onManage()
+                                },
+                            )
+                            if (!normalMode && !filterMode) {
+                                DropdownMenuItem(
+                                    text = { Text(if (hasExportedFilter)
+                                        "Atualizar filtro reutilizável"
+                                        else "Salvar como filtro reutilizável") },
+                                    enabled = canReview && !loading,
+                                    onClick = {
+                                        creatorMoreOpen = false
+                                        onSaveFilter()
+                                    },
+                                )
+                            }
+                            if (page == WizardStep.EDIT && !filterMode &&
+                                (editingNormalId != null || editingId != null)) {
+                                DropdownMenuItem(
+                                    text = { Text("Excluir playlist",
+                                        color = MaterialTheme.colorScheme.error) },
+                                    enabled = !loading,
+                                    onClick = {
+                                        creatorMoreOpen = false
+                                        if (normalMode) confirmDeleteNormal = true
+                                        else confirmDeleteSmart = true
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1619,28 +1662,7 @@ internal fun SmartPlaylistV2WizardUi(
                             onClick = if (filterMode) onSaveFilter
                                 else if (normalMode) onSaveNormal else onSave,
                         )
-                        if (!normalMode && !filterMode) {
-                            PlaylistWizardTextAction(
-                                label = if (hasExportedFilter)
-                                    "Atualizar filtro reutilizável" else
-                                    "Salvar como filtro reutilizável",
-                                enabled = canReview && !loading,
-                                onClick = onSaveFilter,
-                            )
-                        }
-                        if (!filterMode &&
-                            (editingNormalId != null || editingId != null)
-                        ) {
-                            PlaylistWizardTextAction(
-                                label = "Excluir playlist",
-                                destructive = true,
-                                enabled = !loading,
-                                onClick = {
-                                    if (normalMode) confirmDeleteNormal = true
-                                    else confirmDeleteSmart = true
-                                },
-                            )
-                        }
+
                     }
                     WizardStep.IDENTITY -> PlaylistWizardPrimaryAction(
                         label = "Continuar",
@@ -1705,12 +1727,7 @@ internal fun SmartPlaylistV2WizardUi(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        if (!normalMode) PlaylistWizardTextAction(
-                            label = if (editingFilterId != null || hasExportedFilter)
-                                "Atualizar filtro reutilizável" else "Salvar como filtro reutilizável",
-                            enabled = canReview && !loading,
-                            onClick = onSaveFilter,
-                        )
+
                     }
                     WizardStep.CATEGORIES, WizardStep.FIELDS -> Unit
                 }
