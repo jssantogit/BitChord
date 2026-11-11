@@ -44,7 +44,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
-import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.themeArtworkPalette
 
@@ -336,6 +335,7 @@ internal fun PlaylistWizardRuleActions(options: List<PlaylistWizardRuleAction>) 
                 onClick = option.onClick,
                 reserveIconSpace = false,
                 minHeight = 48.dp,
+                trailing = {}, // Actions do not navigate into another hierarchy.
             )
             if (index < options.lastIndex) RowDivider()
         }
@@ -478,15 +478,7 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
                         }
                     }
                 } else null,
-                trailing = {
-                    Icon(
-                        imageVector = BitChordIcons.ChevronRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                            .testTag("playlist-navigation-chevron"),
-                    )
-                },
+                trailing = {}, // Flat condition and category rows have no chevrons.
             )
             if (index < options.lastIndex) RowDivider()
         }
