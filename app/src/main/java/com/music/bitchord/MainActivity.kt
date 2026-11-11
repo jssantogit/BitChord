@@ -5579,7 +5579,7 @@ private fun BitChordApp(
                         else browseActions = null
                     },
                     sheetState = browseSheetState,
-                    shape = androidx.compose.foundation.shape.RectangleShape,
+                    shape = androidx.compose.ui.graphics.RectangleShape,
                     dragHandle = null,
                     containerColor = MaterialTheme.colorScheme.background,
                 ) {
@@ -6824,7 +6824,7 @@ private fun CanonicalPlaylistMenus(
         }
         ModalBottomSheet(
             onDismissRequest = onDetailOptionsDismiss,
-            shape = androidx.compose.foundation.shape.RectangleShape,
+            shape = androidx.compose.ui.graphics.RectangleShape,
             dragHandle = null,
             containerColor = MaterialTheme.colorScheme.background,
         ) {

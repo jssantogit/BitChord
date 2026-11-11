@@ -367,7 +367,7 @@ private fun CanonicalTrackActionSheet(
         sheetState = androidx.compose.material3.rememberModalBottomSheetState(
             skipPartiallyExpanded = true,
         ),
-        shape = androidx.compose.foundation.shape.RectangleShape,
+        shape = androidx.compose.ui.graphics.RectangleShape,
         dragHandle = null,
         containerColor = MaterialTheme.colorScheme.background,
     ) {
