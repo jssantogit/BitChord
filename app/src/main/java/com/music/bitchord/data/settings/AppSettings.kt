@@ -842,9 +842,7 @@ object AppSettings {
         themeMode.value = runCatching {
             ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "DARK")
         }.getOrDefault(ThemeMode.DARK)
-        compactRatingStyle.value = compactRatingStyleFromPersisted(
-            prefs.getString(KEY_COMPACT_RATING_STYLE, null),
-        )
+        refreshCompactRatingStyleFromPreferences()
         autoplay.value = prefs.getBoolean(KEY_AUTOPLAY, true)
         shuffleEnabled.value = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)
@@ -1222,6 +1220,13 @@ object AppSettings {
         return List(EqLayout.MANUAL_COUNT) {
             stored.getOrElse(it) { 0f }.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB)
         }
+    }
+
+    /** Used on cold launch and imports; kept separate from protected auth prefs. */
+    internal fun refreshCompactRatingStyleFromPreferences() {
+        compactRatingStyle.value = compactRatingStyleFromPersisted(
+            prefs.getString(KEY_COMPACT_RATING_STYLE, null),
+        )
     }
 
     fun setCompactRatingStyle(value: CompactRatingStyle) {

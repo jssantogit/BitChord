@@ -26,18 +26,14 @@ class CompactRatingStyleSettingsTest {
             assertEquals(CompactRatingStyle.NUMERIC, AppSettings.compactRatingStyle.value)
             assertEquals("NUMERIC", prefs.getString("compact_rating_style", null))
 
-            // The same decoder used by AppSettings.readAll on every cold launch.
-            // No encrypted auth/keystore is involved in this plain visual setting.
+            // The same hydration path used by AppSettings.readAll on cold launch.
             AppSettings.compactRatingStyle.value = CompactRatingStyle.COLOR
-            assertEquals(
-                CompactRatingStyle.NUMERIC,
-                compactRatingStyleFromPersisted(prefs.getString("compact_rating_style", null)),
-            )
+            AppSettings.refreshCompactRatingStyleFromPreferences()
+            assertEquals(CompactRatingStyle.NUMERIC, AppSettings.compactRatingStyle.value)
+
             prefs.edit().putString("compact_rating_style", "CORRUPTED").commit()
-            assertEquals(
-                CompactRatingStyle.COLOR,
-                compactRatingStyleFromPersisted(prefs.getString("compact_rating_style", null)),
-            )
+            AppSettings.refreshCompactRatingStyleFromPreferences()
+            assertEquals(CompactRatingStyle.COLOR, AppSettings.compactRatingStyle.value)
             assertEquals(CompactRatingStyle.COLOR, compactRatingStyleFromPersisted(null))
         } finally {
             field.set(AppSettings, previousPrefs)
