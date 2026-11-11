@@ -12,8 +12,9 @@ import java.util.Locale
 /**
  * Capability-driven catalog for the 05/06 condition screens in the approved
  * docs/design/playlists. Only V2 rules implemented by the evaluator appear.
- * A future folder, codec or favorite-date predicate MUST NOT be offered
- * as selectable before canonical evidence and serialization are implemented.
+ * Any future predicate MUST NOT become selectable before canonical evidence,
+ * evaluation and serialization are implemented. Local MediaStore fields below
+ * already have dedicated evaluator branches and are not inferred from servers.
  */
 internal data class SmartConditionCategory(
     val id: String,
@@ -27,7 +28,8 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
-        SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
+        SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.LOCAL_GENRE,
+        SmartPlaylistRuleField.MOOD,
         SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE,
         SmartPlaylistRuleField.COMPOSER,
         SmartPlaylistRuleField.DISC_NUMBER, SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
@@ -49,6 +51,7 @@ internal val smartConditionCategories = listOf(
     SmartConditionCategory("library", "Biblioteca e pastas", "Origem das músicas e localização dos arquivos", listOf(
         SmartPlaylistRuleField.SOURCE_KIND,
         SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleField.FOLDER_PATH,
+        SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
