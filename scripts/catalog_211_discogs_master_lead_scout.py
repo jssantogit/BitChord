@@ -226,8 +226,15 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
     # unrelated groups cannot supply a unique edition claim.
     # A maximum of ten artist pages × 25 rows is already bounded at 250.
     # Truncating source rows here can conceal an explicit competing Master.
+    # A tight five-Master budget should not be consumed only by the
+    # alphabetically first large Albums. Single/EP lead candidates are
+    # cheaper to exhaustively compare in principle; this is a *request
+    # scheduling hint*, not editorial evidence about the MB primary type.
+    type_priority = {"Single": 0, "EP": 1, "Album": 2}
     ranked = sorted(candidates, key=lambda item:
-                    (item["artist"], item["group_title"].casefold(),
+                    (item["artist"], type_priority.get(
+                        item["primary_type_hint"], 3),
+                     item["group_title"].casefold(),
                      item["group_mbid"], item["master_id"]))
     # Do not spend all five Master-hydration slots on the first artist
     # alphabetically. Take one bounded lead per artist per round; the
