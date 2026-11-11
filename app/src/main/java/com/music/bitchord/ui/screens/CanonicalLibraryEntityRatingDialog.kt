@@ -33,7 +33,7 @@ internal suspend fun rateCanonicalLibrarySelection(
     selectedSource: String?,
     value: Double,
 ): Boolean = withContext(Dispatchers.IO) {
-    if (!isValidCanonicalEntityRating(value) ||
+    if ((value != 0.0 && !isValidCanonicalEntityRating(value)) ||
         targets.isEmpty() || targets.size > 500) return@withContext false
     val unique = targets.distinct()
     if (unique.size != targets.size ||
@@ -88,19 +88,26 @@ internal suspend fun rateCanonicalLibrarySelection(
     listening.withTransaction {
         for (target in unique) {
             when (target.type) {
-                CanonicalLibraryEntityType.TRACK ->
-                    listening.recordingRatingDao().setRating(target.entityId, value, now)
+                CanonicalLibraryEntityType.TRACK -> {
+                    if (value == 0.0)
+                        listening.recordingRatingDao().clearRating(target.entityId, now)
+                    else
+                        listening.recordingRatingDao().setRating(target.entityId, value, now)
+                }
                 CanonicalLibraryEntityType.ALBUM, CanonicalLibraryEntityType.ARTIST -> {
                     val entity = canonicalEntityRatingTarget(target)
                         ?: error("Missing already-verified entity identity")
-                    listening.canonicalEntityRatingDao().upsert(
-                        CanonicalEntityRatingEntity(
-                            entityType = entity.entityType,
-                            entityId = entity.entityId,
-                            ratingValue = value,
-                            ratedAtEpochMs = now,
+                    if (value == 0.0)
+                        listening.canonicalEntityRatingDao().clear(entity.entityType, entity.entityId)
+                    else
+                        listening.canonicalEntityRatingDao().upsert(
+                            CanonicalEntityRatingEntity(
+                                entityType = entity.entityType,
+                                entityId = entity.entityId,
+                                ratingValue = value,
+                                ratedAtEpochMs = now,
+                            )
                         )
-                    )
                 }
             }
         }
