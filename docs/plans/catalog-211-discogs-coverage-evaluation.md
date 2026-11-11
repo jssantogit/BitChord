@@ -1232,3 +1232,114 @@ precisão/ganho de cobertura nem confundir tipo de obra com
 formato de uma embalagem. **A=0/10; B=10/10; C=0/10;
 corpus total 10/30; 0 edições B sem vínculo Verified; 0 C
 com ausência comprovada e recuperação de UI medida.**
+
+
+## Retomada A/C — 11/30 revisões, correção de falso negativo de título (11/11/2026)
+
+### A — tipo editorial não é propriedade de uma embalagem Discogs
+
+Os seis controles exatos anteriores
+([candidate CI #43118510232](https://github.com/jssantogit/BitChord/actions/runs/43118510232))
+produziram **zero divergências Album/EP/Single elegíveis**: quatro
+controles sem vínculo direto com mesma edição e duas observações
+sem `discogs_explicit_type` suportado (uma destas com relação direta).
+Isso não prova que não há classificação errada no catálogo.
+
+O classificador offline `catalog_211_discogs_type_triage.py` antes
+marcava como `linked_type_disagreement_needs_review` qualquer
+diferença de tipo com link direto, mesmo quando ano, país, barcode,
+artista, título ou faixa da exata edição discordavam. O TDD
+[RED #43119996843](https://github.com/jssantogit/BitChord/actions/runs/43119996843)
+e [GREEN #43120089674](https://github.com/jssantogit/BitChord/actions/runs/43120089674)
+introduziram `linked_edition_evidence_inconclusive` e a lista
+auditável `missing_editional_proofs`. A inconsistência impede até
+a *pista* de revisão de tipo, quanto mais uma correção automática.
+Barcodes não presentes permanecem desconhecidos, sem serem inventados
+como correspondências.
+
+O [scanner de 4 Masters #43120411787](https://github.com/jssantogit/BitChord/actions/runs/43120411787)
+foi **GREEN (11/11 regressões, 56 GETs)** e comparou **86 pares**
+(ENHYPEN 3×3, LE SSERAFIM 9×5, IVE 4×2 e 6×4), preservando
+`source_type_disagreement` e
+`a_type_reviewer_lead_not_adjudicated` separados. Resultado:
+**0 leads A qualificados**, **0 correções**, **0 revisões A**.
+Essa etapa não muda tipos, MBIDs ou estantes.
+
+### A — resolução da amostragem enviesada e do limite de Masters
+
+Uma falha de amostragem impedia explorar artistas diferentes: ordenar
+todos os grupos pelo nome do artista consumia a cota de cinco Masters
+com os primeiros cinco álbuns de IVE. O novo escalonador preserva
+**todos os candidatos** para checar Master compartilhado, mas
+seleciona um por artista por rodada; dentro de cada artista, prioriza
+Single/EP sobre Album como *agenda de requisições*, não como
+inferência editorial. [RED #43121516719](https://github.com/jssantogit/BitChord/actions/runs/43121516719)
+→ [GREEN #43121658790](https://github.com/jssantogit/BitChord/actions/runs/43121658790)
+(cota entre artistas); [RED #43122071843](https://github.com/jssantogit/BitChord/actions/runs/43122071843)
+→ [GREEN #43122136152](https://github.com/jssantogit/BitChord/actions/runs/43122136152)
+(prioridade de Singles), **13/13 regressões**, 20 GETs.
+A coorte B concluída agora bloqueia só a exploração *B*:
+`scout_type_leads` é separado, com `--scope A`; não promove um
+caso B nem abre uma revisão A sem fonte independente.
+
+O novo corte real A resultou em cinco artistas distintos:
+**IVE — After LIKE**, **LE SSERAFIM — FEARLESS**,
+**NMIXX — Fe3O4: BREAK**, **NewJeans — How Sweet & Bubble Gum**,
+**Stray Kids — ATE**. Todos os Masters ultrapassam o limite
+seguro de oito versões; retornam
+`master_too_large_not_exhaustive` com zero correspondência/edição
+confirmada. Isso é um **limite de evidência conhecido**, não
+uma falha de CI e não uma razão para relaxar segurança.
+Próxima investigação A deve priorizar relações de edição exata já
+existentes ou Masters menores com prova editorial, sem ampliar
+indefinidamente a varredura.
+
+### C-04 — falso negativo real de título, não novo EP
+
+A [candidate CI #43118510232](https://github.com/jssantogit/BitChord/actions/runs/43118510232)
+inspecionou Discogs Release `38526540` de Stray Kids, artista
+Discogs ID `6838809` ligado ao MusicBrainz Artist
+`142b343d-bf5a-428c-a64f-6d1a7566bbe9`. O nome Discogs
+`Social Path / Superbowl (Japanese Ver.)` sem barcode forneceu
+**zero resposta** na pesquisa literal MusicBrainz `release:`.
+Isto **não demonstrava ausência**. A página oficial
+[MusicBrainz ReleaseGroup e248dce6](https://musicbrainz.org/release-group/e248dce6-bef8-4d1f-a6d8-164de112151f)
+já classifica `Social Path / Super Bowl -Japanese ver.-` como
+EP de Stray Kids, com uma edição oficial digital de 5 faixas.
+A [Sony Music Japan](https://www.sonymusic.co.jp/artist/StrayKids/info/554372)
+confirmou independentemente o JAPAN 1st EP, lançamento
+06/09/2023 e as cinco músicas. A fonte Discogs observada não
+estabelece correspondência **da mesma edição**, apenas que o
+produto editorial não está ausente do MB.
+
+Uma segunda consulta opcional, somente depois de um zero no
+título completo, usa **o prefixo literal do primeiro segmento
+separado por uma única barra**, exigindo 2–4 tokens Unicode
+com 3–24 caracteres. Ex. `Social Path` gera
+`releasegroup:"Social Path" AND arid:<MBID exato>`.
+Nunca translitera `Superbowl` para `Super Bowl`, não usa
+fuzzy matching, não consulta outro artista, e rejeita retornos
+inválidos. O estado de saída é
+`mb_title_prefix_lead_not_edition`, **não**
+`Verified` ou ausência. O teto de consultas C por lote
+é agora 2 por candidato e máximo 16; pode continuar
+inconclusivo por limitação do índice. [RED #43120874468](https://github.com/jssantogit/BitChord/actions/runs/43120874468)
+→ [GREEN #43121276768](https://github.com/jssantogit/BitChord/actions/runs/43121276768),
+com a suíte pública completa aprovada. O fallback foi
+comprovado com *fixtures*, não homologado como recuperação
+em produção.
+
+O [manifest de corpus](https://github.com/jssantogit/BitChord/blob/catalog/210-discogs-provider-evidence-20261107/docs/plans/catalog-211-discogs-corpus-manifest.json)
+registra **C-04 Reviewed negativo**:
+`match_state=candidate`, `absent_in_musicbrainz=false`,
+`visible=false`, `app_type=Unknown`. Os dois últimos
+valores são **não medidos em Android**, não falhas observadas.
+[Corpus CI #43121153349](https://github.com/jssantogit/BitChord/actions/runs/43121153349)
+**SUCCESS**; 30 slots, A 0/10, B 10/10, C 1/10,
+**total 11/30 revisões independentes, zero C
+recuperações realmente demonstradas e nenhuma métrica global
+calculável**.
+
+Sem APK, smoke físico, merge, prioridade Discogs-first,
+alteração da #209/main, gravação de MBID inventado
+ou mudança da autoridade de MusicBrainz.
