@@ -28,6 +28,23 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistEditorPresentationTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun filterManagerUsesPlainTitleAndTopRightCreateControl() {
+        var created = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistManagerChrome(
+                    onBack = {},
+                    onCreateFilter = { created++ },
+                )
+            }
+        }
+        compose.onNodeWithText("Seus filtros").assertExists()
+        compose.onNodeWithText("Gerenciar coleções").assertDoesNotExist()
+        compose.onNodeWithText("Inteligentes").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Criar filtro").performClick()
+        compose.runOnIdle { assertEquals(1, created) }
+    }
+
     @Test fun secondaryEditorFooterActionIsACompactTextControl() {
         var clicked = 0
         compose.setContent {
