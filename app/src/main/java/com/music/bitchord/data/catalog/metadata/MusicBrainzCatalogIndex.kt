@@ -31,7 +31,11 @@ internal class MusicBrainzCatalogIndex(
     private val database: CanonicalCatalogDatabase,
     private val idFactory: () -> String = { UUID.randomUUID().toString() },
 ) {
-    suspend fun persistRecordings(hits: List<MusicBrainzRecordingHit>): Map<String, String> =
+    suspend fun persistRecordings(
+        hits: List<MusicBrainzRecordingHit>,
+        /** A Release Track fallback lacks independent Recording display authority. */
+        acceptSourceCorrections: Boolean = true,
+    ): Map<String, String> =
         database.withTransaction {
             val dao = database.catalogDao()
             val indexed = linkedMapOf<String, String>()
@@ -70,15 +74,27 @@ internal class MusicBrainzCatalogIndex(
                 check(previousEvidence == null || previousEvidence.mbid.equals(mbid, true)) {
                     "MusicBrainz Recording enrichment conflicts with canonical MBID"
                 }
-                // Only recording search can positively verify audio/visual status.
-                // Sparse Track or ISRC lookups may not erase this evidence.
+                // Only exact Recording-MBID evidence may correct the provider
+                // display fields. A Release Track's title, duration or credit
+                // is an edition-specific fallback, never a correction to a
+                // previously verified Recording. The local canonical fields
+                // (and playback MediaAssets) remain completely untouched.
+                val incomingArtist = hit.artistDisplay?.trim()?.takeIf(String::isNotEmpty)
+                val incomingDuration = hit.durationMs?.takeIf { it >= 0L }
                 dao.upsertMusicBrainzRecordingEnrichment(
                     MusicBrainzRecordingEnrichmentEntity(
                         recordingId = recordingId, mbid = mbid,
-                        title = previousEvidence?.title ?: title,
-                        durationMs = previousEvidence?.durationMs ?: hit.durationMs,
-                        artistDisplay = previousEvidence?.artistDisplay ?: hit.artistDisplay,
+                        title = if (acceptSourceCorrections) title
+                            else previousEvidence?.title ?: title,
+                        durationMs = if (acceptSourceCorrections)
+                            incomingDuration ?: previousEvidence?.durationMs
+                            else previousEvidence?.durationMs ?: incomingDuration,
+                        artistDisplay = if (acceptSourceCorrections)
+                            incomingArtist ?: previousEvidence?.artistDisplay
+                            else previousEvidence?.artistDisplay ?: incomingArtist,
                         fetchedAtEpochMs = System.currentTimeMillis(),
+                        // Search may omit both fields. Never turn missing
+                        // evidence into a negative audio/video classification.
                         hasOfficialAudioRelease = hit.hasOfficialAudioRelease
                             ?: previousEvidence?.hasOfficialAudioRelease,
                         isVideo = hit.isVideo ?: previousEvidence?.isVideo,
@@ -329,7 +345,7 @@ internal class MusicBrainzCatalogIndex(
                 artistDisplay = track.recordingArtistDisplay ?: detail.artistDisplay,
                 durationMs = track.recordingDurationMs ?: track.durationMs,
             )
-        })
+        }, acceptSourceCorrections = false)
         return database.withTransaction {
             val dao = database.catalogDao()
             val groupId = groupMbid?.let { mbid ->

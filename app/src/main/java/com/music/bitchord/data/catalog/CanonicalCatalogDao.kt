@@ -1361,9 +1361,9 @@ internal interface CanonicalCatalogDao {
     @Query(
         """
         SELECT identity.externalId AS musicBrainzId,
-               recording.title AS title,
-               recording.artistDisplay AS artistDisplay,
-               recording.durationMs AS durationMs,
+               COALESCE(NULLIF(TRIM(info.title), ''), recording.title) AS title,
+               COALESCE(NULLIF(TRIM(info.artistDisplay), ''), recording.artistDisplay) AS artistDisplay,
+               COALESCE(info.durationMs, recording.durationMs) AS durationMs,
                info.hasOfficialAudioRelease AS hasOfficialAudioRelease,
                info.isVideo AS isVideo
         FROM catalog_external_identity AS identity
@@ -1375,13 +1375,17 @@ internal interface CanonicalCatalogDao {
           AND (
             instr(lower(recording.title), lower(:query)) > 0
             OR instr(lower(recording.artistDisplay), lower(:query)) > 0
+            OR instr(lower(info.title), lower(:query)) > 0
+            OR instr(lower(info.artistDisplay), lower(:query)) > 0
           )
         ORDER BY CASE WHEN EXISTS (
                     SELECT 1 FROM catalog_media_asset playable
                     WHERE playable.recordingId = recording.id
                 ) THEN 0 ELSE 1 END,
-                 recording.artistDisplay COLLATE NOCASE,
-                 recording.title COLLATE NOCASE, identity.externalId
+                 COALESCE(NULLIF(TRIM(info.artistDisplay), ''), recording.artistDisplay)
+                    COLLATE NOCASE,
+                 COALESCE(NULLIF(TRIM(info.title), ''), recording.title)
+                    COLLATE NOCASE, identity.externalId
         LIMIT :limit
         """,
     )
