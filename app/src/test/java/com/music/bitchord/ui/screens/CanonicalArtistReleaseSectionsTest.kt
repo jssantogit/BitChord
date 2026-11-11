@@ -375,6 +375,10 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(key, canonicalLocalArtistRecentLookupKey("AtHeart", releases.reversed()))
         assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
             releases + ReleaseEntity("local-3", "Say It", "AtHeart", null)))
+        // A rescan may replace a local release ID while the artist/title
+        // remains unchanged. Its old external-date cache must not be reused.
+        assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
+            releases.map { if (it.id == "local-1") it.copy(id = "new-scan-id") else it }))
         assertEquals(false, key == canonicalLocalArtistRecentLookupKey("Other Artist", releases))
         assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
             releases.map { if (it.id == "local-1") it.copy(title = "Another release") else it }))

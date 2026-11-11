@@ -73,8 +73,10 @@ private object LocalArtistRecentMusicBrainzLookup {
         // No presentation-only date can be attributed to a unique edition;
         // avoid a costly remote search for this entirely ambiguous shelf.
         if (uniquelyNamed.isEmpty()) return@withLock emptyMap()
-        val key = name.lowercase(Locale.ROOT) + "|" +
-            local.map { it.title.trim().lowercase(Locale.ROOT) }.sorted().joinToString("|")
+        // Reuse the same release-membership identity as the Compose lookup.
+        // A provider rescan can replace local IDs without changing titles;
+        // cached proof keyed by title alone would reference stale release IDs.
+        val key = canonicalLocalArtistRecentLookupKey(name, local)
         val now = System.currentTimeMillis()
         cache[key]?.takeIf {
             now >= it.storedAt && now - it.storedAt < if (it.evidence.isEmpty())
