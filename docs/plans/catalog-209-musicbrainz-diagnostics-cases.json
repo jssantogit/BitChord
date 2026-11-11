@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "description": "Small, exact-MBID, public MusicBrainz diagnostic corpus. This does not certify Android UI behavior.",
+  "cases": [
+    {
+      "id": "ILLIT-SUPER-REAL-ME",
+      "artist_mbid": "6b128dd7-e998-4edb-a4f5-400fef190445",
+      "artist_name": "ILLIT",
+      "group_mbid": "529f87a1-1081-48a4-8ee1-3c08de229858",
+      "expected_primary_type": "EP",
+      "release_mbids": [
+        "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+        "271b31f8-8ab6-483c-97d9-8f0fabb2d4f4"
+      ],
+      "recording_mbid": "e614e432-ca77-41c1-82c1-4e3a24ebbb0c",
+      "recording_title_contains": "Magnetic"
+    }
+  ]
+}
