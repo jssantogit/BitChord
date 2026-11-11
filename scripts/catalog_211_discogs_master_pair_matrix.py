@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only exact-ID matrix for two public typed Master leads.
+"""Read-only exact-ID matrix for bounded public typed Master leads.
 
 The source lists are checked *in full* before comparing any pairs. Matched
 tracks/barcodes are observations, not a unique pressing, a Discogs Verified
@@ -22,12 +22,12 @@ from catalog_211_discogs_edition_pair_review import release_relations
 from catalog_211_discogs_unlinked_group_probe import label_catalog_evidence
 
 OUTPUT = Path("discogs-211-typed-master-pair-matrix.json")
-MAX_SEEDS, MAX_MB_RELEASES, MAX_REQUESTS = 2, 12, 40
+MAX_SEEDS, MAX_MB_RELEASES, MAX_REQUESTS = 4, 12, 60
 MBID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\Z", re.I)
 
-# Provenance: #43107919302, two MusicBrainz RG -> Discogs Master links and
-# complete <=8 public version lists. Recheck their exact identities on
-# EVERY execution; never trust these strings as a permanent mapping.
+# Provenance: #43107919302 (ENHYPEN/LE SSERAFIM) and #43117680744
+# (IVE): real MusicBrainz RG -> Discogs Master links and bounded <=8
+# version lists. Recheck on EVERY run; never treat IDs as permanent mappings.
 SEEDS = [
     {"artist": "ENHYPEN",
      "artist_mbid": "95663592-1447-4579-90f7-c94733476667",
@@ -37,6 +37,14 @@ SEEDS = [
      "artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
      "group_mbid": "fb426d76-525d-4b25-90d1-fa4d1b3140c9",
      "master_id": 2653076, "discogs_artist_id": 11171795},
+    {"artist": "IVE",
+     "artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+     "group_mbid": "18271616-7122-4bf6-8fc8-11467cc923c1",
+     "master_id": 2531575, "discogs_artist_id": 7122521},
+    {"artist": "IVE",
+     "artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+     "group_mbid": "07fb58fa-2007-4e40-aa57-88e69a9e19be",
+     "master_id": 2911144, "discogs_artist_id": 7122521},
 ]
 
 def validate_seed(seed: dict) -> None:
@@ -235,7 +243,7 @@ def observe(seeds: list[dict], get, pause=lambda: None) -> dict:
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--target", choices=("all", "ENHYPEN", "LE SSERAFIM"),
+    parser.add_argument("--target", choices=("all", "ENHYPEN", "LE SSERAFIM", "IVE"),
                         default="all")
     args = parser.parse_args()
     selected = SEEDS if args.target == "all" else [
