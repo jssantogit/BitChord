@@ -72,23 +72,51 @@ internal data class SmartConditionFieldTab(
 )
 
 internal fun smartConditionFieldTabs(category: SmartConditionCategory): List<SmartConditionFieldTab> {
-    if (category.id != "music") return emptyList()
-    val identity = setOf(
-        SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
-        SmartPlaylistRuleField.RELEASE_TITLE,
-    )
-    val credits = setOf(
-        SmartPlaylistRuleField.ALBUM_ARTIST, SmartPlaylistRuleField.TRACK_ARTIST,
-        SmartPlaylistRuleField.COMPOSER, SmartPlaylistRuleField.ARTIST_COUNTRY,
-    )
-    return listOf(
-        SmartConditionFieldTab("all", "Todos", category.fields),
-        SmartConditionFieldTab("identity", "Identidade", category.fields.filter { it in identity }),
-        SmartConditionFieldTab("credits", "Créditos", category.fields.filter { it in credits }),
-        SmartConditionFieldTab("organization", "Organização", category.fields.filter {
-            it !in identity && it !in credits
-        }),
-    )
+    val all = SmartConditionFieldTab("all", "Todos", category.fields)
+    return when (category.id) {
+        "music" -> {
+            val identity = setOf(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
+                SmartPlaylistRuleField.RELEASE_TITLE,
+            )
+            val credits = setOf(
+                SmartPlaylistRuleField.ALBUM_ARTIST, SmartPlaylistRuleField.TRACK_ARTIST,
+                SmartPlaylistRuleField.COMPOSER, SmartPlaylistRuleField.ARTIST_COUNTRY,
+            )
+            listOf(
+                all,
+                SmartConditionFieldTab("identity", "Identidade",
+                    category.fields.filter { it in identity }),
+                SmartConditionFieldTab("credits", "Créditos",
+                    category.fields.filter { it in credits }),
+                SmartConditionFieldTab("organization", "Organização",
+                    category.fields.filter { it !in identity && it !in credits }),
+            )
+        }
+        "history" -> {
+            val plays = setOf(
+                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE,
+            )
+            listOf(
+                all,
+                SmartConditionFieldTab("plays", "Reproduções",
+                    category.fields.filter { it in plays }),
+                SmartConditionFieldTab("skips", "Pulos",
+                    category.fields.filter { it !in plays }),
+            )
+        }
+        "library" -> listOf(
+            all,
+            SmartConditionFieldTab("sources", "Origem",
+                category.fields.filter { it == SmartPlaylistRuleField.SOURCE_KIND }),
+            SmartConditionFieldTab("paths", "Arquivos e pastas",
+                category.fields.filter { it != SmartPlaylistRuleField.SOURCE_KIND }),
+        )
+        // One- to three-field categories need no extra tab row:
+        // the extra navigation would compete with the entire list.
+        else -> emptyList()
+    }
 }
 
 internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (field) {
