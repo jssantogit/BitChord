@@ -104,6 +104,39 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual(0, result["reviewed_corpus_cases"])
         self.assertEqual(0, result["verified_edition_count"])
 
+    def test_five_lead_budget_is_distributed_across_artists_not_first_name(self):
+        # Previously a sort by artist name put the first five groups from
+        # one artist into the entire five-Master budget. This defeats
+        # multi-artist A-type catalog research even with complete source rows.
+        artists = [(f"Artist-{i}", f"{i:08x}-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+                   for i in range(1, 6)]
+        pages = {}
+        for n, (name, aid) in enumerate(artists):
+            groups = [
+                row(f"{n+1:08x}-{j+1:04x}-4aaa-8aaa-aaaaaaaaaaaa",
+                    5000 + n*10 + j, aid, title=f"Album {j}")
+                for j in range(3)
+            ]
+            pages[url_artist(aid)] = page(groups)
+        def get(url):
+            if url in pages:
+                return pages[url]
+            if url.endswith("/versions?page=1&per_page=8"):
+                return listing([900])
+            if "/masters/" in url:
+                return {"id": int(url.split("/")[-1]), "main_release": 900}
+            if "/ws/2/release/?" in url:
+                gid = url.split("release-group=", 1)[1].split("&", 1)[0]
+                n = int(gid[:8], 16) - 1
+                return edition_page(gid, artists[n][1])
+            raise AssertionError(url)
+        result = scout(artists, set(), get)
+        self.assertEqual(5, len(result["leads"]))
+        self.assertEqual({name for name, _ in artists},
+                         {lead["artist"] for lead in result["leads"]})
+        self.assertEqual(0, result["verified_edition_count"])
+        self.assertEqual(0, result["reviewed_corpus_cases"])
+
     def test_browse_must_keep_exact_credit_and_typed_relation(self):
         rows, meta = browse_page(page([
             row(), row(H, 501, artist=B),
