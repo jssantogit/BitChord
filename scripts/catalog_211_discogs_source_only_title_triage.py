@@ -53,7 +53,7 @@ def title_prefix_query(title: object, artist_mbid: object) -> str | None:
     if title.count("/") != 1:
         return None
     prefix = title.split("/", 1)[0].strip()
-    words = re.findall(r"[^\\W_]+", prefix, re.UNICODE)
+    words = re.findall(r"[^\W_]+", prefix, re.UNICODE)
     if (not 2 <= len(words) <= 4 or
         not all(3 <= len(word) <= 24 for word in words) or
         " ".join(words) != prefix or len(prefix) > 100):
