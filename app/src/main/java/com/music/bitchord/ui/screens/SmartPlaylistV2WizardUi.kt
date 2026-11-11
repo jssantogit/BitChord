@@ -341,8 +341,9 @@ internal fun <T> WizardChoiceDialog(
                     title = label(option),
                     onClick = { onChosen(option); onClose() },
                     reserveIconSpace = false,
-                    modifier = if (radioSelected == null) Modifier else
-                        Modifier.semantics { selected = radioSelected(option) },
+                    modifier = Modifier.testTag("playlist-choice-option-${label(option)}")
+                        .then(if (radioSelected == null) Modifier else
+                            Modifier.semantics { selected = radioSelected(option) }),
                     trailing = if (radioSelected != null) ({
                         Icon(
                             imageVector = if (radioSelected(option))
@@ -1802,7 +1803,8 @@ internal fun SmartPlaylistV2WizardUi(
     }
     if (picker == "sort") {
         WizardChoiceDialog("Ordenar músicas", SmartPlaylistV2Sort.entries, ::sortUiLabel,
-            onChosen = onSortChange, onClose = { picker = null })
+            onChosen = onSortChange, onClose = { picker = null },
+            radioSelected = { it == sort })
     }
     if (picker == "operator") {
         WizardChoiceDialog("Comparar por", draft.field.allowedOperators(), ::operatorUiLabel,
@@ -1821,7 +1823,8 @@ internal fun SmartPlaylistV2WizardUi(
                     textValue = if (presence || !draft.field.isTextField()) null
                         else draft.textValue ?: "",
                 )
-            }, onClose = { picker = null })
+            }, onClose = { picker = null },
+            radioSelected = { it == draft.operator })
     }
     if (picker == "reference" || picker == "replaceReference") {
         WizardChoiceDialog("Playlist salva", savedDefinitions, { it.name },
