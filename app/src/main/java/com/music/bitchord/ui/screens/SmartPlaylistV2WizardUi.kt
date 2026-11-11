@@ -605,10 +605,14 @@ internal fun SmartPlaylistV2WizardUi(
                         DropdownMenu(
                             expanded = creatorMoreOpen,
                             onDismissRequest = { creatorMoreOpen = false },
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+                            modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Seus filtros") },
+                                leadingIcon = {
+                                    Icon(PlaylistEditorIcons.Filters, contentDescription = null)
+                                },
                                 onClick = {
                                     creatorMoreOpen = false
                                     onManage()
@@ -620,6 +624,9 @@ internal fun SmartPlaylistV2WizardUi(
                                         "Atualizar filtro reutilizável"
                                         else "Salvar como filtro reutilizável") },
                                     enabled = canReview && !loading,
+                                    leadingIcon = {
+                                        Icon(PlaylistEditorIcons.Add, contentDescription = null)
+                                    },
                                     onClick = {
                                         creatorMoreOpen = false
                                         onSaveFilter()
@@ -628,9 +635,20 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                             if (page == WizardStep.EDIT && !filterMode &&
                                 (editingNormalId != null || editingId != null)) {
+                                HorizontalDivider(
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Excluir playlist",
                                         color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = {
+                                        Icon(
+                                            PlaylistEditorIcons.Delete,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
                                     enabled = !loading,
                                     onClick = {
                                         creatorMoreOpen = false
