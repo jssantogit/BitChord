@@ -125,6 +125,9 @@ fun SongActionsSheet(
     onAddToPlaylist: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
+    /** Canonical release from a verified Recording→Release link only. */
+    verifiedCanonicalReleaseId: String? = null,
+    onOpenCanonicalAlbum: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
@@ -239,6 +242,20 @@ fun SongActionsSheet(
                     )
                 }
             }
+            // The Apple queue's six playback actions do not include discovery.
+            // A verified release route is still an essential track action.
+            if (song.albumId != null || verifiedCanonicalReleaseId != null) {
+                ActionRow(
+                    icon = Icons.Rounded.Album,
+                    label = stringResource(R.string.open_album),
+                    accent = palette.accent,
+                    onClick = {
+                        if (verifiedCanonicalReleaseId != null && onOpenCanonicalAlbum != null)
+                            onOpenCanonicalAlbum(verifiedCanonicalReleaseId)
+                        else song.albumId?.let(onOpenAlbum)
+                    },
+                )
+            }
         } else {
         // Native playlists work for local and canonical playback without login.
         if (appleQueuePlayerMenu || (signedIn && !isOffline)) {
@@ -285,15 +302,22 @@ fun SongActionsSheet(
             accent = palette.accent,
             onClick = onAddToQueue,
         )
-        when (val id = song.albumId) {
-            null -> if (resolvingLinks) {
-                LoadingActionRow(Icons.Rounded.Album, stringResource(R.string.open_album), palette)
-            }
-            else -> ActionRow(
+        val verifiedRelease = verifiedCanonicalReleaseId
+            ?.takeIf { onOpenCanonicalAlbum != null }
+        when {
+            verifiedRelease != null -> ActionRow(
                 Icons.Rounded.Album,
                 stringResource(R.string.open_album),
                 accent = palette.accent,
-            ) { onOpenAlbum(id) }
+            ) { onOpenCanonicalAlbum?.invoke(verifiedRelease) }
+            song.albumId != null -> ActionRow(
+                Icons.Rounded.Album,
+                stringResource(R.string.open_album),
+                accent = palette.accent,
+            ) { onOpenAlbum(song.albumId) }
+            resolvingLinks -> LoadingActionRow(
+                Icons.Rounded.Album, stringResource(R.string.open_album), palette,
+            )
         }
         when (val id = song.artistId) {
             null -> if (resolvingLinks) {
