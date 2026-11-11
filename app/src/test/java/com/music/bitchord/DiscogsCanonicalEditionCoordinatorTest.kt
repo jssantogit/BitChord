@@ -172,6 +172,53 @@ class DiscogsCanonicalEditionCoordinatorTest {
         assertEquals(2, discogsCalls) // rollback clears ONLY Discogs' in-memory evidence
     }
 
+    @Test fun exactMusicBrainzLabelCatalogPairBlocksContradictoryDiscogsPressing() = runBlocking {
+        // Same UPC, artist, title and track order are insufficient when a
+        // specific label asserts two different catalog numbers.
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = when (parameters["inc"]) {
+                "recordings+artist-credits+release-groups+labels" ->
+                    musicBrainzJson().replace(
+                        "\"media-count\":1",
+                        "\"label-info\":[{\"label\":{\"name\":\"BELIFT LAB\"},\"catalog-number\":\"BEL-001\"}],\"media-count\":1",
+                    )
+                "url-rels" -> """{"id":"$mbid","relations":[{
+                    "type":"discogs",
+                    "type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                    "url":{"resource":"https://www.discogs.com/release/12345"}
+                }]}"""
+                else -> error("Unexpected request: $parameters")
+            }
+        })
+        val graph = MusicBrainzCatalogGraph(mb)
+        val detail = (graph.lookupRelease(mbid) as
+            com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(listOf("BELIFT LAB" to "BEL-001"), detail.editionLabelCatalogPairs)
+        val client = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/12345", path)
+                return DiscogsHttpResponse(200, """{
+                    "id":12345,"title":"ILLIT - SUPER REAL ME",
+                    "artists":[{"name":"ILLIT"}],
+                    "formats":[{"name":"CD","descriptions":["EP"]}],
+                    "labels":[{"name":"BELIFT LAB","catno":"BEL-002"}],
+                    "identifiers":[{"type":"Barcode","value":"036000291452"}],
+                    "tracklist":[{"position":"1","title":"My World"},
+                                 {"position":"2","title":"Magnetic"}]
+                }""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0))
+        val coordinator = DiscogsCanonicalEditionCoordinator(
+            graph = graph, editions = DiscogsEditionRepository(
+                links = DiscogsMusicBrainzLinks(mb), discogs = client, enabled = true,
+            ), enabled = true,
+        )
+        assertEquals(DiscogsEditionEnrichment.Candidate, coordinator.observeRelease(mbid))
+    }
+
     @Test fun releaseGraphDigitalFormatBlocksPhysicalDiscogsEditionEvenWithSameTracks() = runBlocking {
         // The MusicBrainz release JSON already provides medium.format,
         // but the Discogs coordinator previously dropped editionFormats.
