@@ -377,8 +377,9 @@ class MusicBrainzArtistAppearancesTest {
         // belongs to someone else, even if the edition is Official.
         assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
         val absentCredit = body.replace(
-            ""","artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]""",
-            "",
+            """"primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]""",
+            """"primary-type":"Album"""",
         )
         // Missing data is not negative evidence; existing track-scoped
         // browsing still operates while exact group evidence is unavailable.
@@ -401,15 +402,19 @@ class MusicBrainzArtistAppearancesTest {
         assertEquals(1, parseMusicBrainzTrackArtistAppearances(body, target).size)
         assertTrue(parseMusicBrainzTrackArtistAppearances(
             body.replace(
-                """"artist-credit":[{"artist":{"id":"$other","name":"Host"}}]},"media"""",
-                """"artist-credit":[]},"media"""",
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]""",
+                """"primary-type":"Single",
+                "artist-credit":[]""",
             ), target,
         ).isEmpty())
         assertTrue(parseMusicBrainzTrackArtistAppearances(
             body.replace(
-                """"artist-credit":[{"artist":{"id":"$other","name":"Host"}}]},"media"""",
-                """"artist-credit":[{"artist":{"id":"$other","name":"Host"}},
-                    {"artist":{"id":"invalid"}}]},"media"""",
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]""",
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}},
+                    {"artist":{"id":"invalid"}}]""",
             ), target,
         ).isEmpty())
     }
