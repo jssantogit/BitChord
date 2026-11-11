@@ -1425,4 +1425,6 @@
     <string name="visual_offline_confirm_title">Limpar visuais offline?</string>
     <string name="visual_offline_confirm_description">As imagens e animações salvas serão apagadas. Músicas, playlists e avaliações serão preservadas. Os visuais poderão ser baixados novamente quando houver conexão.</string>
     <string name="visual_offline_cleared">Visuais offline apagados</string>
+    <string name="show_album_edition_metadata">Exibir metadados dos álbuns</string>
+    <string name="show_album_edition_metadata_subtitle">Mostra gravadora, data, país e detalhes verificados abaixo das faixas.</string>
 </resources>

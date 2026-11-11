@@ -1419,4 +1419,6 @@
     <string name="visual_offline_confirm_title">Offline-Grafiken löschen?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline-Grafiken gelöscht</string>
+    <string name="show_album_edition_metadata">Album-Metadaten anzeigen</string>
+    <string name="show_album_edition_metadata_subtitle">Zeigt Label, Datum, Land und geprüfte Details unter den Titeln.</string>
 </resources>

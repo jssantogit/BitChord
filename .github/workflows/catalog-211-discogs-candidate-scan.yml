@@ -1,0 +1,98 @@
+name: "Catalog #211 — Discogs corpus candidate scouting"
+
+# Public metadata only. Candidates are not adjudicated corpus results.
+# No token, APK, emulator or physical smoke.
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - scripts/catalog_211_discogs_corpus_candidates.py
+      - scripts/test_catalog_211_discogs_corpus_candidates.py
+      - scripts/catalog_211_discogs_candidate_details.py
+      - scripts/test_catalog_211_discogs_candidate_details.py
+      - scripts/catalog_211_discogs_source_only_reconciliation.py
+      - scripts/test_catalog_211_discogs_source_only_reconciliation.py
+      - scripts/catalog_211_discogs_source_only_title_triage.py
+      - scripts/test_catalog_211_discogs_source_only_title_triage.py
+      - scripts/catalog_211_discogs_fresh_c_followup.py
+      - scripts/test_catalog_211_discogs_fresh_c_followup.py
+      - scripts/catalog_211_discogs_public_link_probe.py
+      - scripts/test_catalog_211_discogs_public_link_probe.py
+      - scripts/catalog_211_discogs_type_triage.py
+      - scripts/test_catalog_211_discogs_type_triage.py
+      - scripts/catalog_211_discogs_edition_pair_review.py
+      - scripts/test_catalog_211_discogs_edition_pair_review.py
+      - docs/plans/catalog-211-discogs-edition-pairs.json
+      - scripts/catalog_211_discogs_unlinked_group_probe.py
+      - scripts/test_catalog_211_discogs_unlinked_group_probe.py
+      - docs/plans/catalog-211-discogs-corpus-manifest.json
+      - .github/workflows/catalog-211-discogs-candidate-scan.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-211-candidate-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scout-public-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test strict offline A-cohort type-triage contract
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_type_triage.py' -v
+      - name: Test ReleaseGroup-scoped barcode lead search offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_unlinked_group_probe.py' -v
+      - name: Run offline identity, completeness and candidate regression tests
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_candidates.py' -v
+      - name: Observe bounded public Artist and ReleaseGroup index leads
+        run: python3 scripts/catalog_211_discogs_corpus_candidates.py
+      - name: Test bounded public Release/Master detail hydration
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_candidate_details.py' -v
+      - name: Inspect bounded candidate Edition metadata, without editorial claims
+        run: python3 scripts/catalog_211_discogs_candidate_details.py
+      - name: Test safe C-cohort barcode reconciliation offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_source_only_reconciliation.py' -v
+      - name: Reconcile Discogs-only leads with existing MusicBrainz barcodes
+        run: python3 scripts/catalog_211_discogs_source_only_reconciliation.py
+      - name: Test C-cohort MusicBrainz title-index fallback offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_source_only_title_triage.py' -v
+      - name: Reconcile no-barcode C leads against MusicBrainz release title index
+        run: python3 scripts/catalog_211_discogs_source_only_title_triage.py
+      - name: Test independent C-only follow-up scan offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_fresh_c_followup.py' -v
+      - name: Observe next independent C candidates without repeating B corpus
+        run: python3 scripts/catalog_211_discogs_fresh_c_followup.py
+      - name: Test reusable public MusicBrainz/Discogs comparison diagnostics
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_public_link_probe.py' -v
+      - name: Test exact-ID cross-provider edition controls offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_edition_pair_review.py' -v
+      - name: Compare six exact MusicBrainz and Discogs Release pairs
+        run: python3 scripts/catalog_211_discogs_edition_pair_review.py
+      - name: Triage explicit Album-EP-Single differences without network or editorial claims
+        run: python3 scripts/catalog_211_discogs_type_triage.py
+      - name: Observe bounded alternative editions in the same ReleaseGroup
+        run: python3 scripts/catalog_211_discogs_unlinked_group_probe.py
+      - name: Retain non-adjudicated source observations for manual review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-corpus-candidate-observations
+          path: |
+            discogs-211-corpus-candidates.json
+            discogs-211-corpus-edition-observations.json
+            discogs-211-source-only-barcode-reconciliation.json
+            discogs-211-source-only-title-triage.json
+            discogs-211-fresh-c-followup.json
+            discogs-211-edition-pair-evidence.json
+            discogs-211-type-disagreement-triage.json
+            discogs-211-unlinked-alternative-editions.json
+          if-no-files-found: warn
+          retention-days: 7

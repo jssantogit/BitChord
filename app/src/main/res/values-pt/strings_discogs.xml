@@ -1,0 +1,10 @@
+<resources>
+    <string name="discogs_search_title">Pesquisa no catálogo Discogs</string>
+    <string name="discogs_search_connected">Token pessoal configurado · descoberta complementar ativada</string>
+    <string name="discogs_search_disconnected">Token pessoal opcional · necessário para buscar edições sem vínculo no MusicBrainz</string>
+    <string name="discogs_search_help">Pesquisa apenas metadados públicos do Discogs para lançamentos consultados. O token fica criptografado neste aparelho e nunca entra no backup ou diagnóstico. Os dados Discogs não permitem reprodução de áudio.</string>
+    <string name="discogs_search_token_label">Token pessoal do Discogs</string>
+    <string name="discogs_search_save_failed">Token inválido ou armazenamento seguro indisponível. Nada foi salvo.</string>
+    <string name="discogs_search_save">Salvar</string>
+    <string name="discogs_search_remove">Remover token</string>
+</resources>

@@ -71,6 +71,9 @@ fun ExploreScreen(
     /** Canonical MusicBrainz genres use the ORIGINAL native Explore grid. */
     canonicalGenres: List<ShelfItem>? = null,
     onCanonicalGenreClick: (ShelfItem) -> Unit = {},
+    /** Read-only source-only releases, using the same Home shelf compositor. */
+    supplementaryCatalogShelves: List<HomeShelf> = emptyList(),
+    onSupplementaryCatalogClick: (ShelfItem, String) -> Unit = { _, _ -> },
 ) {
     PullToRefresh(
         refreshing = refreshing,
@@ -138,6 +141,17 @@ fun ExploreScreen(
                         items(rows, key = { row -> row.first().let { "${it.browseId}|${it.params}" } }) { row ->
                             MoodGenreRow(row = row, columns = columns, onCategoryClick = onCategoryClick)
                         }
+                    }
+                }
+                if (supplementaryCatalogShelves.isNotEmpty()) {
+                    // Cards remain metadata-only; playback is not inferred.
+                    items(supplementaryCatalogShelves, key = { "discogs-shelf:" + it.title }) { shelf ->
+                        Shelf(
+                            shelf = shelf,
+                            onItemClick = { item ->
+                                onSupplementaryCatalogClick(item, shelf.title)
+                            },
+                        )
                     }
                 }
             }

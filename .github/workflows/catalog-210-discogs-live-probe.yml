@@ -1,0 +1,52 @@
+name: Catalog #210 — Discogs public API contract
+
+# This is a network-only probe, NOT an Android UI/phone smoke.
+# Run only when this feature's probe script or workflow changes.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - scripts/catalog_210_discogs_live_probe.py
+      - .github/workflows/catalog-210-discogs-live-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-210-discogs-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discogs-public-release:
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 211
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+      # The PR-path filter checks cumulative changes. Check only the latest
+      # commit here, otherwise every unrelated Android commit re-hits Discogs.
+      - name: Require actual probe change on this push
+        id: changed
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] ||
+             git diff --name-only HEAD^ HEAD | grep -Eq '^(scripts/catalog_210_discogs_live_probe\.py|\.github/workflows/catalog-210-discogs-live-probe\.yml)$'; then
+            echo 'probe=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'probe=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Verify read-only public release endpoint with a unique User-Agent
+        if: steps.changed.outputs.probe == 'true'
+        run: python3 scripts/catalog_210_discogs_live_probe.py discogs-api-evidence.json
+      - name: Save bounded anonymous API observation
+        if: steps.changed.outputs.probe == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-210-discogs-api-evidence
+          path: discogs-api-evidence.json
+          if-no-files-found: warn
+          retention-days: 7

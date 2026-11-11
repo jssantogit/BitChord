@@ -110,6 +110,7 @@ internal fun CanonicalArtistDetailRoute(
 
     val selectedAlbum = nestedNavigation.openedRelease
     if (selectedAlbum != null) {
+        val nestedEditorialEvidence = rememberDiscogsLibraryEditionForRelease(selectedAlbum.id)
         val albumSelection = CanonicalLibrarySelection(
             CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
         )
@@ -120,6 +121,7 @@ internal fun CanonicalArtistDetailRoute(
             selectedSourceKey = selectedSourceKey,
             artworkTrack = nativeReleases.artwork[selectedAlbum.id],
             evidence = nativeReleases.evidence[selectedAlbum.id],
+            editorialEvidence = nestedEditorialEvidence,
             artworkLoader = artworkLoader,
             albumSort = albumSort,
             query = query,

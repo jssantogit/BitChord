@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.ui.components.CoverPlaceholder
@@ -29,6 +30,7 @@ internal fun NativeCanonicalNestedAlbumDetail(
     selectedSourceKey: String?,
     artworkTrack: CanonicalBrowseTrack?,
     evidence: CanonicalArtistReleaseEvidence?,
+    editorialEvidence: DiscogsEditionEnrichment?,
     artworkLoader: OpenSubsonicArtworkLoader,
     albumSort: SongSort,
     query: String,
@@ -58,7 +60,7 @@ internal fun NativeCanonicalNestedAlbumDetail(
     val albumQuality = canonicalAlbumSourceQuality(albumRunningOrder, selectedSourceKey)
     val albumFooter = canonicalAlbumFooterMetadata(
         evidence?.firstReleaseDate, albumRunningOrder,
-    )
+    ).copy(editorialEvidence = editorialEvidence, showAlbumAbout = true)
     val releasePalette = rememberArtworkPalette(
         imageUrl = canonicalNativeReleasePaletteUri(
             artworkTrack?.artworkUri, release.artworkUri,

@@ -244,6 +244,7 @@ import com.music.bitchord.playback.retryCanonicalFailure
 import com.music.bitchord.ui.components.PlaybackRecoveryBanner
 import com.music.bitchord.playback.setQueueDragActive
 import com.music.bitchord.ui.MainViewModel
+import com.music.bitchord.ui.rememberDiscogsEditorialFeeds
 import com.music.bitchord.ui.SearchSource
 import com.music.bitchord.ui.SearchOrigin
 import com.music.bitchord.ui.searchOriginOf
@@ -417,6 +418,8 @@ internal fun shouldSkipAfterDislike(
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
+            .configureSearchCredentials(applicationContext)
         enableEdgeToEdge()
         // Before the composition, so a cold launch from a widget's artwork has
         // the request already standing by the time BitChordApp first reads it.
@@ -1025,11 +1028,14 @@ private fun BitChordApp(
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
             .format(java.util.Date())
     }
+    val discogsEditorialFeeds = rememberDiscogsEditorialFeeds(
+        cachedCanonicalRows, canonicalWorldwideReleases, canonicalGenreResults,
+    )
     // Rendering Now Playing and the mini-player must not rehash and sort hundreds
     // of media URIs. Recompute the native Home shelves only when their input
     // snapshot, date, or the user's locale actually changes.
     val canonicalHomeShelves = remember(
-        downloadedReleases, cachedCanonicalRows, canonicalWorldwideReleases,
+        downloadedReleases, discogsEditorialFeeds.cached, discogsEditorialFeeds.worldwide,
         canonicalHomeLocalPicks, canonicalHomeRemotePicks,
         canonicalTrendingMbids, canonicalTrendingLocalSongs,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
@@ -1045,7 +1051,7 @@ private fun BitChordApp(
                     browseId = Downloads.pageIdFor(collection.id),
                 )
             },
-            metadata = (cachedCanonicalRows + canonicalWorldwideReleases)
+            metadata = (discogsEditorialFeeds.cached + discogsEditorialFeeds.worldwide)
                 .distinctBy { it.kind to it.musicBrainzId },
             localPicks = canonicalHomeLocalPicks,
             remotePicks = canonicalHomeRemotePicks,
@@ -1128,15 +1134,16 @@ private fun BitChordApp(
     val canonicalHomePublicPlaylists = publicPlaylistUi.homeShelf
     val canonicalHomePlaylistNotice = publicPlaylistUi.homeNotice
     val canonicalHomeDisplayShelves = remember(
-        canonicalHomeShelves, canonicalWorldwideReleases,
+        canonicalHomeShelves, discogsEditorialFeeds.worldwide,
         canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
         canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
         worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
         canonicalHomePublicPlaylists, canonicalHomeGlobalDiscoveryHeading, canonicalFeedDate,
+        discogsEditorialFeeds.sourceOnlyShelves,
     ) {
         com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
             localShelves = canonicalHomeShelves,
-            worldwideReleases = canonicalWorldwideReleases,
+            worldwideReleases = discogsEditorialFeeds.worldwide,
             releasesHeading = canonicalReleasesHeading,
             picksHeading = canonicalPicksHeading,
             trendingHeading = canonicalTrendingHeading,
@@ -1149,7 +1156,7 @@ private fun BitChordApp(
             personal = canonicalPersonalShelf,
             publicPlaylists = canonicalHomePublicPlaylists,
             globalDiscoveryHeading = canonicalHomeGlobalDiscoveryHeading,
-        )
+        ) + discogsEditorialFeeds.sourceOnlyShelves
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
@@ -1164,7 +1171,7 @@ private fun BitChordApp(
     }.orEmpty()
     val canonicalGenreState: UiState<List<HomeShelf>> =
         com.music.bitchord.ui.canonicalGenreDisplayState(
-            activeCanonicalGenre, canonicalGenreResults, activeGenrePlaylists,
+            activeCanonicalGenre, discogsEditorialFeeds.genre, activeGenrePlaylists,
             canonicalFeedDate,
         )
     // What a browse id is recorded under in Downloads.collections, when it names
@@ -2061,6 +2068,22 @@ private fun BitChordApp(
     var communityMetadataRecording by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
     val onCanonicalShelfClick: (ShelfItem, String, PlaybackSourceType) -> Unit =
         click@{ item, shelfTitle, tabOrigin ->
+        if (item.browseId?.startsWith("discogs:release:") == true) {
+            // Source-only cards have no MusicBrainz or MediaAsset identity.
+            // Resolve a fresh, canonical attribution URL from the verified
+            // temporary store; stale/forged IDs cannot open arbitrary hosts.
+            com.music.bitchord.data.catalog.metadata.discogs
+                .DiscogsSourceOnlyDiscovery.store
+                .openUrl(item.browseId, System.currentTimeMillis())
+                ?.let { url ->
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)),
+                        )
+                    }
+                }
+            return@click
+        }
         com.music.bitchord.data.catalog.metadata.publicPlaylistMbid(item.browseId)?.let { id ->
             val candidate = canonicalPublicPlaylists.values.asSequence()
                 .flatMap { it.asSequence() }.firstOrNull { it.mbid == id }
@@ -3509,6 +3532,33 @@ private fun BitChordApp(
                         val artistFeaturedRelease = rememberCanonicalPublicArtistFeaturedRelease(
                             viewModel, publicArtistMbid,
                         )
+                        val canonicalBrowsePage = if (
+                            page.browseId.startsWith("catalog:")
+                        ) {
+                            (viewModel.canonicalDetail.collectAsStateWithLifecycle().value
+                                as? UiState.Success)?.data
+                        } else null
+                        val canonicalEditionPage = canonicalBrowsePage?.takeIf {
+                            page.browseId.startsWith("catalog:RELEASE:") ||
+                                page.browseId.startsWith("catalog:RELEASE_GROUP:")
+                        }
+                        // Pure identity/progress gate, outside the giant BitChordApp
+                        // composer to keep its generated JVM method under 64KiB.
+                        val discogsArtistContext = discogsArtistCatalogContext(
+                            currentBrowseId = detail?.browseId,
+                            pageBrowseId = page.browseId,
+                            artistMbid = publicArtistMbid,
+                            rows = canonicalBrowsePage?.rows,
+                            nextOffset = canonicalBrowsePage?.nextOffset,
+                            totalCount = canonicalBrowsePage?.totalCount,
+                        )
+                        val displayedEditionMbid =
+                            com.music.bitchord.data.catalog.metadata.discogs
+                                .discogsOnlineAlbumEditionMbid(
+                                    page.browseId,
+                                    canonicalEditionPage?.selectedReleaseMbid,
+                                    canonicalEditionPage?.selectedReleaseGroupMbid,
+                                )
                         DetailScreen(
                             page = page,
                             currentSong = player.song,
@@ -3580,12 +3630,19 @@ private fun BitChordApp(
                             songSort = songSort,
                             folder = folder,
                             canonicalTracks = if (
-                                page.browseId.startsWith("catalog:RELEASE:") ||
-                                page.browseId.startsWith("catalog:RELEASE_GROUP:")
-                            ) {
-                                (viewModel.canonicalDetail.collectAsStateWithLifecycle().value
-                                    as? UiState.Success)?.data?.rows.orEmpty()
-                            } else emptyList(),
+                                displayedEditionMbid != null && canonicalEditionPage != null &&
+                                displayedEditionMbid == canonicalEditionPage.selectedReleaseMbid
+                            ) canonicalEditionPage.rows else emptyList(),
+                            selectedReleaseMbid = canonicalEditionPage?.selectedReleaseMbid,
+                            selectedReleaseGroupMbid = canonicalEditionPage?.selectedReleaseGroupMbid,
+                            selectedEditionFacts = if (
+                                displayedEditionMbid != null && canonicalEditionPage != null &&
+                                displayedEditionMbid == canonicalEditionPage.selectedReleaseMbid
+                            ) canonicalEditionPage.selectedEditionFacts else emptyList(),
+                            discogsArtistCatalogComplete = discogsArtistContext.complete,
+                            discogsArtistKnownGroupTitles = discogsArtistContext.titles,
+                            canonicalArtistReleaseRows = if (publicArtistMbid != null)
+                                canonicalBrowsePage?.rows.orEmpty() else emptyList(),
                             onCanonicalTrackPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },
@@ -3663,6 +3720,13 @@ private fun BitChordApp(
                                 onCanonicalGenreClick = { item ->
                                     onCanonicalShelfClick(
                                         item, canonicalGenresHeading,
+                                        canonicalEditorialPlaybackSource(explore = true),
+                                    )
+                                },
+                                supplementaryCatalogShelves = discogsEditorialFeeds.sourceOnlyShelves,
+                                onSupplementaryCatalogClick = { item, heading ->
+                                    onCanonicalShelfClick(
+                                        item, heading,
                                         canonicalEditorialPlaybackSource(explore = true),
                                     )
                                 },

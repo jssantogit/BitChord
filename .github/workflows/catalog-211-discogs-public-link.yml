@@ -1,0 +1,44 @@
+name: Catalog #211 — Discogs public link observation
+
+# Network-only source observation, NOT Android/emulator/physical smoke.
+# No token, no media downloads, and no claims of successful verification.
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - scripts/catalog_211_discogs_public_link_probe.py
+      - scripts/test_catalog_211_discogs_public_link_probe.py
+      - .github/workflows/catalog-211-discogs-public-link.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-211-discogs-public-link-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  observe-public-link:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check syntax and public contract fixtures without network
+        run: |
+          python -m py_compile scripts/catalog_211_discogs_public_link_probe.py
+          python -m unittest discover -s scripts -p 'test_catalog_211_discogs_public_link_probe.py' -v
+      - name: Observe one public MusicBrainz and Discogs Release relationship
+        run: python scripts/catalog_211_discogs_public_link_probe.py
+      - name: Preserve bounded anonymous finding
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-public-link-observation
+          path: discogs-211-public-link-observation.json
+          if-no-files-found: warn
+          retention-days: 7

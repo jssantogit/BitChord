@@ -349,6 +349,9 @@ object AppSettings {
     /** Analyzes audio waveform/envelope to align matching playback moment between versions. */
     val smartVersionAlignment = MutableStateFlow(true)
 
+    /** Presentation-only edition metadata, enabled by default. */
+    val showAlbumEditionMetadata = MutableStateFlow(true)
+
     /** Drops haze blur (status bar, mini player, bottom fade, lyrics focus) for a solid-fill look. */
     val reduceDynamicBlur = MutableStateFlow(false)
 
@@ -854,6 +857,7 @@ object AppSettings {
         dontRepeatSuggestions.value = prefs.getBoolean(KEY_DONT_REPEAT_SUGGESTIONS, false)
         preferMusicOnly.value = prefs.getBoolean(KEY_PREFER_MUSIC_ONLY, false)
         smartVersionAlignment.value = prefs.getBoolean(KEY_SMART_VERSION_ALIGNMENT, true)
+        showAlbumEditionMetadata.value = prefs.getBoolean(KEY_SHOW_ALBUM_EDITION_METADATA, true)
         reduceDynamicBlur.value = prefs.getBoolean(KEY_REDUCE_BLUR, false)
         liquidGlass.value = prefs.getBoolean(KEY_LIQUID_GLASS, false)
         lyricsBlur.value = prefs.getBoolean(KEY_LYRICS_BLUR, true)
@@ -1285,6 +1289,11 @@ object AppSettings {
     fun setSmartVersionAlignment(value: Boolean) {
         smartVersionAlignment.value = value
         prefs.edit().putBoolean(KEY_SMART_VERSION_ALIGNMENT, value).apply()
+    }
+
+    fun setShowAlbumEditionMetadata(value: Boolean) {
+        showAlbumEditionMetadata.value = value
+        prefs.edit().putBoolean(KEY_SHOW_ALBUM_EDITION_METADATA, value).apply()
     }
 
     fun setReduceDynamicBlur(value: Boolean) {
@@ -2109,6 +2118,7 @@ object AppSettings {
     private const val KEY_SWIPE_TO_PLAY_NEXT = "swipe_to_play_next"
     private const val KEY_DONT_REPEAT_SUGGESTIONS = "dont_repeat_suggestions"
     private const val KEY_PREFER_MUSIC_ONLY = "prefer_music_only"
+    private const val KEY_SHOW_ALBUM_EDITION_METADATA = "show_album_edition_metadata"
     private const val KEY_SMART_VERSION_ALIGNMENT = "smart_version_alignment"
     private const val KEY_REDUCE_BLUR = "reduce_dynamic_blur"
     private const val KEY_LIQUID_GLASS = "liquid_glass"

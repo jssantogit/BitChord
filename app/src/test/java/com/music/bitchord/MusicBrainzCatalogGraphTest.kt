@@ -134,7 +134,39 @@ class MusicBrainzCatalogGraphTest {
         assertEquals("ILLIT feat. Guest", detail.value.tracks.first().artistDisplay)
         assertEquals("ILLIT", detail.value.tracks.first().recordingArtistDisplay)
         assertEquals(2, detail.value.tracks.map { it.trackMbid }.distinct().size)
-        assertEquals("recordings+artist-credits+release-groups", requests.last().second["inc"])
+        assertEquals("recordings+artist-credits+release-groups+labels", requests.last().second["inc"])
+    }
+
+    @Test fun editionLabelsAndPhysicalFormatsAreCanonicalMusicBrainzFacts() = runBlocking {
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    assertEquals("release/$worldwide", path)
+                    assertTrue(parameters["inc"].orEmpty().split("+").contains("labels"))
+                    return """{"id":"$worldwide","title":"SUPER REAL ME",
+                        "status":"Official","country":"KR","date":"2024-03-25",
+                        "artist-credit":[{"name":"ILLIT"}],
+                        "label-info":[
+                            {"catalog-number":"BEL-001","label":{"name":"Belift Lab"}},
+                            {"catalog-number":"BEL-001","label":{"name":"Belift Lab"}},
+                            {"catalog-number":"CAT-2","label":{"name":"Second Label"}}
+                        ],
+                        "media":[{"position":1,"format":"CD","track-count":1,"tracks":[
+                            {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6",
+                             "title":"Magnetic","recording":{"id":"$original"}}
+                        ]}]}"""
+                }
+            }
+        ))
+        val data = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(listOf("Belift Lab (BEL-001)", "Second Label (CAT-2)"),
+            data.editionLabels)
+        assertEquals(listOf("CD"), data.editionFormats)
+        assertEquals("KR", data.country)
+        assertTrue(data.hasCompleteTracklist)
     }
 
     @Test fun invalidMbidRejectsBeforeNetworkAndFailedResponseDoesNotInventTracks() = runBlocking {
@@ -176,6 +208,29 @@ class MusicBrainzCatalogGraphTest {
     }
 
 
+    @Test fun graphKeepsStructuredMultiArtistCreditsWithoutSplittingJoinphrases() = runBlocking {
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Joint EP","status":"Official",
+                    "artist-credit":[
+                        {"name":"Artist A","joinphrase":" & ","artist":{"name":"Artist A"}},
+                        {"name":"Artist B","artist":{"name":"Artist B"}}
+                    ],
+                    "media":[{"position":1,"track-count":1,"tracks":[{
+                        "id":"14f273b6-813b-4239-b0f8-c4b839b902c6",
+                        "title":"Duet","recording":{"id":"$original"}
+                    }]}]}"""
+            },
+        ))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals("Artist A & Artist B", detail.artistDisplay)
+        assertEquals(listOf("Artist A", "Artist B"), detail.artistCreditNames)
+        assertTrue(detail.hasCompleteTracklist)
+    }
+
     @Test fun browseDeduplicatesByEditionMbidWithoutChangingServerCursor() = runBlocking {
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
             transport = object : MusicBrainzTransport {
@@ -213,6 +268,71 @@ class MusicBrainzCatalogGraphTest {
             com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
             (result as MusicBrainzCatalogGraphResult.Failure).reason,
         )
+    }
+
+    @Test fun discogsCorroborationRequiresCompleteMusicBrainzReleaseTracks() = runBlocking {
+        val client = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                "barcode":"8800000000000","artist-credit":[{"name":"ILLIT"}],
+                "media-count":1,"media":[{"position":1,"track-count":2,"tracks":[
+                  {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6","title":"Magnetic",
+                   "recording":{"id":"$original"}},
+                  {"id":"bad-track","title":"Other","recording":{"id":"$sped"}}
+                ]}]}"""
+        })
+        val detail = (MusicBrainzCatalogGraph(client).lookupRelease(worldwide)
+            as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals("Official", detail.status)
+        assertEquals("8800000000000", detail.barcode)
+        assertEquals(1, detail.tracks.size)
+        assertEquals(false, detail.hasCompleteTracklist)
+    }
+
+    @Test fun fullMusicBrainzReleaseWithoutTopLevelMediaCountIsComplete() = runBlocking {
+        // Real MusicBrainz release lookup provides the list of media and the
+        // per-medium track-count, but can omit a top-level "media-count".
+        // A redundant missing summary field must not block all Discogs data.
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"SUPER REAL ME",
+                  "status":"Official","artist-credit":[{"name":"ILLIT"}],
+                  "media":[{"position":1,"track-count":2,"tracks":[
+                    {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6","title":"My World",
+                     "recording":{"id":"$original"}},
+                    {"id":"7d950448-969b-4d73-a00f-fec131238b5d","title":"Magnetic",
+                     "recording":{"id":"$sped"}}
+                  ]}]}"""
+            }))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(2, detail.tracks.size)
+        assertTrue("Per-medium count proves complete media even without media-count",
+            detail.hasCompleteTracklist)
+    }
+
+    @Test fun exactReleaseGraphProvidesCompleteEvidenceForEditionMatching() = runBlocking {
+        val client = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                "barcode":"036000291452","artist-credit":[{"name":"ILLIT"}],
+                "media-count":1,"media":[{"position":1,"track-count":2,"tracks":[
+                  {"id":"14f273b6-813b-4239-b0f8-c4b839b902c6","title":"My World",
+                   "recording":{"id":"$original"}},
+                  {"id":"7d950448-969b-4d73-a00f-fec131238b5d","title":"Magnetic",
+                   "recording":{"id":"$sped"}}
+                ]}]}"""
+        })
+        val detail = (MusicBrainzCatalogGraph(client).lookupRelease(worldwide)
+            as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(true, detail.hasCompleteTracklist)
+        assertEquals(listOf("My World", "Magnetic"), detail.tracks.map { it.title })
+        assertEquals("Official", detail.status)
+        assertEquals("036000291452", detail.barcode)
     }
 
     @Test fun recordingCoverRequiresExplicitReleaseRelation() = runBlocking {

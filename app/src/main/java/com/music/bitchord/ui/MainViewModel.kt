@@ -255,6 +255,25 @@ internal class DiscoveryRequestEpoch {
     fun isCurrent(generation: Long): Boolean = generation == current.get()
 }
 
+/** Only explicit edition data can describe an album; no invented biography. */
+private fun canonicalMusicBrainzAlbumFacts(
+    edition: MusicBrainzCatalogReleaseDetail,
+): List<String> = buildList {
+    edition.editionLabels.take(3).forEach { add("Gravadora · ${it.take(240)}") }
+    edition.editionFormats.take(3).takeIf { it.isNotEmpty() }?.let {
+        add("Formato · ${it.joinToString(" · ")}")
+    }
+    edition.country?.trim()?.takeIf { it.isNotBlank() }?.let {
+        add("País da edição · ${it.take(80)}")
+    }
+    edition.releaseDate?.trim()?.takeIf { it.isNotBlank() }?.let {
+        add("Data da edição · ${it.take(32)}")
+    }
+    edition.status?.trim()?.takeIf { it.isNotBlank() }?.let {
+        add("Estado da publicação · ${if (it.equals("Official", ignoreCase = true)) "Oficial" else it.take(64)}")
+    }
+}.take(10)
+
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val authStore = AuthStore(app)
@@ -1800,6 +1819,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     artworkUri = initialArtwork.takeIf {
                                         canonicalEditorialReleaseType(entry) != null
                                     },
+                                    selectedReleaseMbid = cached.musicBrainzId,
+                                    selectedReleaseGroupMbid = cached.groupMbid,
+                                    selectedEditionFacts = canonicalMusicBrainzAlbumFacts(cached),
                                     rows = canonicalReleaseTracksWithArtwork(
                                         cached.tracks.map { track ->
                                             CanonicalCatalogSearchRow(
@@ -1930,6 +1952,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = initialArtwork.takeIf {
                                 canonicalEditorialReleaseType(entry) != null
                             },
+                            selectedReleaseMbid = detail.musicBrainzId,
+                            selectedReleaseGroupMbid = detail.groupMbid,
+                            selectedEditionFacts = canonicalMusicBrainzAlbumFacts(detail),
                             rows = canonicalReleaseTracksWithArtwork(detail.tracks.map { track ->
                                 CanonicalCatalogSearchRow(
                                     musicBrainzId = track.recordingMbid,
@@ -1967,6 +1992,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             artworkUri = entry.artworkUri,
                             summary = listOfNotNull(details.country, details.releaseDate)
                                 .joinToString(" · "),
+                            selectedReleaseMbid = details.musicBrainzId,
+                            selectedEditionFacts = canonicalMusicBrainzAlbumFacts(details),
                             rows = canonicalReleaseTracksWithArtwork(details.tracks.map { track -> CanonicalCatalogSearchRow(
                                 musicBrainzId = track.recordingMbid,
                                 kind = CanonicalSearchKind.RECORDING,
@@ -1999,6 +2026,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             title = details.title,
                             summary = "Saved release · offline catalog",
                             artworkUri = entry.artworkUri,
+                            selectedReleaseMbid = details.musicBrainzId,
+                            selectedEditionFacts = canonicalMusicBrainzAlbumFacts(details),
                             rows = canonicalReleaseTracksWithArtwork(details.tracks.map { track -> CanonicalCatalogSearchRow(
                                 musicBrainzId = track.recordingMbid,
                                 kind = CanonicalSearchKind.RECORDING,

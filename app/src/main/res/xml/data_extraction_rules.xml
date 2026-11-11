@@ -11,6 +11,7 @@
         <exclude domain="sharedpref" path="bitchord_sources_plain.xml" />
         <!-- Account metadata may restore; the device-bound OpenSubsonic credential may not. -->
         <exclude domain="sharedpref" path="bitchord_opensubsonic_secret.xml" />
+        <exclude domain="sharedpref" path="bitchord_discogs_credentials.xml" />
         <!-- Playback queues are local session state; do not resurrect them after reinstall. -->
         <exclude domain="sharedpref" path="bitchord_last_played.xml" />
         <exclude domain="sharedpref" path="bitchord_bounded_context.xml" />
@@ -23,6 +24,7 @@
         <exclude domain="sharedpref" path="bitchord_sources_plain.xml" />
         <!-- Account metadata may transfer; the device-bound OpenSubsonic credential may not. -->
         <exclude domain="sharedpref" path="bitchord_opensubsonic_secret.xml" />
+        <exclude domain="sharedpref" path="bitchord_discogs_credentials.xml" />
         <!-- Playback queues are local session state; do not resurrect them after reinstall. -->
         <exclude domain="sharedpref" path="bitchord_last_played.xml" />
         <exclude domain="sharedpref" path="bitchord_bounded_context.xml" />

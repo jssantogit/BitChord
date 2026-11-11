@@ -1,0 +1,312 @@
+{
+  "schema_version": 1,
+  "description": "Discogs #211: five independently source-reviewed non-verified B edition-pairs; five B slots and all 10 A/C slots remain unreviewed; three C source exclusions preliminary; no proven provider gains or complete metrics.",
+  "cases": [
+    {
+      "id": "A-01",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-02",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-03",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-04",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-05",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-06",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-07",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-08",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-09",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "A-10",
+      "cohort": "type",
+      "reviewed": false
+    },
+    {
+      "id": "B-01",
+      "cohort": "unlinked",
+      "reviewed": true,
+      "label": "ENHYPEN · MEMORABILIA",
+      "musicbrainz_release_mbid": "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
+      "musicbrainz_group_mbid": "4e219d4e-c5e0-4ed9-acec-b948c7319b37",
+      "discogs_release_id": 31008160,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "6/6 track titles but country contradiction and nonidentical barcode; exact edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
+        "discogs_release": "https://www.discogs.com/release/31008160",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120",
+        "independent_editorial": "https://weverse.io/enhypen/notice/19177"
+      },
+      "reviewed_at_utc": "2026-11-11T16:32:41Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Unknown",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "conflict",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "BELIFT LAB officially announced a South Korean physical CD product called DARK MOON SPECIAL ALBUM MEMORABILIA (Moon ver.) released 13 May 2024. The exact MB Release d0c0cfe6 is a Japanese Digital Media EP (2024-05-13, barcode 00602465697520); Discogs Release 31008160 in the 11 November live control is a South Korean CD with the same six ordered songs and no independently matching barcode, and its title is expanded to Dark Moon Special Album. This is NOT the same exact MB edition: country/format explicitly disagree despite matching artist, date and tracks. The independently official label calls it a special album, not an explicit EP; reference_type remains Unknown, so no claim to correct MusicBrainz EP is justified. Another MB Release in the same EP group was inspected but lacked pressing identifiers; do not promote it. Android UI was not tested, so app_type Unknown and visible false are NOT a measured rendering failure."
+    },
+    {
+      "id": "B-02",
+      "cohort": "unlinked",
+      "reviewed": true,
+      "label": "TXT · Setsuna Hanabi",
+      "musicbrainz_release_mbid": "6770b265-719a-463b-af5e-50ac5aeac1e5",
+      "musicbrainz_group_mbid": "cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
+      "discogs_release_id": 38302455,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "4/4 tracks in MB alternative 91c4d2eb; official Universal lists HYBJ-02085 / POCS-30033 CD; missing direct Release link/barcode; pressing unconfirmed",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/6770b265-719a-463b-af5e-50ac5aeac1e5",
+        "discogs_release": "https://www.discogs.com/release/38302455",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42921028437",
+        "independent_editorial": "https://www.universal-music.co.jp/txt/news/2026-07-23/"
+      },
+      "reviewed_at_utc": "2026-11-11T16:00:43Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Independent Universal Music Japan announcement of 23 July 2026 confirms a physical CD single dated 19 August, four ordered tracks and catalog HYBJ-02085 / POCS-30033. MusicBrainz Release 6770b265 is the distinct 17 August DIGITAL edition of the already existing Single ReleaseGroup cb79234e; the four-title group overlap does not establish identical edition, especially without a same barcode or an exact Release-to-Discogs link. Discogs Release 38302455 was source-observed as a physical-edition lead in prior authenticated-free CI. This B-02 pair is therefore NOT VERIFIED as an exact edition and must not be promoted or counted as a recovered release. The separately observed MusicBrainz physical alternative 91c4d2eb also remains unproven as an identical pressing. App presentation and device UI were not checked; app_type=Unknown and visible=false mean no confirmed UI gain, not a measured absence from rendered shelves."
+    },
+    {
+      "id": "B-03",
+      "cohort": "unlinked",
+      "reviewed": true,
+      "label": "IVE · Fashion",
+      "musicbrainz_release_mbid": "f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
+      "musicbrainz_group_mbid": "c8ddddd3-db0d-460e-8cce-ccfad9c1170c",
+      "discogs_release_id": 37253067,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "different Japanese bilingual title, 0/1 literal track title; edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
+        "discogs_release": "https://www.discogs.com/release/37253067",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120",
+        "independent_editorial": "https://ssl.sme.co.jp/artist/IVE/info/582836",
+        "independent_catalog_reference": "https://music.apple.com/us/album/fashion-single/1887487297"
+      },
+      "reviewed_at_utc": "2026-11-11T16:32:41Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Sony Music Japan officially announced the IVE one-track digital song Fashion on 3 April 2026 as the pre-release track for the LUCID DREAM EP; the Apple Music release explicitly presents Fashion - Single dated 3 April with one track. MB Release f9ec060a belongs to a MusicBrainz Single group with exactly one track. Discogs Release 37253067 is a 2026 File Single titled Fashion / ファッション with one observed track, but the exact title and sole track are bilingual and do not literally match MusicBrainz, and no shared validated barcode or direct MB Release-to-Discogs URL was observed in the 11 November CI. Artist IDs match at the provider level, but no independent recording/edition identity proof exists. This is a source-confirmed already-known single, NOT a newly recovered group nor a Verified exact Release correspondence. Keep candidate; do not guess Japanese translation or invent an MBID. App UI not independently checked: Unknown/false fields represent no demonstrated gain, not a failed rendering."
+    },
+    {
+      "id": "B-04",
+      "cohort": "unlinked",
+      "reviewed": true,
+      "label": "IVE · DARE ME",
+      "musicbrainz_release_mbid": "5df7296a-92e2-48ae-a69e-eaed1f74d066",
+      "musicbrainz_group_mbid": "7bd8d871-8f1e-4dff-99c2-386097d98910",
+      "discogs_release_id": 34121731,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "different Japanese bilingual title, 0/1 literal track title; edition unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/5df7296a-92e2-48ae-a69e-eaed1f74d066",
+        "discogs_release": "https://www.discogs.com/release/34121731",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42818809120",
+        "independent_editorial": "https://www.sonymusic.co.jp/artist/IVE/info/574055"
+      },
+      "reviewed_at_utc": "2026-11-11T16:32:41Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Sony Music Japan's official 21 April 2025 notice identifies IVE DARE ME as a new Japanese original digital single and the opening theme of a television drama. MB Release 5df7296a belongs to a Single ReleaseGroup with a one-track digital edition already present. Discogs Release 34121731 is a File Single whose observed title Dare Me / デアミー and lone track differ in text from the MusicBrainz names. The public 11 November exact-ID control confirmed the artist source identities and release year, but no common independently validated barcode, complete literal title match, or direct Release URL relation was observed. Therefore candidate NOT VERIFIED is the only justified exact-edition outcome. This is NOT an absent MusicBrainz group and not evidence of type correction; app UI was not measured, and no new playable audio or MusicBrainz identity is created."
+    },
+    {
+      "id": "B-05",
+      "cohort": "unlinked",
+      "reviewed": true,
+      "label": "TXT · 7TH YEAR CD",
+      "musicbrainz_release_mbid": "562a42ed-de56-4282-99f4-e9f7da270098",
+      "musicbrainz_group_mbid": "dc4cfe5f-d5b9-4d18-b281-0691e93d40c8",
+      "discogs_release_id": 37110012,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "BIGHIT MUSIC / BHE0779 label+catalog confirmed in MB edition 562a42ed and Discogs; retailer confirms MB UPC; cross-provider barcode differs, 4/6 literal tracks; pressing unconfirmed",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/562a42ed-de56-4282-99f4-e9f7da270098",
+        "discogs_release": "https://www.discogs.com/release/37110012",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42921028437",
+        "independent_catalog_reference": "https://www.applemusic.co.kr/m/product.html?branduid=19348",
+        "independent_editorial": "https://weverse.io/txt/notice/33998"
+      },
+      "reviewed_at_utc": "2026-11-11T16:04:58Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "conflict",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "BIGHIT MUSIC's official TXT release and preorder notice explicitly calls 7TH YEAR the 8th mini album, dated 13 April 2026, with several physical variants. The exact MusicBrainz CD Release 562a42ed belongs to EP ReleaseGroup dc4cfe5f, barcode 8800357999260, BIGHIT MUSIC catalog BHE0779, six tracks; Korean retail catalog independently confirms that UPC and catno. The Discogs Release 37110012 has the same label/catalog number as the MB edition but a DIFFERENT observed barcode and only four of six literal track names matched in prior CI. No direct MusicBrainz Release URL relationship exists to this Discogs Release. Same product family / editorial EP type is supported, but the exact pressing identity is NOT VERIFIED; mark as conflict of exact edition identity, not successful unlinked match or Album correction. App UI and shelf visibility have not been independently checked, so app_type=Unknown / visible=false mean no verified user-visible gain."
+    },
+    {
+      "id": "B-06",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-07",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-08",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-09",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "B-10",
+      "cohort": "unlinked",
+      "reviewed": false
+    },
+    {
+      "id": "C-01",
+      "cohort": "source_only",
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "aespa · World Tour in Cinemas",
+      "discogs_release_id": 35180680,
+      "selection_note": "video-only Blu-ray, not evidence of a new audio album",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/35180680",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      }
+    },
+    {
+      "id": "C-02",
+      "cohort": "source_only",
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "Stray Kids · The DominATE Experience",
+      "discogs_release_id": 38613330,
+      "selection_note": "video-only DVD, not evidence of a new audio album",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/38613330",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      }
+    },
+    {
+      "id": "C-03",
+      "cohort": "source_only",
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "ENHYPEN · Confessions",
+      "discogs_release_id": 33375572,
+      "selection_note": "three credited artists, not an exclusive ENHYPEN release",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/33375572",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      }
+    },
+    {
+      "id": "C-04",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-05",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-06",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-07",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-08",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-09",
+      "cohort": "source_only",
+      "reviewed": false
+    },
+    {
+      "id": "C-10",
+      "cohort": "source_only",
+      "reviewed": false
+    }
+  ]
+}

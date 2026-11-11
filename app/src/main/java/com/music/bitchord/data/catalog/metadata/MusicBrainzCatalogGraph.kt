@@ -42,6 +42,16 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val country: String?,
     val releaseDate: String?,
     val tracks: List<MusicBrainzCatalogTrack>,
+    /** Metadata-only safety proof: every reported medium and track was parsed. */
+    val hasCompleteTracklist: Boolean = false,
+    val status: String? = null,
+    val barcode: String? = null,
+    /** Structured MusicBrainz credited names, never inferred by splitting joinphrases. */
+    val artistCreditNames: List<String> = emptyList(),
+    /** Verified MusicBrainz release label-info, never inferred by title. */
+    val editionLabels: List<String> = emptyList(),
+    /** Release-specific medium format names from MusicBrainz. */
+    val editionFormats: List<String> = emptyList(),
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -155,7 +165,7 @@ internal class MusicBrainzCatalogGraph(
             ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
         val raw = try {
             client.get("release/$normalized", mapOf(
-                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups",
+                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups+labels",
             ))
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -204,6 +214,26 @@ internal class MusicBrainzCatalogGraph(
                 )
             }
             val tracks = parsedTracks.distinctBy(MusicBrainzCatalogTrack::trackMbid)
+            // Other features may display partial MusicBrainz listings, but
+            // Discogs *edition proof* must never interpret a partial list as
+            // the full edition. Count checks are from MusicBrainz itself,
+            // not from local playable-asset availability.
+            val mediaCount = data.integer("media-count")
+            val completeTracklist = media.isNotEmpty() &&
+                // Real release lookups may omit this redundant top-level
+                // summary; the actual per-medium track counts are present.
+                // When provided, still reject a mismatched media count.
+                (mediaCount == null || mediaCount == media.size) &&
+                media.all { rawMedium ->
+                    val medium = rawMedium as? JsonObject ?: return@all false
+                    val sourceTracks = medium["tracks"] as? JsonArray ?: return@all false
+                    medium.integer("track-count") == sourceTracks.size
+                } &&
+                tracks.isNotEmpty() &&
+                parsedTracks.size == media.sumOf {
+                    ((it as? JsonObject)?.get("tracks") as? JsonArray)?.size ?: 0
+                } &&
+                tracks.size == parsedTracks.size
             MusicBrainzCatalogGraphResult.Success(MusicBrainzCatalogReleaseDetail(
                 musicBrainzId = normalized,
                 groupMbid = (data["release-group"] as? JsonObject)?.string("id").validMbid(),
@@ -212,6 +242,23 @@ internal class MusicBrainzCatalogGraph(
                 country = data.string("country"),
                 releaseDate = data.string("date"),
                 tracks = tracks,
+                hasCompleteTracklist = completeTracklist,
+                status = data.string("status"),
+                barcode = data.string("barcode"),
+                artistCreditNames = data.artistCreditNames(),
+                editionLabels = data.array("label-info").take(12).mapNotNull { entry ->
+                    val info = entry as? JsonObject ?: return@mapNotNull null
+                    val label = (info["label"] as? JsonObject)?.string("name")
+                        ?.trim()?.takeIf { it.isNotEmpty() && it.length <= 180 }
+                        ?: return@mapNotNull null
+                    val catalogNumber = info.string("catalog-number")
+                        ?.trim()?.takeIf { it.isNotEmpty() && it.length <= 80 }
+                    if (catalogNumber != null) "$label ($catalogNumber)" else label
+                }.distinct().take(6),
+                editionFormats = media.mapNotNull { entry ->
+                    (entry as? JsonObject)?.string("format")?.trim()
+                        ?.takeIf { it.isNotEmpty() && it.length <= 80 }
+                }.distinct().take(4),
             ))
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
@@ -277,6 +324,18 @@ internal class MusicBrainzCatalogGraph(
                 runCatching { credit["joinphrase"]?.jsonPrimitive?.contentOrNull }
                     .getOrNull().orEmpty()
         }.trim().takeIf(String::isNotEmpty)
+
+    /** Preserve individual release credits; the visible joinphrase is not an ID separator. */
+    private fun JsonObject.artistCreditNames(): List<String> {
+        val credits = array("artist-credit")
+        if (credits.isEmpty()) return emptyList()
+        return credits.map { entry ->
+            val credit = entry as? JsonObject ?: return emptyList()
+            credit.string("name")
+                ?: (credit["artist"] as? JsonObject)?.string("name")
+                ?: return emptyList()
+        }
+    }
 
     private fun String?.validMbid(): String? =
         this?.trim()?.lowercase(Locale.ROOT)?.takeIf(MBID::matches)

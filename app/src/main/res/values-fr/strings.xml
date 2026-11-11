@@ -1420,4 +1420,6 @@
     <string name="visual_offline_confirm_title">Effacer les visuels hors ligne ?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Visuels hors ligne effacés</string>
+    <string name="show_album_edition_metadata">Afficher les métadonnées des albums</string>
+    <string name="show_album_edition_metadata_subtitle">Affiche le label, la date, le pays et les détails vérifiés sous les titres.</string>
 </resources>

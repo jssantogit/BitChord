@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "description": "Six exact public edition controls; not verified matches or adjudicated 30-case corpus",
+  "pairs": [
+    {
+      "id": "CTRL-ENHYPEN-MEMORABILIA",
+      "artist": "ENHYPEN",
+      "musicbrainz_artist_mbid": "95663592-1447-4579-90f7-c94733476667",
+      "discogs_artist_id": 8303009,
+      "musicbrainz_release_mbid": "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
+      "discogs_release_id": 31008160,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-TXT-SETSUNA-HANABI",
+      "artist": "TOMORROW X TOGETHER",
+      "musicbrainz_artist_mbid": "9d027d72-790e-40ec-bbb7-61aa613457de",
+      "discogs_artist_id": 7164941,
+      "musicbrainz_release_mbid": "6770b265-719a-463b-af5e-50ac5aeac1e5",
+      "discogs_release_id": 38302455,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-LESSERAFIM-EASY-CRAZY-HOT",
+      "artist": "LE SSERAFIM",
+      "musicbrainz_artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "discogs_artist_id": 11171795,
+      "musicbrainz_release_mbid": "e6de9634-eb96-4b54-9568-755a99ec312b",
+      "discogs_release_id": 35021231,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-IVE-FASHION",
+      "artist": "IVE",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "discogs_artist_id": 7122521,
+      "musicbrainz_release_mbid": "f9ec060a-ca42-4e9c-b31a-eaa5bdd7ff21",
+      "discogs_release_id": 37253067,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-IVE-DARE-ME",
+      "artist": "IVE",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "discogs_artist_id": 7122521,
+      "musicbrainz_release_mbid": "5df7296a-92e2-48ae-a69e-eaed1f74d066",
+      "discogs_release_id": 34121731,
+      "reviewed": false
+    },
+    {
+      "id": "CTRL-TXT-SEVENTH-YEAR-CD",
+      "artist": "TOMORROW X TOGETHER",
+      "musicbrainz_artist_mbid": "9d027d72-790e-40ec-bbb7-61aa613457de",
+      "discogs_artist_id": 7164941,
+      "musicbrainz_release_mbid": "562a42ed-de56-4282-99f4-e9f7da270098",
+      "discogs_release_id": 37110012,
+      "reviewed": false
+    }
+  ]
+}
