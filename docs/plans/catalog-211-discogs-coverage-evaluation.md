@@ -371,3 +371,38 @@ somente casos com fonte editorial independente, ID de Release dos dois
 provedores, motivo verificável e status explícito que preserve incerteza.
 Exemplos apresentados anteriormente como `0/30` eram históricos;
 o corte mais recente é `1/30`.
+
+## Segundo par B revisado — B-05: TXT / 7TH YEAR (11/11/2026)
+
+**Resultado:** `match_state=candidate`, **NOT VERIFIED**, tipo EP
+já existente no MusicBrainz, zero reclassificação aplicada.
+
+A [notificação oficial BIGHIT MUSIC no Weverse](https://weverse.io/txt/notice/33998)
+identifica o lançamento como *oitavo miniálbum* e registra as variantes
+físicas de 13/04/2026. O [MusicBrainz Release
+562a42ed](https://musicbrainz.org/release/562a42ed-de56-4282-99f4-e9f7da270098)
+é um CD Official do ReleaseGroup
+`dc4cfe5f-d5b9-4d18-b281-0691e93d40c8`, tipo EP, selo
+BIGHIT MUSIC, catálogo BHE0779, barcode 8800357999260 e seis faixas.
+O [varejo coreano](https://www.applemusic.co.kr/m/product.html?branduid=19348)
+confirma o par catálogo + UPC informado pelo MB. O
+[Discogs Release 37110012](https://www.discogs.com/release/37110012)
+foi comparado na
+[CI #42921028437](https://github.com/jssantogit/BitChord/actions/runs/42921028437):
+catálogo BHE0779 consistente, **barcode divergente**, 4/6 faixas
+literalmente iguais; não existe vínculo direto Release MBID→Discogs
+Release neste par.
+
+**A gravadora confirma o lançamento e a categoria; não confirma que
+duas entradas de catálogos comunitários sejam a mesma prensagem.**
+Nenhum identificador de edição é promovido, nenhuma correção para
+Album, nenhuma entrada "somente Discogs" inventada. A apresentação
+Android continua não aferida (`app_type=Unknown`, `visible=false`:
+sem ganho visual comprovado, não declaração de ausência da UI).
+
+O corpus agora tem **2/30 casos B revisados em sentido negativo**,
+três outros B pré-selecionados e ainda sem revisão; três exclusões C
+preliminares; **zero ganhos comprovados** de novas edições, recuperação
+de grupos ausentes ou correção editorial. Não publicar indicadores
+agregados até completar o corpus (`metrics=null`). Os registros
+anteriores 0/30 e 1/30 permanecem históricos.

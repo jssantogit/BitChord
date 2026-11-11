@@ -82,3 +82,16 @@ não uma validação de UI. O corpus passa a 1/30 revisado, 4 B ainda
 pré-selecionados, 3 exclusões C preliminares; métricas completas e ganhos
 permanecem indisponíveis. Isso **não altera** a conclusão de não autorizar
 Discogs-first sem comprovação de cobertura.
+
+## Segundo controle B revisado (11/11/2026)
+
+O par B-05, TXT / 7TH YEAR, foi comparado à [nota oficial BIGHIT
+MUSIC](https://weverse.io/txt/notice/33998) e ao registro
+MusicBrainz CD/EP: a categoria EP já estava correta. A edição
+Discogs inspecionada compartilha número de catálogo, mas não o
+barcode, e a lista de faixas possui diferenças textuais. É
+**candidato não verificado como mesma prensagem**, não ganho de
+Discogs nem razão para mudar a autoridade do MusicBrainz.
+Corpus 2/30 revisados (ambos pares B negativos), 3 outros B pré-selecionados,
+3 C excluídos preliminarmente, 0 ganhos verificados, métricas
+globais não publicáveis.

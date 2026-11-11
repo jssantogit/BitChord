@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211 coverage corpus: first independently reviewed B negative exact-edition pair (TXT Setsuna Hanabi), four B candidates still unreviewed, three excluded C leads; no measured provider gains or full coverage",
+  "description": "Discogs #211 evaluation: B-02 and B-05 reviewed negative exact-edition pairs with independent labels; three B candidates unreviewed, three C exclusions; 0 verified provider gains, global metrics still unavailable",
   "cases": [
     {
       "id": "A-01",
@@ -137,8 +137,7 @@
     {
       "id": "B-05",
       "cohort": "unlinked",
-      "reviewed": false,
-      "selection_state": "identity_observed",
+      "reviewed": true,
       "label": "TXT · 7TH YEAR CD",
       "musicbrainz_release_mbid": "562a42ed-de56-4282-99f4-e9f7da270098",
       "musicbrainz_group_mbid": "dc4cfe5f-d5b9-4d18-b281-0691e93d40c8",
@@ -149,8 +148,23 @@
         "musicbrainz_release": "https://musicbrainz.org/release/562a42ed-de56-4282-99f4-e9f7da270098",
         "discogs_release": "https://www.discogs.com/release/37110012",
         "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42921028437",
-        "independent_catalog_reference": "https://kpopb2b.com/product/txt-7th-year-a-moment-of-stillness-in-the-thorns/"
-      }
+        "independent_catalog_reference": "https://www.applemusic.co.kr/m/product.html?branduid=19348",
+        "independent_editorial": "https://weverse.io/txt/notice/33998"
+      },
+      "reviewed_at_utc": "2026-11-11T16:04:58Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "BIGHIT MUSIC's official TXT release and preorder notice explicitly calls 7TH YEAR the 8th mini album, dated 13 April 2026, with several physical variants. The exact MusicBrainz CD Release 562a42ed belongs to EP ReleaseGroup dc4cfe5f, barcode 8800357999260, BIGHIT MUSIC catalog BHE0779, six tracks; Korean retail catalog independently confirms that UPC and catno. The Discogs Release 37110012 has the same label/catalog number as the MB edition but a DIFFERENT observed barcode and only four of six literal track names matched in prior CI. No direct MusicBrainz Release URL relationship exists to this Discogs Release. Same product family / editorial EP type is supported, but the exact pressing identity is NOT VERIFIED; mark as candidate, not successful unlinked match or Album correction. App UI and shelf visibility have not been independently checked, so app_type=Unknown / visible=false mean no verified user-visible gain."
     },
     {
       "id": "B-06",
