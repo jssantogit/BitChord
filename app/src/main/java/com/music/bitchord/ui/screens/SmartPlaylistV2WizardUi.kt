@@ -525,10 +525,11 @@ internal fun SmartPlaylistV2WizardUi(
         WizardStep.REVIEW -> "Revisar e criar"
     }
     // Each logical catalog route owns its scroll position. Going to an editor
-    // and backing out restores that route; switching category/tab starts at top.
+    // and backing out restores that route; switching tabs scrolls to the top
+    // without remounting its search TextField or losing keyboard focus.
     val routeScrollStates = remember { mutableMapOf<String, LazyListState>() }
     val routeScrollKey = when (page) {
-        WizardStep.FIELDS -> "FIELDS:${selectedCategory.id}:$selectedFieldTab"
+        WizardStep.FIELDS -> "FIELDS:${selectedCategory.id}"
         WizardStep.GROUP -> "GROUP:${selectedPath.joinToString(",")}"
         else -> page.name
     }
@@ -1299,9 +1300,7 @@ internal fun SmartPlaylistV2WizardUi(
                                             categorySearch = ""
                                             // A fresh visit starts at the first field, but
                                             // editor Back retains the current visit's scroll.
-                                            routeScrollStates.keys.removeAll {
-                                                it.startsWith("FIELDS:${category.id}:")
-                                            }
+                                            routeScrollStates.remove("FIELDS:${category.id}")
                                             page = WizardStep.FIELDS
                                         },
                                     )
