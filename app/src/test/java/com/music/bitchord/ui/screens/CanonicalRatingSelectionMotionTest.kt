@@ -31,4 +31,19 @@ class CanonicalRatingSelectionMotionTest {
         assertNull(ratingSelectionPulseIndex(Double.NaN, touched = true, reducedMotion = false))
         assertNull(ratingSelectionPulseIndex(Double.POSITIVE_INFINITY, touched = true, reducedMotion = false))
     }
+    @Test fun draggingLeftCanClearAllStarsWithoutChangingHalfStepPrecision() {
+        assertEquals(0.0, ratingSelectionFromDrag(-12f, 250f), 0.0)
+        assertEquals(0.0, ratingSelectionFromDrag(0f, 250f), 0.0)
+        assertEquals(2.0, ratingSelectionFromDrag(100f, 250f), 0.0)
+        assertEquals(2.5, ratingSelectionFromDrag(125f, 250f), 0.0)
+        assertEquals(5.0, ratingSelectionFromDrag(250f, 250f), 0.0)
+    }
+
+    @Test fun numericEditorPlacesTheRatingOnlyInsideItsLastSelectedStar() {
+        assertEquals(-1, lastRatedStarIndex(0.0))
+        assertEquals(1, lastRatedStarIndex(2.0))
+        assertEquals(1, lastRatedStarIndex(1.5))
+        assertEquals(4, lastRatedStarIndex(5.0))
+    }
+
 }
