@@ -225,6 +225,52 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(videoRecording, detail.tracks.single().recordingMbid)
     }
 
+
+    @Test fun partialTracklistCannotCertifyVideoOnlyFromVisibleRecordingFlags() = runBlocking {
+        val videoTrack = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val videoRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Video evidence incomplete",
+                    "release-group":{"id":"$group"},
+                    "media":[{"format":"Digital Media","track-count":2,"tracks":[{
+                        "id":"$videoTrack","title":"Only visible video",
+                        "recording":{"id":"$videoRecording","title":"Video","video":true}
+                    }]}]}"""
+            },
+        ))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(1, detail.tracks.size)
+        // There is another unreturned Track; never claim every Recording is video.
+        assertEquals(null, detail.isVideoOnlyContent)
+    }
+
+    @Test fun contradictoryVideoFormatAndRecordingFlagsRemainInconclusive() = runBlocking {
+        val trackMbid = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recordingMbid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        for (format in listOf("DVD-Video", "CD")) {
+            val videoFlag = format == "CD"
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+                object : MusicBrainzTransport {
+                    override suspend fun get(
+                        path: String, parameters: Map<String, String>, userAgent: String,
+                    ): String = """{"id":"$worldwide","title":"Conflicting evidence",
+                        "release-group":{"id":"$group"},
+                        "media":[{"format":"$format","track-count":1,"tracks":[{
+                            "id":"$trackMbid","title":"Conflicting recording",
+                            "recording":{"id":"$recordingMbid","video":$videoFlag}
+                        }]}]}"""
+                },
+            ))
+            val detail = (graph.lookupRelease(worldwide) as
+                MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+            assertEquals(format, null, detail.isVideoOnlyContent)
+        }
+    }
+
     @Test fun invalidMbidRejectsBeforeNetworkAndFailedResponseDoesNotInventTracks() = runBlocking {
         var calls = 0
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
