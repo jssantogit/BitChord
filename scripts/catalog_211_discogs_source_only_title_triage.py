@@ -9,6 +9,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from pathlib import Path
+import re
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -20,7 +21,7 @@ INDEX = Path('discogs-211-corpus-candidates.json')
 EDITIONS = Path('discogs-211-corpus-edition-observations.json')
 BARCODE = Path('discogs-211-source-only-barcode-reconciliation.json')
 OUTPUT = Path('discogs-211-source-only-title-triage.json')
-MAX_REQUESTS = MAX_CANDIDATES
+MAX_REQUESTS = MAX_CANDIDATES * 2  # one exact query plus one safe slash-prefix query
 SEARCH_LIMIT = 10
 
 
@@ -36,6 +37,32 @@ def title_query(title: object, artist_mbid: object) -> str | None:
         'query': phrase, 'fmt':'json','limit':SEARCH_LIMIT,
     })
 
+
+
+def title_prefix_query(title: object, artist_mbid: object) -> str | None:
+    """A bounded literal prefix lead for slash-separated provider titles.
+
+    Example: Discogs "Social Path / Superbowl (Japanese Ver.)" can be
+    searched against the *group* phrase "Social Path" without guessing
+    that "Superbowl" translates to "Super Bowl" or creating an MBID.
+    It runs only after an exact title miss and never proves same edition.
+    """
+    if title_query(title, artist_mbid) is None:
+        return None
+    # Only one slash and at least two distinctive literal words before it.
+    if title.count("/") != 1:
+        return None
+    prefix = title.split("/", 1)[0].strip()
+    words = re.findall(r"[^\\W_]+", prefix, re.UNICODE)
+    if (not 2 <= len(words) <= 4 or
+        not all(3 <= len(word) <= 24 for word in words) or
+        " ".join(words) != prefix or len(prefix) > 100):
+        return None
+    phrase = prefix.replace("\\", "\\\\").replace('"', '\\"')
+    return "https://musicbrainz.org/ws/2/release-group/?" + urlencode({
+        "query": f'releasegroup:"{phrase}" AND arid:{artist_mbid}',
+        "fmt": "json", "limit": SEARCH_LIMIT,
+    })
 
 def parse_mb_group_search(payload: object, artist_mbid: str) -> list[str] | None:
     if not isinstance(payload,dict) or not MBID.fullmatch(artist_mbid):
@@ -122,7 +149,33 @@ def triage(index: dict, editions: dict, barcode_report: dict, get) -> dict:
             row['status']='mb_title_index_lead_not_edition'
             row['mb_group_candidate_mbids']=matches
         else:
-            row['status']='no_title_index_hit_not_absence'
+            # An exact release-title phrase can miss a known ReleaseGroup
+            # whose canonical title spells the second slash segment
+            # differently. Query only an unchanged multiword prefix, still
+            # bound to the same exact MB artist ID; never infer absence.
+            prefix_url = title_prefix_query(
+                source.get('title'), expected['musicbrainz_artist_mbid'])
+            if prefix_url is None:
+                row['status']='no_title_index_hit_not_absence'
+                continue
+            if result['provider_requests'] >= MAX_REQUESTS:
+                row['status']='title_prefix_not_checked_budget'
+                continue
+            result['provider_requests'] += 1
+            try:
+                fallback=get(prefix_url)
+            except (HTTPError,URLError,OSError,TimeoutError,ValueError):
+                row['status']='mb_title_provider_unavailable'
+                continue
+            candidates=parse_mb_group_search(
+                fallback,expected['musicbrainz_artist_mbid'])
+            if candidates is None:
+                row['status']='invalid_mb_title_search'
+            elif candidates:
+                row['status']='mb_title_prefix_lead_not_edition'
+                row['mb_group_candidate_mbids']=candidates
+            else:
+                row['status']='no_title_index_hit_not_absence'
     return result
 
 
