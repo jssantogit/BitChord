@@ -17,6 +17,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.runtime.CompositionLocalProvider
@@ -1040,7 +1042,9 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Adicionar primeira condição").performClick()
         compose.onNodeWithText("Músicas e metadados").performClick()
-        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        // FIELDS has only search, tabs and a tall field-list item.
+        // Swipe its content instead of scrolling to a nonexistent LazyColumn index.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performTouchInput { swipeUp() }
         compose.onNodeWithTag("apple-toolbar-back-button").performClick()
         compose.onNodeWithText("Músicas e metadados").performClick()
         // A new category visit is not a return from the editor; its title
