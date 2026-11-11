@@ -72,6 +72,8 @@ internal data class MusicBrainzReleaseHit(
     val releaseGroupMbid: String? = null,
     /** Positive CAA Front availability flag attached to this *specific* Release. */
     val hasFrontCover: Boolean? = null,
+    /** Linked ReleaseGroup primary type, when present; not guessed from title. */
+    val releaseGroupPrimaryType: String? = null,
 )
 
 // A MusicBrainz cover-art-archive.front flag is a presence hint only.
@@ -111,7 +113,13 @@ internal data class MusicBrainzRecordingHit(
 /** Explicit edition status is required for public streaming-style Release tiles. */
 internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
     hit.status.equals("Official", ignoreCase = true) &&
-        canonicalStreamingTitleIsSafe(hit.title)
+        canonicalStreamingTitleIsSafe(hit.title) &&
+        // A legitimate Official edition may be a film/video or broadcast.
+        // Reject only an explicitly unsupported primary type; unknown stays
+        // browseable while a trusted group classification is unavailable.
+        (hit.releaseGroupPrimaryType == null ||
+            hit.releaseGroupPrimaryType.trim().lowercase(Locale.ROOT) in
+                setOf("album", "ep", "single"))
 
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
     hit.hasOfficialAudioRelease == true && hit.isVideo != true &&
@@ -321,6 +329,7 @@ internal class MusicBrainzCatalogSearch(
                         release.date.nonEmpty(), release.artistCredit.displayArtistCredit(),
                         status = release.status.nonEmpty(),
                         releaseGroupMbid = release.releaseGroup?.id.validSearchMbidOrNull(),
+                        releaseGroupPrimaryType = release.releaseGroup?.primaryType.nonEmpty(),
                     )
                 }
             }
