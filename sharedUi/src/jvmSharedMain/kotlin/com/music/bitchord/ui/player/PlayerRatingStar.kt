@@ -3,7 +3,6 @@ package com.music.bitchord.ui.player
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -13,6 +12,8 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.RatingDisplay
+import com.music.bitchord.ui.components.CompactRatingGeometry
+import com.music.bitchord.ui.components.CompactRatingIndicator
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.recording_feedback_edit
 import org.jetbrains.compose.resources.stringResource
@@ -32,7 +33,10 @@ internal fun PlayerRatingStar(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isRated = playerRatingHasNativeScore(LocalCanonicalRatingDisplay.current.forSong(song))
+    val rating = LocalCanonicalRatingDisplay.current.forSong(song)
+    val localScore = rating?.localValue?.takeIf {
+        playerRatingHasNativeScore(rating) && it * 2.0 == (it * 2.0).toInt().toDouble()
+    }
     Box(
         modifier = modifier
             .size(40.dp)
@@ -40,11 +44,12 @@ internal fun PlayerRatingStar(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            imageVector = if (isRated) AppleQueueVectors.Favorited else AppleQueueVectors.Favorite,
-            contentDescription = stringResource(Res.string.recording_feedback_edit),
-            tint = Color.White,
-            modifier = Modifier.size(34.dp),
+        CompactRatingIndicator(
+            value = localScore,
+            geometry = CompactRatingGeometry.CIRCULAR,
+            size = 34.dp,
+            showUnrated = true,
+            neutralColor = Color.White,
         )
     }
 }

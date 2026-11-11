@@ -158,6 +158,7 @@ import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.components.CompactRatingStyle
 import com.music.bitchord.data.canvas.VisualRetentionMode
 import com.music.bitchord.data.canvas.VisualSurface
 import com.music.bitchord.data.canvas.CanvasCache
@@ -244,6 +245,7 @@ internal fun SettingsScreen(
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
+    val compactRatingStyle by AppSettings.compactRatingStyle.collectAsStateWithLifecycle()
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
     val preferUsbDac by AppSettings.preferUsbDac.collectAsStateWithLifecycle()
@@ -751,6 +753,21 @@ internal fun SettingsScreen(
                     selectedIndex = ThemeMode.entries.indexOf(theme),
                     onSelect = { AppSettings.setThemeMode(ThemeMode.entries[it]) },
                     modifier = Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 14.dp),
+                )
+            }
+            row("Estilo das avaliações", "avaliação", "rating", "estrelas", "cores", "numérica") {
+                SettingsRow(
+                    icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Ratings,
+                    title = "Estilo das avaliações",
+                    subtitle = "Como as notas salvas aparecem no aplicativo",
+                )
+                SegmentedControl(
+                    options = listOf("Por cores", "Numérica"),
+                    selectedIndex = CompactRatingStyle.entries.indexOf(compactRatingStyle),
+                    onSelect = { AppSettings.setCompactRatingStyle(CompactRatingStyle.entries[it]) },
+                    modifier = Modifier.padding(
+                        start = ROW_INSET, end = ROW_INSET, bottom = 14.dp,
+                    ),
                 )
             }
             val reduceAnimationTitle = stringResource(R.string.reduce_animation)

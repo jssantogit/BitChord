@@ -365,6 +365,7 @@ import com.music.bitchord.ui.screens.CanonicalSongMenuRating
 import com.music.bitchord.ui.screens.CanonicalSongRatingDialog
 import com.music.bitchord.ui.screens.rememberCanonicalRatingDisplay
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.components.LocalCompactRatingStyle
 import com.music.bitchord.ui.screens.CanonicalMyRatingsEntry
 import com.music.bitchord.ui.screens.CanonicalMyRatingsScreen
 import com.music.bitchord.ui.screens.LibraryRediscoveryShelfEntry
@@ -435,6 +436,7 @@ class MainActivity : AppCompatActivity() {
         MusicLink.consume(intent)
         setContent {
             val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
+            val compactRatingStyle by AppSettings.compactRatingStyle.collectAsStateWithLifecycle()
             val highPerformance by AppSettings.highPerformanceMode.collectAsStateWithLifecycle()
             val liquidGlassEnabled by AppSettings.liquidGlass.collectAsStateWithLifecycle()
             val reduceGlobalMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
@@ -470,6 +472,7 @@ class MainActivity : AppCompatActivity() {
                 val canonicalRatings = rememberCanonicalRatingDisplay()
                 CompositionLocalProvider(
                     LocalCanonicalRatingDisplay provides canonicalRatings,
+                    LocalCompactRatingStyle provides compactRatingStyle,
                     LocalReduceAnimations provides reduceGlobalMotion,
                     LocalOverscrollFactory provides iosOverscrollFactory,
                     LocalLiquidGlassEnabled provides liquidGlassEnabled,
