@@ -113,6 +113,7 @@ fun CompactRatingIndicator(
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.fillMaxSize()
+                    .testTag("compact-rating-color")
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
@@ -127,7 +128,10 @@ fun CompactRatingIndicator(
                 imageVector = filled,
                 contentDescription = null,
                 tint = foreground,
-                modifier = if (circular) Modifier.fillMaxSize() else Modifier.fillMaxSize()
+                modifier = if (circular) Modifier.fillMaxSize()
+                    .testTag("compact-rating-numeric")
+                else Modifier.fillMaxSize()
+                    .testTag("compact-rating-numeric")
                     .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                     .drawWithContent {
                         drawContent()
