@@ -159,6 +159,36 @@ class MusicBrainzPublicMetadataIndexTest {
                 .map { it.musicBrainzId })
         } finally { db.close() }
     }
+    @Test fun correctedOfficialEditionTitleUpdatesCompositeGroupLabelInBothOfflineSurfaces() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val artist = "49204a7a-ed85-407a-828f-6fd46f1d8126"
+            val group = "11111111-1111-4111-8111-111111111111"
+            val edition = "22222222-2222-4222-8222-222222222222"
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistArtists(listOf(MusicBrainzArtistHit(artist, "NewJeans", null, "KR")))
+            index.persistArtistGroups(artist, listOf(
+                MusicBrainzReleaseGroupHit(
+                    group, "How Sweet & Bubble Gum", "Single", "2024-05-24", "NewJeans",
+                ),
+            ))
+            val original = MusicBrainzReleaseHit(
+                edition, "Legacy packaging title", "XW", "2024-05-24",
+                "NewJeans", status = "Official",
+            )
+            index.persistGroupEditions(group, listOf(original))
+            assertEquals("How Sweet & Bubble Gum", index.cachedArtistGroups(artist).single().title)
+            // A source correction at the SAME Release MBID supports the
+            // verified commercial title without modifying the group identity.
+            index.persistReleases(listOf(original.copy(title = "How Sweet")))
+            assertEquals("How Sweet", index.cachedArtistGroups(artist).single().title)
+            assertEquals("How Sweet", db.catalogDao()
+                .searchKnownMusicBrainzGroups("How Sweet", 25).single().title)
+            assertEquals(group, index.cachedArtistGroups(artist).single().musicBrainzId)
+        } finally { db.close() }
+    }
+
     @Test fun offlineReleaseCoversUseStrictFrontV3AndNeverSurfaceLegacyPoster() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()

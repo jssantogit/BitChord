@@ -132,7 +132,9 @@ internal class MusicBrainzCatalogIndex(
                 dao.upsertMusicBrainzArtistEnrichment(MusicBrainzArtistEnrichmentEntity(
                     artistId = artistId,
                     mbid = mbid,
-                    name = previous?.name ?: hit.name.trim(),
+                    // This row is MusicBrainz-owned, not the user's ArtistEntity.
+                    // A corrected official name for the same MBID supersedes the old one.
+                    name = hit.name.trim(),
                     sortName = previous?.sortName,
                     disambiguation = hit.disambiguation?.trim()?.takeIf(String::isNotEmpty)
                         ?: previous?.disambiguation,
@@ -161,6 +163,13 @@ internal class MusicBrainzCatalogIndex(
                         // Sparse MusicBrainz responses must not erase stronger,
                         // previously confirmed editorial classification.
                         val merged = previous.copy(
+                            // ReleaseGroups are created and claimed only by their
+                            // exact MusicBrainz MBID, never matched by display
+                            // text. Source corrections may update their label;
+                            // sparse optional values must not erase metadata.
+                            title = hit.title.trim(),
+                            artistDisplay = hit.artistDisplay?.trim()
+                                ?.takeIf(String::isNotEmpty) ?: previous.artistDisplay,
                             primaryType = hit.primaryType?.takeIf(String::isNotBlank)
                                 ?: previous.primaryType,
                             firstReleaseDate = hit.firstReleaseDate?.takeIf(String::isNotBlank)
@@ -322,8 +331,10 @@ internal class MusicBrainzCatalogIndex(
         if (tracks.map { it.trackMbid }.distinct().size != tracks.size) return@withTransaction null
         val info = dao.musicBrainzReleaseEnrichment(releaseId)
         MusicBrainzCatalogReleaseDetail(normalized,
-            dao.musicBrainzGroupMbidsForRelease(releaseId).singleOrNull(), release.title,
-            info?.artistDisplay ?: release.artistDisplay, info?.country, info?.releaseDate,
+            dao.musicBrainzGroupMbidsForRelease(releaseId).singleOrNull(),
+            info?.title?.takeIf(String::isNotBlank) ?: release.title,
+            info?.artistDisplay?.takeIf(String::isNotBlank) ?: release.artistDisplay,
+            info?.country, info?.releaseDate,
             tracks, isVideoOnlyContent = info?.isVideoOnlyContent)
     }
 
