@@ -17,6 +17,15 @@ OBSERVATIONS = Path("discogs-211-edition-pair-evidence.json")
 OUTPUT = Path("discogs-211-type-disagreement-triage.json")
 KNOWN_TYPES = {"Album", "EP", "Single"}
 UNAVAILABLE = {"source_unavailable", "invalid_provider_response"}
+# A type disagreement belongs to an exact MB Release/Discogs Release
+# comparison, never just two similarly named releases in the same product
+# family. This is a REVIEW LEAD gate, not a canonical classification rule.
+EDITION_PROOFS = (
+    "artist_matches", "title_matches", "tracklist_complete",
+    "tracklist_matches", "year_matches", "country_compatible",
+    "barcode_compatible",
+)
+
 
 def classify(row: dict) -> dict:
     comparison = row.get("comparison")
@@ -34,6 +43,8 @@ def classify(row: dict) -> dict:
         "reviewed": False,
         "verified": False,
         "type_correction_applied": False,
+        "missing_editional_proofs": [],
+
     }
     if row.get("status") in UNAVAILABLE:
         state = "provider_unavailable"
@@ -56,9 +67,15 @@ def classify(row: dict) -> dict:
     elif mb_type == provider_type:
         state = "linked_type_agreement_not_adjudicated"
     else:
-        # The app's actual correction gate still requires independently
-        # verified edition facts and distinct source-Master evidence.
-        state = "linked_type_disagreement_needs_review"
+        # A typed link is an identity anchor, not a license to compare
+        # conflicting pressings. Require independently corroborated source
+        # observations before even calling a type discrepancy a review lead.
+        missing = [name for name in EDITION_PROOFS
+                   if comparison.get(name) is not True]
+        result["missing_editional_proofs"] = missing
+        state = ("linked_edition_evidence_inconclusive" if missing else
+                 "linked_type_disagreement_needs_review")
+        # This state never edits primary type and never approves a B edition.
     result["state"] = state
     return result
 
