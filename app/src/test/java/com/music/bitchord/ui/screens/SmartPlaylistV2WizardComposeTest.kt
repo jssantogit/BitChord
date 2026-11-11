@@ -212,6 +212,23 @@ class SmartPlaylistV2WizardComposeTest {
             smartConditionFieldTabs(smartConditionCategories.single { it.id == "ratings" }))
     }
 
+    @Test fun historyAndLibrarySubTabsCoverAvailableEvidenceWithoutDuplication() {
+        // Only groups that have multiple meaningful evidence families get
+        // subtabs. Do not fabricate library-state or offline predicates.
+        for (id in listOf("history", "library")) {
+            val category = smartConditionCategories.single { it.id == id }
+            val tabs = smartConditionFieldTabs(category)
+            assertTrue(tabs.size >= 3)
+            assertEquals("Todos", tabs.first().label)
+            assertEquals(category.fields, tabs.first().fields)
+            val partition = tabs.drop(1).flatMap { it.fields }
+            assertEquals(category.fields.size, partition.size)
+            assertEquals(category.fields.toSet(), partition.toSet())
+        }
+        assertEquals(emptyList<SmartConditionFieldTab>(),
+            smartConditionFieldTabs(smartConditionCategories.single { it.id == "audio" }))
+    }
+
     @Test fun fieldTabsAndFlatRowsAreIndependentOfSectionHeadings() {
         var clicked = 0
         compose.setContent {
