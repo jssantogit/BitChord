@@ -1,0 +1,43 @@
+name: "Catalog #211 — Typed Master exact-edition pair matrix"
+
+# Source-only B leads from real public RG->Master relations. No token,
+# APK, UI, merge, provider priority switch or corpus approval.
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - scripts/catalog_211_discogs_master_pair_matrix.py
+      - scripts/test_catalog_211_discogs_master_pair_matrix.py
+      - scripts/catalog_211_discogs_master_lead_scout.py
+      - .github/workflows/catalog-211-discogs-master-pairs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-211-master-pairs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compare-all-versions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify exact source IDs, bounded cross-product and fail-closed regressions
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_pair_matrix.py' -v
+      - name: Observe full small-Master edition-pair matrices
+        run: python3 scripts/catalog_211_discogs_master_pair_matrix.py
+      - name: Retain non-adjudicated pair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-two-typed-master-matrices
+          path: discogs-211-typed-master-pair-matrix.json
+          if-no-files-found: warn
+          retention-days: 7
