@@ -1,5 +1,6 @@
 """Fixture-only tests for two live typed-Master B-lead pair matrices."""
 import unittest
+from urllib.error import HTTPError
 from catalog_211_discogs_master_pair_matrix import inspect, observe, MAX_REQUESTS
 
 ARTIST = "95663592-1447-4579-90f7-c94733476667"
@@ -106,6 +107,24 @@ class MasterPairMatrixTest(unittest.TestCase):
         self.assertLessEqual(found["source_http_requests"], MAX_REQUESTS)
         self.assertEqual("all_pairs_compared_not_adjudicated",
                          found["findings"][0]["status"])
+
+    def test_single_musicbrainz_503_may_retry_within_global_budget(self):
+        target = (f"https://musicbrainz.org/ws/2/release/{RELEASE}"
+                  "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
+        inner = source()
+        attempts = {"value": 0}
+        def transient(url):
+            if url == target:
+                attempts["value"] += 1
+                if attempts["value"] == 1:
+                    raise HTTPError(url, 503, "Service temporarily unavailable", {}, None)
+            return inner(url)
+        report = observe([SEED], transient)
+        self.assertEqual(2, attempts["value"])
+        self.assertEqual(8, report["source_http_requests"])
+        self.assertEqual("all_pairs_compared_not_adjudicated",
+                         report["findings"][0]["status"])
+        self.assertEqual(0, report["verified_edition_count"])
 
     def test_untrusted_seeds_cannot_route_arbitrary_urls(self):
         for field, value in [("master_id", 0), ("group_mbid", "bad"),
