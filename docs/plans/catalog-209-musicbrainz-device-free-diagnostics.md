@@ -100,6 +100,26 @@ assertion that the target artist is absent from that group. For a definitive
 release-group owner check, use an *exact* group lookup with structured credits;
 avoid joining by name, title or Lucene search index.
 
+## Real source matrix: Album / EP / Single
+
+The bounded manifest now covers **three exact-MBID artist/group/recording
+graphs**, not three title-only search guesses:
+
+| Artist | ReleaseGroup | Primary type | Verified edition examples |
+| --- | --- | --- | --- |
+| ILLIT / `6b128dd7-e998-4edb-a4f5-400fef190445` | SUPER REAL ME / `529f87a1-1081-48a4-8ee1-3c08de229858` | EP | Worldwide `541adf5a-48d4-4f7b-a7bb-afd3cea5af27`; Japan `271b31f8-8ab6-483c-97d9-8f0fabb2d4f4` |
+| aespa / `b51c672b-85e0-48fe-8648-470a2422229f` | Armageddon / `3f5eba8d-4dc1-4599-a936-21f501787f8e` | Album | digital `a46ad810-85f6-4873-8b82-87d6a8006edb`; LP `aa3ced48-ed87-4bfa-bd1b-d198e084bc39` |
+| NewJeans / `49204a7a-ed85-407a-828f-6fd46f1d8126` | OMG / `23d1cd75-8dc5-436d-a0c6-cab894dd5f64` | Single | Japan digital `5c9de548-68ef-424d-915d-a7973024d839`; Apple Music `3e73bd0e-636e-46be-9abf-272373a605da` |
+
+The corresponding exact Recording MBIDs are recorded in the JSON manifest.
+MusicBrainz pages were consulted before writing the cases:
+[ILLIT EP](https://musicbrainz.org/release/541adf5a-48d4-4f7b-a7bb-afd3cea5af27),
+[aespa Album](https://musicbrainz.org/release/a46ad810-85f6-4873-8b82-87d6a8006edb),
+[NewJeans Single](https://musicbrainz.org/release-group/23d1cd75-8dc5-436d-a0c6-cab894dd5f64).
+The actual live API run must still validate that each exact group owns
+the edition and type. If a page or lookup is incomplete, report that fact
+instead of inserting/removing shelf entities.
+
 ## Hard limits and unresolved surface
 
 - 1–3 public cases, up to 8 calls per case plus one independent guest

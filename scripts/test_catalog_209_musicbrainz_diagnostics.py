@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Offline proof that a public MB probe cannot invent catalog/UI success."""
+import json
+from pathlib import Path
 import unittest
 from catalog_209_musicbrainz_diagnostics import (diagnose_case, validate_manifest,
                                                     make_report, probe_guest_browse_shape)
@@ -231,6 +233,23 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
             lambda _kind, _ident, **_params: {'release-count': 0, 'releases': []})
         self.assertEqual('INCONCLUSIVE', outcome['status'])
         self.assertEqual(0, outcome['evidence']['sampled_releases'])
+
+    def test_public_manifest_covers_album_ep_single_by_exact_group_mbids(self):
+        path = Path(__file__).resolve().parents[1] / (
+            'docs/plans/catalog-209-musicbrainz-diagnostics-cases.json')
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        cases = validate_manifest(manifest)
+        self.assertIsNotNone(cases)
+        self.assertEqual(3, len(cases))
+        self.assertEqual({'Album', 'EP', 'Single'},
+                         {case['expected_primary_type'] for case in cases})
+        self.assertEqual({
+            'EP': GROUP,
+            'Album': '3f5eba8d-4dc1-4599-a936-21f501787f8e',
+            'Single': '23d1cd75-8dc5-436d-a0c6-cab894dd5f64',
+        }, {case['expected_primary_type']: case['group_mbid'] for case in cases})
+        # Six fixed checks + two editions per case + one shared schema probe.
+        self.assertEqual(25, sum(6 + len(c['release_mbids']) for c in cases) + 1)
 
     def test_network_unavailable_never_becomes_not_found(self):
         client = FakeClient(unavailable=True)
