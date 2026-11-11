@@ -257,15 +257,26 @@ internal fun PlaylistWizardTextEntry(
         // validation text are specific to this wizard.
         // The shared field already has a native boundary; avoid a second
         // competing outline or a dark-on-dark inset panel.
-        PillTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = if (multiline) "Adicionar descrição" else "Digite aqui",
-            container = MaterialTheme.colorScheme.surfaceVariant,
-            keyboardOptions = keyboardOptions,
-            accessibilityLabel = label,
-            multiline = multiline,
-        )
+        Box(
+            modifier = Modifier.fillMaxWidth()
+                .border(
+                    1.dp,
+                    if (error) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
+                    RoundedCornerShape(14.dp),
+                )
+                .testTag("playlist-wizard-field-boundary"),
+        ) {
+            PillTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = if (multiline) "Adicionar descrição" else "Digite aqui",
+                container = MaterialTheme.colorScheme.surfaceVariant,
+                keyboardOptions = keyboardOptions,
+                accessibilityLabel = label,
+                multiline = multiline,
+            )
+        }
         if (hint != null) {
             Text(
                 hint,
@@ -386,11 +397,12 @@ internal fun PlaylistWizardFieldList(options: List<PlaylistWizardNavOption>) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Icon(
-                        imageVector = option.icon ?: PlaylistEditorIcons.Music,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp),
+                    Text(
+                        text = "${index + 1}.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(width = 24.dp, height = 28.dp),
+                        textAlign = TextAlign.Center,
                     )
                     Column(
                         modifier = Modifier.weight(1f),
