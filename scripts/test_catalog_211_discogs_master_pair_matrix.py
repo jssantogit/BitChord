@@ -126,6 +126,23 @@ class MasterPairMatrixTest(unittest.TestCase):
                          report["findings"][0]["status"])
         self.assertEqual(0, report["verified_edition_count"])
 
+    def test_transient_group_503_is_retried_once_without_rewriting_master(self):
+        url = f"https://musicbrainz.org/ws/2/release-group/{GROUP}?fmt=json&inc=url-rels"
+        inner = source()
+        attempts = {"value": 0}
+        def transient(request):
+            if request == url:
+                attempts["value"] += 1
+                if attempts["value"] == 1:
+                    raise HTTPError(request, 503, "Transient", {}, None)
+            return inner(request)
+        report = observe([SEED], transient)
+        self.assertEqual(2, attempts["value"])
+        self.assertEqual(8, report["source_http_requests"])
+        self.assertEqual("all_pairs_compared_not_adjudicated",
+                         report["findings"][0]["status"])
+        self.assertEqual(0, report["verified_edition_count"])
+
     def test_untrusted_seeds_cannot_route_arbitrary_urls(self):
         for field, value in [("master_id", 0), ("group_mbid", "bad"),
                              ("artist_mbid", "bad"), ("discogs_artist_id", 0)]:
