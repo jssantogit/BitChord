@@ -49,6 +49,31 @@ preexisting #178 evidence harness. The diagnostic also tests raw MusicBrainz
 browse offset/total, source type, release-to-group relationship, separated
 Track/Recording IDs, artist search and ReleaseGroup search.
 
+## ReleaseGroup artist-credit identity gate
+
+The exact `release-group/{MBID}` lookup now includes `artist-credits`
+without adding requests to the eight-call budget. A group's type and title
+alone do not prove that it belongs to the selected artist.
+
+- **PASS:** the exact group MBID, primary type and a complete structured
+  artist credit are present, with the selected Artist MBID among its credits.
+  A collaboration may contain multiple MBIDs and joinphrase strings.
+- **FAIL:** identity/type contradicts the manifest, or complete structured
+  group credits explicitly refer to different Artist MBIDs (even when the
+  artist's display name is similar or identical).
+- **INCONCLUSIVE:** the exact group has no usable structured artist credit
+  or a malformed/partial credit; that does not mean the release is absent.
+- **ERROR:** the source could not be consulted. Never turn this into a
+  negative identity assertion.
+
+Evidence fields `expected_artist_mbid`, `observed_artist_mbids`,
+`group_credit_verified` and `group_credit_complete` make attribution
+auditable without a smoke APK, a fuzzy name match or another API request.
+This probe does **not** guarantee that the same nested artist-credit is
+present in the separate Release/track_artist browse response used by the
+app's guest shelf; that runtime edge needs its own response fixture before
+claiming full field coverage.
+
 A search index `count=0` is **not** absence in the browse or source catalog;
 a page that returns fewer rows than its total is **not** complete. A group
 with a Release match does not justify a playable MediaAsset, nor does a CAA
