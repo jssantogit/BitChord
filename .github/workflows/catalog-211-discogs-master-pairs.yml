@@ -31,8 +31,8 @@ jobs:
           python-version: "3.12"
       - name: Verify exact source IDs, bounded cross-product and fail-closed regressions
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_pair_matrix.py' -v
-      - name: Observe full small-Master edition-pair matrices
-        run: python3 scripts/catalog_211_discogs_master_pair_matrix.py
+      - name: Recheck ENHYPEN Master after prior partial hydration
+        run: python3 scripts/catalog_211_discogs_master_pair_matrix.py --target ENHYPEN
       - name: Retain non-adjudicated pair evidence
         if: always()
         uses: actions/upload-artifact@v4
