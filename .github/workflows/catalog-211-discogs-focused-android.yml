@@ -1,0 +1,49 @@
+name: "Catalog #211 — Focused Discogs Android unit tests"
+
+# Isolate Discogs regression behavior from unrelated MusicBrainz tests
+# that currently fail in the shared full Android CI. No APK or emulator.
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - app/src/main/java/com/music/bitchord/data/catalog/metadata/discogs/**
+      - app/src/test/java/com/music/bitchord/Discogs*Test.kt
+      - app/src/test/java/com/music/bitchord/ui/screens/Discogs*Test.kt
+      - .github/workflows/catalog-211-discogs-focused-android.yml
+  workflow_dispatch:
+
+concurrency:
+  group: catalog-211-discogs-focused-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  discogs-junit:
+    name: Discogs · Android JVM unit tests only
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - name: Run Discogs JVM regressions (no MusicBrainz test execution)
+        run: >-
+          ./gradlew --build-cache -Pbitchord.bundleWear=false
+          :app:testDevDebugUnitTest
+          --tests 'com.music.bitchord.Discogs*Test'
+          --tests 'com.music.bitchord.ui.screens.Discogs*Test'
+      - name: Retain focused regression failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-junit-failure-${{ github.sha }}
+          path: app/build/reports/tests/testDevDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 3

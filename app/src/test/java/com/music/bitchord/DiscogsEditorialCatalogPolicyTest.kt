@@ -345,6 +345,15 @@ class DiscogsEditorialCatalogPolicyTest {
             assertEquals("Physical CD may have edition-specific identity",
                 1, select(source.copy(record = source.record.copy(formats =
                     listOf("CD", "Single"))), setOf(knownGroup)).size)
+            assertEquals("A mixed File + CD product is not digital-only",
+                1, select(source.copy(record = source.record.copy(formats =
+                    listOf("File", "CD", "Single"))), setOf(knownGroup)).size)
+            assertEquals("A mixed File + Vinyl product is not digital-only",
+                1, select(source.copy(record = source.record.copy(formats =
+                    listOf("File", "Vinyl", "Single"))), setOf(knownGroup)).size)
+            assertEquals("File + DVD source is not a one-medium digital single",
+                1, select(source.copy(record = source.record.copy(formats =
+                    listOf("File", "DVD", "Single"))), setOf(knownGroup)).size)
             assertEquals("Unknown MusicBrainz titles are not suppressed",
                 1, select(source, setOf("Something Else")).size)
         }
