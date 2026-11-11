@@ -61,6 +61,63 @@ class MusicBrainzOfflineEditionsTest {
         } finally { db.close() }
     }
 
+    @Test fun groupEditionCachePreservesProvenVideoMediaAfterSparseRefresh() = runBlocking {
+        val db = database()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistReleaseGroups(listOf(MusicBrainzReleaseGroupHit(
+                group, "SUPER REAL ME", "EP", "2024-03-25", "ILLIT",
+            )))
+            val videoEdition = MusicBrainzReleaseHit(
+                worldwide, "SUPER REAL ME", "XW", "2024-03-25", "ILLIT",
+                status = "Official", isVideoOnlyMedia = true,
+            )
+            val audioEdition = MusicBrainzReleaseHit(
+                japan, "SUPER REAL ME", "JP", "2024-03-25", "ILLIT",
+                status = "Official", isVideoOnlyMedia = false,
+            )
+            index.persistGroupEditions(group, listOf(videoEdition, audioEdition))
+            val cached = MusicBrainzCatalogIndex(db).cachedGroupReleases(group)
+                .associateBy { it.musicBrainzId }
+            assertEquals(true, cached[worldwide]?.isVideoOnlyMedia)
+            assertEquals(false, cached[japan]?.isVideoOnlyMedia)
+            // A sparse browse has no evidence to replace the previous flags.
+            index.persistGroupEditions(group, listOf(
+                videoEdition.copy(isVideoOnlyMedia = null),
+                audioEdition.copy(isVideoOnlyMedia = null),
+            ))
+            val reloaded = MusicBrainzCatalogIndex(db).cachedGroupReleases(group)
+                .associateBy { it.musicBrainzId }
+            assertEquals(true, reloaded[worldwide]?.isVideoOnlyMedia)
+            assertEquals(false, reloaded[japan]?.isVideoOnlyMedia)
+        } finally { db.close() }
+    }
+
+    @Test fun exactCachedReleaseRetainsVideoOnlyContentProofAndSparseLookupDoesNotClearIt() = runBlocking {
+        val db = database()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            val detail = MusicBrainzCatalogReleaseDetail(
+                worldwide, group, "SUPER REAL ME", "ILLIT", "XW", "2024-03-25",
+                listOf(MusicBrainzCatalogTrack(
+                    track, recording, "Music video", 1, 1, 180000,
+                )),
+                isVideoOnlyContent = true,
+            )
+            index.persistReleaseDetail(detail)
+            assertEquals(true, MusicBrainzCatalogIndex(db)
+                .cachedRelease(worldwide)?.isVideoOnlyContent)
+            index.persistReleaseDetail(detail.copy(isVideoOnlyContent = null))
+            assertEquals(true, MusicBrainzCatalogIndex(db)
+                .cachedRelease(worldwide)?.isVideoOnlyContent)
+            // An explicit newer non-video proof can correct stale editorial data
+            // without touching canonical Track or Recording MBIDs.
+            index.persistReleaseDetail(detail.copy(isVideoOnlyContent = false))
+            assertEquals(false, MusicBrainzCatalogIndex(db)
+                .cachedRelease(worldwide)?.isVideoOnlyContent)
+        } finally { db.close() }
+    }
+
     @Test fun offlineEditionTrackDoesNotBorrowAnotherEditionsCreditForTheSameRecording() = runBlocking {
         val db = database()
         try {
