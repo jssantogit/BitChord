@@ -298,7 +298,7 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
         p = json.loads(Path("docs/plans/catalog-211-discogs-edition-pairs.json").read_text())
         # B-02 and B-05 were reviewed as NOT VERIFIED; only 3 unreviewed
         # exact-ID source pairs remain eligible for another probe.
-        self.assertEqual(3, len(selected(m, p)))
+        self.assertEqual(0, len(selected(m, p)))
 
 if __name__ == "__main__":
     unittest.main()

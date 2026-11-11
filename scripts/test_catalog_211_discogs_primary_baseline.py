@@ -18,9 +18,9 @@ class DiscogsPrimaryBaselineTest(unittest.TestCase):
         self.assertEqual("exploratory_not_approved", result["decision"])
         self.assertFalse(result["automatic_switch_authorized"])
         self.assertFalse(result["corpus_complete"])
-        self.assertEqual(2, result["corpus_reviewed"])
+        self.assertEqual(5, result["corpus_reviewed"])
         self.assertEqual(30, result["corpus_required"])
-        self.assertEqual(3, result["corpus_selected_unreviewed"]["unlinked"])
+        self.assertEqual(0, result["corpus_selected_unreviewed"]["unlinked"])
         self.assertEqual(3, result["corpus_selected_unreviewed"]["source_only"])
         self.assertIsNone(result["corpus_metrics"])
 

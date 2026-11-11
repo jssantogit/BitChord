@@ -50,11 +50,11 @@ jobs:
           assert result["metrics"] is None, "No metric may be invented before adjudication"
           assert len(manifest["cases"]) == 30
           assert not result["errors"], result["errors"]
-          assert result["slots"]["unlinked"]["selected_unreviewed"] == 3
+          assert result["slots"]["unlinked"]["selected_unreviewed"] == 0
           assert result["slots"]["source_only"]["selected_unreviewed"] == 3
-          assert result["slots"]["unlinked"]["reviewed"] == 2
-          print("30 slots: 3 unreviewed B editions, 2 independently reviewed B negatives,"
-                " 3 excluded C leads; no global coverage metrics.")
+          assert result["slots"]["unlinked"]["reviewed"] == 5
+          print("30 slots: 5 independently source-reviewed B pairs, none Verified,"
+                " 3 preliminary excluded C leads; no global coverage metrics.")
           PY
       - name: Retain feasibility baseline for operator review
         if: always()

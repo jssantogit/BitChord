@@ -41,28 +41,27 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual([], result["errors"])
         self.assertFalse(result["complete"])
         self.assertIsNone(result["metrics"])
-        self.assertEqual(3, result["slots"]["unlinked"]["selected_unreviewed"])
+        self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(2, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(5, sum(x["reviewed"] for x in result["slots"].values()))
 
-    def test_wrong_provider_links_and_duplicate_seeded_editions_fail_closed(self):
+    def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
             "docs/plans/catalog-211-discogs-corpus-manifest.json"
         ).read_text(encoding="utf-8"))
-        first = manifest["cases"][10]
-        self.assertEqual("B-01", first["id"])
+        first = manifest["cases"][20]
+        self.assertEqual("C-01", first["id"])
         first["evidence_links"]["discogs_release"] = "https://www.discogs.com/release/123"
         result = report(manifest)
         self.assertTrue(any("invalid unreviewed selection evidence" in s
                             for s in result["errors"]))
-        self.assertEqual(2, result["slots"]["unlinked"]["selected_unreviewed"])
+        self.assertEqual(2, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertIsNone(result["metrics"])
         first["evidence_links"]["discogs_release"] = (
             f"https://www.discogs.com/release/{first['discogs_release_id']}"
         )
-        # B-02 is now reviewed; choose the next *unreviewed* source ID.
-        second = manifest["cases"][12]
+        second = manifest["cases"][21]
         second["discogs_release_id"] = first["discogs_release_id"]
         second["evidence_links"]["discogs_release"] = (
             f"https://www.discogs.com/release/{second['discogs_release_id']}"
@@ -70,6 +69,32 @@ class CorpusReportTests(unittest.TestCase):
         result = report(manifest)
         self.assertTrue(any("duplicate unreviewed source edition" in s
                             for s in result["errors"]))
+        self.assertIsNone(result["metrics"])
+
+    def test_all_five_b_controls_are_source_reviewed_without_verified_editions(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        b_cases = [x for x in manifest["cases"] if x["cohort"] == "unlinked"
+                   and x.get("discogs_release_id")]
+        self.assertEqual(5, len(b_cases))
+        self.assertTrue(all(x["reviewed"] for x in b_cases))
+        self.assertEqual(
+            {"B-01": "conflict", "B-02": "candidate", "B-03": "candidate",
+             "B-04": "candidate", "B-05": "conflict"},
+            {x["id"]: x["match_state"] for x in b_cases},
+        )
+        self.assertTrue(all(x["musicbrainz_type"] in {"EP", "Single"}
+                            and x["reference_type"] == x["musicbrainz_type"]
+                            and x["app_type"] == "Unknown"
+                            and x["absent_in_musicbrainz"] is False
+                            and x["match_correct"] is False
+                            and x["visible"] is False
+                            and "independent_editorial" in x["evidence_links"]
+                            and "selection_state" not in x
+                            for x in b_cases))
+        result = report(manifest)
+        self.assertEqual([], result["errors"])
         self.assertIsNone(result["metrics"])
 
     def test_missing_cases_cannot_invent_coverage(self):
