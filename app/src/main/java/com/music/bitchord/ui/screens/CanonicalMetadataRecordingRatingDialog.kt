@@ -43,9 +43,11 @@ internal fun CanonicalMetadataRecordingRatingDialog(
                 scope.launch {
                     val ok = try {
                         if (!isVerifiedCatalogRecordingId(recordingId) ||
-                            !isValidCanonicalEntityRating(value)) false
+                            (value != 0.0 && !isValidCanonicalEntityRating(value))) false
                         else withContext(Dispatchers.IO) {
-                            dao.setRating(recordingId, value, System.currentTimeMillis())
+                            val now = System.currentTimeMillis()
+                            if (value == 0.0) dao.clearRating(recordingId, now)
+                            else dao.setRating(recordingId, value, now)
                             true
                         }
                     } catch (cancelled: CancellationException) { throw cancelled }
