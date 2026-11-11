@@ -125,6 +125,40 @@ class MasterPairMatrixTest(unittest.TestCase):
         self.assertTrue(all(not x["verified_discogs_edition"]
                             for x in result["pairs"]))
 
+    def test_no_link_pair_cannot_ignore_another_exact_mb_release_direct_owner(self):
+        # A complete ReleaseGroup matrix can observe that Discogs release
+        # 100 is explicitly linked to a different exact MusicBrainz Release.
+        # The same UPC+tracks do not cancel that typed relation.
+        second = "00000000-0000-4000-8000-000000000099"
+        base = source()
+        index_url = ("https://musicbrainz.org/ws/2/release/?release-group=" + GROUP +
+                     "&fmt=json&limit=25&offset=0&inc=artist-credits%2Bmedia%2Brelease-groups")
+        detail_url = (f"https://musicbrainz.org/ws/2/release/{second}"
+                      "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
+        def get(url):
+            if url == index_url:
+                payload = base(url)
+                other = {**payload["releases"][0], "id": second}
+                return {**payload, "release-count": 2,
+                        "releases": payload["releases"] + [other]}
+            if url == detail_url:
+                return {**mb_full(), "id": second, "relations": [
+                    {"type": "discogs",
+                     "url": {"resource": "https://www.discogs.com/release/100"}}]}
+            return base(url)
+        result = inspect(SEED, get)
+        self.assertEqual("all_pairs_compared_not_adjudicated", result["status"])
+        self.assertEqual(4, len(result["pairs"]))
+        by_ids = {(p["musicbrainz_release_mbid"], p["discogs_release_id"]): p
+                  for p in result["pairs"]}
+        self.assertEqual([second],
+            by_ids[(RELEASE, 100)]["competing_direct_release_owner_mbids"])
+        self.assertEqual([],
+            by_ids[(RELEASE, 101)]["competing_direct_release_owner_mbids"])
+        self.assertEqual([],
+            by_ids[(second, 100)]["competing_direct_release_owner_mbids"])
+        self.assertEqual(0, result["verified_edition_count"])
+
     def test_shared_budget_and_preserved_b_corpus_are_explicit(self):
         found = observe([SEED], source())
         self.assertEqual(0, found["reviewed_corpus_cases"])
