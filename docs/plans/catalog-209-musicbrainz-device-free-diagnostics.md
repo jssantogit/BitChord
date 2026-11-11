@@ -100,6 +100,16 @@ assertion that the target artist is absent from that group. For a definitive
 release-group owner check, use an *exact* group lookup with structured credits;
 avoid joining by name, title or Lucene search index.
 
+## Media and Recording.video observations from the existing source requests
+
+The bounded exact-MBID manifest already calls each Release with
+`recordings+artist-credits+release-groups`. Without adding a GET, the
+diagnostics now records the actual `media[].format` list and
+`recording.video` true/false/unknown counts for each Official edition.
+This is **source-only schema evidence**. Digital Media can contain video;
+a missing or ambiguous `video` flag is not a negative claim, and the
+report never asserts offline Room rendering or actual audio playback.
+
 ## Actual HTTP attempt accounting
 
 The public source transport logs **every network attempt before I/O**,

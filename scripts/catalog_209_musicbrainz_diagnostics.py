@@ -221,12 +221,19 @@ def diagnose_case(case: dict, get) -> list[dict]:
         media = payload.get('media')
         track_ids = []
         recording_ids = []
+        # Observe structured format and nested Recording.video presence.
+        # A Digital Media format is NOT positive audio evidence.
+        formats = set()
+        video_counts = {'true': 0, 'false': 0, 'unknown': 0}
         complete = isinstance(media, list) and len(media) > 0
         if complete:
             for medium in media:
                 if not isinstance(medium, dict) or not isinstance(medium.get('tracks'), list):
                     complete = False
                     break
+                fmt = medium.get('format')
+                if isinstance(fmt, str) and fmt.strip():
+                    formats.add(fmt.strip())
                 entries = medium['tracks']
                 medium_count = medium.get('track-count')
                 if type(medium_count) is int and medium_count != len(entries):
@@ -238,6 +245,9 @@ def diagnose_case(case: dict, get) -> list[dict]:
                     tid = track.get('id')
                     rec = track.get('recording')
                     rid = rec.get('id') if isinstance(rec, dict) else None
+                    flag = rec.get('video') if isinstance(rec, dict) else None
+                    video_counts['true' if flag is True else
+                                 'false' if flag is False else 'unknown'] += 1
                     if not _valid_mbid(tid) or not _valid_mbid(rid):
                         complete = False
                     else:
@@ -254,6 +264,8 @@ def diagnose_case(case: dict, get) -> list[dict]:
                  'observed_group_mbid': actual_group, 'status': payload.get('status'),
                  'complete_track_graph': complete, 'track_count': len(track_ids),
                  'unique_recording_count': len(set(recording_ids)),
+                 'edition_media_formats': sorted(formats),
+                 'nested_recording_video_flags': video_counts,
                  'sample_track_mbid': track_ids[0] if track_ids else None,
                  'sample_recording_mbid': recording_ids[0] if recording_ids else None,
                  'cover_art_front_hint': (payload.get('cover-art-archive') or {}).get('front')

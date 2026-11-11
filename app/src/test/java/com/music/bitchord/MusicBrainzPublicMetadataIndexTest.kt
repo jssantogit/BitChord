@@ -350,6 +350,22 @@ class MusicBrainzPublicMetadataIndexTest {
             ))
             assertEquals(group, dao.verifiedRecordingCoverGroupMbid(record))
             assertEquals(null, dao.verifiedRecordingCoverGroupMbid(unrelated))
+            // A verified Front cannot turn a proven video-only Official
+            // edition into positive Recording -> audio group evidence.
+            index.persistGroupEditions(group, listOf(MusicBrainzReleaseHit(
+                release, "Taste of Love", "XW", "2021-06-11", "TWICE",
+                status = "Official", isVideoOnlyMedia = true,
+            )))
+            assertEquals(null, dao.verifiedRecordingCoverGroupMbid(record))
+            assertEquals(emptyList<com.music.bitchord.data.catalog.CanonicalRecordingCoverGroupRow>(),
+                dao.verifiedRecordingCoverGroupMbids(listOf(record)))
+            // Updated explicit audio/mixed media evidence can correct the
+            // earlier classification without changing a single MBID.
+            index.persistGroupEditions(group, listOf(MusicBrainzReleaseHit(
+                release, "Taste of Love", "XW", "2021-06-11", "TWICE",
+                status = "Official", isVideoOnlyMedia = false,
+            )))
+            assertEquals(group, dao.verifiedRecordingCoverGroupMbid(record))
             // Bulk hydration must share the same proven official-edition edge
             // as the individual lookup. A twenty-song album cannot incur one
             // expensive Room graph traversal per cover, and unrelated songs

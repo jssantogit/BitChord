@@ -81,6 +81,9 @@ class MusicBrainzOfflineEditionsTest {
                 .associateBy { it.musicBrainzId }
             assertEquals(true, cached[worldwide]?.isVideoOnlyMedia)
             assertEquals(false, cached[japan]?.isVideoOnlyMedia)
+            assertEquals(true, db.catalogDao()
+                .searchKnownMusicBrainzReleases("SUPER REAL ME", 25)
+                .single { it.musicBrainzId == worldwide }.isVideoOnlyMedia)
             // A sparse browse has no evidence to replace the previous flags.
             index.persistGroupEditions(group, listOf(
                 videoEdition.copy(isVideoOnlyMedia = null),

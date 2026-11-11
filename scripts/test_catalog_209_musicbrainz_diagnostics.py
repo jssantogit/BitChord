@@ -55,9 +55,11 @@ class FakeClient:
             return {'id': ident, 'title': 'SUPER REAL ME',
                     'status': 'Official', 'cover-art-archive': {'front': True}, 'release-group':
                         {'id': '00000000-0000-4000-8000-000000000009' if self.wrong_group else GROUP},
-                    'media': [{'position': 1, 'track-count': 1, 'tracks': [
+                    'media': [{'position': 1, 'format': 'Digital Media',
+                               'track-count': 1, 'tracks': [
                         {'id': TRACK, 'title': 'Magnetic', 'position': 1,
-                         'recording': {'id': RECORDING, 'title': 'Magnetic'}}]}]}
+                         'recording': {'id': RECORDING, 'title': 'Magnetic',
+                                       'video': False}}]}]}
         if kind == 'release' and not ident and 'track_artist' in params:
             return {'release-count': 1, 'releases': [{
                 'id': WORLD, 'artist-credit': [{'artist': {'id': ARTIST}}],
@@ -98,6 +100,9 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         self.assertEqual(RECORDING, release['evidence']['sample_recording_mbid'])
         self.assertEqual(TRACK, release['evidence']['sample_track_mbid'])
         self.assertIs(release['evidence']['cover_art_front_hint'], True)
+        self.assertEqual(['Digital Media'], release['evidence']['edition_media_formats'])
+        self.assertEqual({'true': 0, 'false': 1, 'unknown': 0},
+                         release['evidence']['nested_recording_video_flags'])
         self.assertTrue(all(row['evidence_type'] == 'PUBLIC_API_ONLY' for row in results))
         # The previous diagnose_case call already consumed eight GETs.
         # Count this report on a fresh transport to enforce the 8+1 budget.
