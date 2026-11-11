@@ -336,7 +336,7 @@ internal fun <T> WizardChoiceDialog(
 ) {
     PlaylistWizardSheetChrome(title = title, onClose = onClose) {
         LazyColumn(Modifier.heightIn(max = 480.dp)) {
-            items(options) { option ->
+            itemsIndexed(options) { index, option ->
                 SettingsRow(
                     title = label(option),
                     onClick = { onChosen(option); onClose() },
@@ -352,9 +352,9 @@ internal fun <T> WizardChoiceDialog(
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(22.dp),
                         )
-                    }) else null,
+                    }) else ({}),
                 )
-                RowDivider()
+                if (index < options.lastIndex) RowDivider()
             }
         }
     }
@@ -1261,8 +1261,12 @@ internal fun SmartPlaylistV2WizardUi(
                         if (globalSearch.isNotBlank()) {
                             val matches = smartConditionSearch(globalSearch)
                             if (matches.isEmpty()) item {
-                                Text("Nenhuma condição encontrada.",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    "Nenhuma condição encontrada.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 16.dp),
+                                )
                             } else item {
                                 PlaylistWizardFieldList(matches.map { field ->
                                     PlaylistWizardNavOption(
@@ -1320,7 +1324,14 @@ internal fun SmartPlaylistV2WizardUi(
                                 )
                             })
                         }
-                        if (matches.isEmpty()) item { Text("Nenhuma condição encontrada.") }
+                        if (matches.isEmpty()) item {
+                            Text(
+                                "Nenhuma condição encontrada.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+                        }
                         if (selectedCategory.id == "library") item {
                             Text(
                                 "Pastas e caminhos exigem arquivos locais com localização verificada.",
@@ -1337,6 +1348,7 @@ internal fun SmartPlaylistV2WizardUi(
                                     subtitle = operatorUiLabel(draft.operator),
                                     onClick = { picker = "operator" },
                                     reserveIconSpace = false,
+                                    trailing = {}, // Comparison is a flat choice row, not a drill-down.
                                 )
                                 Column(
                                     modifier = Modifier.fillMaxWidth()
