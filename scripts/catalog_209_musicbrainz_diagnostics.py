@@ -320,6 +320,22 @@ def make_report(manifest: dict, client) -> dict:
         'cases': observed,
         'guest_track_artist_shape': guest_shape,
         'extra_guest_shape_requests': 1,
+        'logical_probe_count': sum(6 + len(c['release_mbids']) for c in cases) + 1,
+        'max_http_requests': getattr(client, 'max_http_requests', None),
+        'http_status_counts': {
+            str(code): sum(
+                (str(item.get('http_status')) if item.get('http_status') is not None
+                 else 'NETWORK_ERROR') == str(code)
+                for item in getattr(client, 'requests', [])
+                if isinstance(item, dict)
+            )
+            for code in sorted({
+                str(item.get('http_status')) if item.get('http_status') is not None
+                else 'NETWORK_ERROR'
+                for item in getattr(client, 'requests', [])
+                if isinstance(item, dict)
+            })
+        },
         'pass_count': sum(x['status'] == 'PASS' for x in rows),
         'fail_count': sum(x['status'] == 'FAIL' for x in rows),
         'error_count': sum(x['status'] == 'ERROR' for x in rows) +
@@ -352,13 +368,16 @@ def main() -> int:
             raise ValueError('manifest invalid')
     except (OSError, ValueError) as exc:
         parser.error(f'Cannot read bounded public manifest: {type(exc).__name__}')
-    client = PublicMusicBrainz(interval=1.1, timeout=22.0)
+    # 25 logical checks at three cases (8 each) + one schema probe.
+    # Permit a small retry reserve but NEVER exceed 32 real HTTP attempts.
+    client = PublicMusicBrainz(interval=1.1, timeout=22.0, max_http_requests=32)
     report = make_report(manifest, client)
     args.output.write_text(json.dumps(report, ensure_ascii=False,
                                       indent=2, sort_keys=True) + '\n', encoding='utf-8')
     print(json.dumps({key: report[key] for key in
                      ('scope', 'pass_count', 'fail_count', 'error_count',
-                      'inconclusive_count', 'http_request_count')}, indent=2))
+                      'inconclusive_count', 'logical_probe_count',
+                      'max_http_requests', 'http_request_count', 'http_status_counts')}, indent=2))
     return 0 if report['fail_count'] == 0 and report['error_count'] == 0 else 2
 
 

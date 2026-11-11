@@ -112,6 +112,9 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         self.assertEqual('OBSERVED', report['guest_track_artist_shape']['status'])
         self.assertEqual(1, report['extra_guest_shape_requests'])
         self.assertEqual(9, report['http_request_count'])
+        self.assertEqual(9, report['logical_probe_count'])
+        self.assertIsNone(report['max_http_requests'])
+        self.assertEqual({}, report['http_status_counts'])
 
     def test_search_index_miss_is_not_a_claim_of_missing_release(self):
         rows = diagnose_case(CASE, FakeClient(missing_search=True).get)

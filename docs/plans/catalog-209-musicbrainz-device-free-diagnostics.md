@@ -100,6 +100,21 @@ assertion that the target artist is absent from that group. For a definitive
 release-group owner check, use an *exact* group lookup with structured credits;
 avoid joining by name, title or Lucene search index.
 
+## Actual HTTP attempt accounting
+
+The public source transport logs **every network attempt before I/O**,
+including successful responses, HTTP 429/503 retries, timeouts and failed
+JSON decoding. A prior source run of the three-case matrix reported **24 PASS
+checks, 0 errors, and 28 actual attempts** for 25 logical operations. The
+old nominal 25-call description did not count retries; this was a reporting
+and rate-bound gap, not an additional catalog identity discovery.
+
+The report now separately records `logical_probe_count`,
+`http_request_count`, `max_http_requests` and aggregate
+`http_status_counts` without leaking API bodies. The shared #178 transport
+keeps its original unbounded default; only the explicitly bounded #209
+diagnostic enables the 32-attempt ceiling.
+
 ## Real source matrix: Album / EP / Single
 
 The bounded manifest now covers **three exact-MBID artist/group/recording
@@ -122,8 +137,11 @@ instead of inserting/removing shelf entities.
 
 ## Hard limits and unresolved surface
 
-- 1–3 public cases, up to 8 calls per case plus one independent guest
-  response-shape probe (max 25 calls total), spacing >=1.1 s,
+- 1–3 public cases, up to 8 **logical queries** per case plus one
+  guest response-shape probe (25 logical checks for three full cases). HTTP
+  429/503 retries are extra attempts: this workflow enforces a **hard ceiling
+  of 32 real HTTP attempts** per run, spaced >=1.1 s. If the cap is reached,
+  remaining checks report an error rather than hiding an unverified response.
   no tokens and no private endpoints. Reuse the #178 retry/client instead of
   creating a parallel HTTP transport.
 - Artifacts expire after seven days; include HEAD / GitHub run provenance.
