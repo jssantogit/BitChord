@@ -5223,6 +5223,17 @@ private fun BitChordApp(
                         null
                     }
                 }
+                val verifiedReleaseId by produceState<String?>(
+                    initialValue = null, key1 = song,
+                ) {
+                    value = try {
+                        com.music.bitchord.ui.components.verifiedPlayerAlbumReleaseId(context, song)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
                 val share: () -> Unit = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -5257,6 +5268,14 @@ private fun BitChordApp(
                     signedIn = signedIn,
                     appleQueuePlayerMenu = fromAppleQueue,
                     verifiedAlbumTitle = verifiedMenuAlbum,
+                    verifiedCanonicalReleaseId = verifiedReleaseId,
+                    onOpenCanonicalAlbum = { releaseId ->
+                        songActions = null
+                        dismissPlayer()
+                        // The route resolves the canonical Release, not a
+                        // remote provider album or guessed title.
+                        viewModel.openCanonicalNativeShelfItem("catalog:RELEASE:$releaseId")
+                    },
                     // The player-wide star now owns rating edits.
                     // Other track-list menus retain the existing first-rating entry.
                     canonicalRatingContent = if (shouldShowRatingEditorInSongActions(fromPlayer)) {
