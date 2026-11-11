@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import org.junit.Assert.assertEquals
@@ -299,6 +300,37 @@ class CanonicalArtistReleaseSectionsTest {
             canonicalCachedRecentArtistProofs(
                 "AtHeart", local, mapOf(key to "Album|2025-08-13")::get,
             ))
+    }
+
+    @Test fun incompleteArtistSearchCannotClaimThatAnExactNameIsGloballyUnique() {
+        val matched = MusicBrainzArtistHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "AtHeart", null, "KR",
+        )
+        val unrelated = MusicBrainzArtistHit(
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "AtHeart covers", null, "KR",
+        )
+        // Nineteen other raw hits may be filtered or have different names;
+        // the server still says later pages exist. A namesake could be there.
+        val incomplete = MusicBrainzCatalogPage(
+            items = listOf(matched), total = 45, offset = 0, consumedCount = 20,
+        )
+        assertNull(canonicalUniqueExactArtistFromCompleteSearch("AtHeart", incomplete))
+        assertNull(canonicalUniqueExactArtistFromCompleteSearch(
+            "AtHeart", incomplete.copy(offset = 20, total = 40),
+        ))
+        val complete = MusicBrainzCatalogPage(
+            items = listOf(matched, unrelated), total = 2, offset = 0, consumedCount = 2,
+        )
+        assertEquals(matched, canonicalUniqueExactArtistFromCompleteSearch(
+            "  atheart  ", complete,
+        ))
+        assertNull(canonicalUniqueExactArtistFromCompleteSearch(
+            "AtHeart", complete.copy(
+                items = listOf(matched, matched.copy(
+                    musicBrainzId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                )),
+            ),
+        ))
     }
 
     @Test fun verifiedRecentLibraryReleaseSurvivesRestartAndChangedLocalIdsWithoutInternet() {
