@@ -2,8 +2,6 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +42,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -353,12 +350,15 @@ internal data class PlaylistWizardNavOption(
 )
 
 @Composable
-private fun PlaylistWizardNavigationSubtitle(description: String) {
+private fun PlaylistWizardNavigationSubtitle(
+    description: String,
+    maxLines: Int = 1,
+) {
     Text(
         description,
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = 1,
+        maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
     )
 }
@@ -404,7 +404,7 @@ internal fun PlaylistWizardFieldList(options: List<PlaylistWizardNavOption>) {
                             overflow = TextOverflow.Ellipsis,
                         )
                         if (option.description.isNotBlank()) {
-                            PlaylistWizardNavigationSubtitle(option.description)
+                            PlaylistWizardNavigationSubtitle(option.description, maxLines = 2)
                         }
                     }
                 }
