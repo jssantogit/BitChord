@@ -212,6 +212,34 @@ class SmartPlaylistV2WizardComposeTest {
             smartConditionFieldTabs(smartConditionCategories.single { it.id == "ratings" }))
     }
 
+    @Test fun conditionEditorDisablesSaveForAnInvalidCalendarYear() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Teste", rule = rule, hasConfiguredRules = false,
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Adicionar primeira condição").performClick()
+        compose.onNodeWithText("Datas e lançamentos").performClick()
+        compose.onNodeWithText("Ano de lançamento da edição").performClick()
+        compose.onNodeWithContentDescription("Ano desta edição (ex.: 2024)")
+            .performTextInput("999")
+        compose.onNodeWithText("Adicionar condição").assertIsNotEnabled()
+    }
+
     @Test fun conditionEditorRejectsValuesInvalidForTheRealV2RuleContract() {
         val year = SmartPlaylistRule.Comparison(
             SmartPlaylistRuleField.RELEASE_YEAR,
