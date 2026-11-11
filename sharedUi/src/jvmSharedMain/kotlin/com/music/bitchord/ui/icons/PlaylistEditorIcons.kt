@@ -24,6 +24,8 @@ object PlaylistEditorIcons {
     val Check = BitChordIcons.Check
     val History = BitChordIcons.Clock
     val Ratings = AppleQueueVectors.Favorite
+    /** Menus use the plain standalone star, never the circular player variant. */
+    val RatingPlain = AppleQueueVectors.RatingStarOutline
 
     private fun outlined(
         name: String,
