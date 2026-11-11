@@ -998,3 +998,91 @@ barcode/faixas, **sem identidade de embalagem**. Resultados
 contingentes de 503 subsequentes não apagam o sucesso datado;
 tampouco permitem declarar que toda execução futura estará disponível.
 Corpus segue 5/30, B-06..B-10 ainda não homologados.
+
+
+## Prensagens com código de barras igual, mas catálogos contraditórios (11/11/2026)
+
+A inspeção real das matrizes completas de `BORDER : DAY ONE` e
+`FEARLESS` revelou uma prova adicional que a lógica Android **não
+utilizava**: o grafo MusicBrainz já expunha o nome da gravadora com
+número de catálogo, mas somente numa string de apresentação
+`"Label (Catalog)"`; `DiscogsCanonicalEditionCoordinator` não
+transportava o **par tipado** para `CanonicalEditionEvidence`.
+Consequentemente `DiscogsEditionMatcher` poderia considerar
+`Verified` uma prensagem com mesmo artista, UPC e faixa, mesmo que
+ambos os provedores afirmassem **números de catálogo diferentes para
+a mesma gravadora**.
+
+- Primeiro teste de regressão Android publicado em
+  [cf2cfd8d](https://github.com/jssantogit/BitChord/commit/cf2cfd8dfc72bbbb20c9ab626ce7013af0cfd47d)
+  e integração JSON MB→Discogs em
+  [4c05cf47](https://github.com/jssantogit/BitChord/commit/4c05cf47322f68f4df290a38748d9b94fccbffaa).
+  [CI RED #43114346635](https://github.com/jssantogit/BitChord/actions/runs/43114346635)
+  falhou somente na compilação dos testes novos:
+  `Unresolved reference editionLabelCatalogPairs`
+  (`compileDevDebugUnitTestKotlin`). Isso demonstra que o campo
+  ainda não existia no contrato antes da correção.
+- Implementação em [f1f6afc0](https://github.com/jssantogit/BitChord/commit/f1f6afc0b285a154d079e2809884404f0a62bbf3),
+  [eb951f11](https://github.com/jssantogit/BitChord/commit/eb951f110dae6a0430afc62fc4ee6e3cf3995dc5)
+  e [aacb7ed8](https://github.com/jssantogit/BitChord/commit/aacb7ed8555b5e6fe4573de406395b72e89408ea):
+  preserva `(label, catalog-number)` no grafo de **exata Release MB**,
+  transporta pelo coordenador e reconhece contradição somente
+  quando o **mesmo nome literal de gravadora**, normalizado em
+  case/whitespace, apresenta conjuntos disjuntos de catálogos
+  explicitamente conhecidos. Resultado seguro = `Candidate`, não
+  `Conflict`: aliases de gravadora, números faltantes e maneiras
+  de descrever a mesma prensagem ainda podem explicar a divergência.
+  Não traduz nome de selo, não usa heurísticas de catalog aliases,
+  não descarta relações e não promove equivalências.
+  **GREEN da suíte Android/JVM no novo HEAD deve ser verificado
+  separadamente**; não confundir código publicado com teste aprovado.
+
+**Provas de fonte reproduzíveis:** o scanner público
+`catalog_211_discogs_master_pair_matrix.py` passou a incluir o
+diagnóstico `label_catalog` em cada par de edição, sem autenticação,
+sem writes e com `verified=false` obrigatório. A regressão
+[RED #43114709845](https://github.com/jssantogit/BitChord/actions/runs/43114709845)
+falhou por ausência desse campo; o novo helper preserva contradições
+de label/catalog na [correção dcd31a8d](https://github.com/jssantogit/BitChord/commit/dcd31a8d664d256b6b9b89d005fd32d221746908).
+O scanner [GREEN #43115086741](https://github.com/jssantogit/BitChord/actions/runs/43115086741)
+concluiu **7/7 regressões e 29 GETs**, comparando 9 pares
+ENHYPEN e 45 FEARLESS completos no mesmo corte.
+
+A fonte ENHYPEN fornece **quatro contradições concretas** para os
+dois MB CDs `6ca81526`/`cb4114dc` e Discogs CDs
+`16620135`/`16620078`: ambos apresentam selo **BELIFT LAB**,
+mas o MusicBrainz declara `L200001786`, enquanto o Discogs
+declara `CMCD 11590`. Mesmo quando UPC coincide e 4/6 faixas
+são literalmente iguais, **não afirmar a mesma prensagem**.
+Esses IDs e números são observações de API, não conclusão
+sobre erro editorial de qualquer provedor.
+
+Em FEARLESS, seis pares satisfaziam a igualdade literal
+tracklist+UPC no diagnóstico simples; a inspeção dos vínculos
+mostra:
+- **3** pares com relação direta MB Release→mesmo Discogs Release:
+  `41f071ef→23594660`, `55092c59→23316113`,
+  `cd7fa327→23314901`. São controles **já ligados**, não
+  recuperações B sem relação.
+- **2** pares apontam para **outra** edição Discogs, apesar de
+  coincidirem UPC/faixas: `55092c59→23314901`,
+  `cd7fa327→23316113`. Nunca sobrepor a relação tipada do MB.
+- **1** par sem relação direta (`cf60fbce→23314901`) diverge
+  em **país e ano** do Discogs e, por isso, não comprova identidade.
+
+Um segundo teste da matriz
+[RED #43115582484](https://github.com/jssantogit/BitChord/actions/runs/43115582484)
+demonstrou a ausência de um aviso para Releases Discogs já
+**explicitamente vinculadas a outro MB Release no mesmo grupo**.
+O campo `competing_direct_release_owner_mbids` foi incluído
+em [75b957a9](https://github.com/jssantogit/BitChord/commit/75b957a979b2b2d41dfa3a48c7f5a09b04f12dcc),
+sem novos GETs ou inferência reversa de propriedade.
+[CI #43115670023](https://github.com/jssantogit/BitChord/actions/runs/43115670023)
+concluiu **8/8 testes e 28 GETs**, comparações completas.
+O campo é um **aviso de concorrência de IDs**, não uma
+atribuição canônica no BitChord.
+
+**Estado:** a nova evidência reforça falsos candidatos, mas ainda
+não homologa B-06..B-10. Corpus **5/30 revisados**, sem nova edição
+não vinculada `Verified` ou recuperação C, sem APK/smoke,
+merge, alteração na #209 ou mudança de provedor primário.
