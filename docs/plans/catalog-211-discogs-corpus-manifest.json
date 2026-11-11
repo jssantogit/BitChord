@@ -349,8 +349,8 @@
         "musicbrainz_release": "https://musicbrainz.org/release/b9290e0d-be3a-41d0-b145-88fe342aa5da",
         "discogs_release": "https://www.discogs.com/release/25524349",
         "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43117923979",
-        "independent_editorial": "https://ive-official.jp/mob/news/diarKijiShw.php?id=197538&ima=0411&site=DIVE",
-        "independent_label_announcement": "https://www.sonymusic.co.jp/artist/IVE/info/544910"
+        "independent_editorial": "https://www.sonymusic.co.jp/artist/IVE/info/544910",
+        "independent_artist_catalog": "https://ive-official.jp/mob/news/diarKijiShw.php?id=197538&ima=0411&site=DIVE"
       },
       "match_state": "candidate",
       "review_notes": "IVE Japan's official discography specifies that the E normal CD edition of ELEVEN -Japanese ver.-, released on 19 October 2022, is catalog KSCL-3394 and contains two tracks: ELEVEN -Japanese ver.- and Queen of Hearts. The bounded public MusicBrainz ReleaseGroup 07fb58fa→Discogs Master 2911144 inspection observed MusicBrainz official CD Release b9290e0d and Discogs physical CD Release 25524349 with the same reported valid barcode and year/country compatibility. Ki/oon label catalog in MB is KSCL-3394 and Discogs renders KSCL 3394 (punctuation/whitespace variation), so the pair plausibly refers to E, but only one of two titles matches literally; neither provider exposes a direct exact MB Release→Discogs Release URL in the sampled payload. A catalog typography difference is not a substantive variant conflict, but neither the UPC alone nor a shared two-track product family proves edition identity. Retain as Candidate, not Verified or recovered Release. Android UI and playback were not checked; Unknown/false fields are no demonstrated gain, not a measured absence.",
