@@ -861,3 +861,95 @@ continuar as pistas de barcode/edição já existentes sem inventar
 vínculo ou forçar `Verified`. O corpus permanece **5/30 casos revisados,
 0 novos B sem vínculo Verified e 0 C recuperados**, sem APK, smoke físico,
 merge, novas identidades MBID ou mudança no MusicBrainz #209.
+
+
+## B-06..B-10 — novas relações RG→Master públicas, sem homologação (11/11/2026)
+
+A triagem não poderia continuar procurando evidência de Master nos cinco pares
+B-01..B-05: quatro RGs não tinham relação tipada nas respostas recentes e
+o quinto ficou indisponível. Em vez de inventar relação ou insistir nos
+mesmos controles, o novo `catalog_211_discogs_master_lead_scout.py`
+consulta **apenas a primeira página de 25 RGs** de até dez artistas
+conhecidos com `inc=artist-credits+url-rels`; exige crédito solo por MBID
+exato e vínculo URL RG→Discogs Master, rejeita duplicatas e Masters
+associados a grupos contraditórios, exclui grupos B já revisados, inspeciona
+no máximo cinco Masters e mantém o limite compartilhado de **25 GETs**.
+Falhas de um artista ficam visíveis, sem paralisar as pistas independentes,
+mas **nenhuma lista de artista é declarada exaustiva**.
+
+A primeira implementação truncava silenciosamente linhas já observadas
+antes de verificar Masters compartilhados. A regressão com 102 linhas
+foi [RED #43107121343](https://github.com/jssantogit/BitChord/actions/runs/43107121343);
+a correção [6d783a6b](https://github.com/jssantogit/BitChord/commit/6d783a6b0ec4133250173d4d8177500c73e9b92b)
+examina todas as no máximo 250 linhas observadas antes de escolher até cinco
+leads. O bloqueio global após HTTP 503 também foi reproduzido em
+[RED #43107359728](https://github.com/jssantogit/BitChord/actions/runs/43107359728)
+e corrigido no [9e147df7](https://github.com/jssantogit/BitChord/commit/9e147df7277e58b150f3e7d60ccf09a98e0467b2).
+[CI #43107430706](https://github.com/jssantogit/BitChord/actions/runs/43107430706)
+passou os sete testes offline e conseguiu observar cinco leads reais,
+três Masters pequenos e dois grandes naquela amostragem.
+
+O passo seguinte adicionou uma consulta **completa ou inconclusiva**
+de Releases oficiais do grupo por MBID, sem escolher prensagem por título,
+mídia ou primeiro resultado. O teste de contrato foi
+[RED #43107805527](https://github.com/jssantogit/BitChord/actions/runs/43107805527)
+e a implementação [6b400a58](https://github.com/jssantogit/BitChord/commit/6b400a582752f7342b5fcced143d69939c87534a)
+passou em [CI #43107919302](https://github.com/jssantogit/BitChord/actions/runs/43107919302):
+**8/8 testes offline, 22 GETs**, nove índices de artista observados,
+um indisponível. O limite é conservador: 25 Releases por RG;
+uma paginação maior NÃO prova ausência de outras edições.
+
+| Pista RG observada | Discogs Master | Resultado público |
+|---|---:|---|
+| ENHYPEN — BORDER : DAY ONE, RG `849d8582` | `1887999` | 3 versões Discogs completas, 3 MB Releases Official listadas |
+| LE SSERAFIM — FEARLESS, RG `fb426d76` | `2653076` | 5 versões Discogs completas, 9 MB Releases Official listadas |
+| LE SSERAFIM — ANTIFRAGILE, RG `cfc67890` | `2834228` | Master grande, não exaustivo |
+| LE SSERAFIM — FEARLESS, RG `c54392ad` | `2986856` | Master grande, não exaustivo; outro RG, não fundir |
+| LE SSERAFIM — HOT, RG `50bcea80` | `3782390` | Master grande, não exaustivo |
+
+Os dois casos pequenos alimentam uma **matriz de pares completos de
+fonte** em `catalog_211_discogs_master_pair_matrix.py`. Ela reafirma
+o RG→Master, exige lista completa de versões <=8, enumera todos os
+MB Releases Official do grupo (máximo 12), hidrata cada Release de ambos
+os lados com IDs exatos e compara o produto cartesiano sem deduplicar
+variantes. Qualquer resposta ausente bloqueia o conjunto; `Verified`
+permanece **sempre false** neste scanner, mesmo com tracklist e UPC
+literalmente coincidentes. Testes offline [CI #43108603679](https://github.com/jssantogit/BitChord/actions/runs/43108603679)
+**4/4 GREEN**; o primeiro corte usou 23 GETs:
+- ENHYPEN: hidratação parcial no primeiro corte, **0 pares publicados**.
+- LE SSERAFIM: **9×5 = 45 pares de fonte comparados**, dos quais
+  seis tinham todas as faixas e o barcode coincidentes no diagnóstico.
+  Essa coincidência NÃO é prova de prensagem exclusiva, nem voto editorial
+  independente: versões do mesmo Master compartilham frequentemente
+  títulos e UPCs.
+- Regressão de identificação de fonte indisponível
+  [RED #43108896923](https://github.com/jssantogit/BitChord/actions/runs/43108896923)
+  e correção [f82b028b](https://github.com/jssantogit/BitChord/commit/f82b028be7b3914d69fe480aa6b412ad983c8266)
+  permitem retry limitado e diagnóstico preciso.
+  [Retry ENHYPEN #43108964124](https://github.com/jssantogit/BitChord/actions/runs/43108964124)
+  **SUCCESS (4/4 testes; 10 GETs)** completou as três edições MB
+  versus três Discogs: **9 pares**, nenhum com simultaneamente
+  tracklist completa e barcode idêntico. Não declarar mesma edição
+  nem ausência de prensagem por esse resultado.
+
+**Terceira fonte independente das variantes, não dos pares de IDs:**
+- [BELIFT LAB](https://beliftlab.com/artist/discography/ENHYPEN/1?lang=en)
+  e [aviso oficial ENHYPEN no Weverse](https://weverse.io/enhypen/notice/789)
+  identificam BORDER : DAY ONE como **1º mini-álbum**,
+  30/11/2020, **DAWN e DUSK**, CD e seis faixas.
+- [SOURCE MUSIC, anúncio FEARLESS no Weverse](https://weverse.io/lesserafim/notice/2469)
+  confirma o 1º mini-álbum de 02/05/2022 com versões **Vol.1
+  e Vol.2**; há ainda anúncio de variante
+  [Monochrome Bouquet](https://weverse.io/lesserafim/notice/2603).
+  Esses anúncios tornam **especialmente inseguro** usar barcode/faixas
+  como identidade de embalagem, mas não identificam qual MB Release
+  equivale a qual Discogs Release.
+
+**Estado medido:** a matriz e o scanner são instrumentos de
+triagem, não o corpus adjudicado. **B-06..B-10 permanecem sem revisão
+homologada**. A/B/C = **5/30 revisados**, sem novos B sem link
+`Verified`, sem C recuperados, sem alteração de `main`, MusicBrainz
+#209, UI, Room, playback, APK/smoke ou prioridade de provedores.
+A próxima discriminação exige cotejar UPC válido por versão, número de
+catálogo/gravadora *em par*, país, formato, arte da embalagem e relação
+direta quando disponível, preservando concorrência entre versões.
