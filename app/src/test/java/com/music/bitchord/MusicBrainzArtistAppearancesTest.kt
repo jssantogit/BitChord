@@ -359,4 +359,58 @@ class MusicBrainzArtistAppearancesTest {
         assertEquals(listOf("Shared main discography"),
             parseMusicBrainzTrackArtistAppearances(genuineGuest, target).map { it.title })
     }
+
+    @Test fun malformedExplicitGroupCreditNeverConfirmsGuestMembership() {
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host"}}],
+            "release-group":{"id":"$releaseGroup","title":"Guest title",
+                "primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Legitimate audio track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        // A present but invalid group credit is not proof that the group
+        // belongs to someone else, even if the edition is Official.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
+        val absentCredit = body.replace(
+            ""","artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]""",
+            "",
+        )
+        // Missing data is not negative evidence; existing track-scoped
+        // browsing still operates while exact group evidence is unavailable.
+        assertEquals(1, parseMusicBrainzTrackArtistAppearances(absentCredit, target).size)
+    }
+
+    @Test fun emptyOrPartiallyMalformedGroupCreditFailsClosedWithoutHidingRealGuest() {
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host"}}],
+            "release-group":{"id":"$releaseGroup","title":"Real collaboration",
+                "primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Verified guest recording",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        assertEquals(1, parseMusicBrainzTrackArtistAppearances(body, target).size)
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"artist-credit":[{"artist":{"id":"$other","name":"Host"}}]},"media"""",
+                """"artist-credit":[]},"media"""",
+            ), target,
+        ).isEmpty())
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"artist-credit":[{"artist":{"id":"$other","name":"Host"}}]},"media"""",
+                """"artist-credit":[{"artist":{"id":"$other","name":"Host"}},
+                    {"artist":{"id":"invalid"}}]},"media"""",
+            ), target,
+        ).isEmpty())
+    }
 }
