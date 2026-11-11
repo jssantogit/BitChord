@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Offline proof that a public MB probe cannot invent catalog/UI success."""
 import unittest
-from catalog_209_musicbrainz_diagnostics import diagnose_case, validate_manifest, make_report
+from catalog_209_musicbrainz_diagnostics import (diagnose_case, validate_manifest,
+                                                    make_report, probe_guest_browse_shape)
 
 ARTIST = '6b128dd7-e998-4edb-a4f5-400fef190445'
 GROUP = '529f87a1-1081-48a4-8ee1-3c08de229858'
@@ -174,6 +175,51 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         group = next(x for x in rows if x['check'] == 'group_identity')
         self.assertEqual('INCONCLUSIVE', group['status'])
         self.assertFalse(group['evidence']['group_credit_complete'])
+
+    def test_guest_browse_shape_does_not_invent_embedded_group_credits(self):
+        calls = []
+        def fake_get(kind, ident, **params):
+            calls.append((kind, ident, params))
+            return {'release-count': 1, 'releases': [{
+                'id': WORLD, 'status': 'Official',
+                'artist-credit': [{'artist': {'id': ARTIST}}],
+                'release-group': {'id': GROUP, 'primary-type': 'EP'},
+                'media': [{'tracks': [{'recording': {'id': RECORDING,
+                         'artist-credit': [{'artist': {'id': ARTIST}}]}}]}],
+            }]}
+        outcome = probe_guest_browse_shape(fake_get)
+        self.assertEqual('OBSERVED', outcome['status'])
+        self.assertEqual(1, outcome['evidence']['sampled_releases'])
+        self.assertEqual(1, outcome['evidence']['release_artist_credit_present'])
+        self.assertEqual(0, outcome['evidence']['group_artist_credit_present'])
+        self.assertEqual([GROUP], outcome['evidence']['sampled_release_group_mbids'])
+        self.assertFalse(outcome['evidence']['group_membership_verified'])
+        self.assertEqual(1, len(calls))
+        self.assertEqual('release', calls[0][0])
+        self.assertEqual('', calls[0][1])
+        self.assertEqual('49204a7a-ed85-407a-828f-6fd46f1d8126',
+                         calls[0][2]['track_artist'])
+        self.assertIn('recordings', calls[0][2]['inc'])
+        self.assertIn('release-groups', calls[0][2]['inc'])
+        self.assertEqual('5', calls[0][2]['limit'])
+
+    def test_guest_browse_schema_records_embedded_group_credit_when_present(self):
+        def fake_get(_kind, _ident, **_params):
+            return {'release-count': 1, 'releases': [{
+                'id': WORLD,
+                'release-group': {'id': GROUP,
+                    'artist-credit': [{'artist': {'id': ARTIST}}]},
+            }]}
+        outcome = probe_guest_browse_shape(fake_get)
+        self.assertEqual('OBSERVED', outcome['status'])
+        self.assertEqual(1, outcome['evidence']['group_artist_credit_present'])
+        self.assertFalse(outcome['evidence']['group_membership_verified'])
+
+    def test_guest_browse_empty_page_is_inconclusive_not_missing(self):
+        outcome = probe_guest_browse_shape(
+            lambda _kind, _ident, **_params: {'release-count': 0, 'releases': []})
+        self.assertEqual('INCONCLUSIVE', outcome['status'])
+        self.assertEqual(0, outcome['evidence']['sampled_releases'])
 
     def test_network_unavailable_never_becomes_not_found(self):
         client = FakeClient(unavailable=True)
