@@ -368,6 +368,47 @@ class MusicBrainzCatalogSearchTest {
         assertTrue(!com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording(rows.last()))
     }
 
+    @Test fun missingRecordingVideoOrReleaseListIsUnknownNotNegativeAudioEvidence() = runBlocking {
+        val knownVideo = "11111111-1111-4111-8111-111111111111"
+        val unknownVideo = "22222222-2222-4222-8222-222222222222"
+        val audio = "33333333-3333-4333-8333-333333333333"
+        val edition = "44444444-4444-4444-8444-444444444444"
+        val group = "55555555-5555-4555-8555-555555555555"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"count":3,"offset":0,"recordings":[
+                    {"id":"$knownVideo","title":"Actual video","video":true,
+                     "releases":[{"id":"$edition","status":"Official",
+                     "release-group":{"id":"$group","primary-type":"Album"}}]},
+                    {"id":"$unknownVideo","title":"Incomplete search result"},
+                    {"id":"$audio","title":"Original recording","video":false,
+                     "releases":[{"id":"$edition","status":"Official",
+                     "release-group":{"id":"$group","primary-type":"Album"}}]}
+                ]}"""
+            },
+        ))
+        val rows = (search.searchRecordings("recording") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit
+            >).page.items
+        assertEquals(listOf(knownVideo, unknownVideo, audio), rows.map { it.musicBrainzId })
+        // An explicitly video Recording does not have evidence of audio even
+        // when the search index lists it in an Official Album group.
+        assertEquals(true, rows[0].isVideo)
+        assertEquals(false, rows[0].hasOfficialAudioRelease)
+        assertEquals(null, rows[0].coverReleaseMbid)
+        // Missing fields are NOT video=false or "no official audio release".
+        // A later sparse search result must not overwrite positive Room proof.
+        assertEquals(null, rows[1].isVideo)
+        assertEquals(null, rows[1].hasOfficialAudioRelease)
+        assertEquals(null, rows[1].coverReleaseMbid)
+        assertEquals(false, rows[2].isVideo)
+        assertEquals(true, rows[2].hasOfficialAudioRelease)
+        assertEquals(edition, rows[2].coverReleaseMbid)
+    }
+
     @Test fun releasePresentationAllowsOnlyExplicitOfficialEdtionsAndKeepsRawMbids() {
         val official = com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit(
             "11111111-1111-4111-8111-111111111111", "Get Up", "XW",
