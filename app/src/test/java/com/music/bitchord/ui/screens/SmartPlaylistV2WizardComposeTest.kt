@@ -953,6 +953,35 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onAllNodesWithText("Adicionar à fila").assertCountEquals(0)
     }
 
+    @Test fun comparisonOptionsShowTheCurrentOperatorAsSelected() {
+        val rule = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
+            SmartPlaylistRule.Comparison(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleOperator.IS_PRESENT,
+            ),
+        ))
+        compose.setContent {
+            SmartPlaylistV2WizardUi(
+                name = "Teste", rule = rule, hasConfiguredRules = false,
+                sort = SmartPlaylistV2Sort.TITLE_ASC, limit = "100", seed = "0",
+                preview = null, loading = false, error = null,
+                editingId = null, editingFilterId = null, savedDefinitions = emptyList(),
+                onNameChange = {}, onRuleChange = {}, onSortChange = {},
+                onLimitChange = {}, onSeedChange = {}, onPreview = {},
+                onSave = {}, onSaveFilter = {}, onPreviewAction = null,
+                currentPreviewQuery = null, onManage = {}, onBack = {},
+            )
+        }
+        compose.onNodeWithText("Continuar").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
+        compose.onNodeWithText("Adicionar primeira condição").performClick()
+        compose.onNodeWithText("Músicas e metadados").performClick()
+        compose.onNodeWithText("Título da música").performClick()
+        compose.onNodeWithText("Comparação").performClick()
+        // TITLE defaults to CONTAINS. The native operator picker should
+        // expose which choice is currently active, not a set of blind rows.
+        compose.onNodeWithTag("playlist-choice-option-0").assertIsSelected()
+    }
+
     @Test fun nestedConditionGroupBackReturnsToItsParentRatherThanRuleRoot() {
         val inner = SmartPlaylistRule.Group(SmartPlaylistRuleJoin.ALL, listOf(
             SmartPlaylistRule.Comparison(
