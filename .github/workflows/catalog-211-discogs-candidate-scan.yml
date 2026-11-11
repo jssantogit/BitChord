@@ -15,6 +15,8 @@ on:
       - scripts/test_catalog_211_discogs_source_only_reconciliation.py
       - scripts/catalog_211_discogs_source_only_title_triage.py
       - scripts/test_catalog_211_discogs_source_only_title_triage.py
+      - scripts/catalog_211_discogs_fresh_c_followup.py
+      - scripts/test_catalog_211_discogs_fresh_c_followup.py
       - scripts/catalog_211_discogs_public_link_probe.py
       - scripts/test_catalog_211_discogs_public_link_probe.py
       - scripts/catalog_211_discogs_type_triage.py
@@ -38,7 +40,7 @@ concurrency:
 jobs:
   scout-public-index:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 7
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -64,6 +66,10 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_source_only_title_triage.py' -v
       - name: Reconcile no-barcode C leads against MusicBrainz release title index
         run: python3 scripts/catalog_211_discogs_source_only_title_triage.py
+      - name: Test independent C-only follow-up scan offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_fresh_c_followup.py' -v
+      - name: Observe next independent C candidates without repeating B corpus
+        run: python3 scripts/catalog_211_discogs_fresh_c_followup.py
       - name: Test reusable public MusicBrainz/Discogs comparison diagnostics
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_public_link_probe.py' -v
       - name: Test exact-ID cross-provider edition controls offline
@@ -84,6 +90,7 @@ jobs:
             discogs-211-corpus-edition-observations.json
             discogs-211-source-only-barcode-reconciliation.json
             discogs-211-source-only-title-triage.json
+            discogs-211-fresh-c-followup.json
             discogs-211-edition-pair-evidence.json
             discogs-211-type-disagreement-triage.json
             discogs-211-unlinked-alternative-editions.json

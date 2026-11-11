@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Tests for bounded C-only continuation without recycling B-case identities."""
+import copy
+import json
+from pathlib import Path
+import unittest
+
+from catalog_211_discogs_candidate_details import candidate_queue
+from catalog_211_discogs_corpus_candidates import ARTISTS
+from catalog_211_discogs_fresh_c_followup import build_followup_index, probe_followup
+
+
+MANIFEST = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
+
+
+def hint(rid, kind="release"):
+    return {"source_kind": kind, "source_id": rid, "title": "Possible new release",
+            "url": f"https://www.discogs.com/{kind}/{rid}",
+            "assessment": "index_title_not_exact_mb_group_title"}
+
+
+def index():
+    return {"schema_version": 1, "artists": [
+        {"artist": name, "musicbrainz_artist_mbid": mbid,
+         "status": "index_compared_not_adjudicated",
+         "discogs_artist_id": i + 100,
+         "distinct_mb_titles_count": 3, "candidate_index_hints":
+            ([hint(301), hint(302), hint(303)] if i == 0 else
+             [hint(401), hint(402), hint(4200420, "master")] if i == 7 else
+             [hint(501), hint(502), hint(503)] if i == 9 else [])}
+        for i, (name, mbid) in enumerate(ARTISTS)
+    ]}
+
+
+def observed(index_payload):
+    return {"schema_version": 1, "observations": [
+        {**row, "discogs_release_id": row["source_id"],
+         "status": "edition_metadata_observed_not_adjudicated"}
+        for row in candidate_queue(index_payload)
+    ]}
+
+
+def provider(url):
+    if "/masters/" in url:
+        return {"id": 4200420, "main_release": 37110012}
+    if "/releases/" in url and "discogs.com" in url:
+        rid = int(url.split("/releases/")[1].split("?")[0])
+        artist = (100 if rid == 303 else 107 if rid == 37110012 else 109)
+        return {
+            "id": rid,
+            "master_id": 4200420 if rid == 37110012 else 0,
+            "title": "Possible New",
+            "artists": [{"id": artist, "name": "Artist"}],
+            "formats": [{"name": "File", "descriptions": ["Single"]}],
+            "labels": [{"name": "Label"}],
+            "tracklist": [{"title": "First", "type_": "track"}],
+            "identifiers": [],
+            "year": 2026,
+        }
+    if "musicbrainz.org" in url:
+        return {"count": 0, "release-groups": []}
+    raise AssertionError("Unexpected provider request " + url)
+
+
+class FreshCFollowupTest(unittest.TestCase):
+    def test_new_index_excludes_all_previously_hydrated_sources(self):
+        doc = index()
+        previous = observed(doc)
+        original = copy.deepcopy(doc)
+        prepared = build_followup_index(doc, previous, MANIFEST)
+        self.assertIsNotNone(prepared)
+        self.assertEqual(doc, original)
+        self.assertEqual({303, 503, 4200420},
+                         {row["source_id"] for row in candidate_queue(prepared)})
+        self.assertEqual(0, len({(row["source_kind"], row["source_id"])
+                                 for row in candidate_queue(doc)} &
+                                {(row["source_kind"], row["source_id"])
+                                 for row in candidate_queue(prepared)}))
+
+    def test_cannot_revisit_existing_b_release_as_new_c_case(self):
+        result = probe_followup(index(), observed(index()), MANIFEST, provider)
+        rows = result["observations"]
+        seeded = [x for x in rows if x["discogs_release_id"] == 37110012]
+        self.assertEqual(1, len(seeded))
+        self.assertEqual("already_seeded_b_or_c_release", seeded[0]["status"])
+        self.assertEqual("not_checked", seeded[0]["title_status"])
+        self.assertEqual(2, result["independent_edition_leads_not_adjudicated"])
+        self.assertFalse(any(x["confirmed_missing_from_musicbrainz"] for x in rows))
+        self.assertEqual(0, result["reviewed_corpus_cases"])
+        self.assertEqual(0, result["confirmed_source_only_cases"])
+
+    def test_new_audio_releases_without_barcode_are_title_checked_not_promoted(self):
+        result = probe_followup(index(), observed(index()), MANIFEST, provider)
+        statuses = [(row["status"], row["title_status"]) for row in result["observations"]]
+        self.assertEqual(2, statuses.count((
+            "edition_metadata_observed_not_adjudicated", "no_title_index_hit_not_absence")))
+        self.assertLessEqual(result["discogs_requests"], 16)
+        self.assertLessEqual(result["musicbrainz_requests"], 24)
+
+    def test_fail_closed_for_mismatched_prior_index(self):
+        doc = index()
+        prev = observed(doc)
+        prev["observations"][0]["source_id"] = 9000
+        self.assertIsNone(build_followup_index(doc, prev, MANIFEST))
+        self.assertEqual(0, probe_followup(doc, prev, MANIFEST, provider)["discogs_requests"])
+
+    def test_fail_closed_for_invalid_manifest(self):
+        doc = index()
+        prev = observed(doc)
+        bad = copy.deepcopy(MANIFEST)
+        bad["cases"][10]["discogs_release_id"] = True
+        self.assertIsNone(build_followup_index(doc, prev, bad))
+        result = probe_followup(doc, prev, bad, provider)
+        self.assertEqual([], result["observations"])
+
+
+if __name__ == "__main__":
+    unittest.main()
