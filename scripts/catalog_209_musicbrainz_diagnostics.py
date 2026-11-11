@@ -97,15 +97,46 @@ def diagnose_case(case: dict, get) -> list[dict]:
         valid = (isinstance(payload, dict) and payload.get('id') == group and
                  isinstance(payload.get('title'), str) and payload['title'].strip() and
                  payload.get('primary-type') == case['expected_primary_type'])
-        return ('PASS' if valid else 'FAIL',
+        credit = payload.get('artist-credit') if isinstance(payload, dict) else None
+        # MusicBrainz artist-credit arrays may include string join phrases
+        # between structured name-credit objects. Names alone prove nothing.
+        ids = []
+        malformed = False
+        if isinstance(credit, list):
+            for item in credit:
+                if isinstance(item, str):
+                    continue
+                ref = item.get('artist') if isinstance(item, dict) else None
+                mbid = ref.get('id') if isinstance(ref, dict) else None
+                if not _valid_mbid(mbid):
+                    malformed = True
+                else:
+                    ids.append(mbid.lower())
+        # Missing/partial credit cannot certify the artist relationship;
+        # an explicit credit for a different MBID contradicts this case.
+        complete_credit = isinstance(credit, list) and bool(ids) and not malformed
+        if not valid:
+            status = 'FAIL'
+        elif not complete_credit:
+            status = 'INCONCLUSIVE'
+        elif artist.lower() in ids:
+            status = 'PASS'
+        else:
+            status = 'FAIL'
+        return (status,
                 {'group_mbid': payload.get('id') if isinstance(payload, dict) else None,
                  'title': payload.get('title') if isinstance(payload, dict) else None,
                  'primary_type': payload.get('primary-type') if isinstance(payload, dict) else None,
                  'expected_primary_type': case['expected_primary_type'],
                  'first_release_date': payload.get('first-release-date') if isinstance(payload, dict) else None,
-                 'secondary_types': payload.get('secondary-types') if isinstance(payload, dict) else None})
+                 'secondary_types': payload.get('secondary-types') if isinstance(payload, dict) else None,
+                 'expected_artist_mbid': artist,
+                 'observed_artist_mbids': list(dict.fromkeys(ids)),
+                 'group_credit_verified': complete_credit and artist.lower() in ids,
+                 'group_credit_complete': complete_credit})
 
-    check('group_identity', lambda: get('release-group', group), group_check)
+    check('group_identity', lambda: get('release-group', group,
+                                       inc='artist-credits'), group_check)
 
     def browse_check(payload):
         if not isinstance(payload, dict):
