@@ -212,6 +212,32 @@ class SmartPlaylistV2WizardComposeTest {
             smartConditionFieldTabs(smartConditionCategories.single { it.id == "ratings" }))
     }
 
+    @Test fun conditionEditorRejectsValuesInvalidForTheRealV2RuleContract() {
+        val year = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.RELEASE_YEAR,
+            SmartPlaylistRuleOperator.EQUAL,
+            value = 999.0,
+        )
+        assertEquals(false, smartConditionDraftValid(year))
+        assertTrue(smartConditionDraftValid(year.copy(value = 2024.0)))
+
+        val days = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.DAYS_SINCE_LAST_SKIP,
+            SmartPlaylistRuleOperator.EQUAL,
+            value = -1.0,
+        )
+        assertEquals(false, smartConditionDraftValid(days))
+        assertTrue(smartConditionDraftValid(days.copy(value = 0.0)))
+
+        val invalidText = SmartPlaylistRule.Comparison(
+            SmartPlaylistRuleField.TITLE,
+            SmartPlaylistRuleOperator.CONTAINS,
+            textValue = "x".repeat(161),
+        )
+        assertEquals(false, smartConditionDraftValid(invalidText))
+        assertTrue(smartConditionDraftValid(invalidText.copy(textValue = "Artista")))
+    }
+
     @Test fun historyAndLibrarySubTabsCoverAvailableEvidenceWithoutDuplication() {
         // Only groups that have multiple meaningful evidence families get
         // subtabs. Do not fabricate library-state or offline predicates.
