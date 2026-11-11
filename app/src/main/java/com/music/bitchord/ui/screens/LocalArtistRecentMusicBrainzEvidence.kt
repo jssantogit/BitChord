@@ -12,6 +12,8 @@ import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.ZoneOffset
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
@@ -32,6 +34,24 @@ import java.util.Locale
  * Never write inferred MBIDs to Room, manufacture a local MediaAsset or use
  * file insertion timestamps as release chronology.
  */
+/**
+ * An exact artist name on a partial search page does not prove uniqueness:
+ * an identically named artist can exist beyond that first raw page. The
+ * presentation-only date fallback requires a complete source page.
+ */
+internal fun canonicalUniqueExactArtistFromCompleteSearch(
+    artistName: String,
+    page: MusicBrainzCatalogPage<MusicBrainzArtistHit>?,
+): MusicBrainzArtistHit? {
+    if (page == null || page.offset != 0 || page.nextOffset != null ||
+        page.consumedCount != page.total
+    ) return null
+    val name = artistName.trim()
+    if (name.isBlank()) return null
+    return page.items.filter { it.name.trim().equals(name, ignoreCase = true) }
+        .singleOrNull()
+}
+
 private object LocalArtistRecentMusicBrainzLookup {
     private val search = MusicBrainzCatalogSearch()
     private val lock = Mutex()
@@ -62,10 +82,9 @@ private object LocalArtistRecentMusicBrainzLookup {
         }?.let { return@withLock it.evidence }
 
         val artistPage = search.searchArtists(name, limit = 20)
-        val artists = (artistPage as? MusicBrainzCatalogSearchResult.Success)?.page
-            ?.items.orEmpty()
-        val exact = artists.filter { it.name.trim().equals(name, ignoreCase = true) }
-        if (exact.size != 1) {
+        val page = (artistPage as? MusicBrainzCatalogSearchResult.Success)?.page
+        val exact = canonicalUniqueExactArtistFromCompleteSearch(name, page)
+        if (exact == null) {
             if (cache.size >= 48) cache.remove(cache.keys.first())
             cache[key] = Cached(now, emptyMap())
             return@withLock emptyMap()
@@ -75,7 +94,7 @@ private object LocalArtistRecentMusicBrainzLookup {
         var offset = 0
         for (pageIndex in 0 until 3) {
             val result = search.searchReleaseGroupsForArtistMbid(
-                exact.single().musicBrainzId, limit = 50, offset = offset,
+                exact.musicBrainzId, limit = 50, offset = offset,
             )
             val page = (result as? MusicBrainzCatalogSearchResult.Success)?.page
                 ?: break
@@ -83,13 +102,13 @@ private object LocalArtistRecentMusicBrainzLookup {
             // Stop when every local title has sufficient exact evidence, or
             // when MusicBrainz has no more release groups. Three pages max.
             val known = canonicalLocalArtistExactReleaseDateEvidence(
-                name, local, exact, groups,
+                name, local, listOf(exact), groups,
             )
             if (known.size == uniquelyNamed.size) break
             offset = page.nextOffset ?: break
         }
         val evidence = canonicalLocalArtistExactReleaseDateEvidence(
-            name, local, exact, groups,
+            name, local, listOf(exact), groups,
         )
         if (cache.size >= 48) cache.remove(cache.keys.first())
         cache[key] = Cached(System.currentTimeMillis(), evidence)
