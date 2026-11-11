@@ -108,8 +108,10 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual(3, len(report["leads"]))
         self.assertTrue(all(x["status"] == "master_shared_across_groups"
                             for x in report["leads"] if x["master_id"] == 500))
-        self.assertEqual(1, len([x for x in report["leads"]
-                                 if x["status"] == "complete_small_master_candidate"]))
+        self.assertTrue(all(x["status"] == "master_shared_across_groups"
+                            for x in report["leads"]))
+        self.assertFalse(any(x["status"] == "complete_small_master_candidate"
+                             for x in report["leads"]))
 
     def test_fail_closed_on_provider_error_and_global_budget(self):
         def unavailable(url):
