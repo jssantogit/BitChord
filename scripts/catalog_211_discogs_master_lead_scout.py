@@ -301,15 +301,41 @@ def known_b_groups(manifest: dict) -> set[str]:
         raise ValueError("invalid_existing_b_id")
     return {x.lower() for x in values}
 
+def scout_corpus(manifest: dict, get, pause=lambda: None) -> dict:
+    """When the ten B slots have been reviewed, stop scouting new B cases.
+
+    All source-reviewed negative pairs remain non-Verified; exhausting a
+    sampling denominator does not demonstrate provider coverage or correctness.
+    """
+    groups = known_b_groups(manifest)
+    b_cases = [row for row in manifest["cases"] if isinstance(row, dict) and
+               row.get("cohort") == "unlinked"]
+    if len(b_cases) != 10:
+        raise ValueError("invalid_b_cohort")
+    if all(x.get("reviewed") is True for x in b_cases):
+        return {
+            "schema_version": 1,
+            "observed_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "status": "b_cohort_all_slots_reviewed",
+            "source_http_requests": 0,
+            "artists": [], "leads": [], "unavailable_artist_pages": 0,
+            "exhaustive_artist_catalog": False,
+            "reviewed_corpus_cases": 0, "verified_edition_count": 0,
+            "warning": ("No new B review slots; ten source reviews are not "
+                        "Verified releases, provider coverage or UI gains."),
+        }
+    return scout(list(ARTISTS), groups, get, pause)
+
 def main():
     from catalog_211_discogs_public_link_probe import read_json
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    result = scout(list(ARTISTS), known_b_groups(manifest),
-                   lambda url: read_json(url)[1],
-                   pause=lambda: time.sleep(1.1))
+    result = scout_corpus(manifest,
+                          lambda url: read_json(url)[1],
+                          pause=lambda: time.sleep(1.1))
     OUTPUT.write_text(json.dumps(result, ensure_ascii=False, sort_keys=True,
                                  indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"requests": result["source_http_requests"],
+    print(json.dumps({"status": result.get("status", "candidate_scout"),
+                      "requests": result["source_http_requests"],
         "artist_statuses": [x["status"] for x in result["artists"]],
         "master_leads": [{"artist": x["artist"], "title": x["group_title"],
                           "group": x["group_mbid"], "master": x["master_id"],
