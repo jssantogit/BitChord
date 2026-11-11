@@ -131,17 +131,16 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
         return result
 
     artist_findings, candidates = [], []
-    # A provider error ends this scan: continuing would make later results
-    # look more complete than the actual observation set.
-    source_failure = False
+    # Source errors affect only their own page. The report never claims an
+    # exhaustive catalog, so an unavailable artist must not starve other
+    # independent read-only lead observations.
     for name, mbid in artists:
         try:
             rows, meta = browse_page(fetch(artist_index_url(mbid)), mbid)
         except (HTTPError, URLError, OSError, TimeoutError):
             artist_findings.append({"artist": name, "artist_mbid": mbid,
                 "status": "source_unavailable", "exhaustive_artist_catalog": False})
-            source_failure = True
-            break
+            continue
         except (ValueError, KeyError, TypeError):
             artist_findings.append({"artist": name, "artist_mbid": mbid,
                 "status": "invalid_source_payload", "exhaustive_artist_catalog": False})
@@ -170,9 +169,6 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
             len(group_masters[lead["group_mbid"]]) > 1):
             lead["status"] = "master_shared_across_groups"
             continue
-        if source_failure:
-            lead["status"] = "scan_interrupted_before_master_inspection"
-            continue
         try:
             master = fetch(f"https://api.discogs.com/masters/{mid}")
             if (master.get("id") != mid or
@@ -195,7 +191,11 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
             lead["status"] = "invalid_provider_response"
     return {"schema_version": 1, "observed_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
             "source_http_requests": request_count, "artists": artist_findings,
-            "leads": leads, "reviewed_corpus_cases": 0, "verified_edition_count": 0,
+            "leads": leads,
+            "unavailable_artist_pages": sum(
+                x["status"] != "partial_index_observed" for x in artist_findings),
+            "exhaustive_artist_catalog": False,
+            "reviewed_corpus_cases": 0, "verified_edition_count": 0,
             "warning": ("First-page only, anonymous candidate scouting. Neither a "
                         "complete artist catalog nor matching MB Releases nor corpus review.")}
 
