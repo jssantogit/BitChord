@@ -56,7 +56,7 @@ import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import java.util.Locale
 
 /** Original, shared vector identities for rating and playlist destructive actions. */
-internal fun browseRatingActionIcon() = PlaylistEditorIcons.Ratings
+internal fun browseRatingActionIcon() = PlaylistEditorIcons.RatingPlain
 internal fun browsePlaylistDeleteIcon() = PlaylistEditorIcons.Delete
 
 /**
