@@ -37,7 +37,7 @@ def read_barcode_search(payload: object, barcode: str, artist_mbid: str) -> dict
     """Reject partial/inconsistent search results; identify existing MB record only."""
     if not isinstance(payload, dict) or not MBID.fullmatch(artist_mbid):
         return None
-    count, rows = payload.get("release-count"), payload.get("releases")
+    count, rows = payload.get("count"), payload.get("releases")
     if (type(count) is not int or not 0 <= count <= MB_SEARCH_LIMIT or
         not isinstance(rows, list) or len(rows) != count):
         return None

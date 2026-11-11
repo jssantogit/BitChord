@@ -40,7 +40,7 @@ def title_query(title: object, artist_mbid: object) -> str | None:
 def parse_mb_group_search(payload: object, artist_mbid: str) -> list[str] | None:
     if not isinstance(payload,dict) or not MBID.fullmatch(artist_mbid):
         return None
-    total,groups = payload.get('release-group-count'),payload.get('release-groups')
+    total,groups = payload.get('count'),payload.get('release-groups')
     if (type(total) is not int or not 0 <= total <= SEARCH_LIMIT or
         not isinstance(groups,list) or len(groups) != total):
         return None

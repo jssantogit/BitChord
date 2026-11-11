@@ -37,7 +37,7 @@ def editions(barcodes=None, status="edition_metadata_observed_not_adjudicated"):
 
 
 def search(rows, count=None):
-    return {"release-count": len(rows) if count is None else count,
+    return {"count": len(rows) if count is None else count,
             "releases": rows}
 
 
@@ -83,8 +83,8 @@ class ReconciliationTest(unittest.TestCase):
 
     def test_partial_or_oversized_search_is_not_evidence(self):
         for payload in (search([mb_release()], 20), search([mb_release()], 2),
-                        {"release-count": "1", "releases": [mb_release()]},
-                        {"release-count": 1, "releases": [mb_release(rid="bad")]},
+                        {"count": "1", "releases": [mb_release()]},
+                        {"count": 1, "releases": [mb_release(rid="bad")]},
                         None):
             self.assertIsNone(read_barcode_search(payload, "8801234567890", ARTIST))
             r = reconcile(index(), editions(), lambda _: payload)

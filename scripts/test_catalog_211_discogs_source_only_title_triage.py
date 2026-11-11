@@ -14,7 +14,7 @@ def prior(status='source_barcode_unavailable'):
 
 
 def response(title='Possible', artist=ARTIST, count=1):
-    return {'release-group-count':count, 'release-groups':[
+    return {'count':count, 'release-groups':[
         {'id':GROUP,'title':title,'artist-credit':[{'artist':{'id':artist}}]}
     ] if count else []}
 
@@ -44,7 +44,7 @@ class TitleTriageTest(unittest.TestCase):
     def test_invalid_payload_is_not_evidence(self):
         for invalid in (None,response(count=20),
                         response(title='Wrong Artist',artist='49204a7a-ed85-407a-828f-6fd46f1d8126'),
-                        {'release-group-count':1,'release-groups':[]}):
+                        {'count':1,'release-groups':[]}):
             self.assertIsNone(parse_mb_group_search(invalid,ARTIST))
             doc=editions(barcodes=[]);doc['observations'][0]['title']='Possible'
             r=triage(index(),doc,prior(),lambda _:invalid)
