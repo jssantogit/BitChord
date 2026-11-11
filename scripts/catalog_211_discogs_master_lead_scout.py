@@ -229,7 +229,24 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
     ranked = sorted(candidates, key=lambda item:
                     (item["artist"], item["group_title"].casefold(),
                      item["group_mbid"], item["master_id"]))
-    leads = [dict(row) for row in ranked[:MASTER_LIMIT]]
+    # Do not spend all five Master-hydration slots on the first artist
+    # alphabetically. Take one bounded lead per artist per round; the
+    # complete candidate universe remains intact below for detecting a
+    # shared Master/ReleaseGroup, including candidates not hydrated.
+    by_artist: dict[str, list[dict]] = {}
+    for row in ranked:
+        by_artist.setdefault(row["artist"], []).append(row)
+    leads = []
+    while len(leads) < MASTER_LIMIT:
+        progressed = False
+        for name in sorted(by_artist):
+            if len(leads) >= MASTER_LIMIT:
+                break
+            if by_artist[name]:
+                leads.append(dict(by_artist[name].pop(0)))
+                progressed = True
+        if not progressed:
+            break
     master_groups: dict[int, set[str]] = {}
     group_masters: dict[str, set[int]] = {}
     for row in candidates:
