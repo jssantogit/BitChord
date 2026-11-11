@@ -25,7 +25,18 @@ internal sealed interface DiscogsUnlinkedMatch {
             // the first one and could falsely certify a verified edition.
             // Only identical repeat records may be collapsed. Disputed IDs
             // cannot be verified; unrelated independent IDs remain eligible.
-            val grouped = candidates.take(32)
+            // The selector is reusable beyond the current eight-ID HTTP
+            // discovery path. Truncating a larger input can hide a competing
+            // pressing after the cut and invent a unique VERIFIED match.
+            // Refuse certification rather than silently ignoring evidence.
+            if (candidates.size > 32) {
+                return Candidates(candidates.asSequence()
+                    .filter { it.link.kind == DiscogsKind.RELEASE }
+                    .take(32)
+                    .distinctBy { it.link.id }
+                    .toList())
+            }
+            val grouped = candidates
                 .filter { it.link.kind == DiscogsKind.RELEASE }
                 .groupBy { it.link.id }
             // A disputed Release is still a possible competitor. If another
