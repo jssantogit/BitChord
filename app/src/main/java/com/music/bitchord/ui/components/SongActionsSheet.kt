@@ -125,8 +125,8 @@ fun SongActionsSheet(
     onAddToPlaylist: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
-    /** Canonical release from a verified Recording→Release link only. */
-    verifiedCanonicalReleaseId: String? = null,
+    /** Canonical Release or ReleaseGroup route, only with verified links. */
+    verifiedCanonicalAlbumRoute: String? = null,
     onOpenCanonicalAlbum: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
@@ -244,14 +244,14 @@ fun SongActionsSheet(
             }
             // The Apple queue's six playback actions do not include discovery.
             // A verified release route is still an essential track action.
-            if (song.albumId != null || verifiedCanonicalReleaseId != null) {
+            if (song.albumId != null || verifiedCanonicalAlbumRoute != null) {
                 ActionRow(
                     icon = Icons.Rounded.Album,
                     label = stringResource(R.string.open_album),
                     accent = palette.accent,
                     onClick = {
-                        if (verifiedCanonicalReleaseId != null && onOpenCanonicalAlbum != null)
-                            onOpenCanonicalAlbum(verifiedCanonicalReleaseId)
+                        if (verifiedCanonicalAlbumRoute != null && onOpenCanonicalAlbum != null)
+                            onOpenCanonicalAlbum(verifiedCanonicalAlbumRoute)
                         else song.albumId?.let(onOpenAlbum)
                     },
                 )
@@ -302,7 +302,7 @@ fun SongActionsSheet(
             accent = palette.accent,
             onClick = onAddToQueue,
         )
-        val verifiedRelease = verifiedCanonicalReleaseId
+        val verifiedRelease = verifiedCanonicalAlbumRoute
             ?.takeIf { onOpenCanonicalAlbum != null }
         when {
             verifiedRelease != null -> ActionRow(
