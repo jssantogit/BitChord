@@ -953,3 +953,48 @@ homologada**. A/B/C = **5/30 revisados**, sem novos B sem link
 A próxima discriminação exige cotejar UPC válido por versão, número de
 catálogo/gravadora *em par*, país, formato, arte da embalagem e relação
 direta quando disponível, preservando concorrência entre versões.
+
+
+### Diagnóstico discriminante ENHYPEN e recuperação de 503 (11/11/2026)
+
+A investigação não deve transformar erro HTTP temporário em ausência. O
+script da matriz registra o ID exato de fonte cuja hidratação falhou;
+a regressão [RED #43108896923](https://github.com/jssantogit/BitChord/actions/runs/43108896923)
+foi corrigida em `f82b028b`. Um único novo GET é permitido **somente**
+após HTTP 503 para endpoint exato MusicBrainz (RG, browse de Releases
+ou detalhe de Release); 404, 429 e outros erros não têm retry
+automático. Cada tentativa utiliza o mesmo orçamento de até 40 GETs
+e intervalo de 1,1 segundo, sem criar índice ou cache persistente.
+Os contratos foram reproduzidos em
+[RED #43109485576](https://github.com/jssantogit/BitChord/actions/runs/43109485576)
+(Release) e [RED #43109666323](https://github.com/jssantogit/BitChord/actions/runs/43109666323)
+(RG), corrigidos em [ea00ddc6](https://github.com/jssantogit/BitChord/commit/ea00ddc64ff7a10f09940f61cc616b02c7071faa)
+e [a635bf0c](https://github.com/jssantogit/BitChord/commit/a635bf0c2a7f3f7df215667bd6ad6e0592896e7a).
+
+[CI #43109735646](https://github.com/jssantogit/BitChord/actions/runs/43109735646)
+concluiu **SUCCESS, 6/6 testes offline, 12 GETs reais**, com matriz
+completa ENHYPEN `BORDER : DAY ONE`: 3 MB Releases x 3 Discogs
+Releases = 9 pares. Nenhum tem simultaneamente tracklist integral e
+barcode iguais:
+
+- MB Digital Media `5af3b323` e Discogs File `16296898`:
+  6/6 títulos em ordem, **barcode não idêntico**; as duas edições
+  físicas Discogs `16620135` e `16620078` também têm seis títulos,
+  mas o meio físico diverge da edição MB digital.
+- MB CDs `6ca81526` e `cb4114dc`: nos Discogs CDs
+  `16620135`/`16620078`, o barcode coincide e país/ano são
+  compatíveis, mas apenas **4/6 títulos** coincidem literalmente.
+  As duas variantes permanecem concorrentes, como esperado pelas
+  embalagens DAWN/DUSK da gravadora.
+- Nenhum dos nove pares tem vínculo direto MB Release→Discogs Release
+  no payload observado. **Sem `Verified` e sem alegação de edição ausente
+  no MusicBrainz.** Diferença de grafia pode ser revisada, mas não
+  traduzida automaticamente em identidade de prensagem.
+
+O reprocessamento focado não reconsulta FEARLESS desnecessariamente.
+O [controle FEARLESS #43108603679](https://github.com/jssantogit/BitChord/actions/runs/43108603679)
+continua a prova de 45 pares completos e seis coincidências de
+barcode/faixas, **sem identidade de embalagem**. Resultados
+contingentes de 503 subsequentes não apagam o sucesso datado;
+tampouco permitem declarar que toda execução futura estará disponível.
+Corpus segue 5/30, B-06..B-10 ainda não homologados.
