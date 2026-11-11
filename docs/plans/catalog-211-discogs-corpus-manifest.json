@@ -160,11 +160,11 @@
       "reference_type": "EP",
       "musicbrainz_type": "EP",
       "app_type": "Unknown",
-      "match_state": "candidate",
+      "match_state": "conflict",
       "match_correct": false,
       "visible": false,
       "absent_in_musicbrainz": false,
-      "review_notes": "BIGHIT MUSIC's official TXT release and preorder notice explicitly calls 7TH YEAR the 8th mini album, dated 13 April 2026, with several physical variants. The exact MusicBrainz CD Release 562a42ed belongs to EP ReleaseGroup dc4cfe5f, barcode 8800357999260, BIGHIT MUSIC catalog BHE0779, six tracks; Korean retail catalog independently confirms that UPC and catno. The Discogs Release 37110012 has the same label/catalog number as the MB edition but a DIFFERENT observed barcode and only four of six literal track names matched in prior CI. No direct MusicBrainz Release URL relationship exists to this Discogs Release. Same product family / editorial EP type is supported, but the exact pressing identity is NOT VERIFIED; mark as candidate, not successful unlinked match or Album correction. App UI and shelf visibility have not been independently checked, so app_type=Unknown / visible=false mean no verified user-visible gain."
+      "review_notes": "BIGHIT MUSIC's official TXT release and preorder notice explicitly calls 7TH YEAR the 8th mini album, dated 13 April 2026, with several physical variants. The exact MusicBrainz CD Release 562a42ed belongs to EP ReleaseGroup dc4cfe5f, barcode 8800357999260, BIGHIT MUSIC catalog BHE0779, six tracks; Korean retail catalog independently confirms that UPC and catno. The Discogs Release 37110012 has the same label/catalog number as the MB edition but a DIFFERENT observed barcode and only four of six literal track names matched in prior CI. No direct MusicBrainz Release URL relationship exists to this Discogs Release. Same product family / editorial EP type is supported, but the exact pressing identity is NOT VERIFIED; mark as conflict of exact edition identity, not successful unlinked match or Album correction. App UI and shelf visibility have not been independently checked, so app_type=Unknown / visible=false mean no verified user-visible gain."
     },
     {
       "id": "B-06",

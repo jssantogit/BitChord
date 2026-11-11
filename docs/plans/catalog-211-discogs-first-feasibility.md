@@ -90,7 +90,7 @@ MUSIC](https://weverse.io/txt/notice/33998) e ao registro
 MusicBrainz CD/EP: a categoria EP já estava correta. A edição
 Discogs inspecionada compartilha número de catálogo, mas não o
 barcode, e a lista de faixas possui diferenças textuais. É
-**candidato não verificado como mesma prensagem**, não ganho de
+**conflito de identidade de edição (barcode divergente)**, não ganho de
 Discogs nem razão para mudar a autoridade do MusicBrainz.
 Corpus 2/30 revisados (ambos pares B negativos), 3 outros B pré-selecionados,
 3 C excluídos preliminarmente, 0 ganhos verificados, métricas

@@ -374,7 +374,7 @@ o corte mais recente é `1/30`.
 
 ## Segundo par B revisado — B-05: TXT / 7TH YEAR (11/11/2026)
 
-**Resultado:** `match_state=candidate`, **NOT VERIFIED**, tipo EP
+**Resultado:** `match_state=conflict`, **NOT VERIFIED**, tipo EP
 já existente no MusicBrainz, zero reclassificação aplicada.
 
 A [notificação oficial BIGHIT MUSIC no Weverse](https://weverse.io/txt/notice/33998)
@@ -406,3 +406,15 @@ preliminares; **zero ganhos comprovados** de novas edições, recuperação
 de grupos ausentes ou correção editorial. Não publicar indicadores
 agregados até completar o corpus (`metrics=null`). Os registros
 anteriores 0/30 e 1/30 permanecem históricos.
+
+### Regra de adjudicação: conflito não é candidato vago
+
+O relatório offline da PR passa a aceitar explicitamente `match_state=conflict`,
+que já existe na política Kotlin como `DiscogsEditionVerdict.CONFLICT`.
+B-05 registra esse estado porque os códigos de barras apresentados para
+o mesmo par de edições físicas são incompatíveis, ainda que selo e número
+de catálogo coincidam. A incompatibilidade exige **não vincular** as
+edições; a fonte editorial independente confirma o EP, não a mesma
+prensagem. Esse caso é revisado, mas não entra em `verified` nem nos
+cálculos de precisão de vínculos verificados. O status `candidate` fica
+reservado aos casos sem prova suficiente e sem contradição decisiva.

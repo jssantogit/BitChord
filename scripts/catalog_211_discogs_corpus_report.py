@@ -10,7 +10,9 @@ from urllib.parse import urlsplit
 
 COHORTS = ("type", "unlinked", "source_only")
 KINDS = {"Album", "EP", "Single", "Unknown"}
-MATCH = {"verified", "ambiguous", "candidate", "no_link", "unavailable", "invalid"}
+# A real rejected same-edition comparison is CONFLICT, not merely a candidate.
+# It must remain reviewable without raising "verified" precision counts.
+MATCH = {"verified", "ambiguous", "candidate", "conflict", "no_link", "unavailable", "invalid"}
 SOURCES = {"artist", "label", "release_notes", "discogs", "musicbrainz"}
 MBID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 WORKFLOW_URL = re.compile(r"https://github\.com/jssantogit/BitChord/actions/runs/[1-9][0-9]*")
