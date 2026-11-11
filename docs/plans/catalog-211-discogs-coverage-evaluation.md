@@ -264,3 +264,42 @@ Há limites independentes: máximo 8 novas entradas (2 por artista),
 16 GETs Discogs para Release/Master, até 16 buscas barcode MB e no máximo
 8 buscas por título MB. Nenhum token ou APK. Este segundo passe é
 apenas um auxílio à seleção de C, nunca valida edição ou tipo editorial.
+
+## Grupo C — segunda sondagem real e equivalência bilíngue segura (11/11/2026)
+
+A [sondagem #43008963680](https://github.com/jssantogit/BitChord/actions/runs/43008963680)
+concluiu SUCCESS e executou oito GETs Discogs + três consultas MusicBrainz
+no segundo passe, sem novos pedidos do índice de artistas.
+Foram observadas cinco entradas adicionais:
+
+- ENHYPEN / *Romance: Untold -Daydream-* (Discogs Release 32437206):
+  barcode + Artist MBID encontraram o MusicBrainz
+  [Release 4c42b226](https://musicbrainz.org/release/4c42b226-24c8-4481-91ce-744ae59eaa5b);
+  é um registro MB existente, mas não prova prensagem idêntica.
+- TXT / *7TH YEAR* (Discogs Release 37110012): já pré-selecionado no
+  caso B-05, corretamente excluído dos novos candidatos C.
+- Stray Kids / *Come Play* (Discogs Release 32612256):
+  múltiplos créditos, inelegível para artista único.
+- TXT / *誓い = Chikai* (Discogs Release 31393100):
+  a busca automatizada por título ficou indisponível; no entanto o
+  MusicBrainz publica [誓い (CHIKAI)](https://musicbrainz.org/release/f34d9628-3757-4a1a-a7a0-241567df737e)
+  com grupo do artista, portanto é falso candidato de ausência no nível
+  ReleaseGroup (sem declarar equivalência exata de prensagem).
+- Stray Kids / *Social Path / Superbowl (Japanese Ver.)* (Discogs Release
+  38526540): a busca literal não encontrou grupo, mas o MusicBrainz lista
+  [Social Path / Super Bowl -Japanese ver.-](https://musicbrainz.org/artist/142b343d-bf5a-428c-a64f-6d1a7566bbe9)
+  como EP existente e edições na lista do artista. A grafia é diferente;
+  manter restrição: não autorizar matching de prensagem nem supor ausência.
+
+Para bloquear falsos candidatos C sem adivinhar traduções, o filtro
+MusicBrainz-known do scanner e a política Kotlin do app passam a reconhecer
+somente o **mesmo par literal nativo + alias latino** exposto em duas formas
+explícitas de fonte, `誓い (CHIKAI)` e `誓い = Chikai`. Remixes, versões com
+termos adicionais, aliases inventados e títulos sem escrita nativa continuam
+distintos. Esta regra atua apenas no filtro *source-only* e não valida
+Release→Discogs. A equivalência genérica entre `Superbowl` e `Super Bowl`
+não é habilitada.
+
+As duas fontes oficiais não comprovam nenhuma recuperação real de C;
+corpus continua 0/30. Nenhuma modificação de tipagem ou promoção
+`Verified` foi realizada.

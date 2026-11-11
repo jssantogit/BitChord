@@ -75,8 +75,40 @@ def bilingual_aliases(value: str) -> set[str]:
     return {alias}
 
 
+def source_asserted_bilingual_pair(value: str) -> tuple[str, str] | None:
+    """Accept the same native title + Latin alias in (Alias) and = Alias forms.
+
+    This is NOT translation inference: require exactly the same two literal
+    strings and an East Asian native title; disallow remix/version descriptors.
+    """
+    parsed = re.fullmatch(
+        r"(.+?)\s+(?:\(([a-z][a-z0-9 &'’!.\-]{2,65})\)|=\s*([a-z][a-z0-9 &'’!.\-]{2,65}))",
+        value,
+    )
+    if parsed is None:
+        return None
+    native = parsed.group(1).strip()
+    alias = (parsed.group(2) or parsed.group(3) or "").strip()
+    if not any(
+        "\uac00" <= ch <= "\ud7a3" or
+        "\u3040" <= ch <= "\u30ff" or
+        "\u4e00" <= ch <= "\u9fff"
+        for ch in native
+    ):
+        return None
+    if sum("a" <= ch <= "z" for ch in alias) < 3 or alias in {
+        "live", "remix", "demo", "acoustic", "instrumental",
+        "version", "english", "japanese", "korean", "explicit", "clean",
+    }:
+        return None
+    return native, alias
+
+
 def known_group_title(title: str, artist: str, known: set[str]) -> bool:
     value = comparable_title(title, artist)
+    pair = source_asserted_bilingual_pair(value)
+    if pair is not None and any(source_asserted_bilingual_pair(group) == pair for group in known):
+        return True
     if value in known or any(value in bilingual_aliases(group) for group in known):
         return True
     signature = lexical_signature(value)

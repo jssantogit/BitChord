@@ -173,6 +173,24 @@ internal object DiscogsShadowCatalog {
         "version", "english", "japanese", "korean", "explicit", "clean",
     )
 
+    // Only compare the SAME explicit native title and Latin alias, where MB
+    // writes "誓い (CHIKAI)" and Discogs writes "誓い = Chikai". No guesses.
+    private val explicitBilingualPair = Regex(
+        """^(.+?)\s+(?:\(([a-z][a-z0-9 &'’!.\-]{2,65})\)|=\s*([a-z][a-z0-9 &'’!.\-]{2,65}))$""",
+    )
+
+    private fun bilingualPair(title: String): Pair<String, String>? {
+        val found = explicitBilingualPair.matchEntire(title) ?: return null
+        val native = found.groupValues[1].trim()
+        val alias = (found.groupValues[2].ifBlank { found.groupValues[3] }).trim()
+        if (native.none {
+                it in '가'..'힣' || it in 'ぁ'..'ヿ' || it in '一'..'鿿'
+            } || alias.count { it in 'a'..'z' } < 3 ||
+            alias in misleadingAlias
+        ) return null
+        return native to alias
+    }
+
     private fun bilingualAliases(title: String): Set<String> {
         val parsed = explicitBilingualAlias.matchEntire(title) ?: return emptySet()
         val original = parsed.groupValues[1]
@@ -220,9 +238,13 @@ internal object DiscogsShadowCatalog {
         known: Set<String>,
         knownSignatures: Set<List<String>>,
         explicitAliases: Set<String>,
+        explicitPairs: Set<Pair<String, String>>,
     ): Boolean {
         val normalized = comparisonTitle(title, creditedArtist)
-        if (normalized in known || normalized in explicitAliases) return true
+        val pair = bilingualPair(normalized)
+        if (normalized in known || normalized in explicitAliases ||
+            (pair != null && pair in explicitPairs)
+        ) return true
         // Require at least three whole Unicode word tokens. "Love Me" and
         // "Love-Me" are too short to merge; subtitles/remixes add new tokens.
         val signature = lexicalSignature(normalized)
@@ -262,7 +284,10 @@ internal object DiscogsShadowCatalog {
         val signatures = known.mapTo(HashSet()) { lexicalSignature(it) }
             .filterTo(HashSet()) { it.size >= 3 }
         val aliases = known.flatMapTo(HashSet()) { bilingualAliases(it) }
-        return { title -> isKnownGroupTitle(title, expectedArtist, known, signatures, aliases) }
+        val pairs = known.mapNotNullTo(HashSet()) { bilingualPair(it) }
+        return { title ->
+            isKnownGroupTitle(title, expectedArtist, known, signatures, aliases, pairs)
+        }
     }
 
     fun select(
