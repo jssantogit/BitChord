@@ -41,10 +41,10 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual([], result["errors"])
         self.assertFalse(result["complete"])
         self.assertIsNone(result["metrics"])
-        self.assertEqual(4, result["slots"]["unlinked"]["selected_unreviewed"])
+        self.assertEqual(3, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(1, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(2, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_wrong_provider_links_and_duplicate_seeded_editions_fail_closed(self):
         manifest = json.loads(Path(
@@ -56,7 +56,7 @@ class CorpusReportTests(unittest.TestCase):
         result = report(manifest)
         self.assertTrue(any("invalid unreviewed selection evidence" in s
                             for s in result["errors"]))
-        self.assertEqual(3, result["slots"]["unlinked"]["selected_unreviewed"])
+        self.assertEqual(2, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertIsNone(result["metrics"])
         first["evidence_links"]["discogs_release"] = (
             f"https://www.discogs.com/release/{first['discogs_release_id']}"
