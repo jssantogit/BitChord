@@ -25,6 +25,8 @@ internal data class CanonicalEditionEvidence(
     val editionFormats: List<String> = emptyList(),
     /** Direct label/catalog pair from this Release, not parsed display text. */
     val editionLabelCatalogPairs: List<Pair<String, String>> = emptyList(),
+    /** False when MB label-info is malformed or exceeds the supported ceiling. */
+    val editionLabelCatalogComplete: Boolean = true,
 )
 
 /** A Discogs link is an identity *anchor*. Matching fields are separate evidence. */
@@ -129,6 +131,12 @@ internal object DiscogsEditionMatcher {
         // unknown labels or placeholder numbers must not invent a conflict.
         // Treat a contradictory pressing as Candidate even for a typed direct
         // MB Release link; never rewrite either provider or claim uniqueness.
+        // Never silently trim the source before deciding that an exact
+        // edition is unique. Discogs' parser accepts at most 64 label rows.
+        if (!canonical.editionLabelCatalogComplete ||
+            canonical.editionLabelCatalogPairs.size > 64 ||
+            record.labels.size > 64
+        ) return DiscogsEditionVerdict.CANDIDATE
         if (hasKnownLabelCatalogMismatch(
                 canonical.editionLabelCatalogPairs, record.labels,
             )) return DiscogsEditionVerdict.CANDIDATE
@@ -206,7 +214,7 @@ internal object DiscogsEditionMatcher {
             "no label", "tba", "no catalog number", "[none]",
         )
         fun exactPairs(source: List<Pair<String, String>>): Map<String, Set<String>> {
-            return source.take(16).mapNotNull { (label, number) ->
+            return source.mapNotNull { (label, number) ->
                 val name = normalized(label).takeIf {
                     it.isNotEmpty() && it.length <= 180 &&
                         it !in placeholders && !it.startsWith("not on label (")
