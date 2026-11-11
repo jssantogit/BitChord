@@ -172,6 +172,52 @@ class DiscogsCanonicalEditionCoordinatorTest {
         assertEquals(2, discogsCalls) // rollback clears ONLY Discogs' in-memory evidence
     }
 
+    @Test fun releaseGraphDigitalFormatBlocksPhysicalDiscogsEditionEvenWithSameTracks() = runBlocking {
+        // The MusicBrainz release JSON already provides medium.format,
+        // but the Discogs coordinator previously dropped editionFormats.
+        // A digital issue must never verify a separately issued CD merely
+        // because the artist, release link, barcode and tracks all match.
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = when (parameters["inc"]) {
+                "recordings+artist-credits+release-groups+labels" ->
+                    musicBrainzJson().replace(
+                        "\"position\":1,\"track-count\":2",
+                        "\"position\":1,\"format\":\"Digital Media\",\"track-count\":2",
+                    )
+                "url-rels" -> """{"id":"$mbid","relations":[{
+                    "type":"discogs",
+                    "type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                    "url":{"resource":"https://www.discogs.com/release/12345"}
+                }]}"""
+                else -> error("Unexpected MusicBrainz request: $parameters")
+            }
+        })
+        val client = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/12345", path)
+                return DiscogsHttpResponse(200, """{
+                  "id":12345,"title":"ILLIT - SUPER REAL ME",
+                  "artists":[{"name":"ILLIT"}],
+                  "formats":[{"name":"CD","descriptions":["EP"]}],
+                  "identifiers":[{"type":"Barcode","value":"036000291452"}],
+                  "labels":[{"name":"BELIFT LAB","catno":"BEL-001"}],
+                  "tracklist":[{"position":"1","title":"My World"},
+                               {"position":"2","title":"Magnetic"}]
+                }""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0))
+        val result = DiscogsCanonicalEditionCoordinator(
+            graph = MusicBrainzCatalogGraph(mb),
+            editions = DiscogsEditionRepository(
+                links = DiscogsMusicBrainzLinks(mb), discogs = client, enabled = true,
+            ),
+            enabled = true,
+        ).observeRelease(mbid)
+        assertEquals(DiscogsEditionEnrichment.Conflict, result)
+    }
+
     @Test fun completeEditionCorroboratesDiscogsOnlyUsingRealMusicBrainzTracklist() = runBlocking {
         var calls = 0
         val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {

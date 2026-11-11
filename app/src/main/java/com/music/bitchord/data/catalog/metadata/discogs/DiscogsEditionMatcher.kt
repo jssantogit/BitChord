@@ -21,6 +21,8 @@ internal data class CanonicalEditionEvidence(
     val creditedArtistNames: List<String> = emptyList(),
     /** Parent grouping identity, never interchangeable with this edition MBID. */
     val musicBrainzReleaseGroupId: String? = null,
+    /** Exact-release medium formats already parsed from MusicBrainz media. */
+    val editionFormats: List<String> = emptyList(),
 )
 
 /** A Discogs link is an identity *anchor*. Matching fields are separate evidence. */
@@ -100,6 +102,24 @@ internal object DiscogsEditionMatcher {
         if (mbCountry != null && discogsCountry != null &&
             mbCountry != discogsCountry
         ) return DiscogsEditionVerdict.CONFLICT
+
+        // Track counts and even valid barcodes can be shared between a
+        // digital issue, CD, vinyl and a bundled mixed-format release.
+        // Compare only explicit, recognized media families on both sources.
+        // Unknown source formats cannot be used to invent a contradiction.
+        val mbMedia = canonical.editionFormats.mapNotNull(::mediaFamily).toSet()
+        val discogsMedia = record.formats.mapNotNull(::mediaFamily).toSet()
+        if (mbMedia.isNotEmpty() && discogsMedia.isNotEmpty()) {
+            if (mbMedia.intersect(discogsMedia).isEmpty()) {
+                return DiscogsEditionVerdict.CONFLICT
+            }
+            // The Discogs Release lists additional physical media absent
+            // from the exact MB edition (or vice versa). It may be related,
+            // but is not proved to be the same packaging/pressing.
+            if (mbMedia != discogsMedia) {
+                return DiscogsEditionVerdict.CANDIDATE
+            }
+        }
 
         // Unofficial *edition* observations are not claims about the entire RG.
         // Never validate an officially classified MB edition against one.
@@ -265,6 +285,26 @@ internal object DiscogsEditionMatcher {
             country in recognizedIsoCountries -> country
             country in countryAliases -> countryAliases[country]
             else -> isoCountryByEnglishName[country]
+        }
+    }
+
+    /** Explicit medium evidence, NOT generic Album/EP/Single type descriptors. */
+    private fun mediaFamily(raw: String): String? {
+        val token = normalized(raw)
+        return when {
+            token in setOf("digital media", "file", "files", "download",
+                "digital download") -> "digital"
+            token == "cd" -> "cd"
+            token in setOf("cdr", "cd-r") -> "cdr"
+            token == "vinyl" || token == "lp" ||
+                Regex("""^(7|10|12)["”]\s*vinyl$""").matches(token) -> "vinyl"
+            token == "cassette" -> "cassette"
+            token == "sacd" -> "sacd"
+            token == "minidisc" -> "minidisc"
+            token in setOf("dvd", "dvd-video", "dvd-r") -> "dvd"
+            token in setOf("blu-ray", "blu-ray audio") -> "blu-ray"
+            token == "vhs" -> "vhs"
+            else -> null
         }
     }
 

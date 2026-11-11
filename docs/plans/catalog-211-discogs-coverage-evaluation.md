@@ -634,3 +634,52 @@ O teste `DiscogsEditorialCatalogPolicyTest.contradictorySnapshotsForSameUnlinked
 verifica ambas as ordens, repetição idêntica e outra edição
 independente. O gate JUnit específico do Discogs executa o
 regressionamento; Android CI geral permanece um gate à parte.
+
+## Proteção contra edição Digital Media ↔ CD/Vinyl por meio físico (11/11/2026)
+
+A sondagem B-01 de ENHYPEN / MEMORABILIA ilustra o problema
+de confundir **lançamento/grupo de músicas** com **formato físico
+da edição**: o MB Release `d0c0cfe6` representa Digital Media,
+enquanto a edição Discogs `31008160` representa CD sul-coreano.
+Um título, código de barras e ordem de faixas similares não bastam
+para dizer que são a mesma edição.
+
+Foi localizada uma lacuna de implementação: o grafo existente
+`MusicBrainzCatalogGraph.lookupRelease` já fornece
+`MusicBrainzCatalogReleaseDetail.editionFormats` a partir de
+`media[].format`, mas `DiscogsCanonicalEditionCoordinator` não
+repassava essa lista ao `CanonicalEditionEvidence`. Portanto o
+`DiscogsEditionMatcher` não conseguia usar o formato na prova.
+
+A correção transporta a lista de formatos de **cada Release MB**
+para o matcher e compara apenas famílias **explicitamente
+reconhecidas** nos dois provedores: `Digital Media` ↔ `File`,
+CD, CDr, Vinyl (inclusive 12″), Cassette, SACD, MiniDisc, DVD,
+Blu-ray e VHS. `Album`/`EP`/`Single` são descrições editoriais,
+**não formatos físicos** e nunca entram nessa comparação.
+
+A decisão permanece conservadora:
+- Famílias reconhecidas e **disjuntas** ⇒ `CONFLICT` (por
+  exemplo Digital Media vs CD, ou CD vs Vinyl).
+- Famílias com interseção, mas **conjuntos distintos** ⇒
+  `CANDIDATE`, jamais `VERIFIED` (por exemplo File versus
+  publicação File+CD; uma mídia adicional poderia indicar
+  outra prensagem ou pacote).
+- Conjuntos iguais ou formato ausente/desconhecido em uma
+  das fontes ⇒ não inventar conflito; continuam valendo os
+  requisitos anteriores de Release tipado, artista,
+  barcode, sequência de faixas, ano etc.
+
+A verificação de formato é igualmente aplicada ao caminho de
+vínculo direto e ao de descoberta sem vínculo. Essa proteção
+não altera as regras de tradução de títulos, não adiciona GETs,
+não muda MusicBrainz ReleaseGroup/Track/Recording MBIDs,
+não escreve bibliotecas pessoais e não gera áudio ou capas.
+
+Regressões `DiscogsEditionMatcherTest` cobrem mídia digital,
+CD, vinil, mídia mista e formatos desconhecidos; a regressão
+`DiscogsCanonicalEditionCoordinatorTest.releaseGraphDigitalFormatBlocksPhysicalDiscogsEditionEvenWithSameTracks`
+cobre o caminho real JSON MB→edição Discogs→veredito.
+Isso é **correção de integridade**, não prova de lançamento
+Discogs-only recuperado nem aumento do corpus A/B/C, que
+permanece 5/30 revisados sem ganhos comprovados.
