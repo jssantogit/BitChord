@@ -1657,12 +1657,9 @@ internal fun SmartPlaylistV2WizardUi(
                         onClick = { page = WizardStep.RULES },
                     )
                     WizardStep.EDITOR -> {
-                        val presence = draft.operator == SmartPlaylistRuleOperator.IS_PRESENT ||
-                            draft.operator == SmartPlaylistRuleOperator.IS_MISSING
-                        val valueOk = presence || when {
-                            draft.field.isTextField() -> !draft.textValue.isNullOrBlank()
-                            else -> draft.value?.isFinite() == true
-                        }
+                        // Do not enable Add/Save for rules that the real V2
+                        // query validator would reject at the review stage.
+                        val valueOk = smartConditionDraftValid(draft)
                         PlaylistWizardPrimaryAction(
                             label = if (editingPath != null)
                                 "Salvar condição" else "Adicionar condição",
