@@ -1312,7 +1312,13 @@ internal fun SmartPlaylistV2WizardUi(
                     WizardStep.FIELDS -> {
                         item {
                             PlaylistWizardSearchEntry(
-                                categorySearch, { categorySearch = it }, "Buscar nesta categoria")
+                                categorySearch, {
+                                    categorySearch = it
+                                    // The search entry says "nesta categoria": it must
+                                    // search across all sub-tabs, not just the last tab
+                                    // selected while browsing the catalog.
+                                    if (it.isNotBlank()) selectedFieldTab = "all"
+                                }, "Buscar nesta categoria")
                         }
                         val tabs = smartConditionFieldTabs(selectedCategory)
                         if (tabs.isNotEmpty()) item {
