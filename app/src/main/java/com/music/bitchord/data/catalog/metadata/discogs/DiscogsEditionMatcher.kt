@@ -23,6 +23,8 @@ internal data class CanonicalEditionEvidence(
     val musicBrainzReleaseGroupId: String? = null,
     /** Exact-release medium formats already parsed from MusicBrainz media. */
     val editionFormats: List<String> = emptyList(),
+    /** Direct label/catalog pair from this Release, not parsed display text. */
+    val editionLabelCatalogPairs: List<Pair<String, String>> = emptyList(),
 )
 
 /** A Discogs link is an identity *anchor*. Matching fields are separate evidence. */
@@ -121,6 +123,16 @@ internal object DiscogsEditionMatcher {
             }
         }
 
+        // Two editions can have identical barcode, artist and tracklist
+        // while their own label declares different catalog/packaging IDs.
+        // Only compare the SAME literal label after whitespace/case folding;
+        // unknown labels or placeholder numbers must not invent a conflict.
+        // Treat a contradictory pressing as Candidate even for a typed direct
+        // MB Release link; never rewrite either provider or claim uniqueness.
+        if (hasKnownLabelCatalogMismatch(
+                canonical.editionLabelCatalogPairs, record.labels,
+            )) return DiscogsEditionVerdict.CANDIDATE
+
         // Unofficial *edition* observations are not claims about the entire RG.
         // Never validate an officially classified MB edition against one.
         if (record.unofficial) {
@@ -182,6 +194,34 @@ internal object DiscogsEditionMatcher {
             DiscogsEditionVerdict.VERIFIED
         } else {
             DiscogsEditionVerdict.CANDIDATE
+        }
+    }
+
+    private fun hasKnownLabelCatalogMismatch(
+        musicBrainz: List<Pair<String, String>>,
+        discogs: List<Pair<String, String>>,
+    ): Boolean {
+        val placeholders = setOf(
+            "none", "n/a", "na", "unknown", "?", "-", "not on label",
+            "no label", "tba", "no catalog number", "[none]",
+        )
+        fun exactPairs(source: List<Pair<String, String>>): Map<String, Set<String>> {
+            return source.take(16).mapNotNull { (label, number) ->
+                val name = normalized(label).takeIf {
+                    it.isNotEmpty() && it.length <= 180 &&
+                        it !in placeholders && !it.startsWith("not on label (")
+                } ?: return@mapNotNull null
+                val catalog = normalized(number).takeIf {
+                    it.isNotEmpty() && it.length <= 100 && it !in placeholders
+                } ?: return@mapNotNull null
+                name to catalog
+            }.groupBy({ it.first }, { it.second })
+                .mapValues { (_, numbers) -> numbers.toSet() }
+        }
+        val known = exactPairs(musicBrainz)
+        val external = exactPairs(discogs)
+        return known.keys.intersect(external.keys).any { name ->
+            known.getValue(name).intersect(external.getValue(name)).isEmpty()
         }
     }
 
