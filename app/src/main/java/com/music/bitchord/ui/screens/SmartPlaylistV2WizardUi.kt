@@ -1274,11 +1274,12 @@ internal fun SmartPlaylistV2WizardUi(
                         }
                         val matches = smartConditionSearch(search, selectedCategory)
                         if (matches.isNotEmpty()) item {
-                            PlaylistWizardNavigationList(matches.map { field ->
+                            PlaylistWizardFieldList(matches.map { field ->
                                 PlaylistWizardNavOption(
                                     title = smartConditionLabel(field),
                                     description = if (smartConditionDescription(field).startsWith(
                                         "A condição usa somente")) "" else smartConditionDescription(field),
+                                    icon = iconForConditionCategory(selectedCategory.id),
                                     onClick = { openField(field) },
                                 )
                             })

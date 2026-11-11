@@ -359,6 +359,63 @@ private fun PlaylistWizardNavigationSubtitle(description: String) {
     )
 }
 
+/**
+ * Field-picker composition follows the search result list: no grouped card,
+ * category section headers, filter chips or trailing navigation chevrons.
+ * The field itself is the entire touch target. Colours and glyphs remain
+ * BitChord's, not the reference mock's blue assets.
+ */
+@Composable
+internal fun PlaylistWizardFieldList(options: List<PlaylistWizardNavOption>) {
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("playlist-field-flat-list"),
+    ) {
+        options.forEachIndexed { index, option ->
+            androidx.compose.material3.Surface(
+                onClick = option.onClick,
+                color = MaterialTheme.colorScheme.background,
+                modifier = Modifier.fillMaxWidth().testTag("playlist-field-row"),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 68.dp)
+                        .padding(vertical = 12.dp, horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Icon(
+                        imageVector = option.icon ?: PlaylistEditorIcons.Music,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Text(
+                            option.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        if (option.description.isNotBlank()) {
+                            PlaylistWizardNavigationSubtitle(option.description)
+                        }
+                    }
+                }
+            }
+            if (index < options.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 48.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant,
+                )
+            }
+        }
+    }
+}
+
 /** Native library/settings rows, not independent Material3 action cards. */
 @Composable
 internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>) {
