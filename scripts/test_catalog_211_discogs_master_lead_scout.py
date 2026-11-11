@@ -76,15 +76,15 @@ def fixtures(*, conflicting=False, large=False):
     return get
 
 class MasterLeadScoutTest(unittest.TestCase):
-    def test_real_seven_reviewed_b_groups_excluded_from_future_master_scout(self):
+    def test_real_ten_reviewed_b_cases_excluded_from_future_master_scout(self):
         source = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json")
                             .read_text(encoding="utf-8"))
         groups = known_b_groups(source)
-        self.assertEqual(7, len(groups))
+        self.assertEqual(9, len(groups))
         self.assertIn("849d8582-3422-4d61-bfbe-9b65f4bfdc06", groups)
         self.assertIn("fb426d76-525d-4b25-90d1-fa4d1b3140c9", groups)
         selected = source["cases"]
-        self.assertEqual(3, sum(item["id"].startswith("B-") and
+        self.assertEqual(0, sum(item["id"].startswith("B-") and
                                 item.get("reviewed") is False for item in selected))
         self.assertEqual(0, sum(item["id"].startswith("B-") and
                                 item.get("match_state") == "verified" for item in selected))
