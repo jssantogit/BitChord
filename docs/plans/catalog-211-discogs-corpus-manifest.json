@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: five independently source-reviewed non-verified B edition-pairs; five B slots and all 10 A/C slots remain unreviewed; three C source exclusions preliminary; no proven provider gains or complete metrics.",
+  "description": "Discogs #211: seven independently source-reviewed non-verified B edition-pairs; three B slots and all A/C slots remain unreviewed; three preliminary C source exclusions; no proven provider gains or complete coverage metrics.",
   "cases": [
     {
       "id": "A-01",
@@ -212,12 +212,65 @@
     {
       "id": "B-06",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": true,
+      "label": "ENHYPEN · BORDER : DAY ONE CD",
+      "musicbrainz_release_mbid": "6ca81526-ecfe-4bc9-be65-d5f20a23f084",
+      "musicbrainz_group_mbid": "849d8582-3422-4d61-bfbe-9b65f4bfdc06",
+      "discogs_release_id": 16620135,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "same reported UPC but 4/6 literal tracks and BELIFT LAB catalog L200001786 vs CMCD 11590; variant unresolved",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/6ca81526-ecfe-4bc9-be65-d5f20a23f084",
+        "discogs_release": "https://www.discogs.com/release/16620135",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43115086741",
+        "independent_editorial": "https://shop.weverse.io/en/shop/USD/artists/10/sales/2216",
+        "independent_label_discography": "https://beliftlab.com/artist/discography/ENHYPEN/1?lang=en"
+      },
+      "reviewed_at_utc": "2026-11-11T23:04:07Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "BELIFT LAB's official album discography identifies BORDER : DAY ONE as ENHYPEN's first mini album, with six tracks and DAWN/DUSK visual versions; the official Weverse shop also explicitly lists separate DAWN and DUSK CD package versions. The public 11 November cross-provider matrix found a MusicBrainz official CD Release 6ca81526 (in EP ReleaseGroup 849d8582) and Discogs CD Release 16620135 (Master 1887999) with matching reported barcode digits and year/country compatibility. However, only four of six track titles match literally; more importantly, although both assert the label BELIFT LAB, MusicBrainz reports catalog L200001786 while Discogs reports CMCD 11590. These numbers may reflect different identifiers or variants; no direct MB Release-to-Discogs Release relation was observed. The alternate Discogs CD 16620078 is another plausible competitor. Exact physical pressing is NOT VERIFIED, and same group or UPC does not identify one package. App UI was not checked; Unknown and false visible mean no demonstrated display gain, not a measured missing shelf."
     },
     {
       "id": "B-07",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": true,
+      "label": "LE SSERAFIM · FEARLESS CD",
+      "musicbrainz_release_mbid": "cf60fbce-4c79-45d2-9249-293b17a8f8fc",
+      "musicbrainz_group_mbid": "fb426d76-525d-4b25-90d1-fa4d1b3140c9",
+      "discogs_release_id": 23314901,
+      "direct_release_relation": "no_direct_release_link",
+      "selection_note": "5/5 literal tracks and reported UPC coincide, but source country/year disagree and Discogs ID is directly linked to another MB Release",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/cf60fbce-4c79-45d2-9249-293b17a8f8fc",
+        "discogs_release": "https://www.discogs.com/release/23314901",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43115670023",
+        "independent_editorial": "https://weverse.io/lesserafim/notice/2469"
+      },
+      "reviewed_at_utc": "2026-11-11T23:04:07Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "conflict",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "SOURCE MUSIC's official Weverse pre-order announcement confirms FEARLESS as LE SSERAFIM's first mini album, released 2 May 2022, with at least two separate physical CD packages, Vol.1 and Vol.2. The complete public Master matrix (five Discogs versions against nine MusicBrainz Official editions in ReleaseGroup fb426d76) observed a MusicBrainz Release cf60fbce with no direct URL relation to Discogs Release 23314901; both had five literally matching ordered tracks and the same reported barcode digits. However, this pair disagrees on source country AND year, and the same Discogs ID 23314901 has an exact typed direct relation from the DIFFERENT MusicBrainz CD Release cd7fa327-4886-4774-845a-5672596113ca. That independently anchored identity cannot be overwritten by content similarity. The reviewed cross-provider pair is a CONFLICT for exact pressing verification, not a newly recovered edition or new MusicBrainz group. UI presentation and local playback were not measured; app_type Unknown and visible false do not claim an observed rendering defect."
     },
     {
       "id": "B-08",
