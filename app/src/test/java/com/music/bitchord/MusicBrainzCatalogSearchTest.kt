@@ -400,4 +400,40 @@ class MusicBrainzCatalogSearchTest {
         assertTrue(!check(good.copy(hasOfficialAudioRelease = false)))
     }
 
+
+    @Test fun officialOtherAndBroadcastReleasesMustNotEnterStreamingEditionTiles() = runBlocking {
+        val album = "11111111-1111-4111-8111-111111111111"
+        val video = "22222222-2222-4222-8222-222222222222"
+        val broadcast = "33333333-3333-4333-8333-333333333333"
+        val unknown = "44444444-4444-4444-8444-444444444444"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"count":4,"offset":0,"releases":[
+                    {"id":"$album","title":"Official studio album","status":"Official",
+                     "release-group":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                                      "primary-type":"Album"}},
+                    {"id":"$video","title":"Official visual edition","status":"Official",
+                     "release-group":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                                      "primary-type":"Other"}},
+                    {"id":"$broadcast","title":"Official radio edition","status":"Official",
+                     "release-group":{"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                                      "primary-type":"Broadcast"}},
+                    {"id":"$unknown","title":"Unclassified official release","status":"Official",
+                     "release-group":{"id":"dddddddd-dddd-4ddd-8ddd-dddddddddddd"}}
+                ]}"""
+            },
+        ))
+        val page = (search.searchReleases("official") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+            >).page
+        // Keep searchable source records; only streaming-style presentation
+        // should reject the explicit non-audio ReleaseGroup types.
+        assertEquals(4, page.items.size)
+        assertEquals(listOf(album, unknown), page.items.filter {
+            com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease(it)
+        }.map { it.musicBrainzId })
+    }
 }
