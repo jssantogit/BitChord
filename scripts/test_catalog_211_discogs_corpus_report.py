@@ -44,7 +44,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(10, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(11, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
@@ -115,6 +115,26 @@ class CorpusReportTests(unittest.TestCase):
             self.assertIn("independent_editorial", item["evidence_links"])
             self.assertFalse(item["match_correct"])
             self.assertFalse(item["absent_in_musicbrainz"])
+
+    def test_c04_stray_kids_slash_name_is_known_musicbrainz_ep_not_recovered(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        c04 = next(item for item in manifest["cases"] if item["id"] == "C-04")
+        self.assertTrue(c04["reviewed"])
+        self.assertEqual(38526540, c04["discogs_release_id"])
+        self.assertEqual("e248dce6-bef8-4d1f-a6d8-164de112151f",
+                         c04["musicbrainz_group_mbid"])
+        self.assertEqual("https://www.sonymusic.co.jp/artist/StrayKids/info/554372",
+                         c04["evidence_links"]["independent_editorial"])
+        self.assertFalse(c04["absent_in_musicbrainz"])
+        self.assertFalse(c04["visible"])
+        self.assertFalse(c04["match_correct"])
+        self.assertEqual("candidate", c04["match_state"])
+        result = report(manifest)
+        self.assertEqual([], result["errors"])
+        self.assertEqual(1, result["slots"]["source_only"]["reviewed"])
+        self.assertIsNone(result["metrics"])
 
     def test_missing_cases_cannot_invent_coverage(self):
         result = report({"schema_version": 1, "cases": []})
