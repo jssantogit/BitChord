@@ -76,7 +76,7 @@ class CanonicalRecordingFeedbackControlsTest {
             .getUnclippedBoundsInRoot()
         val saveBounds = compose.onNodeWithTag("rating-editor-save-action")
             .getUnclippedBoundsInRoot()
-        assertEquals(cancelBounds.width, saveBounds.width)
+        assertEquals(cancelBounds.right - cancelBounds.left, saveBounds.right - saveBounds.left)
     }
 
     @Test fun ratingSheetBackgroundFollowsSolidPlayerThemeWithoutFrosting() {
