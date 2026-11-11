@@ -255,6 +255,52 @@ class CanonicalArtistReleaseSectionsTest {
     }
 
 
+    @Test fun duplicateLocalTitlesCannotBothBorrowOneMusicBrainzGroupClassification() {
+        val local = listOf(
+            ReleaseEntity("edition-one", "Plot Twist", "AtHeart", null),
+            ReleaseEntity("edition-two", "  plot   twist  ", "AtHeart", null),
+            ReleaseEntity("unique-single", "Say It", "AtHeart", null),
+        )
+        val artists = listOf(MusicBrainzArtistHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "AtHeart", null, "KR",
+        ))
+        val groups = listOf(
+            MusicBrainzReleaseGroupHit(
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "Plot Twist", "Album", "2025-08-13", "AtHeart",
+            ),
+            MusicBrainzReleaseGroupHit(
+                "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "Say It", "Single", "2026-06-25", "AtHeart",
+            ),
+        )
+        val proof = canonicalLocalArtistExactReleaseDateEvidence(
+            "AtHeart", local, artists, groups,
+        )
+        // A shared title cannot prove which of two local editions owns the
+        // online group; never manufacture two Album/RecentRelease claims.
+        assertEquals(setOf("unique-single"), proof.keys)
+        assertEquals("Single", proof["unique-single"]?.primaryType)
+        assertEquals("2026-06-25", proof["unique-single"]?.firstReleaseDate)
+    }
+
+    @Test fun diskProofLookupRejectsWhitespaceEquivalentDuplicateTitles() {
+        val local = listOf(
+            ReleaseEntity("first", "Plot Twist", "AtHeart", null),
+            ReleaseEntity("second", "  plot   twist  ", "AtHeart", null),
+        )
+        // Both strings hash to the exact same canonical cache key. This
+        // must NOT allow one previously dated group to populate both IDs.
+        val key = canonicalRecentArtistProofCacheKey("AtHeart", "Plot Twist")
+        assertEquals(key, canonicalRecentArtistProofCacheKey(
+            "AtHeart", "  plot   twist  ",
+        ))
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalCachedRecentArtistProofs(
+                "AtHeart", local, mapOf(key to "Album|2025-08-13")::get,
+            ))
+    }
+
     @Test fun verifiedRecentLibraryReleaseSurvivesRestartAndChangedLocalIdsWithoutInternet() {
         val online = ReleaseEntity("old-scan-id", "Say It", "AtHeart", null)
         val offline = online.copy(id = "new-scan-id")
