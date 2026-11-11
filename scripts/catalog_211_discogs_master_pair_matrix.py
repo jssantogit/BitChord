@@ -116,6 +116,9 @@ def inspect(seed: dict, get) -> dict:
         if master["main_release"] not in ids:
             result["status"] = "source_identity_conflict"
             return result
+        group_type = group.get("primary-type")
+        result["musicbrainz_group_primary_type"] = (
+            group_type if group_type in ("Album", "EP", "Single") else None)
         result["discogs_release_ids"] = ids
         rows, state = release_browse(
             _mb_once_retry_503(release_index_url(rgid), get), rgid, aid)
@@ -187,6 +190,24 @@ def inspect(seed: dict, get) -> dict:
             related = release_relations(mb)
             for discogs in discogs_details:
                 comparison = compare_edition(mb, discogs)
+                label_catalog = label_catalog_evidence(mb, discogs)
+                source_type_disagreement = (
+                    result["musicbrainz_group_primary_type"] is not None and
+                    comparison["discogs_explicit_type"] in ("Album", "EP", "Single") and
+                    result["musicbrainz_group_primary_type"] !=
+                        comparison["discogs_explicit_type"])
+                # This only proposes a human reviewer lead. Direct identity
+                # and nonconflicting independent edition facts are required
+                # before a Discogs physical-format label can even be compared
+                # against the MusicBrainz ReleaseGroup primary type.
+                a_type_lead = (
+                    source_type_disagreement and
+                    related is not None and discogs["id"] in related and
+                    all(comparison.get(field) is True for field in (
+                        "artist_matches", "title_matches", "tracklist_complete",
+                        "tracklist_matches", "year_matches",
+                        "country_compatible", "barcode_compatible")) and
+                    not label_catalog["conflicting_same_label_catalog_numbers"])
                 result["pairs"].append({
                     "musicbrainz_release_mbid": mb["id"],
                     "discogs_release_id": discogs["id"],
@@ -199,7 +220,9 @@ def inspect(seed: dict, get) -> dict:
                     "discogs_formats": [x.get("name") for x in discogs["formats"]
                                        if isinstance(x, dict) and isinstance(x.get("name"), str)][:12],
                     "comparison": comparison,
-                    "label_catalog": label_catalog_evidence(mb, discogs),
+                    "label_catalog": label_catalog,
+                    "source_type_disagreement": bool(source_type_disagreement),
+                    "a_type_reviewer_lead_not_adjudicated": bool(a_type_lead),
                     "competing_direct_release_owner_mbids": sorted(
                         owners.get(discogs["id"], set()) - {mb["id"]}),
                     "verified_discogs_edition": False,
@@ -258,6 +281,14 @@ def main():
                      "discogs_release_count": len(x["discogs_release_ids"]),
                      "raw_pairs": len(x["pairs"]),
                      "unavailable_source_id": x.get("unavailable_source_id"),
+                     "group_primary_type": x.get("musicbrainz_group_primary_type"),
+                     "a_type_reviewer_leads_not_adjudicated": [
+                         {"mb": p["musicbrainz_release_mbid"],
+                          "discogs": p["discogs_release_id"],
+                          "discogs_type": p["comparison"]["discogs_explicit_type"]}
+                         for p in x["pairs"]
+                         if p["a_type_reviewer_lead_not_adjudicated"]
+                     ],
                      "label_catalog_conflicting_pairs": [
                          {"mb": p["musicbrainz_release_mbid"],
                           "discogs": p["discogs_release_id"],
