@@ -44,7 +44,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(7, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(10, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
@@ -71,18 +71,19 @@ class CorpusReportTests(unittest.TestCase):
                             for s in result["errors"]))
         self.assertIsNone(result["metrics"])
 
-    def test_seven_b_controls_are_source_reviewed_without_verified_editions(self):
+    def test_all_ten_b_controls_are_source_reviewed_without_verified_editions(self):
         manifest = json.loads(Path(
             "docs/plans/catalog-211-discogs-corpus-manifest.json"
         ).read_text(encoding="utf-8"))
         b_cases = [x for x in manifest["cases"] if x["cohort"] == "unlinked"
                    and x.get("discogs_release_id")]
-        self.assertEqual(7, len(b_cases))
+        self.assertEqual(10, len(b_cases))
         self.assertTrue(all(x["reviewed"] for x in b_cases))
         self.assertEqual(
             {"B-01": "conflict", "B-02": "candidate", "B-03": "candidate",
              "B-04": "candidate", "B-05": "conflict",
-             "B-06": "candidate", "B-07": "conflict"},
+             "B-06": "candidate", "B-07": "conflict",
+             "B-08": "conflict", "B-09": "conflict", "B-10": "candidate"},
             {x["id"]: x["match_state"] for x in b_cases},
         )
         self.assertTrue(all(x["musicbrainz_type"] in {"EP", "Single"}
@@ -97,11 +98,14 @@ class CorpusReportTests(unittest.TestCase):
                             for x in b_cases))
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(7, result["slots"]["unlinked"]["reviewed"])
+        self.assertEqual(10, result["slots"]["unlinked"]["reviewed"])
         self.assertIsNone(result["metrics"])
         for case_id, mbid, discogs_id in (
             ("B-06", "6ca81526-ecfe-4bc9-be65-d5f20a23f084", 16620135),
             ("B-07", "cf60fbce-4c79-45d2-9249-293b17a8f8fc", 23314901),
+            ("B-08", "47106725-be2e-4af7-9d27-4610f4116e0b", 21255514),
+            ("B-09", "251ad807-4bf0-4810-a4f9-34673d6d2ff8", 25759165),
+            ("B-10", "b9290e0d-be3a-41d0-b145-88fe342aa5da", 25524349),
         ):
             item = next(x for x in b_cases if x["id"] == case_id)
             self.assertEqual(mbid, item["musicbrainz_release_mbid"])
