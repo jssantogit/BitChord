@@ -6,6 +6,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,6 +78,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.ceil
+import kotlin.math.roundToInt
+import com.music.bitchord.ui.components.CompactRatingIndicator
+import com.music.bitchord.ui.components.CompactRatingGeometry
+import com.music.bitchord.ui.components.CompactRatingStyle
+import com.music.bitchord.ui.components.LocalCompactRatingStyle
+import com.music.bitchord.ui.components.compactRatingColorStops
 
 /**
  * Both song actions and My Ratings use this *same* local rating dialog.
@@ -109,7 +117,7 @@ internal fun CanonicalRecordingFeedbackAction(onClick: () -> Unit) {
 }
 
 /** One icon identity across the expanded player, rating picker and action menus. */
-internal fun ratingActionIcon() = PlaylistEditorIcons.Ratings
+internal fun ratingActionIcon() = PlaylistEditorIcons.RatingPlain
 
 /** The player never guesses a provider-native ID or track title for a local rating. */
 private data class RatingTargetResolution(val pending: Boolean, val recordingId: String?)
@@ -194,7 +202,10 @@ internal fun CanonicalRecordingRatingDialog(recordingId: String, onDismiss: () -
                 denied = false
                 scope.launch {
                     val succeeded = try {
-                        withContext(Dispatchers.IO) { editor.set(recordingId, value) }
+                        withContext(Dispatchers.IO) {
+                            if (value == 0.0) editor.clear(recordingId)
+                            else editor.set(recordingId, value)
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
@@ -216,6 +227,16 @@ internal fun ratingSelectionPulseIndex(selected: Double, touched: Boolean, reduc
     if (!touched || reducedMotion || !selected.isFinite() || selected !in 1.0..5.0) null
     else ceil(selected).toInt() - 1
 
+/** Dragging outside the first star clears the whole local rating. */
+internal fun ratingSelectionFromDrag(positionX: Float, width: Float): Double {
+    if (!positionX.isFinite() || !width.isFinite() || width <= 0f) return 0.0
+    val halfSteps = (positionX.coerceIn(0f, width) / width * 10f).roundToInt()
+    return if (halfSteps == 0) 0.0 else (halfSteps / 2.0).coerceAtLeast(1.0)
+}
+
+internal fun lastRatedStarIndex(selected: Double): Int =
+    if (selected.isFinite() && selected in 1.0..5.0) ceil(selected).toInt() - 1 else -1
+
 /** Fixed solid background matching the player's light/dark base layer. */
 internal fun ratingSheetSolidColor(dark: Boolean): androidx.compose.ui.graphics.Color =
     if (dark) androidx.compose.ui.graphics.Color.Black
@@ -231,7 +252,7 @@ internal fun ratingDialogEntranceFrame(progress: Float, reducedMotion: Boolean):
  * Icon-based, locally editable 1–5 star modal. Each star has a left (half)
  * and right (whole) touch target; every increment is explicit and accessible.
  * Neither opening nor changing selection persists anything until Save.
- * Deliberately NO clear/reset rating action.
+ * Dragging left of the first star selects zero and removes a persisted rating.
  */
 @Composable
 internal fun CanonicalRecordingFeedbackPanel(
@@ -253,6 +274,10 @@ internal fun CanonicalRecordingFeedbackPanel(
     val selectedDescription = stringResource(Res.string.recording_feedback_stars_selected, selected.toString())
     val reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current
     val pulseIndex = ratingSelectionPulseIndex(selected, touched, reduceMotion)
+    val terminalStar = lastRatedStarIndex(selected)
+    val numericStars = LocalCompactRatingStyle.current == CompactRatingStyle.NUMERIC
+    val selectedStarTint = compactRatingColorStops(selected).firstOrNull()?.second
+        ?: MaterialTheme.colorScheme.primary
     // Dismissing an edited value must not silently throw it away. A late Room
     // emission cannot erase the pending selection, and saving stays modal.
     val original = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
@@ -322,7 +347,18 @@ internal fun CanonicalRecordingFeedbackPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("native-rating-editor-star-row")
-                        .semantics { contentDescription = selectedDescription },
+                        .semantics { contentDescription = selectedDescription }
+                        .pointerInput(saving) {
+                            detectDragGestures(onDrag = { change, _ ->
+                                if (!saving) {
+                                    change.consume()
+                                    touched = true
+                                    selected = ratingSelectionFromDrag(
+                                        change.position.x, size.width.toFloat(),
+                                    )
+                                }
+                            })
+                        },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -358,19 +394,32 @@ internal fun CanonicalRecordingFeedbackPanel(
                             // Five repeated platters looked like generic chips.
                             // A 48dp glyph viewport keeps the visible star
                             // near 28dp while maintaining generous touch slots.
-                            AppleRatingStarGlyph(
-                                fill = starFill,
-                                standalone = true,
-                                tint = if (starFill == com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY)
-                                    sheetForeground else sheetAccent,
-                                modifier = Modifier
-                                    .size(56.dp)
+                            Box(
+                                modifier = Modifier.size(56.dp)
                                     .testTag("rating-editor-star-$i-${starFill.name.lowercase()}")
                                     .graphicsLayer {
                                         scaleX = starPulse.value
                                         scaleY = starPulse.value
                                     },
-                            )
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (numericStars && i == terminalStar) {
+                                    CompactRatingIndicator(
+                                        value = selected,
+                                        geometry = CompactRatingGeometry.STANDALONE,
+                                        size = 56.dp,
+                                    )
+                                } else {
+                                    AppleRatingStarGlyph(
+                                        fill = starFill,
+                                        standalone = true,
+                                        tint = if (starFill ==
+                                            com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY)
+                                            sheetForeground else selectedStarTint,
+                                        modifier = Modifier.size(56.dp),
+                                    )
+                                }
+                            }
                             Row(Modifier.fillMaxSize()) {
                                 Box(
                                     modifier = Modifier.weight(1f).fillMaxHeight()
@@ -434,7 +483,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                 }
                 androidx.compose.material3.Button(
                     onClick = { onSave(selected) },
-                    enabled = selected in 1.0..5.0 && !saving,
+                    enabled = (selected in 1.0..5.0 || (selected == 0.0 && original != 0.0)) && !saving,
                     modifier = Modifier.weight(1f).height(52.dp)
                         .testTag("rating-editor-save-action"),
                     shape = RoundedCornerShape(26.dp),
@@ -449,7 +498,8 @@ internal fun CanonicalRecordingFeedbackPanel(
                 ) {
                     if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
                     else Text(
-                        stringResource(Res.string.recording_feedback_dialog_save),
+                        if (selected == 0.0) "Remover avaliação"
+                        else stringResource(Res.string.recording_feedback_dialog_save),
                         style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                     )
@@ -458,9 +508,7 @@ internal fun CanonicalRecordingFeedbackPanel(
         }
             }
         }
-    }
-
-    if (confirmDiscard) {
+        if (confirmDiscard) {
         ConfirmationAlert(
             hazeState = null,
             title = androidx.compose.ui.res.stringResource(R.string.editor_discard_title),
@@ -474,5 +522,6 @@ internal fun CanonicalRecordingFeedbackPanel(
             },
             onDismiss = { confirmDiscard = false },
         )
+        }
     }
 }
