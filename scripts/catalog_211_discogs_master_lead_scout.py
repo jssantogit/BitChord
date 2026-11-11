@@ -153,7 +153,8 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
                               if row["group_mbid"].lower() not in known_b_groups)
     # Duplicate RG IDs returned for two artists or Masters attached to
     # unrelated groups cannot supply a unique edition claim.
-    candidates = candidates[:100]
+    # A maximum of ten artist pages × 25 rows is already bounded at 250.
+    # Truncating source rows here can conceal an explicit competing Master.
     ranked = sorted(candidates, key=lambda item:
                     (item["artist"], item["group_title"].casefold(),
                      item["group_mbid"], item["master_id"]))
