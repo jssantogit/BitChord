@@ -56,20 +56,43 @@ internal fun sharedVerifiedReleaseId(
     return preferredReleaseId?.takeIf { it in common } ?: common.singleOrNull()
 }
 
-internal suspend fun verifiedPlayerAlbumReleaseId(context: Context, song: Song): String? =
+/** Release wins when unique; an exact shared ReleaseGroup is the only
+ * fallback. A broad reissue/compilation with different groups is inconclusive.
+ */
+internal fun sharedVerifiedReleaseGroupId(
+    recordingIds: List<String>,
+    groupRows: List<Pair<String, String>>,
+): String? {
+    if (recordingIds.isEmpty() || recordingIds.any(String::isBlank)) return null
+    val byRecording = groupRows.groupBy { it.first }
+    val common = recordingIds.distinct().map { id ->
+        byRecording[id].orEmpty().map { it.second }.filter(String::isNotBlank).toSet()
+    }.reduceOrNull { a, b -> a.intersect(b) }.orEmpty()
+    return common.singleOrNull()
+}
+
+internal suspend fun verifiedPlayerAlbumCatalogRoute(context: Context, song: Song): String? =
     withContext(Dispatchers.IO) {
         val dao = CanonicalCatalogDatabase.get(context.applicationContext).catalogDao()
-        // The presence of a provider's albumId alone is not MusicBrainz evidence.
+        // Provider album IDs are not automatically MusicBrainz Release IDs.
         song.albumId?.takeIf(String::isNotBlank)?.let { id ->
-            if (dao.releaseById(id) != null) return@withContext id
+            if (dao.releaseById(id) != null)
+                return@withContext "catalog:RELEASE:$id"
         }
         val ids = try { verifiedRecordings(context, listOf(song)) }
             catch (e: CancellationException) { throw e }
             catch (_: Exception) { null }
             ?: return@withContext null
-        val rows = dao.recordingReleaseTitlesByIds(ids)
+        val releases = dao.recordingReleaseTitlesByIds(ids)
             .map { Triple(it.recordingId, it.releaseId, it.releaseTitle) }
-        sharedVerifiedReleaseId(ids, rows, song.albumId)
+        sharedVerifiedReleaseId(ids, releases, song.albumId)?.let {
+            return@withContext "catalog:RELEASE:$it"
+        }
+        val groups = dao.recordingReleaseGroupLinksByIds(ids)
+            .map { it.recordingId to it.releaseGroupId }
+        sharedVerifiedReleaseGroupId(ids, groups)?.let {
+            "catalog:RELEASE_GROUP:$it"
+        }
     }
 
 private suspend fun verifiedRecordings(context: Context, songs: List<Song>): List<String>? {
