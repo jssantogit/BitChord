@@ -294,7 +294,7 @@ def known_b_groups(manifest: dict) -> set[str]:
         raise ValueError("incomplete_manifest")
     existing = [x for x in cases if isinstance(x, dict) and
                 x.get("cohort") == "unlinked" and x.get("reviewed") is True]
-    if len(existing) != 5 or len({x.get("id") for x in existing}) != 5:
+    if not 5 <= len(existing) <= 10 or len({x.get("id") for x in existing}) != len(existing):
         raise ValueError("unexpected_reviewed_b")
     values = [x.get("musicbrainz_group_mbid") for x in existing]
     if not all(isinstance(x, str) and MBID.fullmatch(x) for x in values):
