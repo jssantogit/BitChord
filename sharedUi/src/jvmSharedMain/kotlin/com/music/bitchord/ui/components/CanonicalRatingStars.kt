@@ -97,8 +97,10 @@ fun CanonicalRatingStars(
     val remoteName = stringResource(Res.string.my_ratings_remote_source)
     val remoteUnavailable = stringResource(Res.string.my_ratings_remote_unavailable)
     val description = listOfNotNull(
-        rating?.localValue?.let { "$it/5 · $localName" },
-        rating?.remoteValue?.let { "$it/5 · $remoteName" },
+        rating?.localValue?.let { compactRatingAccessibility(it) + " · " + localName },
+        rating?.remoteValue?.let {
+            compactRatingAccessibility(it.toDouble()) + " · " + remoteName
+        },
         rating?.takeIf { !it.remoteAvailable }?.let { remoteUnavailable },
     ).joinToString("; ")
     Column(

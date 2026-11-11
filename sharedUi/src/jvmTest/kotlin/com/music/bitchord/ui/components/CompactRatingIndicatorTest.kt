@@ -58,6 +58,11 @@ class CompactRatingIndicatorTest {
         assertTrue(compactRatingColorStops(Double.NaN).isEmpty())
     }
 
+    @Test fun numericalInkRemainsLegibleOnDarkAndLightSurfaces() {
+        assertEquals(Color.White, compactRatingNumberTint(true))
+        assertEquals(Color.Black, compactRatingNumberTint(false))
+    }
+
     @Test fun preferencesAndGeometriesRemainOrthogonalToSourceAndRating() {
         assertEquals(2, CompactRatingStyle.entries.size)
         assertEquals(2, CompactRatingGeometry.entries.size)

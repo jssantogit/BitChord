@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
@@ -60,6 +61,9 @@ fun compactRatingAccessibility(value: Double?): String {
     return "Avaliação: " + text + " de 5 estrelas"
 }
 
+/** Numeric ink is legible against the actual light/dark theme, not hardcoded white. */
+fun compactRatingNumberTint(dark: Boolean): Color = if (dark) Color.White else Color.Black
+
 /**
  * Glyph outlines come directly from the user's V3 SVG handoff. Both geometries
  * use these SAME 28x28 paths, preventing the old scale mismatch. Nothing is
@@ -90,8 +94,9 @@ fun CompactRatingIndicator(
     val score = normalizedCompactRating(value)
     if (score == null && !showUnrated) return
     val style = LocalCompactRatingStyle.current
-    val foreground = if (MaterialTheme.colorScheme.background.luminance() < .5f)
-        Color.White else Color.Black
+    val foreground = compactRatingNumberTint(
+        MaterialTheme.colorScheme.background.luminance() < .5f,
+    )
     val circular = geometry == CompactRatingGeometry.CIRCULAR
     val outline = if (circular) AppleQueueVectors.Favorite else AppleQueueVectors.RatingStarOutline
     val filled = if (circular) AppleQueueVectors.Favorited else AppleQueueVectors.RatingStarFilled
@@ -122,7 +127,9 @@ fun CompactRatingIndicator(
             )
         } else {
             val numbers = remember(score) {
-                PathParser().parsePathString(compactRatingDigitPath(score)).toPath()
+                PathParser().parsePathString(compactRatingDigitPath(score)).toPath().apply {
+                    fillType = PathFillType.EvenOdd
+                }
             }
             Icon(
                 imageVector = filled,
