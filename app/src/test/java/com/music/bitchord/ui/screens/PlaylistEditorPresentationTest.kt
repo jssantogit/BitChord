@@ -126,23 +126,62 @@ class PlaylistEditorPresentationTest {
         }
     }
 
-    @Test fun ruleCategoriesUseCompactNeutralNativeBadgesAndPreserveNavigation() {
-        var clicked = 0
+    @Test fun conditionCategoriesUseTwoColumnTilesAndReserveFullWidthForLastCategory() {
+        var opened = ""
         compose.setContent {
             MaterialTheme {
-                PlaylistWizardNavigationList(
+                PlaylistWizardCategoryGrid(
+                    (1..7).map { index ->
+                        PlaylistWizardNavOption(
+                            title = "Categoria $index",
+                            description = "Grupo de condições $index",
+                            icon = PlaylistEditorIcons.Music,
+                            onClick = { opened = "category-$index" },
+                        )
+                    },
+                )
+            }
+        }
+        compose.onNodeWithTag("playlist-category-grid", useUnmergedTree = true).assertExists()
+        val tiles = compose.onAllNodesWithTag("playlist-category-tile", useUnmergedTree = true)
+        tiles.assertCountEquals(7)
+        compose.onAllNodesWithTag("playlist-category-wide-tile", useUnmergedTree = true)
+            .assertCountEquals(1)
+        compose.onAllNodesWithTag("playlist-category-icon", useUnmergedTree = true)
+            .assertCountEquals(7)
+        val first = tiles[0].fetchSemanticsNode().boundsInRoot
+        val second = tiles[1].fetchSemanticsNode().boundsInRoot
+        val third = tiles[2].fetchSemanticsNode().boundsInRoot
+        val last = tiles[6].fetchSemanticsNode().boundsInRoot
+        assertEquals(first.top, second.top)
+        org.junit.Assert.assertTrue(first.left < second.left)
+        org.junit.Assert.assertTrue(third.top > first.top)
+        org.junit.Assert.assertTrue(last.width > first.width + second.width)
+        compose.onNodeWithText("Categoria 7").performClick()
+        compose.runOnIdle { assertEquals("category-7", opened) }
+    }
+
+    @Test fun categoryGridStillNavigatesThroughAnyCategoryAndKeepsLabelsAccessible() {
+        var opened = ""
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardCategoryGrid(
                     listOf(
-                        PlaylistWizardNavOption("Música", "Condições de música", PlaylistEditorIcons.Music) { clicked++ },
-                        PlaylistWizardNavOption("Datas", "Condições de data", PlaylistEditorIcons.Calendar) { clicked++ },
+                        PlaylistWizardNavOption(
+                            "Músicas e metadados", "Título, artista, álbum",
+                            PlaylistEditorIcons.Music,
+                        ) { opened = "music" },
+                        PlaylistWizardNavOption(
+                            "Avaliações", "Notas em estrelas",
+                            PlaylistEditorIcons.Ratings,
+                        ) { opened = "ratings" },
                     ),
                 )
             }
         }
-        compose.onNodeWithTag("playlist-category-group", useUnmergedTree = true).assertExists()
-        compose.onAllNodesWithTag("playlist-navigation-chevron", useUnmergedTree = true).assertCountEquals(2)
-        compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true).assertCountEquals(2)
-        compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true)[0].assertWidthIsEqualTo(32.dp)
-        compose.onNodeWithText("Música").performClick()
-        compose.runOnIdle { assertEquals(1, clicked) }
+        compose.onNodeWithText("Avaliações").performClick()
+        compose.runOnIdle { assertEquals("ratings", opened) }
+        compose.onNodeWithText("Músicas e metadados").assertExists()
+        compose.onNodeWithText("Notas em estrelas").assertExists()
     }
 }
