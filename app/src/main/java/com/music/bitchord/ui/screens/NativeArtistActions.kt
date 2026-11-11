@@ -118,7 +118,7 @@ internal fun ActionRow(
                     CompactRatingIndicator(
                         value = artistRating,
                         geometry = CompactRatingGeometry.STANDALONE,
-                        size = 23.dp,
+                        size = 30.dp,
                         showUnrated = true,
                     )
                 },

@@ -118,7 +118,7 @@ fun CanonicalRatingStars(
             CompactRatingIndicator(
                 value = value,
                 geometry = geometry,
-                size = 24.dp,
+                size = 30.dp,
                 neutralColor = color,
             )
         }

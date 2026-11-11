@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -31,9 +32,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
-import com.music.bitchord.ui.components.CanonicalRatingStars
+import com.music.bitchord.ui.components.CompactRatingGeometry
+import com.music.bitchord.ui.components.CompactRatingIndicator
+import com.music.bitchord.ui.components.normalizedCompactRating
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.components.SourceQualityBadge
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -183,58 +185,63 @@ internal fun NativeReleaseHeaderLayout(
             content = artwork,
         )
         Spacer(Modifier.height(20.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineMedium,
-            color = palette.onBackground,
-            textAlign = TextAlign.Center,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
-        )
+        val savedRating = normalizedCompactRating(rating)
+        // Integrate ratings with release identity rather than creating a tiny
+        // isolated third line between the artist and the playback controls.
+        // If no score exists, the verified native editor remains reachable
+        // from an outline (or the quality badge when one is shown).
+        val inlineRating = savedRating != null || (onRate != null && quality == null)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = HEADER_GUTTER),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineMedium,
+                color = palette.onBackground,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false).testTag("native-release-title"),
+            )
+            if (credit.isBlank() && inlineRating) {
+                Spacer(Modifier.width(8.dp))
+                NativeInlineReleaseRating(savedRating, onRate, palette)
+            }
+        }
         if (credit.isNotBlank()) {
             Spacer(Modifier.height(2.dp))
-            Text(
-                text = credit,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.Normal, fontSize = 19.sp,
-                ),
-                color = palette.onBackgroundVariant,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = HEADER_GUTTER)
-                    .let { m -> if (onCreditClick == null) m
-                        else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
-            )
-        }
-        // The original rating slot shows first-party stars when saved. With
-        // no rating it uses the exact Now Playing source badge; never invent
-        // "Hi-Res" from bitrate or claim provider evidence was played.
-        // A verified source-quality badge has priority over an EMPTY rating.
-        // When the user has actually rated the release, show the stars instead.
-        // Keep the native rating editor reachable from the badge as well as
-        // from the existing album overflow; never hide genuine audio quality.
-        if (onRate != null && (rating != null || quality == null)) {
-            Spacer(Modifier.height(8.dp))
-            Box(
-                modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onRate)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .testTag("native-album-rating"),
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = HEADER_GUTTER),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (rating != null) {
-                    CanonicalRatingStars(
-                        rating = RatingDisplay(localValue = rating),
-                        color = palette.onBackground,
-                    )
-                } else Text(
-                    text = "☆ Avaliar",
-                    style = MaterialTheme.typography.labelMedium,
+                Text(
+                    text = credit,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Normal, fontSize = 19.sp,
+                    ),
                     color = palette.onBackgroundVariant,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                        .testTag("native-release-credit")
+                        .let { m -> if (onCreditClick == null) m
+                            else m.clip(RoundedCornerShape(6.dp))
+                                .clickable(onClick = onCreditClick) },
                 )
+                if (inlineRating) {
+                    Spacer(Modifier.width(8.dp))
+                    NativeInlineReleaseRating(savedRating, onRate, palette)
+                }
             }
-        } else if (quality != null) {
+        }
+        // Audio quality retains its established path and independent evidence.
+        // A saved personal score lives beside identity; never replace a score
+        // with an inferred quality badge or vice versa.
+        if (quality != null && (savedRating == null || onRate == null)) {
             Spacer(Modifier.height(8.dp))
             SourceQualityBadge(
                 quality = quality,
@@ -263,3 +270,29 @@ internal fun NativeReleaseHeaderLayout(
 }
 
 
+
+/** Reused by album and playlist identity rows; no independent rating shelf. */
+@Composable
+private fun NativeInlineReleaseRating(
+    rating: Double?,
+    onRate: (() -> Unit)?,
+    palette: ArtworkPalette,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .testTag("native-album-rating")
+            .then(if (onRate == null) Modifier else Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable(onClickLabel = "Avaliar álbum", onClick = onRate)),
+        contentAlignment = Alignment.Center,
+    ) {
+        CompactRatingIndicator(
+            value = rating,
+            geometry = CompactRatingGeometry.STANDALONE,
+            size = 32.dp,
+            showUnrated = rating == null,
+            neutralColor = palette.onBackground,
+        )
+    }
+}

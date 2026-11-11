@@ -88,7 +88,7 @@ class CompactRatingPresentationTest {
                         CompactRatingIndicator(
                             value = 4.5,
                             geometry = CompactRatingGeometry.STANDALONE,
-                            size = 23.dp,
+                            size = 30.dp,
                         )
                     },
                 )
@@ -99,6 +99,16 @@ class CompactRatingPresentationTest {
         compose.onNodeWithContentDescription("4,5 de 5 estrelas", substring = true)
             .assertExists()
         compose.runOnIdle { assertEquals(1, opened) }
+    }
+
+    @Test fun savedStandaloneBadgeIsThirtyDpOnEveryNativeList() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRatingStars(RatingDisplay(localValue = 4.5))
+            }
+        }
+        compose.onNodeWithTag("compact-rating-indicator", useUnmergedTree = true)
+            .assertWidthIsEqualTo(30.dp)
     }
 
     @Test fun malformedLocalOrRemoteScoresNeverCreateGhostRatingRows() {
