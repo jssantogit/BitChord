@@ -367,10 +367,16 @@ private fun CanonicalTrackActionSheet(
         sheetState = androidx.compose.material3.rememberModalBottomSheetState(
             skipPartiallyExpanded = true,
         ),
+        shape = androidx.compose.foundation.shape.RectangleShape,
+        dragHandle = null,
         containerColor = MaterialTheme.colorScheme.background,
     ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.music.bitchord.ui.components.LocalActionRowStyle provides
+                com.music.bitchord.ui.components.ActionRowStyle.AppleSolid,
+        ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
             ActionRow(Icons.Rounded.PlayArrow, "Reproduzir daqui") {
                 onPlay()
@@ -392,6 +398,7 @@ private fun CanonicalTrackActionSheet(
                     onDismiss()
                 }
             }
+        }
         }
     }
 }

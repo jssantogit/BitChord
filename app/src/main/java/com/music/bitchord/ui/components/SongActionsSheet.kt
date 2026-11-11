@@ -172,10 +172,10 @@ fun SongActionsSheet(
             onBackgroundVariant = Color.White.copy(alpha = 0.64f),
             divider = Color.White.copy(alpha = 0.09f),
         )
-    } else if (menu) {
-        neutralMenuPalette()
     } else {
-        rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX)
+        // Outside Now Playing every ⋯ sheet is a theme-solid Apple-style
+        // surface; artwork blur is exclusively the player's identity.
+        neutralMenuPalette()
     }
     // Show the native pin's actual state where the verified Recording is already
     // in the canonical presentation snapshot. The click still revalidates it.
@@ -318,21 +318,28 @@ fun SongActionsSheet(
         return
     }
 
-    TintedSheet(palette = palette, imageUrl = song.thumbnailUrl, modifier = modifier, appleStyle = appleQueuePlayerMenu) {
+    TintedSheet(
+        palette = palette,
+        imageUrl = if (appleQueuePlayerMenu) song.thumbnailUrl else null,
+        modifier = modifier,
+        appleStyle = true,
+        solidTheme = !appleQueuePlayerMenu,
+    ) {
         SheetTrackHeader(
             song,
             subtitleColor = palette.onBackgroundVariant,
             preloadedArtworkModel = preloadedArtworkModel,
-            appleStyle = appleQueuePlayerMenu,
+            appleStyle = true,
+            solidTheme = !appleQueuePlayerMenu,
             verifiedAlbumTitle = verifiedAlbumTitle,
         )
         HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
-        if (appleQueuePlayerMenu) {
-            CompositionLocalProvider(LocalActionRowStyle provides ActionRowStyle.Apple) { rows() }
-        } else {
+        CompositionLocalProvider(
+            LocalActionRowStyle provides if (appleQueuePlayerMenu)
+                ActionRowStyle.Apple else ActionRowStyle.AppleSolid,
+        ) {
             rows()
         }
-        if (!appleQueuePlayerMenu) Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -340,7 +347,7 @@ fun SongActionsSheet(
 enum class SongActionsPresentation { Sheet, Menu }
 
 /** Row density and layout, set by whichever surface the rows are drawn on. */
-internal enum class ActionRowStyle { Sheet, Menu, Apple }
+internal enum class ActionRowStyle { Sheet, Menu, Apple, AppleSolid }
 
 internal val LocalActionRowStyle = staticCompositionLocalOf { ActionRowStyle.Sheet }
 
@@ -409,6 +416,7 @@ private fun TintedSheet(
     imageUrl: String?,
     modifier: Modifier = Modifier,
     appleStyle: Boolean = false,
+    solidTheme: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val maxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.85f
@@ -417,15 +425,20 @@ private fun TintedSheet(
             .fillMaxWidth()
             .clip(if (appleStyle) RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp) else SHEET_SHAPE),
     ) {
-        ArtworkBackdrop(
-            palette = palette,
-            imageUrl = imageUrl,
-            modifier = Modifier.matchParentSize(),
-            // Keep the user-requested artwork-driven blurred gradient even for
-            // Apple-mode overflow; only row geometry/action policy differs.
-            washFraction = 0.75f,
-            artPx = ROW_ART_PX,
-        )
+        if (solidTheme) {
+            Box(
+                Modifier.matchParentSize().background(MaterialTheme.colorScheme.background),
+            )
+        } else {
+            // Now Playing alone retains the artwork-derived blurred gradient.
+            ArtworkBackdrop(
+                palette = palette,
+                imageUrl = imageUrl,
+                modifier = Modifier.matchParentSize(),
+                washFraction = 0.75f,
+                artPx = ROW_ART_PX,
+            )
+        }
         Column(
             // Let the six Apple actions determine the sheet's actual height.
             // The earlier 70%-of-screen minimum left a large empty block.
@@ -623,16 +636,19 @@ internal fun ActionRow(
 ) {
     val menu = LocalActionRowStyle.current == ActionRowStyle.Menu
     val apple = LocalActionRowStyle.current == ActionRowStyle.Apple
-    // The popup sits on a surface rather than the page background, so its
-    // text follows the surface's colour — the two differ in light mode.
-    val foreground = if (apple) Color.White else if (menu) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onBackground
+    val appleSolid = LocalActionRowStyle.current == ActionRowStyle.AppleSolid
+    val playerGeometry = apple || appleSolid
+    // Identical player geometry; on every other page the foreground follows
+    // its solid theme background instead of being hardcoded white.
+    val foreground = if (apple) Color.White else if (menu || appleSolid)
+        MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onBackground
     val alpha = if (enabled) 1f else 0.4f
     val iconView: @Composable () -> Unit = {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = (tint ?: foreground).copy(alpha = alpha),
-            modifier = Modifier.size(if (apple) 18.dp else if (menu) 20.dp else 22.dp),
+            modifier = Modifier.size(if (playerGeometry) 18.dp else if (menu) 20.dp else 22.dp),
         )
     }
     Row(
@@ -643,7 +659,7 @@ internal fun ActionRow(
             .then(
                 if (menu) {
                     Modifier.heightIn(min = 46.dp).padding(horizontal = 18.dp, vertical = 11.dp)
-                } else if (apple) {
+                } else if (playerGeometry) {
                     Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 9.dp)
                 } else {
                     Modifier.padding(horizontal = 22.dp, vertical = 15.dp)
@@ -655,11 +671,11 @@ internal fun ActionRow(
         // the sheet keeps the glyph leading, like every other list in the app.
         if (!menu) {
             iconView()
-            Spacer(Modifier.width(if (apple) 22.dp else 18.dp))
+            Spacer(Modifier.width(if (playerGeometry) 22.dp else 18.dp))
         }
         Text(
             text = label,
-            style = if (apple) MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp) else MaterialTheme.typography.bodyLarge,
+            style = if (playerGeometry) MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp) else MaterialTheme.typography.bodyLarge,
             color = foreground.copy(alpha = alpha),
             maxLines = if (menu) 2 else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis,
@@ -739,6 +755,7 @@ internal fun SheetTrackHeader(
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     preloadedArtworkModel: Any? = null,
     appleStyle: Boolean = false,
+    solidTheme: Boolean = false,
     verifiedAlbumTitle: String? = null,
 ) {
     Row(
@@ -762,13 +779,14 @@ internal fun SheetTrackHeader(
             ExplicitSongTitle(
                 song = song,
                 style = if (appleStyle) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
-                color = if (appleStyle) Color.White else MaterialTheme.colorScheme.onBackground,
+                color = if (appleStyle && !solidTheme) Color.White
+                    else MaterialTheme.colorScheme.onBackground,
             )
             Text(
                 text = song.artist,
                 style = if (appleStyle) MaterialTheme.typography.titleMedium
                     else MaterialTheme.typography.bodyMedium,
-                color = if (appleStyle) Color.White else subtitleColor,
+                color = if (appleStyle && !solidTheme) Color.White else subtitleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

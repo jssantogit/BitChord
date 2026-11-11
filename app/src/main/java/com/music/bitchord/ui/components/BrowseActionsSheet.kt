@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -215,11 +217,14 @@ fun BrowseActionsSheet(
         return
     }
 
-    CompositionLocalProvider(LocalActionRowStyle provides if (menu) ActionRowStyle.Menu else ActionRowStyle.Sheet) {
+    CompositionLocalProvider(
+        LocalActionRowStyle provides if (menu) ActionRowStyle.Menu else ActionRowStyle.AppleSolid,
+    ) {
         Column(
             modifier
                 .fillMaxWidth()
-                .then(if (menu) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.85f)
+                .verticalScroll(rememberScrollState()),
         ) {
             if (!menu) {
                 BrowseSheetHeader(target, headerArtwork)
@@ -351,7 +356,6 @@ fun BrowseActionsSheet(
                     }
                 }
             }
-            if (!menu) Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -366,12 +370,12 @@ private fun BrowseSheetHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(80.dp)
                 .clip(shape)
                 .thumbnailBorder(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -387,8 +391,8 @@ private fun BrowseSheetHeader(
         Column(Modifier.weight(1f)) {
             Text(
                 text = target.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -404,7 +408,7 @@ private fun BrowseSheetHeader(
                             .orEmpty()
                     }
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

@@ -5579,6 +5579,8 @@ private fun BitChordApp(
                         else browseActions = null
                     },
                     sheetState = browseSheetState,
+                    shape = androidx.compose.foundation.shape.RectangleShape,
+                    dragHandle = null,
                     containerColor = MaterialTheme.colorScheme.background,
                 ) {
                     browseMenuBody(target, SongActionsPresentation.Sheet)
@@ -6822,6 +6824,8 @@ private fun CanonicalPlaylistMenus(
         }
         ModalBottomSheet(
             onDismissRequest = onDetailOptionsDismiss,
+            shape = androidx.compose.foundation.shape.RectangleShape,
+            dragHandle = null,
             containerColor = MaterialTheme.colorScheme.background,
         ) {
             BrowseActionsSheet(

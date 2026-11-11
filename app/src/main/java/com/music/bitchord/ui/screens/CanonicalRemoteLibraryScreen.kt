@@ -1351,6 +1351,8 @@ internal fun CanonicalRemoteLibraryScreen(
             }
             ModalBottomSheet(
                 onDismissRequest = { libraryMenu = null },
+                shape = androidx.compose.foundation.shape.RectangleShape,
+                dragHandle = null,
                 containerColor = MaterialTheme.colorScheme.background,
             ) {
                 BrowseActionsSheet(
