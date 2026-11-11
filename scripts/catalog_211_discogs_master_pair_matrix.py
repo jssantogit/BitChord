@@ -114,6 +114,7 @@ def inspect(seed: dict, get) -> dict:
                     "?fmt=json&inc=recordings+artist-credits+release-groups+url-rels+labels")
             except (HTTPError, URLError, OSError, TimeoutError):
                 result["status"] = "incomplete_source_hydration"
+                result["unavailable_source_id"] = "musicbrainz_release:" + mbid
                 return result
             if (not isinstance(record, dict) or record.get("id") != mbid or
                 not isinstance(record.get("release-group"), dict) or
@@ -134,6 +135,7 @@ def inspect(seed: dict, get) -> dict:
                 record = get(f"https://api.discogs.com/releases/{did}")
             except (HTTPError, URLError, OSError, TimeoutError):
                 result["status"] = "incomplete_source_hydration"
+                result["unavailable_source_id"] = "discogs_release:" + str(did)
                 return result
             if (not isinstance(record, dict) or record.get("id") != did or
                 record.get("master_id") != mid or
@@ -204,7 +206,14 @@ def observe(seeds: list[dict], get, pause=lambda: None) -> dict:
             "findings": findings}
 
 def main():
-    data = observe(SEEDS, lambda url: read_json(url)[1],
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--target", choices=("all", "ENHYPEN", "LE SSERAFIM"),
+                        default="all")
+    args = parser.parse_args()
+    selected = SEEDS if args.target == "all" else [
+        x for x in SEEDS if x["artist"] == args.target]
+    data = observe(selected, lambda url: read_json(url)[1],
                    pause=lambda: time.sleep(1.1))
     OUTPUT.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True,
                                  indent=2) + "\n", encoding="utf-8")
@@ -213,10 +222,18 @@ def main():
                      "master": x["master_id"], "mb_release_count": len(x["mb_release_ids"]),
                      "discogs_release_count": len(x["discogs_release_ids"]),
                      "raw_pairs": len(x["pairs"]),
+                     "unavailable_source_id": x.get("unavailable_source_id"),
                      "matching_full_tracks_and_barcode": sum(
                          p["comparison"]["tracklist_matches"] and
                          p["comparison"]["barcode_identical_on_both"]
-                         for p in x["pairs"])}
+                         for p in x["pairs"]),
+                     "matching_pair_source_ids": [
+                         {"mb": p["musicbrainz_release_mbid"],
+                          "discogs": p["discogs_release_id"],
+                          "direct_relation": p["direct_release_relation"]}
+                         for p in x["pairs"]
+                         if p["comparison"]["tracklist_matches"] and
+                         p["comparison"]["barcode_identical_on_both"]][:12]}
                     for x in data["findings"]],
         "verified": 0, "reviewed": 0}, ensure_ascii=False))
 
