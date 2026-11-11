@@ -77,6 +77,23 @@ class FreshCFollowupTest(unittest.TestCase):
                                 {(row["source_kind"], row["source_id"])
                                  for row in candidate_queue(prepared)}))
 
+    def test_reviewed_c04_cannot_reappear_as_a_new_source_only_recovery(self):
+        # C-04 was independently reviewed: MB already has Stray Kids'
+        # Social Path / Super Bowl -Japanese ver.- EP, notwithstanding an
+        # exact-title search miss. Future Discogs index rows must exclude
+        # its known Release ID rather than recycling a false recovery.
+        doc = index()
+        previous = observed(doc)
+        doc["artists"][9]["candidate_index_hints"][-1] = hint(38526540)
+        prepared = build_followup_index(doc, previous, MANIFEST)
+        self.assertIsNotNone(prepared)
+        self.assertNotIn(38526540,
+            {row["source_id"] for row in candidate_queue(prepared)})
+        output = probe_followup(doc, previous, MANIFEST, provider)
+        self.assertFalse(any(row["discogs_release_id"] == 38526540
+                             for row in output["observations"]))
+        self.assertEqual(0, output["confirmed_source_only_cases"])
+
     def test_cannot_revisit_existing_b_release_as_new_c_case(self):
         result = probe_followup(index(), observed(index()), MANIFEST, provider)
         rows = result["observations"]
