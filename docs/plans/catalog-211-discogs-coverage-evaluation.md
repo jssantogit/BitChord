@@ -510,3 +510,36 @@ verificado em campo e **não** são testes de UI negativos. A revisão
 A/B/C completa continua pendente: A 0/10, B 5/10 (cinco vagas ainda
 sem IDs), C 0/10, três C excluídos preliminarmente. O Discogs
 continua complementar; nenhum MBID, MediaAsset ou stream é inventado.
+
+## C: guarda conservadora para singles digitais com título latino / japonês (11/11/2026)
+
+A revisão de B-03/B-04 revelou um falso caminho de descoberta C:
+MusicBrainz já conhece os grupos Single `Fashion` e `DARE ME`,
+mas a edição Discogs apresenta respectivamente
+`Fashion / ファッション` e `Dare Me / デアミー`.
+A filtragem inicial do índice não pode tomar a barra e a
+segunda escrita como prova da mesma obra; entretanto, depois de
+hidratar uma edição `File` explicitamente `Single`, com **uma
+única faixa cujo título repete exatamente o título bilíngue do
+lançamento**, o primeiro título latino já constar na discografia
+completa do mesmo artista é motivo para **não afirmar ausência**.
+
+A nova guarda no `DiscogsShadowCatalog.select` usa apenas essa
+sinalização negativa, após a verificação da identidade do artista
+e da completude do browse MusicBrainz: limita-se a
+`<exact-known-Latin-title> / <Japanese-script>` sem títulos
+adicionais, com uma faixa e formato digital Single. Não traduz,
+não associa Recording, não cria equivalência de Release,
+não altera a classificação editorial, não vincula MBIDs e não
+remove o Release original das consultas de fonte. Ela impede
+**apenas a publicação como suposta descoberta exclusivamente
+Discogs** quando a evidência de ausência é insuficiente.
+
+A exclusão deliberadamente não se aplica a CD/vinil,
+coleções de duas faixas, outros tipos de formatos, textos
+como `Fashion / Live`, variantes instrumental/remix,
+nomes sem grupo MusicBrainz conhecido nem títulos em outra
+ordem. A política de candidatos B permanece distinta do
+critério source-only C: B-03/B-04 continuam `candidate`,
+sem `Verified` da edição. Testes Kotlin verificam os dois
+exemplos da API real e controles negativos, sem smoke físico.

@@ -297,6 +297,35 @@ internal object DiscogsShadowCatalog {
         return names.any { it in video } && names.none { it in audio }
     }
 
+    // An already-known one-track digital Single can be written in Discogs
+    // as "Fashion / ファッション" while the complete MusicBrainz artist browse
+    // names the release group "Fashion". This is NOT edition verification
+    // or a claim about the translation: it only blocks a *source-only*
+    // assertion when the same one-track title visibly contains the exact
+    // existing Latin group name plus a strictly Japanese second script.
+    // Keep physical formats, multiple tracks, remixes and unknown titles
+    // outside this narrowly scoped non-absence guard.
+    private val digitalSingleSlash = Regex(
+        """^([a-z][a-z0-9 &'!.\-]{2,90}) / ([ぁ-ヿ一-鿿]{3,60})$""",
+    )
+
+    private fun mayAlreadyBeKnownBilingualDigitalSingle(
+        record: DiscogsRecord,
+        creditedArtist: String,
+        knownNormalizedTitles: Set<String>,
+    ): Boolean {
+        if (record.tracklist.size != 1 ||
+            record.formats.none { it.trim().equals("File", ignoreCase = true) } ||
+            discogsEditorialKind(record.formats) != DiscogsEditorialKind.SINGLE
+        ) return false
+        val title = comparisonTitle(record.title, creditedArtist)
+        val pair = digitalSingleSlash.matchEntire(title) ?: return false
+        if (pair.groupValues[1] !in knownNormalizedTitles) return false
+        // A second song/arrangement in the medium is not a known single.
+        // Do not guess equivalence between separately written track names.
+        return normalizedTitle(record.tracklist.single().second) == title
+    }
+
     /** A precomputed predicate shared between the index and hydrated edition. */
     internal fun knownTitlePredicate(
         expectedArtist: String,
@@ -325,6 +354,9 @@ internal object DiscogsShadowCatalog {
         if (!mbCatalogChecked || expectedArtist.isBlank() || nowMillis < 0L) return emptyList()
         val artist = normalizedTitle(expectedArtist)
         val knownTitle = knownTitlePredicate(expectedArtist, knownMusicBrainzTitles)
+        val knownNormalizedTitles = knownMusicBrainzTitles.mapTo(HashSet()) {
+            normalizedTitle(it)
+        }
         val eligible = observations.take(80).mapNotNull { item ->
             val release = item.record
             val artistMatches = if (expectedDiscogsArtistId != null) {
@@ -344,6 +376,9 @@ internal object DiscogsShadowCatalog {
                 isVideoOnlyFormat(release.formats) ||
                 release.artistNames.size != 1 || !artistMatches ||
                 knownTitle(release.title) ||
+                mayAlreadyBeKnownBilingualDigitalSingle(
+                    release, expectedArtist, knownNormalizedTitles,
+                ) ||
                 release.tracklist.isEmpty() ||
                 release.year == null ||
                 release.labels.isEmpty()
