@@ -1,7 +1,7 @@
 """Fixture-only tests for two live typed-Master B-lead pair matrices."""
 import unittest
 from urllib.error import HTTPError
-from catalog_211_discogs_master_pair_matrix import inspect, observe, MAX_REQUESTS
+from catalog_211_discogs_master_pair_matrix import inspect, observe, MAX_REQUESTS, SEEDS
 
 ARTIST = "95663592-1447-4579-90f7-c94733476667"
 GROUP = "849d8582-3422-4d61-bfbe-9b65f4bfdc06"
@@ -68,6 +68,18 @@ def source(*, missing_detail=False, large=False, bad_artist=False, bad_group=Fal
     return get
 
 class MasterPairMatrixTest(unittest.TestCase):
+    def test_two_real_ive_masters_are_distinct_exact_source_controls(self):
+        # IDs observed via public typed Master lead scout #43117680744.
+        controls = [x for x in SEEDS if x["artist"] == "IVE"]
+        self.assertEqual(2, len(controls))
+        self.assertEqual({
+            ("18271616-7122-4bf6-8fc8-11467cc923c1", 2531575),
+            ("07fb58fa-2007-4e40-aa57-88e69a9e19be", 2911144),
+        }, {(x["group_mbid"], x["master_id"]) for x in controls})
+        self.assertTrue(all(x["artist_mbid"] ==
+            "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196" and
+            x["discogs_artist_id"] == 7122521 for x in controls))
+
     def test_all_versions_and_mb_editions_are_compared_but_never_verified(self):
         result = inspect(SEED, source())
         self.assertEqual("all_pairs_compared_not_adjudicated", result["status"])
