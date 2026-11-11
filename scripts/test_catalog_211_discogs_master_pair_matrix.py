@@ -94,6 +94,9 @@ class MasterPairMatrixTest(unittest.TestCase):
                 self.assertEqual(expected, found["status"])
                 self.assertEqual([], found["pairs"])
                 self.assertEqual(0, found["verified_edition_count"])
+                if options.get("missing_detail"):
+                    self.assertEqual("discogs_release:101",
+                                     found["unavailable_source_id"])
 
     def test_shared_budget_and_preserved_b_corpus_are_explicit(self):
         found = observe([SEED], source())
