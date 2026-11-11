@@ -409,6 +409,121 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
     }
 }
 
+
+/**
+ * Compact two-column selection surface for the seven top-level rule families.
+ * The final unpaired category spans the available width rather than creating
+ * a visually empty right-hand slot. Nested field navigation stays a native list.
+ * These proportions are a BitChord adaptation, not measured Apple Music tokens.
+ */
+@Composable
+internal fun PlaylistWizardCategoryGrid(options: List<PlaylistWizardNavOption>) {
+    if (options.isEmpty()) return
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("playlist-category-grid"),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        options.chunked(2).forEach { pair ->
+            if (pair.size == 1) {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                        .testTag("playlist-category-wide-tile"),
+                ) {
+                    PlaylistWizardCategoryTile(
+                        option = pair.first(),
+                        modifier = Modifier.fillMaxWidth(),
+                        wide = true,
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    PlaylistWizardCategoryTile(pair[0], Modifier.weight(1f), wide = false)
+                    PlaylistWizardCategoryTile(pair[1], Modifier.weight(1f), wide = false)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistWizardCategoryTile(
+    option: PlaylistWizardNavOption,
+    modifier: Modifier,
+    wide: Boolean,
+) {
+    androidx.compose.material3.Surface(
+        onClick = option.onClick,
+        modifier = modifier.heightIn(min = if (wide) 76.dp else 116.dp)
+            .testTag("playlist-category-tile"),
+        shape = GroupShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+    ) {
+        if (wide) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                PlaylistWizardCategoryGlyph(option.icon)
+                Box(modifier = Modifier.weight(1f)) {
+                    PlaylistWizardCategoryLabels(option)
+                }
+            }
+        } else {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(7.dp),
+            ) {
+                PlaylistWizardCategoryGlyph(option.icon)
+                PlaylistWizardCategoryLabels(option)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistWizardCategoryGlyph(icon: ImageVector?) {
+    Box(
+        modifier = Modifier.size(32.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            .testTag("playlist-category-icon"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon ?: PlaylistEditorIcons.Music,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun PlaylistWizardCategoryLabels(option: PlaylistWizardNavOption) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            option.title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (option.description.isNotBlank()) {
+            Text(
+                option.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
 @Composable
 internal fun PlaylistWizardSelectionRow(
     label: String,

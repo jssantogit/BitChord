@@ -762,9 +762,9 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("history", opened) }
     }
 
-    @Test fun conditionCategoriesReuseOneGroupedSettingsSurfaceWithSevenBadges() {
+    @Test fun conditionCategoriesShowSixGridCellsAndSeventhWideCell() {
         compose.setContent {
-            PlaylistWizardNavigationList(
+            PlaylistWizardCategoryGrid(
                 (1..7).map { n ->
                     PlaylistWizardNavOption(
                         title = "Categoria $n",
@@ -775,18 +775,12 @@ class PlaylistLibraryVisualReuseTest {
                 },
             )
         }
-        compose.onNodeWithTag("playlist-category-group", useUnmergedTree = true).assertExists()
-        compose.onAllNodesWithTag("native-settings-group-surface", useUnmergedTree = true)
-            .assertCountEquals(1)
-        compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true)
+        compose.onNodeWithTag("playlist-category-grid", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithTag("playlist-category-tile", useUnmergedTree = true)
             .assertCountEquals(7)
-        compose.onAllNodesWithTag("playlist-navigation-chevron", useUnmergedTree = true)
-            .assertCountEquals(7)
-        compose.onAllNodesWithTag("playlist-category-wide-tile", useUnmergedTree = true)
-            .assertCountEquals(0)
+        compose.onNodeWithTag("playlist-category-wide-tile", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Categoria 7").assertExists()
     }
-
 
     @Test fun explicitSavedCoverOverridesTheAutomaticCollageWithoutChangingCardIdentity() {
         val normal = LibraryPlaylistCard.CanonicalNormal(

@@ -1252,7 +1252,7 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         } else {
                             item {
-                                PlaylistWizardNavigationList(smartConditionCategories.map { category ->
+                                PlaylistWizardCategoryGrid(smartConditionCategories.map { category ->
                                     PlaylistWizardNavOption(
                                         title = category.title,
                                         description = category.description,
