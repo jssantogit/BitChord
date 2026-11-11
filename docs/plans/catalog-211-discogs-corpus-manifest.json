@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: ten independently source-reviewed B edition-pairs (all non-Verified), ten A and ten C unreviewed; three C source exclusions preliminary; no proven provider gains or complete coverage metrics.",
+  "description": "Discogs #211: ten independently source-reviewed negative B edition pairs; one source-reviewed negative C existing EP control; A 0/10, B 10/10, C 1/10, full corpus 11/30; no proven B Verified, C recovery or UI gains; three preliminary C exclusions.",
   "cases": [
     {
       "id": "A-01",
@@ -410,7 +410,34 @@
     {
       "id": "C-04",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": true,
+      "label": "Stray Kids · Social Path / Super Bowl -Japanese ver.-",
+      "musicbrainz_group_mbid": "e248dce6-bef8-4d1f-a6d8-164de112151f",
+      "musicbrainz_artist_mbid": "142b343d-bf5a-428c-a64f-6d1a7566bbe9",
+      "artist_browse_complete": true,
+      "discogs_release_id": 38526540,
+      "selection_note": "Discogs title-index zero hit from variant Superbowl, but official Sony and exact MusicBrainz artist EP ReleaseGroup show existing 2023 EP; no C absence proof",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/38526540",
+        "musicbrainz_artist": "https://musicbrainz.org/artist/142b343d-bf5a-428c-a64f-6d1a7566bbe9",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/e248dce6-bef8-4d1f-a6d8-164de112151f",
+        "independent_editorial": "https://www.sonymusic.co.jp/artist/StrayKids/info/554372",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43118510232"
+      },
+      "reviewed_at_utc": "2026-11-11T23:35:09Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Official Sony Music Japan's 27 July 2023 announcement explicitly identifies Social Path (feat. LiSA) / Super Bowl -Japanese ver.- as Stray Kids JAPAN 1st EP, issued 6 September 2023 with five common audio tracks. MusicBrainz already contains exact Stray Kids ReleaseGroup e248dce6-bef8-4d1f-a6d8-164de112151f classified EP, with a five-track official digital Release. Public anonymous CI #43118510232 independently hydrated Discogs Release 38526540 as a solo Stray Kids artist-linked File source candidate titled Social Path / Superbowl (Japanese Ver.) without a reported barcode, and its initial exact title-index lookup returned zero. That zero is a query/title-normalization false negative, NOT proof of missing catalog content. The Discogs edition cannot be equated to an exact MusicBrainz physical pressing without source relations, barcodes or a complete pair comparison. Thus reviewed for known-release non-absence only: no new MusicBrainz group, no Verified edition, no UI recovery, and no observed missing EP in BitChord. app_type Unknown and visible false reflect no device measurement."
     },
     {
       "id": "C-05",
