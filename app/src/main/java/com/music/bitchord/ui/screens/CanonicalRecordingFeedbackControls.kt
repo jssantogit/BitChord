@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -46,8 +47,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.music.bitchord.ui.components.AppleRatingStarGlyph
 import com.music.bitchord.ui.components.appleRatingStarFill
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
@@ -213,6 +216,11 @@ internal fun ratingSelectionPulseIndex(selected: Double, touched: Boolean, reduc
     if (!touched || reducedMotion || !selected.isFinite() || selected !in 1.0..5.0) null
     else ceil(selected).toInt() - 1
 
+/** Fixed solid background matching the player's light/dark base layer. */
+internal fun ratingSheetSolidColor(dark: Boolean): androidx.compose.ui.graphics.Color =
+    if (dark) androidx.compose.ui.graphics.Color.Black
+    else androidx.compose.ui.graphics.Color.White
+
 internal data class RatingDialogEntranceFrame(val alpha: Float, val scale: Float)
 internal fun ratingDialogEntranceFrame(progress: Float, reducedMotion: Boolean): RatingDialogEntranceFrame {
     val p = if (reducedMotion || !progress.isFinite()) 1f else progress.coerceIn(0f, 1f)
@@ -225,6 +233,7 @@ internal fun ratingDialogEntranceFrame(progress: Float, reducedMotion: Boolean):
  * Neither opening nor changing selection persists anything until Save.
  * Deliberately NO clear/reset rating action.
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun CanonicalRecordingFeedbackPanel(
     rating: Double?,
@@ -264,35 +273,44 @@ internal fun CanonicalRecordingFeedbackPanel(
             tween(durationMillis = 180, easing = FastOutSlowInEasing),
         )
     }
-    // The new-surface-patterns recipe treats this as a BitChord choice/editor:
-    // one canonical sheet-like dialog, a labeled selection, explicit actions
-    // and untouched persistence. No claim of an Apple rating editor.
-    androidx.compose.ui.window.Dialog(
+    // Rating is a contextual bottom sheet, not a Settings card or a centered
+    // alert. Follow the user's marked composition: stars and two equal actions,
+    // no artwork, text summary, visible title or drag handle. The pane title
+    // remains exposed to accessibility services.
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val sheetBackground = ratingSheetSolidColor(darkTheme)
+    val sheetForeground = if (darkTheme) androidx.compose.ui.graphics.Color.White
+        else androidx.compose.ui.graphics.Color.Black
+    // AM-DECOMP's key tint; do not infer a native rating sheet from this token.
+    val sheetAccent = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF0091FF)
+        else androidx.compose.ui.graphics.Color(0xFF0088FF)
+    val sheetTitle = title ?: stringResource(Res.string.recording_feedback_dialog_title)
+    androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = requestDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+            skipPartiallyExpanded = true,
+        ),
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        containerColor = sheetBackground,
+        contentColor = sheetForeground,
+        scrimColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.48f),
     ) {
-        SettingsGroupSurface(
+        Column(
             modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER)
+                .navigationBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 20.dp)
+                .testTag("native-rating-bottom-sheet")
+                .semantics { paneTitle = sheetTitle }
                 .graphicsLayer {
                     val entrance = ratingDialogEntranceFrame(dialogEntrance.value, reduceMotion)
                     alpha = entrance.alpha
                     scaleX = entrance.scale
                     scaleY = entrance.scale
                 },
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    title ?: stringResource(Res.string.recording_feedback_dialog_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -325,7 +343,7 @@ internal fun CanonicalRecordingFeedbackPanel(
                         val wholeDescription = stringResource(Res.string.recording_feedback_stars_value, (index + 1.0).toString().removeSuffix(".0"))
                         val starFill = appleRatingStarFill(selected, i)
                         Box(
-                            modifier = Modifier.weight(1f).height(48.dp),
+                            modifier = Modifier.weight(1f).height(56.dp),
                             contentAlignment = Alignment.Center,
                         ) {
                             // Retain the player's exact original star
@@ -336,9 +354,10 @@ internal fun CanonicalRecordingFeedbackPanel(
                             AppleRatingStarGlyph(
                                 fill = starFill,
                                 standalone = true,
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = if (starFill == com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY)
+                                    sheetForeground else sheetAccent,
                                 modifier = Modifier
-                                    .size(48.dp)
+                                    .size(56.dp)
                                     .testTag("rating-editor-star-$i-${starFill.name.lowercase()}")
                                     .graphicsLayer {
                                         scaleX = starPulse.value
@@ -374,41 +393,59 @@ internal fun CanonicalRecordingFeedbackPanel(
                         }
                     }
                 }
-                if (denied) {
+            if (denied) {
+                Text(
+                    stringResource(Res.string.recording_feedback_unavailable),
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.Button(
+                    onClick = requestDismiss,
+                    enabled = !saving,
+                    modifier = Modifier.weight(1f).height(52.dp)
+                        .testTag("rating-editor-cancel-action"),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = if (darkTheme)
+                            androidx.compose.ui.graphics.Color(0xFF2B2B2D)
+                        else androidx.compose.ui.graphics.Color(0xFFF0F0F2),
+                        contentColor = sheetForeground,
+                    ),
+                ) {
                     Text(
-                        stringResource(Res.string.recording_feedback_unavailable),
-                        color = MaterialTheme.colorScheme.error,
+                        stringResource(Res.string.cancel),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
                     )
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically,
+                androidx.compose.material3.Button(
+                    onClick = { onSave(selected) },
+                    enabled = selected in 1.0..5.0 && !saving,
+                    modifier = Modifier.weight(1f).height(52.dp)
+                        .testTag("rating-editor-save-action"),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = sheetAccent,
+                        contentColor = androidx.compose.ui.graphics.Color.White,
+                        disabledContainerColor = if (darkTheme)
+                            androidx.compose.ui.graphics.Color(0xFF343437)
+                        else androidx.compose.ui.graphics.Color(0xFFDEDEE1),
+                        disabledContentColor = sheetForeground.copy(alpha = 0.45f),
+                    ),
                 ) {
-                    TextButton(
-                        onClick = requestDismiss,
-                        enabled = !saving,
-                        modifier = Modifier.height(44.dp),
-                    ) {
-                        Text(
-                            stringResource(Res.string.cancel),
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    androidx.compose.material3.Button(
-                        onClick = { onSave(selected) },
-                        enabled = selected in 1.0..5.0 && !saving,
-                        modifier = Modifier.height(44.dp),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = com.music.bitchord.ui.theme.AccentRed,
-                            contentColor = androidx.compose.ui.graphics.Color.White,
-                        ),
-                    ) {
-                        if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                        else Text(stringResource(Res.string.recording_feedback_dialog_save))
-                    }
+                    if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                    else Text(
+                        stringResource(Res.string.recording_feedback_dialog_save),
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 1,
+                    )
                 }
             }
         }
