@@ -99,6 +99,29 @@ class DiscogsEditionMatcherTest {
                 linked, discogs))
     }
 
+    @Test fun missingStructuredMusicBrainzCreditCannotApproveAdditionalDiscogsArtists() {
+        // A MusicBrainz display string alone cannot attest a second artist
+        // embedded in the Discogs Release artist list. This direct matcher
+        // boundary must be safe even when a caller skips the coordinator.
+        val oneArtistWithoutStructuredCredit = canon.copy(
+            creditedArtist = "아티스트", creditedArtistNames = emptyList(),
+        )
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(oneArtistWithoutStructuredCredit, linked, record))
+        val collaborativeEdition = record.copy(
+            artistNames = listOf("아티스트", "Another Artist"),
+        )
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(
+                oneArtistWithoutStructuredCredit, linked, collaborativeEdition,
+                explicitReleaseRelation = true,
+            ))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assessUnlinked(
+                oneArtistWithoutStructuredCredit, collaborativeEdition,
+            ))
+    }
+
     @Test fun anUnofficialPressingMustNotVerifyAnOfficialMusicBrainzRelease() {
         assertEquals(DiscogsEditionVerdict.CONFLICT,
             DiscogsEditionMatcher.assess(canon, linked, record.copy(unofficial = true)))
