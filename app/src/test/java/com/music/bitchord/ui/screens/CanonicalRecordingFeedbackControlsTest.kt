@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import com.music.bitchord.ui.components.ActionRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Radio
@@ -43,7 +44,8 @@ class CanonicalRecordingFeedbackControlsTest {
                 )
             }
         }
-        compose.onNodeWithText("User rating").assertIsDisplayed()
+        compose.onNodeWithTag("native-rating-bottom-sheet").assertExists()
+        compose.onNodeWithText("User rating").assertDoesNotExist()
         compose.onNodeWithContentDescription("4 stars").performClick()
         compose.runOnIdle {
             assertEquals(emptyList<Double>(), values)
@@ -51,6 +53,35 @@ class CanonicalRecordingFeedbackControlsTest {
         }
         compose.onNodeWithText("Save rating").performClick()
         compose.runOnIdle { assertEquals(listOf(4.0), values) }
+    }
+
+    @Test fun ratingCompositionMatchesMinimalSolidBottomSheetConcept() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecordingFeedbackPanel(
+                    rating = 4.5,
+                    title = "Rate playlist",
+                    onSave = {},
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("native-rating-bottom-sheet").assertExists()
+        compose.onNodeWithText("Rate playlist").assertDoesNotExist()
+        compose.onNodeWithTag("rating-editor-sheet-handle").assertDoesNotExist()
+        compose.onNodeWithTag("rating-editor-artwork-header").assertDoesNotExist()
+        compose.onNodeWithTag("rating-editor-cancel-action").assertExists()
+        compose.onNodeWithTag("rating-editor-save-action").assertExists()
+        val cancelBounds = compose.onNodeWithTag("rating-editor-cancel-action")
+            .getUnclippedBoundsInRoot()
+        val saveBounds = compose.onNodeWithTag("rating-editor-save-action")
+            .getUnclippedBoundsInRoot()
+        assertEquals(cancelBounds.width, saveBounds.width)
+    }
+
+    @Test fun ratingSheetBackgroundFollowsSolidPlayerThemeWithoutFrosting() {
+        assertEquals(Color.Black, ratingSheetSolidColor(true))
+        assertEquals(Color.White, ratingSheetSolidColor(false))
     }
 
     @Test fun cancelCannotWriteAndDialogNeverExposesClear() {
