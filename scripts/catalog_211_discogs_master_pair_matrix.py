@@ -19,6 +19,7 @@ from catalog_211_discogs_master_lead_scout import release_browse, release_index_
 from catalog_211_discogs_master_versions_probe import typed_master, versions, positive_id
 from catalog_211_discogs_public_link_probe import compare_edition, read_json
 from catalog_211_discogs_edition_pair_review import release_relations
+from catalog_211_discogs_unlinked_group_probe import label_catalog_evidence
 
 OUTPUT = Path("discogs-211-typed-master-pair-matrix.json")
 MAX_SEEDS, MAX_MB_RELEASES, MAX_REQUESTS = 2, 12, 40
@@ -180,6 +181,7 @@ def inspect(seed: dict, get) -> dict:
                     "discogs_formats": [x.get("name") for x in discogs["formats"]
                                        if isinstance(x, dict) and isinstance(x.get("name"), str)][:12],
                     "comparison": comparison,
+                    "label_catalog": label_catalog_evidence(mb, discogs),
                     "verified_discogs_edition": False,
                 })
         result["status"] = "all_pairs_compared_not_adjudicated"
@@ -236,6 +238,13 @@ def main():
                      "discogs_release_count": len(x["discogs_release_ids"]),
                      "raw_pairs": len(x["pairs"]),
                      "unavailable_source_id": x.get("unavailable_source_id"),
+                     "label_catalog_conflicting_pairs": [
+                         {"mb": p["musicbrainz_release_mbid"],
+                          "discogs": p["discogs_release_id"],
+                          "conflicts": p["label_catalog"]["conflicting_same_label_catalog_numbers"]}
+                         for p in x["pairs"]
+                         if p["label_catalog"]["conflicting_same_label_catalog_numbers"]
+                     ][:15],
                      "matching_full_tracks_and_barcode": sum(
                          p["comparison"]["tracklist_matches"] and
                          p["comparison"]["barcode_identical_on_both"]
