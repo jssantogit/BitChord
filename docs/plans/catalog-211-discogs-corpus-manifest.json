@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: seven independently source-reviewed non-verified B edition-pairs; three B slots and all A/C slots remain unreviewed; three preliminary C source exclusions; no proven provider gains or complete coverage metrics.",
+  "description": "Discogs #211: ten independently source-reviewed B edition-pairs (all non-Verified), ten A and ten C unreviewed; three C source exclusions preliminary; no proven provider gains or complete coverage metrics.",
   "cases": [
     {
       "id": "A-01",
@@ -275,17 +275,98 @@
     {
       "id": "B-08",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": true,
+      "label": "IVE · ELEVEN original digital vs physical CD",
+      "musicbrainz_release_mbid": "47106725-be2e-4af7-9d27-4610f4116e0b",
+      "musicbrainz_group_mbid": "18271616-7122-4bf6-8fc8-11467cc923c1",
+      "discogs_release_id": 21255514,
+      "selection_note": "same reported barcode but MusicBrainz Digital Media one-track edition versus Discogs two-track CD; exact edition conflict",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/47106725-be2e-4af7-9d27-4610f4116e0b",
+        "discogs_release": "https://www.discogs.com/release/21255514",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43117923979",
+        "independent_editorial": "https://www.starship-ent.com/board/newrelease/466",
+        "independent_artist_catalog": "https://ive-official.jp/mob/news/diarKijiShw.php?id=154826&ima=2150&site=DIVE"
+      },
+      "match_state": "conflict",
+      "review_notes": "STARSHIP Entertainment's official 1 December 2021 release notice identifies IVE's debut ELEVEN as its first Single Album. The IVE Japan official discography independently lists both tracks ELEVEN and Take It and multiple physical-package variants. In the complete anonymous 11 November control for typed ReleaseGroup 18271616→Discogs Master 2531575, exact MusicBrainz Release 47106725 is Digital Media with one observed Track, while Discogs Release 21255514 is a physical CD with two observed tracks. Although the providers report matching barcode digits, year and country compatibility, the physical media family and complete track count differ; their editions are NOT identical. The public matrix observes no direct Release→Discogs URL for this MB edition. This is an independently source-reviewed negative exact-edition pair, not a newly recovered title, missing MusicBrainz group, or classification correction. No Android device check was done, so app_type Unknown and visible false do not claim a UI failure.",
+      "direct_release_relation": "no_direct_release_link",
+      "reviewed_at_utc": "2026-11-11T23:14:23Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false
     },
     {
       "id": "B-09",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": true,
+      "label": "IVE · ELEVEN -Japanese ver.- I CD vs V CD+Blu-ray",
+      "musicbrainz_release_mbid": "251ad807-4bf0-4810-a4f9-34673d6d2ff8",
+      "musicbrainz_group_mbid": "07fb58fa-2007-4e40-aa57-88e69a9e19be",
+      "discogs_release_id": 25759165,
+      "selection_note": "Sony official I CD KSCL-3390 versus V CD+Blu-ray KSCL-3392; reported barcode differs, 1/2 literal tracks; distinct packaging",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/251ad807-4bf0-4810-a4f9-34673d6d2ff8",
+        "discogs_release": "https://www.discogs.com/release/25759165",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43117923979",
+        "independent_editorial": "https://www.sonymusic.co.jp/artist/IVE/info/544910",
+        "independent_artist_catalog": "https://ive-official.jp/mob/news/diarKijiShw.php?id=197538&ima=0411&site=DIVE"
+      },
+      "match_state": "conflict",
+      "review_notes": "Sony Music Japan's official Japanese debut announcement and IVE Japan discography identify ELEVEN -Japanese ver.- as a two-song single issued 19 October 2022 in distinct versions: I edition CD+photo book catalog KSCL-3390/3391, V edition CD+Blu-ray catalog KSCL-3392/3393, plus E and Fan Club packages. The anonymous typed Master matrix observed MusicBrainz official CD Release 251ad807 with label Ki/oon catalog KSCL-3390 and Discogs Release 25759165 with Ki/oon catalog KSCL-3392, CD+Blu-ray. Barcode does not match and only one of two track titles matches literally. The official version-specific catalog and physical package distinctions corroborate that this specific pair is NOT one identical pressing, despite being the same single family. No MB Release→Discogs Release direct link was observed for this pair; no MusicBrainz ID, audio, or shelf gain was created. app_type and visible are unmeasured Android placeholders, not tested UI failures.",
+      "direct_release_relation": "no_direct_release_link",
+      "reviewed_at_utc": "2026-11-11T23:14:23Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false
     },
     {
       "id": "B-10",
       "cohort": "unlinked",
-      "reviewed": false
+      "reviewed": true,
+      "label": "IVE · ELEVEN -Japanese ver.- E CD lead",
+      "musicbrainz_release_mbid": "b9290e0d-be3a-41d0-b145-88fe342aa5da",
+      "musicbrainz_group_mbid": "07fb58fa-2007-4e40-aa57-88e69a9e19be",
+      "discogs_release_id": 25524349,
+      "selection_note": "Sony official E edition KSCL-3394; MB Ki/oon KSCL-3394 vs Discogs KSCL 3394, matching UPC but only 1/2 literal tracks; not Verified",
+      "evidence_links": {
+        "musicbrainz_release": "https://musicbrainz.org/release/b9290e0d-be3a-41d0-b145-88fe342aa5da",
+        "discogs_release": "https://www.discogs.com/release/25524349",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43117923979",
+        "independent_editorial": "https://ive-official.jp/mob/news/diarKijiShw.php?id=197538&ima=0411&site=DIVE",
+        "independent_label_announcement": "https://www.sonymusic.co.jp/artist/IVE/info/544910"
+      },
+      "match_state": "candidate",
+      "review_notes": "IVE Japan's official discography specifies that the E normal CD edition of ELEVEN -Japanese ver.-, released on 19 October 2022, is catalog KSCL-3394 and contains two tracks: ELEVEN -Japanese ver.- and Queen of Hearts. The bounded public MusicBrainz ReleaseGroup 07fb58fa→Discogs Master 2911144 inspection observed MusicBrainz official CD Release b9290e0d and Discogs physical CD Release 25524349 with the same reported valid barcode and year/country compatibility. Ki/oon label catalog in MB is KSCL-3394 and Discogs renders KSCL 3394 (punctuation/whitespace variation), so the pair plausibly refers to E, but only one of two titles matches literally; neither provider exposes a direct exact MB Release→Discogs Release URL in the sampled payload. A catalog typography difference is not a substantive variant conflict, but neither the UPC alone nor a shared two-track product family proves edition identity. Retain as Candidate, not Verified or recovered Release. Android UI and playback were not checked; Unknown/false fields are no demonstrated gain, not a measured absence.",
+      "direct_release_relation": "no_direct_release_link",
+      "reviewed_at_utc": "2026-11-11T23:14:23Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false
     },
     {
       "id": "C-01",
