@@ -2,6 +2,11 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithTag
+import com.music.bitchord.ui.components.LocalCompactRatingStyle
+import com.music.bitchord.ui.components.CompactRatingStyle
 import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertWidthIsEqualTo
@@ -272,9 +277,27 @@ class CanonicalRecordingFeedbackControlsTest {
         }
     }
 
-    @Test fun ratingActionUsesTheExactPlayerOutlineVector() {
+    @Test fun numericRatingStylePlacesOneNumberOnlyOnTerminalStar() {
+        compose.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(LocalCompactRatingStyle provides CompactRatingStyle.NUMERIC) {
+                    CanonicalRecordingFeedbackPanel(
+                        rating = 2.0,
+                        onSave = {},
+                        onDismiss = {},
+                    )
+                }
+            }
+        }
+        compose.onAllNodesWithTag("compact-rating-numeric", useUnmergedTree = true)
+            .assertCountEquals(1)
+        compose.onNodeWithTag("rating-editor-star-1-full").assertExists()
+        compose.onNodeWithTag("rating-editor-star-2-empty").assertExists()
+    }
+
+    @Test fun ratingActionUsesThePlainStandaloneOutlineVector() {
         assertEquals(
-            com.music.bitchord.ui.icons.PlaylistEditorIcons.Ratings,
+            com.music.bitchord.ui.icons.PlaylistEditorIcons.RatingPlain,
             ratingActionIcon(),
         )
     }
