@@ -35,7 +35,7 @@ import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.components.CompactRatingIndicator
 import com.music.bitchord.ui.components.CompactRatingGeometry
-import com.music.bitchord.ui.player.AppleQueueVectors
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 
 /** Native artist star is context/capability-driven, not a legacy provider ID. */
 internal enum class NativeArtistStarKind { FOLLOW, RATE, UNAVAILABLE }
@@ -109,7 +109,7 @@ internal fun ActionRow(
             )
         } else if (starKind == NativeArtistStarKind.RATE) {
             CircleIconButton(
-                icon = AppleQueueVectors.RatingStarOutline,
+                icon = PlaylistEditorIcons.Ratings,
                 contentDescription = "Avaliar artista",
                 onClick = { onRateArtist?.invoke() },
                 haptic = Haptic.ToggleOn,
