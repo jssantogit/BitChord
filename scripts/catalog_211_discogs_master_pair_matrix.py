@@ -162,6 +162,16 @@ def inspect(seed: dict, get) -> dict:
                 result["status"] = "source_identity_conflict"
                 return result
             discogs_details.append(record)
+        # Exact MB Release->Discogs Release relations provide *ownership
+        # warnings* for other same-RG editions, not a new link. Never
+        # overwrite a typed direct relation with a no-link UPC coincidence.
+        owners: dict[int, set[str]] = {}
+        for mb in mb_details:
+            links = release_relations(mb)
+            if links is not None:
+                for discogs_id in links:
+                    if discogs_id in ids:
+                        owners.setdefault(discogs_id, set()).add(mb["id"])
         # No deduplication: two versions can have identical UPC+tracklists.
         # Retain the complete cross-product so a caller cannot cherry-pick
         # the sole attractive match out of a competing physical version.
@@ -182,6 +192,8 @@ def inspect(seed: dict, get) -> dict:
                                        if isinstance(x, dict) and isinstance(x.get("name"), str)][:12],
                     "comparison": comparison,
                     "label_catalog": label_catalog_evidence(mb, discogs),
+                    "competing_direct_release_owner_mbids": sorted(
+                        owners.get(discogs["id"], set()) - {mb["id"]}),
                     "verified_discogs_edition": False,
                 })
         result["status"] = "all_pairs_compared_not_adjudicated"
