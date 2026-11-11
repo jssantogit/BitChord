@@ -115,6 +115,15 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         val groupId = group.appearanceText("id")?.lowercase(Locale.ROOT)
             ?: return@mapNotNull null
         if (!ARTIST_APPEARANCE_MBID.matches(groupId)) return@mapNotNull null
+        // An edition can credit someone else while its ReleaseGroup remains
+        // primarily credited to the selected artist. That group belongs in
+        // their main discography, not the guest-appearance shelf. Check the
+        // structured MBID when present; never compare artist display names.
+        val belongsToArtistGroup = (group["artist-credit"] as? JsonArray).orEmpty().any { part ->
+            val creditedArtist = (part as? JsonObject)?.get("artist") as? JsonObject
+            creditedArtist?.appearanceText("id")?.equals(target, ignoreCase = true) == true
+        }
+        if (belongsToArtistGroup) return@mapNotNull null
         val title = group.appearanceText("title")?.takeIf { it.length <= 180 }
             ?: return@mapNotNull null
         if (!canonicalStreamingTitleIsSafe(title) ||
