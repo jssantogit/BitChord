@@ -762,22 +762,23 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("history", opened) }
     }
 
-    @Test fun conditionCategoriesUseOneNativeGroupedListWithSevenAccessibleBadges() {
+    @Test fun conditionCategoriesShowSixGridCellsAndSeventhWideCell() {
         compose.setContent {
-            PlaylistWizardNavigationList(
+            PlaylistWizardCategoryGrid(
                 (1..7).map { n ->
                     PlaylistWizardNavOption(
                         title = "Categoria $n",
                         description = "Descrição $n",
-                        icon = androidx.compose.material.icons.Icons.Rounded.LibraryMusic,
+                        icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Music,
                         onClick = {},
                     )
                 },
             )
         }
-        compose.onNodeWithTag("playlist-category-group", useUnmergedTree = true).assertExists()
-        compose.onAllNodesWithTag("playlist-category-icon-badge", useUnmergedTree = true)
+        compose.onNodeWithTag("playlist-category-grid", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithTag("playlist-category-tile", useUnmergedTree = true)
             .assertCountEquals(7)
+        compose.onNodeWithTag("playlist-category-wide-tile", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Categoria 7").assertExists()
     }
 
