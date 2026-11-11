@@ -4,6 +4,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
+import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import java.text.Normalizer
@@ -270,6 +271,14 @@ internal fun smartConditionSearch(
         ).contains(term)
     }
 }
+
+/**
+ * A draft's Add/Save action uses the same typed validation contract as the
+ * persisted query. "Nonblank" and "finite" alone accept impossible years,
+ * negative counters and text beyond the persisted limit.
+ */
+internal fun smartConditionDraftValid(draft: SmartPlaylistRule.Comparison): Boolean =
+    runCatching { SmartPlaylistV2Query(rules = draft) }.isSuccess
 
 /** Rule paths index Group children; traverse a NOT-wrapped Group transparently. */
 internal fun smartRuleAtPath(root: SmartPlaylistRule, path: List<Int>): SmartPlaylistRule =
