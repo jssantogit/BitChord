@@ -156,6 +156,32 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual(0, output["verified_edition_count"])
         self.assertFalse(output["exhaustive_artist_catalog"])
 
+    def test_bounded_a_master_scout_favors_single_leads_over_five_alphabetical_albums(self):
+        # The first pass used five alphabetic Album Masters (all >8
+        # versions) and missed a later small Single within the same browse.
+        groups = [
+            row(f"{i:08x}-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 6000 + i, A,
+                title=("ZZZ Single" if i == 6 else f"AAA Album {i}"),
+                kind=("Single" if i == 6 else "Album"))
+            for i in range(1, 7)
+        ]
+        def get(url):
+            if url == url_artist(A):
+                return page(groups)
+            if "/versions?" in url:
+                return listing([900])
+            if "/masters/" in url:
+                return {"id": int(url.split("/")[-1]), "main_release": 900}
+            if "/ws/2/release/?" in url:
+                group = url.split("release-group=", 1)[1].split("&", 1)[0]
+                return edition_page(group, A)
+            raise AssertionError(url)
+        result = scout([("Artist A", A)], set(), get)
+        self.assertEqual(MASTER_LIMIT, len(result["leads"]))
+        self.assertIn("ZZZ Single", [x["group_title"] for x in result["leads"]])
+        self.assertEqual("Single", result["leads"][0]["primary_type_hint"])
+        self.assertEqual(0, result["verified_edition_count"])
+
     def test_browse_must_keep_exact_credit_and_typed_relation(self):
         rows, meta = browse_page(page([
             row(), row(H, 501, artist=B),
