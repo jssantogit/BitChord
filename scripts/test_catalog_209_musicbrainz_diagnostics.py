@@ -94,7 +94,10 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         self.assertEqual(TRACK, release['evidence']['sample_track_mbid'])
         self.assertIs(release['evidence']['cover_art_front_hint'], True)
         self.assertTrue(all(row['evidence_type'] == 'PUBLIC_API_ONLY' for row in results))
-        report = make_report({'schema_version': 1, 'cases': [CASE]}, client)
+        # The previous diagnose_case call already consumed eight GETs.
+        # Count this report on a fresh transport to enforce the 8+1 budget.
+        report_client = FakeClient()
+        report = make_report({'schema_version': 1, 'cases': [CASE]}, report_client)
         self.assertEqual('PUBLIC_API_NOT_ANDROID_UI', report['scope'])
         self.assertEqual(0, report['fail_count'])
         self.assertEqual(0, report['error_count'])
