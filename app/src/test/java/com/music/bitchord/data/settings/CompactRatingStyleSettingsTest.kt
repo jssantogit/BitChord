@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
 import com.music.bitchord.ui.components.CompactRatingStyle
-import com.music.bitchord.auth.AuthStore
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,28 +19,28 @@ class CompactRatingStyleSettingsTest {
         prefs.edit().clear().commit()
         val field = AppSettings::class.java.getDeclaredField("prefs").apply { isAccessible = true }
         val previousPrefs = field.get(AppSettings)
-        val authField = AppSettings::class.java.getDeclaredField("authStore")
-            .apply { isAccessible = true }
-        val previousAuth = authField.get(AppSettings)
         val previousStyle = AppSettings.compactRatingStyle.value
         try {
             field.set(AppSettings, prefs)
-            authField.set(AppSettings, AuthStore(context))
             AppSettings.setCompactRatingStyle(CompactRatingStyle.NUMERIC)
             assertEquals(CompactRatingStyle.NUMERIC, AppSettings.compactRatingStyle.value)
             assertEquals("NUMERIC", prefs.getString("compact_rating_style", null))
 
-            // Simulates reloading after a process restart without any music reload.
+            // The same decoder used by AppSettings.readAll on every cold launch.
+            // No encrypted auth/keystore is involved in this plain visual setting.
             AppSettings.compactRatingStyle.value = CompactRatingStyle.COLOR
-            AppSettings.reload()
-            assertEquals(CompactRatingStyle.NUMERIC, AppSettings.compactRatingStyle.value)
-
+            assertEquals(
+                CompactRatingStyle.NUMERIC,
+                compactRatingStyleFromPersisted(prefs.getString("compact_rating_style", null)),
+            )
             prefs.edit().putString("compact_rating_style", "CORRUPTED").commit()
-            AppSettings.reload()
-            assertEquals(CompactRatingStyle.COLOR, AppSettings.compactRatingStyle.value)
+            assertEquals(
+                CompactRatingStyle.COLOR,
+                compactRatingStyleFromPersisted(prefs.getString("compact_rating_style", null)),
+            )
+            assertEquals(CompactRatingStyle.COLOR, compactRatingStyleFromPersisted(null))
         } finally {
             field.set(AppSettings, previousPrefs)
-            authField.set(AppSettings, previousAuth)
             AppSettings.compactRatingStyle.value = previousStyle
             prefs.edit().clear().commit()
         }

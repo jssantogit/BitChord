@@ -792,7 +792,7 @@ class SmartPlaylistV2WizardComposeTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("5/5", substring = true).assertExists()
+        compose.onNodeWithContentDescription("Avaliação: 5 de 5 estrelas", substring = true).assertExists()
     }
 
     @Test fun lastRuleCanBeDeletedWithNativeIconAndReturnsToUnconfiguredState() {

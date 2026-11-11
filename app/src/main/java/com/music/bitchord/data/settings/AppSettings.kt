@@ -136,6 +136,11 @@ enum class SongSort {
     DATE_ADDED_DESC,
 }
 
+/** Pure preference decoder, shared by cold-start hydration and regression tests. */
+internal fun compactRatingStyleFromPersisted(name: String?): CompactRatingStyle =
+    runCatching { CompactRatingStyle.valueOf(name ?: CompactRatingStyle.COLOR.name) }
+        .getOrDefault(CompactRatingStyle.COLOR)
+
 /**
  * App settings, backed by SharedPreferences and exposed as flows.
  *
@@ -837,11 +842,9 @@ object AppSettings {
         themeMode.value = runCatching {
             ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "DARK")
         }.getOrDefault(ThemeMode.DARK)
-        compactRatingStyle.value = runCatching {
-            CompactRatingStyle.valueOf(
-                prefs.getString(KEY_COMPACT_RATING_STYLE, null) ?: CompactRatingStyle.COLOR.name,
-            )
-        }.getOrDefault(CompactRatingStyle.COLOR)
+        compactRatingStyle.value = compactRatingStyleFromPersisted(
+            prefs.getString(KEY_COMPACT_RATING_STYLE, null),
+        )
         autoplay.value = prefs.getBoolean(KEY_AUTOPLAY, true)
         shuffleEnabled.value = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)

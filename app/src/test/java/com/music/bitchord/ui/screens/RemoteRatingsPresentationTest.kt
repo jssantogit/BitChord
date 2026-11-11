@@ -64,7 +64,7 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Remote track").assertIsDisplayed()
-        compose.onNodeWithContentDescription("4/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("OpenSubsonic", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Remote rating: 4/5").assertDoesNotExist()
         compose.onNodeWithText("OpenSubsonic (remote)").assertDoesNotExist()
@@ -88,8 +88,8 @@ class RemoteRatingsPresentationTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4,5 de 5 estrelas", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Rating: 4.5").assertDoesNotExist()
         compose.onNodeWithText("Remote rating: 5/5").assertDoesNotExist()
         compose.onNodeWithText("Local and remote ratings differ").assertIsDisplayed()
@@ -125,7 +125,7 @@ class RemoteRatingsPresentationTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4,5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Remote ratings unavailable").assertIsDisplayed()
     }
 
@@ -145,8 +145,8 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Remote sources disagree").assertIsDisplayed()
-        compose.onNodeWithContentDescription("3/5", substring = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 3 de 5 estrelas", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Remote rating: 3/5").assertDoesNotExist()
         compose.onNodeWithText("Remote rating: 5/5").assertDoesNotExist()
     }
@@ -208,7 +208,7 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Could not load ratings. Try reopening this page.").assertIsDisplayed()
-        compose.onNodeWithContentDescription("4/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4 de 5 estrelas", substring = true).assertIsDisplayed()
     }
 
     @Test fun partialCanonicalMatchingIsVisibleWithoutGuessingUnknownRecordings() {
