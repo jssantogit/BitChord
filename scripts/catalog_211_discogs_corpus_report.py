@@ -193,9 +193,10 @@ def report(document: dict) -> dict:
             errors.append(f"case {cid}: missing exact public MusicBrainz group MBID")
             continue
         release_id = case.get("discogs_release_id")
-        if (case.get("match_state") == "verified" or cohort == "source_only") and (
-            type(release_id) is not int or not 1 <= release_id <= 999_999_999_999
-        ):
+        # Every reviewed cross-provider case, including a negative/conflict
+        # verdict, must have a typed Discogs Release ID. It is needed to keep
+        # known identities out of future source-only discovery scans.
+        if type(release_id) is not int or not 1 <= release_id <= 999_999_999_999:
             errors.append(f"case {cid}: missing exact Discogs release ID")
             continue
         if any(case.get(k) not in KINDS for k in

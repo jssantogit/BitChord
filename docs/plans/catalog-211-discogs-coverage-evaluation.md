@@ -418,3 +418,24 @@ edições; a fonte editorial independente confirma o EP, não a mesma
 prensagem. Esse caso é revisado, mas não entra em `verified` nem nos
 cálculos de precisão de vínculos verificados. O status `candidate` fica
 reservado aos casos sem prova suficiente e sem contradição decisiva.
+
+## Não reciclar casos B revisados como possíveis C (11/11/2026)
+
+A passagem de B-02/B-05 para `reviewed=true` expôs uma lacuna
+na segunda sondagem C: `_known_releases` guardava somente os B/C
+**pré-selecionados e ainda não revisados**. Assim, o mesmo Discogs
+Release 37110012, B-05 revisado como conflito de barcode, podia
+reaparecer na sondagem como suposto candidato C, mesmo já havendo
+evidência de grupo MusicBrainz existente.
+
+Agora o scanner incorpora os **Release IDs válidos tanto de B/C
+pré-selecionados quanto de B/C revisados**, exigindo que cada caso
+revisto possua links e prova editorial validados pelo manifesto.
+A validação do relatório também exige Discogs Release ID concreto
+para **todo caso revisto**, inclusive os resultados `candidate` e
+`conflict` — não somente os `verified`. Um Master de índice que
+resolva para Release conhecida fica excluído na hidratação. A
+regressão `test_cannot_revisit_existing_b_release_as_new_c_case`
+demonstrou a quebra na [CI #43055313679](https://github.com/jssantogit/BitChord/actions/runs/43055313679)
+e protege a correção. Nenhum título ou ID novo foi inventado,
+nenhuma ausência MB afirmada e nenhum dado do usuário alterado.

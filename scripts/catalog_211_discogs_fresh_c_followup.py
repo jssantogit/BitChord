@@ -18,7 +18,7 @@ from catalog_211_discogs_candidate_details import (
     candidate_queue, observe, valid_id, MAX_CANDIDATES,
 )
 from catalog_211_discogs_corpus_candidates import ARTISTS
-from catalog_211_discogs_corpus_report import report, selected_identity
+from catalog_211_discogs_corpus_report import report, reviewed_evidence, selected_identity
 from catalog_211_discogs_source_only_reconciliation import reconcile
 from catalog_211_discogs_source_only_title_triage import triage
 from catalog_211_discogs_public_link_probe import read_json
@@ -48,13 +48,19 @@ def _known_releases(manifest: dict) -> set[int] | None:
         return None
     identities = set()
     for case in manifest["cases"]:
-        if "selection_state" not in case:
-            continue
         if case["cohort"] not in ("unlinked", "source_only"):
-            return None
-        if selected_identity(case) is None or case.get("reviewed") is not False:
-            return None
-        identities.add(case["discogs_release_id"])
+            continue
+        # A reviewed negative pair remains a KNOWN source Release. Otherwise
+        # promotion from selected_unreviewed to reviewed would erase it from
+        # this exclusion set and accidentally recycle B as a new C lead.
+        if case.get("reviewed") is True:
+            if not reviewed_evidence(case):
+                return None
+            identities.add(case["discogs_release_id"])
+        elif "selection_state" in case:
+            if selected_identity(case) is None or case.get("reviewed") is not False:
+                return None
+            identities.add(case["discogs_release_id"])
     return identities
 
 
