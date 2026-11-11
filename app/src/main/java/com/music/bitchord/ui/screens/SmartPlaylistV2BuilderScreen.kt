@@ -320,7 +320,7 @@ internal fun SmartPlaylistV2BuilderScreen(
     var legacyFailure by remember { mutableStateOf(false) }
     var editorEpoch by remember { mutableStateOf(0) }
     var showWizard by remember { mutableStateOf(true) }
-    var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.PLAYLISTS) }
+    var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.FILTERS) }
     var pendingDeletion by remember { mutableStateOf<PendingSmartDeletion?>(null) }
     var pendingEditorNavigation by remember { mutableStateOf<PendingEditorNavigation?>(null) }
     // Selecting a different library section starts at its own heading,
@@ -1147,19 +1147,12 @@ internal fun SmartPlaylistV2BuilderScreen(
             ) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                     PlaylistManagerChrome(
-                        selectedIndex = when (manageTab) {
-                            SmartPlaylistManageTab.FILTERS -> 0
-                            SmartPlaylistManageTab.PLAYLISTS -> 1
-                            SmartPlaylistManageTab.CLASSIC -> 2
-                        },
-                        onSelect = { index ->
-                            manageTab = when (index) {
-                                0 -> SmartPlaylistManageTab.FILTERS
-                                1 -> SmartPlaylistManageTab.PLAYLISTS
-                                else -> SmartPlaylistManageTab.CLASSIC
-                            }
-                        },
                         onBack = { showWizard = true },
+                        onCreateFilter = {
+                            requestEditorDestination(PendingEditorNavigation(
+                                "", EditorDestination.CREATE_FILTER,
+                            ))
+                        },
                     )
                     if (error != null) {
                         Text(error.orEmpty(),
@@ -1172,23 +1165,9 @@ internal fun SmartPlaylistV2BuilderScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
             if (manageTab == SmartPlaylistManageTab.FILTERS) {
-            item(key = "v2-saved-filter-heading") {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                ) {
-                    Text("Seus filtros", style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = {
-                        requestEditorDestination(PendingEditorNavigation(
-                            "", EditorDestination.CREATE_FILTER,
-                        ))
-                    }) { Text("Criar filtro") }
-                }
-                if (filtersFailure) {
-                    Text("Não foi possível ler os filtros salvos.",
-                        color = MaterialTheme.colorScheme.error)
-                }
+            if (filtersFailure) item(key = "v2-saved-filter-error") {
+                Text("Não foi possível ler os filtros salvos.",
+                    color = MaterialTheme.colorScheme.error)
             }
             if (!filtersFailure && savedFilters.isEmpty()) {
                 item(key = "v2-saved-filter-empty-state") {
@@ -1201,63 +1180,69 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
                 var more by remember(filter.id) { mutableStateOf(false) }
-                // Reuse a single native settings row per saved filter. Clicking
-                // opens the existing action picker; it never silently overwrites
-                // the editing playlist's rule graph.
                 SettingsGroupSurface {
                     SettingsRow(
                         title = filter.name,
                         subtitle = "${smartConditionCountLabel(smartRuleLeafCount(filter.rules))} · Filtro reutilizável",
                         reserveIconSpace = false,
-                        onClick = { more = true },
-                        trailing = {
-                            RowMoreButton(
-                                onClick = { more = true },
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        onClick = {
+                            requestEditorDestination(PendingEditorNavigation(
+                                filter.id, EditorDestination.EDIT_FILTER,
+                            ))
                         },
-                    )
-                }
-                if (more) {
-                    WizardChoiceDialog(
-                        title = filter.name,
-                        options = savedFilterActionsForDraft(normalMode, editingNormalId),
-                        label = { it },
-                        onChosen = { option ->
-                            when (option) {
-                                "Aplicar regras ao rascunho" -> {
-                                    if (hasConfiguredRules && rule != filter.rules) {
-                                        // Unlike E/OU, replacing existing predicates is
-                                        // destructive. Require explicit confirmation.
-                                        pendingFilterReplacementId = filter.id
-                                    } else {
-                                        applyManagerFilter(filter, SavedFilterApplication.REPLACE)
-                                    }
-                                }
-                                "Combinar com o rascunho (E)" -> {
-                                    applyManagerFilter(filter, SavedFilterApplication.ALL)
-                                }
-                                "Combinar com o rascunho (OU)" -> {
-                                    applyManagerFilter(filter, SavedFilterApplication.ANY)
-                                }
-                                "Editar filtro" -> {
-                                    requestEditorDestination(PendingEditorNavigation(
-                                        filter.id, EditorDestination.EDIT_FILTER,
-                                    ))
-                                }
-                                "Criar playlist com este filtro" -> {
-                                    requestEditorDestination(PendingEditorNavigation(
-                                        filter.id, EditorDestination.CREATE_FROM_FILTER,
-                                    ))
-                                }
-                                "Excluir filtro" -> {
-                                    pendingDeletion = PendingSmartDeletion(
-                                        filter.id, filter.name, true,
-                                    )
+                        trailing = {
+                            Box {
+                                RowMoreButton(
+                                    onClick = { more = true },
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                DropdownMenu(
+                                    expanded = more,
+                                    onDismissRequest = { more = false },
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant),
+                                ) {
+                                    // Tapping the row is Edit. Don't duplicate it
+                                    // in the contextual menu.
+                                    savedFilterActionsForDraft(normalMode, editingNormalId)
+                                        .filterNot { it == "Editar filtro" }
+                                        .forEach { option ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Text(when (option) {
+                                                        "Aplicar regras ao rascunho" -> "Aplicar regras"
+                                                        "Combinar com o rascunho (E)" -> "Combinar (E)"
+                                                        "Combinar com o rascunho (OU)" -> "Combinar (OU)"
+                                                        "Criar playlist com este filtro" -> "Criar playlist"
+                                                        else -> option
+                                                    })
+                                                },
+                                                onClick = {
+                                                    more = false
+                                                    when (option) {
+                                                        "Aplicar regras ao rascunho" -> {
+                                                            if (hasConfiguredRules && rule != filter.rules)
+                                                                pendingFilterReplacementId = filter.id
+                                                            else applyManagerFilter(filter, SavedFilterApplication.REPLACE)
+                                                        }
+                                                        "Combinar com o rascunho (E)" ->
+                                                            applyManagerFilter(filter, SavedFilterApplication.ALL)
+                                                        "Combinar com o rascunho (OU)" ->
+                                                            applyManagerFilter(filter, SavedFilterApplication.ANY)
+                                                        "Criar playlist com este filtro" ->
+                                                            requestEditorDestination(PendingEditorNavigation(
+                                                                filter.id, EditorDestination.CREATE_FROM_FILTER,
+                                                            ))
+                                                        "Excluir filtro" ->
+                                                            pendingDeletion = PendingSmartDeletion(
+                                                                filter.id, filter.name, true,
+                                                            )
+                                                    }
+                                                },
+                                            )
+                                        }
                                 }
                             }
                         },
-                        onClose = { more = false },
                     )
                 }
             }
