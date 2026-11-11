@@ -60,6 +60,32 @@ class DiscogsEditionMatcherTest {
             ))))
     }
 
+    @Test fun lateCatalogNumbersAndOversizedSourceListsCannotSilentlyVerify() {
+        // Prior take(16) threw away the contradictory 17th source pair.
+        val firstSixteen = (1..16).map { "Label $it" to "CAT-$it" }
+        val canonical = canon.copy(
+            releaseYear = 2024, editionFormats = listOf("CD"),
+            editionLabelCatalogPairs = firstSixteen + ("BELIFT LAB" to "BEL-001"),
+        )
+        val observed = record.copy(
+            labels = firstSixteen + ("BELIFT LAB" to "BEL-002"),
+        )
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canonical, linked, observed,
+                explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assessUnlinked(canonical, observed))
+        val many = (1..65).map { "Label $it" to "CAT-$it" }
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canonical.copy(
+                editionLabelCatalogPairs = many,
+            ), linked, record.copy(labels = many)))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canonical.copy(
+                editionLabelCatalogComplete = false,
+            ), linked, record.copy(labels = firstSixteen)))
+    }
+
     @Test fun confirmedEditionNeedsAnExactDiscogsReleaseLinkAndIndependentCorroboration() {
         assertEquals(DiscogsEditionVerdict.VERIFIED,
             DiscogsEditionMatcher.assess(canon, linked, record))
