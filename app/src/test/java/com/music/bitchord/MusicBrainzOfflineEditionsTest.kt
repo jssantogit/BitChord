@@ -121,6 +121,37 @@ class MusicBrainzOfflineEditionsTest {
         } finally { db.close() }
     }
 
+    @Test fun releaseTrackAliasWithoutRecordingCreditCannotUndoCorrectedRecordingMetadata() = runBlocking {
+        val db = database()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistRecordings(listOf(MusicBrainzRecordingHit(
+                recording, "Corrected recording title", "Verified recording artist", 163_000L,
+            )))
+            // The Track is an edition-scoped alias. A missing nested
+            // Recording title/credit does not license replacing the known
+            // Recording metadata with the edition's Track title/artist.
+            index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
+                worldwide, group, "SUPER REAL ME", "ILLIT", "XW", "2024-03-25",
+                listOf(MusicBrainzCatalogTrack(
+                    track, recording, "Edition-only alias", 1, 2, 160_000L,
+                    artistDisplay = "Edition guest",
+                    recordingTitle = null, recordingArtistDisplay = null,
+                    recordingDurationMs = null,
+                )),
+            ))
+            val localId = db.catalogDao().entityIdForExternalIdentity(
+                "musicbrainz", "recording", recording,
+            )!!
+            val cached = db.catalogDao().musicBrainzRecordingEnrichment(localId)!!
+            assertEquals("Corrected recording title", cached.title)
+            assertEquals("Verified recording artist", cached.artistDisplay)
+            assertEquals(163_000L, cached.durationMs)
+            assertEquals("Edition-only alias", index.cachedRelease(worldwide)!!
+                .tracks.single().title)
+        } finally { db.close() }
+    }
+
     @Test fun offlineEditionTrackDoesNotBorrowAnotherEditionsCreditForTheSameRecording() = runBlocking {
         val db = database()
         try {
