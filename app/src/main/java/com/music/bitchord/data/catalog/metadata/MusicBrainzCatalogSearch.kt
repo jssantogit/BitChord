@@ -392,8 +392,16 @@ internal class MusicBrainzCatalogSearch(
                         // edition is still not positive evidence of official
                         // audio. Match the *same* supported Album/EP/Single
                         // evidence required for trustworthy cover association.
-                        hasOfficialAudioRelease = audioReleases.isNotEmpty(),
-                        isVideo = recording.video == true,
+                        // Recording.video is tri-state in the search index.
+                        // An omitted boolean or omitted release list is NOT
+                        // a negative fact and must not clear Room proof from
+                        // a previous complete lookup for this exact MBID.
+                        hasOfficialAudioRelease = when {
+                            recording.video == true -> false
+                            recording.releases == null -> null
+                            else -> audioReleases.isNotEmpty()
+                        },
+                        isVideo = recording.video,
                     )
                 }
             }
