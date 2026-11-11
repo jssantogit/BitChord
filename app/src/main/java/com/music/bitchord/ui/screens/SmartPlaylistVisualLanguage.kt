@@ -431,34 +431,15 @@ internal fun PlaylistWizardFieldTabs(
     onSelect: (String) -> Unit,
 ) {
     if (tabs.isEmpty()) return
-    Row(
-        modifier = Modifier.fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .testTag("playlist-field-search-tabs"),
-        horizontalArrangement = Arrangement.spacedBy(24.dp),
-    ) {
-        tabs.forEach { tab ->
-            val active = tab.key == selectedKey
-            Column(
-                modifier = Modifier.clickable { onSelect(tab.key) }
-                    .testTag("playlist-field-tab-${tab.key}"),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    tab.label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (active) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 2.dp, vertical = 10.dp),
-                )
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(2.dp)
-                        .background(if (active) MaterialTheme.colorScheme.primary
-                            else Color.Transparent),
-                )
-            }
-        }
+    // Use the same real Search tab component rather than a second selector
+    // with different underline thickness, tint and label rhythm.
+    // The semantic keys continue to own filtering in the condition wizard.
+    Box(Modifier.fillMaxWidth().testTag("playlist-field-search-tabs")) {
+        AppleSearchOriginTabs(
+            options = tabs.map { it.label },
+            selectedIndex = tabs.indexOfFirst { it.key == selectedKey }.coerceAtLeast(0),
+            onSelect = { index -> tabs.getOrNull(index)?.let { onSelect(it.key) } },
+        )
     }
 }
 
