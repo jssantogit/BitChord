@@ -25,24 +25,31 @@ internal sealed interface DiscogsUnlinkedMatch {
             // the first one and could falsely certify a verified edition.
             // Only identical repeat records may be collapsed. Disputed IDs
             // cannot be verified; unrelated independent IDs remain eligible.
-            val unique = candidates.take(32)
+            val grouped = candidates.take(32)
                 .filter { it.link.kind == DiscogsKind.RELEASE }
                 .groupBy { it.link.id }
-                .values.mapNotNull { snapshots ->
-                    snapshots.firstOrNull()?.takeIf { first ->
-                        snapshots.all { it == first }
-                    }
-                }
-            val assessed = unique.map { it to DiscogsEditionMatcher.assessUnlinked(musicBrainzEdition, it) }
+            // A disputed Release is still a possible competitor. If another
+            // ID verifies, ignoring the disputed one would invent uniqueness.
+            val contested = grouped.values.filter { snapshots ->
+                snapshots.any { it != snapshots.first() }
+            }.map { it.first() }
+            val stable = grouped.values.filter { snapshots ->
+                snapshots.all { it == snapshots.first() }
+            }.map { it.first() }
+            val assessed = stable.map {
+                it to DiscogsEditionMatcher.assessUnlinked(musicBrainzEdition, it)
+            }
             val verified = assessed.filter { it.second == DiscogsEditionVerdict.VERIFIED }
                 .map { it.first }
             return when {
+                verified.size > 1 || (verified.isNotEmpty() && contested.isNotEmpty()) ->
+                    Ambiguous((verified + contested).distinctBy { it.link.id })
                 verified.size == 1 -> Verified(verified.single())
-                verified.size > 1 -> Ambiguous(verified)
                 else -> {
                     val pending = assessed.filter { it.second == DiscogsEditionVerdict.CANDIDATE }
                         .map { it.first }
-                    if (pending.isEmpty()) NoMatch else Candidates(pending)
+                    val unresolved = (pending + contested).distinctBy { it.link.id }
+                    if (unresolved.isEmpty()) NoMatch else Candidates(unresolved)
                 }
             }
         }

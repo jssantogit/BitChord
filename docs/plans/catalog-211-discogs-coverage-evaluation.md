@@ -620,9 +620,13 @@ outro que contradiz o mesmo ID, a ordem das requisições poderia
 transformar o primeiro em `Verified` — ou eliminar um bom
 candidato diferente. O seletor passa a agrupar por ID e manter
 **somente observações idênticas** para aquele ID; se diferirem,
-o ID disputado fica fora da decisão de vínculo exato, mas
-**outro ID genuinamente independente** pode continuar Verified.
-Os registros de fonte originais continuam intactos; não se cria
+o ID disputado continua `Candidates`, nunca `Verified`.
+Se outro Release separado parecer verificado, a presença do ID
+disputado bloqueia a alegação de **unicidade**, resultando em
+`Ambiguous` para ambas as edições potenciais. Isso preserva
+a chance de revisão sem transformar ausência de certeza em
+uma correspondência automática. Os registros de fonte
+originais continuam intactos; não se cria
 MBID/URL nem se executa playback, e nenhuma divergência é tratada
 como evidência de ausência MusicBrainz.
 

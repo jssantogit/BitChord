@@ -75,16 +75,28 @@ class DiscogsEditorialCatalogPolicyTest {
         assertEquals(DiscogsEditionVerdict.CANDIDATE,
             DiscogsEditionMatcher.assessUnlinked(mb, conflict))
         for (records in listOf(listOf(correct, conflict), listOf(conflict, correct))) {
-            assertFalse("A conflicting repeat of one Discogs ID cannot be a Verified edition",
-                DiscogsUnlinkedMatch.select(mb, records) is DiscogsUnlinkedMatch.Verified)
+            val unresolved = DiscogsUnlinkedMatch.select(mb, records)
+            assertTrue("Conflicting observations must stay reviewable, never verified",
+                unresolved is DiscogsUnlinkedMatch.Candidates)
+            assertEquals(101L,
+                (unresolved as DiscogsUnlinkedMatch.Candidates).records.single().link.id)
         }
         // Repeated identical provider observations remain one verified ID.
         assertEquals(101L, (DiscogsUnlinkedMatch.select(mb, listOf(correct, correct))
             as DiscogsUnlinkedMatch.Verified).record.link.id)
-        // A conflicting duplicated ID must not erase a *different* verified ID.
+        // A conflicting duplicated ID remains a possible second match: never
+        // invent uniqueness for another otherwise verified Release ID.
         val another = edition(202)
-        val selected = DiscogsUnlinkedMatch.select(mb, listOf(correct, conflict, another))
-        assertEquals(202L, (selected as DiscogsUnlinkedMatch.Verified).record.link.id)
+        for (records in listOf(
+            listOf(correct, conflict, another),
+            listOf(conflict, correct, another),
+        )) {
+            val selected = DiscogsUnlinkedMatch.select(mb, records)
+            assertTrue(selected is DiscogsUnlinkedMatch.Ambiguous)
+            assertEquals(setOf(101L, 202L),
+                (selected as DiscogsUnlinkedMatch.Ambiguous).records
+                    .map { it.link.id }.toSet())
+        }
     }
 
     @Test fun missingTypeCanBeFilledButContradictorySingleEditionCannotOverwriteMusicBrainz() {
