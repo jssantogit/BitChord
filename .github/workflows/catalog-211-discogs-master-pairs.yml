@@ -31,8 +31,8 @@ jobs:
           python-version: "3.12"
       - name: Verify exact source IDs, bounded cross-product and fail-closed regressions
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_pair_matrix.py' -v
-      - name: Compare two new IVE ELEVEN typed Masters with complete source versions
-        run: python3 scripts/catalog_211_discogs_master_pair_matrix.py --target IVE
+      - name: Compare all four bounded typed Masters for safe A-type review leads
+        run: python3 scripts/catalog_211_discogs_master_pair_matrix.py --target all
       - name: Summarize every observed pair without a matching verdict or new requests
         run: |
           python3 - <<'PY'
@@ -55,6 +55,8 @@ jobs:
                       "year_matches": c["year_matches"],
                       "mb_formats": pair["mb_formats"],
                       "discogs_formats": pair["discogs_formats"],
+                      "source_type_disagreement": pair["source_type_disagreement"],
+                      "a_type_reviewer_lead_not_adjudicated": pair["a_type_reviewer_lead_not_adjudicated"],
                       "label_catalog_status": pair["label_catalog"]["assessment"],
                       "matching_label_catalog": pair["label_catalog"]["matching_pairs"],
                       "conflicting_same_label_catalog": pair["label_catalog"]["conflicting_same_label_catalog_numbers"],
