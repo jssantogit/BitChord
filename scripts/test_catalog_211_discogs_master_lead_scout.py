@@ -5,7 +5,7 @@ from pathlib import Path
 
 from catalog_211_discogs_master_lead_scout import (
     ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT, browse_page, release_browse, scout,
-    known_b_groups,
+    known_b_groups, scout_corpus,
 )
 
 A = "6b128dd7-e998-4edb-a4f5-400fef190445"
@@ -88,6 +88,21 @@ class MasterLeadScoutTest(unittest.TestCase):
                                 item.get("reviewed") is False for item in selected))
         self.assertEqual(0, sum(item["id"].startswith("B-") and
                                 item.get("match_state") == "verified" for item in selected))
+
+    def test_completed_b_cohort_never_spends_requests_searching_nonexistent_slots(self):
+        corpus = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json")
+                            .read_text(encoding="utf-8"))
+        calls = []
+        def forbidden(url):
+            calls.append(url)
+            raise AssertionError("No network after ten B reviews")
+        result = scout_corpus(corpus, forbidden)
+        self.assertEqual("b_cohort_all_slots_reviewed", result["status"])
+        self.assertEqual([], calls)
+        self.assertEqual(0, result["source_http_requests"])
+        self.assertEqual([], result["leads"])
+        self.assertEqual(0, result["reviewed_corpus_cases"])
+        self.assertEqual(0, result["verified_edition_count"])
 
     def test_browse_must_keep_exact_credit_and_typed_relation(self):
         rows, meta = browse_page(page([
