@@ -235,3 +235,11 @@ resultado negativo comprova lançamento ausente**. O relatório mantém
 `confirmed_missing_from_musicbrainz=false`, `reviewed=false` e as métricas do
 corpus em zero até adjudicação manual com fonte editorial independente e inspeção
 visual. O artifact de comparação é reprodutível e não modifica as prateleiras.
+
+## Grupo C — verificação por título de edição quando falta barcode (11/11/2026)
+
+A primeira execução da etapa de barcode no [scanner #43004860199](https://github.com/jssantogit/BitChord/actions/runs/43004860199) teve 0 consultas MusicBrainz: dos 8 detalhes, 3 foram excluídos por vídeo/crédito de artista e os 5 restantes não tinham barcode Discogs publicamente utilizável. Resultado correto: nenhum registro ausente nem correspondente comprovado.
+
+Para não encerrar a investigação nesse limite, `scripts/catalog_211_discogs_source_only_title_triage.py` consulta o índice `release` de ReleaseGroups MusicBrainz com filtro obrigatório `arid` (MBID do artista) para os casos sem barcode. Limita a uma busca por edição e oito buscas por workflow; utiliza somente título observado e IDs validados, nunca um link inserido no Discogs como destino de HTTP. O resultado `mb_title_index_lead_not_edition` é apenas uma pista de ReleaseGroup já indexado, não valida edição nem relação Discogs. Zero hits e falhas da API nunca são ausência provada. A identidade real de lançamento continua exigindo revisão humana e fonte editorial independente.
+
+O artefato adicional `discogs-211-source-only-title-triage.json` está conectado ao scanner público, separado do corpus 0/30. Busca Lucene usa `release` e `arid` documentados na [API MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API/Search/ReleaseGroupSearch).
