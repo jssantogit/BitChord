@@ -76,6 +76,60 @@ class DiscogsEditionMatcherTest {
                 explicitReleaseRelation = true))
     }
 
+    @Test fun knownDigitalMediaCannotVerifyMatchingPhysicalDiscogsCdOrVinyl() {
+        // Real catalog problem: MEMORABILIA has a MusicBrainz digital
+        // edition and a separate Korean Discogs CD using the same songs.
+        // A copied barcode or direct Release relation cannot negate
+        // an explicit physical-vs-digital contradiction.
+        val digital = canon.copy(editionFormats = listOf("Digital Media"))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(digital, linked,
+                record.copy(formats = listOf("CD", "EP")), explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assessUnlinked(digital,
+                record.copy(formats = listOf("Vinyl", "EP"))))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(digital, linked,
+                record.copy(formats = listOf("File", "EP")), explicitReleaseRelation = true))
+    }
+
+    @Test fun knownCdAndVinylMustNotVerifyWrongPhysicalMedium() {
+        val compactDisc = canon.copy(editionFormats = listOf("CD"))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(compactDisc, linked,
+                record.copy(formats = listOf("File", "EP"))))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assessUnlinked(compactDisc,
+                record.copy(formats = listOf("Vinyl", "EP"))))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(compactDisc, linked, record))
+        val vinyl = canon.copy(editionFormats = listOf("12\" Vinyl"))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(vinyl, linked,
+                record.copy(formats = listOf("Vinyl", "LP", "Album"))))
+        assertEquals(DiscogsEditionVerdict.CONFLICT,
+            DiscogsEditionMatcher.assess(vinyl, linked, record))
+    }
+
+    @Test fun mixedMediaEditionIsCandidateNotVerifiedAsDigitalOrCdOnly() {
+        val digital = canon.copy(editionFormats = listOf("Digital Media"))
+        val cd = canon.copy(editionFormats = listOf("CD"))
+        val mixed = record.copy(formats = listOf("File", "CD", "EP"))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(digital, linked, mixed,
+                explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assessUnlinked(cd, mixed))
+        // Incomplete or unfamiliar format metadata must not be invented
+        // into a conflict; the other independent evidence still applies.
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(canon, linked, mixed))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(
+                canon.copy(editionFormats = listOf("Unknown format")),
+                linked, record.copy(formats = listOf("Vinyl", "EP"))))
+    }
+
     @Test fun barcodeAloneOrTitleAloneIsNeverEditionProof() {
         val noTracklist = record.copy(tracklist = emptyList())
         val noBarcodes = record.copy(barcodes = emptyList())
