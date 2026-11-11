@@ -72,6 +72,16 @@ class CorpusCandidateScoutingTest(unittest.TestCase):
         self.assertFalse(known_group_title("Live", "ENHYPEN", {"공연 (live)"}))
         self.assertFalse(known_group_title("Fashion / ファッション", "IVE",
                                            {"fashion"}))
+        self.assertTrue(known_group_title("誓い = Chikai", "TOMORROW X TOGETHER",
+                                          {"誓い (chikai)"}))
+        self.assertTrue(known_group_title("TOMORROW X TOGETHER - 誓い = Chikai",
+                                          "TOMORROW X TOGETHER", {"誓い (chikai)"}))
+        self.assertFalse(known_group_title("誓い = Chikai (Remix)",
+                                           "TOMORROW X TOGETHER", {"誓い (chikai)"}))
+        self.assertFalse(known_group_title("誓い = Other",
+                                           "TOMORROW X TOGETHER", {"誓い (chikai)"}))
+        self.assertFalse(known_group_title("Hello = Chikai", "TOMORROW X TOGETHER",
+                                           {"hello (chikai)"}))
         self.assertIsNone(complete_mb_titles(MBID, lambda _: {
             "release-group-offset": 0, "release-group-count": 2,
             "release-groups": [{"id": GROUP_A, "title": "Only One"}]

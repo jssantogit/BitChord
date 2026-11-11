@@ -334,6 +334,20 @@ class DiscogsEditorialCatalogPolicyTest {
         }
     }
 
+    @Test fun exactSourceAssertedBilingualPairsAcceptParenthesesAndEqualsOnly() {
+        val known = DiscogsShadowCatalog.knownTitlePredicate(
+            "TOMORROW X TOGETHER", setOf("誓い (CHIKAI)"),
+        )
+        assertTrue(known("誓い = Chikai"))
+        assertTrue(known("TOMORROW X TOGETHER - 誓い = Chikai"))
+        assertFalse(known("誓い = Other"))
+        assertFalse(known("誓い = Chikai (Remix)"))
+        assertFalse(known("誓い = Chikai / Bonus"))
+        assertFalse(DiscogsShadowCatalog.knownTitlePredicate(
+            "TOMORROW X TOGETHER", setOf("Hello (Chikai)"),
+        )("Hello = Chikai"))
+    }
+
     @Test fun videoOnlyAlbumOrSingleLabelsCannotCreateAudioArtistShelves() {
         val videoCases = listOf(
             listOf("DVD", "DVD-Video", "Album"),
