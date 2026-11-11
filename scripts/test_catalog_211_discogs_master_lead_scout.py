@@ -113,6 +113,42 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertFalse(any(x["status"] == "complete_small_master_candidate"
                              for x in report["leads"]))
 
+    def test_later_source_rows_cannot_be_truncated_before_master_conflict_check(self):
+        # 102 source observations: the last RG contradicts an earlier
+        # Master. Scanning only the first 100 would fabricate uniqueness.
+        artist_ids = [f"{i:08x}-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+                      for i in range(1, 7)]
+        pages = {}
+        for index, artist in enumerate(artist_ids):
+            if index == 0:
+                rows = [row(G, 500, artist, title="AAA")]
+            elif index == 5:
+                rows = [row(H, 500, artist, title="ZZZ")]
+            else:
+                rows = [
+                    row(f"{index:08x}-{k:04x}-4aaa-8aaa-aaaaaaaaaaaa",
+                        1_000 + index * 25 + k, artist,
+                        title=f"Filler {k:02}")
+                    for k in range(25)
+                ]
+            pages[url_artist(artist)] = page(rows)
+
+        def get(url):
+            if url in pages:
+                return pages[url]
+            if "/versions?" in url:
+                return listing([900])
+            if "/masters/" in url:
+                mid = int(url.split("/")[-1])
+                return {"id": mid, "main_release": 900}
+            raise AssertionError(url)
+
+        report = scout([(str(i), mbid) for i, mbid in enumerate(artist_ids)],
+                       set(), get)
+        early = next(x for x in report["leads"] if x["master_id"] == 500)
+        self.assertEqual("master_shared_across_groups", early["status"])
+        self.assertLessEqual(report["source_http_requests"], REQUEST_LIMIT)
+
     def test_fail_closed_on_provider_error_and_global_budget(self):
         def unavailable(url):
             if url == url_artist(A):
