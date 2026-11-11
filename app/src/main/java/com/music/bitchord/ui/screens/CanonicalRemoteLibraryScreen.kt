@@ -2201,7 +2201,9 @@ private fun NativeUnifiedLibraryBody(
     BoxWithConstraints(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     ) {
-        val dragModifier = if (canLongPressSelect) {
+        // A hold opens the existing contextual ⋯ menu. Once the user enters
+        // selection mode, holding and dragging continues to paint selections.
+        val dragModifier = if (canLongPressSelect && selectedItems.isNotEmpty()) {
             Modifier.pointerInput(dragRows, dragIndices, gridMode) {
                 val visited = mutableSetOf<CanonicalLibrarySelection>()
                 var previousIndex: Int? = null
@@ -2302,7 +2304,7 @@ private fun NativeUnifiedLibraryBody(
                                     else onTrackPlay(track)
                                 },
                                 onMore = null, // Category root has no inline overflow.
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onTrackOptions(track) }) else null,
                                 selectionMode = selectedItems.isNotEmpty(),
                                 selected = target in selectedItems,
                                 onToggleSelection = { onToggleSelection(target) },
@@ -2321,7 +2323,7 @@ private fun NativeUnifiedLibraryBody(
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
                             showInlineOptions = false,
-                            onLongPress = null, // The list-level gesture handles hold and drag.
+                            onLongPress = if (selectedItems.isEmpty()) ({ onTrackOptions(track) }) else null,
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = target in selectedItems,
                             onToggleSelection = { onToggleSelection(target) },
@@ -2367,7 +2369,7 @@ private fun NativeUnifiedLibraryBody(
                                         ))
                                     },
                                     onMore = null, // Category root has no inline overflow.
-                                    onLongPress = null, // The list-level gesture handles hold and drag.
+                                    onLongPress = if (selectedItems.isEmpty()) ({ onAlbumOptions(album) }) else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -2393,7 +2395,7 @@ private fun NativeUnifiedLibraryBody(
                                         album.id, album.title, album.artworkUri,
                                     ))
                                 },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onAlbumOptions(album) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
                                         IconButton(onClick = { onToggleSelection(target) }) {
@@ -2459,7 +2461,7 @@ private fun NativeUnifiedLibraryBody(
                                         else onEntitySelect(artist)
                                     },
                                     onMore = null, // Category root has no inline overflow.
-                                    onLongPress = null, // The list-level gesture handles hold and drag.
+                                    onLongPress = if (selectedItems.isEmpty()) ({ onArtistOptions(artist) }) else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -2484,7 +2486,7 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onEntitySelect(artist)
                                 },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onArtistOptions(artist) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
                                         IconButton(onClick = { onToggleSelection(target) }) {
