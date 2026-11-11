@@ -211,6 +211,34 @@ class MusicBrainzCatalogSearchTest {
     }
 
 
+    @Test fun emptySecondaryTypeListIsExplicitRemovalButMissingFieldIsUnknown() = runBlocking {
+        val group = "11111111-1111-4111-8111-111111111111"
+        var includeEmpty = true
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    val field = if (includeEmpty) ""","secondary-types":[]""" else ""
+                    return """{"count":1,"offset":0,"release-groups":[{
+                        "id":"$group","title":"Official album","primary-type":"Album"$field
+                    }]}"""
+                }
+            },
+        ))
+        val empty = (search.searchReleaseGroups("Official album") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+            >).page.items.single()
+        assertEquals("", empty.secondaryTypes)
+        includeEmpty = false
+        val absent = (search.searchReleaseGroups("Official album") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+            >).page.items.single()
+        assertEquals(null, absent.secondaryTypes)
+    }
+
     @Test fun recordingSearchKeepsVerifiedReleaseCoverAssociationWithoutGuessingTitle() = runBlocking {
         val recordingId = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
         val release1 = "11111111-1111-4111-8111-111111111111"

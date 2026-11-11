@@ -126,6 +126,33 @@ class MusicBrainzPublicMetadataIndexTest {
         } finally { db.close() }
     }
 
+    @Test fun confirmedEmptySecondaryTypesClearStaleCompilationButMissingDoesNot() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            val mbid = "529f87a1-1081-48a4-8ee1-3c08de229858"
+            val tagged = MusicBrainzReleaseGroupHit(
+                mbid, "Official album", "Album", "2024-03-25", "ILLIT",
+                secondaryTypes = "Compilation",
+            )
+            val id = requireNotNull(index.persistReleaseGroups(listOf(tagged))[mbid])
+            assertEquals("Compilation", db.catalogDao().catalogReleaseGroup(id)?.secondaryTypes)
+            // Explicit [] from the source is a correction, NOT a sparse null.
+            index.persistReleaseGroups(listOf(tagged.copy(secondaryTypes = "")))
+            assertEquals("", db.catalogDao().catalogReleaseGroup(id)?.secondaryTypes)
+            val updated = db.catalogDao().searchKnownMusicBrainzGroups("Official", 25)
+                .single()
+            assertEquals("", updated.secondaryTypes)
+            assertEquals(emptyList<String>(), com.music.bitchord.ui
+                .CanonicalEditorialDiscography.classify(updated.primaryType,
+                    updated.secondaryTypes).secondaryTypes)
+            index.persistReleaseGroups(listOf(tagged.copy(secondaryTypes = null)))
+            assertEquals("", db.catalogDao().catalogReleaseGroup(id)?.secondaryTypes)
+            assertEquals(id, index.persistReleaseGroups(listOf(tagged)).getValue(mbid))
+        } finally { db.close() }
+    }
+
     @Test fun artistAndReleaseGroupAreSearchableOfflineByStrongMbidsOnly() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()

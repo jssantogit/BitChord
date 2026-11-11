@@ -77,6 +77,34 @@ class MusicBrainzCatalogGraphTest {
             .map { it.musicBrainzId })
     }
 
+    @Test fun browseExplicitEmptySecondaryTypesDiffersFromOmittedTypes() = runBlocking {
+        val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
+        var includeEmpty = true
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    val field = if (includeEmpty) ""","secondary-types":[]""" else ""
+                    return """{"release-group-count":1,"release-group-offset":0,
+                        "release-groups":[{"id":"$group","title":"Official album",
+                        "primary-type":"Album"$field}]}"""
+                }
+            },
+        ))
+        val knownEmpty = (graph.browseReleaseGroupsForArtist(artist) as
+            MusicBrainzCatalogGraphResult.Success<
+                MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>
+            >).value.items.single()
+        assertEquals("", knownEmpty.secondaryTypes)
+        includeEmpty = false
+        val notSupplied = (graph.browseReleaseGroupsForArtist(artist) as
+            MusicBrainzCatalogGraphResult.Success<
+                MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>
+            >).value.items.single()
+        assertEquals(null, notSupplied.secondaryTypes)
+    }
+
     @Test fun frontPresenceFlagAloneDoesNotClaimThatImageTypesAreApproved() {
         // Positive metadata only allows the archive JSON to be checked.
         // It is not enough to construct a URL or classify a Poster as a sleeve.
