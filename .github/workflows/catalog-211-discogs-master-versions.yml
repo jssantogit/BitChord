@@ -1,0 +1,43 @@
+name: "Catalog #211 — Public bounded Master versions evidence"
+
+# Anonymous read-only probe of the already-reviewed B-01..B-05 controls.
+# Does not validate exact editions, change the corpus or build an APK.
+on:
+  push:
+    branches:
+      - catalog/210-discogs-provider-evidence-20261107
+    paths:
+      - scripts/catalog_211_discogs_master_versions_probe.py
+      - scripts/test_catalog_211_discogs_master_versions_probe.py
+      - docs/plans/catalog-211-discogs-corpus-manifest.json
+      - .github/workflows/catalog-211-discogs-master-versions.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-211-master-versions-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-master-observation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test Master URL identity, pagination, exhaustiveness and source budget
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_versions_probe.py' -v
+      - name: Observe exact public Master versions for five B control groups
+        run: python3 scripts/catalog_211_discogs_master_versions_probe.py
+      - name: Retain non-adjudicated public source facts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discogs-211-master-version-observations
+          path: discogs-211-master-version-observations.json
+          if-no-files-found: warn
+          retention-days: 7
