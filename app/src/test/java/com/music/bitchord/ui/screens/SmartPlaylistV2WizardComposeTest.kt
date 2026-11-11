@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -235,12 +236,12 @@ class SmartPlaylistV2WizardComposeTest {
             "apple-selected-origin-indicator", useUnmergedTree = true,
         ).assertCountEquals(1)
         compose.onAllNodesWithTag("playlist-navigation-chevron").assertCountEquals(0)
-        compose.onNodeWithText("CRÉDITOS").performClick()
+        compose.onNodeWithText("CRÉDITOS").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("credits", selectedKey) }
         compose.onAllNodesWithTag(
             "apple-selected-origin-indicator", useUnmergedTree = true,
         ).assertCountEquals(1)
-        compose.onNodeWithText("ORGANIZAÇÃO").performClick()
+        compose.onNodeWithText("ORGANIZAÇÃO").performScrollTo().performClick()
         compose.runOnIdle { assertEquals("organization", selectedKey) }
     }
 
