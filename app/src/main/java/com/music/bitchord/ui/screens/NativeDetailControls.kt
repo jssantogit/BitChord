@@ -129,7 +129,17 @@ internal fun CircleIconButton(
         contentAlignment = Alignment.Center,
     ) {
         if (customIcon != null) {
-            customIcon()
+            // Custom indicators have their own score semantics, but the parent
+            // control must still announce its actionable purpose (e.g. rate artist).
+            // The original Icon branch already supplies its own label.
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier.semantics(mergeDescendants = true) {
+                    this.contentDescription = contentDescription
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                customIcon()
+            }
         } else {
             Icon(
                 imageVector = icon,

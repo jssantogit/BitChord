@@ -110,7 +110,7 @@ internal fun ActionRow(
         } else if (starKind == NativeArtistStarKind.RATE) {
             CircleIconButton(
                 icon = PlaylistEditorIcons.Ratings,
-                contentDescription = "Avaliar artista",
+                contentDescription = "Avaliar artista · ${com.music.bitchord.ui.components.compactRatingAccessibility(artistRating)}",
                 onClick = { onRateArtist?.invoke() },
                 haptic = Haptic.ToggleOn,
                 size = ARTIST_SIDE_BUTTON,

@@ -7,12 +7,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.CompactRatingGeometry
 import com.music.bitchord.ui.components.CompactRatingIndicator
 import com.music.bitchord.ui.components.CompactRatingStyle
 import com.music.bitchord.ui.components.LocalCompactRatingStyle
+import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -69,6 +71,31 @@ class CompactRatingPresentationTest {
         compose.runOnIdle { style.value = CompactRatingStyle.NUMERIC }
         compose.onNodeWithTag("compact-rating-numeric", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("compact-rating-color", useUnmergedTree = true).assertDoesNotExist()
+    }
+
+    @Test fun customArtistRatingIconPreservesActionLabelAndExactAccessibleScore() {
+        var opened = 0
+        compose.setContent {
+            MaterialTheme {
+                CircleIconButton(
+                    icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Ratings,
+                    contentDescription = "Avaliar artista · Avaliação: 4,5 de 5 estrelas",
+                    onClick = { opened++ },
+                    customIcon = {
+                        CompactRatingIndicator(
+                            value = 4.5,
+                            geometry = CompactRatingGeometry.STANDALONE,
+                            size = 23.dp,
+                        )
+                    },
+                )
+            }
+        }
+        compose.onNodeWithContentDescription("Avaliar artista", substring = true)
+            .performClick()
+        compose.onNodeWithContentDescription("4,5 de 5 estrelas", substring = true)
+            .assertExists()
+        compose.runOnIdle { assertEquals(1, opened) }
     }
 
     @Test fun unverifiedSongHasNoListRatingButAnUnratedPlayerControl() {
