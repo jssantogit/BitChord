@@ -482,6 +482,14 @@ internal fun SmartPlaylistV2WizardUi(
             page = WizardStep.GROUP
         }
     }
+    // Both Back and Save should return to the containing group. Jumping
+    // directly to Rules from a nested group loses the editing context.
+    fun parentAfterGroup(): WizardStep =
+        if (selectedPath.size > 1) {
+            selectedPath = selectedPath.dropLast(1)
+            WizardStep.GROUP
+        } else WizardStep.RULES
+
     fun back() {
         page = when (page) {
             WizardStep.EDIT -> {
@@ -498,10 +506,7 @@ internal fun SmartPlaylistV2WizardUi(
             }
             WizardStep.SONGS -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
             WizardStep.RULES -> if (isEditing) WizardStep.EDIT else WizardStep.IDENTITY
-            WizardStep.GROUP -> if (selectedPath.size > 1) {
-                selectedPath = selectedPath.dropLast(1)
-                WizardStep.GROUP
-            } else WizardStep.RULES
+            WizardStep.GROUP -> parentAfterGroup()
             WizardStep.CATEGORIES -> if (addingGroup || targetGroupPath.isEmpty())
                 WizardStep.RULES else WizardStep.GROUP
             WizardStep.FIELDS -> WizardStep.CATEGORIES
@@ -1654,7 +1659,7 @@ internal fun SmartPlaylistV2WizardUi(
                     )
                     WizardStep.GROUP -> PlaylistWizardPrimaryAction(
                         label = "Salvar grupo",
-                        onClick = { page = WizardStep.RULES },
+                        onClick = { page = parentAfterGroup() },
                     )
                     WizardStep.EDITOR -> {
                         // Do not enable Add/Save for rules that the real V2
