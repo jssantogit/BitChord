@@ -17,7 +17,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -29,6 +30,13 @@ import org.robolectric.annotation.ConscryptMode
 @RunWith(RobolectricTestRunner::class)
 @Config(application = Application::class, sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
+/**
+ * Robolectric dispatches Compose accessibility actions reliably for a Dialog
+ * window, while raw touch injection into this separate window is unreliable.
+ * These tests verify the editor's actual save/cancel/half-star callbacks and
+ * state transitions, not physical pointer positioning. The latter remains a
+ * device-smoke requirement and must not be claimed green from this suite.
+ */
 class CanonicalRecordingFeedbackControlsTest {
     @get:Rule val compose = createComposeRule()
 
@@ -46,12 +54,12 @@ class CanonicalRecordingFeedbackControlsTest {
         }
         compose.onNodeWithTag("native-rating-bottom-sheet").assertExists()
         compose.onNodeWithText("User rating").assertDoesNotExist()
-        compose.onNodeWithContentDescription("4 stars").performClick()
+        compose.onNodeWithContentDescription("4 stars").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle {
             assertEquals(emptyList<Double>(), values)
             assertEquals(0, dismissals)
         }
-        compose.onNodeWithText("Save rating").performClick()
+        compose.onNodeWithText("Save rating").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals(listOf(4.0), values) }
     }
 
@@ -97,7 +105,7 @@ class CanonicalRecordingFeedbackControlsTest {
             }
         }
         compose.onNodeWithText("Clear rating").assertDoesNotExist()
-        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithText("Cancel").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle {
             assertEquals(1, dismissals)
             assertEquals(emptyList<Double>(), values)
@@ -116,7 +124,7 @@ class CanonicalRecordingFeedbackControlsTest {
             }
         }
         compose.onNodeWithContentDescription("2.5 stars selected").assertIsDisplayed()
-        compose.onNodeWithText("Save rating").performClick()
+        compose.onNodeWithText("Save rating").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals(listOf(2.5), values) }
     }
 
@@ -131,10 +139,10 @@ class CanonicalRecordingFeedbackControlsTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("2.5 stars").performClick()
+        compose.onNodeWithContentDescription("2.5 stars").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals(emptyList<Double>(), values) }
         compose.onNodeWithContentDescription("2.5 stars selected").assertIsDisplayed()
-        compose.onNodeWithText("Save rating").performClick()
+        compose.onNodeWithText("Save rating").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals(listOf(2.5), values) }
     }
 
@@ -169,7 +177,7 @@ class CanonicalRecordingFeedbackControlsTest {
         compose.onNodeWithTag("rating-editor-star-2-half").assertExists()
         compose.onNodeWithTag("rating-editor-star-3-empty").assertExists()
         compose.onNodeWithTag("rating-editor-star-4-empty").assertExists()
-        compose.onNodeWithContentDescription("4 stars").performClick()
+        compose.onNodeWithContentDescription("4 stars").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithTag("rating-editor-star-3-full").assertExists()
         compose.onNodeWithTag("rating-editor-star-4-empty").assertExists()
     }
@@ -227,11 +235,11 @@ class CanonicalRecordingFeedbackControlsTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4 stars").performClick()
+        compose.onNodeWithContentDescription("4 stars").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
         compose.runOnIdle { incoming.value = 3.0 }
         compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
-        compose.onNodeWithText("Save rating").performClick()
+        compose.onNodeWithText("Save rating").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle { assertEquals(listOf(4.0), values) }
     }
 
@@ -247,17 +255,17 @@ class CanonicalRecordingFeedbackControlsTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4 stars").performClick()
-        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithContentDescription("4 stars").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Cancel").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithText("Discard changes?").assertIsDisplayed()
         compose.runOnIdle {
             assertEquals(0, dismissals)
             assertEquals(emptyList<Double>(), values)
         }
-        compose.onNodeWithText("Keep editing").performClick()
+        compose.onNodeWithText("Keep editing").performSemanticsAction(SemanticsActions.OnClick)
         compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
-        compose.onNodeWithText("Cancel").performClick()
-        compose.onNodeWithText("Discard").performClick()
+        compose.onNodeWithText("Cancel").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Discard").performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle {
             assertEquals(1, dismissals)
             assertEquals(emptyList<Double>(), values)
