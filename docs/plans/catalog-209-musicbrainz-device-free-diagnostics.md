@@ -79,9 +79,31 @@ a page that returns fewer rows than its total is **not** complete. A group
 with a Release match does not justify a playable MediaAsset, nor does a CAA
 flag guarantee an image rendered in Compose.
 
+## Guest track_artist browse: API shape, not ownership
+
+The bounded live run now performs **one additional GET total** (not per
+manifest case) for a known public Artist MBID, NewJeans
+`49204a7a-ed85-407a-828f-6fd46f1d8126`:
+
+`/ws/2/release?track_artist=<MBID>&inc=release-groups+artist-credits+recordings+labels+isrcs&limit=5`
+
+The `guest_track_artist_shape` report summarizes *which nested artist-credit
+arrays were actually present* in this sample, along with up to five linked
+ReleaseGroup MBIDs; it does not upload full JSON bodies. `OBSERVED` means a
+valid group was seen, not that a guest/own-group relationship was proved.
+`INCONCLUSIVE` covers empty or missing group data. An API error is `ERROR`.
+
+This specifically tests whether `release-group.artist-credit` is embedded in
+the response consumed by the Kotlin guest parser. The group may be linked by
+MBID without its own credits. A zero count must **never** be read as an
+assertion that the target artist is absent from that group. For a definitive
+release-group owner check, use an *exact* group lookup with structured credits;
+avoid joining by name, title or Lucene search index.
+
 ## Hard limits and unresolved surface
 
-- 1–3 public cases, up to 8 calls per case, max 24 calls, spacing >=1.1 s,
+- 1–3 public cases, up to 8 calls per case plus one independent guest
+  response-shape probe (max 25 calls total), spacing >=1.1 s,
   no tokens and no private endpoints. Reuse the #178 retry/client instead of
   creating a parallel HTTP transport.
 - Artifacts expire after seven days; include HEAD / GitHub run provenance.

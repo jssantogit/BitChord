@@ -53,6 +53,11 @@ class FakeClient:
                     'media': [{'position': 1, 'track-count': 1, 'tracks': [
                         {'id': TRACK, 'title': 'Magnetic', 'position': 1,
                          'recording': {'id': RECORDING, 'title': 'Magnetic'}}]}]}
+        if kind == 'release' and not ident and 'track_artist' in params:
+            return {'release-count': 1, 'releases': [{
+                'id': WORLD, 'artist-credit': [{'artist': {'id': ARTIST}}],
+                'release-group': {'id': GROUP, 'primary-type': 'EP'},
+            }]}
         if kind == 'recording' and ident == RECORDING:
             return {'id': RECORDING, 'title': 'Magnetic'}
         if kind == 'artist' and not ident and 'query' in params:
@@ -96,6 +101,9 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         self.assertFalse(report['android_ui_verified'])
         self.assertFalse(report['local_library_verified'])
         self.assertFalse(report['provider_priority_changed'])
+        self.assertEqual('OBSERVED', report['guest_track_artist_shape']['status'])
+        self.assertEqual(1, report['extra_guest_shape_requests'])
+        self.assertEqual(9, report['http_request_count'])
 
     def test_search_index_miss_is_not_a_claim_of_missing_release(self):
         rows = diagnose_case(CASE, FakeClient(missing_search=True).get)

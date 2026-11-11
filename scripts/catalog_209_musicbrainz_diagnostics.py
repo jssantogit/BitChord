@@ -63,6 +63,62 @@ def _result(check: str, status: str, evidence: dict) -> dict:
             'evidence_type': 'PUBLIC_API_ONLY', 'evidence': evidence}
 
 
+# A tiny *schema* probe, not a guest-membership assertion. MusicBrainz's
+# track_artist browse is not equivalent to an exact ReleaseGroup artist lookup.
+# NewJeans has independently observed credits on other artists' releases; the
+# public example makes it possible to inspect nested credit availability.
+GUEST_BROWSE_ARTIST_MBID = '49204a7a-ed85-407a-828f-6fd46f1d8126'
+
+
+def probe_guest_browse_shape(get) -> dict:
+    """One extra rate-limited public GET. Never infer group ownership from omissions."""
+    name = 'guest_track_artist_browse_shape'
+    try:
+        payload = get('release', '', track_artist=GUEST_BROWSE_ARTIST_MBID,
+                      inc='release-groups+artist-credits+recordings+labels+isrcs',
+                      limit='5', offset='0')
+    except (HTTPError, URLError, TimeoutError, OSError, ValueError, KeyError,
+            TypeError, UnicodeError) as exc:
+        return _result(name, 'ERROR', {
+            'provider_unavailable': True, 'error_kind': type(exc).__name__})
+    if not isinstance(payload, dict) or not isinstance(payload.get('releases'), list):
+        return _result(name, 'INCONCLUSIVE', {'unexpected_browse_response': True})
+    releases = payload['releases']
+    if len(releases) > 5 or any(not isinstance(r, dict) for r in releases):
+        return _result(name, 'INCONCLUSIVE', {'unexpected_browse_response': True})
+    groups = [r.get('release-group') for r in releases]
+    observed_ids = list(dict.fromkeys(group['id'].lower()
+        for group in groups if isinstance(group, dict) and
+        _valid_mbid(group.get('id'))))
+    group_credit = sum(isinstance(group, dict) and
+                       isinstance(group.get('artist-credit'), list)
+                       for group in groups)
+    edition_credit = sum(isinstance(r.get('artist-credit'), list) for r in releases)
+    # These booleans describe which JSON subobjects are present, not whether
+    # any single ArtistId is truly credited to the nested ReleaseGroup.
+    recording_credit = 0
+    for release in releases:
+        has_recording_credit = any(
+            isinstance(track.get('recording'), dict) and
+            isinstance(track['recording'].get('artist-credit'), list)
+            for medium in release.get('media', [])
+            if isinstance(medium, dict)
+            for track in medium.get('tracks', [])
+            if isinstance(track, dict)
+        )
+        recording_credit += int(has_recording_credit)
+    return _result(name, 'OBSERVED' if observed_ids else 'INCONCLUSIVE', {
+        'artist_mbid': GUEST_BROWSE_ARTIST_MBID,
+        'server_total': payload.get('release-count'),
+        'sampled_releases': len(releases),
+        'sampled_release_group_mbids': observed_ids[:5],
+        'release_artist_credit_present': edition_credit,
+        'group_artist_credit_present': group_credit,
+        'recording_artist_credit_present': recording_credit,
+        'group_membership_verified': False,
+    })
+
+
 def diagnose_case(case: dict, get) -> list[dict]:
     """Eight fixed, independent queries; never interpret search miss as absence."""
     if validate_manifest({'schema_version': 1, 'cases': [case]}) is None:
@@ -255,16 +311,21 @@ def make_report(manifest: dict, client) -> dict:
         for case in cases
     ]
     rows = [row for case in observed for row in case['observations']]
+    guest_shape = probe_guest_browse_shape(client.get)
     return {
         'schema_version': 1,
         'scope': 'PUBLIC_API_NOT_ANDROID_UI',
         'observed_utc': start,
         'head_sha': os.environ.get('GITHUB_SHA'),
         'cases': observed,
+        'guest_track_artist_shape': guest_shape,
+        'extra_guest_shape_requests': 1,
         'pass_count': sum(x['status'] == 'PASS' for x in rows),
         'fail_count': sum(x['status'] == 'FAIL' for x in rows),
-        'error_count': sum(x['status'] == 'ERROR' for x in rows),
-        'inconclusive_count': sum(x['status'] == 'INCONCLUSIVE' for x in rows),
+        'error_count': sum(x['status'] == 'ERROR' for x in rows) +
+            int(guest_shape['status'] == 'ERROR'),
+        'inconclusive_count': sum(x['status'] == 'INCONCLUSIVE' for x in rows) +
+            int(guest_shape['status'] == 'INCONCLUSIVE'),
         'http_request_count': len(getattr(client, 'requests',
                                           getattr(client, 'calls', []))),
         'android_ui_verified': False,
@@ -273,6 +334,7 @@ def make_report(manifest: dict, client) -> dict:
         'limitations': [
             'Public API only: does not execute Kotlin parser, Room, search UI or device',
             'Search index empty result cannot prove missing release',
+            'track_artist browse shape does not establish ReleaseGroup ownership',
             'Cover presence flag cannot prove UI image load',
             'Physical smoke remains separate and only requested when needed',
         ],
