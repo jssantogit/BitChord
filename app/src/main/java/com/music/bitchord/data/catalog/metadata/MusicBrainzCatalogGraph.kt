@@ -273,9 +273,10 @@ internal class MusicBrainzCatalogGraph(
 
     /**
      * Official MusicBrainz releases may contain only video media. A medium
-     * format is positive evidence only when it is unambiguously video-specific;
-     * DVD-Audio, Digital Media, CD and mixed CD/DVD packages remain eligible.
-     * Omitted / ambiguous formats (e.g. Blu-ray) are inconclusive, not audio.
+     * format is positive evidence only when it is unambiguously video-specific.
+     * DVD-Audio, CD and mixed CD/DVD packages remain eligible; Digital Media
+     * can ALSO contain video files, so its format alone is inconclusive.
+     * Omitted / ambiguous formats (e.g. Blu-ray) are not proof of audio.
      * Uses the same source-supported 'inc=media' on the existing browse GET.
      */
     private fun JsonObject.videoOnlyMediaEvidence(): Boolean? {
@@ -289,8 +290,8 @@ internal class MusicBrainzCatalogGraph(
             "vhs", "betamax", "laserdisc", "8\" laserdisc", "12\" laserdisc",
         )
         val explicitlyAudio = setOf(
-            "digital media", "cd", "dvd-audio", "vinyl", "cassette",
-            "sacd", "minidisc", "usb flash drive",
+            "cd", "dvd-audio", "vinyl", "cassette",
+            "sacd", "minidisc",
             "dualdisc (cd side)", "dualdisc (dvd-audio side)",
             "dvdplus (cd side)", "dvdplus (dvd-audio side)",
         )

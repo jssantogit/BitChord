@@ -167,7 +167,8 @@ class MusicBrainzCatalogGraphTest {
             MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>).value
         assertEquals(4, page.items.size)
         assertEquals(true, page.items[0].isVideoOnlyMedia)
-        assertEquals(false, page.items[1].isVideoOnlyMedia)
+        // Digital Media is container-agnostic: video recordings can use it.
+        assertEquals(null, page.items[1].isVideoOnlyMedia)
         assertEquals(false, page.items[2].isVideoOnlyMedia)
         assertEquals(null, page.items[3].isVideoOnlyMedia)
     }
@@ -200,6 +201,28 @@ class MusicBrainzCatalogGraphTest {
             MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
         assertEquals(false, detail.isVideoOnlyContent)
         assertEquals(2, detail.tracks.size)
+    }
+
+    @Test fun digitalEditionWithOnlyVideoRecordingsStaysTypedButNotAudio() = runBlocking {
+        val videoTrack = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val videoRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Official single",
+                    "release-group":{"id":"$group"},
+                    "media":[{"format":"Digital Media","tracks":[{
+                        "id":"$videoTrack","title":"Music video",
+                        "recording":{"id":"$videoRecording","title":"Music video",
+                                     "video":true}
+                    }]}]}"""
+            },
+        ))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(true, detail.isVideoOnlyContent)
+        assertEquals(videoRecording, detail.tracks.single().recordingMbid)
     }
 
     @Test fun invalidMbidRejectsBeforeNetworkAndFailedResponseDoesNotInventTracks() = runBlocking {
