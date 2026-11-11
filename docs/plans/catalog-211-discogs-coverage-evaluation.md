@@ -1086,3 +1086,124 @@ atribuição canônica no BitChord.
 não homologa B-06..B-10. Corpus **5/30 revisados**, sem nova edição
 não vinculada `Verified` ou recuperação C, sem APK/smoke,
 merge, alteração na #209 ou mudança de provedor primário.
+
+
+## Revisão B concluída sem correspondências inventadas — 10/10 pares (11/11/2026)
+
+A comparação repetida dos Masters pequenos expôs um problema de
+**integridade em produção**, não apenas do scanner: o grafo MusicBrainz
+exibia gravadora e catálogo como texto de apresentação, mas o matcher
+de edição exata não recebia o **par de fonte** `(label, catalog-number)`.
+Mesmo UPC e lista de músicas idênticos podem coexistir em embalagens
+diferentes, portanto é incorreto declarar `Verified` quando **a mesma
+gravadora declara números de catálogo contraditórios**.
+
+O contrato agora mantém `editionLabelCatalogPairs` estruturado no
+`MusicBrainzCatalogReleaseDetail`, passa os pares pelo
+`DiscogsCanonicalEditionCoordinator` e compara no
+`DiscogsEditionMatcher` tanto com vínculo tipado quanto sem ele.
+Nome de gravadora e catálogo são comparados apenas por case/whitespace;
+aliases, catálogos ausentes e nomes de gravadoras divergentes não
+inventam contradições. Conflito de números sob **o mesmo label literal**
+resulta em `Candidate`, nunca `Verified` nem prova categórica de
+outra prensagem.
+
+Foi fechada ainda a perda silenciosa da sétima/17ª relação de catálogo:
+a lista de evidência MB agora mantém até 64 pares estruturados; quando
+a fonte informa mais que o teto ou `label-info` malformado, transporta
+`editionLabelCatalogComplete=false`. O matcher não declara
+`Verified` com evidência explicitamente incompleta e não utiliza
+`take(16)` para ocultar uma linha que pode contrariar as anteriores.
+O limite de seis strings da apresentação permanece separado da
+prova de edição. Regressões Kotlin cobrem a contradição de selo,
+um par ao final da lista, o teto >64, integração do JSON do grafo e
+controles em que a evidência é desconhecida. [CI Android/JVM Discogs
+#43116317156](https://github.com/jssantogit/BitChord/actions/runs/43116317156)
+concluiu **SUCCESS** (`BUILD SUCCESSFUL in 5m 59s`).
+A primeira tentativa [#43115011842](https://github.com/jssantogit/BitChord/actions/runs/43115011842)
+havia falhado em **1 de 167 testes** porque a fixture do
+matcher `assessUnlinked` omitiu o ano, campo que ele exige;
+foi corrigida a fixture, não relaxada a regra de produção.
+Isso é uma suíte Discogs focada, **não** full Android ou smoke.
+
+### IVE — comparações públicas sem token (prova adicional de variantes)
+
+O novo scanner de Masters [#43117680744](https://github.com/jssantogit/BitChord/actions/runs/43117680744)
+passou **9/9 testes**, examinou 22 solicitações, excluiu
+as sete revisões B anteriores e localizou os Masters tipados
+de IVE `ELEVEN` (`2531575`, duas versões Discogs)
+e `ELEVEN -Japanese ver.-` (`2911144`, quatro versões).
+
+A [matriz pública #43117923979](https://github.com/jssantogit/BitChord/actions/runs/43117923979)
+terminou **SUCCESS (9/9 testes, 26 GETs)**:
+- `ELEVEN` Coreia: 4 MB Official × 2 Discogs = **8 pares**.
+  Quatro pares de CDs têm mesmo UPC e títulos, mas todas essas
+  coincidências possuem relação direta MB→Discogs Release
+  **deste** ou de **outro** Release. Não são ganho de ligação B.
+  O candidato digital MB `47106725` versus CD Discogs
+  `21255514` tem meio e contagem distintos (1 MB Track
+  contra 2 Discogs Tracks), embora os UPCs reportados coincidam.
+- `ELEVEN -Japanese ver.-`: 6 MB Official × 4 Discogs
+  = **24 pares**, **zero pares** simultaneamente iguais em
+  lista inteira de faixas e UPC. Dez combinações apresentaram
+  divergência literal de catálogo sob o mesmo selo Ki/oon.
+  A apresentação `KSCL-3394` versus `KSCL 3394`
+  também é registrada como diferença textual e mantida
+  inconclusiva; não converter formatação automaticamente
+  em equivalência de edição.
+
+As referências **independentes** são a
+[STARSHIP Entertainment, ELEVEN em 01/12/2021](https://www.starship-ent.com/board/newrelease/466),
+a [IVE Japan, ELEVEN original](https://ive-official.jp/mob/news/diarKijiShw.php?id=154826&ima=2150&site=DIVE),
+e a [Sony Music Japan, ELEVEN -Japanese ver.-](https://www.sonymusic.co.jp/artist/IVE/info/544910).
+A [discografia oficial IVE Japan](https://ive-official.jp/mob/news/diarKijiShw.php?id=197538&ima=0411&site=DIVE)
+registra 19/10/2022, **duas faixas** e quatro
+embalagens distintas: I (CD+livreto, `KSCL-3390~91`),
+V (CD+Blu-ray, `KSCL-3392~93`),
+E (CD, `KSCL-3394`) e FC (CD+espelho,
+`KSC8-20~21`). O parentesco de conteúdo NÃO identifica
+uma das embalagens automaticamente.
+
+### Corpus B-08, B-09 e B-10 (revisões negativas e candidata)
+
+A seleção dos três pares restantes utilizou a matriz completa
+de 32 pares e as fontes editoriais oficiais, **não** uma busca
+por título simples:
+
+- **B-08** — MB `47106725-be2e-4af7-9d27-4610f4116e0b`
+  (`ELEVEN`, edição Digital Media com uma faixa) versus
+  Discogs `21255514` (CD duas faixas), sem vínculo direto:
+  `conflict` de identidade exata mesmo com UPC reportado igual.
+- **B-09** — MB `251ad807-4bf0-4810-a4f9-34673d6d2ff8`
+  (`ELEVEN -Japanese ver.-`, Ki/oon `KSCL-3390`,
+  CD da versão I) versus Discogs `25759165`
+  (Ki/oon `KSCL-3392`, CD+Blu-ray versão V):
+  `conflict` da embalagem, com catalogação diferente
+  confirmada pela Sony, UPC divergente e apenas um dos
+  dois títulos literalmente igual.
+- **B-10** — MB `b9290e0d-be3a-41d0-b145-88fe342aa5da`
+  versus Discogs `25524349`, ambos possíveis
+  `ELEVEN -Japanese ver.-` versão E:
+  `candidate`, com UPC igual e label Ki/oon
+  `KSCL-3394`/`KSCL 3394`, mas apenas
+  1/2 títulos literais e nenhum vínculo exato MB Release URL
+  na observação. Plausível não significa `Verified`.
+
+Todos permanecem *não Verified* e `app_type=Unknown` /
+`visible=false` significam que o Android não foi medido,
+não uma falha de interface comprovada. B-06 e B-07, também
+não Verified, eram respectivamente BORDER : DAY ONE e
+FEARLESS. O corpus foi ampliado de sete para **10/10
+casos B source-reviewed**, sem promover coincidências de
+barcodes a acertos de edição e sem preencher outros grupos.
+[CI de corpus #43118511020](https://github.com/jssantogit/BitChord/actions/runs/43118511020)
+**SUCCESS**, 12/12 regressões do relatório e 5/5 do
+baseline; `10 reviewed B, none Verified`, sem métricas
+globais fabricadas. A e C seguem **0/10 revistos**
+cada; três exclusões C são preliminares, não
+recuperações. **Total: 10/30 casos revisados,
+0 correspondências B unlinked Verified, 0 recuperações C.**
+
+Não foram criados MBIDs, áudios, gravações locais,
+caches de usuário, APKs, smoke, merge, alterações na
+#209/main ou prioridade Discogs sobre MusicBrainz.
