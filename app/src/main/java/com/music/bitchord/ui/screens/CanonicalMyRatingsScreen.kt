@@ -18,8 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Star
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -286,7 +285,7 @@ internal fun CanonicalMyRatingsContent(
                                 }
                                 if (rating.title != null) {
                                     TextButton(onClick = { onEdit(rating.recordingId) }) {
-                                        Icon(Icons.Rounded.Star, contentDescription = null,
+                                        Icon(PlaylistEditorIcons.Ratings, contentDescription = null,
                                             modifier = Modifier.size(18.dp))
                                         Text(
                                             stringResource(Res.string.recording_feedback_edit),
@@ -330,7 +329,7 @@ internal fun CanonicalMyRatingsContent(
                             // score for the same verified canonical RecordingId.
                             if (row.title != null) {
                                 TextButton(onClick = { onEdit(row.recordingId) }) {
-                                    Icon(Icons.Rounded.Star, contentDescription = null,
+                                    Icon(PlaylistEditorIcons.Ratings, contentDescription = null,
                                         modifier = Modifier.size(18.dp))
                                     Text(
                                         stringResource(Res.string.recording_feedback_edit),
