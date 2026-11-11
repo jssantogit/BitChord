@@ -233,7 +233,6 @@ internal fun ratingDialogEntranceFrame(progress: Float, reducedMotion: Boolean):
  * Neither opening nor changing selection persists anything until Save.
  * Deliberately NO clear/reset rating action.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 internal fun CanonicalRecordingFeedbackPanel(
     rating: Double?,
@@ -285,17 +284,25 @@ internal fun CanonicalRecordingFeedbackPanel(
     val sheetAccent = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF0091FF)
         else androidx.compose.ui.graphics.Color(0xFF0088FF)
     val sheetTitle = title ?: stringResource(Res.string.recording_feedback_dialog_title)
-    androidx.compose.material3.ModalBottomSheet(
+    androidx.compose.ui.window.Dialog(
         onDismissRequest = requestDismiss,
-        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
-            skipPartiallyExpanded = true,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
         ),
-        dragHandle = null,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-        containerColor = sheetBackground,
-        contentColor = sheetForeground,
-        scrimColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.48f),
     ) {
+        // A genuine bottom-aligned surface without a drag handle or blur.
+        // Dialog preserves the app's already-tested pointer/Back behavior;
+        // ModalBottomSheet did not dispatch several Robolectric touches.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            androidx.compose.material3.Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = sheetBackground,
+                contentColor = sheetForeground,
+            ) {
         Column(
             modifier = Modifier.fillMaxWidth()
                 .navigationBarsPadding()
@@ -447,6 +454,8 @@ internal fun CanonicalRecordingFeedbackPanel(
                         maxLines = 1,
                     )
                 }
+            }
+        }
             }
         }
     }
