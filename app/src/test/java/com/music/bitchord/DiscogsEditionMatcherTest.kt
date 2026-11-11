@@ -22,6 +22,44 @@ class DiscogsEditionMatcherTest {
         unofficial = false,
     )
 
+    @Test fun identicalUpcTracksCannotVerifyDifferentCatalogNumberOnSameLabel() {
+        // Two physical package variants can share their EAN and tracks.
+        // Source-owned exact label + catalog-number pairs must reach the
+        // edition matcher; no fuzzy label aliases or catalog inference.
+        val canonical = canon.copy(
+            editionLabelCatalogPairs = listOf("BELIFT LAB" to "BEL-001"),
+            editionFormats = listOf("CD"),
+        )
+        val matching = record.copy(labels = listOf("BELIFT LAB" to "BEL-001"))
+        val different = record.copy(labels = listOf("Belift Lab" to "BEL-002"))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(canonical, linked, matching))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assessUnlinked(canonical, matching))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canonical, linked, different,
+                explicitReleaseRelation = true))
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assessUnlinked(canonical, different))
+        // Unknown labels, absent catalog numbers and producer aliases are
+        // inconclusive; none is proof that two different numbers disagree.
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(canonical, linked,
+                record.copy(labels = listOf("Different label" to "BEL-002"))))
+        assertEquals(DiscogsEditionVerdict.VERIFIED,
+            DiscogsEditionMatcher.assess(canonical, linked,
+                record.copy(labels = listOf("BELIFT LAB" to ""))))
+        // Opposing numbers on a shared label remain unresolved even if a
+        // third, unrelated publisher and catalog entry coincidentally match.
+        assertEquals(DiscogsEditionVerdict.CANDIDATE,
+            DiscogsEditionMatcher.assess(canonical.copy(
+                editionLabelCatalogPairs = listOf(
+                    "BELIFT LAB" to "BEL-001", "Other Label" to "XYZ"),
+            ), linked, record.copy(labels = listOf(
+                "BELIFT LAB" to "BEL-002", "Other Label" to "XYZ",
+            ))))
+    }
+
     @Test fun confirmedEditionNeedsAnExactDiscogsReleaseLinkAndIndependentCorroboration() {
         assertEquals(DiscogsEditionVerdict.VERIFIED,
             DiscogsEditionMatcher.assess(canon, linked, record))
