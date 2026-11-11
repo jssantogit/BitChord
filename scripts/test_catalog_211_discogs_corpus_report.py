@@ -157,6 +157,30 @@ class CorpusReportTests(unittest.TestCase):
         self.assertTrue(any("duplicate source identity" in error
                             for error in result["errors"]))
 
+    def test_adjudicated_barcode_conflict_is_not_a_verified_edition_match(self):
+        cases = [case(c, i) for c in ("type", "unlinked", "source_only")
+                 for i in range(10)]
+        cases[10]["match_state"] = "conflict"
+        cases[10]["match_correct"] = False
+        cases[10]["visible"] = False
+        result = report({"schema_version": 1, "cases": cases})
+        self.assertTrue(result["complete"])
+        self.assertEqual([], result["errors"])
+        self.assertEqual(9, result["metrics"]["unlinked_matching"]["verified"])
+        self.assertEqual(29, result["metrics"]["verified_precision"]["verified"])
+        self.assertEqual(0, result["metrics"]["false_positive_count"])
+
+    def test_live_b05_is_documented_as_conflict_not_an_album_correction(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        b05 = next(case for case in manifest["cases"] if case["id"] == "B-05")
+        self.assertTrue(b05["reviewed"])
+        self.assertEqual("conflict", b05["match_state"])
+        self.assertEqual("EP", b05["musicbrainz_type"])
+        self.assertEqual("Unknown", b05["app_type"])
+        self.assertFalse(b05["absent_in_musicbrainz"])
+
     def test_false_positive_is_not_hidden(self):
         cases = [case(c, i) for c in ("type", "unlinked", "source_only")
                  for i in range(10)]

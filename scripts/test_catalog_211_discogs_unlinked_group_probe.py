@@ -296,7 +296,9 @@ class UnlinkedGroupProbeTests(unittest.TestCase):
     def test_checked_in_b_samples_are_joined_to_exact_control_pairs(self):
         m = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
         p = json.loads(Path("docs/plans/catalog-211-discogs-edition-pairs.json").read_text())
-        self.assertEqual(5, len(selected(m, p)))
+        # B-02 and B-05 were reviewed as NOT VERIFIED; only 3 unreviewed
+        # exact-ID source pairs remain eligible for another probe.
+        self.assertEqual(3, len(selected(m, p)))
 
 if __name__ == "__main__":
     unittest.main()
