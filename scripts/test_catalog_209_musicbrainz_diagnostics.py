@@ -19,12 +19,14 @@ CASE = {
 
 class FakeClient:
     def __init__(self, *, incomplete_browse=False, missing_search=False, wrong_group=False,
-                 unavailable=False):
+                 unavailable=False, wrong_group_artist=False, missing_group_credit=False):
         self.calls = []
         self.incomplete_browse = incomplete_browse
         self.missing_search = missing_search
         self.wrong_group = wrong_group
         self.unavailable = unavailable
+        self.wrong_group_artist = wrong_group_artist
+        self.missing_group_credit = missing_group_credit
 
     def get(self, kind, ident, **params):
         self.calls.append((kind, ident, params))
@@ -33,7 +35,12 @@ class FakeClient:
         if kind == 'artist' and ident == ARTIST:
             return {'id': ARTIST, 'name': 'ILLIT'}
         if kind == 'release-group' and ident == GROUP:
-            return {'id': GROUP, 'title': 'SUPER REAL ME', 'primary-type': 'EP'}
+            group = {'id': GROUP, 'title': 'SUPER REAL ME', 'primary-type': 'EP'}
+            if not self.missing_group_credit:
+                group['artist-credit'] = [{'artist': {
+                    'id': '11111111-1111-4111-8111-111111111111'
+                          if self.wrong_group_artist else ARTIST, 'name': 'ILLIT'}}]
+            return group
         if kind == 'release-group' and not ident and 'artist' in params:
             return {'release-group-count': 2 if self.incomplete_browse else 1,
                     'release-group-offset': 0, 'release-groups':
@@ -108,6 +115,30 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         rows = diagnose_case(CASE, FakeClient(wrong_group=True).get)
         self.assertEqual(2, sum(x['status'] == 'FAIL' for x in rows))
         self.assertTrue(all(x['check'].startswith('release_') for x in rows if x['status'] == 'FAIL'))
+
+    def test_exact_group_credit_requires_artist_mbid_not_edition_or_name(self):
+        rows = diagnose_case(CASE, FakeClient(wrong_group_artist=True).get)
+        group = next(x for x in rows if x['check'] == 'group_identity')
+        self.assertEqual('FAIL', group['status'])
+        self.assertEqual(ARTIST, group['evidence']['expected_artist_mbid'])
+        self.assertNotIn(ARTIST, group['evidence']['observed_artist_mbids'])
+
+    def test_missing_structured_group_credit_is_unresolved_not_approved(self):
+        rows = diagnose_case(CASE, FakeClient(missing_group_credit=True).get)
+        group = next(x for x in rows if x['check'] == 'group_identity')
+        self.assertEqual('INCONCLUSIVE', group['status'])
+        self.assertFalse(group['evidence']['group_credit_verified'])
+
+    def test_group_lookup_requests_structured_artist_credit_without_extra_get(self):
+        client = FakeClient()
+        rows = diagnose_case(CASE, client.get)
+        self.assertEqual(8, len(rows))
+        self.assertEqual(8, len(client.calls))
+        self.assertEqual('artist-credits', next(params['inc'] for kind, ident, params
+                         in client.calls if kind == 'release-group' and ident == GROUP))
+        group = next(x for x in rows if x['check'] == 'group_identity')
+        self.assertEqual('PASS', group['status'])
+        self.assertTrue(group['evidence']['group_credit_verified'])
 
     def test_network_unavailable_never_becomes_not_found(self):
         client = FakeClient(unavailable=True)
