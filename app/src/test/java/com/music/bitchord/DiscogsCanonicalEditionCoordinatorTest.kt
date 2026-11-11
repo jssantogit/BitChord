@@ -219,6 +219,59 @@ class DiscogsCanonicalEditionCoordinatorTest {
         assertEquals(DiscogsEditionEnrichment.Candidate, coordinator.observeRelease(mbid))
     }
 
+    @Test fun seventhSourceCatalogPairIsNotTruncatedBeforeExactEditionProof() = runBlocking {
+        // Display labels can be capped for UI, but edition identity must see
+        // the 7th pair that contradicts the selected physical Discogs version.
+        val mbLabels = (1..6).joinToString(",") {
+            """{"label":{"name":"Label $it"},"catalog-number":"CAT-$it"}"""
+        } + """,{"label":{"name":"BELIFT LAB"},"catalog-number":"BEL-001"}"""
+        val dcLabels = (1..6).joinToString(",") {
+            """{"name":"Label $it","catno":"CAT-$it"}"""
+        } + """,{"name":"BELIFT LAB","catno":"BEL-002"}"""
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = when (parameters["inc"]) {
+                "recordings+artist-credits+release-groups+labels" ->
+                    musicBrainzJson().replace(
+                        "\"media-count\":1", "\"label-info\":[$mbLabels],\"media-count\":1",
+                    )
+                "url-rels" -> """{"id":"$mbid","relations":[{
+                    "type":"discogs",
+                    "type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                    "url":{"resource":"https://www.discogs.com/release/12345"}
+                }]}"""
+                else -> error("Unexpected request")
+            }
+        })
+        val graph = MusicBrainzCatalogGraph(mb)
+        val detail = (graph.lookupRelease(mbid) as
+            com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(7, detail.editionLabelCatalogPairs.size)
+        val client = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/12345", path)
+                return DiscogsHttpResponse(200, """{
+                    "id":12345,"title":"ILLIT - SUPER REAL ME",
+                    "artists":[{"name":"ILLIT"}],
+                    "labels":[$dcLabels],
+                    "identifiers":[{"type":"Barcode","value":"036000291452"}],
+                    "tracklist":[{"position":"1","title":"My World"},
+                                 {"position":"2","title":"Magnetic"}]
+                }""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0))
+        assertEquals(DiscogsEditionEnrichment.Candidate,
+            DiscogsCanonicalEditionCoordinator(
+                graph = graph,
+                editions = DiscogsEditionRepository(
+                    links = DiscogsMusicBrainzLinks(mb),
+                    discogs = client, enabled = true,
+                ), enabled = true,
+            ).observeRelease(mbid))
+    }
+
     @Test fun releaseGraphDigitalFormatBlocksPhysicalDiscogsEditionEvenWithSameTracks() = runBlocking {
         // The MusicBrainz release JSON already provides medium.format,
         // but the Discogs coordinator previously dropped editionFormats.
