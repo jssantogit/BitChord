@@ -220,6 +220,30 @@ class SmartPlaylistV2WizardComposeTest {
         compose.runOnIdle { assertEquals(1, clicked) }
     }
 
+    @Test fun conditionTabsReuseTheSearchUnderlineAndPreserveTabIdentity() {
+        val tabs = smartConditionFieldTabs(smartConditionCategories.single { it.id == "music" })
+        var selectedKey by mutableStateOf("all")
+        compose.setContent {
+            androidx.compose.material3.MaterialTheme {
+                PlaylistWizardFieldTabs(tabs, selectedKey) { selectedKey = it }
+            }
+        }
+        // Search's shared selected indicator (blue, underlined) belongs to
+        // the category selector too. A second row of chips is not allowed.
+        compose.onNodeWithTag("playlist-field-search-tabs").assertExists()
+        compose.onAllNodesWithTag(
+            "apple-selected-origin-indicator", useUnmergedTree = true,
+        ).assertCountEquals(1)
+        compose.onAllNodesWithTag("playlist-navigation-chevron").assertCountEquals(0)
+        compose.onNodeWithText("CRÉDITOS").performClick()
+        compose.runOnIdle { assertEquals("credits", selectedKey) }
+        compose.onAllNodesWithTag(
+            "apple-selected-origin-indicator", useUnmergedTree = true,
+        ).assertCountEquals(1)
+        compose.onNodeWithText("ORGANIZAÇÃO").performClick()
+        compose.runOnIdle { assertEquals("organization", selectedKey) }
+    }
+
     @Test fun secondaryPlaylistActionsAreExplicitNativeButtonsNotBareText() {
         var clicked = 0
         compose.setContent {
