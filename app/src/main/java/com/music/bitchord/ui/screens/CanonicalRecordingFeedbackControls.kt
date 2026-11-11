@@ -290,19 +290,22 @@ internal fun CanonicalRecordingFeedbackPanel(
             usePlatformDefaultWidth = false,
         ),
     ) {
-        // A genuine bottom-aligned surface without a drag handle or blur.
-        // Dialog preserves the app's already-tested pointer/Back behavior;
-        // ModalBottomSheet did not dispatch several Robolectric touches.
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter,
+        // A wrap-content dialog window is placed at the screen's bottom.
+        // A fillMaxSize child inside a wrap-content Dialog laid the interactive
+        // surface outside the actual window bounds under Robolectric: Compose
+        // could find the semantics nodes but no pointer event reached them.
+        // Keep physical hit targets and the drawn surface in the same window.
+        val dialogView = androidx.compose.ui.platform.LocalView.current
+        androidx.compose.runtime.SideEffect {
+            (dialogView.parent as? androidx.compose.ui.window.DialogWindowProvider)
+                ?.window?.setGravity(android.view.Gravity.BOTTOM)
+        }
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            color = sheetBackground,
+            contentColor = sheetForeground,
         ) {
-            androidx.compose.material3.Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                color = sheetBackground,
-                contentColor = sheetForeground,
-            ) {
         Column(
             modifier = Modifier.fillMaxWidth()
                 .navigationBarsPadding()
@@ -456,7 +459,6 @@ internal fun CanonicalRecordingFeedbackPanel(
                 }
             }
         }
-            }
         }
     }
 
