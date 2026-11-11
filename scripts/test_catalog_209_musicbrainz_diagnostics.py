@@ -2,7 +2,10 @@
 """Offline proof that a public MB probe cannot invent catalog/UI success."""
 import json
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from unittest.mock import patch
 import unittest
+from catalog_178_musicbrainz_live_probe import PublicMusicBrainz
 from catalog_209_musicbrainz_diagnostics import (diagnose_case, validate_manifest,
                                                     make_report, probe_guest_browse_shape)
 
@@ -250,6 +253,31 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         }, {case['expected_primary_type']: case['group_mbid'] for case in cases})
         # Six fixed checks + two editions per case + one shared schema probe.
         self.assertEqual(25, sum(6 + len(c['release_mbids']) for c in cases) + 1)
+
+    def test_http_budget_includes_429_retries_not_just_logical_queries(self):
+        throttled = HTTPError('https://musicbrainz.org', 429,
+                              'Rate limited', {}, None)
+        with patch('catalog_178_musicbrainz_live_probe.urlopen',
+                   side_effect=throttled) as transport:
+            with patch('catalog_178_musicbrainz_live_probe.time.sleep'):
+                client = PublicMusicBrainz(max_http_requests=1)
+                with self.assertRaises(OSError):
+                    client.get('artist', ARTIST)
+        self.assertEqual(1, transport.call_count)
+        self.assertEqual(1, len(client.requests))
+        self.assertEqual(429, client.requests[0]['http_status'])
+
+    def test_transport_errors_also_count_as_attempts_toward_budget(self):
+        with patch('catalog_178_musicbrainz_live_probe.urlopen',
+                   side_effect=URLError('offline')) as transport:
+            client = PublicMusicBrainz(max_http_requests=1)
+            with self.assertRaises(URLError):
+                client.get('artist', ARTIST)
+        self.assertEqual(1, transport.call_count)
+        self.assertEqual(1, len(client.requests))
+        self.assertIsNone(client.requests[0]['http_status'])
+        with self.assertRaises(ValueError):
+            PublicMusicBrainz(max_http_requests=0)
 
     def test_network_unavailable_never_becomes_not_found(self):
         client = FakeClient(unavailable=True)
