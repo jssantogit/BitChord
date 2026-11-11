@@ -104,6 +104,34 @@ def source_asserted_bilingual_pair(value: str) -> tuple[str, str] | None:
     return native, alias
 
 
+def literal_slash_word_boundary_signature(title: str) -> tuple[str, str] | None:
+    """Match only an unchanged two-word prefix and identical literal suffix.
+
+    Examples: "Social Path / Superbowl (Japanese Ver.)" and the existing
+    MB group "Social Path / Super Bowl -Japanese ver.-" preserve the same
+    letters in the same order. This is only a *source-only duplicate*
+    safeguard, never a matching MB Release or translation proof.
+    """
+    if title.count("/") != 1 or re.search(
+        r"\b(?:remix|live|acoustic|instrumental|sped\s+up|slowed)\b", title
+    ):
+        return None
+    left, right = (part.strip() for part in title.split("/", 1))
+    prefix_words = lexical_signature(left)
+    if (not 2 <= len(prefix_words) <= 4 or
+        any(not re.fullmatch(r"[a-z0-9]{3,24}", word)
+            for word in prefix_words) or
+        left != " ".join(prefix_words)):
+        return None
+    suffix_words = lexical_signature(right)
+    if (not 2 <= len(suffix_words) <= 8 or
+        any(not re.fullmatch(r"[a-z0-9]{2,24}", word)
+            for word in suffix_words)):
+        return None
+    compact = "".join(suffix_words)
+    return (left, compact) if 12 <= len(compact) <= 100 else None
+
+
 def known_group_title(title: str, artist: str, known: set[str]) -> bool:
     value = comparable_title(title, artist)
     pair = source_asserted_bilingual_pair(value)
@@ -113,6 +141,15 @@ def known_group_title(title: str, artist: str, known: set[str]) -> bool:
         return True
     signature = lexical_signature(value)
     if len(signature) >= 3 and any(lexical_signature(item) == signature for item in known):
+        return True
+    # Strictly preserve both slash components and their literal letters.
+    # Word-break differences are not distinct albums, but a changed
+    # remix/version or one-word generic prefix remains an independent lead.
+    slash_signature = literal_slash_word_boundary_signature(value)
+    if slash_signature is not None and any(
+        literal_slash_word_boundary_signature(item) == slash_signature
+        for item in known
+    ):
         return True
     ending = re.search(r"\s*[\(\[]([^\(\)\[\]]{1,72})[\)\]]$", value)
     if not ending:
