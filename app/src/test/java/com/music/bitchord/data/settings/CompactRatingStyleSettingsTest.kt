@@ -1,5 +1,6 @@
 package com.music.bitchord.data.settings
 
+import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
@@ -12,7 +13,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(application = Application::class, sdk = [35])
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class CompactRatingStyleSettingsTest {
     @Test fun choiceWritesToExistingPreferencesAndSurvivesReload() {
