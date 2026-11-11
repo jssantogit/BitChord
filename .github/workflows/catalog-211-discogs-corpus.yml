@@ -52,8 +52,8 @@ jobs:
           assert not result["errors"], result["errors"]
           assert result["slots"]["unlinked"]["selected_unreviewed"] == 0
           assert result["slots"]["source_only"]["selected_unreviewed"] == 3
-          assert result["slots"]["unlinked"]["reviewed"] == 7
-          print("30 slots: 7 independently source-reviewed B pairs, none Verified,"
+          assert result["slots"]["unlinked"]["reviewed"] == 10
+          print("30 slots: 10 independently source-reviewed B pairs, none Verified,"
                 " 3 preliminary excluded C leads; no global coverage metrics.")
           PY
       - name: Retain feasibility baseline for operator review
