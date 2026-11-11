@@ -127,6 +127,36 @@ class DiscogsEditorialCatalogPolicyTest {
             is DiscogsTypeResolution.Disputed)
     }
 
+    @Test fun contradictoryKindsForOneVerifiedDiscogsReleaseCannotCreateTypeCorrection() {
+        // Duplicated observations of the SAME Release are not independent
+        // editorial evidence. Never keep whichever kind arrived first.
+        val contradictory = listOf(
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true, masterId = 500),
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.ALBUM, true, masterId = 500),
+            DiscogsGroupTypeProof(301, DiscogsEditorialKind.EP, true, masterId = 600),
+        )
+        assertTrue(DiscogsTypeConsensus.resolve("Album", contradictory)
+            is DiscogsTypeResolution.Disputed)
+        assertTrue(DiscogsTypeConsensus.resolve("Other", contradictory)
+            is DiscogsTypeResolution.Disputed)
+        assertTrue(DiscogsTypeConsensus.resolve("Album", contradictory.reversed())
+            is DiscogsTypeResolution.Disputed)
+    }
+
+    @Test fun contradictoryMasterAssignmentForSameReleaseCannotInflateIndependentVotes() {
+        // One Release is claimed by two different Masters. Choosing the first
+        // record can turn one editorial Master into two apparent independent votes.
+        val contradictory = listOf(
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true, masterId = 600),
+            DiscogsGroupTypeProof(211, DiscogsEditorialKind.EP, true, masterId = 500),
+            DiscogsGroupTypeProof(301, DiscogsEditorialKind.EP, true, masterId = 500),
+        )
+        assertTrue(DiscogsTypeConsensus.resolve("Album", contradictory)
+            is DiscogsTypeResolution.Disputed)
+        assertTrue(DiscogsTypeConsensus.resolve("Album", contradictory.reversed())
+            is DiscogsTypeResolution.Disputed)
+    }
+
     @Test fun recoveredDiscogsReleaseHasTypedIndependentIdentityAndNoPlayback() {
         val observations = listOf(
             DiscogsPublicEditionSnapshot(edition(101, master = 987), fetchedAtMillis = 1_000),
