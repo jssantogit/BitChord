@@ -218,7 +218,7 @@ internal fun canonicalPreferredEditions(
         it.status.equals("Official", ignoreCase = true) &&
             // Video-only media may share an Official Single/EP ReleaseGroup.
             // Do not select them as the canonical audio tracklist or cover.
-            it.isVideoOnlyMedia != true
+            it.isVideoOnlyMedia != true && it.isVideoOnlyContent != true
     }
     return official.sortedWith(
         compareBy<MusicBrainzReleaseHit> {

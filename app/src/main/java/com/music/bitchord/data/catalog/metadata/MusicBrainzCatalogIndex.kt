@@ -247,6 +247,9 @@ internal class MusicBrainzCatalogIndex(
                     status = hit.status?.trim()?.takeIf(String::isNotEmpty)
                         ?: previous?.status,
                     fetchedAtEpochMs = System.currentTimeMillis(),
+                    // Sparse subsequent browse results never clear proof.
+                    isVideoOnlyMedia = hit.isVideoOnlyMedia ?: previous?.isVideoOnlyMedia,
+                    isVideoOnlyContent = hit.isVideoOnlyContent ?: previous?.isVideoOnlyContent,
                 ))
                 indexed[mbid] = releaseId
             }
@@ -283,6 +286,8 @@ internal class MusicBrainzCatalogIndex(
                     edition.musicBrainzId, edition.title,
                     edition.country, edition.releaseDate,
                     edition.artistDisplay, status = edition.status,
+                    isVideoOnlyMedia = edition.isVideoOnlyMedia,
+                    isVideoOnlyContent = edition.isVideoOnlyContent,
                 )
             }
         }
@@ -302,7 +307,8 @@ internal class MusicBrainzCatalogIndex(
         val info = dao.musicBrainzReleaseEnrichment(releaseId)
         MusicBrainzCatalogReleaseDetail(normalized,
             dao.musicBrainzGroupMbidsForRelease(releaseId).singleOrNull(), release.title,
-            info?.artistDisplay ?: release.artistDisplay, info?.country, info?.releaseDate, tracks)
+            info?.artistDisplay ?: release.artistDisplay, info?.country, info?.releaseDate,
+            tracks, isVideoOnlyContent = info?.isVideoOnlyContent)
     }
 
     /**
@@ -363,6 +369,16 @@ internal class MusicBrainzCatalogIndex(
             }
             persistReleases(listOf(MusicBrainzReleaseHit(releaseMbid, detail.title,
                 detail.country, detail.releaseDate, detail.artistDisplay)))
+            if (detail.isVideoOnlyContent != null) {
+                // Exact edition video evidence, not a canonical media claim.
+                val previous = dao.musicBrainzReleaseEnrichment(releaseId)
+                if (previous != null) {
+                    dao.upsertMusicBrainzReleaseEnrichment(previous.copy(
+                        isVideoOnlyContent = detail.isVideoOnlyContent,
+                        fetchedAtEpochMs = System.currentTimeMillis(),
+                    ))
+                }
+            }
             if (groupId != null) {
                 dao.upsertCatalogReleaseGroupEdition(CatalogReleaseGroupEditionEntity(
                     releaseGroupId = groupId, releaseId = releaseId,

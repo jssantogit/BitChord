@@ -1,6 +1,8 @@
 package com.music.bitchord
 
 import android.database.sqlite.SQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
+import java.lang.reflect.Proxy
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import java.io.File
@@ -40,6 +42,7 @@ class MusicBrainzEnrichmentMigrationTest {
                 CanonicalCatalogDatabase.MIGRATION_13_14,
                 CanonicalCatalogDatabase.MIGRATION_14_15,
                 CanonicalCatalogDatabase.MIGRATION_15_16,
+                CanonicalCatalogDatabase.MIGRATION_16_17,
             )
             .allowMainThreadQueries()
             .build()
@@ -74,6 +77,50 @@ class MusicBrainzEnrichmentMigrationTest {
 
         database.close()
         context.deleteDatabase(name)
+    }
+
+    @Test
+    fun migrationFromSixteenPreservesLegacyReleaseAndStartsWithUnknownVideoProof() {
+        val context = RuntimeEnvironment.getApplication()
+        val file = context.getDatabasePath("musicbrainz-video-16-17-${System.nanoTime()}.db")
+        file.parentFile?.mkdirs()
+        val raw = SQLiteDatabase.openOrCreateDatabase(file, null)
+        val mbid = "11111111-1111-4111-8111-111111111111"
+        try {
+            raw.execSQL("""CREATE TABLE musicbrainz_release_enrichment(
+                releaseId TEXT NOT NULL PRIMARY KEY, mbid TEXT NOT NULL,
+                title TEXT, artistDisplay TEXT, releaseDate TEXT,
+                country TEXT, status TEXT, fetchedAtEpochMs INTEGER NOT NULL
+            )""")
+            raw.execSQL("""INSERT INTO musicbrainz_release_enrichment(
+                releaseId,mbid,title,artistDisplay,releaseDate,country,status,fetchedAtEpochMs
+            ) VALUES ('legacy','$mbid','Original','Artist',
+                '2023-01-01','XW','Official',12345)""")
+            val db = Proxy.newProxyInstance(
+                SupportSQLiteDatabase::class.java.classLoader,
+                arrayOf(SupportSQLiteDatabase::class.java),
+            ) { _, method, args ->
+                check(method.name == "execSQL")
+                raw.execSQL(args!![0] as String)
+                null
+            } as SupportSQLiteDatabase
+            CanonicalCatalogDatabase.MIGRATION_16_17.migrate(db)
+            raw.rawQuery("""SELECT mbid,title,status,fetchedAtEpochMs,
+                isVideoOnlyMedia,isVideoOnlyContent
+                FROM musicbrainz_release_enrichment WHERE releaseId='legacy'""", null)
+                .use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(mbid, cursor.getString(0))
+                    assertEquals("Original", cursor.getString(1))
+                    assertEquals("Official", cursor.getString(2))
+                    assertEquals(12345L, cursor.getLong(3))
+                    assertTrue(cursor.isNull(4))
+                    assertTrue(cursor.isNull(5))
+                }
+        } finally {
+            raw.close()
+            file.delete()
+        }
     }
 
     private fun createVersionTwoDatabase(file: File) {

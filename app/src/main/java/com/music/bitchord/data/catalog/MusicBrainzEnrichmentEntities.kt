@@ -99,6 +99,10 @@ internal data class MusicBrainzReleaseEnrichmentEntity(
     val country: String?,
     val status: String?,
     val fetchedAtEpochMs: Long,
+    /** Positive edition media-format evidence; null means unverified. */
+    val isVideoOnlyMedia: Boolean? = null,
+    /** Exact Track/Recording evidence; distinct from edition media. */
+    val isVideoOnlyContent: Boolean? = null,
 )
 
 @Entity(

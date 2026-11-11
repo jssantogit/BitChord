@@ -65,6 +65,8 @@ internal data class CanonicalCachedGroupEditionRow(
     val releaseDate: String?,
     val artistDisplay: String?,
     val status: String?,
+    val isVideoOnlyMedia: Boolean?,
+    val isVideoOnlyContent: Boolean?,
 )
 
 /** Exact Recording MBID to an already-verified Official ReleaseGroup cover. */
@@ -363,6 +365,8 @@ internal interface CanonicalCatalogDao {
                     ON evidence.releaseId = edition.id
                 WHERE groupEdition.releaseGroupId = grp.id
                   AND lower(evidence.status) = 'official'
+                   AND COALESCE(evidence.isVideoOnlyMedia, 0) != 1
+                   AND COALESCE(evidence.isVideoOnlyContent, 0) != 1
                   -- A composite ReleaseGroup label is not necessarily the
                   -- commercially released album title. “How Sweet & Bubble
                   -- Gum” has verified Official editions titled “How Sweet”.
@@ -412,6 +416,8 @@ internal interface CanonicalCatalogDao {
         JOIN musicbrainz_release_enrichment AS releaseInfo
             ON releaseInfo.releaseId = trackEvidence.releaseId
                 AND lower(releaseInfo.status) = 'official'
+                AND COALESCE(releaseInfo.isVideoOnlyMedia, 0) != 1
+                AND COALESCE(releaseInfo.isVideoOnlyContent, 0) != 1
         JOIN catalog_release_group_edition AS relation
             ON relation.releaseId = trackEvidence.releaseId
         JOIN catalog_release_group AS groupInfo
@@ -450,6 +456,8 @@ internal interface CanonicalCatalogDao {
         JOIN musicbrainz_release_enrichment AS releaseInfo
             ON releaseInfo.releaseId = trackEvidence.releaseId
                AND lower(releaseInfo.status) = 'official'
+                AND COALESCE(releaseInfo.isVideoOnlyMedia, 0) != 1
+                AND COALESCE(releaseInfo.isVideoOnlyContent, 0) != 1
         JOIN catalog_release_group_edition AS relation
             ON relation.releaseId = trackEvidence.releaseId
         JOIN catalog_release_group AS groupInfo
@@ -499,7 +507,9 @@ internal interface CanonicalCatalogDao {
                edition.title AS title,
                info.country AS country, info.releaseDate AS releaseDate,
                COALESCE(info.artistDisplay, edition.artistDisplay) AS artistDisplay,
-               info.status AS status
+               info.status AS status,
+               info.isVideoOnlyMedia AS isVideoOnlyMedia,
+               info.isVideoOnlyContent AS isVideoOnlyContent
         FROM catalog_release_group_edition AS relation
         JOIN catalog_release AS edition ON edition.id = relation.releaseId
         JOIN catalog_external_identity AS ident
@@ -1265,6 +1275,8 @@ internal interface CanonicalCatalogDao {
                     ON evidence.releaseId = edition.id
                 WHERE groupEdition.releaseGroupId = grp.id
                   AND lower(evidence.status) = 'official'
+                   AND COALESCE(evidence.isVideoOnlyMedia, 0) != 1
+                   AND COALESCE(evidence.isVideoOnlyContent, 0) != 1
                   -- A composite ReleaseGroup label is not necessarily the
                   -- commercially released album title. “How Sweet & Bubble
                   -- Gum” has verified Official editions titled “How Sweet”.
@@ -1295,6 +1307,8 @@ internal interface CanonicalCatalogDao {
         SELECT identity.externalId AS musicBrainzId, edition.title AS title,
             edition.artistDisplay AS artistDisplay, info.country AS country,
             info.releaseDate AS releaseDate, info.status AS status,
+             info.isVideoOnlyMedia AS isVideoOnlyMedia,
+             info.isVideoOnlyContent AS isVideoOnlyContent,
             COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release edition ON edition.id = identity.entityId
