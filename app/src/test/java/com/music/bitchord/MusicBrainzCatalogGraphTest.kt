@@ -137,6 +137,71 @@ class MusicBrainzCatalogGraphTest {
         assertEquals("recordings+artist-credits+release-groups", requests.last().second["inc"])
     }
 
+    @Test fun browseMediaFormatsIdentifyOnlyExplicitlyVideoOnlyOfficialEditions() = runBlocking {
+        val video = "11111111-1111-4111-8111-111111111111"
+        val audio = "22222222-2222-4222-8222-222222222222"
+        val mixed = "33333333-3333-4333-8333-333333333333"
+        val ambiguous = "44444444-4444-4444-8444-444444444444"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    assertEquals("release", path)
+                    assertEquals(group, parameters["release-group"])
+                    assertEquals("media", parameters["inc"])
+                    return """{"release-count":4,"release-offset":0,"releases":[
+                        {"id":"$video","title":"Same title","status":"Official",
+                         "media":[{"format":"DVD-Video"}]},
+                        {"id":"$audio","title":"Same title","status":"Official",
+                         "media":[{"format":"Digital Media"}]},
+                        {"id":"$mixed","title":"Same title","status":"Official",
+                         "media":[{"format":"DVD-Video"},{"format":"CD"}]},
+                        {"id":"$ambiguous","title":"Same title","status":"Official",
+                         "media":[{"format":"Blu-ray"}]}
+                    ]}"""
+                }
+            },
+        ))
+        val page = (graph.browseGroupReleases(group) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>).value
+        assertEquals(4, page.items.size)
+        assertEquals(true, page.items[0].isVideoOnlyMedia)
+        assertEquals(false, page.items[1].isVideoOnlyMedia)
+        assertEquals(false, page.items[2].isVideoOnlyMedia)
+        assertEquals(null, page.items[3].isVideoOnlyMedia)
+    }
+
+    @Test fun lookupKeepsVideoRecordingEvidenceDistinctFromDigitalAudio() = runBlocking {
+        val videoTrack = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val videoRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val audioTrack = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        val audioRecording = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    assertEquals("release/$worldwide", path)
+                    return """{"id":"$worldwide","title":"Same title",
+                        "release-group":{"id":"$group"},
+                        "media":[{"format":"Digital Media","tracks":[
+                            {"id":"$videoTrack","title":"Music video",
+                             "recording":{"id":"$videoRecording","title":"Music video",
+                                          "video":true}},
+                            {"id":"$audioTrack","title":"Original audio",
+                             "recording":{"id":"$audioRecording","title":"Original audio",
+                                          "video":false}}
+                        ]}]}"""
+                }
+            },
+        ))
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(false, detail.isVideoOnlyContent)
+        assertEquals(2, detail.tracks.size)
+    }
+
     @Test fun invalidMbidRejectsBeforeNetworkAndFailedResponseDoesNotInventTracks() = runBlocking {
         var calls = 0
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
