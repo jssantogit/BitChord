@@ -2,7 +2,6 @@ package com.music.bitchord.ui.player
 
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import com.music.bitchord.ui.components.CompactRatingGeometry
-import com.music.bitchord.ui.components.CompactRatingGeometry
 
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.ExplicitSongTitle

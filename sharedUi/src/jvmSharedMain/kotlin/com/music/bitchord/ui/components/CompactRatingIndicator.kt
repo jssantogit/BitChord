@@ -136,7 +136,7 @@ fun CompactRatingIndicator(
                     .drawWithContent {
                         drawContent()
                         withTransform({
-                            scale(size.width / 28f, size.height / 28f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+                            scale(this.size.width / 28f, this.size.height / 28f, pivot = androidx.compose.ui.geometry.Offset.Zero)
                         }) {
                             drawPath(numbers, Color.Black, blendMode = BlendMode.Clear)
                         }
@@ -145,7 +145,7 @@ fun CompactRatingIndicator(
             if (circular) {
                 Canvas(Modifier.fillMaxSize()) {
                     withTransform({
-                        scale(size.width / 28f, size.height / 28f, pivot = androidx.compose.ui.geometry.Offset.Zero)
+                        scale(this.size.width / 28f, this.size.height / 28f, pivot = androidx.compose.ui.geometry.Offset.Zero)
                     }) {
                         clipPath(AppleQueueVectors.RatingStarContour) {
                             drawPath(numbers, foreground)
