@@ -49,6 +49,10 @@ private object LocalArtistRecentMusicBrainzLookup {
         if (name.length !in 2..100 || name.any(Char::isISOControl) ||
             local.isEmpty() || local.size > 200
         ) return@withLock emptyMap()
+        val uniquelyNamed = canonicalUnambiguousLocalArtistReleases(local)
+        // No presentation-only date can be attributed to a unique edition;
+        // avoid a costly remote search for this entirely ambiguous shelf.
+        if (uniquelyNamed.isEmpty()) return@withLock emptyMap()
         val key = name.lowercase(Locale.ROOT) + "|" +
             local.map { it.title.trim().lowercase(Locale.ROOT) }.sorted().joinToString("|")
         val now = System.currentTimeMillis()
@@ -81,7 +85,7 @@ private object LocalArtistRecentMusicBrainzLookup {
             val known = canonicalLocalArtistExactReleaseDateEvidence(
                 name, local, exact, groups,
             )
-            if (known.size == local.size) break
+            if (known.size == uniquelyNamed.size) break
             offset = page.nextOffset ?: break
         }
         val evidence = canonicalLocalArtistExactReleaseDateEvidence(
@@ -127,10 +131,7 @@ internal fun canonicalCachedRecentArtistProofs(
     read: (String) -> String?,
 ): Map<String, CanonicalArtistReleaseEvidence> {
     if (artistName.isBlank()) return emptyMap()
-    val groups = local.groupBy { it.title.trim().lowercase(Locale.ROOT) }
-    return groups.values.mapNotNull { releases ->
-        if (releases.size != 1) return@mapNotNull null
-        val release = releases.single()
+    return canonicalUnambiguousLocalArtistReleases(local).mapNotNull { release ->
         val raw = read(canonicalRecentArtistProofCacheKey(artistName, release.title))
             ?: return@mapNotNull null
         val split = raw.split('|')
@@ -156,8 +157,7 @@ private class LocalArtistRecentProofDiskStore(context: Context) {
         if (verified.isEmpty()) return
         val editor = prefs.edit()
         var hasValue = false
-        local.groupBy { it.title.trim().lowercase(Locale.ROOT) }.values
-            .filter { it.size == 1 }.map { it.single() }.forEach { release ->
+        canonicalUnambiguousLocalArtistReleases(local).forEach { release ->
                 val payload = verified[release.id]?.let(::recentProofPayload)
                 if (payload != null) {
                     editor.putString(canonicalRecentArtistProofCacheKey(

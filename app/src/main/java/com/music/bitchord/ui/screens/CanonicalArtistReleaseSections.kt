@@ -29,6 +29,24 @@ internal fun canonicalArtistReleaseEvidenceWithTrustedDate(
     )
 
 /**
+ * Multiple local editions may share a title while representing different
+ * MusicBrainz releases. A normalized title alone cannot select which ID owns
+ * one external group/date. Return only unambiguous local release identities;
+ * never erase or merge the other local releases.
+ *
+ * Use one shared rule for online corroboration and the offline proof cache:
+ * case, surrounding space and repeated whitespace must not create two keys.
+ */
+internal fun canonicalUnambiguousLocalArtistReleases(
+    local: List<ReleaseEntity>,
+): List<ReleaseEntity> = local.distinctBy { it.id }
+    .groupBy { release ->
+        release.title.trim().lowercase(java.util.Locale.ROOT)
+            .replace(Regex("""\\s+"""), " ")
+    }
+    .values.mapNotNull { candidates -> candidates.singleOrNull() }
+
+/**
  * Presentation-only external date corroboration for an undated local artist.
  * The source artist must be unique by exact name; its MusicBrainz release
  * group results must come from a fielded Artist MBID search. An exact local
@@ -64,8 +82,9 @@ internal fun canonicalLocalArtistExactReleaseDateEvidence(
                     ?.let { !it.isAfter(today) }
             } == true
     }.groupBy { key(it.title) }
-    return localReleases.mapNotNull { release ->
-        // One exact group per title; same-name competing groups must stay
+    return canonicalUnambiguousLocalArtistReleases(localReleases).mapNotNull { release ->
+        // One exact group per title AND one local release for that title.
+        // Same-name competing editions/groups must stay
         // unknown rather than selecting an arbitrary release date.
         val matches = groupCandidates[key(release.title)].orEmpty()
         val matched = matches.singleOrNull() ?: return@mapNotNull null
