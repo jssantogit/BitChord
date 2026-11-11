@@ -1,8 +1,11 @@
 """Offline guardrails for bounded RG-to-Master scouting, not adjudication."""
 import unittest
+import json
+from pathlib import Path
 
 from catalog_211_discogs_master_lead_scout import (
     ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT, browse_page, release_browse, scout,
+    known_b_groups,
 )
 
 A = "6b128dd7-e998-4edb-a4f5-400fef190445"
@@ -73,6 +76,19 @@ def fixtures(*, conflicting=False, large=False):
     return get
 
 class MasterLeadScoutTest(unittest.TestCase):
+    def test_real_seven_reviewed_b_groups_excluded_from_future_master_scout(self):
+        source = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json")
+                            .read_text(encoding="utf-8"))
+        groups = known_b_groups(source)
+        self.assertEqual(7, len(groups))
+        self.assertIn("849d8582-3422-4d61-bfbe-9b65f4bfdc06", groups)
+        self.assertIn("fb426d76-525d-4b25-90d1-fa4d1b3140c9", groups)
+        selected = source["cases"]
+        self.assertEqual(3, sum(item["id"].startswith("B-") and
+                                item.get("reviewed") is False for item in selected))
+        self.assertEqual(0, sum(item["id"].startswith("B-") and
+                                item.get("match_state") == "verified" for item in selected))
+
     def test_browse_must_keep_exact_credit_and_typed_relation(self):
         rows, meta = browse_page(page([
             row(), row(H, 501, artist=B),
