@@ -1242,11 +1242,13 @@ internal fun SmartPlaylistV2WizardUi(
                                 Text("Nenhuma condição encontrada.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                             } else item {
-                                PlaylistWizardNavigationList(matches.map { field ->
+                                PlaylistWizardFieldList(matches.map { field ->
                                     PlaylistWizardNavOption(
                                         title = smartConditionLabel(field),
                                         description = if (smartConditionDescription(field).startsWith(
                                             "A condição usa somente")) "" else smartConditionDescription(field),
+                                        icon = iconForConditionCategory(
+                                            smartConditionCategories.first { field in it.fields }.id),
                                         onClick = { openField(field) },
                                     )
                                 })
