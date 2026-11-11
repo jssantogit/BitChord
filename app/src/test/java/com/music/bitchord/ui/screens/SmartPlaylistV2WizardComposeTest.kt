@@ -1100,6 +1100,10 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Condição 2").assertDoesNotExist()
         compose.onNodeWithTag("apple-toolbar-back-button").performClick()
         compose.onNodeWithText("Condição 2").assertExists()
+        // Save is navigation too; it must not jump over the parent group.
+        compose.onNodeWithText("Condição 1").performClick()
+        compose.onNodeWithText("Salvar grupo").performClick()
+        compose.onNodeWithText("Condição 2").assertExists()
     }
 
     @Test fun reopeningAConditionCategoryStartsAtTopRatherThanAnOldScrollPosition() {
