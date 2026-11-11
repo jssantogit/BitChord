@@ -63,7 +63,7 @@ class CanonicalMyRatingsVisibilityTest {
         compose.onNodeWithText("Track A").assertIsDisplayed()
         compose.onNodeWithText("Artist A").assertIsDisplayed()
         // Icon-only presentation: numeric value survives through accessibility.
-        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4,5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Rating: 4.5").assertDoesNotExist()
     }
 
