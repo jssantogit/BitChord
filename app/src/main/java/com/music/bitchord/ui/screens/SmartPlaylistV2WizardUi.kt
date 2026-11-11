@@ -1248,7 +1248,7 @@ internal fun SmartPlaylistV2WizardUi(
                                         description = if (smartConditionDescription(field).startsWith(
                                             "A condição usa somente")) "" else smartConditionDescription(field),
                                         icon = iconForConditionCategory(
-                                            smartConditionCategories.first { field in it.fields }.id),
+                                            smartConditionCategories.firstOrNull { field in it.fields }?.id ?: "music"),
                                         onClick = { openField(field) },
                                     )
                                 })
