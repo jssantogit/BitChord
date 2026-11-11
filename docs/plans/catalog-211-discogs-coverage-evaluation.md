@@ -543,3 +543,32 @@ ordem. A política de candidatos B permanece distinta do
 critério source-only C: B-03/B-04 continuam `candidate`,
 sem `Verified` da edição. Testes Kotlin verificam os dois
 exemplos da API real e controles negativos, sem smoke físico.
+
+## Regressão de formato misto e gate Discogs isolado (11/11/2026)
+
+A prevenção de falso `Discogs-only` para `Fashion / ファッション` e
+`Dare Me / デアミー` considera `File`/Single de uma faixa,
+mas uma Release Discogs pode declarar **File + CD/Vinyl/DVD**
+simultaneamente. Essa publicação não é digital-only: filtrá-la
+com base na presença de `File` apagaria uma edição física potencial,
+mesmo que o MusicBrainz já conheça o Single digital.
+
+A guarda source-only passa a exigir a presença de `File`,
+tipo `Single` e **ausência de mídia física declarada**.
+Não inferir equivalência de edições: CD/vinil, mídias mistas,
+lançamentos com duas faixas ou títulos desconhecidos continuam
+sendo candidatos à investigação normal. Os testes JUnit
+`knownSingleDigitalBilingualSlashCannotBeInventedAsDiscogsOnly`
+agora verificam File+CD, File+Vinyl e File+DVD,
+além dos controles anteriores.
+
+Para não confundir falha de outro subsistema com regressão Discogs,
+a workflow `Catalog #211 — Focused Discogs Android unit tests`
+executa apenas `Discogs*Test` (incluindo bridges UI) no
+`:app:testDevDebugUnitTest`, com `--tests`, **sem APK**.
+A Android CI geral do HEAD anterior `299d5b87`
+[falhou nos testes `MusicBrainzArtistAppearancesTest`](https://github.com/jssantogit/BitChord/actions/runs/43060820465),
+mas compilou Kotlin: isso não prova que o Discogs esteja
+vermelho ou verde. A correção MusicBrainz fica no chat/PR
+separado. O gate Discogs isolado só prova essa suíte;
+não substitui a compilação/testes de integração completos.

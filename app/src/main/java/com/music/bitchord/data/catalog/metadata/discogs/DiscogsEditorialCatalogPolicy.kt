@@ -309,6 +309,16 @@ internal object DiscogsShadowCatalog {
         """^([a-z][a-z0-9 &'!.\-]{2,90}) / ([ぁ-ヿ一-鿿]{3,60})$""",
     )
 
+    // The parser flattens all Discogs format names/descriptions. A release
+    // listed as both File and CD/Vinyl/DVD is a mixed-media product, not a
+    // digital-only single. It must retain its independent source-only lead.
+    private val physicalReleaseMedia = setOf(
+        "cd", "vinyl", "cassette", "sacd", "shellac", "minidisc",
+        "8-track cartridge", "flexi-disc", "lathe cut", "cdr",
+        "dvd", "dvd-video", "dvd-r", "blu-ray", "blu-ray audio",
+        "vhs", "laserdisc", "vcd", "video cd",
+    )
+
     private fun mayAlreadyBeKnownBilingualDigitalSingle(
         record: DiscogsRecord,
         creditedArtist: String,
@@ -316,6 +326,9 @@ internal object DiscogsShadowCatalog {
     ): Boolean {
         if (record.tracklist.size != 1 ||
             record.formats.none { it.trim().equals("File", ignoreCase = true) } ||
+            record.formats.any {
+                it.trim().lowercase(Locale.ROOT) in physicalReleaseMedia
+            } ||
             discogsEditorialKind(record.formats) != DiscogsEditorialKind.SINGLE
         ) return false
         val title = comparisonTitle(record.title, creditedArtist)
