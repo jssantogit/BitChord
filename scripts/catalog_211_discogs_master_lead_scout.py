@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B cohort: discover real RG->Discogs Master leads with no personal token.
+"""Bounded A/B research: real typed RG->Discogs Master leads without token.
 
 Only the first 25 official MusicBrainz ReleaseGroups per chosen artist are
 examined. The output is an explicitly INCOMPLETE lead list, never an absence
@@ -343,12 +343,33 @@ def scout_corpus(manifest: dict, get, pause=lambda: None) -> dict:
         }
     return scout(list(ARTISTS), groups, get, pause)
 
+def scout_type_leads(manifest: dict, get, pause=lambda: None) -> dict:
+    """Independent A-type research using the same bounded typed-Master graph.
+
+    This is deliberately separate from scout_corpus: a completed negative
+    B sample cannot be reused as an A type correction, nor should it block
+    new source-only *review leads*. The first artist browse is not complete.
+    """
+    result = scout(list(ARTISTS), known_b_groups(manifest), get, pause)
+    result["status"] = "a_type_source_leads_not_adjudicated"
+    result["a_type_reviewed_cases"] = 0
+    result["warning"] = (
+        "A-type source leads only: no editorial type disagreement, "
+        "correction, matched edition, complete artist catalog or app UI gain"
+    )
+    return result
+
 def main():
+    import argparse
     from catalog_211_discogs_public_link_probe import read_json
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scope", choices=("B", "A"), default="B")
+    args = parser.parse_args()
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    result = scout_corpus(manifest,
-                          lambda url: read_json(url)[1],
-                          pause=lambda: time.sleep(1.1))
+    scanner = scout_type_leads if args.scope == "A" else scout_corpus
+    result = scanner(manifest,
+                     lambda url: read_json(url)[1],
+                     pause=lambda: time.sleep(1.1))
     OUTPUT.write_text(json.dumps(result, ensure_ascii=False, sort_keys=True,
                                  indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"status": result.get("status", "candidate_scout"),
