@@ -78,6 +78,18 @@ class CandidateDetailsTest(unittest.TestCase):
         self.assertEqual("artist_id_disagrees_with_relation", wrong["status"])
         self.assertEqual("invalid_release", hydrate(entry, lambda _: edition(rid=1))["status"])
 
+    def test_barcode_identifiers_retained_without_guessing_edition_identity(self):
+        entry = candidate_queue(document([source(kind="release", rid=777)]))[0]
+        doc = edition(master=0)
+        doc["identifiers"] = [
+            {"type": "Barcode", "value": "880 1234-567890"},
+            {"type": "Matrix / Runout", "value": "not-a-barcode"},
+        ]
+        observation = hydrate(entry, lambda _: doc)
+        self.assertEqual(["880 1234-567890"], observation["barcodes"])
+        self.assertEqual("edition_metadata_observed_not_adjudicated", observation["status"])
+        self.assertNotIn("absent_in_musicbrainz", observation)
+
     def test_report_never_makes_corpus_claim_or_accepts_untrusted_url(self):
         urls = []
         def get(url):

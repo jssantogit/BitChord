@@ -131,7 +131,18 @@ def hydrate(entry: dict, get) -> dict:
         country = release.get("country")
         if not isinstance(country, str) or len(country) > 120:
             country = None
+        # Keep only literal public Discogs barcode identifiers for later
+        # MusicBrainz corroboration. No search tokens or printed artwork.
+        identifiers = release.get("identifiers", [])
+        barcode_values = set()
+        if isinstance(identifiers, list) and len(identifiers) <= 80:
+            for identifier in identifiers:
+                if (isinstance(identifier, dict) and identifier.get("type") == "Barcode" and
+                    isinstance(identifier.get("value"), str) and
+                    len(identifier["value"]) <= 40):
+                    barcode_values.add(identifier["value"])
         output.update({
+            "barcodes": sorted(barcode_values) if len(barcode_values) <= 12 else [],
             "title": title.strip(), "artist_credits": names, "country": country,
             "year": year, "format_names": sorted(fmt_names),
             "format_descriptions": sorted(desc),

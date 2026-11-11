@@ -218,3 +218,20 @@ edição MB não oficial permanecem inelegíveis. O artefato
 `discogs-211-type-disagreement-triage.json` é verificável no mesmo
 workflow de sondagem. O corpus A preserva dez vagas sem seleção até
 surgirem casos realmente divergentes com evidência independente.
+
+## Grupo C — reconciliação por barcode de edições públicas (11/11/2026)
+
+O segundo passe `scripts/catalog_211_discogs_source_only_reconciliation.py` usa os mesmos
+artifacts do scanner público (índice + detalhe), sem autenticação e sem refazer
+queries Discogs. Apenas uma junção exata de identidade permite consultar no
+MusicBrainz até dois códigos de barras Discogs por edição, em no máximo 16 GETs;
+os casos inválidos, de vídeo, artista distinto e sem barcode não usam rede.
+
+O resultado `existing_mb_artist_barcode` indica um registro MusicBrainz já existente
+com **código de barras e MBID do artista coincidentes**. Isso NÃO valida a mesma
+prensagem nem o vínculo Release→Discogs. Respostas incompletas, múltiplos resultados,
+barcodes de outros artistas e ausência de hits são estados distintos; **nenhum
+resultado negativo comprova lançamento ausente**. O relatório mantém
+`confirmed_missing_from_musicbrainz=false`, `reviewed=false` e as métricas do
+corpus em zero até adjudicação manual com fonte editorial independente e inspeção
+visual. O artifact de comparação é reprodutível e não modifica as prateleiras.

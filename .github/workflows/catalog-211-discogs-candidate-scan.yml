@@ -11,6 +11,8 @@ on:
       - scripts/test_catalog_211_discogs_corpus_candidates.py
       - scripts/catalog_211_discogs_candidate_details.py
       - scripts/test_catalog_211_discogs_candidate_details.py
+      - scripts/catalog_211_discogs_source_only_reconciliation.py
+      - scripts/test_catalog_211_discogs_source_only_reconciliation.py
       - scripts/catalog_211_discogs_public_link_probe.py
       - scripts/test_catalog_211_discogs_public_link_probe.py
       - scripts/catalog_211_discogs_type_triage.py
@@ -52,6 +54,10 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_candidate_details.py' -v
       - name: Inspect bounded candidate Edition metadata, without editorial claims
         run: python3 scripts/catalog_211_discogs_candidate_details.py
+      - name: Test safe C-cohort barcode reconciliation offline
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_source_only_reconciliation.py' -v
+      - name: Reconcile Discogs-only leads with existing MusicBrainz barcodes
+        run: python3 scripts/catalog_211_discogs_source_only_reconciliation.py
       - name: Test reusable public MusicBrainz/Discogs comparison diagnostics
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_public_link_probe.py' -v
       - name: Test exact-ID cross-provider edition controls offline
@@ -70,6 +76,7 @@ jobs:
           path: |
             discogs-211-corpus-candidates.json
             discogs-211-corpus-edition-observations.json
+            discogs-211-source-only-barcode-reconciliation.json
             discogs-211-edition-pair-evidence.json
             discogs-211-type-disagreement-triage.json
             discogs-211-unlinked-alternative-editions.json
