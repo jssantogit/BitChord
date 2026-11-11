@@ -174,8 +174,10 @@ internal class MusicBrainzCatalogIndex(
                                 ?: previous.primaryType,
                             firstReleaseDate = hit.firstReleaseDate?.takeIf(String::isNotBlank)
                                 ?: previous.firstReleaseDate,
-                            secondaryTypes = hit.secondaryTypes?.takeIf(String::isNotBlank)
-                                ?: previous.secondaryTypes,
+                            // Null means omitted by this response; empty
+                            // string means an explicit [] and clears stale
+                            // Compilation/Live/Remix tags for this exact MBID.
+                            secondaryTypes = hit.secondaryTypes ?: previous.secondaryTypes,
                         )
                         if (merged != previous) dao.upsertCatalogReleaseGroup(merged)
                         indexed[mbid] = existing

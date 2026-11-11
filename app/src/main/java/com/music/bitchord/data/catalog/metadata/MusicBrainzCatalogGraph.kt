@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.booleanOrNull
@@ -94,9 +95,13 @@ internal class MusicBrainzCatalogGraph(
                 primaryType = row.string("primary-type"),
                 firstReleaseDate = row.string("first-release-date"),
                 artistDisplay = row.artistDisplay(),
-                secondaryTypes = (row["secondary-types"] as? JsonArray)
-                    ?.mapNotNull { runCatching { it.jsonPrimitive.contentOrNull }.getOrNull() }
-                    ?.filter(String::isNotBlank)?.joinToString("|")?.ifBlank { null },
+                secondaryTypes = (row["secondary-types"] as? JsonArray)?.let { types ->
+                    // A provided [] clears an old tag, unlike an omitted field.
+                    // Malformed entries cannot silently masquerade as [].
+                    if (types.any { it !is JsonPrimitive || !it.isString }) null
+                    else types.map { (it as JsonPrimitive).content.trim() }
+                        .filter(String::isNotBlank).joinToString("|")
+                },
             )
         }
 

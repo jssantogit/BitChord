@@ -55,7 +55,7 @@ internal data class MusicBrainzReleaseGroupHit(
     val firstReleaseDate: String?,
     val artistDisplay: String?,
     val artworkUri: String? = null,
-    /** Pipe-separated official MusicBrainz secondary types; unknown remains null. */
+    /** Pipe-separated MusicBrainz types: null = absent/unknown, "" = explicitly no tags. */
     val secondaryTypes: String? = null,
 )
 
@@ -297,8 +297,11 @@ internal class MusicBrainzCatalogSearch(
                     MusicBrainzReleaseGroupHit(
                         mbid, title, group.primaryType.nonEmpty(),
                         group.firstReleaseDate.nonEmpty(), group.artistCredit.displayArtistCredit(),
-                        secondaryTypes = group.secondaryTypes?.filter(String::isNotBlank)
-                            ?.joinToString("|")?.ifBlank { null },
+                        // Explicit [] is a source correction: it means zero
+                        // secondary types. Missing field remains unknown/null.
+                        secondaryTypes = group.secondaryTypes
+                            ?.map(String::trim)?.filter(String::isNotBlank)
+                            ?.joinToString("|"),
                     )
                 }
             }
