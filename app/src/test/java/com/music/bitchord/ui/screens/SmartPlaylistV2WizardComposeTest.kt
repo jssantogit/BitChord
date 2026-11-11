@@ -139,9 +139,11 @@ class SmartPlaylistV2WizardComposeTest {
         assertEquals("music", smartConditionCategories.single {
             SmartPlaylistRuleField.GENRE in it.fields
         }.id)
-        assertTrue(smartConditionCategories.none {
+        // Universal genre and local MediaStore genre are distinct sources,
+        // both offered because both evaluator branches already exist.
+        assertEquals("music", smartConditionCategories.single {
             SmartPlaylistRuleField.LOCAL_GENRE in it.fields
-        })
+        }.id)
         val legacy = smartRuleNewComparison(SmartPlaylistRuleField.LOCAL_GENRE)
         assertEquals(SmartPlaylistRuleOperator.CONTAINS, legacy.operator)
     }
