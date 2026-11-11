@@ -122,7 +122,7 @@ internal fun CircleIconButton(
             .appleSecondaryActionSurface()
             .then(
                 if (customIcon != null) Modifier.semantics(mergeDescendants = true) {
-                    contentDescription = actionLabel
+                    this.contentDescription = actionLabel
                 } else Modifier
             )
             .then(
