@@ -42,7 +42,7 @@ internal fun canonicalUnambiguousLocalArtistReleases(
 ): List<ReleaseEntity> = local.distinctBy { it.id }
     .groupBy { release ->
         release.title.trim().lowercase(java.util.Locale.ROOT)
-            .replace(Regex("""\\s+"""), " ")
+            .replace(Regex("""\s+"""), " ")
     }
     .values.mapNotNull { candidates -> candidates.singleOrNull() }
 
