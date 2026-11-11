@@ -26,7 +26,10 @@ def observation():
             "artist_identity_confirmed_by_source_ids": True,
             "direct_release_relation": "points_to_this_release",
             "comparison": {"discogs_explicit_type": "Album",
-                           "tracklist_matches": True,
+                           "artist_matches": True, "title_matches": True,
+                           "tracklist_complete": True, "tracklist_matches": True,
+                           "year_matches": True, "country_compatible": True,
+                           "barcode_compatible": True,
                            "barcode_identical_on_both": True}}
 
 def controls():
@@ -48,6 +51,43 @@ class TypeTriageTest(unittest.TestCase):
         self.assertFalse(r["reviewed"])
         self.assertEqual(0, item["reviewed_corpus_cases"])
         self.assertEqual(1, item["linked_type_disagreement_leads"])
+
+    def test_direct_link_does_not_make_incompatible_pressing_an_a_type_lead(self):
+        base = observation()
+        evidence = base["comparison"]
+        for field in ("artist_matches", "title_matches", "tracklist_complete",
+                      "tracklist_matches", "year_matches",
+                      "country_compatible", "barcode_compatible"):
+            with self.subTest(field=field):
+                source = copy.deepcopy(base)
+                source["comparison"][field] = False
+                item = triage(controls(), report(source))
+                self.assertEqual("linked_edition_evidence_inconclusive",
+                                 item["cases"][0]["state"])
+                self.assertIn(field, item["cases"][0]["missing_editional_proofs"])
+                self.assertEqual(0, item["linked_type_disagreement_leads"])
+                self.assertEqual(0, item["type_corrections"])
+        source = copy.deepcopy(base)
+        del source["comparison"]["country_compatible"]
+        item = triage(controls(), report(source))
+        self.assertEqual("linked_edition_evidence_inconclusive",
+                         item["cases"][0]["state"])
+        self.assertIn("country_compatible", item["cases"][0]["missing_editional_proofs"])
+
+    def test_type_lead_only_when_complete_exact_edition_facts_support_it(self):
+        item = triage(controls(), report())
+        self.assertEqual("linked_type_disagreement_needs_review",
+                         item["cases"][0]["state"])
+        self.assertEqual([], item["cases"][0]["missing_editional_proofs"])
+        self.assertFalse(item["cases"][0]["verified"])
+        source = copy.deepcopy(observation())
+        source["comparison"]["barcode_identical_on_both"] = False
+        # Missing barcode is not proof of a different edition. It is
+        # separately reported, never fabricated into barcode agreement.
+        item = triage(controls(), report(source))
+        self.assertEqual("linked_type_disagreement_needs_review",
+                         item["cases"][0]["state"])
+        self.assertFalse(item["cases"][0]["verified"])
 
     def test_unlinked_same_or_conflicting_types_are_context_only(self):
         raw = observation()
