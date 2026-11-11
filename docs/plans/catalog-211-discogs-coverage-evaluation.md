@@ -332,3 +332,42 @@ ordem de leitura, Master antes desconhecido e ciclo de expiração.
 continua sem homologação (0/30); nenhuma correção de tipo real ou edição
 Discogs-only foi promovida por esta mudança. APK e smoke físico seguem
 dependentes de autorização separada.
+
+## Primeiro caso B revisado com fonte editorial independente — B-02 (11/11/2026)
+
+**TXT / セツナハナビ (Setsuna Hanabi)** — resultado da revisão:
+`match_state=candidate`, **NOT VERIFIED**, nenhum ganho automático aplicado.
+O [registro MusicBrainz de edição 6770b265](https://musicbrainz.org/release/6770b265-719a-463b-af5e-50ac5aeac1e5)
+citado no controle é **digital** (17/08/2026; ReleaseGroup
+`cb79234e-c3d3-4973-a3e3-6ec603b3d1f4`, Single), enquanto o
+[anúncio primário da Universal Music Japan de 23/07/2026](https://www.universal-music.co.jp/txt/news/2026-07-23/)
+descreve o **CD físico** de 19/08/2026, quatro faixas e versão regular
+HYBJ-02085 / POCS-30033. O [Discogs Release 38302455](https://www.discogs.com/release/38302455)
+foi observado em sondagens da
+[CI #42921028437](https://github.com/jssantogit/BitChord/actions/runs/42921028437),
+mas o conjunto de evidências não estabelece que a prensagem é
+a mesma de um Release MB específico. A edição alternativa MB
+`91c4d2eb-d34f-427a-b489-44411063c131` permanece inconclusiva.
+
+**Resultado negativo útil:** não declarar Discogs-only nem mesmo Release
+verificada pela coincidência de quatro faixas. O grupo Single está no
+MusicBrainz, então `absent_in_musicbrainz=false`. A revisão é **somente
+da identidade de fonte e da decisão de não promover**; o aparelho não foi
+testado, portanto `app_type=Unknown` / `visible=false` não são medições de
+UI e não devem ser apresentados como tal. Não se usa a classificação
+do lançamento no MusicBrainz para declarar identidade da prensagem.
+
+O manifesto passa de 0/30 para **1/30 revisado**, quatro pares B ainda
+pré-selecionados sem revisão, três C excluídos preliminarmente e
+zero ganho confirmado de correspondência, reclassificação ou recuperação.
+**O benchmark completo continua bloqueado**, `metrics=null`, até
+os 30 casos serem revisados; este caso não autoriza lançamento nem smoke APK.
+
+### Nota de integridade da amostra
+
+Uma revisão B negativa é um resultado real, mas não é uma
+demonstração de superioridade Discogs. A contagem de revisões deve incluir
+somente casos com fonte editorial independente, ID de Release dos dois
+provedores, motivo verificável e status explícito que preserve incerteza.
+Exemplos apresentados anteriormente como `0/30` eram históricos;
+o corte mais recente é `1/30`.

@@ -71,3 +71,14 @@ Para um piloto de precedência editorial, exigir **os mesmos artistas e datas** 
 **Discogs-first como substituição integral da fonte canônica: não demonstrado e não autorizado.**
 
 O relatório automatizado registra este estado sem converter a hipótese em decisão. O próximo avanço na PR #211 segue sendo completar evidências reais dos grupos A/B/C; não trocar provedores como atalho para uma avaliação inconclusiva.
+
+## Atualização do estado de evidências (11/11/2026)
+
+A revisão independente de B-02 (TXT / Setsuna Hanabi) confirmou o produto
+CD com fonte primária da gravadora e que o Release MBID comparado é uma
+**edição digital diferente**, portanto não há `Verified` de edição nem
+recuperação de um grupo ausente. É uma revisão **negativa do par exato**,
+não uma validação de UI. O corpus passa a 1/30 revisado, 4 B ainda
+pré-selecionados, 3 exclusões C preliminares; métricas completas e ganhos
+permanecem indisponíveis. Isso **não altera** a conclusão de não autorizar
+Discogs-first sem comprovação de cobertura.

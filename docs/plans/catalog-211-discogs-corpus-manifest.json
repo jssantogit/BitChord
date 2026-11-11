@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211 evaluation manifest: five exact-ID unlinked edition candidates and three excluded source-only index leads; zero adjudicated, no measured coverage",
+  "description": "Discogs #211 coverage corpus: first independently reviewed B negative exact-edition pair (TXT Setsuna Hanabi), four B candidates still unreviewed, three excluded C leads; no measured provider gains or full coverage",
   "cases": [
     {
       "id": "A-01",
@@ -72,8 +72,7 @@
     {
       "id": "B-02",
       "cohort": "unlinked",
-      "reviewed": false,
-      "selection_state": "identity_observed",
+      "reviewed": true,
       "label": "TXT · Setsuna Hanabi",
       "musicbrainz_release_mbid": "6770b265-719a-463b-af5e-50ac5aeac1e5",
       "musicbrainz_group_mbid": "cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
@@ -85,7 +84,21 @@
         "discogs_release": "https://www.discogs.com/release/38302455",
         "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42921028437",
         "independent_editorial": "https://www.universal-music.co.jp/txt/news/2026-07-23/"
-      }
+      },
+      "reviewed_at_utc": "2026-11-11T16:00:43Z",
+      "sources": [
+        "label",
+        "musicbrainz",
+        "discogs"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Independent Universal Music Japan announcement of 23 July 2026 confirms a physical CD single dated 19 August, four ordered tracks and catalog HYBJ-02085 / POCS-30033. MusicBrainz Release 6770b265 is the distinct 17 August DIGITAL edition of the already existing Single ReleaseGroup cb79234e; the four-title group overlap does not establish identical edition, especially without a same barcode or an exact Release-to-Discogs link. Discogs Release 38302455 was source-observed as a physical-edition lead in prior authenticated-free CI. This B-02 pair is therefore NOT VERIFIED as an exact edition and must not be promoted or counted as a recovered release. The separately observed MusicBrainz physical alternative 91c4d2eb also remains unproven as an identical pressing. App presentation and device UI were not checked; app_type=Unknown and visible=false mean no confirmed UI gain, not a measured absence from rendered shelves."
     },
     {
       "id": "B-03",
