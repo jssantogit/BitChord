@@ -5,7 +5,7 @@ from pathlib import Path
 
 from catalog_211_discogs_master_lead_scout import (
     ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT, browse_page, release_browse, scout,
-    known_b_groups, scout_corpus,
+    known_b_groups, scout_corpus, scout_type_leads,
 )
 
 A = "6b128dd7-e998-4edb-a4f5-400fef190445"
@@ -136,6 +136,25 @@ class MasterLeadScoutTest(unittest.TestCase):
                          {lead["artist"] for lead in result["leads"]})
         self.assertEqual(0, result["verified_edition_count"])
         self.assertEqual(0, result["reviewed_corpus_cases"])
+
+    def test_a_type_discovery_can_continue_after_all_b_review_slots_filled(self):
+        # The completed B sample is not a reason to stop researching
+        # independently selected A-type metadata signals.
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        calls = []
+        def empty_index(url):
+            calls.append(url)
+            self.assertIn("/ws/2/release-group/?artist=", url)
+            return page([], total=0)
+        output = scout_type_leads(manifest, empty_index)
+        self.assertEqual("a_type_source_leads_not_adjudicated", output["status"])
+        self.assertEqual(10, output["source_http_requests"])
+        self.assertEqual([], output["leads"])
+        self.assertEqual(0, output["reviewed_corpus_cases"])
+        self.assertEqual(0, output["verified_edition_count"])
+        self.assertFalse(output["exhaustive_artist_catalog"])
 
     def test_browse_must_keep_exact_credit_and_typed_relation(self):
         rows, meta = browse_page(page([
