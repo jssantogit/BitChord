@@ -379,6 +379,54 @@ class MusicBrainzCatalogGraphTest {
         }
     }
 
+    // Synthetic malformed positions: only omission permits positional fallback.
+    @Test fun explicitlyInvalidMediumAndTrackPositionsCannotUseFallbacks() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val trackJson = """{"id":"$track","title":"Track","recording":{"id":"$recording"}}"""
+        val invalidResponses = listOf(
+            """{"id":"$worldwide","title":"Null medium position","media":[{"position":null,"tracks":[$trackJson]}]}""",
+            """{"id":"$worldwide","title":"Text medium position","media":[{"position":"one","tracks":[$trackJson]}]}""",
+            """{"id":"$worldwide","title":"Negative medium position","media":[{"position":-1,"tracks":[$trackJson]}]}""",
+            """{"id":"$worldwide","title":"Null track position","media":[{"tracks":[{"id":"$track","position":null,"title":"Track","recording":{"id":"$recording"}}]}]}""",
+            """{"id":"$worldwide","title":"Text track position","media":[{"tracks":[{"id":"$track","position":"first","title":"Track","recording":{"id":"$recording"}}]}]}""",
+            """{"id":"$worldwide","title":"Negative track position","media":[{"tracks":[{"id":"$track","position":-1,"title":"Track","recording":{"id":"$recording"}}]}]}""",
+        )
+
+        invalidResponses.forEach { response ->
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+                object : MusicBrainzTransport {
+                    override suspend fun get(
+                        path: String, parameters: Map<String, String>, userAgent: String,
+                    ): String = response
+                },
+            ))
+            assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+        }
+    }
+
+    // Synthetic schema-valid zero positions: retain the explicit values rather than inventing fallbacks.
+    @Test fun zeroMediumAndTrackPositionsArePreservedAsNonNegativeValues() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Synthetic zero positions","media":[
+                    {"position":0,"tracks":[
+                        {"id":"$track","position":0,"title":"Track","recording":{"id":"$recording"}}
+                    ]}
+                ]}"""
+            },
+        ))
+
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(0, detail.tracks.single().mediumNumber)
+        assertEquals(0, detail.tracks.single().trackNumber)
+    }
+
     @Test fun graphPreservesNestedArtistCreditsWhenCreditDisplayNamesAreMissing() = runBlocking {
         val transport = object : MusicBrainzTransport {
             override suspend fun get(

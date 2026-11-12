@@ -77,6 +77,8 @@ class CanonicalArtistReleaseSectionsTest {
         )
         assertTrue(sections.albums.isEmpty())
         assertTrue(sections.singlesAndEps.isEmpty())
+        // Undated, unclassified releases retain the artist shelf's source order.
+        // A later base branch's alphabetical expectation contradicts this rule.
         assertEquals(rows.map { it.id }, sections.unclassified.map { it.id })
         assertNull(sections.recentAlbum)
     }

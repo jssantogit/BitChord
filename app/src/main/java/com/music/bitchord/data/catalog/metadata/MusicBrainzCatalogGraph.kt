@@ -193,7 +193,14 @@ internal class MusicBrainzCatalogGraph(
                         MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
                     )
                 }
-                val number = mediumObj.integer("position")?.takeIf { it > 0 } ?: (mediumIndex + 1)
+                val number = if ("position" in mediumObj) {
+                    mediumObj.integer("position")?.takeIf { it >= 0 }
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
+                } else {
+                    mediumIndex + 1
+                }
                 val rawTracks = mediumObj["tracks"] as? JsonArray
                     ?: return MusicBrainzCatalogGraphResult.Failure(
                         MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
@@ -225,7 +232,14 @@ internal class MusicBrainzCatalogGraph(
                         recordingMbid = rid,
                         title = titleText,
                         mediumNumber = number,
-                        trackNumber = track.integer("position")?.takeIf { it > 0 } ?: index + 1,
+                        trackNumber = if ("position" in track) {
+                            track.integer("position")?.takeIf { it >= 0 }
+                                ?: return MusicBrainzCatalogGraphResult.Failure(
+                                    MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                                )
+                        } else {
+                            index + 1
+                        },
                         durationMs = (track.long("length") ?: recording.long("length"))?.takeIf { it >= 0 },
                         artistDisplay = track.artistDisplay() ?: recording.artistDisplay(),
                         recordingArtistDisplay = recording.artistDisplay(),

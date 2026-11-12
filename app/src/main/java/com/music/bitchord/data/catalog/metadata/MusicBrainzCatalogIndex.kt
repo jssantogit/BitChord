@@ -459,7 +459,7 @@ internal class MusicBrainzCatalogIndex(
                 val trackMbid = track.trackMbid.trim().lowercase(Locale.ROOT)
                 val recordingId = recordingIds[track.recordingMbid.lowercase(Locale.ROOT)]
                 if (!MBID.matches(trackMbid) || recordingId == null ||
-                    track.mediumNumber <= 0 || track.trackNumber <= 0) return@forEach
+                    track.mediumNumber < 0 || track.trackNumber < 0) return@forEach
                 // An edition-specific Track title may differ from its nested
                 // Recording. Cache source-specific Recording facts without
                 // mutating the user's canonical local/Navidrome metadata.
@@ -485,8 +485,8 @@ internal class MusicBrainzCatalogIndex(
                 }
                 val existingTrack = dao.catalogMusicBrainzTrack(trackMbid)
                 check(existingTrack == null ||
-                    (existingTrack.releaseId == releaseId && existingTrack.recordingId == recordingId)) {
-                    "MusicBrainz Track MBID conflicts with a different recording or edition"
+                    existingTrack.releaseId == releaseId) {
+                    "MusicBrainz Track MBID conflicts with a different edition"
                 }
                 dao.upsertCatalogMusicBrainzTrack(CatalogMusicBrainzTrackEntity(
                     trackMbid, releaseId, recordingId, track.mediumNumber,
