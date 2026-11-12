@@ -1947,7 +1947,7 @@ private fun CanonicalPlaylistPickerGroupRow(
         horizontalInset = 0.dp,
         showRatingSlot = false,
         rating = {},
-        background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        background = if (selected) com.music.bitchord.ui.theme.appleMusicKeyColor().copy(alpha = 0.14f)
             else Color.Transparent,
         leading = {
             val artworkShape = if (album) RoundedCornerShape(8.dp) else CircleShape
@@ -1977,24 +1977,18 @@ private fun CanonicalPlaylistPickerGroupRow(
             )
         },
         actions = {
-            IconButton(
-                onClick = onToggleGroup,
+            NativeLibrarySelectionAction(
+                selected = selected,
                 enabled = !loading,
-                modifier = Modifier.size(40.dp),
-            ) {
-                Icon(
-                    if (selected) PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
-                    contentDescription = when {
-                        album && selected -> "Remover álbum selecionado"
-                        album -> "Adicionar álbum inteiro"
-                        selected -> "Remover artista selecionado"
-                        else -> "Adicionar artista inteiro"
-                    },
-                    tint = if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp).testTag("playlist-wizard-group-selection"),
-                )
-            }
+                label = when {
+                    album && selected -> "Remover álbum selecionado"
+                    album -> "Adicionar álbum inteiro"
+                    selected -> "Remover artista selecionado"
+                    else -> "Adicionar artista inteiro"
+                },
+                onToggle = onToggleGroup,
+                tag = "playlist-wizard-group-selection",
+            )
         },
     )
 }
@@ -2011,7 +2005,7 @@ private fun NormalPlaylistTrackPickerRow(
         horizontalInset = 0.dp,
         showRatingSlot = false,
         rating = {},
-        background = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+        background = if (selected) com.music.bitchord.ui.theme.appleMusicKeyColor().copy(alpha = 0.14f)
             else Color.Transparent,
         leading = {
             Box(Modifier.size(52.dp).clip(RoundedCornerShape(8.dp))) {
@@ -2037,15 +2031,12 @@ private fun NormalPlaylistTrackPickerRow(
             )
         },
         actions = {
-            IconButton(onClick = { onToggle(row.id) }, modifier = Modifier.size(40.dp)) {
-                Icon(
-                    if (selected) PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
-                    contentDescription = if (selected) "Remover música" else "Adicionar música",
-                    tint = if (selected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp).testTag("playlist-wizard-track-selection"),
-                )
-            }
+            NativeLibrarySelectionAction(
+                selected = selected,
+                label = if (selected) "Remover música" else "Adicionar música",
+                onToggle = { onToggle(row.id) },
+                tag = "playlist-wizard-track-selection",
+            )
         },
     )
 }

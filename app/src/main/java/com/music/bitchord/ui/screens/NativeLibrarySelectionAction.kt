@@ -28,6 +28,8 @@ internal fun NativeLibrarySelectionAction(
     label: String,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    tag: String = "native-library-selection-action",
 ) {
     val neutral = MaterialTheme.colorScheme.onSurface
     Box(
@@ -35,15 +37,21 @@ internal fun NativeLibrarySelectionAction(
             .size(40.dp)
             .clip(CircleShape)
             .background(neutral.copy(alpha = 0.065f))
-            .toggleable(value = selected, role = Role.Checkbox, onValueChange = { onToggle() })
-            .testTag("native-library-selection-action"),
+            .toggleable(
+                value = selected,
+                enabled = enabled,
+                role = Role.Checkbox,
+                onValueChange = { onToggle() },
+            )
+            .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = if (selected) PlaylistEditorIcons.Selected
                 else PlaylistEditorIcons.Unselected,
             contentDescription = label,
-            tint = if (selected) appleMusicKeyColor() else neutral,
+            tint = (if (selected) appleMusicKeyColor() else neutral)
+                .copy(alpha = if (enabled) 1f else 0.42f),
             modifier = Modifier.size(23.dp),
         )
     }
