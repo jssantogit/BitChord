@@ -10,7 +10,7 @@ class PlaylistEditorIconsTest {
     @Test fun playlistControlsHaveNativeVectorIdentitiesInsteadOfMaterialGlyphs() {
         val native = listOf(
             PlaylistEditorIcons.Back, PlaylistEditorIcons.Close,
-            PlaylistEditorIcons.Filters, PlaylistEditorIcons.Delete,
+            PlaylistEditorIcons.Filters, PlaylistEditorIcons.Sort, PlaylistEditorIcons.Delete,
             PlaylistEditorIcons.Edit,
             PlaylistEditorIcons.ChevronUp,
             PlaylistEditorIcons.ChevronDown, PlaylistEditorIcons.Calendar,
@@ -20,6 +20,7 @@ class PlaylistEditorIconsTest {
         )
         assertEquals(native.size, native.map { it.name }.toSet().size)
         // Toolbars own the circular surface: the glyph itself is unplattered.
+        assertEquals("playlist_sort", PlaylistEditorIcons.Sort.name)
         assertEquals(AppleQueueVectors.MorePlain, PlaylistEditorIcons.More)
         assertEquals(AppleQueueVectors.Favorite, PlaylistEditorIcons.Ratings)
         native.forEach {
