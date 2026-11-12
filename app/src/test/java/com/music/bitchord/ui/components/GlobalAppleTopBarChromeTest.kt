@@ -35,6 +35,7 @@ import com.music.bitchord.R
 import com.music.bitchord.ui.theme.BitChordTheme
 import com.music.bitchord.ui.screens.CircleIconButton
 import com.music.bitchord.ui.screens.ActionPill
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -54,6 +55,10 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class GlobalAppleTopBarChromeTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun toolbarBackUsesSharedNativeVectorInsteadOfGenericMaterialArrow() {
+        assertEquals(PlaylistEditorIcons.Back, artworkPageBackIcon())
+    }
 
     @Test fun globalSettingsPopupLeavesVisibleSpaceBelowTheFortyDpButton() {
         // Unlike the old 38dp offset, this cannot overlap the 40dp button.
