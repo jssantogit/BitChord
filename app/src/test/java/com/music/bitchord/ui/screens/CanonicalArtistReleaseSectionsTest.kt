@@ -77,7 +77,10 @@ class CanonicalArtistReleaseSectionsTest {
         )
         assertTrue(sections.albums.isEmpty())
         assertTrue(sections.singlesAndEps.isEmpty())
-        assertEquals(rows.map { it.id }, sections.unclassified.map { it.id })
+        assertEquals(
+            listOf("Butterfly Doors", "Plot Twist", "Say It", "unresolved"),
+            sections.unclassified.map { it.id },
+        )
         assertNull(sections.recentAlbum)
     }
 
