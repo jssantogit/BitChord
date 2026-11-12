@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: 17/30 independently reviewed: A 2/10 already correctly typed; B 10/10 negative/candidate exact-edition comparisons; C 5/10 confirmed negatives (Stray Kids Social Path, ENHYPEN ROMANCE repackage, LE SSERAFIM Jewelry, TXT Setsuna Hanabi, ENHYPEN MEMORABILIA), zero genuine MusicBrainz absences/Discogs-only recoveries, no Verified unlinked, no real type correction, no Android UI gain measured.",
+  "description": "Discogs #211 editorial coverage 24/30: A 9/10 (A-03 JYP Holiday Special Single Christmas EveL vs MB EP is a source-type disagreement NEEDS editorial decision; remaining eight A controls already agree with source; ZERO automatic type corrections), B 10/10 negative/candidate pressing reviews and zero new Verified, C 5/10 negative apparent absences already in MB and zero Discogs-only recoveries. Six slots pending, no Android UI gains measured.",
   "cases": [
     {
       "id": "A-01",
@@ -68,37 +68,214 @@
     {
       "id": "A-03",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "Stray Kids · Christmas EveL — JYP Holiday Special Single vs MB EP",
+      "musicbrainz_artist_mbid": "142b343d-bf5a-428c-a64f-6d1a7566bbe9",
+      "musicbrainz_group_mbid": "62812a62-f532-490a-9b52-1feccb3fdaba",
+      "discogs_release_id": 22076131,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/62812a62-f532-490a-9b52-1feccb3fdaba",
+        "discogs_release": "https://www.discogs.com/release/22076131",
+        "independent_editorial": "https://straykids.jype.com/notice?PgIndex=97",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43135307603",
+        "independent_label_announcement": "https://straykids.jype.com/Default/NoticeList?PgIndex=94",
+        "musicbrainz_release": "https://musicbrainz.org/release/ba0e42d5-a720-4f86-b00f-502292f1a8e2"
+      },
+      "reviewed_at_utc": "2026-11-12T09:26:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Genuine EDITORIAL TYPE DISAGREEMENT, not a proven automatic correction: official JYP Entertainment contemporary notices explicitly market the 29 November 2021 four-song Christmas EveL as Holiday Special Single, while exact MusicBrainz ReleaseGroup 62812a62-f532-490a-9b52-1feccb3fdaba is primary type EP. Official MB CD Release ba0e42d5-a720-4f86-b00f-502292f1a8e2 has a direct typed Discogs Release relation to 22076131, barcode 8809755509491, four tracks and JYP label; both the artist and label source describe the same project. But four songs and a special-single marketing category can coexist with MusicBrainz's EP style rules; a single label term does not establish that MB's EP is erroneous under its own editorial guidelines. The paired physical Discogs pressing has not undergone distinct packaging/independent version adjudication. Mark candidate/unmeasured app, raise for editorial review; never auto-change the canonical MB type or count a real correction.",
+      "musicbrainz_release_mbid": "ba0e42d5-a720-4f86-b00f-502292f1a8e2"
     },
     {
       "id": "A-04",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "IVE · After LIKE — already Single",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "musicbrainz_group_mbid": "1c8c9fa5-8b86-4dd1-81cb-b22f8dcd487c",
+      "discogs_release_id": 24725813,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/1c8c9fa5-8b86-4dd1-81cb-b22f8dcd487c",
+        "discogs_release": "https://www.discogs.com/release/24725813",
+        "independent_editorial": "https://www.starship-ent.com/musician/ive",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43135307603",
+        "musicbrainz_release": "https://musicbrainz.org/release/2115801c-30ef-48bf-9074-3ccb5e097a0b"
+      },
+      "reviewed_at_utc": "2026-11-12T09:26:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "STARSHIP Entertainment's official IVE discography explicitly categorizes After LIKE, released 22 August 2022, as the group's third SINGLE ALBUM. MusicBrainz already sets exact ReleaseGroup 1c8c9fa5-8b86-4dd1-81cb-b22f8dcd487c to Single; the public exact-ID linked-Release probe CI #43135307603 rechecked the MusicBrainz Artist to Discogs Artist relation, ReleaseGroup to Discogs Master 2803793, and Official MB Release 2115801c-30ef-48bf-9074-3ccb5e097a0b direct Discogs Release URL 24725813 with matching Discogs artist and Master. Thus agreement Single/Single is a NEGATIVE A type correction case. Discogs Master has more than eight versions so the exact physical edition was not independently adjudicated. Candidate, app type/visibility unmeasured; neither Verified unlinked B nor correction.",
+      "musicbrainz_release_mbid": "2115801c-30ef-48bf-9074-3ccb5e097a0b"
     },
     {
       "id": "A-05",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "NewJeans · How Sweet & Bubble Gum — already Single",
+      "musicbrainz_artist_mbid": "49204a7a-ed85-407a-828f-6fd46f1d8126",
+      "musicbrainz_group_mbid": "9750354e-78df-4058-8758-b5a7a2eccf66",
+      "discogs_release_id": 30848370,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/9750354e-78df-4058-8758-b5a7a2eccf66",
+        "discogs_release": "https://www.discogs.com/release/30848370",
+        "independent_editorial": "https://www.newjeans.jp/news/dwmgij",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43135307603",
+        "independent_label_release": "https://shop.weverse.io/en/shop/KRW/artists/82/sales/25959",
+        "independent_agency_statement_report": "https://en.yna.co.kr/view/AEN20240327002600315",
+        "musicbrainz_release": "https://musicbrainz.org/release/bec858c4-1ebc-40a1-8f8c-d6ffcf7f5b98"
+      },
+      "reviewed_at_utc": "2026-11-12T09:26:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Official NewJeans Japan April 26 2024 physical release announcement and ADOR-supplied package specification give 24 May 2024 and four tracks: How Sweet, Bubble Gum and two instrumentals, with six distinct CD packages; Yonhap's March 27 2024 report of ADOR's announcement calls it the group's new single. MusicBrainz ReleaseGroup 9750354e-78df-4058-8758-b5a7a2eccf66 is already Single, and public exact-ID CI #43135307603 corroborated MB Release bec858c4 direct Discogs Release 30848370 inside linked Master 3499101 and exact artist. Agreement Single/Single, no correction or recovery. Some storefronts call this release an EP but that does not supersede independent artist/agency source labeling; six cover variants must never be collapsed by shared barcode/title. Pressing-level validation and Android type were not measured.",
+      "musicbrainz_release_mbid": "bec858c4-1ebc-40a1-8f8c-d6ffcf7f5b98"
     },
     {
       "id": "A-06",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "NMIXX · Fe3O4: BREAK — already EP",
+      "musicbrainz_artist_mbid": "2d623e82-73e2-4179-9c44-e963980f2d58",
+      "musicbrainz_group_mbid": "48e4a94a-7fe5-4764-8880-b23a91bd7ee3",
+      "discogs_release_id": 35165884,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/48e4a94a-7fe5-4764-8880-b23a91bd7ee3",
+        "discogs_release": "https://www.discogs.com/release/35165884",
+        "independent_editorial": "https://nmixx.jype.com/Mobile/NoticeView?AnSeq=6193&NoticeNumber=361",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43191673198"
+      },
+      "reviewed_at_utc": "2026-11-12T09:26:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "JYP Entertainment explicitly published the 16 January 2024 notice headed NMIXX 2nd EP Fe3O4: BREAK, confirming the label's EP designation. The MusicBrainz ReleaseGroup 48e4a94a-7fe5-4764-8880-b23a91bd7ee3 already carries primary type EP. Public eight-Master scout CI #43191673198 checked its typed MusicBrainz ReleaseGroup to Discogs Master 3392668 relation and Discogs Master.main_release=35165884 but the Master contains more than eight versions; the MusicBrainz Release browse reports more than 25 editions, so this scanner deliberately refused to call it complete or claim any corresponding MB pressing. Agreement EP/EP at group level, exact pressing identity UNAVAILABLE for review, no type correction or Verified match. No app UI observation, no inference that zero collected Release IDs means zero MusicBrainz editions."
     },
     {
       "id": "A-07",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "IVE · LOVE DIVE — already Single",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "musicbrainz_group_mbid": "58e44e7a-8ebb-4f08-9dbb-9b7998a2a483",
+      "discogs_release_id": 25179088,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/58e44e7a-8ebb-4f08-9dbb-9b7998a2a483",
+        "discogs_release": "https://www.discogs.com/release/25179088",
+        "independent_editorial": "https://www.starship-ent.com/musician/ive",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43191673198"
+      },
+      "reviewed_at_utc": "2026-11-12T09:26:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "STARSHIP Entertainment's canonical artist catalog describes 5 April 2022 IVE LOVE DIVE as the 2nd SINGLE ALBUM. MusicBrainz exact ReleaseGroup 58e44e7a-8ebb-4f08-9dbb-9b7998a2a483 is Single and typed to Discogs Master 2603975. Public eight-lead scan #43191673198 checked Master 2603975 and Discogs main Release 25179088 as a source-typed edition lead; more than eight Master versions prohibit assuming a unique pressing or correspondence to any given MusicBrainz Release. There are ten Official MusicBrainz Release IDs in complete first-page browse, not ten verified Discogs matches. This is Single/Single agreement, not an editorial repair or observed improvement in the app. Physical variants and their catalog numbers remain unadjudicated."
     },
     {
       "id": "A-08",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "TOMORROW X TOGETHER · The Dream Chapter: ETERNITY — already EP",
+      "musicbrainz_artist_mbid": "9d027d72-790e-40ec-bbb7-61aa613457de",
+      "musicbrainz_group_mbid": "b389c57b-ccf1-4d9f-b3cc-015b66365641",
+      "discogs_release_id": 15387239,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/b389c57b-ccf1-4d9f-b3cc-015b66365641",
+        "discogs_release": "https://www.discogs.com/release/15387239",
+        "independent_editorial": "https://ibighit.com/legacy/txt/the_dream_chapter-eternity-en.html",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43191673198"
+      },
+      "reviewed_at_utc": "2026-11-12T09:26:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "BIGHIT MUSIC's official artist page explicitly describes The Dream Chapter: ETERNITY as TOMORROW X TOGETHER's 2nd MINI ALBUM / second EP, released 18 May 2020, with six tracks. MusicBrainz exact ReleaseGroup b389c57b-ccf1-4d9f-b3cc-015b66365641 is already typed EP and its Discogs Master relation points to 1746612. Public A eight-lead CI #43191673198 exhaustively enumerated the small Discogs Master's exactly two Release versions 15387236 and 15387239, checked main release 15387239, and also found three official MusicBrainz editions by RG. Although versions are exhaustive, this scan DID NOT perform edition-by-edition physical label/catalog/packaging adjudication; thus the main release is only a review lead, not a Verified exact pair. EP/EP agreement, no correction or UI gain."
     },
     {
       "id": "A-09",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "LE SSERAFIM · ANTIFRAGILE — already EP",
+      "musicbrainz_artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "musicbrainz_group_mbid": "cfc67890-7a0a-465a-b817-d506f57b9058",
+      "discogs_release_id": 24854783,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/cfc67890-7a0a-465a-b817-d506f57b9058",
+        "discogs_release": "https://www.discogs.com/release/24854783",
+        "independent_editorial": "https://www.universal-music.co.jp/lesserafim/news/2022-09-19/",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43191673198"
+      },
+      "reviewed_at_utc": "2026-11-12T09:26:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Universal Music Japan's dated 19 September 2022 official release notice calls ANTIFRAGILE LE SSERAFIM's 2nd Mini Album, sold 17 October 2022 in three regular CD volumes and five compact physical variants. MusicBrainz ReleaseGroup cfc67890-7a0a-465a-b817-d506f57b9058 is already EP, matching the label's type; public eight-Master A CI #43191673198 checked typed Discogs Master 2834228 and Master.main_release 24854783. This Master has more than eight Discogs versions; the MusicBrainz Official release browse includes 24 exact MB IDs, but the scout does not establish any corresponding physical pressing from shared Master or label. EP/EP agreement, zero correction, variant equivalence not adjudicated and no app display measured."
     },
     {
       "id": "A-10",
