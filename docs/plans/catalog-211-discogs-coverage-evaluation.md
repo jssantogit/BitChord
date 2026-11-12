@@ -1676,3 +1676,101 @@ sem alterar `reviewed=false` ou
 `confirmed_missing_from_musicbrainz=false`.
 É correção de **rastreabilidade de evidência**, não
 uma recuperação de Discogs-only ou modificação do app.
+
+## Revisão em lote A/C — dez casos numa sessão, corpus 24/30 (12/11/2026, Bahia)
+
+A avaliação editorial deixou de revisar apenas dois exemplos por sessão.
+A prospecção A agora examina **até oito Discogs Masters de uma vez**
+com escalonamento **round-robin por artista**, usando orçamento máximo de
+40 GETs públicos, sem token. RED
+[CI #43190463227](https://github.com/jssantogit/BitChord/actions/runs/43190463227)
+→ [GREEN #43190713479](https://github.com/jssantogit/BitChord/actions/runs/43190713479):
+34 GETs, oito grupos tipados, nenhum casamento de edição/falso Verified.
+Foram identificados cinco Masters >8 versões (After LIKE,
+FEARLESS Japão, NewJeans How Sweet, Stray Kids ATE, NMIXX BREAK) e
+outros três leads (TXT ETERNITY com **duas versões Discogs**
+examinadas integralmente, IVE LOVE DIVE, LE SSERAFIM ANTIFRAGILE).
+A sondagem preserva ainda `Discogs Master.main_release` como **ID de
+edição Discogs candidato**, sem assumi-lo como correspondente físico a
+um MB Release. RED
+[CI #43191582443](https://github.com/jssantogit/BitChord/actions/runs/43191582443)
+→ [GREEN #43191673198](https://github.com/jssantogit/BitChord/actions/runs/43191673198).
+NMIXX possui mais de 25 MB Releases, portanto o browse continua
+**incompleto/inconclusivo**, e não zero edições.
+
+### A: sete revisões editoriais em lote (A-03…A-09)
+
+| Caso | Grupo MusicBrainz / Discogs Release | Tipo MB → fonte independente | Conclusão |
+|---|---|---|---|
+| **A-03: Stray Kids — Christmas EveL** | RG `62812a62`; Discogs `22076131` | **EP → JYP Holiday Special Single** | **DIVERGÊNCIA editorial real entre declarações de fontes; revisão necessária; zero correção automática** |
+| A-04: IVE — After LIKE | RG `1c8c9fa5`; Discogs `24725813` | Single → Starship 3rd Single Album | Concordância |
+| A-05: NewJeans — How Sweet & Bubble Gum | RG `9750354e`; Discogs `30848370` | Single → comunicado ADOR/lançamento oficial | Concordância |
+| A-06: NMIXX — Fe3O4: BREAK | RG `48e4a94a`; Discogs Master principal `35165884` | EP → JYP 2nd EP | Concordância; MB browse >25 incompleto |
+| A-07: IVE — LOVE DIVE | RG `58e44e7a`; Discogs Master principal `25179088` | Single → Starship 2nd Single Album | Concordância |
+| A-08: TXT — The Dream Chapter: ETERNITY | RG `b389c57b`; Discogs Master principal `15387239` | EP → BIGHIT 2nd Mini Album / EP | Concordância; Master 2 versões |
+| A-09: LE SSERAFIM — ANTIFRAGILE | RG `cfc67890`; Discogs Master principal `24854783` | EP → Universal 2nd Mini Album | Concordância |
+
+**A-03 merece atenção.** [JYP oficial](https://straykids.jype.com/Default/NoticeList?PgIndex=94)
+chama `Christmas EveL` de **Holiday Special Single**, datado de
+29/11/2021, e o [MusicBrainz RG](https://musicbrainz.org/release-group/62812a62-f532-490a-9b52-1feccb3fdaba)
+é **EP** com quatro faixas; MB Release
+[`ba0e42d5`](https://musicbrainz.org/release/ba0e42d5-a720-4f86-b00f-502292f1a8e2)
+tem relação direta para a edição Discogs `22076131`, JYP e
+barcode `8809755509491`. O rótulo de marketing "Single" e os
+critérios editoriais MusicBrainz podem diferir; **não presumir erro
+canônico**, não inferir inversão de autoridade, e não produzir
+`DISCOGS_CORRECTION` a partir de uma declaração única. Mantido
+`match_state=candidate`, `app_type=Unknown`, `visible=false`,
+`match_correct=false` por ausência de homologação de prensagem/UI,
+mesmo com relação direta MB Release→Discogs Release.
+
+As concordâncias estão ancoradas em fontes primárias:
+[Starship (IVE)](https://www.starship-ent.com/musician/ive),
+[ADOR/NewJeans](https://www.newjeans.jp/news/dwmgij),
+[JYP NMIXX](https://nmixx.jype.com/Mobile/NoticeView?AnSeq=6193&NoticeNumber=361),
+[BIGHIT TXT](https://ibighit.com/legacy/txt/the_dream_chapter-eternity-en.html),
+[Universal LE SSERAFIM](https://www.universal-music.co.jp/lesserafim/news/2022-09-19/).
+Nenhuma linha prova que a edição principal de um Master Discogs é
+a mesma prensagem física que uma edição MB. Dois casos A (After LIKE,
+How Sweet) possuem relações MB Release→Discogs Release exatas
+independentemente sondadas na
+[CI #43135307603](https://github.com/jssantogit/BitChord/actions/runs/43135307603);
+mesmo assim sem `Verified` de prensagem. `A-10` continua livre.
+
+### C: três revisões negativas em lote (C-06…C-08)
+
+| Caso | Descoberta Discogs | Prova contra ausência MusicBrainz |
+|---|---|---|
+| **C-06: LE SSERAFIM — Jewelry** | Discogs Release `28089088` | MusicBrainz já tem Single RG `14e1a869`, conferido por índice artístico/título; [Universal anúncio](https://www.universal-music.co.jp/lesserafim/news/2023-07-25-2/) |
+| **C-07: TXT — Setsuna Hanabi** | Discogs Release `38302455` | MusicBrainz já tem Single RG `cb79234e`, e edição digital Official `6770b265`; [Universal anúncio](https://www.universal-music.co.jp/txt/news/2026-07-23/) |
+| **C-08: ENHYPEN — MEMORABILIA** | Discogs Release `31008160` | MusicBrainz já tem EP RG `4e219d4e` e edição `d0c0cfe6`; [BELIFT anúncio](https://weverse.io/enhypen/notice/19177) |
+
+As edições Discogs não foram certificadas como a mesma prensagem
+física das edições MB. C-08 tem `reference_type=Unknown`
+porque o título comercial `SPECIAL ALBUM` não comprova sozinho
+uma divergência EP→Album. Todos permanecem
+`absent_in_musicbrainz=false`, `match_state=candidate`,
+`visible=false` (Android não medido), não são recuperações.
+
+### Gates, total e continuidade
+
+Os três C e sete A novos foram registrados em **duas atualizações
+em lote** no manifesto de 30 vagas, com testes RED antes dos dados.
+A URL oficial JYP contém parâmetros de consulta e por isso é
+preservada em `independent_label_announcement`; o campo obrigatório
+`independent_editorial` usa uma URL independente, pública e estável
+sem query, de acordo com a validação fail-closed existente do corpus.
+O teste do corpus
+[GREEN #43192985029](https://github.com/jssantogit/BitChord/actions/runs/43192985029)
+**SUCCESS** após actualizar as expectativas de revisão e referências.
+
+**Denominador vigente: 24/30** — **A 9/10**, **B 10/10**,
+**C 5/10**, seis ainda pendentes (A-10 e cinco C).
+A-03 é uma **divergência de nomenclatura editorial para reavaliar**,
+mas **zero correções efetivamente aplicadas**. B tem zero novos
+`Verified`; C tem zero Discogs-only comprovadamente ausentes
+do MusicBrainz, portanto zero recuperações. Nenhum APK/smoke
+ou ganho de UI Android medido. A PR #211 permanece Draft/unmerged,
+MusicBrainz canônico e #209/main preservados. O relatório de
+cobertura final não deve calcular precisão/ganho antes dos 30 casos
+revisados e validados.
