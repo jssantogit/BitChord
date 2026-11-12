@@ -34,19 +34,58 @@ def case(cohort, i):
 
 class CorpusReportTests(unittest.TestCase):
     def test_reusing_one_discogs_edition_in_b_and_c_must_be_rejected(self):
-        # The historical manifest reused B-01 MEMORABILIA as C-08 and
-        # B-02 Setsuna Hanabi as C-07. Cross-cohort sampling cannot count
-        # the SAME Discogs Release twice, even under different tests.
-        source = json.loads(Path(
+        # Reproduce the historical C07/B02 or C08/B01 double counting even
+        # after the live corpus itself is repaired to independent C editions.
+        manifest=json.loads(Path(
             "docs/plans/catalog-211-discogs-corpus-manifest.json"
         ).read_text(encoding="utf-8"))
-        errors = report(source)["errors"]
-        self.assertTrue(
-            any("C-07: duplicate reviewed Discogs edition across cohorts"
-                in error for error in errors), errors)
-        self.assertTrue(
-            any("C-08: duplicate reviewed Discogs edition across cohorts"
-                in error for error in errors), errors)
+        existing=next(x for x in manifest["cases"] if x["id"]=="B-02")
+        target=next(x for x in manifest["cases"] if x["id"]=="C-07")
+        target["discogs_release_id"]=existing["discogs_release_id"]
+        target["evidence_links"]["discogs_release"]=existing["evidence_links"]["discogs_release"]
+        self.assertTrue(any("C-07: duplicate reviewed Discogs edition across cohorts"
+                            in e for e in report(manifest)["errors"]))
+
+    def test_ten_independent_c_audio_editions_and_legacy_exclusion_archive(self):
+        manifest=json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        expected={
+            "C-01":(31961039,"b51a484e-872d-4355-9de8-f6a7034f79d2"),
+            "C-02":(31781147,"56384077-7321-4f57-8186-38ef11710552"),
+            "C-03":(31422908,"518945b0-343b-404d-9b63-7c57c8b311dc"),
+            "C-04":(38526540,"e248dce6-bef8-4d1f-a6d8-164de112151f"),
+            "C-05":(32437206,"0c668bdb-328c-4dba-8407-8eddb5373a5d"),
+            "C-06":(28089088,"14e1a869-8378-47df-818e-07dfe1d0c7fc"),
+            "C-07":(27107343,"829216ed-7ab6-434f-a3ab-a504ac32819f"),
+            "C-08":(34417612,"f95117e6-cd4f-4d7b-8e92-f7d216a156cd"),
+            "C-09":(29892898,"b64d0fbf-a084-40e9-9087-b8c333ebb775"),
+            "C-10":(27690417,"72f51e2e-0257-41d5-8b5c-5f21c7e338ed"),
+        }
+        c=[x for x in manifest["cases"] if x["cohort"]=="source_only"]
+        b={x["discogs_release_id"] for x in manifest["cases"]
+           if x["cohort"]=="unlinked"}
+        self.assertEqual(10,len(c))
+        self.assertEqual(10,len({x["discogs_release_id"] for x in c}))
+        self.assertFalse({x["discogs_release_id"] for x in c}&b)
+        self.assertTrue(all(x["reviewed"] and x["absent_in_musicbrainz"] is False
+                            and x["match_state"]=="candidate" and
+                            x["app_type"]=="Unknown" and x["visible"] is False
+                            for x in c))
+        for row in c:
+            self.assertEqual(expected[row["id"]],
+                             (row["discogs_release_id"],row["musicbrainz_group_mbid"]))
+        archived=manifest["screened_out_sources"]
+        self.assertEqual({35180680,38613330,33375572},
+                         {x["discogs_release_id"] for x in archived})
+        self.assertTrue(all(x["selection_state"]=="excluded_by_provider_metadata"
+                            for x in archived))
+        result=report(manifest)
+        self.assertEqual([],result["errors"])
+        self.assertTrue(result["complete"])
+        self.assertEqual(10,result["slots"]["source_only"]["reviewed"])
+        self.assertEqual(0,result["metrics"]["source_only_recovery"]["confirmed_absent"])
+        self.assertEqual(0,result["metrics"]["source_only_recovery"]["visible"])
 
     def test_real_staged_manifest_reports_selected_but_no_reviewed_or_metrics(self):
         manifest = json.loads(Path(
