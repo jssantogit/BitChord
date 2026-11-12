@@ -152,7 +152,10 @@ fun NativeCompactOverflowMenu(
     if (expanded || visible.currentState || visible.targetState) {
         Popup(
             popupPositionProvider = popupPositionProvider,
-            onDismissRequest = onDismissRequest,
+            onDismissRequest = {
+                actionGate.close()
+                onDismissRequest()
+            },
             properties = PopupProperties(focusable = true, dismissOnBackPress = true,
                 dismissOnClickOutside = true, clippingEnabled = true),
         ) {
@@ -220,7 +223,9 @@ fun NativeCompactMenuItem(
             .then(actionModifier)
             .semantics {
                 testTag = "native-compact-menu-item"
-                if (!actionEnabled) disabled()
+                // The gate is read at semantics evaluation time, not only at
+                // recomposition: an exiting Popup may retain its old lambda.
+                if (!actionEnabled || actionGate?.consumed == true) disabled()
                 if (selected != null) this.selected = selected
             }
             .heightIn(min = 54.dp)
