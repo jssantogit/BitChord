@@ -36,7 +36,7 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_primary_baseline.py' -v
       - name: Publish proposal-only primary provider baseline
         run: python3 scripts/catalog_211_discogs_primary_baseline.py --output discogs-211-primary-feasibility.json
-      - name: Assert unreviewed manifest does not make coverage claims
+      - name: Enforce complete and nonoverlapping A/B/C corpus without claiming recovery
         run: |
           python3 - <<'PY'
           import json
@@ -46,17 +46,30 @@ jobs:
           from catalog_211_discogs_corpus_report import report
           manifest = json.loads(Path("docs/plans/catalog-211-discogs-corpus-manifest.json").read_text())
           result = report(manifest)
-          assert not result["complete"], "Unreviewed cases must never count as measured coverage"
-          assert result["metrics"] is None, "No metric may be invented before adjudication"
           assert len(manifest["cases"]) == 30
           assert not result["errors"], result["errors"]
-          assert result["slots"]["unlinked"]["selected_unreviewed"] == 0
-          assert result["slots"]["source_only"]["selected_unreviewed"] == 3
-          assert result["slots"]["unlinked"]["reviewed"] == 10
-          assert result["slots"]["source_only"]["reviewed"] == 5
-          assert result["slots"]["type"]["reviewed"] == 10
-          print("30 slots: 10 A type reviews, one editorial type disagreement, 10 reviewed B pairs, 5 negative C reviews, none Verified,"
-                " 3 preliminary excluded C leads; no global coverage metrics.")
+          assert result["complete"], result
+          assert all(result["slots"][group]["reviewed"] == 10
+                     for group in ("type", "unlinked", "source_only"))
+          assert result["screened_out_not_reviewed"] == 3
+          assert all(result["slots"][group]["selected_unreviewed"] == 0
+                     for group in ("type", "unlinked", "source_only"))
+          b = {x["discogs_release_id"] for x in manifest["cases"]
+               if x["cohort"] == "unlinked"}
+          c = {x["discogs_release_id"] for x in manifest["cases"]
+               if x["cohort"] == "source_only"}
+          assert len(b) == len(c) == 10 and not b.intersection(c)
+          metrics = result["metrics"]
+          assert metrics is not None
+          assert metrics["unlinked_matching"]["verified"] == 0
+          assert metrics["source_only_recovery"] == {
+              "visible": 0, "confirmed_absent": 0}
+          assert metrics["type_correction"]["corrected"] == 0
+          assert metrics["verified_precision"]["verified"] == 0
+          assert metrics["false_positive_count"] == 0
+          print("Corpus 30/30 independently sampled: A10 B10 C10.")
+          print("Three media exclusions archived outside denominator; no recovered")
+          print("MusicBrainz-absent works or Android gain demonstrated.")
           PY
       - name: Retain feasibility baseline for operator review
         if: always()
