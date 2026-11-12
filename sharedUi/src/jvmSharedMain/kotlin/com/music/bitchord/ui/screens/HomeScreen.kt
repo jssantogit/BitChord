@@ -65,7 +65,7 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Cached
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.MoreVert
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.material.icons.rounded.Storage
 import com.music.bitchord.ui.icons.BitChordIcons
 import coil3.compose.AsyncImage
@@ -597,7 +597,7 @@ fun HomeTitle(
                         .testTag("home-overflow"),
                 ) {
                     Icon(
-                        Icons.Rounded.MoreVert,
+                        PlaylistEditorIcons.More,
                         contentDescription = stringResource(Res.string.more),
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
