@@ -61,9 +61,13 @@ class MusicBrainzArtistAppearancesTest {
                     "artist-credit":[{"artist":{"id":"$target","name":"NewJeans"}}]}
             }]}]
         }]}"""
-        assertTrue(parseMusicBrainzTrackArtistAppearances(json, target).isEmpty())
+        val parsed = parseMusicBrainzTrackArtistAppearances(json, target)
+        // Preserve raw Recording guest provenance for rechecking; do not
+        // invent a published guest Track when edition credits disagree.
+        assertEquals(1, parsed.size)
+        assertTrue(parsed.single().conflictingTrackCredit)
         assertTrue(com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
-            parseMusicBrainzTrackArtistAppearances(json, target),
+            parsed,
         ).isEmpty())
     }
 
@@ -393,8 +397,12 @@ class MusicBrainzArtistAppearancesTest {
                                  {"artist":{"id":"$target"}}]}
           }]}]
         }]}"""
-        assertEquals(listOf("Label collaboration"),
-            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+        val raw = parseMusicBrainzTrackArtistAppearances(body, target)
+        assertEquals(listOf("Label collaboration"), raw.map { it.title })
+        // A genuine Recording-level guest credit survives in raw metadata,
+        // but conflicting edition Track credits cannot promote it unaudited.
+        assertTrue(raw.single().conflictingTrackCredit)
+        assertTrue(com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(raw).isEmpty())
     }
 
 

@@ -26,6 +26,9 @@ internal data class MusicBrainzArtistAppearance(
     val trackTitle: String? = null,
     /** Official edition plus independent barcode/label/ISRC provenance. */
     val commerciallyVerified: Boolean = false,
+    /** Track explicitly credits someone else while linked Recording credits this guest.
+     * Retain raw evidence for auditing; never promote it to an editorial guest shelf. */
+    val conflictingTrackCredit: Boolean = false,
 )
 
 private val ARTIST_APPEARANCE_MBID =
@@ -39,6 +42,13 @@ private val NON_EDITORIAL_GUEST_TITLE = Regex(
 
 private fun JsonObject.appearanceText(name: String): String? =
     (this[name] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotBlank)
+
+private data class GuestTrackEvidence(
+    val recordingId: String?,
+    val title: String?,
+    val hasIsrc: Boolean,
+    val conflictingTrackCredit: Boolean,
+)
 
 internal fun parseMusicBrainzTrackArtistAppearances(
     body: String,
@@ -78,30 +88,40 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                     val recording = entry["recording"] as? JsonObject
                     val recordingId = recording?.appearanceText("id")
                         ?.lowercase(Locale.ROOT)?.takeIf(ARTIST_APPEARANCE_MBID::matches)
-                    // The edition's Track credit is the authoritative
-                    // printed credit for this appearance. A Recording can be
-                    // reused by several releases with different Track credits:
-                    // a guest mentioned ONLY on the Recording must not turn
-                    // a host-only edition Track into a false "Incluído em".
-                    //
-                    // Fall back to the Recording credit only when the browse
-                    // response OMITS the Track credit entirely, and only for
-                    // the exact proven Recording MBID. An explicitly supplied
-                    // empty/malformed Track credit is not permission to borrow
-                    // another entity's evidence.
-                    val credits = if ("artist-credit" in entry) {
+                    // MusicBrainz Track and Recording artist credits can
+                    // legitimately differ. Keep BOTH pieces of raw evidence,
+                    // but do not promote a Recording-only guest into the
+                    // public "Incluído em" shelf if this exact edition Track
+                    // explicitly credits another artist. A missing Track
+                    // credit is not a contradiction.
+                    val suppliedTrackCredit = "artist-credit" in entry
+                    val trackCredit = if (suppliedTrackCredit)
                         entry["artist-credit"] as? JsonArray ?: return@track null
-                    } else {
-                        if (recordingId == null) return@track null
-                        recording?.get("artist-credit") as? JsonArray
-                            ?: return@track null
-                    }
-                    val hasArtist = credits.any { part ->
-                        val id = ((part as? JsonObject)?.get("artist")
-                            as? JsonObject)?.appearanceText("id")
-                        id?.equals(target, ignoreCase = true) == true
-                    }
-                    if (!hasArtist) return@track null
+                    else null
+                    // A present-but-malformed Track credit is inconclusive,
+                    // never evidence that the Recording can be substituted.
+                    if (trackCredit != null && (trackCredit.isEmpty() ||
+                        trackCredit.any { part ->
+                            if (part is JsonPrimitive && part.isString) false
+                            else {
+                                val artist = (part as? JsonObject)?.get("artist") as? JsonObject
+                                val id = artist?.appearanceText("id")
+                                id == null || !ARTIST_APPEARANCE_MBID.matches(id)
+                            }
+                        }
+                    )) return@track null
+                    val recordingCredit = if (recordingId != null)
+                        recording?.get("artist-credit") as? JsonArray else null
+                    fun hasSelectedArtist(parts: JsonArray?): Boolean =
+                        parts?.any { part ->
+                            val id = ((part as? JsonObject)?.get("artist")
+                                as? JsonObject)?.appearanceText("id")
+                            id?.equals(target, ignoreCase = true) == true
+                        } == true
+                    val onTrack = hasSelectedArtist(trackCredit)
+                    val onRecording = hasSelectedArtist(recordingCredit)
+                    if (!onTrack && !onRecording) return@track null
+                    val conflictingTrackCredit = suppliedTrackCredit && !onTrack && onRecording
                     val trackTitle = recording?.appearanceText("title")
                         ?: entry.appearanceText("title")
                     val isrc = (recording?.get("isrcs") as? JsonArray).orEmpty().any {
@@ -109,7 +129,7 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                         code != null && Regex("""[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}""")
                             .matches(code)
                     }
-                    Triple(recordingId, trackTitle, isrc)
+                    GuestTrackEvidence(recordingId, trackTitle, isrc, conflictingTrackCredit)
                 }
             }
         if (creditedTracks.isEmpty()) return@mapNotNull null
@@ -188,19 +208,21 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                 !labelName.isNullOrBlank() &&
                 labelName.lowercase(Locale.ROOT) !in setOf("[no label]", "no label", "none")
         }
-        creditedTracks.map { (recordingId, trackTitle, hasIsrc) ->
+        creditedTracks.map { evidence ->
             MusicBrainzArtistAppearance(
                 groupId, title, mainArtist, date, kind, editionId,
-                recordingMbid = recordingId,
-                trackTitle = trackTitle,
-                commerciallyVerified = commercialBarcode || commercialLabel || hasIsrc,
+                recordingMbid = evidence.recordingId,
+                trackTitle = evidence.title,
+                commerciallyVerified = commercialBarcode || commercialLabel || evidence.hasIsrc,
+                conflictingTrackCredit = evidence.conflictingTrackCredit,
             )
         }
     }.flatMap { it.asSequence() }
         // Retain the most convincing Official edition of an exact Recording.
         .sortedWith(compareByDescending<MusicBrainzArtistAppearance> {
-            it.commerciallyVerified
-        }.thenByDescending { it.releaseDate.orEmpty() })
+            !it.conflictingTrackCredit
+        }.thenByDescending { it.commerciallyVerified }
+            .thenByDescending { it.releaseDate.orEmpty() })
         .distinctBy { it.recordingMbid ?: it.releaseGroupMbid }
         .take(limit.coerceIn(0, 20))
         .toList()
@@ -281,7 +303,8 @@ internal class MusicBrainzArtistAppearancesClient(
                 // because a fan edit happened to be indexed first.
                 parseMusicBrainzTrackArtistAppearances(response, id)
                     .filter {
-                        it.commerciallyVerified && !it.recordingMbid.isNullOrBlank() &&
+                        it.commerciallyVerified && !it.conflictingTrackCredit &&
+                            !it.recordingMbid.isNullOrBlank() &&
                             !it.trackTitle.isNullOrBlank()
                     }
                     .forEach { appearance ->
