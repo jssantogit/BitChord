@@ -74,7 +74,6 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.IosShare
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
@@ -82,7 +81,6 @@ import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.PlaylistAdd
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Upgrade
 import com.music.bitchord.data.listentogether.ServerConnectionState
 import androidx.compose.material3.DropdownMenu
@@ -6744,10 +6742,14 @@ private fun CanonicalLibraryAlbumRatingToolbarAction(
     }
 }
 
+/** Keep the detail toolbar's ⋯ identical to the editor, rows and player. */
+internal fun nativeCollectionOverflowGlyph(): ImageVector =
+    com.music.bitchord.ui.icons.PlaylistEditorIcons.More
+
 @Composable
 private fun NativeCollectionOverflowAction(contentDescription: String, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
-        Icon(Icons.Rounded.MoreHoriz, contentDescription = contentDescription,
+        Icon(nativeCollectionOverflowGlyph(), contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface)
     }
 }
