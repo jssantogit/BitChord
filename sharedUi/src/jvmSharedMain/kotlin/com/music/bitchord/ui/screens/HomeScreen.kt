@@ -591,8 +591,10 @@ fun HomeTitle(
             Box {
                 IconButton(
                     onClick = { expanded = true },
+                    // All header icon pucks use one visible 40dp diameter;
+                    // the platform keeps the broader accessible touch target.
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(40.dp)
                         .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
                         .testTag("home-overflow"),
                 ) {
