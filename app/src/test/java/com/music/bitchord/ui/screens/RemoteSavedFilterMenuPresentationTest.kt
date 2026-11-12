@@ -5,6 +5,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Filter
@@ -15,6 +18,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.ConscryptMode
 
@@ -46,5 +50,22 @@ class RemoteSavedFilterMenuPresentationTest {
         compose.onNodeWithText("Filtro 24").assertExists()
         compose.onNodeWithText("Todas as músicas").performClick()
         compose.runOnIdle { assertEquals(null, chosen) }
+    }
+
+    @Test fun remoteBrowseBackUsesFortyDpNativeVectorAndPreservesNavigation() {
+        var backs = 0
+        compose.setContent {
+            MaterialTheme {
+                RemoteBrowseTopBar(
+                    title = "Remote library",
+                    onBack = { backs++ },
+                )
+            }
+        }
+        val label = RuntimeEnvironment.getApplication().getString(com.music.bitchord.R.string.remote_library_back)
+        compose.onNodeWithContentDescription(label)
+            .assertWidthIsEqualTo(40.dp)
+            .performClick()
+        compose.runOnIdle { assertEquals(1, backs) }
     }
 }

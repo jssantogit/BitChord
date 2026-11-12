@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -85,5 +86,24 @@ class SettingsNavigationTest {
             assertEquals(SettingsSection.PLAYBACK, destination)
             assertEquals("Crossfade", setting)
         }
+    }
+
+    @Test fun filteringSettingsUsesNativeShowAllActionWithoutLosingCallback() {
+        var clears = 0
+        compose.setContent {
+            MaterialTheme {
+                Column {
+                    SettingsDetailHeader(
+                        section = SettingsSection.PLAYBACK,
+                        filteredQuery = "equalizer",
+                        onClearFilter = { clears++ },
+                    )
+                }
+            }
+        }
+        compose.onNodeWithTag("settings-show-all-action")
+            .assertHasClickAction()
+            .performClick()
+        compose.runOnIdle { assertEquals(1, clears) }
     }
 }

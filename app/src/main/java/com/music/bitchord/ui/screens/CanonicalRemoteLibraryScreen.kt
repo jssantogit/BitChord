@@ -34,7 +34,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.MusicNote
@@ -46,7 +45,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -101,6 +99,7 @@ import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.data.catalog.ArtistEntity
@@ -1677,7 +1676,7 @@ internal fun RemoteSongSavedFilterMenu(
 }
 
 @Composable
-private fun RemoteBrowseTopBar(
+internal fun RemoteBrowseTopBar(
     title: String,
     onBack: () -> Unit,
 ) {
@@ -1688,12 +1687,12 @@ private fun RemoteBrowseTopBar(
             .heightIn(min = 56.dp)
             .padding(horizontal = 8.dp),
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = stringResource(R.string.remote_library_back),
-            )
-        }
+        CircleIconButton(
+            icon = PlaylistEditorIcons.Back,
+            contentDescription = stringResource(R.string.remote_library_back),
+            onClick = onBack,
+        )
+        Spacer(Modifier.width(8.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
