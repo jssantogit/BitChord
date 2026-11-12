@@ -44,7 +44,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(24, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(25, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
@@ -135,7 +135,7 @@ class CorpusReportTests(unittest.TestCase):
         report_data = report(manifest)
         self.assertEqual([], report_data["errors"])
         self.assertIsNone(report_data["metrics"])
-        self.assertEqual(9, report_data["slots"]["type"]["reviewed"])
+        self.assertEqual(10, report_data["slots"]["type"]["reviewed"])
 
     def test_a02_japanese_fearless_is_distinct_2023_single_not_2022_ep(self):
         manifest = json.loads(Path(
@@ -166,7 +166,7 @@ class CorpusReportTests(unittest.TestCase):
                          a02["evidence_links"]["observed_workflow"])
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(9, result["slots"]["type"]["reviewed"])
+        self.assertEqual(10, result["slots"]["type"]["reviewed"])
         self.assertIsNone(result["metrics"])
 
     def test_a_bulk_seven_reviews_distinguish_genuine_dispute_from_agreements(self):
@@ -217,6 +217,27 @@ class CorpusReportTests(unittest.TestCase):
         self.assertFalse(report(document)["complete"])
         self.assertEqual(9, report(document)["slots"]["type"]["reviewed"])
         self.assertIsNone(report(document)["metrics"])
+
+    def test_a10_ate_is_ep_according_to_jyp_without_exact_discogs_pressing_claim(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        row = next(x for x in manifest["cases"] if x["id"] == "A-10")
+        self.assertTrue(row["reviewed"])
+        self.assertEqual("350ea536-dbf2-437d-913f-40040a3932ab",
+                         row["musicbrainz_group_mbid"])
+        self.assertEqual(31284695, row["discogs_release_id"])
+        self.assertEqual("EP", row["musicbrainz_type"])
+        self.assertEqual("EP", row["reference_type"])
+        self.assertEqual("candidate", row["match_state"])
+        self.assertEqual("https://straykids.jype.com/discography/37ab301d",
+                         row["evidence_links"]["independent_editorial"])
+        self.assertEqual("Unknown", row["app_type"])
+        self.assertFalse(row["visible"])
+        self.assertFalse(row["absent_in_musicbrainz"])
+        self.assertEqual([], report(manifest)["errors"])
+        self.assertEqual(10, report(manifest)["slots"]["type"]["reviewed"])
+        self.assertIsNone(report(manifest)["metrics"])
 
     def test_c04_stray_kids_slash_name_is_known_musicbrainz_ep_not_recovered(self):
         manifest = json.loads(Path(
