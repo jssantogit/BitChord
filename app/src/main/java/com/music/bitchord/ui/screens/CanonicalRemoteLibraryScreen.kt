@@ -1883,13 +1883,13 @@ internal fun CanonicalCatalogRatingMenu(
             onClick = { expanded = true },
             contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
         )
-        DropdownMenu(
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            DropdownMenuItem(
-                text = { Text(sharedStringResource(Res.string.recording_feedback_edit)) },
-                leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) },
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = sharedStringResource(Res.string.recording_feedback_edit),
+                icon = com.music.bitchord.ui.player.AppleQueueVectors.RatingStarOutline,
                 onClick = {
                     expanded = false
                     onEdit()
