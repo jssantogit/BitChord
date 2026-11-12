@@ -41,6 +41,70 @@ class MusicBrainzArtistAppearancesTest {
         assertEquals("World Music Radio", visible.single().title)
     }
 
+    /**
+     * A Recording is reusable across editions and can carry an older artist
+     * credit. When the actual edition Track explicitly credits the HOST
+     * instead of the viewed artist, that Recording credit must not override
+     * what is printed for this edition in the 'Incluído em' shelf.
+     */
+    @Test fun explicitHostOnlyTrackCreditCannotBorrowGuestFromLinkedRecording() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val json = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Host album","primary-type":"Album"},
+            "media":[{"tracks":[{
+                "title":"Host-only edition track",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+                "recording":{"id":"$recording","title":"Shared recording",
+                    "artist-credit":[{"artist":{"id":"$target","name":"NewJeans"}}]}
+            }]}]
+        }]}"""
+        assertTrue(parseMusicBrainzTrackArtistAppearances(json, target).isEmpty())
+        assertTrue(com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            parseMusicBrainzTrackArtistAppearances(json, target),
+        ).isEmpty())
+    }
+
+    @Test fun malformedExplicitTrackCreditsDoNotFallbackToRecordingsGuestCredit() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val json = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Host album","primary-type":"Album"},
+            "media":[{"tracks":[{
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}],
+                "recording":{"id":"$recording","title":"Shared recording",
+                    "artist-credit":[{"artist":{"id":"$target","name":"NewJeans"}}]}
+            }]}]
+        }]}"""
+        assertTrue(parseMusicBrainzTrackArtistAppearances(json, target).isEmpty())
+    }
+
+    @Test fun explicitGuestTrackCreditStillCountsEvenIfRecordingHasOnlyHostCredit() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val json = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Host album","primary-type":"Album"},
+            "media":[{"tracks":[{
+                "title":"Featured single on this edition",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}},
+                                 {"artist":{"id":"$target","name":"NewJeans"}}],
+                "recording":{"id":"$recording","title":"Shared recording",
+                    "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]}
+            }]}]
+        }]}"""
+        val results = parseMusicBrainzTrackArtistAppearances(json, target)
+        assertEquals(listOf(recording), results.map { it.recordingMbid })
+        assertEquals(1, com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            results,
+        ).size)
+    }
+
     @Test fun fakeOfficialStatusWithoutCommercialProofCannotEnterGuestShelf() {
         val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         val raw = """{"releases":[{
