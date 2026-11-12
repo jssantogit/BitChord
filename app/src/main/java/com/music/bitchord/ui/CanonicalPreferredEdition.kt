@@ -119,9 +119,16 @@ internal fun canonicalEditionTitleIsSuitableForGroupArtwork(
 }
 
 internal fun canonicalArtworkEditionsForGroup(
-    editions: List<MusicBrainzReleaseHit>, groupTitle: String,
+    editions: List<MusicBrainzReleaseHit>,
+    groupTitle: String,
+    groupMbid: String,
 ): List<MusicBrainzReleaseHit> =
-    canonicalPreferredEditions(editions, groupTitle)
+    // A title is never proof of which work owns a sleeve. Search returns
+    // editions from unrelated ReleaseGroups; compare exact MBIDs BEFORE
+    // evaluating title suitability or CAA artwork hints.
+    canonicalPreferredEditions(editions.filter {
+        it.releaseGroupMbid?.equals(groupMbid, ignoreCase = true) == true
+    }, groupTitle)
         .filter { edition ->
             // A ReleaseGroup's conceptual title is not necessarily the official
             // Release title: “How Sweet & Bubble Gum” owns official “How Sweet”

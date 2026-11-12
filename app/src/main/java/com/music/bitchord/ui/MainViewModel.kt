@@ -614,15 +614,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { emptyList() }
             var vetted = canonicalArtworkEditionsForGroup(
-                prefetchedOfficialEditions.orEmpty(), row.title,
-            ).ifEmpty { canonicalArtworkEditionsForGroup(saved, row.title) }
+                prefetchedOfficialEditions.orEmpty(), row.title, row.musicBrainzId,
+            ).ifEmpty { canonicalArtworkEditionsForGroup(saved, row.title, row.musicBrainzId) }
             if (vetted.isEmpty()) {
                 val fetched = musicBrainzGraph.browseGroupReleases(row.musicBrainzId, limit = 40)
                 if (fetched is MusicBrainzCatalogGraphResult.Success) {
                     try { index.persistGroupEditions(row.musicBrainzId, fetched.value.items) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { /* Fresh response remains usable. */ }
-                    vetted = canonicalArtworkEditionsForGroup(fetched.value.items, row.title)
+                    vetted = canonicalArtworkEditionsForGroup(
+                        fetched.value.items, row.title, row.musicBrainzId,
+                    )
                 }
             }
             for (edition in vetted) {

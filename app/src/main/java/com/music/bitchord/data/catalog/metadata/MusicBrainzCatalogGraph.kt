@@ -158,6 +158,10 @@ internal class MusicBrainzCatalogGraph(
                 releaseDate = row.string("date"),
                 artistDisplay = row.artistDisplay(),
                 status = row.string("status"),
+                // This is an exact release-group=<MBID> browse. MusicBrainz
+                // often omits nested release-group in this response; carry
+                // the verified scope as explicit edition provenance.
+                releaseGroupMbid = groupMbid.trim().lowercase(Locale.ROOT),
                 hasFrontCover = (row["cover-art-archive"] as? JsonObject)
                     ?.get("front")?.jsonPrimitive?.booleanOrNull,
                 isVideoOnlyMedia = row.videoOnlyMediaEvidence(),

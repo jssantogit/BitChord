@@ -363,7 +363,15 @@ internal class MusicBrainzCatalogIndex private constructor(
             val groupId = dao.entityIdForExternalIdentity("musicbrainz", "release-group", normalized)
                 ?: return@withTransaction
             check(dao.catalogReleaseGroup(groupId) != null) { "Orphaned release-group claim" }
-            persistReleases(hits).values.forEach { releaseId ->
+            // A scoped browse proves this relationship; an explicit
+            // contradictory Group MBID does not. Reject those claims before
+            // inserting a group edge. Legacy partial hits without a nested
+            // group remain usable only from this exact-group caller.
+            val linkedHits = hits.filter { hit ->
+                hit.releaseGroupMbid == null ||
+                    hit.releaseGroupMbid.trim().equals(normalized, ignoreCase = true)
+            }
+            persistReleases(linkedHits).values.forEach { releaseId ->
                 dao.upsertCatalogReleaseGroupEdition(CatalogReleaseGroupEditionEntity(groupId, releaseId))
             }
         }
@@ -384,6 +392,9 @@ internal class MusicBrainzCatalogIndex private constructor(
                     edition.musicBrainzId, edition.title,
                     edition.country, edition.releaseDate,
                     edition.artistDisplay, status = edition.status,
+                    // This Room relation is an exact cached Group -> Release
+                    // edge, even if the source Edition omitted nested Group.
+                    releaseGroupMbid = normalized,
                     isVideoOnlyMedia = edition.isVideoOnlyMedia,
                     isVideoOnlyContent = edition.isVideoOnlyContent,
                 )
