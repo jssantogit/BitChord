@@ -1774,3 +1774,37 @@ ou ganho de UI Android medido. A PR #211 permanece Draft/unmerged,
 MusicBrainz canônico e #209/main preservados. O relatório de
 cobertura final não deve calcular precisão/ganho antes dos 30 casos
 revisados e validados.
+
+### A-10 — Stray Kids *ATE* é Mini Album / EP; coorte A completa
+
+Depois do lote A-03…A-09, o último controle de classificação A
+foi revisto: **Stray Kids — ATE** (19/07/2024).
+A discografia oficial da JYP, em
+[Falling Up](https://straykids.jype.com/discography/37ab301d)
+e em [GIANT](https://straykids.jype.com/discography/6hldjvn5),
+chama o ATE de **Mini Album**. MusicBrainz
+ReleaseGroup `350ea536-dbf2-437d-913f-40040a3932ab`
+já é **EP**, e a [CI pública A de oito Masters
+#43191673198](https://github.com/jssantogit/BitChord/actions/runs/43191673198)
+revalidou Master Discogs `3554257` com Release principal
+`31284695`. O Master excede oito versões, portanto sua
+edição principal NÃO deve ser tratada como a prensagem
+MusicBrainz correspondente. Treze MB Releases Official
+foram observadas como pistas, mas nenhuma foi homologada
+como mesma edição física Discogs.
+
+A-10 agora é `reviewed=true`, `reference_type=EP`,
+`musicbrainz_type=EP`, `match_state=candidate`,
+`app_type=Unknown`, `visible=false`, sem mudança real da
+classificação.
+
+**Denominador atualizado: 25/30, A 10/10 concluída**:
+- 9 concordâncias de tipo com editoras/representantes;
+- 1 divergência editorial fonte JYP Single vs MB EP
+  (`Christmas EveL`, A-03), **sem aplicação automática**
+  enquanto não resolvida nos critérios editoriais;
+- B 10/10 segue com **0 unlinked `Verified`**;
+- C 5/10 continua com **0 ausências MB comprovadas /
+  0 Discogs-only recuperados**; C-01…03 e C-09…10 pendentes.
+- Sem APK/smoke físico, alterações em #209/main, inversão de
+  provedores nem ganhos de UI medidos.
