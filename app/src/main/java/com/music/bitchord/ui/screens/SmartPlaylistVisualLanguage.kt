@@ -3,9 +3,7 @@ package com.music.bitchord.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,8 +20,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -140,20 +136,23 @@ internal fun PlaylistWizardSecondaryAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    // Native neutral outlined action: unmistakable touch target without
-    // competing with the single blue primary CTA or tinting text red.
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+    val ink = MaterialTheme.colorScheme.onSurface
+    Box(
+        modifier = Modifier.fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(GroupShape)
+            .background(ink.copy(alpha = if (enabled) 0.055f else 0.025f))
+            .border(1.dp, ink.copy(alpha = if (enabled) 0.13f else 0.06f), GroupShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .testTag("playlist-wizard-secondary-button"),
-        shape = GroupShape,
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = ink.copy(alpha = if (enabled) 1f else 0.40f),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -201,18 +200,14 @@ internal fun PlaylistWizardTextAction(
     destructive: Boolean = false,
     onClick: () -> Unit,
 ) {
-    TextButton(
+    PlaylistWizardInlineAction(
+        label = label,
         onClick = onClick,
+        modifier = Modifier.fillMaxWidth().testTag("playlist-wizard-text-action"),
         enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp)
-            .testTag("playlist-wizard-text-action"),
-        colors = ButtonDefaults.textButtonColors(
-            contentColor = if (destructive) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.onSurface,
-        ),
-    ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-    }
+        subdued = !destructive,
+        destructive = destructive,
+    )
 }
 
 /** Compact variant of the same neutral outlined action for sheets and row tools. */
@@ -224,24 +219,41 @@ internal fun PlaylistWizardCompactAction(
     enabled: Boolean = true,
     icon: ImageVector? = null,
 ) {
-    // Same native outlined control; optional native icon instead of visible text.
-    // Keep the label as the accessibility description and minimum touch target.
-    OutlinedButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = if (icon == null) modifier.heightIn(min = 42.dp)
-            else modifier.size(40.dp).testTag("playlist-editor-icon-action"),
-        shape = if (icon == null) GroupShape else CircleShape,
-        contentPadding = if (icon == null) ButtonDefaults.ContentPadding
-            else PaddingValues(0.dp),
-        colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+    val ink = MaterialTheme.colorScheme.onSurface
+    val shape = if (icon == null) GroupShape else CircleShape
+    val bounds = if (icon == null) modifier.heightIn(min = 42.dp)
+        else modifier.size(40.dp)
+    Row(
+        modifier = bounds
+            .clip(shape)
+            .background(ink.copy(alpha = if (enabled) 0.055f else 0.025f))
+            .border(1.dp, ink.copy(alpha = if (enabled) 0.13f else 0.06f), shape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(
+                horizontal = if (icon == null) 16.dp else 0.dp,
+                vertical = if (icon == null) 10.dp else 0.dp,
+            )
+            .testTag(
+                if (icon == null) "playlist-wizard-native-compact-action"
+                else "playlist-editor-icon-action",
+            ),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Icon(icon, contentDescription = label,
-            modifier = Modifier.size(20.dp))
-        else Text(label, style = MaterialTheme.typography.bodyMedium)
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                modifier = Modifier.size(20.dp),
+                tint = ink.copy(alpha = if (enabled) 1f else 0.40f),
+            )
+        } else {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = ink.copy(alpha = if (enabled) 1f else 0.40f),
+            )
+        }
     }
 }
 
