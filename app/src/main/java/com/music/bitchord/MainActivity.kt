@@ -108,6 +108,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
@@ -6958,7 +6959,7 @@ private fun FrostedSortMenu(
                 Icon(
                     Icons.Rounded.ArrowUpward,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = com.music.bitchord.ui.theme.appleMusicKeyColor(),
                     modifier = Modifier.rotate(arrowRotation),
                 )
             }
@@ -7426,7 +7427,7 @@ private fun FrostedMenuPanel(
 
 /** One option on a frosted menu: its label, and a tick or [icon] at the end. */
 @Composable
-private fun FrostedMenuRow(
+internal fun FrostedMenuRow(
     label: String,
     checked: Boolean,
     onClick: () -> Unit,
@@ -7437,6 +7438,7 @@ private fun FrostedMenuRow(
             .fillMaxWidth()
             .heightIn(min = 44.dp)
             .clickable(role = Role.Button, onClick = onClick)
+            .semantics { selected = checked }
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -7449,7 +7451,7 @@ private fun FrostedMenuRow(
             Icon(
                 Icons.Rounded.Check,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = com.music.bitchord.ui.theme.appleMusicKeyColor(),
             )
         } else if (icon != null) {
             Spacer(Modifier.width(16.dp))
