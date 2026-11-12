@@ -491,6 +491,9 @@ internal fun AppleRootSettingsOverflow(
     }
 }
 
+/** Space below the global 40dp overflow button, including a 14dp visible gap. */
+internal val APPLE_SETTINGS_POPUP_OFFSET = 54.dp
+
 /**
  * One shared menu across root tabs and pushed screens: the same compact
  * Settings action, not a per-screen fake account shortcut.
@@ -516,7 +519,9 @@ private fun AppleSettingsPopup(
     // still animating.
     if (!visibility.currentState && !visibility.targetState && visibility.isIdle) return
 
-    val offsetPx = with(LocalDensity.current) { 38.dp.roundToPx() }
+    val offsetPx = with(LocalDensity.current) {
+        APPLE_SETTINGS_POPUP_OFFSET.roundToPx()
+    }
     Popup(
         alignment = Alignment.TopEnd,
         offset = IntOffset(0, offsetPx),
@@ -526,15 +531,15 @@ private fun AppleSettingsPopup(
         AnimatedVisibility(
             visibleState = visibility,
             enter = if (reduced) EnterTransition.None else
-                fadeIn(tween(170)) + scaleIn(
-                    animationSpec = tween(170),
-                    initialScale = 0.96f,
+                fadeIn(tween(200)) + scaleIn(
+                    animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    initialScale = 0.92f,
                     transformOrigin = TransformOrigin(1f, 0f),
                 ),
             exit = if (reduced) ExitTransition.None else
-                fadeOut(tween(125)) + scaleOut(
-                    animationSpec = tween(125),
-                    targetScale = 0.98f,
+                fadeOut(tween(160)) + scaleOut(
+                    animationSpec = tween(160, easing = FastOutSlowInEasing),
+                    targetScale = 0.96f,
                     transformOrigin = TransformOrigin(1f, 0f),
                 ),
         ) {
