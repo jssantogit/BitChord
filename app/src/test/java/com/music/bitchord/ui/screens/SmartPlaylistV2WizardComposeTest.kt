@@ -1100,14 +1100,21 @@ class SmartPlaylistV2WizardComposeTest {
         }
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithText("Externo").performClick()
+        // Group items are lazy; the second child can be outside the compact
+        // test viewport until the enclosing LazyColumn is scrolled.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Condição 2").assertExists()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Condição 1").performClick()
         compose.onNodeWithText("Condição 2").assertDoesNotExist()
         compose.onNodeWithTag("apple-toolbar-back-button").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Condição 2").assertExists()
         // Save is navigation too; it must not jump over the parent group.
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Condição 1").performClick()
         compose.onNodeWithText("Salvar grupo").performClick()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Condição 2").assertExists()
     }
 
@@ -1225,7 +1232,8 @@ class SmartPlaylistV2WizardComposeTest {
             }
         }
         compose.onAllNodesWithTag("playlist-navigation-chevron").assertCountEquals(0)
-        compose.onNodeWithText("Não contém").performClick()
+        // Choose the tappable native row, not its unmerged text descendant.
+        compose.onNodeWithTag("playlist-choice-option-Não contém").performClick()
         compose.runOnIdle {
             assertEquals("Não contém", selected)
             assertTrue(closed)
@@ -1255,7 +1263,9 @@ class SmartPlaylistV2WizardComposeTest {
         compose.onNodeWithText("Adicionar primeira condição").performClick()
         compose.onNodeWithContentDescription("Buscar condições")
             .performTextInput("Avaliação em estrelas")
-        compose.onNodeWithText("Avaliação em estrelas").performClick()
+        // The query is also accessible as editable text. Target the one
+        // actual result row rather than an ambiguous onNodeWithText match.
+        compose.onAllNodesWithTag("playlist-field-row")[0].performClick()
         compose.onNodeWithTag("apple-toolbar-back-button").performClick()
 
         // Returning must preserve the search scope and query, not fall into
