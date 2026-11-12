@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -47,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -120,7 +122,7 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             shrinkTowards = Alignment.End,
         ),
     ) {
-        IconButton(
+        TopBarDownloadAction(
             onClick = {
                 haptics.play(Haptic.Select)
                 onClick()
@@ -165,6 +167,28 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
                     modifier = Modifier.size(if (session.busy) GLYPH_IN_RING else GLYPH_SIZE),
                 )
             }
+        }
+    }
+}
+
+/**
+ * The download indicator uses the same native 40dp icon slot as the three-dot
+ * header action. Content may be a ring, success or failure glyph; visibility,
+ * completion and the haptic callback stay with the session owner.
+ */
+@Composable
+internal fun TopBarDownloadAction(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(AppleFloatingControlMetrics.toolbarDiameter)
+            .testTag("apple-topbar-download-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
+            content()
         }
     }
 }
