@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: 25/30 independently reviewed; A 10/10 (1 real JYP Single vs MusicBrainz EP editorial disagreement A03 not automatically corrected; nine type agreements), B 10/10 negative/candidate without new Verified, C 5/10 source-only negatives and zero proven recoveries. Only C09-C10 and C01-C03 pending; no Android UI gains measured.",
+  "description": "Discogs #211 strict independent editorial corpus 30/30: A 10 reviewed (9 source agreements, Christmas EveL JYP Single vs MusicBrainz EP editorial disagreement without automatic correction), B 10 reviewed (0 new Verified), C 10 independently reviewed audio-only distinct Discogs release IDs with no B overlap (all existing in MusicBrainz, zero source-only recoveries). Three excluded videos/multi-artist rows preserved separately; superseded duplicated C07/C08 evidence archived outside sample. No Android UI measurement.",
   "cases": [
     {
       "id": "A-01",
@@ -627,41 +627,99 @@
     {
       "id": "C-01",
       "cohort": "source_only",
-      "reviewed": false,
-      "selection_state": "excluded_by_provider_metadata",
-      "label": "aespa · World Tour in Cinemas",
-      "discogs_release_id": 35180680,
-      "selection_note": "video-only Blu-ray, not evidence of a new audio album",
+      "reviewed": true,
+      "label": "aespa · SYNK : PARALLEL LINE - Special Digital Single",
+      "musicbrainz_artist_mbid": "b51c672b-85e0-48fe-8648-470a2422229f",
+      "musicbrainz_group_mbid": "b51a484e-872d-4355-9de8-f6a7034f79d2",
+      "discogs_release_id": 31961039,
+      "artist_browse_complete": true,
       "evidence_links": {
-        "discogs_release": "https://www.discogs.com/release/35180680",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
-      }
+        "musicbrainz_artist": "https://musicbrainz.org/artist/b51c672b-85e0-48fe-8648-470a2422229f",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/b51a484e-872d-4355-9de8-f6a7034f79d2",
+        "discogs_release": "https://www.discogs.com/release/31961039",
+        "independent_editorial": "https://www.koreajoongangdaily.com/entertainment/girl-group-aespa-to-release-members-solo-tracks-on-oct-9/12219465",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43197529440",
+        "musicbrainz_release": "https://musicbrainz.org/release/4a1b8bc3-5000-4080-b7a8-06362ce4db92"
+      },
+      "reviewed_at_utc": "2026-11-12T10:12:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "SM Entertainment's October 2024 public artist announcement identified four concert solo tracks to be released under aespa as SYNK: Parallel Line on 9 October 2024; this is a group-credit audio compilation, not individual solo release identity guessed from track titles. The canonical MusicBrainz aespa artist has existing Official Digital Media Release 4a1b8bc3 in group b51a484e, typed Single, four tracks, with official SM label. The public Discogs Artist page-two and hydration CI #43197529440 observed exact Discogs Release 31961039, solo aespa Discogs artist ID 8724412, FLAC File Single, four tracks, SM label, year 2024. Existing MusicBrainz source means this cannot count as Discogs-only recovery. No direct MB Release→Discogs Release URL or same pressing was verified; Android display not observed.",
+      "musicbrainz_release_mbid": "4a1b8bc3-5000-4080-b7a8-06362ce4db92"
     },
     {
       "id": "C-02",
       "cohort": "source_only",
-      "reviewed": false,
-      "selection_state": "excluded_by_provider_metadata",
-      "label": "Stray Kids · The DominATE Experience",
-      "discogs_release_id": 38613330,
-      "selection_note": "video-only DVD, not evidence of a new audio album",
+      "reviewed": true,
+      "label": "NMIXX · Funky Glitter Christmas",
+      "musicbrainz_artist_mbid": "2d623e82-73e2-4179-9c44-e963980f2d58",
+      "musicbrainz_group_mbid": "56384077-7321-4f57-8186-38ef11710552",
+      "discogs_release_id": 31781147,
+      "artist_browse_complete": true,
       "evidence_links": {
-        "discogs_release": "https://www.discogs.com/release/38613330",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
-      }
+        "musicbrainz_artist": "https://musicbrainz.org/artist/2d623e82-73e2-4179-9c44-e963980f2d58",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/56384077-7321-4f57-8186-38ef11710552",
+        "discogs_release": "https://www.discogs.com/release/31781147",
+        "independent_editorial": "https://www.enmixx.com/en/discography/funky-glitter-christmas",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43197529440",
+        "musicbrainz_release": "https://musicbrainz.org/release/2b4e2a89-1b7b-4fa1-9164-486663216616"
+      },
+      "reviewed_at_utc": "2026-11-12T10:12:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "JYP Entertainment's official NMIXX discography calls FUNKY GLITTER CHRISTMAS the 1st Intermixxion Single, released November 23 2022, with one track. MusicBrainz already contains Single ReleaseGroup 56384077 and Official digital edition 2b4e2a89. Public Discogs audio batch CI #43197529440 observed Discogs Release 31781147, solo NMIXX Discogs Artist ID 10946579, JYP Entertainment File MP3 Single with one track, year 2022, no barcode. These facts disprove a missing MusicBrainz work; they do not prove an identical vendor encoding or edition ID. No new C recovery or on-device UI observation.",
+      "musicbrainz_release_mbid": "2b4e2a89-1b7b-4fa1-9164-486663216616"
     },
     {
       "id": "C-03",
       "cohort": "source_only",
-      "reviewed": false,
-      "selection_state": "excluded_by_provider_metadata",
-      "label": "ENHYPEN · Confessions",
-      "discogs_release_id": 33375572,
-      "selection_note": "three credited artists, not an exclusive ENHYPEN release",
+      "reviewed": true,
+      "label": "IVE · CRUSH (Japanese single preceding ALIVE)",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "musicbrainz_group_mbid": "518945b0-343b-404d-9b63-7c57c8b311dc",
+      "discogs_release_id": 31422908,
+      "artist_browse_complete": true,
       "evidence_links": {
-        "discogs_release": "https://www.discogs.com/release/33375572",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
-      }
+        "musicbrainz_artist": "https://musicbrainz.org/artist/b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/518945b0-343b-404d-9b63-7c57c8b311dc",
+        "discogs_release": "https://www.discogs.com/release/31422908",
+        "independent_editorial": "https://www.sonymusic.co.jp/artist/IVE/info/566706",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43197529440"
+      },
+      "reviewed_at_utc": "2026-11-12T10:12:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Sony Music Japan's official IVE 28 August 2024 notice identifies CRUSH as original Japanese promotional title song of the JAPAN 2nd EP ALIVE, released for streaming in advance; the single CRUSH must not be confused with ALIVE multi-song EP. MusicBrainz already has a separate Single ReleaseGroup 518945b0 for CRUSH. The public Discogs page-two audio CI #43197529440 observed Release 31422908 as solo IVE artist ID 7122521, 2024 FLAC promotional Single File, one track, Starship label. Exact Discogs Release and musicbrainz release edition are not independently matched by barcode, catalog or direct typed URL. No new source-only work or Android display validation."
     },
     {
       "id": "C-04",
@@ -764,6 +822,181 @@
       "id": "C-07",
       "cohort": "source_only",
       "reviewed": true,
+      "label": "IVE · Kitsch (pre-release single)",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "musicbrainz_group_mbid": "829216ed-7ab6-434f-a3ab-a504ac32819f",
+      "discogs_release_id": 27107343,
+      "artist_browse_complete": true,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/829216ed-7ab6-434f-a3ab-a504ac32819f",
+        "discogs_release": "https://www.discogs.com/release/27107343",
+        "independent_editorial": "https://www.soompi.com/article/1573203wpp/ive-confirms-april-comeback-date-in-teaser-for-1st-full-album-ive-ive",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43197529440",
+        "musicbrainz_release": "https://musicbrainz.org/release/a34cdc42-341a-4b3c-8c2b-0ff3e87d822a"
+      },
+      "reviewed_at_utc": "2026-11-12T10:12:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Agency comeback announcement reported March 2023 identifies Kitsch as IVE's advance single for I've IVE, with March 27 digital release. MusicBrainz Official digital Release a34cdc42 is explicitly Single, ReleaseGroup 829216ed. Discogs page-two hydrated exact Discogs Release 27107343 under solo artist Discogs ID 7122521 and Starship Entertainment, FLAC promo File Single with one track, 2023. The corresponding MusicBrainz title exists; the Discogs promo File encoding is not certified the same release/pressing as any MB edition. The previously staged C-07 Setsuna Hanabi was removed from independent C sample because B-02 already uses the same Discogs Release 38302455; its earlier editorial findings survive in superseded_cross_cohort_reviews.",
+      "musicbrainz_release_mbid": "a34cdc42-341a-4b3c-8c2b-0ff3e87d822a"
+    },
+    {
+      "id": "C-08",
+      "cohort": "source_only",
+      "reviewed": true,
+      "label": "NMIXX · Roller Coaster (advance single)",
+      "musicbrainz_artist_mbid": "2d623e82-73e2-4179-9c44-e963980f2d58",
+      "musicbrainz_group_mbid": "f95117e6-cd4f-4d7b-8e92-f7d216a156cd",
+      "discogs_release_id": 34417612,
+      "artist_browse_complete": true,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/2d623e82-73e2-4179-9c44-e963980f2d58",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/f95117e6-cd4f-4d7b-8e92-f7d216a156cd",
+        "discogs_release": "https://www.discogs.com/release/34417612",
+        "independent_editorial": "https://www.enmixx.com/en/discography/a-midsummer-nmixx-dream",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43197529440"
+      },
+      "reviewed_at_utc": "2026-11-12T10:12:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Unknown",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "JYP Entertainment's official NMIXX A Midsummer NMIXX's Dream track listing confirms Roller Coaster as a song on the later EP; the MusicBrainz NMIXX artist already has a separate official Roller Coaster Single ReleaseGroup f95117e6 with five editions dated July 3 2023, before the later EP. Discogs audio hydration CI #43197529440 observed solo NMIXX Discogs Artist ID 10946579 and Release 34417612 as 2023 File AIFF Single with one track from JYP Entertainment. The official label EP page is not proof that Roller Coaster was marketed as a standalone Single; reference_type Unknown prevents editorial type claims. No Discogs-only recovery and no matched digital encoding confirmed. Superseded C-08 MEMORABILIA reused B-01's Discogs 31008160 and is archived outside the unique C denominator."
+    },
+    {
+      "id": "C-09",
+      "cohort": "source_only",
+      "reviewed": true,
+      "label": "LE SSERAFIM · EASY (English ver.)",
+      "musicbrainz_artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "musicbrainz_group_mbid": "b64d0fbf-a084-40e9-9087-b8c333ebb775",
+      "discogs_release_id": 29892898,
+      "artist_browse_complete": true,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/b64d0fbf-a084-40e9-9087-b8c333ebb775",
+        "discogs_release": "https://www.discogs.com/release/29892898",
+        "independent_editorial": "https://www.nme.com/news/music/le-sserafim-english-version-easy-3591757",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43197529440"
+      },
+      "reviewed_at_utc": "2026-11-12T10:12:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "SOURCE MUSIC officially distributed EASY (English ver.) on 23 February 2024 as a separate three-track digital product containing English, sped-up, and slowed/reverb versions; independent reporting by NME corroborates this. This is NOT the five-song 19 February 2024 Korean EP EASY: MusicBrainz lists standalone Single ReleaseGroup b64d0fbf for English versions, which must not be collapsed with the original EP on title alone. Discogs Artist-page 2 hydration CI #43197529440 observed Release 29892898 as solo LE SSERAFIM Discogs artist ID 11171795, Source Music AAC Single File, three tracks, 2024. No exact digital edition pairing or UI visibility verified; previously existing MusicBrainz title disqualifies a C recovery."
+    },
+    {
+      "id": "C-10",
+      "cohort": "source_only",
+      "reviewed": true,
+      "label": "IVE · I WANT (Pepsi campaign single)",
+      "musicbrainz_artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "musicbrainz_group_mbid": "72f51e2e-0257-41d5-8b5c-5f21c7e338ed",
+      "discogs_release_id": 27690417,
+      "artist_browse_complete": true,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/72f51e2e-0257-41d5-8b5c-5f21c7e338ed",
+        "discogs_release": "https://www.discogs.com/release/27690417",
+        "independent_editorial": "https://www.soompi.com/article/1600451wpp/watch-ive-drops-fun-and-refreshing-i-want-mv-for-2023-pepsi-campaign",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43197529440"
+      },
+      "reviewed_at_utc": "2026-11-12T10:12:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Pepsi Korea and Starship's public 13 July 2023 campaign release identifies IVE I WANT as a standalone single, not a full album and not an unrelated artist's track. MusicBrainz already contains I WANT as Single ReleaseGroup 72f51e2e under exact IVE Artist MBID. Discogs Artist-page two and audio batch CI #43197529440 observed solo IVE Discogs artist ID 7122521 with Release 27690417, Starship/Pepsi 2023 FLAC Single File and one track. No barcode observed and no exact identical MusicBrainz edition authenticated. This negative case proves the work already exists in the canonical catalog but does not certify pressing identity or Android shelf representation."
+    }
+  ],
+  "screened_out_sources": [
+    {
+      "id": "C-01",
+      "cohort": "source_only",
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "aespa · World Tour in Cinemas",
+      "discogs_release_id": 35180680,
+      "selection_note": "video-only Blu-ray, not evidence of a new audio album",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/35180680",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      },
+      "exclusion_reason": "video-only Blu-ray, not evidence of a new audio album",
+      "original_slot": "C-01"
+    },
+    {
+      "id": "C-02",
+      "cohort": "source_only",
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "Stray Kids · The DominATE Experience",
+      "discogs_release_id": 38613330,
+      "selection_note": "video-only DVD, not evidence of a new audio album",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/38613330",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      },
+      "exclusion_reason": "video-only DVD, not evidence of a new audio album",
+      "original_slot": "C-02"
+    },
+    {
+      "id": "C-03",
+      "cohort": "source_only",
+      "reviewed": false,
+      "selection_state": "excluded_by_provider_metadata",
+      "label": "ENHYPEN · Confessions",
+      "discogs_release_id": 33375572,
+      "selection_note": "three credited artists, not an exclusive ENHYPEN release",
+      "evidence_links": {
+        "discogs_release": "https://www.discogs.com/release/33375572",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/42807755689"
+      },
+      "exclusion_reason": "three credited artists, not an exclusive ENHYPEN release",
+      "original_slot": "C-03"
+    }
+  ],
+  "superseded_cross_cohort_reviews": [
+    {
+      "id": "C-07",
+      "cohort": "source_only",
+      "reviewed": true,
       "label": "TOMORROW X TOGETHER · セツナハナビ (Setsuna Hanabi) [already in MB]",
       "musicbrainz_artist_mbid": "9d027d72-790e-40ec-bbb7-61aa613457de",
       "musicbrainz_group_mbid": "cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
@@ -790,7 +1023,9 @@
       "visible": false,
       "absent_in_musicbrainz": false,
       "review_notes": "Universal Music Japan's dated 23 July 2026 official track-list publication confirms TOMORROW X TOGETHER's Japanese fifth single セツナハナビ (Setsuna Hanabi), with four tracks and physical CD editions scheduled 19 August 2026 (digital 17 August). The MusicBrainz canonical artist-catalog and title-index already contain the exact Single release group cb79234e, and MusicBrainz Official Release 6770b265 has the same four-song program and digital date, so it is not missing from MusicBrainz. CI #43139788281 independently observed Discogs CD Release 38302455 as Master 4331424 main release with exact Discogs artist 7164941, four track rows; a direct identical-pressing relationship between that CD and MB digital Release 6770b265 is not established. This is a C negative, not source-only recovery, and no Android rendering was inspected.",
-      "musicbrainz_release_mbid": "6770b265-719a-463b-af5e-50ac5aeac1e5"
+      "musicbrainz_release_mbid": "6770b265-719a-463b-af5e-50ac5aeac1e5",
+      "superseded_reason": "same Discogs Release 38302455 as reviewed B-02",
+      "not_counted_in_unique_c": true
     },
     {
       "id": "C-08",
@@ -822,17 +1057,9 @@
       "visible": false,
       "absent_in_musicbrainz": false,
       "review_notes": "BELIFT LAB's official Moon-version pre-order notice confirms DARK MOON SPECIAL ALBUM MEMORABILIA dated 13 May 2024 and distinguishes the Moon physical package (CD) from other separately announced products. The MusicBrainz ENHYPEN discography already includes ReleaseGroup 4e219d4e as EP with two editions, including Official digital Release d0c0cfe6 with six tracks and 13 May 2024 date. This proves an existing MusicBrainz title, not a Discogs-only recovery. Public Discogs C scouting CI #43139788281 observed physical Moon-or-main-version Discogs Release 31008160 in Master 3540736 and exact artist ID 8303009, six tracks; its exact packaging/label/catalog match to an MB physical edition remains unadjudicated. The label's marketing expression 'special album' alone is not independent proof of an Album-versus-EP classification error, so reference_type Unknown here and no type correction. App visibility remains unmeasured.",
-      "musicbrainz_release_mbid": "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10"
-    },
-    {
-      "id": "C-09",
-      "cohort": "source_only",
-      "reviewed": false
-    },
-    {
-      "id": "C-10",
-      "cohort": "source_only",
-      "reviewed": false
+      "musicbrainz_release_mbid": "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10",
+      "superseded_reason": "same Discogs Release 31008160 as reviewed B-01",
+      "not_counted_in_unique_c": true
     }
   ]
 }
