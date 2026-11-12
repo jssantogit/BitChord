@@ -81,6 +81,24 @@ class CanonicalArtistReleaseSectionsTest {
         assertNull(sections.recentAlbum)
     }
 
+    @Test fun unclassifiedUndatedReleasesPreserveArtistShelfOrderAfterDatedRows() {
+        val rows = listOf(
+            release("Zebra"), release("dated-old"), release("Alpha"),
+            release("dated-new"), release("Middle"),
+        )
+        val proof = mapOf(
+            "dated-old" to CanonicalArtistReleaseEvidence("dated-old", null, "2024-02-01"),
+            "dated-new" to CanonicalArtistReleaseEvidence("dated-new", null, "2026-03-01"),
+        )
+        val sections = canonicalArtistReleaseSections(rows, proof)
+        assertEquals(
+            listOf("dated-new", "dated-old", "Zebra", "Alpha", "Middle"),
+            sections.unclassified.map { it.id },
+        )
+        assertTrue(sections.albums.isEmpty())
+        assertTrue(sections.singlesAndEps.isEmpty())
+    }
+
     @Test fun officialReleaseGroupTypeOutranksProvisionalMembershipCount() {
         val rows = listOf(release("partial-album"), release("multi-track-ep"),
             release("official-single-multiple-recordings"), release("official-album-one-recording"),
