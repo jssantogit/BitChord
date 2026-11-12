@@ -55,6 +55,29 @@ class DiscogsEditorialArtistShelvesTest {
         assertEquals(5, groups.size)
     }
 
+    @Test fun aSourceLinkedSingleStillBelongsToUnrelatedDiscoveryShelf() {
+        // Only the artist's typed discography grid is being consolidated.
+        // An explicit selection on another shelf is not this projection.
+        val singleId = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
+        val epId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val single = CanonicalCatalogSearchRow(singleId,
+            CanonicalSearchKind.RELEASE_GROUP, "HOT", "LE SSERAFIM",
+            releaseKind = "Single")
+        val ep = single.copy(musicBrainzId = epId, releaseKind = "EP")
+        val picked = ShelfItem("HOT", "Single", null, null,
+            "catalog:RELEASE_GROUP:$singleId")
+        val parent = ShelfItem("HOT", "EP", null, null,
+            "catalog:RELEASE_GROUP:$epId")
+        val original = listOf(
+            HomeShelf("Para descobrir", listOf(picked)),
+            HomeShelf("Singles e EPs", listOf(picked, parent)),
+        )
+        val out = discogsEditorialArtistShelves(original,
+            listOf(single, ep), emptyMap())
+        assertEquals(listOf(picked), out.first().items)
+        assertEquals(listOf(parent), out.last().items)
+    }
+
     @Test fun linkedHotSingleMustStayWhenParentOrTypedRelationNotVisible() {
         val singleId = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
         val epId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
