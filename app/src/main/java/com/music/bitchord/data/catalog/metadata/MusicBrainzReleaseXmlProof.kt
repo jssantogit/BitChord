@@ -10,6 +10,7 @@ internal object MusicBrainzReleaseXmlProof {
     private const val MAX_XML_CHARS = 2_000_000
     private const val MAX_MEDIA = 100
     private const val MAX_TRACKS = 2_000
+    private const val MMD_NAMESPACE = "http://musicbrainz.org/ns/mmd-2.0#"
     private val MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
     private data class Frame(
@@ -71,6 +72,7 @@ internal object MusicBrainzReleaseXmlProof {
                     val parent = stack.lastOrNull()
                     if (parent == null) {
                         if (rootSeen || name != "metadata") error("unexpected root")
+                        if (ns != MMD_NAMESPACE) error("unexpected MusicBrainz namespace")
                         rootSeen = true
                         namespace = ns
                     }

@@ -18,7 +18,7 @@ class MusicBrainzReleaseXmlProofTest {
     private val recording = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 
     private fun xml(count: Int = 2, offset: String? = null, ids: Pair<String, String> = trackA to trackB) =
-        """<metadata><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="$count"${offset?.let { " offset=\"$it\"" }.orEmpty()}><track id="${ids.first}"><position>1</position><recording id="$recording"/></track><track id="${ids.second}"><position>2</position><recording id="$recording"/></track></track-list></medium></medium-list></release></metadata>"""
+        """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="$count"${offset?.let { " offset=\"$it\"" }.orEmpty()}><track id="${ids.first}"><position>1</position><recording id="$recording"/></track><track id="${ids.second}"><position>2</position><recording id="$recording"/></track></track-list></medium></medium-list></release></metadata>"""
 
     private fun detail(completeness: MusicBrainzReleaseJsonCompleteness = MusicBrainzReleaseJsonCompleteness(true, true, true)) =
         MusicBrainzCatalogReleaseDetail(release, null, "Edition", null, null, null, listOf(
@@ -43,7 +43,8 @@ class MusicBrainzReleaseXmlProofTest {
         assertTrue(MusicBrainzReleaseXmlProof.proves(zeroXml, release, zeroDetail))
 
         val externalEntityXml = """<!DOCTYPE metadata [<!ENTITY x SYSTEM "file:///etc/passwd">]>""" +
-            xml().replace("<metadata>", "<metadata>&x;")
+            xml().replace("<metadata xmlns=\"http://musicbrainz.org/ns/mmd-2.0#\">",
+                "<metadata xmlns=\"http://musicbrainz.org/ns/mmd-2.0#\">&x;")
         assertFalse(MusicBrainzReleaseXmlProof.proves(externalEntityXml, release, detail()))
     }
 
@@ -66,13 +67,20 @@ class MusicBrainzReleaseXmlProofTest {
     }
 
     @Test fun rejectsTrackListsOutsideReleaseEvenWhenRowsAndCountsMatch() {
-        val movedList = """<metadata><release id="$release"/><medium-list count="1"><medium><position>1</position><track-list count="2"><track id="$trackA"><position>1</position><recording id="$recording"/></track><track id="$trackB"><position>2</position><recording id="$recording"/></track></track-list></medium></medium-list></metadata>"""
+        val movedList = """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"/><medium-list count="1"><medium><position>1</position><track-list count="2"><track id="$trackA"><position>1</position><recording id="$recording"/></track><track id="$trackB"><position>2</position><recording id="$recording"/></track></track-list></medium></medium-list></metadata>"""
         assertFalse(MusicBrainzReleaseXmlProof.proves(movedList, release, detail()))
     }
 
-    @Test fun acceptsTheSameStrictHierarchyWithAnInheritedXmlNamespace() {
-        val namespaced = xml().replace("<metadata>", "<metadata xmlns=\"https://musicbrainz.org/ns/mmd-2.0#\">")
-        assertTrue(MusicBrainzReleaseXmlProof.proves(namespaced, release, detail()))
+    @Test fun requiresOfficialNamespaceOnRootAndEveryStructuralElement() {
+        assertTrue(MusicBrainzReleaseXmlProof.proves(xml(), release, detail()))
+        var prefixed = xml().replace("xmlns=\"http://musicbrainz.org/ns/mmd-2.0#\"",
+            "xmlns:m=\"http://musicbrainz.org/ns/mmd-2.0#\"")
+        listOf("metadata", "release", "medium-list", "medium", "track-list", "track", "position", "recording")
+            .forEach { name -> prefixed = prefixed.replace("<$name", "<m:$name").replace("</$name>", "</m:$name>") }
+        assertTrue(MusicBrainzReleaseXmlProof.proves(prefixed, release, detail()))
+        assertFalse(MusicBrainzReleaseXmlProof.proves(xml().replace("<metadata xmlns=\"http://musicbrainz.org/ns/mmd-2.0#\">", "<metadata>"), release, detail()))
+        assertFalse(MusicBrainzReleaseXmlProof.proves(xml().replace("http://musicbrainz.org/ns/mmd-2.0#", "urn:other"), release, detail()))
+        assertFalse(MusicBrainzReleaseXmlProof.proves(xml().replace("<track id=", "<x:track xmlns:x=\"urn:other\" id=").replace("</track>", "</x:track>"), release, detail()))
     }
 
     @Test fun zeroPositionsAreExplicitValidPositionsNotMissingValues() {

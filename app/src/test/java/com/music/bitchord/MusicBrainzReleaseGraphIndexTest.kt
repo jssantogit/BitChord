@@ -130,7 +130,7 @@ class MusicBrainzReleaseGraphIndexTest {
             val ra = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
             val rb = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
             val xml = """
-                <metadata><release id="$release"><medium-list count="1"><medium>
+                <metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium>
                 <position>1</position><track-list count="1"><track id="$a"><position>1</position>
                 <recording id="$ra"/></track></track-list></medium></medium-list></release></metadata>
             """.trimIndent()
@@ -215,7 +215,7 @@ class MusicBrainzReleaseGraphIndexTest {
             val ra = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
             val rb = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
             lateinit var index: MusicBrainzCatalogIndex
-            val xml = """<metadata><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$a"><position>1</position><recording id="$ra"/></track></track-list></medium></medium-list></release></metadata>"""
+            val xml = """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$a"><position>1</position><recording id="$ra"/></track></track-list></medium></medium-list></release></metadata>"""
             val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
                 override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
                     val dao = db.catalogDao()
