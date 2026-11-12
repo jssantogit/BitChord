@@ -55,7 +55,7 @@ internal data class MusicBrainzReleaseGroupHit(
     val firstReleaseDate: String?,
     val artistDisplay: String?,
     val artworkUri: String? = null,
-    /** Pipe-separated official MusicBrainz secondary types; unknown remains null. */
+    /** Pipe-separated MusicBrainz types: null = absent/unknown, "" = explicitly no tags. */
     val secondaryTypes: String? = null,
 )
 
@@ -72,6 +72,12 @@ internal data class MusicBrainzReleaseHit(
     val releaseGroupMbid: String? = null,
     /** Positive CAA Front availability flag attached to this *specific* Release. */
     val hasFrontCover: Boolean? = null,
+    /** Linked ReleaseGroup primary type, when present; not guessed from title. */
+    val releaseGroupPrimaryType: String? = null,
+    /** Positive source evidence: every declared medium is explicitly video-only. */
+    val isVideoOnlyMedia: Boolean? = null,
+    /** Evidence from exact Release's Track/Recording graph, when cached. */
+    val isVideoOnlyContent: Boolean? = null,
 )
 
 // A MusicBrainz cover-art-archive.front flag is a presence hint only.
@@ -111,7 +117,15 @@ internal data class MusicBrainzRecordingHit(
 /** Explicit edition status is required for public streaming-style Release tiles. */
 internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
     hit.status.equals("Official", ignoreCase = true) &&
-        canonicalStreamingTitleIsSafe(hit.title)
+        // Official is a publication status, not proof of an audio edition.
+        hit.isVideoOnlyMedia != true && hit.isVideoOnlyContent != true &&
+        canonicalStreamingTitleIsSafe(hit.title) &&
+        // A legitimate Official edition may be a film/video or broadcast.
+        // Reject only an explicitly unsupported primary type; unknown stays
+        // browseable while a trusted group classification is unavailable.
+        (hit.releaseGroupPrimaryType == null ||
+            hit.releaseGroupPrimaryType.trim().lowercase(Locale.ROOT) in
+                setOf("album", "ep", "single"))
 
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
     hit.hasOfficialAudioRelease == true && hit.isVideo != true &&
@@ -283,8 +297,11 @@ internal class MusicBrainzCatalogSearch(
                     MusicBrainzReleaseGroupHit(
                         mbid, title, group.primaryType.nonEmpty(),
                         group.firstReleaseDate.nonEmpty(), group.artistCredit.displayArtistCredit(),
-                        secondaryTypes = group.secondaryTypes?.filter(String::isNotBlank)
-                            ?.joinToString("|")?.ifBlank { null },
+                        // Explicit [] is a source correction: it means zero
+                        // secondary types. Missing field remains unknown/null.
+                        secondaryTypes = group.secondaryTypes
+                            ?.map(String::trim)?.filter(String::isNotBlank)
+                            ?.joinToString("|"),
                     )
                 }
             }
@@ -321,6 +338,7 @@ internal class MusicBrainzCatalogSearch(
                         release.date.nonEmpty(), release.artistCredit.displayArtistCredit(),
                         status = release.status.nonEmpty(),
                         releaseGroupMbid = release.releaseGroup?.id.validSearchMbidOrNull(),
+                        releaseGroupPrimaryType = release.releaseGroup?.primaryType.nonEmpty(),
                     )
                 }
             }
@@ -377,8 +395,16 @@ internal class MusicBrainzCatalogSearch(
                         // edition is still not positive evidence of official
                         // audio. Match the *same* supported Album/EP/Single
                         // evidence required for trustworthy cover association.
-                        hasOfficialAudioRelease = audioReleases.isNotEmpty(),
-                        isVideo = recording.video == true,
+                        // Recording.video is tri-state in the search index.
+                        // An omitted boolean or omitted release list is NOT
+                        // a negative fact and must not clear Room proof from
+                        // a previous complete lookup for this exact MBID.
+                        hasOfficialAudioRelease = when {
+                            recording.video == true -> false
+                            recording.releases == null -> null
+                            else -> audioReleases.isNotEmpty()
+                        },
+                        isVideo = recording.video,
                     )
                 }
             }

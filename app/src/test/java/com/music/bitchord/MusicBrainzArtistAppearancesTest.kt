@@ -333,4 +333,89 @@ class MusicBrainzArtistAppearancesTest {
             parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
     }
 
+
+    @Test fun releaseGroupPrimaryArtistIsNeverMisclassifiedAsGuestOfAnotherEdition() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Edition artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Shared main discography",
+                "primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"$recording","title":"Album track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        // The group belongs to this artist's own discography, even when one
+        // edition has a different display credit. It is not a guest release.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
+
+        // A genuine appearance on another artist's group must still work.
+        val genuineGuest = body.replace(
+            "\"artist-credit\":[{\"artist\":{\"id\":\"$target\",\"name\":\"Selected artist\"}}]",
+            "\"artist-credit\":[{\"artist\":{\"id\":\"$other\",\"name\":\"Edition artist\"}}]",
+        )
+        assertEquals(listOf("Shared main discography"),
+            parseMusicBrainzTrackArtistAppearances(genuineGuest, target).map { it.title })
+    }
+
+    @Test fun malformedExplicitGroupCreditNeverConfirmsGuestMembership() {
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host"}}],
+            "release-group":{"id":"$releaseGroup","title":"Guest title",
+                "primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Legitimate audio track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        // A present but invalid group credit is not proof that the group
+        // belongs to someone else, even if the edition is Official.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
+        val absentCredit = body.replace(
+            """"primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]""",
+            """"primary-type":"Album"""",
+        )
+        // Missing data is not negative evidence; existing track-scoped
+        // browsing still operates while exact group evidence is unavailable.
+        assertEquals(1, parseMusicBrainzTrackArtistAppearances(absentCredit, target).size)
+    }
+
+    @Test fun emptyOrPartiallyMalformedGroupCreditFailsClosedWithoutHidingRealGuest() {
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host"}}],
+            "release-group":{"id":"$releaseGroup","title":"Real collaboration",
+                "primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Verified guest recording",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        assertEquals(1, parseMusicBrainzTrackArtistAppearances(body, target).size)
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]""",
+                """"primary-type":"Single",
+                "artist-credit":[]""",
+            ), target,
+        ).isEmpty())
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]""",
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}},
+                    {"artist":{"id":"invalid"}}]""",
+            ), target,
+        ).isEmpty())
+    }
 }

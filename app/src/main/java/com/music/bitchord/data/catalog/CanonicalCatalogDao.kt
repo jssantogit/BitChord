@@ -65,6 +65,8 @@ internal data class CanonicalCachedGroupEditionRow(
     val releaseDate: String?,
     val artistDisplay: String?,
     val status: String?,
+    val isVideoOnlyMedia: Boolean?,
+    val isVideoOnlyContent: Boolean?,
 )
 
 /** Exact Recording MBID to an already-verified Official ReleaseGroup cover. */
@@ -345,6 +347,22 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT COUNT(*) FROM catalog_musicbrainz_artist_group WHERE artistId = :artistId")
     suspend fun musicBrainzArtistGroupMembershipCount(artistId: String): Int
 
+    /**
+     * Sidecar-edge deletion only. A complete MusicBrainz artist-MBID browse
+     * may invalidate this artist's earlier website-default-v1 membership,
+     * but never delete the ReleaseGroup entity or any legacy/other-artist edge.
+     */
+    @Query("""
+        DELETE FROM catalog_musicbrainz_artist_group
+        WHERE artistId = :artistId
+          AND publicationEvidence = 'website-default-v1'
+          AND releaseGroupId NOT IN (:retainedGroupIds)
+    """)
+    suspend fun pruneObsoleteMusicBrainzArtistGroups(
+        artistId: String,
+        retainedGroupIds: List<String>,
+    ): Int
+
     @Query("""
         SELECT groupEntity.*
         FROM catalog_musicbrainz_artist_group AS association
@@ -362,18 +380,22 @@ internal interface CanonicalCatalogDao {
      */
     @Query("""
         SELECT ident.externalId AS musicBrainzId, COALESCE((
-                SELECT edition.title
+                SELECT COALESCE(NULLIF(TRIM(evidence.title), ''), edition.title)
                 FROM catalog_release_group_edition AS groupEdition
                 JOIN catalog_release AS edition ON edition.id = groupEdition.releaseId
                 JOIN musicbrainz_release_enrichment AS evidence
                     ON evidence.releaseId = edition.id
                 WHERE groupEdition.releaseGroupId = grp.id
                   AND lower(evidence.status) = 'official'
+                   AND COALESCE(evidence.isVideoOnlyMedia, 0) != 1
+                   AND COALESCE(evidence.isVideoOnlyContent, 0) != 1
                   -- A composite ReleaseGroup label is not necessarily the
                   -- commercially released album title. “How Sweet & Bubble
                   -- Gum” has verified Official editions titled “How Sweet”.
                   -- The title remains source-owned; group ID never changes.
-                  AND instr(lower(grp.title), lower(trim(edition.title) || ' & ')) = 1
+                  AND instr(lower(grp.title),
+                      lower(trim(COALESCE(NULLIF(TRIM(evidence.title), ''), edition.title))
+                            || ' & ')) = 1
                 ORDER BY CASE WHEN evidence.country = 'XW' THEN 0
                               WHEN evidence.country = 'KR' THEN 1 ELSE 2 END,
                          evidence.releaseDate, edition.id
@@ -418,6 +440,8 @@ internal interface CanonicalCatalogDao {
         JOIN musicbrainz_release_enrichment AS releaseInfo
             ON releaseInfo.releaseId = trackEvidence.releaseId
                 AND lower(releaseInfo.status) = 'official'
+                AND COALESCE(releaseInfo.isVideoOnlyMedia, 0) != 1
+                AND COALESCE(releaseInfo.isVideoOnlyContent, 0) != 1
         JOIN catalog_release_group_edition AS relation
             ON relation.releaseId = trackEvidence.releaseId
         JOIN catalog_release_group AS groupInfo
@@ -456,6 +480,8 @@ internal interface CanonicalCatalogDao {
         JOIN musicbrainz_release_enrichment AS releaseInfo
             ON releaseInfo.releaseId = trackEvidence.releaseId
                AND lower(releaseInfo.status) = 'official'
+                AND COALESCE(releaseInfo.isVideoOnlyMedia, 0) != 1
+                AND COALESCE(releaseInfo.isVideoOnlyContent, 0) != 1
         JOIN catalog_release_group_edition AS relation
             ON relation.releaseId = trackEvidence.releaseId
         JOIN catalog_release_group AS groupInfo
@@ -502,10 +528,13 @@ internal interface CanonicalCatalogDao {
      */
     @Query("""
         SELECT ident.externalId AS musicBrainzId,
-               edition.title AS title,
+               COALESCE(NULLIF(TRIM(info.title), ''), edition.title) AS title,
                info.country AS country, info.releaseDate AS releaseDate,
-               COALESCE(info.artistDisplay, edition.artistDisplay) AS artistDisplay,
-               info.status AS status
+               COALESCE(NULLIF(TRIM(info.artistDisplay), ''), edition.artistDisplay)
+                   AS artistDisplay,
+               info.status AS status,
+               info.isVideoOnlyMedia AS isVideoOnlyMedia,
+               info.isVideoOnlyContent AS isVideoOnlyContent
         FROM catalog_release_group_edition AS relation
         JOIN catalog_release AS edition ON edition.id = relation.releaseId
         JOIN catalog_external_identity AS ident
@@ -1283,18 +1312,22 @@ internal interface CanonicalCatalogDao {
     @Query(
         """
         SELECT identity.externalId AS musicBrainzId, COALESCE((
-                SELECT edition.title
+                SELECT COALESCE(NULLIF(TRIM(evidence.title), ''), edition.title)
                 FROM catalog_release_group_edition AS groupEdition
                 JOIN catalog_release AS edition ON edition.id = groupEdition.releaseId
                 JOIN musicbrainz_release_enrichment AS evidence
                     ON evidence.releaseId = edition.id
                 WHERE groupEdition.releaseGroupId = grp.id
                   AND lower(evidence.status) = 'official'
+                   AND COALESCE(evidence.isVideoOnlyMedia, 0) != 1
+                   AND COALESCE(evidence.isVideoOnlyContent, 0) != 1
                   -- A composite ReleaseGroup label is not necessarily the
                   -- commercially released album title. “How Sweet & Bubble
                   -- Gum” has verified Official editions titled “How Sweet”.
                   -- The title remains source-owned; group ID never changes.
-                  AND instr(lower(grp.title), lower(trim(edition.title) || ' & ')) = 1
+                  AND instr(lower(grp.title),
+                      lower(trim(COALESCE(NULLIF(TRIM(evidence.title), ''), edition.title))
+                            || ' & ')) = 1
                 ORDER BY CASE WHEN evidence.country = 'XW' THEN 0
                               WHEN evidence.country = 'KR' THEN 1 ELSE 2 END,
                          evidence.releaseDate, edition.id
@@ -1317,9 +1350,14 @@ internal interface CanonicalCatalogDao {
     ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit>
 
     @Query("""
-        SELECT identity.externalId AS musicBrainzId, edition.title AS title,
-            edition.artistDisplay AS artistDisplay, info.country AS country,
+        SELECT identity.externalId AS musicBrainzId,
+            COALESCE(NULLIF(TRIM(info.title), ''), edition.title) AS title,
+            COALESCE(NULLIF(TRIM(info.artistDisplay), ''), edition.artistDisplay)
+                AS artistDisplay,
+            info.country AS country,
             info.releaseDate AS releaseDate, info.status AS status,
+             info.isVideoOnlyMedia AS isVideoOnlyMedia,
+             info.isVideoOnlyContent AS isVideoOnlyContent,
             COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release edition ON edition.id = identity.entityId
@@ -1329,8 +1367,11 @@ internal interface CanonicalCatalogDao {
             ON art.entityType = 'release:front-v3' AND art.mbid = identity.externalId
         WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'release'
             AND (instr(lower(edition.title), lower(:query)) > 0
-                OR instr(lower(edition.artistDisplay), lower(:query)) > 0)
-        ORDER BY edition.title COLLATE NOCASE, identity.externalId
+                OR instr(lower(edition.artistDisplay), lower(:query)) > 0
+                OR instr(lower(info.title), lower(:query)) > 0
+                OR instr(lower(info.artistDisplay), lower(:query)) > 0)
+        ORDER BY COALESCE(NULLIF(TRIM(info.title), ''), edition.title)
+                   COLLATE NOCASE, identity.externalId
         LIMIT :limit
     """)
     suspend fun searchKnownMusicBrainzReleases(
@@ -1372,9 +1413,9 @@ internal interface CanonicalCatalogDao {
     @Query(
         """
         SELECT identity.externalId AS musicBrainzId,
-               recording.title AS title,
-               recording.artistDisplay AS artistDisplay,
-               recording.durationMs AS durationMs,
+               COALESCE(NULLIF(TRIM(info.title), ''), recording.title) AS title,
+               COALESCE(NULLIF(TRIM(info.artistDisplay), ''), recording.artistDisplay) AS artistDisplay,
+               COALESCE(info.durationMs, recording.durationMs) AS durationMs,
                info.hasOfficialAudioRelease AS hasOfficialAudioRelease,
                info.isVideo AS isVideo
         FROM catalog_external_identity AS identity
@@ -1386,13 +1427,17 @@ internal interface CanonicalCatalogDao {
           AND (
             instr(lower(recording.title), lower(:query)) > 0
             OR instr(lower(recording.artistDisplay), lower(:query)) > 0
+            OR instr(lower(info.title), lower(:query)) > 0
+            OR instr(lower(info.artistDisplay), lower(:query)) > 0
           )
         ORDER BY CASE WHEN EXISTS (
                     SELECT 1 FROM catalog_media_asset playable
                     WHERE playable.recordingId = recording.id
                 ) THEN 0 ELSE 1 END,
-                 recording.artistDisplay COLLATE NOCASE,
-                 recording.title COLLATE NOCASE, identity.externalId
+                 COALESCE(NULLIF(TRIM(info.artistDisplay), ''), recording.artistDisplay)
+                    COLLATE NOCASE,
+                 COALESCE(NULLIF(TRIM(info.title), ''), recording.title)
+                    COLLATE NOCASE, identity.externalId
         LIMIT :limit
         """,
     )

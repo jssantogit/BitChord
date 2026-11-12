@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.booleanOrNull
@@ -42,6 +43,8 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val country: String?,
     val releaseDate: String?,
     val tracks: List<MusicBrainzCatalogTrack>,
+    /** Exact Release lookup only; not inferred from title or group type. */
+    val isVideoOnlyContent: Boolean? = null,
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -92,9 +95,13 @@ internal class MusicBrainzCatalogGraph(
                 primaryType = row.string("primary-type"),
                 firstReleaseDate = row.string("first-release-date"),
                 artistDisplay = row.artistDisplay(),
-                secondaryTypes = (row["secondary-types"] as? JsonArray)
-                    ?.mapNotNull { runCatching { it.jsonPrimitive.contentOrNull }.getOrNull() }
-                    ?.filter(String::isNotBlank)?.joinToString("|")?.ifBlank { null },
+                secondaryTypes = (row["secondary-types"] as? JsonArray)?.let { types ->
+                    // A provided [] clears an old tag, unlike an omitted field.
+                    // Malformed entries cannot silently masquerade as [].
+                    if (types.any { it !is JsonPrimitive || !it.isString }) null
+                    else types.map { (it as JsonPrimitive).content.trim() }
+                        .filter(String::isNotBlank).joinToString("|")
+                },
             )
         }
 
@@ -108,7 +115,7 @@ internal class MusicBrainzCatalogGraph(
         artistMbid: String, limit: Int = 100, offset: Int = 0,
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseHit>> =
         paged("release", "artist", artistMbid, limit, offset,
-            extraParameters = mapOf("status" to "official", "inc" to "release-groups"),
+            extraParameters = mapOf("status" to "official", "inc" to "release-groups+media"),
             countKey = "release-count", offsetKey = "release-offset", arrayKey = "releases",
             identity = MusicBrainzReleaseHit::musicBrainzId,
         ) { row ->
@@ -123,6 +130,7 @@ internal class MusicBrainzCatalogGraph(
                     ?.string("id").validMbid(),
                 hasFrontCover = (row["cover-art-archive"] as? JsonObject)
                     ?.get("front")?.jsonPrimitive?.booleanOrNull,
+                isVideoOnlyMedia = row.videoOnlyMediaEvidence(),
             )
         }
 
@@ -131,6 +139,7 @@ internal class MusicBrainzCatalogGraph(
         groupMbid: String, limit: Int = 25, offset: Int = 0,
     ): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseHit>> =
         paged("release", "release-group", groupMbid, limit, offset,
+            extraParameters = mapOf("inc" to "media"),
             countKey = "release-count", offsetKey = "release-offset", arrayKey = "releases",
             identity = MusicBrainzReleaseHit::musicBrainzId,
         ) { row ->
@@ -143,6 +152,7 @@ internal class MusicBrainzCatalogGraph(
                 status = row.string("status"),
                 hasFrontCover = (row["cover-art-archive"] as? JsonObject)
                     ?.get("front")?.jsonPrimitive?.booleanOrNull,
+                isVideoOnlyMedia = row.videoOnlyMediaEvidence(),
             )
         }
 
@@ -169,18 +179,47 @@ internal class MusicBrainzCatalogGraph(
             }
             val title = data.string("title")?.takeIf(String::isNotBlank)
                 ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
-            val media = data.array("media")
-            val parsedTracks = media.flatMapIndexed { mediumIndex, medium ->
-                val mediumObj = medium as? JsonObject ?: return@flatMapIndexed emptyList()
+            val media = data["media"] as? JsonArray
+                ?: return MusicBrainzCatalogGraphResult.Failure(
+                    MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                )
+            val decodedByMedium = media.mapIndexed { mediumIndex, medium ->
+                val mediumObj = medium as? JsonObject
+                    ?: return MusicBrainzCatalogGraphResult.Failure(
+                        MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                    )
+                if ("track-offset" in mediumObj && mediumObj.integer("track-offset") != 0) {
+                    return MusicBrainzCatalogGraphResult.Failure(
+                        MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                    )
+                }
                 val number = mediumObj.integer("position")?.takeIf { it > 0 } ?: (mediumIndex + 1)
-                mediumObj.array("tracks").mapIndexedNotNull { index, entry ->
-                    val track = entry as? JsonObject ?: return@mapIndexedNotNull null
-                    val recording = track["recording"] as? JsonObject ?: return@mapIndexedNotNull null
-                    val tid = track.string("id").validMbid() ?: return@mapIndexedNotNull null
-                    val rid = recording.string("id").validMbid() ?: return@mapIndexedNotNull null
+                val rawTracks = mediumObj["tracks"] as? JsonArray
+                    ?: return MusicBrainzCatalogGraphResult.Failure(
+                        MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                    )
+                rawTracks.mapIndexed { index, entry ->
+                    val track = entry as? JsonObject
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
+                    val recording = track["recording"] as? JsonObject
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
+                    val tid = track.string("id").validMbid()
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
+                    val rid = recording.string("id").validMbid()
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
                     val titleText = track.string("title")?.takeIf(String::isNotBlank)
                         ?: recording.string("title")?.takeIf(String::isNotBlank)
-                        ?: return@mapIndexedNotNull null
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
                     MusicBrainzCatalogTrack(
                         trackMbid = tid,
                         recordingMbid = rid,
@@ -195,6 +234,25 @@ internal class MusicBrainzCatalogGraph(
                     )
                 }
             }
+            val parsedTracks = decodedByMedium.flatten()
+            // Media track-count belongs to THIS specific release and medium.
+            // Truncated or undecodable Tracks cannot be published as a
+            // complete edition or overwrite an existing offline tracklist.
+            val declaredCountIncomplete = media.indices.any { index ->
+                val medium = media[index] as? JsonObject ?: return@any false
+                if ("track-count" !in medium) return@any false
+                val expected = medium.integer("track-count") ?: return@any true
+                val rawTracks = medium["tracks"] as? JsonArray ?: return@any true
+                expected < 0 || rawTracks.size != expected ||
+                    decodedByMedium[index].size != expected ||
+                    decodedByMedium[index].map { it.trackMbid }.distinct().size != expected
+            }
+            if (declaredCountIncomplete ||
+                parsedTracks.map { it.trackMbid }.distinct().size != parsedTracks.size) {
+                return MusicBrainzCatalogGraphResult.Failure(
+                    MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                )
+            }
             // An MB Track ID uniquely identifies its edition-specific Recording.
             // Contradictory rows are not silently collapsed into arbitrary truth.
             if (parsedTracks.groupBy(MusicBrainzCatalogTrack::trackMbid)
@@ -203,7 +261,13 @@ internal class MusicBrainzCatalogGraph(
                     MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
                 )
             }
-            val tracks = parsedTracks.distinctBy(MusicBrainzCatalogTrack::trackMbid)
+            val tracks = parsedTracks.sortedWith(
+                compareBy<MusicBrainzCatalogTrack> { it.mediumNumber }
+                    .thenBy { it.trackNumber }
+                    .thenBy { it.trackMbid },
+            )
+            val mediaEvidence = data.videoOnlyMediaEvidence()
+            val recordingEvidence = data.videoOnlyRecordingEvidence()
             MusicBrainzCatalogGraphResult.Success(MusicBrainzCatalogReleaseDetail(
                 musicBrainzId = normalized,
                 groupMbid = (data["release-group"] as? JsonObject)?.string("id").validMbid(),
@@ -212,6 +276,15 @@ internal class MusicBrainzCatalogGraph(
                 country = data.string("country"),
                 releaseDate = data.string("date"),
                 tracks = tracks,
+                isVideoOnlyContent = when {
+                    // Conflicting positive source fields are not proof of an
+                    // audio-only or video-only edition. Keep it unknown.
+                    mediaEvidence != null && recordingEvidence != null &&
+                        mediaEvidence != recordingEvidence -> null
+                    mediaEvidence == true || recordingEvidence == true -> true
+                    mediaEvidence == false || recordingEvidence == false -> false
+                    else -> null
+                },
             ))
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
@@ -256,6 +329,74 @@ internal class MusicBrainzCatalogGraph(
             )
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
+        }
+    }
+
+    /**
+     * Official MusicBrainz releases may contain only video media. A medium
+     * format is positive evidence only when it is unambiguously video-specific.
+     * DVD-Audio, CD and mixed CD/DVD packages remain eligible; Digital Media
+     * can ALSO contain video files, so its format alone is inconclusive.
+     * Omitted / ambiguous formats (e.g. Blu-ray) are not proof of audio.
+     * Uses the same source-supported 'inc=media' on the existing browse GET.
+     */
+    private fun JsonObject.videoOnlyMediaEvidence(): Boolean? {
+        val mediums = this["media"] as? JsonArray ?: return null
+        if (mediums.isEmpty()) return null
+        val formats = mediums.map { (it as? JsonObject)?.string("format")
+            ?.lowercase(Locale.ROOT) }
+        val explicitlyVideo = setOf(
+            "dvd-video", "dualdisc (dvd-video side)",
+            "dvdplus (dvd-video side)", "vcd", "svcd",
+            "vhs", "betamax", "laserdisc", "8\" laserdisc", "12\" laserdisc",
+        )
+        val explicitlyAudio = setOf(
+            "cd", "dvd-audio", "vinyl", "cassette",
+            "sacd", "minidisc",
+            "dualdisc (cd side)", "dualdisc (dvd-audio side)",
+            "dvdplus (cd side)", "dvdplus (dvd-audio side)",
+        )
+        return when {
+            formats.all { it != null && it in explicitlyVideo } -> true
+            formats.any { it != null && it in explicitlyAudio } -> false
+            else -> null
+        }
+    }
+
+    /**
+     * Recording.video is per Recording, not per ReleaseGroup.
+     * Never conclude that ALL tracks are videos if an included medium's
+     * track-count exceeds the returned rows, a medium is malformed, or one
+     * medium has no usable track array. Unknown video flags stay unknown.
+     */
+    private fun JsonObject.videoOnlyRecordingEvidence(): Boolean? {
+        val media = this["media"] as? JsonArray ?: return null
+        if (media.isEmpty()) return null
+        val flags = mutableListOf<Boolean?>()
+        for (medium in media) {
+            val item = medium as? JsonObject ?: return null
+            val tracks = item["tracks"] as? JsonArray ?: return null
+            if (tracks.isEmpty()) return null
+            val expectedCount = item.integer("track-count")
+            if (expectedCount != null && expectedCount != tracks.size) return null
+            for (track in tracks) {
+                val itemTrack = track as? JsonObject ?: return null
+                val recording = itemTrack["recording"] as? JsonObject ?: return null
+                // Without both exact Track and Recording MBIDs the source
+                // cannot corroborate a video flag for the edition graph.
+                if (itemTrack.string("id").validMbid() == null ||
+                    recording.string("id").validMbid() == null
+                ) return null
+                flags += runCatching {
+                    recording["video"]?.jsonPrimitive?.booleanOrNull
+                }.getOrNull()
+            }
+        }
+        return when {
+            flags.isEmpty() -> null
+            flags.all { it == true } -> true
+            flags.any { it == false } -> false
+            else -> null
         }
     }
 

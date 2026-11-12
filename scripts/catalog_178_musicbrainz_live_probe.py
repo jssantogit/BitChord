@@ -46,12 +46,21 @@ def percentile(values: list[float], percentile_value: float) -> float | None:
     return round(ordered[floor] * (1 - fractional) + ordered[ceil] * fractional, 2)
 
 
+class PublicMusicBrainzRequestBudgetExceeded(OSError):
+    """An optional bounded diagnostic reached its HTTP attempt ceiling."""
+
+
 class PublicMusicBrainz:
-    def __init__(self, interval: float = 1.1, timeout: float = 22.0):
+    def __init__(self, interval: float = 1.1, timeout: float = 22.0,
+                 max_http_requests: int | None = None):
         if interval < 1.0:
             raise ValueError("A minimum 1 second request spacing is mandatory")
+        if max_http_requests is not None and (type(max_http_requests) is not int or
+                                              max_http_requests < 1):
+            raise ValueError("HTTP request budget must be a positive integer")
         self.interval = interval
         self.timeout = timeout
+        self.max_http_requests = max_http_requests
         self.last_started: float | None = None
         self.latencies_ms: list[float] = []
         self.requests: list[dict] = []
@@ -60,24 +69,34 @@ class PublicMusicBrainz:
         params = {"fmt": "json", **params}
         url = f"{MB_BASE}/{kind}/{ident}?{urlencode(params)}" if kind in ("artist", "release", "recording", "release-group") else f"{MB_BASE}/{kind}?{urlencode(params)}"
         for attempt in range(3):
+            # Retried 429/503 responses are additional real HTTP attempts,
+            # not free logical checks. Enforce the ceiling BEFORE a retry.
+            if self.max_http_requests is not None and len(self.requests) >= self.max_http_requests:
+                raise PublicMusicBrainzRequestBudgetExceeded(
+                    "Bounded MusicBrainz probe HTTP attempt budget exhausted")
             now = time.monotonic()
             if self.last_started is not None:
                 time.sleep(max(0.0, self.interval - (now - self.last_started)))
             self.last_started = time.monotonic()
             t0 = self.last_started
             request = Request(url, headers={"User-Agent": APP_AGENT, "Accept": "application/json"})
+            # Register every actual attempt before network I/O, including
+            # timeouts, malformed JSON and retries. An offline failure must
+            # not disappear from the measured rate-limit budget.
+            attempt_record = {"endpoint": kind, "http_status": None, "latency_ms": None}
+            self.requests.append(attempt_record)
             try:
                 with urlopen(request, timeout=self.timeout) as response:
                     body = response.read(5_000_000)
                     data = json.loads(body)
                     ms = round((time.monotonic() - t0) * 1000, 2)
                     self.latencies_ms.append(ms)
-                    self.requests.append({"endpoint": kind, "http_status": response.status, "latency_ms": ms})
+                    attempt_record.update({"http_status": response.status, "latency_ms": ms})
                     return data
             except HTTPError as exc:
                 ms = round((time.monotonic() - t0) * 1000, 2)
                 self.latencies_ms.append(ms)
-                self.requests.append({"endpoint": kind, "http_status": exc.code, "latency_ms": ms})
+                attempt_record.update({"http_status": exc.code, "latency_ms": ms})
                 if exc.code not in (429, 503) or attempt == 2:
                     raise
                 wait_seconds = 1.5 * (attempt + 1)
@@ -94,6 +113,11 @@ class PublicMusicBrainz:
                         except (TypeError, ValueError, OverflowError):
                             pass
                 time.sleep(wait_seconds)
+            except (URLError, OSError, ValueError):
+                ms = round((time.monotonic() - t0) * 1000, 2)
+                self.latencies_ms.append(ms)
+                attempt_record["latency_ms"] = ms
+                raise
         raise RuntimeError("Retry loop exhausted")
 
 

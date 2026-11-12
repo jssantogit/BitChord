@@ -63,6 +63,7 @@ class CanonicalCatalogArtistMigrationTest {
                 CanonicalCatalogDatabase.MIGRATION_13_14,
                 CanonicalCatalogDatabase.MIGRATION_14_15,
                 CanonicalCatalogDatabase.MIGRATION_15_16,
+                CanonicalCatalogDatabase.MIGRATION_16_17,
             )
             .allowMainThreadQueries()
             .build()
@@ -95,7 +96,7 @@ class CanonicalCatalogArtistMigrationTest {
         }
         sql.query("PRAGMA user_version").use { cursor ->
             assertTrue(cursor.moveToFirst())
-            assertEquals(16, cursor.getInt(0))
+            assertEquals(17, cursor.getInt(0))
         }
         sql.query("SELECT COUNT(*) FROM catalog_artist").use { cursor ->
             assertTrue(cursor.moveToFirst())

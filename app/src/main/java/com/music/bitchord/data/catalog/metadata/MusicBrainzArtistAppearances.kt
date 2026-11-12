@@ -115,6 +115,31 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         val groupId = group.appearanceText("id")?.lowercase(Locale.ROOT)
             ?: return@mapNotNull null
         if (!ARTIST_APPEARANCE_MBID.matches(groupId)) return@mapNotNull null
+        // A different edition-level credit does not prove a different
+        // ReleaseGroup artist. When structured group credits are explicitly
+        // supplied, ALL credited artist objects must have valid MBIDs before
+        // classifying this as someone else's release. Malformed or empty
+        // credits are inconclusive, never positive guest evidence.
+        //
+        // Omitted group credits are not a negative identity assertion. Keep
+        // the previous track-scoped behavior in that case; MusicBrainz
+        // browse responses may contain partial nested entities.
+        group["artist-credit"]?.let { supplied ->
+            val parts = supplied as? JsonArray ?: return@mapNotNull null
+            var verifiedArtists = 0
+            for (part in parts) {
+                if (part is JsonPrimitive && part.isString) continue
+                val credited = (part as? JsonObject)?.get("artist") as? JsonObject
+                    ?: return@mapNotNull null
+                val creditedId = credited.appearanceText("id")
+                    ?.lowercase(Locale.ROOT)
+                    ?.takeIf(ARTIST_APPEARANCE_MBID::matches)
+                    ?: return@mapNotNull null
+                verifiedArtists++
+                if (creditedId == target) return@mapNotNull null
+            }
+            if (verifiedArtists == 0) return@mapNotNull null
+        }
         val title = group.appearanceText("title")?.takeIf { it.length <= 180 }
             ?: return@mapNotNull null
         if (!canonicalStreamingTitleIsSafe(title) ||

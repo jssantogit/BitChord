@@ -16,7 +16,7 @@ internal data class CatalogReleaseGroupEntity(
     val artistDisplay: String?,
     val primaryType: String?,
     val firstReleaseDate: String?,
-    /** Null means no secondary-type evidence; never infer tags from titles. */
+    /** Null means unavailable; empty string means verified zero secondary types. */
     val secondaryTypes: String? = null,
 )
 

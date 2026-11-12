@@ -211,6 +211,34 @@ class MusicBrainzCatalogSearchTest {
     }
 
 
+    @Test fun emptySecondaryTypeListIsExplicitRemovalButMissingFieldIsUnknown() = runBlocking {
+        val group = "11111111-1111-4111-8111-111111111111"
+        var includeEmpty = true
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    val field = if (includeEmpty) ""","secondary-types":[]""" else ""
+                    return """{"count":1,"offset":0,"release-groups":[{
+                        "id":"$group","title":"Official album","primary-type":"Album"$field
+                    }]}"""
+                }
+            },
+        ))
+        val empty = (search.searchReleaseGroups("Official album") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+            >).page.items.single()
+        assertEquals("", empty.secondaryTypes)
+        includeEmpty = false
+        val absent = (search.searchReleaseGroups("Official album") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+            >).page.items.single()
+        assertEquals(null, absent.secondaryTypes)
+    }
+
     @Test fun recordingSearchKeepsVerifiedReleaseCoverAssociationWithoutGuessingTitle() = runBlocking {
         val recordingId = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
         val release1 = "11111111-1111-4111-8111-111111111111"
@@ -368,6 +396,47 @@ class MusicBrainzCatalogSearchTest {
         assertTrue(!com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording(rows.last()))
     }
 
+    @Test fun missingRecordingVideoOrReleaseListIsUnknownNotNegativeAudioEvidence() = runBlocking {
+        val knownVideo = "11111111-1111-4111-8111-111111111111"
+        val unknownVideo = "22222222-2222-4222-8222-222222222222"
+        val audio = "33333333-3333-4333-8333-333333333333"
+        val edition = "44444444-4444-4444-8444-444444444444"
+        val group = "55555555-5555-4555-8555-555555555555"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"count":3,"offset":0,"recordings":[
+                    {"id":"$knownVideo","title":"Actual video","video":true,
+                     "releases":[{"id":"$edition","status":"Official",
+                     "release-group":{"id":"$group","primary-type":"Album"}}]},
+                    {"id":"$unknownVideo","title":"Incomplete search result"},
+                    {"id":"$audio","title":"Original recording","video":false,
+                     "releases":[{"id":"$edition","status":"Official",
+                     "release-group":{"id":"$group","primary-type":"Album"}}]}
+                ]}"""
+            },
+        ))
+        val rows = (search.searchRecordings("recording") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit
+            >).page.items
+        assertEquals(listOf(knownVideo, unknownVideo, audio), rows.map { it.musicBrainzId })
+        // An explicitly video Recording does not have evidence of audio even
+        // when the search index lists it in an Official Album group.
+        assertEquals(true, rows[0].isVideo)
+        assertEquals(false, rows[0].hasOfficialAudioRelease)
+        assertEquals(null, rows[0].coverReleaseMbid)
+        // Missing fields are NOT video=false or "no official audio release".
+        // A later sparse search result must not overwrite positive Room proof.
+        assertEquals(null, rows[1].isVideo)
+        assertEquals(null, rows[1].hasOfficialAudioRelease)
+        assertEquals(null, rows[1].coverReleaseMbid)
+        assertEquals(false, rows[2].isVideo)
+        assertEquals(true, rows[2].hasOfficialAudioRelease)
+        assertEquals(edition, rows[2].coverReleaseMbid)
+    }
+
     @Test fun releasePresentationAllowsOnlyExplicitOfficialEdtionsAndKeepsRawMbids() {
         val official = com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit(
             "11111111-1111-4111-8111-111111111111", "Get Up", "XW",
@@ -400,4 +469,40 @@ class MusicBrainzCatalogSearchTest {
         assertTrue(!check(good.copy(hasOfficialAudioRelease = false)))
     }
 
+
+    @Test fun officialOtherAndBroadcastReleasesMustNotEnterStreamingEditionTiles() = runBlocking {
+        val album = "11111111-1111-4111-8111-111111111111"
+        val video = "22222222-2222-4222-8222-222222222222"
+        val broadcast = "33333333-3333-4333-8333-333333333333"
+        val unknown = "44444444-4444-4444-8444-444444444444"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"count":4,"offset":0,"releases":[
+                    {"id":"$album","title":"Official studio album","status":"Official",
+                     "release-group":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                                      "primary-type":"Album"}},
+                    {"id":"$video","title":"Official visual edition","status":"Official",
+                     "release-group":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                                      "primary-type":"Other"}},
+                    {"id":"$broadcast","title":"Official radio edition","status":"Official",
+                     "release-group":{"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                                      "primary-type":"Broadcast"}},
+                    {"id":"$unknown","title":"Unclassified official release","status":"Official",
+                     "release-group":{"id":"dddddddd-dddd-4ddd-8ddd-dddddddddddd"}}
+                ]}"""
+            },
+        ))
+        val page = (search.searchReleases("official") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+            >).page
+        // Keep searchable source records; only streaming-style presentation
+        // should reject the explicit non-audio ReleaseGroup types.
+        assertEquals(4, page.items.size)
+        assertEquals(listOf(album, unknown), page.items.filter {
+            com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease(it)
+        }.map { it.musicBrainzId })
+    }
 }

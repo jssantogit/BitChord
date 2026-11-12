@@ -114,7 +114,7 @@ internal data class CanonicalArtistReleaseSections(
 internal fun canonicalArtistReleaseSections(
     releases: List<ReleaseEntity>,
     evidence: Map<String, CanonicalArtistReleaseEvidence>,
-    recordingCountsByRelease: Map<String, Int> = emptyMap(),
+    _recordingCountsByRelease: Map<String, Int> = emptyMap(),
 ): CanonicalArtistReleaseSections {
     fun browseKind(release: ReleaseEntity): String {
         val type = evidence[release.id]?.primaryType?.trim()?.lowercase(java.util.Locale.ROOT)
