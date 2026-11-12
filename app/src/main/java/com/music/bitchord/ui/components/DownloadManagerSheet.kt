@@ -34,7 +34,6 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,6 +48,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -62,6 +62,7 @@ import com.music.bitchord.download.DownloadProgress
 import com.music.bitchord.download.DownloadSession
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.ui.haptics.Haptic
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.haptics.rememberHaptics
 
 /**
@@ -97,7 +98,7 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tint by animateColorAsState(
         targetValue = when {
             failed -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.primary
+            else -> appleMusicKeyColor()
         },
         animationSpec = tween(220),
         label = "downloadRingTint",
@@ -184,12 +185,12 @@ internal fun TopBarDownloadAction(
     Box(
         modifier = Modifier
             .size(AppleFloatingControlMetrics.toolbarDiameter)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
             .testTag("apple-topbar-download-action"),
         contentAlignment = Alignment.Center,
     ) {
-        IconButton(onClick = onClick, modifier = Modifier.fillMaxSize()) {
-            content()
-        }
+        content()
     }
 }
 
