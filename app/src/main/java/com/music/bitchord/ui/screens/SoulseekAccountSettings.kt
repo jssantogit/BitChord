@@ -2,12 +2,12 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.NativeAlertHost
+import com.music.bitchord.ui.components.NativeSettingsSecondaryAction
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.theme.appleMusicKeyColor
 
 import android.app.Activity
 import android.view.WindowManager
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -22,7 +22,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -212,16 +211,11 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            OutlinedButton(
+            NativeSettingsSecondaryAction(
+                label = "Testar conexão",
                 onClick = { testAndMaybeSave(false) },
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                ),
-            ) { Text("Testar conexão") }
+            )
             Button(
                 onClick = { testAndMaybeSave(true) },
                 enabled = !busy,
@@ -233,16 +227,11 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
                 ),
             ) { Text("Conectar e salvar conta") }
             if (savedUsername != null) {
-                OutlinedButton(
+                NativeSettingsSecondaryAction(
+                    label = "Desconectar e esquecer credenciais",
                     onClick = { confirmForget = true },
                     enabled = !busy,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                ) { Text("Desconectar e esquecer credenciais") }
+                )
             }
         }
     }
