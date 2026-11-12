@@ -21,6 +21,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import com.music.bitchord.ui.components.FrostedTopBar
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.assertHeightIsEqualTo
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
@@ -40,6 +43,18 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class HomeHeaderTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun homeOverflowUsesTheSame40DpVisualControlAsTheOtherHeaders() {
+        compose.setContent {
+            MaterialTheme {
+                HomeTitle(title = "Explorar", actions = listOf(
+                    HomeHeaderAction("Configurações") {},
+                ))
+            }
+        }
+        compose.onNodeWithTag("home-overflow").assertWidthIsEqualTo(40.dp)
+        compose.onNodeWithTag("home-overflow").assertHeightIsEqualTo(40.dp)
+    }
 
     @Test fun homeTitleIsStartAlignedAndOldListenNowHeadingIsAbsent() {
         compose.setContent {
