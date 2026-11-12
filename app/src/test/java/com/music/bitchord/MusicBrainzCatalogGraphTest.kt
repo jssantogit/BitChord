@@ -40,6 +40,29 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(4, page.nextOffset)
     }
 
+    @Test fun explicitlyContradictoryNestedGroupCannotHijackScopedReleaseBrowse() = runBlocking {
+        val other = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String =
+                    """{"release-count":3,"release-offset":0,"releases":[
+                        {"id":"$worldwide","title":"Same album",
+                         "release-group":{"id":"$other"}},
+                        {"id":"271b31f8-8ab6-483c-97d9-8f0fabb2d4f4",
+                         "title":"Same album","release-group":{"id":"$group"}},
+                        {"id":"11111111-1111-4111-8111-111111111111","title":"Same album"}
+                    ]}"""
+            },
+        ))
+        val page = (graph.browseGroupReleases(group) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>).value
+        assertEquals(3, page.consumedCount)
+        assertEquals(2, page.items.size)
+        assertEquals(listOf(group, group), page.items.map { it.releaseGroupMbid })
+        assertTrue(page.items.none { it.musicBrainzId == worldwide })
+    }
+
     private val group = "529f87a1-1081-48a4-8ee1-3c08de229858"
     private val worldwide = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
     private val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
