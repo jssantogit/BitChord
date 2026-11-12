@@ -20,6 +20,8 @@ import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowCatalog
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowRelease
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsSourceOnlyDiscovery
 import com.music.bitchord.data.catalog.metadata.discogs.loadCompleteMusicBrainzArtistGroupTitles
+import com.music.bitchord.data.catalog.metadata.discogs.loadCompleteMusicBrainzArtistReleaseTitles
+import com.music.bitchord.data.catalog.metadata.discogs.completeDiscogsArtistKnownTitles
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -68,6 +70,17 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
                 val completedTitles = if (musicBrainzCatalogComplete) knownNames
                     else loadCompleteMusicBrainzArtistGroupTitles(artistMbid)
                         ?: return@withContext emptyList<DiscogsShadowRelease>()
+                // ReleaseGroup titles alone are insufficient for editions
+                // whose names differ (e.g. ROMANCE : UNTOLD -daydream-).
+                // Browse only up to three Official MB Release pages; if the
+                // artist edition index is incomplete, suppress source-only
+                // suggestions rather than falsely labeling a known edition new.
+                val completedReleaseTitles =
+                    loadCompleteMusicBrainzArtistReleaseTitles(artistMbid)
+                        ?: return@withContext emptyList<DiscogsShadowRelease>()
+                val allKnownTitles = completeDiscogsArtistKnownTitles(
+                    completedTitles, completedReleaseTitles,
+                ) ?: return@withContext emptyList<DiscogsShadowRelease>()
                 val safe = when (discogsArtistDiscoveryMode(
                     enabled = DiscogsEditionAccess.ENABLED,
                     tokenConfigured = DiscogsEditionAccess.isSearchConfigured(),
@@ -76,13 +89,13 @@ internal fun rememberDiscogsArtistSupplementaryReleases(
                         DiscogsEditionAccess.discovery.findForArtist(
                             artistName = artistName,
                             mbCatalogChecked = true,
-                            knownMusicBrainzTitles = completedTitles,
+                            knownMusicBrainzTitles = allKnownTitles,
                         )
                     DiscogsArtistDiscoveryMode.PUBLIC_ARTIST_LINK ->
                         DiscogsEditionAccess.publicArtistDiscovery.findForArtist(
                             musicBrainzArtistMbid = artistMbid,
                             artistName = artistName,
-                            completedMusicBrainzTitles = completedTitles,
+                            completedMusicBrainzTitles = allKnownTitles,
                         )
                     DiscogsArtistDiscoveryMode.DISABLED -> emptyList()
                 }
