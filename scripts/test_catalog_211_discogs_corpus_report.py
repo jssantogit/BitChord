@@ -438,6 +438,29 @@ class CorpusReportTests(unittest.TestCase):
             self.assertFalse(result["complete"], cohort)
             self.assertIsNone(result["metrics"])
 
+    def test_marketing_single_vs_mb_ep_is_editorial_dispute_not_confirmed_type_error(self):
+        source = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        christmas = next(x for x in source["cases"] if x["id"] == "A-03")
+        self.assertTrue(christmas["editorial_type_dispute_only"])
+        result = report(source)
+        self.assertEqual([], result["errors"])
+        self.assertTrue(result["complete"])
+        self.assertEqual(1, result["metrics"]["editorial_type_disputes"])
+        self.assertEqual({"corrected":0, "eligible":0},
+                         result["metrics"]["type_correction"])
+        self.assertFalse(result["metrics"]["false_positive_count"])
+
+    def test_type_dispute_flag_cannot_hide_matching_types_or_unreviewed_cases(self):
+        source = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        a04 = next(x for x in source["cases"] if x["id"] == "A-04")
+        a04["editorial_type_dispute_only"] = True
+        self.assertTrue(any("invalid editorial type dispute" in e
+                            for e in report(source)["errors"]))
+
     def test_unknown_type_fill_is_not_counted_as_correction(self):
         cases = [case(c, i) for c in ("type", "unlinked", "source_only")
                  for i in range(10)]
