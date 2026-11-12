@@ -19,6 +19,65 @@ class DiscogsEditorialArtistShelvesTest {
     private val unknown = row("00000000-0000-4000-8000-000000000102", "Other")
     private val ep = row("00000000-0000-4000-8000-000000000103", "EP")
 
+    @Test fun expandedArtistGridMustUseCurrentProjectionNotOldClickedShelfSnapshot() {
+        val stale = HomeShelf("Singles e EPs", listOf(
+            ShelfItem("HOT", "Single", null, null, "catalog:RELEASE_GROUP:44adb7df-66bd-4ebe-a43a-3ea45a93529d"),
+            ShelfItem("HOT", "EP", null, null, "catalog:RELEASE_GROUP:50bcea80-692f-4e36-a7a5-825a3233cb13"),
+        ))
+        val current = HomeShelf("Singles e EPs", stale.items.drop(1))
+        assertEquals(current, com.music.bitchord.ui.canonicalArtistCurrentExpandedShelf(
+            stale, listOf(current)))
+        assertNull(com.music.bitchord.ui.canonicalArtistCurrentExpandedShelf(stale, emptyList()))
+        val discovery = HomeShelf("Para descobrir", stale.items)
+        assertEquals(discovery, com.music.bitchord.ui.canonicalArtistCurrentExpandedShelf(
+            discovery, listOf(current)))
+    }
+
+    @Test fun duplicateNamedBoompalaRemixesMustDisplayRealMusicBrainzCollaborators() {
+        fun row(id: String, credited: String) = CanonicalCatalogSearchRow(
+            musicBrainzId = id, kind = CanonicalSearchKind.RELEASE_GROUP,
+            title = "BOOMPALA", subtitle = credited, releaseKind = "Single",
+            secondaryTypes = "Remix", releaseDate = "2026-07-24",
+        )
+        val groups = listOf(
+            row("00000000-0000-4000-8000-000000000301", "LE SSERAFIM feat. SANTOS BRAVOS"),
+            row("00000000-0000-4000-8000-000000000302", "LE SSERAFIM feat. Ayra Starr"),
+            row("00000000-0000-4000-8000-000000000303", "LE SSERAFIM feat. GURU RANDHAWA"),
+            row("00000000-0000-4000-8000-000000000304", "LE SSERAFIM"),
+        )
+        val original = listOf(HomeShelf("Singles e EPs", groups.map {
+            ShelfItem("BOOMPALA", "Single · Remix", null, null,
+                "catalog:RELEASE_GROUP:${it.musicBrainzId}")
+        }))
+        val output = com.music.bitchord.ui.canonicalArtistDisambiguateCreditedCollisions(
+            original, groups, "LE SSERAFIM",
+        )
+        val cards = output.single().items
+        assertEquals(4, cards.size)
+        assertEquals("BOOMPALA (feat. SANTOS BRAVOS)", cards[0].title)
+        assertEquals("BOOMPALA (feat. Ayra Starr)", cards[1].title)
+        assertEquals("BOOMPALA (feat. GURU RANDHAWA)", cards[2].title)
+        assertEquals("BOOMPALA", cards[3].title)
+        assertEquals(original.single().items.map { it.browseId }, cards.map { it.browseId })
+        assertTrue(cards.all { it.subtitle == "Single · Remix" })
+    }
+
+    @Test fun identicalTitleWithoutSpecificArtistCreditMustNotInventAnEdition() {
+        val a = CanonicalCatalogSearchRow(
+            "00000000-0000-4000-8000-000000000305",
+            CanonicalSearchKind.RELEASE_GROUP, "Same", "LE SSERAFIM",
+            releaseKind = "Single", secondaryTypes = "Remix",
+        )
+        val b = a.copy(musicBrainzId = "00000000-0000-4000-8000-000000000306")
+        val shelves = listOf(HomeShelf("Singles e EPs", listOf(a,b).map {
+            ShelfItem("Same", "Single · Remix", null, null,
+                "catalog:RELEASE_GROUP:${it.musicBrainzId}")
+        }))
+        assertEquals(shelves,
+            com.music.bitchord.ui.canonicalArtistDisambiguateCreditedCollisions(
+                shelves, listOf(a,b), "LE SSERAFIM"))
+    }
+
     @Test fun musicBrainzLinkedHotTitleSingleCollapsesOnlyOnArtistWhenParentEpCardPresent() {
         // Exact public MusicBrainz release-group relation:
         // HOT Single 44adb7df -> HOT EP 50bcea80 (single/EP taken from).
