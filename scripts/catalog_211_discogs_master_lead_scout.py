@@ -271,6 +271,9 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
                 not positive_id(master.get("main_release"))):
                 lead["status"] = "invalid_master"
                 continue
+            # Source literal only; a Master main_release is not proof that
+            # any chosen MusicBrainz edition is the same pressing.
+            lead["discogs_master_main_release_id"] = master["main_release"]
             version_state, ids = versions(fetch(
                 f"https://api.discogs.com/masters/{mid}/versions?page=1&per_page=8"))
             if version_state not in (
@@ -391,6 +394,7 @@ def main():
         "artist_statuses": [x["status"] for x in result["artists"]],
         "master_leads": [{"artist": x["artist"], "title": x["group_title"],
                           "group": x["group_mbid"], "master": x["master_id"],
+                          "main_release": x.get("discogs_master_main_release_id"),
                           "status": x["status"], "versions": x["version_ids"],
                           "mb_status": x.get("mb_release_browse_status"),
                           "mb_release_ids": [r["release_mbid"] for r in
