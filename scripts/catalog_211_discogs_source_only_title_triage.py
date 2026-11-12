@@ -68,8 +68,11 @@ def parse_mb_group_search(payload: object, artist_mbid: str) -> list[str] | None
     if not isinstance(payload,dict) or not MBID.fullmatch(artist_mbid):
         return None
     total,groups = payload.get('count'),payload.get('release-groups')
-    if (type(total) is not int or not 0 <= total <= SEARCH_LIMIT or
-        not isinstance(groups,list) or len(groups) != total):
+    # The search API's count is the total matching groups, not the page
+    # length. Validate this bounded first page and keep its identity leads;
+    # later pages remain unobserved and never justify absence claims.
+    if (type(total) is not int or total < 0 or
+        not isinstance(groups,list) or len(groups) != min(total, SEARCH_LIMIT)):
         return None
     seen = set()
     for group in groups:
