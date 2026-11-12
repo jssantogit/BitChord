@@ -121,4 +121,30 @@ class TitleTriageTest(unittest.TestCase):
         self.assertEqual(0,r['provider_requests'])
 
 
+    def test_musicbrainz_total_count_above_limit_keeps_first_page_group_leads(self):
+        # MusicBrainz search 'count' can exceed the 10 records returned.
+        page = {'count': 11, 'release-groups': [
+            {'id': GROUP if n == 9 else f"00000000-0000-4000-8000-{n:012x}",
+             'title': 'Possible',
+             'artist-credit': [{'artist': {'id': ARTIST}}]}
+            for n in range(10)
+        ]}
+        self.assertEqual(10, len(parse_mb_group_search(page, ARTIST)))
+        doc = editions(barcodes=[])
+        doc['observations'][0]['title'] = 'Possible'
+        result = triage(index(), doc, prior(), lambda _: page)
+        self.assertEqual(1, result['provider_requests'])
+        self.assertEqual('mb_title_index_lead_not_edition',
+                         result['observations'][0]['status'])
+        self.assertIn(GROUP, result['observations'][0]['mb_group_candidate_mbids'])
+        self.assertFalse(result['observations'][0]['confirmed_missing_from_musicbrainz'])
+
+    def test_partial_first_page_is_still_invalid_not_absence_evidence(self):
+        page = {'count': 11, 'release-groups': [
+            {'id': GROUP, 'title': 'Possible',
+             'artist-credit': [{'artist': {'id': ARTIST}}]}
+        ]}
+        self.assertIsNone(parse_mb_group_search(page, ARTIST))
+
+
 if __name__=='__main__': unittest.main()
