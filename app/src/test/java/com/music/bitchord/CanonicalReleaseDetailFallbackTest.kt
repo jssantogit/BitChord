@@ -7,6 +7,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
+import com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseJsonCompleteness
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
