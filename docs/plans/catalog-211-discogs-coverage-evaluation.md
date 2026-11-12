@@ -1574,3 +1574,69 @@ de regressões e sondagens.
 ausência aparente). **Zero recuperação C comprovada, zero correção
 de tipo, zero ganho UI medido.** Não inferir métricas globais
 com 16 slots não revisados.
+
+## C — busca por título de edição, além do nome do ReleaseGroup (11/11/2026, Bahia)
+
+### Problema observado depois de C-05
+
+O catálogo MusicBrainz registra ENHYPEN `ROMANCE : UNTOLD -daydream-` como
+**Release Official**, enquanto seu ReleaseGroup tem o nome do álbum original.
+Isso comprovou um falso candidato de ausência Discogs-only no scanner de
+títulos de ReleaseGroups; a revisão C-05 foi aprovada como negativa.
+Entretanto, uma consulta literal `release:"Romance: Untold -Daydream-" AND
+arid:<ENHYPEN Artist MBID>` ao índice MusicBrainz de **Releases** também
+não retornou o Release conhecido na primeira página, conforme
+[CI #43138407037](https://github.com/jssantogit/BitChord/actions/runs/43138407037):
+`no_c05_exact_release_in_first_page_not_absence`, um GET real e zero
+correspondências. O Release `4c42b226` continua comprovado por sua
+página específica no MusicBrainz; **zero resultados de busca não é
+evidência de ausência física, nem de ausência no banco de dados.**
+A sintaxe `release` é prevista no índice de Release e ReleaseGroup
+do MusicBrainz, mas resultados de índice não constituem enumeração
+canônica exaustiva de edições.
+
+### Correção progressiva do diagnóstico, sem promover provas
+
+O script `scripts/catalog_211_discogs_source_only_title_triage.py`
+passou a distinguir buscas *ReleaseGroup* e *Release*. Após busca
+de RG por título e, quando aplicável, por prefixo literal de barra,
+ele pode consultar o índice de **MusicBrainz Release**, sempre com
+`arid` do mesmo Artist MBID. A resposta precisa validar cada MBID de
+Release e pai ReleaseGroup, artista creditado exato e título de
+Release normalizado **integralmente idêntico** ao título Discogs;
+um acerto nunca autoriza identidade da prensagem Discogs.
+
+Após um índice de frase literal não encontrar a edição conhecida,
+foi adicionado um **último fallback opcional** de *termo final distintivo*
+do próprio título: pelo menos três tokens no título, último token
+ASCII com 6–24 letras, sem descritores genéricos como `remix`,
+`version`, `japanese`, `deluxe` ou `instrumental`. O termo só
+seleciona a primeira página de até dez resultados sob o mesmo
+artista, e não gera correspondência sem uma checagem posterior
+de **título inteiro + Artist MBID + Release/ReleaseGroup MBIDs
+tipados**. Resultados do mesmo artista com outros títulos são
+ignorados, sem fusão de remixes/versões; crédito incorreto,
+IDs repetidos e páginas inconsistentes são rejeitados. O
+orçamento máximo do pipeline investigativo foi explicitado como
+**quatro GETs MusicBrainz por candidato** (máximo oito candidatos;
+a pesquisa por barcode tem orçamento separado), não busca
+indefinida. Falhas HTTP e ausência de hit continuam inconclusivas;
+nenhum marcador `absent_in_musicbrainz` vira `true` por causa
+de uma pesquisa vazia.
+
+A regressão de ReleaseGroup diferente já havia passado em
+[CI #43138056041](https://github.com/jssantogit/BitChord/actions/runs/43138056041).
+A insuficiência do literal foi reproduzida em
+[RED #43138903490](https://github.com/jssantogit/BitChord/actions/runs/43138903490).
+O workflow público foi atualizado para realizar até dois GETs
+no controle C-05 (frase literal e termo distintivo) e guardar
+`discogs-211-c05-exact-release-search.json`. A observação do
+fallback de termo ainda depende do último resultado público;
+não antecipar recuperação, equivalência de edição, correção
+de tipo ou Android.
+
+O follow-up C reproduz a mesma decisão sem reciclar os
+IDs Discogs já revisados. **O novo scanner é pesquisa
+investigativa; a estante Android ainda não usa esses resultados.**
+Nenhuma mudança de UI foi feita e o corpus permanece
+**14/30 (A2, B10, C2), zero recuperações C comprovadas**.
