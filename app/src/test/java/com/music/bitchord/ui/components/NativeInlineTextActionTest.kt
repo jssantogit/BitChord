@@ -56,6 +56,33 @@ class NativeInlineTextActionTest {
         compose.runOnIdle { assertEquals(0, calls) }
     }
 
+    @Test fun downloadCancelAndClearTextActionsKeepSeparateCallbacks() {
+        var cancelled = 0
+        var cleared = 0
+        compose.setContent {
+            MaterialTheme {
+                androidx.compose.foundation.layout.Row {
+                    NativeInlineTextAction(
+                        label = "Cancelar todos",
+                        destructive = true,
+                        onClick = { cancelled++ },
+                    )
+                    NativeInlineTextAction(
+                        label = "Limpar",
+                        subdued = true,
+                        onClick = { cleared++ },
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText("Cancelar todos").performClick()
+        compose.onNodeWithText("Limpar").performClick()
+        compose.runOnIdle {
+            assertEquals(1, cancelled)
+            assertEquals(1, cleared)
+        }
+    }
+
     @Test fun destructivePartyActionCanRetainAnIndependentTag() {
         var removals = 0
         compose.setContent {
