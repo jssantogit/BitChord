@@ -33,6 +33,21 @@ def case(cohort, i):
                 visible=True, absent_in_musicbrainz=cohort == "source_only")
 
 class CorpusReportTests(unittest.TestCase):
+    def test_reusing_one_discogs_edition_in_b_and_c_must_be_rejected(self):
+        # The historical manifest reused B-01 MEMORABILIA as C-08 and
+        # B-02 Setsuna Hanabi as C-07. Cross-cohort sampling cannot count
+        # the SAME Discogs Release twice, even under different tests.
+        source = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        errors = report(source)["errors"]
+        self.assertTrue(
+            any("C-07: duplicate reviewed Discogs edition across cohorts"
+                in error for error in errors), errors)
+        self.assertTrue(
+            any("C-08: duplicate reviewed Discogs edition across cohorts"
+                in error for error in errors), errors)
+
     def test_real_staged_manifest_reports_selected_but_no_reviewed_or_metrics(self):
         manifest = json.loads(Path(
             "docs/plans/catalog-211-discogs-corpus-manifest.json"
