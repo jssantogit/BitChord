@@ -84,6 +84,28 @@ class CanonicalPreferredVideoEditionTest {
         ).map { it.musicBrainzId })
     }
 
+    @Test fun sameTitleHotEpCannotBorrowArtworkFromSeparateSameTitleSingle() {
+        // These are two DIFFERENT real MusicBrainz ReleaseGroups, both named
+        // HOT by LE SSERAFIM. Fixture edition MBIDs are synthetic.
+        val epGroup = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val singleGroup = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
+        val ep = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "HOT", "XW", "2025-03-14",
+            "LE SSERAFIM", status = "Official", releaseGroupMbid = epGroup,
+            hasFrontCover = true,
+        )
+        val single = ep.copy(
+            musicBrainzId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            releaseGroupMbid = singleGroup,
+        )
+        assertEquals(listOf(ep.musicBrainzId), canonicalArtworkEditionsForGroup(
+            listOf(single, ep), "HOT", epGroup,
+        ).map { it.musicBrainzId })
+        assertEquals(listOf(single.musicBrainzId), canonicalArtworkEditionsForGroup(
+            listOf(ep, single), "HOT", singleGroup,
+        ).map { it.musicBrainzId })
+    }
+
     @Test fun confirmedVideoOnlyCachedTrackGraphCannotBecomeDefaultAudio() = runBlocking {
         val stubTrack = MusicBrainzCatalogTrack(
             trackMbid = "33333333-3333-4333-8333-333333333333",

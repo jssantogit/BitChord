@@ -315,6 +315,34 @@ class CanonicalSearchPagingTest {
         ))
     }
 
+    @Test fun identicallyNamedHotEpAndSingleGroupsMustNeverMergeByTitle() {
+        // MusicBrainz identifies HOT as two distinct official works.
+        val hotEp = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val hotSingle = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
+        val ep = CanonicalCatalogSearchRow(
+            hotEp, CanonicalSearchKind.RELEASE_GROUP, "HOT", "LE SSERAFIM",
+            releaseKind = "EP",
+        )
+        val single = CanonicalCatalogSearchRow(
+            hotSingle, CanonicalSearchKind.RELEASE_GROUP, "HOT", "LE SSERAFIM",
+            releaseKind = "Single",
+        )
+        val epEdition = CanonicalCatalogSearchRow(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            CanonicalSearchKind.RELEASE, "HOT", "LE SSERAFIM",
+            coverGroupMbid = hotEp,
+        )
+        val singleEdition = epEdition.copy(
+            musicBrainzId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            coverGroupMbid = hotSingle,
+        )
+        val rows = canonicalSearchRowsWithoutRedundantEditions(
+            listOf(ep, single, epEdition, singleEdition),
+        )
+        assertEquals(listOf(hotEp, hotSingle), rows.map { it.musicBrainzId })
+        assertEquals(listOf("EP", "Single"), rows.map { it.releaseKind })
+    }
+
     private fun page(
         total: Int, offset: Int, raw: Int,
     ): MusicBrainzCatalogSearchResult.Success<String> =
