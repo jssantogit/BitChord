@@ -99,6 +99,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.music.bitchord.R
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.data.model.Account
 import com.music.bitchord.data.settings.AppSettings
 import dev.chrisbanes.haze.HazeState
@@ -854,7 +855,7 @@ internal fun RefreshPuck(
             if (GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing || fading, reduceMotion)) {
                 CircularProgressIndicator(
                     modifier = indicatorModifier,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = refreshPuckProgressTint(),
                     strokeWidth = 2.5.dp,
                     strokeCap = StrokeCap.Round,
                 )
@@ -875,7 +876,7 @@ internal fun RefreshPuck(
                             // NOT measured progress of the network request.
                             progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
                         },
-                    color = MaterialTheme.colorScheme.primary,
+                    color = refreshPuckProgressTint(),
                     trackColor = Color.Transparent,
                     strokeWidth = 2.5.dp,
                     strokeCap = StrokeCap.Round,
@@ -885,6 +886,10 @@ internal fun RefreshPuck(
         }
     }
 }
+
+/** Active refresh affordance follows the theme-specific Apple Music key color. */
+@Composable
+internal fun refreshPuckProgressTint(): Color = appleMusicKeyColor()
 
 private val PUCK_SIZE = 40.dp
 

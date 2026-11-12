@@ -22,6 +22,8 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -315,4 +317,24 @@ class GlobalAppleTopBarChromeTest {
         compose.onNodeWithText("Unavailable labeled action").assertIsNotEnabled()
     }
 
+
+    @Test fun refreshProgressUsesAppleKeyBlueInBothThemes() {
+        var tint = Color.Unspecified
+        compose.setContent {
+            MaterialTheme(colorScheme = lightColorScheme()) {
+                tint = refreshPuckProgressTint()
+            }
+        }
+        compose.runOnIdle {
+            assertEquals(com.music.bitchord.ui.theme.AppleMusicLightKey, tint)
+        }
+        compose.setContent {
+            MaterialTheme(colorScheme = darkColorScheme()) {
+                tint = refreshPuckProgressTint()
+            }
+        }
+        compose.runOnIdle {
+            assertEquals(com.music.bitchord.ui.theme.AppleMusicDarkKey, tint)
+        }
+    }
 }
