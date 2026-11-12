@@ -8,6 +8,10 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.onNode
+import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.provider.RemoteNumericRating
 import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
@@ -48,6 +52,19 @@ class RemoteRatingsPresentationTest {
             RemoteNumericRating(RemoteNumericRatingKind.VALUE, numeric),
         starred = starred,
     )
+
+    @Test fun fallbackThreeDotRatingMenuUsesTheNativeCompactPopup() {
+        var edits = 0
+        compose.setContent {
+            MaterialTheme {
+                CanonicalCatalogRatingMenu(onEdit = { edits++ })
+            }
+        }
+        compose.onNode(hasClickAction()).performClick()
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+        compose.onNodeWithTag("native-compact-menu-item").performClick()
+        compose.runOnIdle { assertEquals(1, edits) }
+    }
 
     @Test fun remoteOnlyCanonicalRatingIsVisibleWhenLocalRoomIsEmpty() {
         compose.setContent {
