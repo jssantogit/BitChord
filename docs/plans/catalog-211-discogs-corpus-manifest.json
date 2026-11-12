@@ -76,9 +76,9 @@
       "evidence_links": {
         "musicbrainz_release_group": "https://musicbrainz.org/release-group/62812a62-f532-490a-9b52-1feccb3fdaba",
         "discogs_release": "https://www.discogs.com/release/22076131",
-        "independent_editorial": "https://straykids.jype.com/notice?PgIndex=97",
+        "independent_editorial": "https://www.bandwagon.asia/articles/stray-kids-drop-christmas-evel-surprise-single-november-comeback-release-2021",
         "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43135307603",
-        "independent_label_announcement": "https://straykids.jype.com/Default/NoticeList?PgIndex=94",
+        "independent_label_announcement": "https://straykids.jype.com/Mobile/NoticeView?AnSeq=3802&NoticeNumber=485",
         "musicbrainz_release": "https://musicbrainz.org/release/ba0e42d5-a720-4f86-b00f-502292f1a8e2"
       },
       "reviewed_at_utc": "2026-11-12T09:26:00Z",
@@ -172,8 +172,9 @@
       "evidence_links": {
         "musicbrainz_release_group": "https://musicbrainz.org/release-group/48e4a94a-7fe5-4764-8880-b23a91bd7ee3",
         "discogs_release": "https://www.discogs.com/release/35165884",
-        "independent_editorial": "https://nmixx.jype.com/Mobile/NoticeView?AnSeq=6193&NoticeNumber=361",
-        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43191673198"
+        "independent_editorial": "https://www.enmixx.com/en/discography/fe3o4-break",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43191673198",
+        "independent_label_announcement": "https://nmixx.jype.com/Mobile/NoticeView?AnSeq=6193&NoticeNumber=361"
       },
       "reviewed_at_utc": "2026-11-12T09:26:00Z",
       "sources": [
