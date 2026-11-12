@@ -100,3 +100,7 @@ Workflow `Discogs 211 Android native smoke APK` tem `:app:testDevDebugUnitTest`,
 6. Se algum card estiver ausente ou duplicado, enviar captura, nome da seção e, quando disponível, a URL/MBID que o card abre.
 
 Regerar apenas o APK `devDebug` da PR #211, **não** publicar release, **não** fazer merge e não mudar #209/main. O workflow continua exigindo `:app:testDevDebugUnitTest`, regressão `:shared:jvmTest` e montagem do APK com SHA e checksum. O smoke anterior não valida este patch; somente novo APK e observação A54.
+
+### Repetição obrigatória por correção de compilação do fixture (12/11/2026)
+
+O gate focused [#43215915310](https://github.com/jssantogit/BitChord/actions/runs/43215915310) chegou à compilação de testes e identificou exclusivamente a falha de nulabilidade em `DiscogsEditorialArtistShelvesTest.kt` (linha que usava `row.releaseKind: String?` no subtítulo `ShelfItem: String`). O fixture foi corrigido em [`178d0e01`](https://github.com/jssantogit/BitChord/commit/178d0e01c9ef6625fb72f394d4a5098b4a9837b7), com `row.releaseKind.orEmpty()`, sem mudança no código de produto nem redução de cobertura. Solicitar APK **novo** incluindo o fix e refazer todos os gates no SHA publicado; o run anterior não comprova a versão final.
