@@ -24,6 +24,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,6 +54,58 @@ import kotlinx.coroutines.launch
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+
+/**
+ * Single-action status fallback in the same native UIAlertController frame.
+ * The pending state is an actual spinner, not an unavailable verdict. Neither
+ * action nor layout is claimed as a measured Apple Music rating UI.
+ */
+@Composable
+fun NativeStatusAlert(
+    hazeState: HazeState?,
+    title: String,
+    description: String,
+    loading: Boolean,
+    dismissLabel: String,
+    onDismiss: () -> Unit,
+) {
+    AlertScaffold(hazeState = hazeState, onDismiss = onDismiss) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 19.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.W600,
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+            if (loading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.padding(top = 12.dp).size(24.dp)
+                        .testTag("native-status-alert-loading"),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                Text(
+                    text = description,
+                    modifier = Modifier.padding(top = 4.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+        AlertRule()
+        AlertAction(label = dismissLabel, emphasised = false, onClick = onDismiss)
+    }
+}
 
 /**
  * Same UIAlertController shape as [UpdateAvailableDialog] — frosted card,

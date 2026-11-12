@@ -20,12 +20,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
@@ -40,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.ConfirmationAlert
+import com.music.bitchord.ui.components.NativeAlertHost
+import com.music.bitchord.ui.components.NativeStatusAlert
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.R
 import androidx.compose.ui.Modifier
@@ -158,20 +158,16 @@ internal fun CanonicalSongRatingDialog(song: Song, onDismiss: () -> Unit) {
     if (id != null) {
         CanonicalRecordingRatingDialog(recordingId = id, onDismiss = onDismiss)
     } else {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
-            text = {
-                if (resolution.pending) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Text(stringResource(Res.string.recording_feedback_unavailable))
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.cancel)) }
-            },
-        )
+        NativeAlertHost(onDismiss = onDismiss) {
+            NativeStatusAlert(
+                hazeState = null,
+                title = stringResource(Res.string.recording_feedback_dialog_title),
+                description = stringResource(Res.string.recording_feedback_unavailable),
+                loading = resolution.pending,
+                dismissLabel = stringResource(Res.string.cancel),
+                onDismiss = onDismiss,
+            )
+        }
     }
 }
 
