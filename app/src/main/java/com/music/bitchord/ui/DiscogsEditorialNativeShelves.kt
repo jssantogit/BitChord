@@ -80,6 +80,57 @@ internal fun discogsEditorialProjectedRows(
 }
 
 /**
+ * The MusicBrainz site explicitly links the LE SSERAFIM HOT title-track
+ * Single release-group to its parent HOT EP as "single/EP taken from".
+ * These are DIFFERENT canonical MBIDs; both remain available in Search,
+ * release detail, Library and the canonical graph. The artist's featured
+ * discography, however, must not display the derivative identically named
+ * Single as a second main work beside its parent EP.
+ *
+ * This is intentionally an exact-MBID, source-evidenced association,
+ * not a same-title heuristic. In particular, HOT (English ver.) EP and
+ * HOT (English ver.) Single are distinct products and must stay visible.
+ * See https://musicbrainz.org/release-group/44adb7df-66bd-4ebe-a43a-3ea45a93529d
+ * and https://musicbrainz.org/release-group/50bcea80-692f-4e36-a7a5-825a3233cb13
+ */
+private val musicBrainzLinkedTitleTrackSingles = mapOf(
+    "44adb7df-66bd-4ebe-a43a-3ea45a93529d" to
+        "50bcea80-692f-4e36-a7a5-825a3233cb13",
+)
+
+internal fun canonicalArtistCollapseLinkedTitleTrackSingles(
+    shelves: List<HomeShelf>,
+    groups: List<CanonicalCatalogSearchRow>,
+): List<HomeShelf> {
+    if (shelves.isEmpty() || groups.isEmpty()) return shelves
+    val groupsById = groups.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+        .groupBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    val visible = shelves.flatMap { it.items }
+        .mapNotNull { it.browseId?.removePrefix("catalog:RELEASE_GROUP:")
+            ?.takeIf { id -> it.browseId == "catalog:RELEASE_GROUP:$id" }
+            ?.lowercase(java.util.Locale.ROOT) }
+        .toSet()
+    val duplicateIds = musicBrainzLinkedTitleTrackSingles.mapNotNull { (singleId, epId) ->
+        val single = groupsById[singleId]?.singleOrNull() ?: return@mapNotNull null
+        val ep = groupsById[epId]?.singleOrNull() ?: return@mapNotNull null
+        // The linked parent must actually be on the screen. Progressive
+        // paging/cached partial results may not yet include the parent.
+        if (singleId !in visible || epId !in visible ||
+            !single.releaseKind.equals("Single", ignoreCase = true) ||
+            !ep.releaseKind.equals("EP", ignoreCase = true) ||
+            single.title.trim() != ep.title.trim() ||
+            single.subtitle.isNullOrBlank() ||
+            !single.subtitle.equals(ep.subtitle, ignoreCase = true)
+        ) null else "catalog:RELEASE_GROUP:$singleId"
+    }.toSet()
+    if (duplicateIds.isEmpty()) return shelves
+    return shelves.map { shelf ->
+        val retained = shelf.items.filterNot { it.browseId in duplicateIds }
+        if (retained.size == shelf.items.size) shelf else shelf.copy(items = retained)
+    }.filter { it.items.isNotEmpty() }
+}
+
+/**
  * Source-scoped overrides of existing native artist shelves. The MBID remains
  * the browse identity; never write this derived classification into MusicBrainz
  * Room tables. Disputes retain the canonical MusicBrainz classification.
@@ -91,7 +142,8 @@ internal fun discogsEditorialArtistShelves(
     albumsHeading: String = "Álbuns",
     singlesHeading: String = "Singles e EPs",
 ): List<HomeShelf> {
-    if (groupProofs.isEmpty() || musicBrainzGroups.isEmpty()) return original
+    if (groupProofs.isEmpty() || musicBrainzGroups.isEmpty()) return
+        canonicalArtistCollapseLinkedTitleTrackSingles(original, musicBrainzGroups)
     val evidenceByGroup = musicBrainzGroups.filter {
         it.kind == CanonicalSearchKind.RELEASE_GROUP
     }.associateBy { it.musicBrainzId }
@@ -115,7 +167,8 @@ internal fun discogsEditorialArtistShelves(
         }
         id to (row to format)
     }.toMap()
-    if (changes.isEmpty()) return original
+    if (changes.isEmpty()) return
+        canonicalArtistCollapseLinkedTitleTrackSingles(original, musicBrainzGroups)
 
     val affectedBrowseIds = changes.keys.mapTo(HashSet()) {
         "catalog:RELEASE_GROUP:$it"
@@ -144,7 +197,7 @@ internal fun discogsEditorialArtistShelves(
         moved.filter { it.first == "EP" || it.first == "Single" }.map { it.third })
         .distinctBy { it.browseId }
     val extras = original.filterNot { it.title in setOf(albumsHeading, singlesHeading) }
-    return buildList {
+    return canonicalArtistCollapseLinkedTitleTrackSingles(buildList {
         if (albums.isNotEmpty()) add(
             original.firstOrNull { it.title == albumsHeading }?.copy(items = albums)
                 ?: HomeShelf(albumsHeading, albums)
@@ -154,5 +207,5 @@ internal fun discogsEditorialArtistShelves(
                 ?: HomeShelf(singlesHeading, singles)
         )
         addAll(extras)
-    }
+    }, musicBrainzGroups)
 }
