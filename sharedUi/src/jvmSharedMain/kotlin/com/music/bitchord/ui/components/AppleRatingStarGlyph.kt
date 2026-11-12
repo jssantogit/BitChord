@@ -7,6 +7,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.clipRect
 import com.music.bitchord.ui.player.AppleQueueVectors
 
@@ -37,6 +41,10 @@ fun AppleRatingStarGlyph(
     fill: AppleRatingStarFill,
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.onSurface,
+    /** Optional fractional score tint: mask the gradient into the existing SVG. */
+    colorBrush: Brush? = null,
+    /** Outline stays theme-neutral even when a half-star fill is colored. */
+    outlineTint: Color = tint,
     /** Five-star editors need standalone silhouettes, not five player platters. */
     standalone: Boolean = false,
 ) {
@@ -44,25 +52,41 @@ fun AppleRatingStarGlyph(
         else AppleQueueVectors.Favorite
     val filled = if (standalone) AppleQueueVectors.RatingStarFilled
         else AppleQueueVectors.Favorited
+    // Apply a gradient only to the colored filled vector. The outline, when
+    // present, must keep its distinct neutral stroke; color is masked by the
+    // same alpha silhouette used everywhere in the app.
+    val fillPaint = if (colorBrush == null) Modifier else Modifier
+        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        .drawWithContent {
+            drawContent()
+            drawRect(brush = colorBrush, blendMode = BlendMode.SrcIn)
+        }
     Box(modifier) {
         Icon(
             imageVector = if (fill == AppleRatingStarFill.FULL) filled else empty,
             contentDescription = null,
-            tint = tint,
-            modifier = Modifier.matchParentSize(),
+            tint = when {
+                fill == AppleRatingStarFill.HALF -> outlineTint
+                colorBrush != null -> Color.White
+                else -> tint
+            },
+            modifier = Modifier.matchParentSize()
+                .then(if (fill == AppleRatingStarFill.FULL) fillPaint else Modifier),
         )
         if (fill == AppleRatingStarFill.HALF) {
             Icon(
                 imageVector = filled,
                 contentDescription = null,
-                tint = tint,
-                modifier = Modifier.matchParentSize().drawWithContent {
-                    // clipRect changes the implicit DrawScope receiver.
-                    // Keep the enclosing ContentDrawScope to draw the icon.
-                    clipRect(right = size.width / 2f) {
-                        this@drawWithContent.drawContent()
-                    }
-                },
+                tint = if (colorBrush != null) Color.White else tint,
+                modifier = Modifier.matchParentSize()
+                    .then(fillPaint)
+                    .drawWithContent {
+                        // The mask is applied after the half clipping, so the
+                        // right half remains transparent on fractional scores.
+                        clipRect(right = size.width / 2f) {
+                            this@drawWithContent.drawContent()
+                        }
+                    },
             )
         }
     }
