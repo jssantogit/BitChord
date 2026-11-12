@@ -326,9 +326,6 @@ internal fun CanonicalRecordingFeedbackPanel(
     val sheetBackground = ratingSheetSolidColor(darkTheme)
     val sheetForeground = if (darkTheme) androidx.compose.ui.graphics.Color.White
         else androidx.compose.ui.graphics.Color.Black
-    // AM-DECOMP's key tint; do not infer a native rating sheet from this token.
-    val sheetAccent = if (darkTheme) androidx.compose.ui.graphics.Color(0xFF0091FF)
-        else androidx.compose.ui.graphics.Color(0xFF0088FF)
     val sheetTitle = title ?: stringResource(Res.string.recording_feedback_dialog_title)
     androidx.compose.ui.window.Dialog(
         onDismissRequest = requestDismiss,
@@ -489,48 +486,26 @@ internal fun CanonicalRecordingFeedbackPanel(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                androidx.compose.material3.Button(
+                NativeRatingEditorAction(
+                    label = stringResource(Res.string.cancel),
                     onClick = requestDismiss,
                     enabled = !saving,
-                    modifier = Modifier.weight(1f).height(52.dp)
-                        .testTag("rating-editor-cancel-action"),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = if (darkTheme)
-                            androidx.compose.ui.graphics.Color(0xFF2B2B2D)
-                        else androidx.compose.ui.graphics.Color(0xFFF0F0F2),
-                        contentColor = sheetForeground,
-                    ),
-                ) {
-                    Text(
-                        stringResource(Res.string.cancel),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                    )
-                }
-                androidx.compose.material3.Button(
+                    emphasized = false,
+                    darkTheme = darkTheme,
+                    modifier = Modifier.weight(1f),
+                    tag = "rating-editor-cancel-action",
+                )
+                NativeRatingEditorAction(
+                    label = if (selected == 0.0) "Remover avaliação"
+                        else stringResource(Res.string.recording_feedback_dialog_save),
                     onClick = { onSave(selected) },
                     enabled = (selected in 1.0..5.0 || (selected == 0.0 && original != 0.0)) && !saving,
-                    modifier = Modifier.weight(1f).height(52.dp)
-                        .testTag("rating-editor-save-action"),
-                    shape = RoundedCornerShape(26.dp),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = sheetAccent,
-                        contentColor = androidx.compose.ui.graphics.Color.White,
-                        disabledContainerColor = if (darkTheme)
-                            androidx.compose.ui.graphics.Color(0xFF343437)
-                        else androidx.compose.ui.graphics.Color(0xFFDEDEE1),
-                        disabledContentColor = sheetForeground.copy(alpha = 0.45f),
-                    ),
-                ) {
-                    if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                    else Text(
-                        if (selected == 0.0) "Remover avaliação"
-                        else stringResource(Res.string.recording_feedback_dialog_save),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                    )
-                }
+                    emphasized = true,
+                    darkTheme = darkTheme,
+                    loading = saving,
+                    modifier = Modifier.weight(1f),
+                    tag = "rating-editor-save-action",
+                )
             }
         }
             }
