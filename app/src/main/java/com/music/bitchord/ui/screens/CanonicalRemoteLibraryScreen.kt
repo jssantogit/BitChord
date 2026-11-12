@@ -47,7 +47,6 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -1650,9 +1649,10 @@ internal fun RemoteSongSavedFilterMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
-        TextButton(onClick = { expanded = true }) {
-            Text("Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"))
-        }
+        PlaylistWizardInlineAction(
+            label = "Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"),
+            onClick = { expanded = true },
+        )
         // This may contain dozens of filters, so cap the viewport instead of
         // letting the native popup extend beyond the available display.
         val maxPopupHeight = LocalConfiguration.current.screenHeightDp.dp * 0.68f
