@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.Color
 import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.material3.Button
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.ui.components.CoverPlaceholder
+import com.music.bitchord.ui.components.NativeSettingsSecondaryAction
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.spotify.SpotifyLibrary
@@ -129,17 +128,10 @@ fun SpotifyLibraryScreen(
                         Text(stringResource(R.string.spotify_sign_in))
                     }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(
+                    NativeSettingsSecondaryAction(
+                        label = stringResource(R.string.spotify_use_spdc_token),
                         onClick = onOpenTokenSetup,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    ) {
-                        Text(stringResource(R.string.spotify_use_spdc_token))
-                    }
+                    )
                 }
             }
         } else {
