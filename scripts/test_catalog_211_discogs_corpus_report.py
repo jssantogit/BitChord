@@ -44,7 +44,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(13, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(14, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
@@ -186,7 +186,32 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual("candidate", c04["match_state"])
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(1, result["slots"]["source_only"]["reviewed"])
+        self.assertEqual(2, result["slots"]["source_only"]["reviewed"])
+        self.assertIsNone(result["metrics"])
+
+    def test_c05_daydream_repackage_is_existing_mb_release_inside_older_group(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        case = next(x for x in manifest["cases"] if x["id"] == "C-05")
+        self.assertTrue(case["reviewed"])
+        self.assertEqual(32437206, case["discogs_release_id"])
+        self.assertEqual("0c668bdb-328c-4dba-8407-8eddb5373a5d",
+                         case["musicbrainz_group_mbid"])
+        self.assertEqual("4c42b226-24c8-4481-91ce-744ae59eaa5b",
+                         case["musicbrainz_release_mbid"])
+        self.assertEqual("Album", case["musicbrainz_type"])
+        self.assertEqual("Album", case["reference_type"])
+        self.assertEqual("candidate", case["match_state"])
+        self.assertFalse(case["absent_in_musicbrainz"])
+        self.assertFalse(case["visible"])
+        self.assertFalse(case["match_correct"])
+        self.assertIn("ReleaseGroup", case["review_notes"])
+        self.assertEqual("https://beliftlab.com/artist/discography/ENHYPEN/12",
+                         case["evidence_links"]["independent_editorial"])
+        result = report(manifest)
+        self.assertEqual([], result["errors"])
+        self.assertEqual(2, result["slots"]["source_only"]["reviewed"])
         self.assertIsNone(result["metrics"])
 
     def test_missing_cases_cannot_invent_coverage(self):
