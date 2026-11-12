@@ -73,6 +73,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.foundation.shape.CircleShape
@@ -80,7 +81,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,6 +90,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.SolidColor
 import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -396,12 +397,23 @@ fun MessageState(
             textAlign = TextAlign.Center,
         )
         if (actionLabel != null && onAction != null) {
-            Button(
-                onClick = onAction,
-                modifier = Modifier.height(50.dp).testTag("native-message-action"),
-                shape = RoundedCornerShape(25.dp),
-                colors = applePrimaryButtonColors(),
-            ) { Text(actionLabel) }
+            Box(
+                modifier = Modifier
+                    .height(50.dp)
+                    .widthIn(min = 88.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    .background(appleMusicKeyColor())
+                    .clickable(role = Role.Button, onClick = onAction)
+                    .testTag("native-message-action"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    actionLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 18.dp),
+                )
+            }
         }
     }
 }
