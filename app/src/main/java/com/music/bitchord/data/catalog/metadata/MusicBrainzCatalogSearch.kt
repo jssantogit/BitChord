@@ -135,7 +135,8 @@ internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
  * tags alone are not proof of a bogus release.
  */
 internal fun isCuratedMusicBrainzReleaseGroup(hit: MusicBrainzReleaseGroupHit): Boolean =
-    hit.primaryType?.trim()?.lowercase(Locale.ROOT) in setOf("album", "ep", "single") &&
+    (hit.primaryType?.trim()?.lowercase(Locale.ROOT) ?: "") in
+        setOf("album", "ep", "single") &&
         !hit.artistDisplay.isNullOrBlank() && canonicalStreamingTitleIsSafe(hit.title)
 
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
