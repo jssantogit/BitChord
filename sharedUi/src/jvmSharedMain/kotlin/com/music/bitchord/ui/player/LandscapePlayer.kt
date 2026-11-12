@@ -36,7 +36,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -470,7 +469,7 @@ internal fun LandscapeCredits(
         }
         Spacer(Modifier.width(10.dp))
         CircleGlyph(
-            icon = if (showPlayerRatingStar) AppleQueueVectors.More else Icons.Rounded.MoreHoriz,
+            icon = nativeLandscapePlayerOverflowGlyph(),
             contentDescription = stringResource(Res.string.more),
             onClick = onOpenMenu,
         )
@@ -556,3 +555,6 @@ internal fun LandscapeLyricsPane(
         }
     }
 }
+
+/** Landscape CircleGlyph supplies its own platter, so only the plain ⋯ belongs inside. */
+internal fun nativeLandscapePlayerOverflowGlyph() = AppleQueueVectors.MorePlain
