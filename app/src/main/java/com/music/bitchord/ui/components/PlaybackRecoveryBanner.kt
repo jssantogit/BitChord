@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.R
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.playback.PlaybackRecoveryNotice
 import com.music.bitchord.playback.PlaybackRecoveryReason
 import com.music.bitchord.playback.PlaybackRecoveryStatus
@@ -55,13 +57,22 @@ internal fun PlaybackRecoveryBanner(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(onClick = onDismiss) {
+                TextButton(
+                    onClick = onDismiss,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                ) {
                     Text(stringResource(R.string.playback_recovery_dismiss))
                 }
                 TextButton(
                     onClick = onRetry,
                     enabled = retryEnabled &&
                         notice.status == PlaybackRecoveryStatus.WAITING_FOR_USER,
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = appleMusicKeyColor(),
+                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                 ) {
                     Text(
                         stringResource(
