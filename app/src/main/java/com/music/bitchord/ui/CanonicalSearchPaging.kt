@@ -134,12 +134,33 @@ internal fun canonicalSearchRowsWithoutRedundantEditions(
     if (groups.isEmpty()) return rows
     fun normalizedTitle(value: String): String =
         value.trim().replace(Regex("""\s+"""), " ").lowercase(java.util.Locale.ROOT)
-    return rows.filterNot { row ->
-        if (row.kind != CanonicalSearchKind.RELEASE) return@filterNot false
+    // Consolidation must not throw away a cover already verified for the
+    // exact Release. A group often arrives AFTER its release in progressive
+    // search and may not have resolved its own CAA cover yet. Reuse only the
+    // artwork of a redundant edition whose Group MBID is explicit and whose
+    // display title equals this Group. Never borrow from a similarly named
+    // edition belonging to another Group or override existing group art.
+    val suppressed = mutableSetOf<Int>()
+    val editionCoversByGroup = mutableMapOf<String, String>()
+    rows.forEachIndexed { index, row ->
+        if (row.kind != CanonicalSearchKind.RELEASE) return@forEachIndexed
         val groupId = row.coverGroupMbid
-            ?.trim()?.lowercase(java.util.Locale.ROOT) ?: return@filterNot false
-        val group = groups[groupId] ?: return@filterNot false
-        normalizedTitle(row.title) == normalizedTitle(group.title)
+            ?.trim()?.lowercase(java.util.Locale.ROOT) ?: return@forEachIndexed
+        val group = groups[groupId] ?: return@forEachIndexed
+        if (normalizedTitle(row.title) != normalizedTitle(group.title))
+            return@forEachIndexed
+        suppressed += index
+        row.artworkUri?.takeUnless(String::isBlank)?.let {
+            editionCoversByGroup.putIfAbsent(groupId, it)
+        }
+    }
+    return rows.mapIndexedNotNull { index, row ->
+        if (index in suppressed) return@mapIndexedNotNull null
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP ||
+            !row.artworkUri.isNullOrBlank()) return@mapIndexedNotNull row
+        val groupId = row.musicBrainzId.trim().lowercase(java.util.Locale.ROOT)
+        val cover = editionCoversByGroup[groupId] ?: return@mapIndexedNotNull row
+        row.copy(artworkUri = cover)
     }
 }
 
