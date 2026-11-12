@@ -44,7 +44,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(11, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(12, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
@@ -115,6 +115,27 @@ class CorpusReportTests(unittest.TestCase):
             self.assertIn("independent_editorial", item["evidence_links"])
             self.assertFalse(item["match_correct"])
             self.assertFalse(item["absent_in_musicbrainz"])
+
+    def test_a01_fearless_primary_type_is_already_correct_by_source_music(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        a01 = next(x for x in manifest["cases"] if x["id"] == "A-01")
+        self.assertTrue(a01["reviewed"])
+        self.assertEqual("fb426d76-525d-4b25-90d1-fa4d1b3140c9",
+                         a01["musicbrainz_group_mbid"])
+        self.assertEqual(23314901, a01["discogs_release_id"])
+        self.assertEqual("EP", a01["musicbrainz_type"])
+        self.assertEqual("EP", a01["reference_type"])
+        self.assertEqual("Unknown", a01["app_type"])
+        self.assertEqual("candidate", a01["match_state"])
+        self.assertFalse(a01["match_correct"])
+        self.assertEqual("https://weverse.io/lesserafim/notice/2469",
+                         a01["evidence_links"]["independent_editorial"])
+        report_data = report(manifest)
+        self.assertEqual([], report_data["errors"])
+        self.assertIsNone(report_data["metrics"])
+        self.assertEqual(1, report_data["slots"]["type"]["reviewed"])
 
     def test_c04_stray_kids_slash_name_is_known_musicbrainz_ep_not_recovered(self):
         manifest = json.loads(Path(
