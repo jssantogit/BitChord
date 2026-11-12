@@ -7388,7 +7388,9 @@ private fun FrostedMenuPanel(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
-    val shape = MaterialTheme.shapes.extraLarge
+    // The legacy frosted sort panel shares the compact menu's explicit
+    // 18dp radius instead of inheriting Material 3's extraLarge corner.
+    val shape = RoundedCornerShape(18.dp)
     val entrance = com.music.bitchord.ui.components.rememberFrostedMenuEntranceModifier(
         reduceMotion = LocalReduceAnimations.current,
     )
