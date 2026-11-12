@@ -39,6 +39,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -213,8 +217,12 @@ fun NativeCompactMenuItem(
     }
     Row(
         modifier = Modifier.fillMaxWidth()
-            .testTag("native-compact-menu-item")
             .then(actionModifier)
+            .semantics {
+                testTag = "native-compact-menu-item"
+                if (!actionEnabled) disabled()
+                if (selected != null) this.selected = selected
+            }
             .heightIn(min = 54.dp)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
