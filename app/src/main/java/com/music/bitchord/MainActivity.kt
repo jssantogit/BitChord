@@ -3314,6 +3314,12 @@ private fun BitChordApp(
                                     CanonicalCollectionIntent.PLAY_NOW,
                                 )
                             },
+                            onTrackAction = { recordingId, intent ->
+                                executeSmartCollection(
+                                    SmartCollectionActionSource.RecentLocalTrack(recordingId),
+                                    intent,
+                                )
+                            },
                         )
                     } else if (key == "library_show_all") {
                         libraryShowAll?.let { shelf ->
@@ -4159,6 +4165,12 @@ private fun BitChordApp(
                                         executeSmartCollection(
                                             SmartCollectionActionSource.RecentLocalTrack(recordingId),
                                             CanonicalCollectionIntent.PLAY_NOW,
+                                        )
+                                    },
+                                    onTrackAction = { recordingId, intent ->
+                                        executeSmartCollection(
+                                            SmartCollectionActionSource.RecentLocalTrack(recordingId),
+                                            intent,
                                         )
                                     },
                                 )
