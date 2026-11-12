@@ -63,7 +63,7 @@ import com.music.bitchord.ui.LocalReduceAnimations
  * pins content to the top, keeping all possible options within the window.
  * End alignment mirrors in RTL and is clamped at both horizontal edges.
  */
-internal fun compactOverflowPopupPosition(
+fun compactOverflowPopupPosition(
     anchorBounds: IntRect,
     popupSize: IntSize,
     windowSize: IntSize,
