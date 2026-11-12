@@ -200,14 +200,16 @@ internal fun PlaylistWizardTextAction(
     destructive: Boolean = false,
     onClick: () -> Unit,
 ) {
-    PlaylistWizardInlineAction(
-        label = label,
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth().testTag("playlist-wizard-text-action"),
-        enabled = enabled,
-        subdued = !destructive,
-        destructive = destructive,
-    )
+    Box(modifier = Modifier.fillMaxWidth().testTag("playlist-wizard-text-action")) {
+        PlaylistWizardInlineAction(
+            label = label,
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = enabled,
+            subdued = !destructive,
+            destructive = destructive,
+        )
+    }
 }
 
 /** Compact variant of the same neutral outlined action for sheets and row tools. */
