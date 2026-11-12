@@ -39,6 +39,22 @@ class PlaylistWizardInlineActionTest {
         compose.runOnIdle { assertEquals(1, opened) }
     }
 
+    @Test fun destructiveActionCanBeActivatedWithoutChangingItsCallback() {
+        var removed = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardInlineAction(
+                    label = "Excluir playlist",
+                    onClick = { removed++ },
+                    destructive = true,
+                )
+            }
+        }
+        compose.onNodeWithTag("playlist-wizard-inline-action").assertHasClickAction()
+        compose.onNodeWithText("Excluir playlist").performClick()
+        compose.runOnIdle { assertEquals(1, removed) }
+    }
+
     @Test fun disabledArtworkLinkCannotRemoveTheCover() {
         var removals = 0
         compose.setContent {
