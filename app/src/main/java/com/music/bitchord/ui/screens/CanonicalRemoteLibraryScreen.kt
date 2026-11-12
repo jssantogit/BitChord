@@ -44,10 +44,8 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
@@ -73,6 +71,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1643,7 +1642,7 @@ private fun RemoteCanonicalEntityList(
 
 /** Only fields supported by the selected canonical media context are offered. */
 @Composable
-private fun RemoteSongSavedFilterMenu(
+internal fun RemoteSongSavedFilterMenu(
     selectedName: String?,
     options: List<SavedSmartPlaylistV2Filter>,
     selectedFilterId: String?,
@@ -1654,14 +1653,23 @@ private fun RemoteSongSavedFilterMenu(
         TextButton(onClick = { expanded = true }) {
             Text("Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"))
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Todas as músicas") },
+        // This may contain dozens of filters, so cap the viewport instead of
+        // letting the native popup extend beyond the available display.
+        val maxPopupHeight = LocalConfiguration.current.screenHeightDp.dp * 0.68f
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            maxContentHeight = maxPopupHeight,
+        ) {
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Todas as músicas",
+                selected = selectedFilterId == null,
                 onClick = { expanded = false; onSelect(null) },
             )
             options.forEach { filter ->
-                DropdownMenuItem(
-                    text = { Text(filter.name) },
+                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                    label = filter.name,
+                    selected = selectedFilterId == filter.id,
                     onClick = { expanded = false; onSelect(filter.id) },
                 )
             }
