@@ -10,6 +10,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +42,8 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -355,7 +358,7 @@ internal fun CreatePartySheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            StepperButton("−", enabled = enabled && maxMembers > 2) {
+            PartyStepperControl("−", enabled = enabled && maxMembers > 2) {
                 onMaxMembersChange(maxMembers - 1)
             }
             Text(
@@ -365,7 +368,7 @@ internal fun CreatePartySheet(
                 modifier = Modifier.width(32.dp),
                 textAlign = TextAlign.Center,
             )
-            StepperButton("+", enabled = enabled && maxMembers < 10) {
+            PartyStepperControl("+", enabled = enabled && maxMembers < 10) {
                 onMaxMembersChange(maxMembers + 1)
             }
         }
@@ -390,10 +393,29 @@ internal fun CreatePartySheet(
     }
 }
 
+/**
+ * Native 40dp party-size control. The M3 text button showed full-strength
+ * foreground even when disabled; ink and semantics now share the same state.
+ * The circle is a BitChord adaptation, not an Apple Music measured stepper.
+ */
 @Composable
-private fun StepperButton(label: String, enabled: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled) {
-        Text(label, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+internal fun PartyStepperControl(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val ink = MaterialTheme.colorScheme.onSurface
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(ink.copy(alpha = if (enabled) 0.065f else 0.025f))
+            .border(1.dp, ink.copy(alpha = if (enabled) 0.12f else 0.05f), CircleShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag("listen-together-party-stepper"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleLarge,
+            color = ink.copy(alpha = if (enabled) 1f else 0.36f),
+        )
     }
 }
 
