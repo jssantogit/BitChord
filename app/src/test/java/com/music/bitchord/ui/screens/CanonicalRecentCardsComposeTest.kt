@@ -45,6 +45,27 @@ class CanonicalRecentCardsComposeTest {
         }
     }
 
+    @Test fun recentLocalFullListUsesTheRowLongPressAndKeepsTapPlaybackSeparate() {
+        var queued: Pair<String, CanonicalCollectionIntent>? = null
+        var played = 0
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecentAdditionsGrid(
+                    recent = listOf(V2DisplayRow(id = "local-recording", title = "Recent song", artist = "Artist")),
+                    onPlayTrack = { played++ },
+                    viewType = com.music.bitchord.data.settings.LibraryViewType.LIST,
+                    onTrackAction = { id, action -> queued = id to action },
+                )
+            }
+        }
+        compose.onNodeWithText("Recent song").performTouchInput { longClick() }
+        compose.onNodeWithText("Adicionar à fila").performClick()
+        compose.runOnIdle {
+            assertEquals("local-recording" to CanonicalCollectionIntent.ADD_TO_QUEUE, queued)
+            assertEquals(0, played)
+        }
+    }
+
     @Test fun recentRecordingCardSharesShelfWidthInsteadOfLegacy142Dp() {
         compose.setContent {
             MaterialTheme {
