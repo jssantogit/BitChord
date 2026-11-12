@@ -35,10 +35,43 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.window.PopupPositionProvider
 import com.music.bitchord.ui.LocalReduceAnimations
+
+/** Popups must not cover the control that opened them.
+ *
+ * Prefer directly below with the configured gap; if that would clip the
+ * content, prefer above. The fallback for menus taller than either side
+ * pins content to the top, keeping all possible options within the window.
+ * End alignment mirrors in RTL and is clamped at both horizontal edges.
+ */
+internal fun compactOverflowPopupPosition(
+    anchorBounds: IntRect,
+    popupSize: IntSize,
+    windowSize: IntSize,
+    layoutDirection: LayoutDirection,
+    gapPx: Int,
+): IntOffset {
+    val gap = gapPx.coerceAtLeast(0)
+    val x = when (layoutDirection) {
+        LayoutDirection.Ltr -> anchorBounds.right - popupSize.width
+        LayoutDirection.Rtl -> anchorBounds.left
+    }.coerceIn(0, (windowSize.width - popupSize.width).coerceAtLeast(0))
+    val below = anchorBounds.bottom + gap
+    val above = anchorBounds.top - popupSize.height - gap
+    val y = when {
+        below + popupSize.height <= windowSize.height -> below
+        above >= 0 -> above
+        else -> 0
+    }.coerceIn(0, (windowSize.height - popupSize.height).coerceAtLeast(0))
+    return IntOffset(x, y)
+}
 
 /**
  * One compact popup surface for Home/Explore and the playlist editor.
@@ -65,10 +98,21 @@ fun NativeCompactOverflowMenu(
     val duration = if (reduceMotion) 0 else 170
     val exitDuration = if (reduceMotion) 0 else 130
     val gap = with(LocalDensity.current) { 12.dp.roundToPx() }
+    val popupPositionProvider = remember(gap) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset = compactOverflowPopupPosition(
+                anchorBounds, popupContentSize, windowSize, layoutDirection, gap,
+            )
+        }
+    }
     if (expanded || visible.currentState || visible.targetState) {
         Popup(
-            alignment = Alignment.BottomEnd,
-            offset = IntOffset(0, gap),
+            popupPositionProvider = popupPositionProvider,
             onDismissRequest = onDismissRequest,
             properties = PopupProperties(focusable = true, dismissOnBackPress = true,
                 dismissOnClickOutside = true, clippingEnabled = true),
