@@ -29,6 +29,24 @@ internal fun canonicalArtistReleaseEvidenceWithTrustedDate(
     )
 
 /**
+ * Multiple local editions may share a title while representing different
+ * MusicBrainz releases. A normalized title alone cannot select which ID owns
+ * one external group/date. Return only unambiguous local release identities;
+ * never erase or merge the other local releases.
+ *
+ * Use one shared rule for online corroboration and the offline proof cache:
+ * case, surrounding space and repeated whitespace must not create two keys.
+ */
+internal fun canonicalUnambiguousLocalArtistReleases(
+    local: List<ReleaseEntity>,
+): List<ReleaseEntity> = local.distinctBy { it.id }
+    .groupBy { release ->
+        release.title.trim().lowercase(java.util.Locale.ROOT)
+            .replace(Regex("""\s+"""), " ")
+    }
+    .values.mapNotNull { candidates -> candidates.singleOrNull() }
+
+/**
  * Presentation-only external date corroboration for an undated local artist.
  * The source artist must be unique by exact name; its MusicBrainz release
  * group results must come from a fielded Artist MBID search. An exact local
@@ -64,8 +82,9 @@ internal fun canonicalLocalArtistExactReleaseDateEvidence(
                     ?.let { !it.isAfter(today) }
             } == true
     }.groupBy { key(it.title) }
-    return localReleases.mapNotNull { release ->
-        // One exact group per title; same-name competing groups must stay
+    return canonicalUnambiguousLocalArtistReleases(localReleases).mapNotNull { release ->
+        // One exact group per title AND one local release for that title.
+        // Same-name competing editions/groups must stay
         // unknown rather than selecting an arbitrary release date.
         val matches = groupCandidates[key(release.title)].orEmpty()
         val matched = matches.singleOrNull() ?: return@mapNotNull null
@@ -86,17 +105,12 @@ internal data class CanonicalArtistReleaseSections(
 /**
  * Preferred classification comes from a linked, verified ReleaseGroup type.
  *
- * When a user's local/remote album tag created a canonical Release without
- * the MusicBrainz edition edge, present a *browse-only* fallback based on
- * CURRENTLY available distinct release recordings: multiple => Albums,
- * exactly one => Singles e EPs. This is a UI grouping, not evidence that a
- * partially downloaded album is officially a single; never persist it as
- * ReleaseGroup truth or use it for metadata filters.
- *
- * Unknown/explicitly other types stay in "Lançamentos". A typed Album,
- * Single or EP with a verified full release date may become the hero release;
- * browse-only classifications cannot claim a new release.
+ * Types absent from MusicBrainz and explicitly unsupported types stay in
+ * "Lançamentos"; recording counts never determine release type. An officially
+ * typed Album, Single or EP with a verified full release date may become the
+ * hero release.
  */
+@Suppress("UNUSED_PARAMETER")
 internal fun canonicalArtistReleaseSections(
     releases: List<ReleaseEntity>,
     evidence: Map<String, CanonicalArtistReleaseEvidence>,
@@ -107,11 +121,6 @@ internal fun canonicalArtistReleaseSections(
         return when {
             type == "album" -> "album"
             type == "single" || type == "ep" -> "single"
-            type.isNullOrEmpty() -> when (recordingCountsByRelease[release.id]) {
-                1 -> "single"
-                null, 0 -> "other"
-                else -> "album"
-            }
             else -> "other"
         }
     }
