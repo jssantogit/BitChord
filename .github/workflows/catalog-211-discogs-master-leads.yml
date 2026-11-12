@@ -38,11 +38,15 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_exact_release_link_probe.py' -v
       - name: Research five artist-balanced typed Masters for A type controls
         run: python3 scripts/catalog_211_discogs_master_lead_scout.py --scope A
+      - name: Trace exact MusicBrainz Release to Discogs Release links inside large Masters
+        run: python3 scripts/catalog_211_discogs_exact_release_link_probe.py
       - name: Preserve discovery evidence, never adjudicate B cases
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: discogs-211-a-type-source-master-leads
-          path: discogs-211-master-lead-scout.json
+          path: |
+            discogs-211-master-lead-scout.json
+            discogs-211-exact-release-link-probe.json
           if-no-files-found: warn
           retention-days: 7
