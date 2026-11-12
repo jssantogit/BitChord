@@ -24,6 +24,57 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class CanonicalReleaseDetailFallbackTest {
+    @Test fun catalogIndexPreservesPositionalNamedAndTrailingIdFactoryForms() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val proofClient = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String) = "<metadata/>"
+                override suspend fun getLimited(
+                    path: String,
+                    parameters: Map<String, String>,
+                    userAgent: String,
+                    maxResponseBytes: Long,
+                ) = "<metadata/>"
+            })
+            val factoryVariable: () -> String = { "variable-factory" }
+            suspend fun storedId(index: MusicBrainzCatalogIndex, mbid: String) =
+                index.persistRecordings(listOf(MusicBrainzRecordingHit(mbid, "Track", "Artist", null)))
+                    .getValue(mbid)
+
+            assertEquals("positional", storedId(
+                MusicBrainzCatalogIndex(db, { "positional" }),
+                "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            ))
+            assertEquals("variable-factory", storedId(
+                MusicBrainzCatalogIndex(db, factoryVariable),
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            ))
+            assertEquals("trailing", storedId(
+                MusicBrainzCatalogIndex(db) { "trailing" },
+                "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            ))
+            assertEquals("named", storedId(
+                MusicBrainzCatalogIndex(db, idFactory = { "named" }),
+                "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            ))
+            assertEquals("proof-trailing", storedId(
+                MusicBrainzCatalogIndex(db, proofClient = proofClient) { "proof-trailing" },
+                "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+            ))
+            assertEquals("proof-named", storedId(
+                MusicBrainzCatalogIndex(db, proofClient = proofClient, idFactory = { "proof-named" }),
+                "ffffffff-ffff-4fff-8fff-ffffffffffff",
+            ))
+            assertEquals(1, MusicBrainzCatalogIndex(db).persistRecordings(listOf(
+                MusicBrainzRecordingHit("11111111-1111-4111-8111-111111111111", "Default", "Artist", null),
+            )).size)
+        } finally {
+            db.close()
+        }
+    }
+
     @Test fun catalogIndexKeepsTrailingIdFactoryWithNamedProofClientInjection() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,

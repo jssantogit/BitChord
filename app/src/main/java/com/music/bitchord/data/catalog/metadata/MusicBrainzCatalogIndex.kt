@@ -27,11 +27,40 @@ import java.util.UUID
  * Search cannot infer local identity from title/artist. Only an already-claimed
  * strong MusicBrainz Recording MBID is reused.
  */
-internal class MusicBrainzCatalogIndex(
+internal class MusicBrainzCatalogIndex private constructor(
     private val database: CanonicalCatalogDatabase,
-    private val proofClient: MusicBrainzClient = MusicBrainzClient(),
-    private val idFactory: () -> String = { UUID.randomUUID().toString() },
+    configuration: Configuration,
 ) {
+    private val proofClient = configuration.proofClient
+    private val idFactory = configuration.idFactory
+
+    private data class Configuration(
+        val idFactory: () -> String,
+        val proofClient: MusicBrainzClient,
+    )
+
+    /** Original constructor shape: keep positional, named, and trailing-lambda callers source-compatible. */
+    constructor(
+        database: CanonicalCatalogDatabase,
+        idFactory: () -> String = { UUID.randomUUID().toString() },
+    ) : this(database, Configuration(idFactory, MusicBrainzClient()))
+
+    constructor(
+        database: CanonicalCatalogDatabase,
+        idFactory: () -> String,
+        injectedProofClient: MusicBrainzClient,
+    ) : this(database, Configuration(idFactory, injectedProofClient))
+
+    constructor(database: CanonicalCatalogDatabase, proofClient: MusicBrainzClient) :
+        this(database, Configuration({ UUID.randomUUID().toString() }, proofClient))
+
+    /** Supports proof-client injection together with an existing trailing id factory. */
+    constructor(
+        database: CanonicalCatalogDatabase,
+        proofClient: MusicBrainzClient,
+        idFactory: () -> String,
+    ) : this(database, Configuration(idFactory, proofClient))
+
     suspend fun persistRecordings(
         hits: List<MusicBrainzRecordingHit>,
         /** A Release Track fallback lacks independent Recording display authority. */
