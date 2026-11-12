@@ -36,7 +36,8 @@ internal fun nativeArtistEditorialGuestTracks(
     appearances: List<MusicBrainzArtistAppearance>,
 ): List<MusicBrainzArtistAppearance> = appearances.asSequence()
     .filter {
-        it.commerciallyVerified && !it.recordingMbid.isNullOrBlank() &&
+        it.commerciallyVerified && !it.conflictingTrackCredit &&
+            !it.recordingMbid.isNullOrBlank() &&
             !it.trackTitle.isNullOrBlank() &&
             canonicalStreamingTitleIsSafe(it.trackTitle)
     }
