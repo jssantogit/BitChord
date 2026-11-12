@@ -178,7 +178,7 @@ class CorpusReportTests(unittest.TestCase):
             # is a REAL source disagreement, not an automatic type correction.
             "A-03": ("62812a62-f532-490a-9b52-1feccb3fdaba",
                      22076131, "EP", "Single",
-                     "https://straykids.jype.com/notice?PgIndex=97"),
+                     "https://www.bandwagon.asia/articles/stray-kids-drop-christmas-evel-surprise-single-november-comeback-release-2021"),
             "A-04": ("1c8c9fa5-8b86-4dd1-81cb-b22f8dcd487c",
                      24725813, "Single", "Single",
                      "https://www.starship-ent.com/musician/ive"),
@@ -187,7 +187,7 @@ class CorpusReportTests(unittest.TestCase):
                      "https://www.newjeans.jp/news/dwmgij"),
             "A-06": ("48e4a94a-7fe5-4764-8880-b23a91bd7ee3",
                      35165884, "EP", "EP",
-                     "https://nmixx.jype.com/Mobile/NoticeView?AnSeq=6193&NoticeNumber=361"),
+                     "https://www.enmixx.com/en/discography/fe3o4-break"),
             "A-07": ("58e44e7a-8ebb-4f08-9dbb-9b7998a2a483",
                      25179088, "Single", "Single",
                      "https://www.starship-ent.com/musician/ive"),
