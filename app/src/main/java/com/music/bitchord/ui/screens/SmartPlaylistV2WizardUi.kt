@@ -326,6 +326,13 @@ internal fun PlaylistWizardSheetChrome(
     }
 }
 
+/** Selected choice marks use the verified Apple key, not M3 primary white/black. */
+internal fun wizardChoiceSelectionTint(
+    selected: Boolean,
+    keyColor: Color,
+    neutralColor: Color,
+): Color = if (selected) keyColor else neutralColor
+
 @Composable
 internal fun <T> WizardChoiceDialog(
     title: String,
@@ -350,8 +357,11 @@ internal fun <T> WizardChoiceDialog(
                             imageVector = if (radioSelected(option))
                                 PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
                             contentDescription = null,
-                            tint = if (radioSelected(option)) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = wizardChoiceSelectionTint(
+                                selected = radioSelected(option),
+                                keyColor = com.music.bitchord.ui.theme.appleMusicKeyColor(),
+                                neutralColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                             modifier = Modifier.size(22.dp),
                         )
                     }) else ({}),
