@@ -81,3 +81,22 @@ Observação do usuário no APK anterior: a seção agora aparece, inclusive em 
 ### Gates do APK
 
 Workflow `Discogs 211 Android native smoke APK` tem `:app:testDevDebugUnitTest`, `:shared:jvmTest` de playback e `:app:assembleDevDebug` como pré-condições para publicar o artefato; também anexa SHA-256 e commit exato. Corpus editorial [30/30 aprovado](https://github.com/jssantogit/BitChord/actions/runs/43200460173) e [Android JVM Discogs focused aprovado](https://github.com/jssantogit/BitChord/actions/runs/43199315323) no corte de código anterior à solicitação. Se teste completo falhar, reportar bloqueio em vez de chamar APK de gerado. Nenhum merge automático.
+
+## Correção A54 — HOT duplicado em LE SSERAFIM, novo APK requerido (12/11/2026)
+
+**Relato físico do proprietário:** APK Discogs #211 anterior instalado com navegação, fonte canônica, rodapé, opções avançadas, rotas e modo offline funcionando. Nas capturas comparativas, a página de artista LE SSERAFIM do BitChord mostra duas entradas `HOT` classificadas `Single` e `EP`; Apple Music de referência não exibe o card redundantemente derivado da faixa-título como um segundo minialbum.
+
+**Causa por fonte:** MusicBrainz mantém `HOT` Single `44adb7df-66bd-4ebe-a43a-3ea45a93529d` explicitamente vinculado como *single/EP taken from* ao `HOT` EP principal `50bcea80-692f-4e36-a7a5-825a3233cb13`. Não é bug de título Discogs nem justificativa para alterar o tipo MusicBrainz em Room.
+
+**Correção no código da PR:** projeção somente da discografia tipada do artista remove o card do Single derivado **apenas** quando ambos os MBIDs corretos aparecem no grid, com títulos e artista iguais e tipos Single/EP. Preserva busca canônica, release details, versões `HOT (English ver.)` Single/EP, `HOT (KAZUHA ver.)` Remix e prateleiras independentes (ex.: Para descobrir), sem tocar no MBID, tracklist ou artistas creditados. Paginação parcial não oculta o Single se o EP pai ainda não estiver visível. Testes novos `DiscogsEditorialArtistShelvesTest.kt` cobrem os controles e evitarão regressões.
+
+### Checklist exclusivo deste APK
+
+1. Abrir LE SSERAFIM → Singles e EPs. Quando ambos os grupos HOT forem carregados, deve existir **um único card principal `HOT`**, marcado **EP**, e não outro card `HOT` marcado Single.
+2. Confirmar `HOT (English ver.) - Single` e `HOT (English ver.) - EP`, caso ambos estejam no catálogo, como produtos separados, sem suprimir nenhuma das variantes.
+3. Confirmar que `HOT (KAZUHA ver.)` e demais versões/remixes continuam com sua própria identidade e classificação.
+4. Abrir o EP HOT, voltar, rolar e reabrir o artista: nenhuma duplicação transitória depois da carga dos grupos. Pesquisa direta por `HOT` continua com todas as identidades MusicBrainz, sem exclusão global.
+5. Repetir um exemplo anterior (ENHYPEN `ROMANCE : UNTOLD -daydream-`) e verificar que a proteção contra falsos `Discogs-only` continua funcionando.
+6. Se algum card estiver ausente ou duplicado, enviar captura, nome da seção e, quando disponível, a URL/MBID que o card abre.
+
+Regerar apenas o APK `devDebug` da PR #211, **não** publicar release, **não** fazer merge e não mudar #209/main. O workflow continua exigindo `:app:testDevDebugUnitTest`, regressão `:shared:jvmTest` e montagem do APK com SHA e checksum. O smoke anterior não valida este patch; somente novo APK e observação A54.
