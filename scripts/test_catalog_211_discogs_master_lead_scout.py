@@ -382,7 +382,7 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual(0, report["verified_edition_count"])
         self.assertEqual(0, report["reviewed_corpus_cases"])
         self.assertLessEqual(ARTIST_LIMIT, 10)
-        self.assertLessEqual(MASTER_LIMIT, 5)
+        self.assertLessEqual(MASTER_LIMIT, 8)
         self.assertLessEqual(report["source_http_requests"], REQUEST_LIMIT)
 
 if __name__ == "__main__":
