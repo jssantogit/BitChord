@@ -327,6 +327,7 @@ import com.music.bitchord.ui.screens.LocalFolderState
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import com.music.bitchord.ui.screens.localizedLabel
 import com.music.bitchord.data.LocalGroups
 import com.music.bitchord.data.settings.LibraryViewType
@@ -6605,6 +6606,8 @@ private fun CanonicalPlaylistToolbarActions(
     onSearch: () -> Unit,
     onSortOrFilter: () -> Unit,
     onOverflow: () -> Unit,
+    sortMenu: (@Composable () -> Unit)? = null,
+    overflowMenu: (@Composable () -> Unit)? = null,
 ) {
     if (!hasDetail && showCreate) {
         IconButton(onClick = onCreate) {
@@ -6623,14 +6626,32 @@ private fun CanonicalPlaylistToolbarActions(
     if (hasDetail && ratingTarget != null) {
         CanonicalToolbarRatingAction(ratingTarget, "playlist")
     }
-    NativeCollectionSortAction(
-        contentDescription = if (hasDetail) "Ordenar músicas" else "Filtrar playlists",
-        onClick = onSortOrFilter,
-    )
-    NativeCollectionOverflowAction(
-        contentDescription = if (hasDetail) "Opções da playlist" else "Ordenar playlists",
-        onClick = onOverflow,
-    )
+    val sortDescription = if (hasDetail) "Ordenar músicas" else "Filtrar playlists"
+    if (sortMenu == null) {
+        NativeCollectionSortAction(
+            contentDescription = sortDescription, onClick = onSortOrFilter,
+        )
+    } else {
+        Box(Modifier.testTag("native-toolbar-sort-anchor")) {
+            NativeCollectionSortAction(
+                contentDescription = sortDescription, onClick = onSortOrFilter,
+            )
+            sortMenu()
+        }
+    }
+    val overflowDescription = if (hasDetail) "Opções da playlist" else "Ordenar playlists"
+    if (overflowMenu == null) {
+        NativeCollectionOverflowAction(
+            contentDescription = overflowDescription, onClick = onOverflow,
+        )
+    } else {
+        Box(Modifier.testTag("native-toolbar-overflow-anchor")) {
+            NativeCollectionOverflowAction(
+                contentDescription = overflowDescription, onClick = onOverflow,
+            )
+            overflowMenu()
+        }
+    }
 }
 
 /**
@@ -7579,7 +7600,7 @@ private fun NativeExternalMusicLinkEffect(
 
 /** One native public-playlist toolbar, not a second renderer in the root app. */
 @Composable
-private fun NativePublicPlaylistTopBarActions(
+internal fun NativePublicPlaylistTopBarActions(
     playlist: com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist,
     searching: Boolean,
     onToggleSearch: () -> Unit,
@@ -7601,15 +7622,21 @@ private fun NativePublicPlaylistTopBarActions(
         onSearch = onToggleSearch,
         onSortOrFilter = onShowSort,
         onOverflow = onShowOptions,
-    )
-    com.music.bitchord.ui.screens.CanonicalPublicPlaylistToolbarMenus(
-        playlist = playlist,
-        sortOpen = sortOpen,
-        optionsOpen = optionsOpen,
-        onSortDismiss = onSortDismiss,
-        onOptionsDismiss = onOptionsDismiss,
-        sort = sort,
-        onSort = onSort,
+        sortMenu = {
+            com.music.bitchord.ui.screens.CanonicalPublicPlaylistSortMenu(
+                expanded = sortOpen,
+                onDismiss = onSortDismiss,
+                sort = sort,
+                onSort = onSort,
+            )
+        },
+        overflowMenu = {
+            com.music.bitchord.ui.screens.CanonicalPublicPlaylistOverflowMenu(
+                playlist = playlist,
+                expanded = optionsOpen,
+                onDismiss = onOptionsDismiss,
+            )
+        },
     )
 }
 
