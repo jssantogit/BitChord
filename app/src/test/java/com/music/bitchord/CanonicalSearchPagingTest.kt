@@ -6,6 +6,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import com.music.bitchord.ui.CanonicalSearchPageCursors
 import com.music.bitchord.ui.canonicalArtistContinuationRows
 import com.music.bitchord.ui.canonicalSearchRowsWithoutRedundantEditions
+import com.music.bitchord.ui.canonicalProgressiveSearchPreview
 import com.music.bitchord.ui.canonicalSearchRowsWithOfficialEditionTitles
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow

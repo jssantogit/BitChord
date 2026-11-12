@@ -17,6 +17,7 @@ class CanonicalNativeNavigationTest {
     private val artist = CanonicalCatalogSearchRow("artist-id", CanonicalSearchKind.ARTIST, "ILLIT", null)
     private val group = CanonicalCatalogSearchRow("group-id", CanonicalSearchKind.RELEASE_GROUP,
         "SUPER REAL ME", "ILLIT", releaseKind = "EP")
+    private val artworkGroupMbid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
     private val edition = CanonicalCatalogSearchRow("release-id", CanonicalSearchKind.RELEASE,
         "SUPER REAL ME", "ILLIT")
 
@@ -179,7 +180,7 @@ class CanonicalNativeNavigationTest {
     @Test fun artistCoverCandidatesRejectVideoVariantsAndUnknownEditionStatus() {
         val groupTitle = "Almond Chocolate"
         val base = MusicBrainzReleaseHit("official-xw", groupTitle, "XW", "2025-02-15",
-            "ILLIT", status = "Official")
+            "ILLIT", status = "Official", releaseGroupMbid = artworkGroupMbid)
         val options = listOf(
             base.copy(musicBrainzId = "video", title = "Almond Chocolate (performance ver.)"),
             base.copy(musicBrainzId = "bootleg", status = "Bootleg"),
@@ -188,30 +189,30 @@ class CanonicalNativeNavigationTest {
             base,
         )
         assertEquals(listOf("official-xw"),
-            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, groupTitle)
+            com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, groupTitle, artworkGroupMbid)
                 .map { it.musicBrainzId })
     }
 
     @Test fun missingVerifiedEditionMustNotChooseArbitraryReleaseGroupArtwork() {
         val options = listOf(
-            MusicBrainzReleaseHit("post", "Topping", null, "2025-07-05", "ILLIT", status = "Promotion"),
-            MusicBrainzReleaseHit("other", "Topping (Music Video)", null, null, "ILLIT", status = "Official"),
+            MusicBrainzReleaseHit("post", "Topping", null, "2025-07-05", "ILLIT", status = "Promotion", releaseGroupMbid = artworkGroupMbid),
+            MusicBrainzReleaseHit("other", "Topping (Music Video)", null, null, "ILLIT", status = "Official", releaseGroupMbid = artworkGroupMbid),
         )
-        assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, "Topping")
+        assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(options, "Topping", artworkGroupMbid)
             .isEmpty())
     }
 
 
     @Test fun artworkSkipsConfirmedMissingFrontAndTriesKnownPositiveBeforeUnknown() {
         val original = MusicBrainzReleaseHit("old-no-art", "Get Up", "KR",
-            "2023-07-21", "NewJeans", status = "Official", hasFrontCover = false)
+            "2023-07-21", "NewJeans", status = "Official", releaseGroupMbid = artworkGroupMbid, hasFrontCover = false)
         val unknown = original.copy(musicBrainzId = "unknown-front",
             releaseDate = "2023-07-22", hasFrontCover = null)
         val positive = original.copy(musicBrainzId = "confirmed-front",
             releaseDate = "2023-07-23", hasFrontCover = true)
         assertEquals(listOf("confirmed-front", "unknown-front"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-                listOf(original, unknown, positive), "Get Up"
+                listOf(original, unknown, positive), "Get Up", artworkGroupMbid
             ).map { it.musicBrainzId })
     }
 
@@ -219,14 +220,14 @@ class CanonicalNativeNavigationTest {
     @Test fun catalogCoverUsesLinkedOfficialEditionWhenGroupAndReleaseTitlesDiffer() {
         val howSweet = MusicBrainzReleaseHit(
             "how-sweet-xw", "How Sweet", "XW", "2024-05-24", "NewJeans",
-            status = "Official", hasFrontCover = true,
+            status = "Official", releaseGroupMbid = artworkGroupMbid, hasFrontCover = true,
         )
         val video = howSweet.copy(musicBrainzId = "video",
             title = "How Sweet (music video)")
         val promo = howSweet.copy(musicBrainzId = "promo", status = "Promotion")
         assertEquals(listOf("how-sweet-xw"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-                listOf(video, promo, howSweet), "How Sweet & Bubble Gum",
+                listOf(video, promo, howSweet), "How Sweet & Bubble Gum", artworkGroupMbid,
             ).map { it.musicBrainzId })
     }
 
@@ -248,36 +249,36 @@ class CanonicalNativeNavigationTest {
     @Test fun candidateRankingSkipsConfirmedNoFrontWithoutStarvingOtherOfficialTitles() {
         val noCover = MusicBrainzReleaseHit(
             "plain", "Get Up", "XW", "2023-07-21", "NewJeans",
-            status = "Official", hasFrontCover = false,
+            status = "Official", releaseGroupMbid = artworkGroupMbid, hasFrontCover = false,
         )
         val official = noCover.copy(musicBrainzId = "other-official",
             title = "NewJeans 2nd EP Get Up", hasFrontCover = true)
         assertEquals(listOf("other-official"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-                listOf(noCover, official), "Get Up",
+                listOf(noCover, official), "Get Up", artworkGroupMbid,
             ).map { it.musicBrainzId })
     }
 
 
     @Test fun groupArtworkNeverBorrowsAnotherEditionWithUnrelatedOrCollectorTitle() {
         val normal = MusicBrainzReleaseHit("official", "Taste of Love", "XW",
-            "2021-06-11", "TWICE", status = "Official", hasFrontCover = true)
+            "2021-06-11", "TWICE", status = "Official", releaseGroupMbid = artworkGroupMbid, hasFrontCover = true)
         val variant = normal.copy(musicBrainzId = "product", title = "Taste of Love (Taste ver.)")
         val unrelated = normal.copy(musicBrainzId = "unrelated", title = "Perfect World")
         val remix = normal.copy(musicBrainzId = "remix", title = "Taste of Love (DJ remix)")
         assertEquals(listOf("official"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-                listOf(variant, unrelated, remix, normal), "Taste of Love",
+                listOf(variant, unrelated, remix, normal), "Taste of Love", artworkGroupMbid,
             ).map { it.musicBrainzId })
         assertTrue(com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-            listOf(variant, unrelated, remix), "Taste of Love",
+            listOf(variant, unrelated, remix), "Taste of Love", artworkGroupMbid,
         ).isEmpty())
     }
 
     @Test fun officialRetailPackagingEditionsAreNotCanonicalStreamingAlbumSleeves() {
         val canonical = MusicBrainzReleaseHit(
             "main", "Taste of Love", "XW", "2021-06-11", "TWICE",
-            status = "Official", hasFrontCover = true,
+            status = "Official", releaseGroupMbid = artworkGroupMbid, hasFrontCover = true,
         )
         val editions = listOf(
             "Taste of Love (Digipack)" ,
@@ -294,7 +295,7 @@ class CanonicalNativeNavigationTest {
         assertEquals(
             listOf("main"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-                editions + canonical, "Taste of Love",
+                editions + canonical, "Taste of Love", artworkGroupMbid,
             ).map { it.musicBrainzId },
         )
         assertTrue(com.music.bitchord.ui.canonicalEditionTitleIsSuitableForGroupArtwork(
@@ -324,12 +325,12 @@ class CanonicalNativeNavigationTest {
 
     @Test fun identicalOfficialAlbumTitlesPreferWorldwideCoverOverEarlyLocalPackaging() {
         val korean = MusicBrainzReleaseHit("kr", "Taste of Love", "KR",
-            "2021-06-09", "TWICE", status = "Official", hasFrontCover = true)
+            "2021-06-09", "TWICE", status = "Official", releaseGroupMbid = artworkGroupMbid, hasFrontCover = true)
         val worldwide = korean.copy(musicBrainzId = "xw", country = "XW",
             releaseDate = "2021-06-11")
         assertEquals(listOf("xw", "kr"),
             com.music.bitchord.ui.canonicalArtworkEditionsForGroup(
-                listOf(korean, worldwide), "Taste of Love",
+                listOf(korean, worldwide), "Taste of Love", artworkGroupMbid,
             ).map { it.musicBrainzId })
     }
 
