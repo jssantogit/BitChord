@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -68,7 +67,6 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
-import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.theme.appleSelectionAccentColor
 import java.util.Locale
 
@@ -217,27 +215,17 @@ fun PlaylistPickerSheet(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Button(
+                NativeSettingsPrimaryAction(
+                    label = if (selected.isEmpty()) {
+                        stringResource(R.string.add_to_playlist)
+                    } else {
+                        pluralStringResource(R.plurals.add_to_playlists_count, selected.size, selected.size)
+                    },
                     onClick = { onAdd(playlists.filter { it.playlistId in selected }) },
                     enabled = selected.isNotEmpty(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 22.dp)
-                        .height(50.dp),
-                    shape = RoundedCornerShape(25.dp),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = appleMusicKeyColor(),
-                        contentColor = androidx.compose.ui.graphics.Color.White,
-                    ),
-                ) {
-                    Text(
-                        if (selected.isEmpty()) {
-                            stringResource(R.string.add_to_playlist)
-                        } else {
-                            pluralStringResource(R.plurals.add_to_playlists_count, selected.size, selected.size)
-                        },
-                    )
-                }
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+                    tag = "playlist-picker-confirm-action",
+                )
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -495,26 +483,15 @@ private fun NewPlaylistForm(
         }
 
         Spacer(Modifier.height(20.dp))
-        Button(
+        NativeSettingsPrimaryAction(
+            label = stringResource(R.string.create_playlist),
             onClick = submit,
             enabled = validName && !saving,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp)
-                .height(50.dp),
-            shape = RoundedCornerShape(25.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = appleMusicKeyColor(),
-                contentColor = androidx.compose.ui.graphics.Color.White,
-            ),
-        ) {
-            if (saving) CircularProgressIndicator(
-                modifier = Modifier.size(20.dp).testTag("playlist-editor-saving"),
-                strokeWidth = 2.dp,
-                color = androidx.compose.ui.graphics.Color.White,
-            )
-            else Text(stringResource(R.string.create_playlist))
-        }
+            loading = saving,
+            loadingTag = "playlist-editor-saving",
+            tag = "playlist-picker-create-action",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+        )
         Spacer(Modifier.height(28.dp))
     }
 }
@@ -642,21 +619,13 @@ internal fun RenamePlaylistForm(
                 modifier = Modifier.padding(horizontal = 22.dp),
             )
         }
-        Button(
+        NativeSettingsPrimaryAction(
+            label = stringResource(R.string.save_name),
             onClick = submit,
             enabled = validName && hasChanges,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp)
-                .height(50.dp),
-            shape = RoundedCornerShape(25.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = appleMusicKeyColor(),
-                contentColor = androidx.compose.ui.graphics.Color.White,
-            ),
-        ) {
-            Text(stringResource(R.string.save_name))
-        }
+            tag = "playlist-picker-rename-action",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+        )
         Spacer(Modifier.height(28.dp))
     }
     if (confirmDiscard) {

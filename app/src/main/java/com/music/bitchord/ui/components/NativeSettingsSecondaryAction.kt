@@ -8,8 +8,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -64,6 +66,9 @@ internal fun NativeSettingsPrimaryAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    loading: Boolean = false,
+    tag: String = "native-settings-primary-action",
+    loadingTag: String = "native-settings-primary-action-loading",
 ) {
     Box(
         modifier = modifier
@@ -74,15 +79,23 @@ internal fun NativeSettingsPrimaryAction(
                 if (enabled) appleMusicKeyColor()
                 else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             )
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .testTag("native-settings-primary-action"),
+            .clickable(enabled = enabled && !loading, role = Role.Button, onClick = onClick)
+            .testTag(tag),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
+        if (loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp).testTag(loadingTag),
+                color = MaterialTheme.colorScheme.onSurface,
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
     }
 }
