@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -143,9 +142,10 @@ internal data class SmartPlaylistPreviewRow(
 
 @Composable
 internal fun SmartPlaylistBuilderEntry(onOpen: () -> Unit) {
-    TextButton(onClick = onOpen) {
-        Text(stringResource(Res.string.smart_playlist_title))
-    }
+    PlaylistWizardInlineAction(
+        label = stringResource(Res.string.smart_playlist_title),
+        onClick = onOpen,
+    )
 }
 
 /** Saved definitions are distinct from a failed Room observation. */
@@ -196,9 +196,10 @@ internal fun SmartPlaylistBuilderHeader(onBack: () -> Unit) {
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        TextButton(onClick = onBack) {
-            Text(stringResource(Res.string.smart_playlist_close))
-        }
+        PlaylistWizardInlineAction(
+            label = stringResource(Res.string.smart_playlist_close),
+            onClick = onBack,
+        )
     }
 }
 
@@ -339,7 +340,7 @@ internal fun SmartPlaylistBuilderScreen(
     ) {
         item(key = "header") {
             SmartPlaylistBuilderHeader(onBack)
-            TextButton(onClick = { showAdvanced = true }) { Text("Editor avançado V2") }
+            PlaylistWizardInlineAction(label = "Editor avançado V2", onClick = { showAdvanced = true })
         }
         item(key = "editor") {
             Column {
@@ -389,8 +390,10 @@ internal fun SmartPlaylistBuilderScreen(
                     }, enabled = !busy, colors = applePrimaryButtonColors(), shape = RoundedCornerShape(25.dp)) {
                         Text(stringResource(Res.string.smart_playlist_save))
                     }
-                    TextButton(onClick = {
-                        if (busy) return@TextButton
+                    PlaylistWizardInlineAction(
+                        label = stringResource(Res.string.smart_playlist_preview),
+                        onClick = {
+                        if (busy) return@PlaylistWizardInlineAction
                         busy = true
                         scope.launch {
                             try {
@@ -425,12 +428,13 @@ internal fun SmartPlaylistBuilderScreen(
                                 busy = false
                             }
                         }
-                    }, enabled = !busy) {
-                        Text(stringResource(Res.string.smart_playlist_preview))
-                    }
-                    TextButton(onClick = ::clearForm, enabled = !busy) {
-                        Text(stringResource(Res.string.smart_playlist_reset))
-                    }
+                    }, enabled = !busy)
+                    PlaylistWizardInlineAction(
+                        label = stringResource(Res.string.smart_playlist_reset),
+                        onClick = ::clearForm,
+                        enabled = !busy,
+                        subdued = true,
+                    )
                 }
                 if (busy) NativeLoadingSpinner()
                 if (error != null) Text(error.orEmpty())
@@ -445,22 +449,20 @@ internal fun SmartPlaylistBuilderScreen(
                 if (preview!!.isEmpty()) Text(stringResource(Res.string.smart_playlist_empty))
                 if (onPreviewAction != null) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(
+                        PlaylistWizardInlineAction(
+                            label = stringResource(Res.string.smart_collection_batch_play),
                             onClick = {
                                 previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.PLAY_NOW) }
                             },
                             enabled = !busy && preview!!.isNotEmpty() && previewQuery != null,
-                        ) {
-                            Text(stringResource(Res.string.smart_collection_batch_play))
-                        }
-                        TextButton(
+                        )
+                        PlaylistWizardInlineAction(
+                            label = stringResource(Res.string.smart_collection_batch_queue),
                             onClick = {
                                 previewQuery?.let { onPreviewAction(it, CanonicalCollectionIntent.ADD_TO_QUEUE) }
                             },
                             enabled = !busy && preview!!.isNotEmpty() && previewQuery != null,
-                        ) {
-                            Text(stringResource(Res.string.smart_collection_batch_queue))
-                        }
+                        )
                     }
                 }
             }
@@ -495,11 +497,16 @@ internal fun SmartPlaylistBuilderScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(item.name, modifier = Modifier.weight(1f).padding(top = 12.dp))
-                TextButton(onClick = { edit(item) }, enabled = !busy) {
-                    Text(stringResource(Res.string.smart_playlist_edit))
-                }
-                TextButton(onClick = {
-                    if (busy) return@TextButton
+                PlaylistWizardInlineAction(
+                    label = stringResource(Res.string.smart_playlist_edit),
+                    onClick = { edit(item) },
+                    enabled = !busy,
+                )
+                PlaylistWizardInlineAction(
+                    label = stringResource(Res.string.smart_playlist_delete),
+                    destructive = true,
+                    onClick = {
+                    if (busy) return@PlaylistWizardInlineAction
                     busy = true
                     scope.launch {
                         try {
@@ -513,22 +520,20 @@ internal fun SmartPlaylistBuilderScreen(
                             busy = false
                         }
                     }
-                }, enabled = !busy) {
-                    Text(stringResource(Res.string.smart_playlist_delete))
-                }
+                }, enabled = !busy)
             }
             if (onSavedAction != null) {
                 Row {
-                    TextButton(onClick = {
-                        onSavedAction(item.id, CanonicalCollectionIntent.PLAY_NOW)
-                    }, enabled = !busy) {
-                        Text(stringResource(Res.string.smart_collection_batch_play))
-                    }
-                    TextButton(onClick = {
-                        onSavedAction(item.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                    }, enabled = !busy) {
-                        Text(stringResource(Res.string.smart_collection_batch_queue))
-                    }
+                    PlaylistWizardInlineAction(
+                        label = stringResource(Res.string.smart_collection_batch_play),
+                        onClick = { onSavedAction(item.id, CanonicalCollectionIntent.PLAY_NOW) },
+                        enabled = !busy,
+                    )
+                    PlaylistWizardInlineAction(
+                        label = stringResource(Res.string.smart_collection_batch_queue),
+                        onClick = { onSavedAction(item.id, CanonicalCollectionIntent.ADD_TO_QUEUE) },
+                        enabled = !busy,
+                    )
                 }
             }
             }

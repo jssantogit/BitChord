@@ -169,9 +169,13 @@ internal fun PlaylistWizardInlineAction(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     subdued: Boolean = false,
+    destructive: Boolean = false,
 ) {
-    val ink = if (subdued) MaterialTheme.colorScheme.onSurfaceVariant
-        else appleMusicKeyColor()
+    val ink = when {
+        destructive -> MaterialTheme.colorScheme.error
+        subdued -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> appleMusicKeyColor()
+    }
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
