@@ -39,6 +39,32 @@ class PlaylistWizardNativeActionsTest {
         compose.runOnIdle { assertEquals(1, saves) }
     }
 
+    @Test fun classicEditorPrimarySaveFitsBesidePreviewAndReset() {
+        var saves = 0
+        compose.setContent {
+            MaterialTheme {
+                androidx.compose.foundation.layout.Row(
+                    modifier = androidx.compose.ui.Modifier.width(340.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                ) {
+                    PlaylistWizardPrimaryAction(
+                        label = "Salvar",
+                        modifier = androidx.compose.ui.Modifier.weight(1f),
+                        onClick = { saves++ },
+                    )
+                    PlaylistWizardInlineAction(label = "Prévia", onClick = {})
+                    PlaylistWizardInlineAction(label = "Limpar", subdued = true, onClick = {})
+                }
+            }
+        }
+        compose.onNodeWithTag("playlist-wizard-primary-action")
+            .assertHeightIsAtLeast(50.dp)
+        compose.onNodeWithText("Prévia").assertExists()
+        compose.onNodeWithText("Limpar").assertExists()
+        compose.onNodeWithText("Salvar").performClick()
+        compose.runOnIdle { assertEquals(1, saves) }
+    }
+
     @Test fun disabledPrimaryWizardActionCannotCommit() {
         var saves = 0
         compose.setContent {
