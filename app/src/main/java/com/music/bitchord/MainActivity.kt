@@ -1901,7 +1901,7 @@ private fun BitChordApp(
     val onBrowseLongPress: (ShelfItem) -> Unit = { item ->
         val id = item.browseId
         val type = id?.let { viewModel.browseTypeOf(it) }
-        if (id != null && type != BrowseType.ARTIST) {
+        if (id != null) {
             openBrowseMenu(
                 BrowseTarget(
                     browseId = id,
@@ -3745,6 +3745,7 @@ private fun BitChordApp(
                             pullState = homePull,
                             contentPadding = listPadding,
                             title = stringResource(R.string.home),
+                            onItemLongPress = onShelfLongPress,
                             signedIn = true,
                             publicPlaylistNotice = canonicalHomePlaylistNotice,
                             leadHero = true,
@@ -3792,6 +3793,7 @@ private fun BitChordApp(
                             pullState = explorePull,
                             contentPadding = listPadding,
                             title = activeCanonicalGenre?.title ?: stringResource(R.string.explore),
+                            onItemLongPress = onShelfLongPress,
                             publicPlaylistNotice = canonicalGenrePlaylistNotice,
                             onBack = if (activeCanonicalGenre != null) {
                                 { activeCanonicalGenre = null }
@@ -3876,7 +3878,7 @@ private fun BitChordApp(
                             onBrowseLongPress = { item ->
                                 // A search row does say what it is, so its own type is
                                 // better than what the browse id can be read to mean.
-                                if (item.type != BrowseType.ARTIST) {
+                                if (item.browseId.isNotBlank()) {
                                     openBrowseMenu(
                                         BrowseTarget(
                                             browseId = item.browseId,
@@ -6246,16 +6248,20 @@ private fun LegacyBrowseActionsMenuBody(
         },
         startRenaming = startRenaming,
         onRenameDraftChanged = onRenameDraftChanged,
-        onPlayNext = act(playSongsNext),
-        onAddToQueue = act(addSongsToQueue),
-        onPlay = act { songs -> play(songs, 0) }.takeIf { target.fromCard },
+        // Artist pages are collections of multiple releases, not an ordered
+        // album or playlist. Holding an artist opens its safe context menu,
+        // never a fabricated all-tracks playback or download operation.
+        onPlayNext = act(playSongsNext).takeIf { target.type != BrowseType.ARTIST },
+        onAddToQueue = act(addSongsToQueue).takeIf { target.type != BrowseType.ARTIST },
+        onPlay = act { songs -> play(songs, 0) }
+            .takeIf { target.fromCard && target.type != BrowseType.ARTIST },
         onShuffle = act { songs ->
             // As on a release page: shuffle goes on before the queue
             // is built, so it is built shuffled rather than played
             // out of order.
             QueueShuffle.enableForNextQueue()
             play(songs, songs.indices.random())
-        }.takeIf { target.fromCard },
+        }.takeIf { target.fromCard && target.type != BrowseType.ARTIST },
         onOpen = target.browseId
             ?.takeIf { target.fromCard }
             ?.let { id ->
@@ -6292,7 +6298,7 @@ private fun LegacyBrowseActionsMenuBody(
                         )
                     },
             )
-        }.takeIf { remote },
+        }.takeIf { remote && target.type != BrowseType.ARTIST },
         // Share music metadata until canonical, provider-neutral links exist.
         onShare = if (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) {
             {
