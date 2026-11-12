@@ -51,6 +51,12 @@ import org.robolectric.annotation.ConscryptMode
 class GlobalAppleTopBarChromeTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun globalSettingsPopupLeavesVisibleSpaceBelowTheFortyDpButton() {
+        // Unlike the old 38dp offset, this cannot overlap the 40dp button.
+        assertEquals(54.dp, APPLE_SETTINGS_POPUP_OFFSET)
+        assertTrue(APPLE_SETTINGS_POPUP_OFFSET > AppleFloatingControlMetrics.toolbarDiameter)
+    }
+
     @Test fun accountAvatarBecomesThreeDotSettingsMenu() {
         var enteredSettings = false
         compose.setContent {
