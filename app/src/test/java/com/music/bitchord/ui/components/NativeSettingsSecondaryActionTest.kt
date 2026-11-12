@@ -42,6 +42,22 @@ class NativeSettingsSecondaryActionTest {
         compose.runOnIdle { assertEquals(1, calls) }
     }
 
+    @Test fun SpotifyManualTokenActionKeepsSecondaryGeometryAndNavigates() {
+        var opened = 0
+        compose.setContent {
+            MaterialTheme {
+                NativeSettingsSecondaryAction(
+                    label = "Usar token SPDC",
+                    onClick = { opened++ },
+                )
+            }
+        }
+        compose.onNodeWithTag("native-settings-secondary-action")
+            .assertHeightIsAtLeast(48.dp)
+        compose.onNodeWithText("Usar token SPDC").performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
+    }
+
     @Test fun disabledActionCannotRequestCredentialRemoval() {
         var calls = 0
         compose.setContent {
