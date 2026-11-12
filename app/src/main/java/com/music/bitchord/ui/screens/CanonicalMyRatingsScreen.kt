@@ -3,7 +3,11 @@ package com.music.bitchord.ui.screens
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.RatingDisplay
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,9 +24,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,9 +35,15 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.data.listening.CanonicalRatedLibrarySnapshot
@@ -67,12 +77,53 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 
+/**
+ * Compact native action for personal ratings; the geometry is a BitChord
+ * adaptation, not a measurement of Apple Music's rating editor.
+ */
+@Composable
+internal fun MyRatingsInlineAction(
+    label: String,
+    onClick: () -> Unit,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    subdued: Boolean = false,
+) {
+    val ink = if (subdued) MaterialTheme.colorScheme.onSurfaceVariant
+        else appleMusicKeyColor()
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag("my-ratings-inline-action"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = ink.copy(alpha = if (enabled) 1f else 0.4f),
+            )
+            Spacer(Modifier.width(6.dp))
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = ink.copy(alpha = if (enabled) 1f else 0.4f),
+        )
+    }
+}
+
 /** Library entry works independently of YouTube login and Rediscovery eligibility. */
 @Composable
 internal fun CanonicalMyRatingsEntry(onOpen: () -> Unit) {
-    TextButton(onClick = onOpen) {
-        Text(stringResource(Res.string.my_ratings_title))
-    }
+    MyRatingsInlineAction(
+        label = stringResource(Res.string.my_ratings_title),
+        onClick = onOpen,
+    )
 }
 
 /** This inset is for the shared floating MainActivity chrome, not a replacement for it.
@@ -239,9 +290,11 @@ internal fun CanonicalMyRatingsContent(
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                TextButton(onClick = onBack) {
-                    Text(stringResource(Res.string.rediscovery_close))
-                }
+                MyRatingsInlineAction(
+                    label = stringResource(Res.string.rediscovery_close),
+                    onClick = onBack,
+                    subdued = true,
+                )
             }
             LazyColumn(Modifier.fillMaxSize()) {
                 when (state) {
@@ -284,14 +337,11 @@ internal fun CanonicalMyRatingsContent(
                                     RemoteRatingDetails(remote, localValue = rating.value)
                                 }
                                 if (rating.title != null) {
-                                    TextButton(onClick = { onEdit(rating.recordingId) }) {
-                                        Icon(PlaylistEditorIcons.Ratings, contentDescription = null,
-                                            modifier = Modifier.size(18.dp))
-                                        Text(
-                                            stringResource(Res.string.recording_feedback_edit),
-                                            modifier = Modifier.padding(start = 6.dp),
-                                        )
-                                    }
+                                    MyRatingsInlineAction(
+                                        label = stringResource(Res.string.recording_feedback_edit),
+                                        icon = PlaylistEditorIcons.Ratings,
+                                        onClick = { onEdit(rating.recordingId) },
+                                    )
                                 }
                             }
                         }
@@ -328,14 +378,11 @@ internal fun CanonicalMyRatingsContent(
                             // Remote evidence is read-only; this edits a separate LOCAL
                             // score for the same verified canonical RecordingId.
                             if (row.title != null) {
-                                TextButton(onClick = { onEdit(row.recordingId) }) {
-                                    Icon(PlaylistEditorIcons.Ratings, contentDescription = null,
-                                        modifier = Modifier.size(18.dp))
-                                    Text(
-                                        stringResource(Res.string.recording_feedback_edit),
-                                        modifier = Modifier.padding(start = 6.dp),
-                                    )
-                                }
+                                MyRatingsInlineAction(
+                                    label = stringResource(Res.string.recording_feedback_edit),
+                                    icon = PlaylistEditorIcons.Ratings,
+                                    onClick = { onEdit(row.recordingId) },
+                                )
                             }
                         }
                     }
