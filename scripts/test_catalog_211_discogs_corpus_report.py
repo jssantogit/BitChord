@@ -211,7 +211,7 @@ class CorpusReportTests(unittest.TestCase):
                          case["evidence_links"]["independent_editorial"])
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(2, result["slots"]["source_only"]["reviewed"])
+        self.assertEqual(5, result["slots"]["source_only"]["reviewed"])
         self.assertIsNone(result["metrics"])
 
     def test_three_more_c_negative_revisions_have_source_and_mb_group_evidence(self):
