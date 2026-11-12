@@ -24,6 +24,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.theme.appleMusicKeyColor
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.canonical_loading_more
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Secondary search action using BitChord's Apple-derived neutral surfaces.
@@ -42,6 +45,7 @@ fun NativeSearchSecondaryAction(
 ) {
     val active = enabled && !loading
     val ink = MaterialTheme.colorScheme.onSurface
+    val loadingDescription = stringResource(Res.string.canonical_loading_more)
     val shape = RoundedCornerShape(12.dp)
     Row(
         modifier = modifier
@@ -52,7 +56,7 @@ fun NativeSearchSecondaryAction(
             .heightIn(min = 44.dp)
             .padding(horizontal = 15.dp, vertical = 9.dp)
             .testTag("native-search-secondary-action")
-            .semantics { if (loading) stateDescription = "Carregando" },
+            .semantics { if (loading) stateDescription = loadingDescription },
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {

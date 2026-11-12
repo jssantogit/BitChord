@@ -2,6 +2,9 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -65,5 +68,21 @@ class NativeSearchSecondaryActionTest {
             }
         }
         compose.onNodeWithTag("native-search-secondary-action").assertIsNotEnabled()
+    }
+
+    @Test
+    @Config(qualifiers = "en")
+    fun loadingPaginationUsesLocalizedAccessibilityStatus() {
+        compose.setContent {
+            MaterialTheme {
+                NativeSearchSecondaryAction(
+                    label = "Load more",
+                    loading = true,
+                    onClick = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("native-search-secondary-action")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Loading…"))
     }
 }
