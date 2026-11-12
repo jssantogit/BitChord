@@ -4653,9 +4653,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 else emptyList(),
             )
             val combined = withVerifiedLocalBadges(
-                editionLabelRows.filter { row ->
+                canonicalSearchRowsWithoutRedundantEditions(editionLabelRows.filter { row ->
                     row.kind != CanonicalSearchKind.RECORDING || canonicalStreamingTitleIsSafe(row.title)
-                },
+                }),
             )
             if (_searchSource.value != SearchSource.CANONICAL ||
                 _query.value.trim() != query
@@ -4788,7 +4788,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (editions is MusicBrainzCatalogSearchResult.Success) editions.page.items
                     else emptyList(),
                 )
-                val verified = withVerifiedLocalBadges(named)
+                val verified = withVerifiedLocalBadges(
+                    canonicalSearchRowsWithoutRedundantEditions(named),
+                )
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != cursor.query ||
                     canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null

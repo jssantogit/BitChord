@@ -114,6 +114,35 @@ internal fun canonicalSearchRowsWithOfficialEditionTitles(
     }
 }
 
+/**
+ * Group cards represent published works; Release cards represent editions.
+ * Show one mainstream card when an exact Release -> Group MBID and identical
+ * display title prove a redundant edition. Do NOT deduplicate by title alone:
+ * LE SSERAFIM's EASY EP and EASY (English ver.) Single have different Group
+ * identities, and differently named physical/territorial editions remain
+ * discoverable.
+ *
+ * Unknown membership is never a reason to suppress an edition. This changes
+ * search presentation only, not Room release/edition identities.
+ */
+internal fun canonicalSearchRowsWithoutRedundantEditions(
+    rows: List<CanonicalCatalogSearchRow>,
+): List<CanonicalCatalogSearchRow> {
+    val groups = rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+        .associateBy { it.musicBrainzId.trim().lowercase(java.util.Locale.ROOT) }
+    if (groups.isEmpty()) return rows
+    fun normalizedTitle(value: String): String =
+        value.trim().replace(Regex("""\s+"""), " ").lowercase(java.util.Locale.ROOT)
+    return rows.filterNot { row ->
+        if (row.kind != CanonicalSearchKind.RELEASE) return@filterNot false
+        val groupId = row.coverGroupMbid
+            ?.trim()?.lowercase(java.util.Locale.ROOT) ?: return@filterNot false
+        val group = groups[groupId] ?: return@filterNot false
+        normalizedTitle(row.title) == normalizedTitle(group.title)
+    }
+}
+
 /** Live facts win over cache. Only failed entity kinds may use stale evidence. */
 internal fun mergeCanonicalSearchRows(
     live: List<CanonicalCatalogSearchRow>,
@@ -134,4 +163,6 @@ internal fun canonicalProgressiveSearchPreview(
     existing: List<CanonicalCatalogSearchRow>,
     fresh: List<CanonicalCatalogSearchRow>,
 ): List<CanonicalCatalogSearchRow> =
-    (fresh + existing).distinctBy { it.kind to it.musicBrainzId }
+    canonicalSearchRowsWithoutRedundantEditions(
+        (fresh + existing).distinctBy { it.kind to it.musicBrainzId },
+    )
