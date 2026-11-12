@@ -5157,6 +5157,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          */
 
         fun browseTypeOf(browseId: String, fallback: BrowseType = BrowseType.OTHER): BrowseType = when {
+            // Canonical IDs are typed declarations; never infer an artist
+            // or an album from a display title, and never treat an Artist
+            // as a generic playlist for long-press queue actions.
+            browseId.startsWith("catalog:ARTIST:") -> BrowseType.ARTIST
+            browseId.startsWith("catalog:RELEASE:") ||
+                browseId.startsWith("catalog:RELEASE_GROUP:") -> BrowseType.ALBUM
             // Built for playlists, but an album downloaded whole opens through
             // the same prefix, and its page should read as the album it is.
             browseId.startsWith(Downloads.PLAYLIST_PREFIX) ->
