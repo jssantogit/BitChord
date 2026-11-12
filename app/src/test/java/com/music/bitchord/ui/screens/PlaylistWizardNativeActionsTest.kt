@@ -25,6 +25,31 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistWizardNativeActionsTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun primaryWizardActionHasNative50dpTargetAndCallsSave() {
+        var saves = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardPrimaryAction(label = "Salvar", onClick = { saves++ })
+            }
+        }
+        compose.onNodeWithTag("playlist-wizard-primary-action")
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(50.dp)
+        compose.onNodeWithText("Salvar").performClick()
+        compose.runOnIdle { assertEquals(1, saves) }
+    }
+
+    @Test fun disabledPrimaryWizardActionCannotCommit() {
+        var saves = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardPrimaryAction(label = "Salvar", enabled = false, onClick = { saves++ })
+            }
+        }
+        compose.onNodeWithTag("playlist-wizard-primary-action").assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(0, saves) }
+    }
+
     @Test fun neutralSecondaryActionHas48dpTargetAndPreservesClick() {
         var calls = 0
         compose.setContent {
