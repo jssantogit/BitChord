@@ -392,6 +392,64 @@ class MusicBrainzReleaseGraphIndexTest {
         } finally { db.close() }
     }
 
+
+    @Test fun exactEditionReorderUpdatesLegacyPositionForMusicBrainzOnlyOwnership() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val index = MusicBrainzCatalogIndex(db)
+            val initial = detail(release, listOf(track to recording))
+            index.persistReleaseDetail(initial)
+            val dao = db.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            val recordingId = dao.entityIdForExternalIdentity("musicbrainz", "recording", recording)!!
+            assertEquals(1, dao.catalogReleaseTracksForRecording(recordingId).single { it.releaseId == releaseId }.trackNumber)
+
+            val updated = initial.copy(tracks = listOf(
+                initial.tracks.single().copy(mediumNumber = 2, trackNumber = 7),
+            ))
+            index.persistReleaseDetail(updated)
+
+            assertEquals(7, index.cachedRelease(release)!!.tracks.single().trackNumber)
+            assertEquals(7, dao.catalogReleaseTracksForRecording(recordingId).single { it.releaseId == releaseId }.trackNumber)
+            assertEquals(setOf("musicbrainz"), dao.catalogReleaseTrackSources(
+                releaseId, recordingId,
+            ).map { it.provider }.toSet())
+        } finally { db.close() }
+    }
+
+    @Test fun editionReorderCannotRewriteCoOwnedLegacyTrackPosition() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val index = MusicBrainzCatalogIndex(db)
+            val initial = detail(release, listOf(track to recording))
+            index.persistReleaseDetail(initial)
+            val dao = db.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            val recordingId = dao.entityIdForExternalIdentity("musicbrainz", "recording", recording)!!
+            dao.upsertReleaseTrack(ReleaseTrackEntity(releaseId, recordingId, 44))
+            dao.upsertCatalogReleaseTrackSource(com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity(
+                releaseId, recordingId, "third-party",
+            ))
+            index.persistReleaseDetail(initial.copy(tracks = listOf(
+                initial.tracks.single().copy(trackNumber = 7),
+            )))
+            assertEquals(7, index.cachedRelease(release)!!.tracks.single().trackNumber)
+            assertEquals(44, dao.catalogReleaseTracksForRecording(recordingId).single { it.releaseId == releaseId }.trackNumber)
+            assertEquals(setOf("musicbrainz", "third-party"),
+                dao.catalogReleaseTrackSources(releaseId, recordingId).map { it.provider }.toSet())
+        } finally { db.close() }
+    }
+
     @Test fun malformedRefreshCannotAddPartialTracksToPreviouslyCachedEdition() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
