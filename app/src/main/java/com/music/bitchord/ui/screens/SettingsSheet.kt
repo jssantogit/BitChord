@@ -60,7 +60,6 @@ import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Gradient
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -1542,7 +1541,7 @@ internal fun SettingsScreen(
             val dontRepeatSongsTitle = stringResource(R.string.dont_repeat_songs)
             row(dontRepeatSongsTitle, "radio", "suggestions") {
                 SettingsRow(
-                    icon = Icons.Rounded.History,
+                    icon = Icons.Rounded.FilterAlt,
                     title = dontRepeatSongsTitle,
                     subtitle = stringResource(R.string.dont_repeat_songs_subtitle),
                     trailing = {
