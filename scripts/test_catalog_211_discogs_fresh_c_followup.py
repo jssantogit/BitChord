@@ -94,6 +94,25 @@ class FreshCFollowupTest(unittest.TestCase):
                              for row in output["observations"]))
         self.assertEqual(0, output["confirmed_source_only_cases"])
 
+    def test_reviewed_c05_repackage_release_is_excluded_from_future_c_scans(self):
+        # A different MB Release title can live inside a canonical RG named
+        # for the original album. C-05 already exists as a MusicBrainz
+        # Release; never recycle its Discogs Release ID as 'Discogs-only'.
+        doc = index()
+        prev = observed(doc)
+        doc["artists"][0]["candidate_index_hints"][-1] = hint(32437206)
+        prepared = build_followup_index(doc, prev, MANIFEST)
+        self.assertIsNotNone(prepared)
+        self.assertNotIn(32437206, {
+            item["source_id"]
+            for artist in prepared["artists"]
+            for item in artist["candidate_index_hints"]
+        })
+        followup = probe_followup(doc, prev, MANIFEST, provider)
+        self.assertFalse(any(x["discogs_release_id"] == 32437206
+                             for x in followup["observations"]))
+        self.assertEqual(0, followup["confirmed_source_only_cases"])
+
     def test_cannot_revisit_existing_b_release_as_new_c_case(self):
         result = probe_followup(index(), observed(index()), MANIFEST, provider)
         rows = result["observations"]
