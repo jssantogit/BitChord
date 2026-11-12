@@ -1912,3 +1912,36 @@ A implementação não altera o catálogo MusicBrainz, tags, Room,
 playback, listas ou seleção automática de prensagem. A validação
 da compilação Android e teste físico permanece separada do
 corpus Python.
+
+### Fechamento do gate Android e correção do denominador A-03
+
+A implementação de proteção source-only para títulos de **MusicBrainz
+Official Releases**, com até 3 × 100 IDs e paginação/identidades
+fail-closed, passou em
+[**CI Android focada #43199315323**](https://github.com/jssantogit/BitChord/actions/runs/43199315323)
+**COMPLETED/SUCCESS**, inclusive o teste de repackage de nome
+diferente do ReleaseGroup e os controles que preservam remixes
+ou versões ao vivo distintas. Esse gate comprova a compilação e
+testes JVM focados; **não substitui APK/smoke em dispositivo**.
+
+A divergência A-03 *Christmas EveL* foi formalmente distinguida
+de uma correção confirmada. `editorial_type_dispute_only=true`
+exige coorte A, fontes explícitas e tipos MB/fonte diferentes.
+O relatório expõe `editorial_type_disputes=1`, mas
+`type_correction.eligible=0` e `corrected=0`:
+marketing JYP "Holiday Special Single" pode coexistir com as
+regras de EP do MusicBrainz para uma obra de quatro faixas.
+Um caso com tipos já iguais não pode usar a marca para ocultar
+uma divergência. [**CI final de corpus
+#43200460173**](https://github.com/jssantogit/BitChord/actions/runs/43200460173)
+**SUCCESS**, 30/30 revisões distintas e nenhum resultado
+falso positivo inventado.
+
+A PR #211 permanece deliberadamente **Draft/unmerged** e
+MusicBrainz é o provedor de identidade/obra canônico.
+A coorte C não demonstrou recuperações realmente ausentes da
+fonte canônica; o avanço de código que efetivamente fecha uma
+lacuna identificada é a **redução dos falsos inéditos** no
+shelf complementar de artista, ainda não validada visualmente
+no Android físico. A decisão de merge exige testes de dispositivo
+e avaliação do proprietário.
