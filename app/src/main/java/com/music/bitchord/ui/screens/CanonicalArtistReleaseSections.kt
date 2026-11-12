@@ -137,7 +137,11 @@ internal fun canonicalArtistReleaseSections(
         .thenBy { it.title.lowercase(java.util.Locale.ROOT) }.thenBy { it.id }
     val albums = categorized["album"].orEmpty().sortedWith(latestFirst)
     val singles = categorized["single"].orEmpty().sortedWith(latestFirst)
-    val other = categorized["other"].orEmpty().sortedWith(latestFirst)
+    // Unclassified releases have no proven type. Keep verified dates newest-first
+    // but retain artist-shelf order for undated ties; alphabetic sorting would
+    // reshuffle unresolved source rows even though their chronology is unknown.
+    val other = categorized["other"].orEmpty()
+        .sortedWith(compareByDescending<ReleaseEntity>(::verifiedDay))
     val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
     val recent = albums.firstOrNull { album ->
         evidence[album.id]?.primaryType?.trim()?.equals("Album", ignoreCase = true) == true &&
