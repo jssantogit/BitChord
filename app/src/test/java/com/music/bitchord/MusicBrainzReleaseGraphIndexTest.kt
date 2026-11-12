@@ -26,6 +26,57 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class MusicBrainzReleaseGraphIndexTest {
+    // Synthetic MusicBrainz response: schema-valid zero and positive positions must round-trip.
+    @Test fun zeroAndPositivePositionsRoundTripThroughRoomWithoutPartialEdition() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val mediumZeroTrack = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val mediumZeroRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val trackZero = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val trackZeroRecording = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            val positiveTrack = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+            val positiveRecording = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$release","title":"Synthetic zero-position edition","media":[
+                    {"position":0,"tracks":[
+                        {"id":"$mediumZeroTrack","position":7,"title":"Zero medium","recording":{"id":"$mediumZeroRecording","title":"Zero medium"}}
+                    ]},
+                    {"position":3,"tracks":[
+                        {"id":"$trackZero","position":0,"title":"Zero track","recording":{"id":"$trackZeroRecording","title":"Zero track"}}
+                    ]},
+                    {"position":8,"tracks":[
+                        {"id":"$positiveTrack","position":13,"title":"Positive positions","recording":{"id":"$positiveRecording","title":"Positive positions"}}
+                    ]}
+                ]}"""
+            }))
+
+            val online = (graph.lookupRelease(release) as
+                MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistReleaseDetail(online)
+            val cached = index.cachedRelease(release)!!
+
+            assertEquals(
+                listOf(mediumZeroTrack, trackZero, positiveTrack),
+                cached.tracks.map { it.trackMbid },
+            )
+            assertEquals(
+                listOf(0 to 7, 3 to 0, 8 to 13),
+                cached.tracks.map { it.mediumNumber to it.trackNumber },
+            )
+            assertEquals(online.tracks.map { it.trackMbid }, cached.tracks.map { it.trackMbid })
+            assertEquals(
+                online.tracks.map { it.mediumNumber to it.trackNumber },
+                cached.tracks.map { it.mediumNumber to it.trackNumber },
+            )
+        } finally { db.close() }
+    }
+
     @Test fun sameEditionTrackRecordingCorrectionPreservesOldRecordingOwnershipAndRejectsEditionReuse() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
