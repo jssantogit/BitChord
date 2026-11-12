@@ -248,6 +248,40 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual([], report["leads"][0]["version_ids"])
         self.assertEqual("complete_small_master_candidate", report["leads"][1]["status"])
 
+    def test_large_master_still_lists_exact_mb_official_editions_without_discogs_pair(self):
+        # The >8 Discogs versions must remain inconclusive, but that does
+        # not make the exact MusicBrainz Releases of the linked RG disappear.
+        result = scout([("Artist A", A)], set(), fixtures(large=True))
+        large = next(x for x in result["leads"] if x["master_id"] == 500)
+        self.assertEqual("master_too_large_not_exhaustive", large["status"])
+        self.assertEqual([], large["version_ids"])
+        self.assertEqual("complete_official_release_index",
+                         large["mb_release_browse_status"])
+        self.assertEqual([RELEASE],
+                         [x["release_mbid"] for x in large["mb_official_release_candidates"]])
+        self.assertTrue(all(
+            x["verified_discogs_identity"] is False
+            for x in large["mb_official_release_candidates"]
+        ))
+        self.assertEqual(0, result["verified_edition_count"])
+        self.assertEqual(0, result["reviewed_corpus_cases"])
+        self.assertLessEqual(result["source_http_requests"], REQUEST_LIMIT)
+
+    def test_large_master_mb_release_browse_is_inconclusive_when_incomplete(self):
+        source = fixtures(large=True)
+        def get(url):
+            if url == url_editions(G):
+                return edition_page(G, complete=False)
+            return source(url)
+        report = scout([("Artist A", A)], set(), get)
+        large = next(x for x in report["leads"] if x["master_id"] == 500)
+        self.assertEqual("master_too_large_not_exhaustive", large["status"])
+        self.assertEqual("incomplete_canonical_release_index",
+                         large["mb_release_browse_status"])
+        self.assertEqual([], large["mb_official_release_candidates"])
+        self.assertEqual([], large["version_ids"])
+        self.assertEqual(0, report["verified_edition_count"])
+
     def test_different_groups_with_one_master_cannot_be_unique_leads(self):
         report = scout([("Artist A", A), ("Artist B", B)], set(),
                        fixtures(conflicting=True))
