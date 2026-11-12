@@ -269,11 +269,10 @@ class MusicBrainzCatalogGraphTest {
                     }]}]}"""
             },
         ))
-        val detail = (graph.lookupRelease(worldwide) as
-            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
-        assertEquals(1, detail.tracks.size)
-        // There is another unreturned Track; never claim every Recording is video.
-        assertEquals(null, detail.isVideoOnlyContent)
+        val result = graph.lookupRelease(worldwide)
+        // Another unreturned Track cannot certify every Recording is video
+        // or be promoted into a complete cached edition.
+        assertTrue(result is MusicBrainzCatalogGraphResult.Failure)
     }
 
     @Test fun invalidRecordingIdentityCannotBecomePositiveVideoOnlyEvidence() = runBlocking {
@@ -290,10 +289,9 @@ class MusicBrainzCatalogGraphTest {
                     }]}]}"""
             },
         ))
-        val detail = (graph.lookupRelease(worldwide) as
-            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
-        assertEquals(0, detail.tracks.size)
-        assertEquals(null, detail.isVideoOnlyContent)
+        val result = graph.lookupRelease(worldwide)
+        // The declared track exists, but its recording identity is invalid.
+        assertTrue(result is MusicBrainzCatalogGraphResult.Failure)
     }
 
     @Test fun contradictoryVideoFormatAndRecordingFlagsRemainInconclusive() = runBlocking {

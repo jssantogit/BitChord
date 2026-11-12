@@ -180,8 +180,8 @@ internal class MusicBrainzCatalogGraph(
             val title = data.string("title")?.takeIf(String::isNotBlank)
                 ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
             val media = data.array("media")
-            val parsedTracks = media.flatMapIndexed { mediumIndex, medium ->
-                val mediumObj = medium as? JsonObject ?: return@flatMapIndexed emptyList()
+            val decodedByMedium = media.mapIndexed { mediumIndex, medium ->
+                val mediumObj = medium as? JsonObject ?: return@mapIndexed emptyList()
                 val number = mediumObj.integer("position")?.takeIf { it > 0 } ?: (mediumIndex + 1)
                 mediumObj.array("tracks").mapIndexedNotNull { index, entry ->
                     val track = entry as? JsonObject ?: return@mapIndexedNotNull null
@@ -204,6 +204,31 @@ internal class MusicBrainzCatalogGraph(
                         recordingDurationMs = recording.long("length")?.takeIf { it >= 0 },
                     )
                 }
+            }
+            val parsedTracks = decodedByMedium.flatten()
+            // Media track-count belongs to THIS specific release and medium.
+            // Truncated or undecodable Tracks cannot be published as a
+            // complete edition or overwrite an existing offline tracklist.
+            val declaredCountIncomplete = media.indices.any { index ->
+                val medium = media[index] as? JsonObject ?: return@any false
+                if ("track-count" !in medium) return@any false
+                val expected = medium.integer("track-count") ?: return@any true
+                val rawTracks = medium["tracks"] as? JsonArray ?: return@any true
+                expected < 0 || rawTracks.size != expected ||
+                    decodedByMedium[index].size != expected ||
+                    decodedByMedium[index].map { it.trackMbid }.distinct().size != expected
+            }
+            // Edition-scoped Track IDs cannot repeat across media either.
+            val declaredCountsPresent = media.any { medium ->
+                medium is JsonObject && "track-count" in medium
+            }
+            if (declaredCountIncomplete ||
+                (declaredCountsPresent &&
+                    parsedTracks.map { it.trackMbid }.distinct().size != parsedTracks.size)
+            ) {
+                return MusicBrainzCatalogGraphResult.Failure(
+                    MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                )
             }
             // An MB Track ID uniquely identifies its edition-specific Recording.
             // Contradictory rows are not silently collapsed into arbitrary truth.
