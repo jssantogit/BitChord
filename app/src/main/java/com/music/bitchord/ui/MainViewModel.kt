@@ -1918,36 +1918,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ))
                     } else {
                         val detail = chosen
-                        val available = try {
+                        val page = try {
                             withContext(Dispatchers.IO) {
                                 val db = CanonicalCatalogDatabase.get(getApplication<Application>())
-                                MusicBrainzCatalogIndex(db).persistReleaseDetail(detail)
-                                db.catalogDao().musicBrainzRecordingMbidsWithAssets(
-                                    detail.tracks.map { it.recordingMbid },
-                                ).toSet()
+                                canonicalPersistedReleaseDetailPage(
+                                    database = db,
+                                    index = MusicBrainzCatalogIndex(db),
+                                    incoming = detail,
+                                    title = editorialTitle,
+                                    summary = null,
+                                    artworkUri = initialArtwork.takeIf {
+                                        canonicalEditorialReleaseType(entry) != null
+                                    },
+                                    inheritedFromGroup = true,
+                                    expectedGroupMbid = entry.musicBrainzId,
+                                )
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { emptySet() }
+                        } catch (_: Exception) { null }
                         // Publish tracks immediately; remote cover is a separate,
                         // cancellable decoration, never a tracklist prerequisite.
-                        UiState.Success(CanonicalCatalogDetailPage(
-                            title = editorialTitle,
-                            summary = null,
-                            artworkUri = initialArtwork.takeIf {
-                                canonicalEditorialReleaseType(entry) != null
-                            },
-                            rows = canonicalReleaseTracksWithArtwork(detail.tracks.map { track ->
-                                CanonicalCatalogSearchRow(
-                                    musicBrainzId = track.recordingMbid,
-                                    kind = CanonicalSearchKind.RECORDING,
-                                    title = track.title,
-                                    subtitle = track.artistDisplay ?: detail.artistDisplay,
-                                    hasCatalogedAsset = track.recordingMbid in available,
-                                    trackMbid = track.trackMbid,
-                                    durationMs = track.durationMs,
-                                )
-                            }, initialArtwork, inheritedFromGroup = true),
+                        if (page != null) UiState.Success(page)
+                        else UiState.Error(getApplication<Application>().getString(
+                            R.string.canonical_discovery_cache_empty,
                         ))
                     }
                 }
@@ -1956,34 +1950,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ) {
                     is MusicBrainzCatalogGraphResult.Success -> {
                         val details = result.value
-                        val available = try {
+                        val page = try {
                             withContext(Dispatchers.IO) {
                                 val db = CanonicalCatalogDatabase.get(getApplication<Application>())
-                                MusicBrainzCatalogIndex(db).persistReleaseDetail(details)
-                                db.catalogDao().musicBrainzRecordingMbidsWithAssets(
-                                    details.tracks.map { it.recordingMbid },
-                                ).toSet()
+                                canonicalPersistedReleaseDetailPage(
+                                    database = db,
+                                    index = MusicBrainzCatalogIndex(db),
+                                    incoming = details,
+                                    title = details.title,
+                                    summary = listOfNotNull(details.country, details.releaseDate)
+                                        .joinToString(" · "),
+                                    artworkUri = entry.artworkUri,
+                                    includeTrackPosition = true,
+                                )
                             }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) {
-                            emptySet()
+                            null
                         }
-                        UiState.Success(CanonicalCatalogDetailPage(
-                            title = details.title,
-                            artworkUri = entry.artworkUri,
-                            summary = listOfNotNull(details.country, details.releaseDate)
-                                .joinToString(" · "),
-                            rows = canonicalReleaseTracksWithArtwork(details.tracks.map { track -> CanonicalCatalogSearchRow(
-                                musicBrainzId = track.recordingMbid,
-                                kind = CanonicalSearchKind.RECORDING,
-                                title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
-                                subtitle = track.artistDisplay ?: details.artistDisplay,
-                                hasCatalogedAsset = track.recordingMbid in available,
-                                trackMbid = track.trackMbid,
-                                durationMs = track.durationMs,
-                            ) }, entry.artworkUri),
-                        ))
+                        if (page != null) UiState.Success(page)
+                        else UiState.Error("Unable to load release tracks")
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> {
                         val cached = try {

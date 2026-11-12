@@ -8,20 +8,40 @@ import io.ktor.client.plugins.ResponseException
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+
+internal const val MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES = 2_000_000L
 
 internal interface MusicBrainzTransport {
     suspend fun get(
         path: String,
         parameters: Map<String, String>,
         userAgent: String,
+    ): String
+}
+
+/** Opt-in bounded body contract; unbounded transports must never service proof requests. */
+internal interface BoundedMusicBrainzTransport {
+    suspend fun getLimited(
+        path: String,
+        parameters: Map<String, String>,
+        userAgent: String,
+        maxResponseBytes: Long,
     ): String
 }
 
@@ -35,7 +55,7 @@ internal class KtorMusicBrainzTransport(
             socketTimeoutMillis = 15_000L
         }
     },
-) : MusicBrainzTransport {
+) : MusicBrainzTransport, BoundedMusicBrainzTransport {
     override suspend fun get(
         path: String,
         parameters: Map<String, String>,
@@ -45,12 +65,72 @@ internal class KtorMusicBrainzTransport(
         endpoint = metadataEndpointLabel(path),
         status = { response: Pair<Int, String> -> response.first },
     ) {
-        val response = client.get("${baseUrl.trimEnd('/')}/$path") {
-            header(HttpHeaders.UserAgent, userAgent)
-            parameters.forEach { (name, value) -> parameter(name, value) }
-        }
+        val response = request(path, parameters, userAgent)
         response.status.value to response.bodyAsText()
     }.second
+
+    override suspend fun getLimited(
+        path: String,
+        parameters: Map<String, String>,
+        userAgent: String,
+        maxResponseBytes: Long,
+    ): String = measureMetadataHttp(
+        provider = "musicbrainz",
+        endpoint = metadataEndpointLabel(path),
+        status = { response: Pair<Int, String> -> response.first },
+    ) {
+        require(maxResponseBytes > 0L && maxResponseBytes <= MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES)
+        val response = request(path, parameters, userAgent)
+        response.status.value to response.readBodyLimited(maxResponseBytes)
+    }.second
+
+    private suspend fun request(
+        path: String,
+        parameters: Map<String, String>,
+        userAgent: String,
+    ): HttpResponse = client.get("${baseUrl.trimEnd('/')}/$path") {
+        header(HttpHeaders.UserAgent, userAgent)
+        parameters.forEach { (name, value) -> parameter(name, value) }
+    }
+
+    private suspend fun HttpResponse.readBodyLimited(maxBytes: Long): String {
+        val declaredLength = headers[HttpHeaders.ContentLength]?.toLongOrNull()
+        if (declaredLength != null && declaredLength > maxBytes) {
+            val tooLarge = IOException("MusicBrainz XML response exceeds limit")
+            bodyAsChannel().cancel(tooLarge)
+            throw tooLarge
+        }
+        val channel: ByteReadChannel = bodyAsChannel()
+        val output = ByteArrayOutputStream(minOf(maxBytes, 8_192L).toInt())
+        val buffer = ByteArray(8_192)
+        var total = 0L
+        while (true) {
+            // Read at most one byte beyond the limit: this detects chunked or
+            // under-reported bodies without ever buffering their full contents.
+            val requested = minOf(buffer.size.toLong(), maxBytes - total + 1L).toInt()
+            val read = channel.readAvailable(buffer, 0, requested)
+            if (read == -1) break
+            if (read == 0) {
+                yield()
+                continue
+            }
+            if (total + read > maxBytes) {
+                val tooLarge = IOException("MusicBrainz XML response exceeds limit")
+                channel.cancel(tooLarge)
+                throw tooLarge
+            }
+            output.write(buffer, 0, read)
+            total += read
+        }
+        if (declaredLength != null && total != declaredLength) {
+            throw IOException("MusicBrainz XML Content-Length mismatch")
+        }
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        return decoder.decode(ByteBuffer.wrap(output.toByteArray())).toString()
+    }
+
 }
 
 /**
@@ -106,14 +186,27 @@ internal class MusicBrainzClient(
     suspend fun get(
         path: String,
         parameters: Map<String, String> = mapOf("fmt" to "json"),
+    ): String = request { transport.get(path, parameters, userAgent) }
+
+    suspend fun getLimited(
+        path: String,
+        parameters: Map<String, String>,
+        maxResponseBytes: Long,
     ): String {
+        require(maxResponseBytes > 0L && maxResponseBytes <= MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES)
+        val bounded = transport as? BoundedMusicBrainzTransport
+            ?: throw IOException("MusicBrainz transport does not support bounded responses")
+        return request { bounded.getLimited(path, parameters, userAgent, maxResponseBytes) }
+    }
+
+    private suspend fun request(call: suspend () -> String): String {
         var attempt = 1
         while (true) {
             try {
                 // A retry is a new request and must pass through the same shared
                 // budget as the first attempt and every other MusicBrainz endpoint.
                 return rateLimiter.runLimited {
-                    transport.get(path, parameters, userAgent)
+                    call()
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled

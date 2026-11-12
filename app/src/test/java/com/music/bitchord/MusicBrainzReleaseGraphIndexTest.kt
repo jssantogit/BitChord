@@ -6,12 +6,15 @@ import com.music.bitchord.data.catalog.ExternalIdentityEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.ReleaseTrackEntity
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
+import com.music.bitchord.data.catalog.metadata.BoundedMusicBrainzTransport
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
+import com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseJsonCompleteness
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -77,6 +80,124 @@ class MusicBrainzReleaseGraphIndexTest {
         } finally { db.close() }
     }
 
+    @Test fun completeXmlSnapshotAllowsOnlyObsoleteMusicBrainzTrackSidecarRemoval() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val ra = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val rb = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            val xml = """
+                <metadata><release id="$release"><medium-list count="1"><medium>
+                <position>1</position><track-list count="1"><track id="$a"><position>1</position>
+                <recording id="$ra"/></track></track-list></medium></medium-list></release></metadata>
+            """.trimIndent()
+            var xmlRequests = 0
+            val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    xmlRequests++
+                    assertEquals("release/$release", path)
+                    assertEquals("xml", parameters["fmt"])
+                    assertEquals("recordings", parameters["inc"])
+                    return xml
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>, userAgent: String,
+                    maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = client)
+            index.persistReleaseDetail(detail(release, listOf(a to ra, b to rb)))
+            val dao = db.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            val recordingB = dao.entityIdForExternalIdentity("musicbrainz", "recording", rb)!!
+            dao.upsertMediaAsset(MediaAssetEntity("asset-b", recordingB, "local", "b", "content://b", null, null, null, null))
+            dao.upsertReleaseTrack(ReleaseTrackEntity(releaseId, recordingB, 2))
+            dao.upsertCatalogReleaseTrackSource(com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity(releaseId, recordingB, "third-party"))
+
+            index.persistReleaseDetail(detail(release, listOf(a to ra)))
+
+            assertEquals(listOf(a), dao.catalogMusicBrainzTracks(releaseId).map { it.trackMbid })
+            assertEquals(recordingB, dao.recordingById(recordingB)!!.id)
+            assertEquals("asset-b", dao.mediaAsset("local", "b")!!.id)
+            assertTrue(dao.catalogReleaseTracksForRecording(recordingB).any { it.releaseId == releaseId })
+            assertTrue(dao.catalogReleaseTrackSources(releaseId, recordingB).any { it.provider == "third-party" })
+            assertEquals(1, xmlRequests)
+        } finally { db.close() }
+    }
+
+    private fun detail(release: String, tracks: List<Pair<String, String>>) =
+        MusicBrainzCatalogReleaseDetail(release, null, "Edition", null, null, null,
+            tracks.mapIndexed { i, (track, recording) -> MusicBrainzCatalogTrack(track, recording, "T$i", 1, i + 1, null) },
+            completeness = MusicBrainzReleaseJsonCompleteness(true, true, true))
+
+    @Test fun additiveUpdateNeverFetchesXmlAndUnprovenRemovalPreservesSidecar() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val ra = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val rb = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            var xmlCalls = 0
+            val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    xmlCalls++
+                    error("offline")
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>, userAgent: String,
+                    maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = client)
+            index.persistReleaseDetail(detail(release, listOf(a to ra)))
+            index.persistReleaseDetail(detail(release, listOf(a to ra, b to rb)))
+            assertEquals(0, xmlCalls)
+            index.persistReleaseDetail(detail(release, listOf(a to ra)))
+            val releaseId = db.catalogDao().entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            assertEquals(setOf(a, b), db.catalogDao().catalogMusicBrainzTracks(releaseId).map { it.trackMbid }.toSet())
+            assertEquals(1, xmlCalls)
+            index.persistReleaseDetail(detail(release, emptyList()))
+            assertEquals(setOf(a, b), db.catalogDao().catalogMusicBrainzTracks(releaseId).map { it.trackMbid }.toSet())
+            assertEquals(1, xmlCalls)
+        } finally { db.close() }
+    }
+
+    @Test fun sidecarRaceDuringXmlProofAbortsReconciliation() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val ra = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val rb = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            lateinit var index: MusicBrainzCatalogIndex
+            val xml = """<metadata><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$a"><position>1</position><recording id="$ra"/></track></track-list></medium></medium-list></release></metadata>"""
+            val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    val dao = db.catalogDao()
+                    val row = dao.catalogMusicBrainzTrack(b)!!
+                    dao.upsertCatalogMusicBrainzTrack(row.copy(title = "concurrent edit"))
+                    return xml
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>, userAgent: String,
+                    maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            index = MusicBrainzCatalogIndex(db, proofClient = client)
+            index.persistReleaseDetail(detail(release, listOf(a to ra, b to rb)))
+
+            val result = index.persistReleaseDetail(detail(release, listOf(a to ra)))
+
+            val releaseId = db.catalogDao().entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            assertNull(result)
+            assertEquals(setOf(a, b), db.catalogDao().catalogMusicBrainzTracks(releaseId).map { it.trackMbid }.toSet())
+            assertEquals("concurrent edit", db.catalogDao().catalogMusicBrainzTrack(b)!!.title)
+        } finally { db.close() }
+    }
     @Test fun sameEditionTrackRecordingCorrectionPreservesOldRecordingOwnershipAndRejectsEditionReuse() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
@@ -137,8 +258,8 @@ class MusicBrainzReleaseGraphIndexTest {
                 ))
             }
             assertTrue(failedReuse.isFailure)
-            // Recording 2 was persisted before persistReleaseDetail's transaction;
-            // only the rejected release identity and Track association must roll back.
+            // The rejected correction rolls back its release identity and Track association;
+            // pre-existing Recording 2 remains untouched.
             assertNull(dao.entityIdForExternalIdentity("musicbrainz", "release", otherRelease))
             assertEquals(releaseId, dao.catalogMusicBrainzTrack(track)!!.releaseId)
 

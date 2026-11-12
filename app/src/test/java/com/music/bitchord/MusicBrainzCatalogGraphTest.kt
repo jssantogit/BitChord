@@ -41,6 +41,24 @@ class MusicBrainzCatalogGraphTest {
     private val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
     private val sped = "3e619ba2-34f0-4649-83d8-05483e2fabe5"
 
+    @Test fun releaseGraphPreservesExplicitZeroPositionsAsCompleteEvidence() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String =
+                """{"id":"$worldwide","title":"Edition","media":[{"position":0,"track-count":1,"tracks":[{"id":"$track","position":0,"title":"Track","recording":{"id":"$recording","title":"Track"}}]}]}"""
+        }, rateLimiter = com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter(delayMillis = {})))
+
+        val result = graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
+
+        assertEquals(0, result.value.tracks.single().mediumNumber)
+        assertEquals(0, result.value.tracks.single().trackNumber)
+        assertTrue(result.value.completeness.countsExplicitAndExact)
+        assertTrue(result.value.completeness.offsetsValid)
+        assertTrue(result.value.completeness.positionsExplicitUnique)
+    }
+
     @Test fun artistOfficialEditionBatchProvidesExactGroupEdgesForFastArtworkEnrichment() = runBlocking {
         val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
         var calls = 0
