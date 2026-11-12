@@ -38,8 +38,10 @@ def read_barcode_search(payload: object, barcode: str, artist_mbid: str) -> dict
     if not isinstance(payload, dict) or not MBID.fullmatch(artist_mbid):
         return None
     count, rows = payload.get("count"), payload.get("releases")
-    if (type(count) is not int or not 0 <= count <= MB_SEARCH_LIMIT or
-        not isinstance(rows, list) or len(rows) != count):
+    # MusicBrainz count is the TOTAL number of hits, not page length.
+    # Accept a complete first page even if further results are unobserved.
+    if (type(count) is not int or count < 0 or
+        not isinstance(rows, list) or len(rows) != min(count, MB_SEARCH_LIMIT)):
         return None
     identities = set()
     matches = set()
@@ -70,7 +72,8 @@ def read_barcode_search(payload: object, barcode: str, artist_mbid: str) -> dict
             matches.add(rid.lower())
         else:
             other_artist = True
-    return {"matching_release_mbids": sorted(matches), "other_artist_hit": other_artist}
+    return {"matching_release_mbids": sorted(matches), "other_artist_hit": other_artist,
+            "truncated": count > MB_SEARCH_LIMIT}
 
 
 def reconcile(index: dict, editions: dict, get) -> dict:
@@ -132,6 +135,7 @@ def reconcile(index: dict, editions: dict, get) -> dict:
             row["status"] = "multiple_source_barcodes_unresolved"
             continue
         found, collision, failed, zero_hit = set(), False, False, True
+        truncated_page = False
         for barcode in barcodes:
             if result["provider_requests"] >= MAX_MB_REQUESTS:
                 failed = True
@@ -153,11 +157,13 @@ def reconcile(index: dict, editions: dict, get) -> dict:
                 continue
             matches = parsed["matching_release_mbids"]
             collision |= parsed["other_artist_hit"]
+            truncated_page |= parsed["truncated"]
             zero_hit &= not matches and not parsed["other_artist_hit"]
             found.update(matches)
             row["barcode_searches"].append({
                 "barcode": barcode, "status": "observed", "mb_artist_release_matches": matches,
                 "other_artist_hit": parsed["other_artist_hit"],
+                "truncated": parsed["truncated"],
             })
         row["matched_mb_release_mbids"] = sorted(found)
         if found:
@@ -165,6 +171,9 @@ def reconcile(index: dict, editions: dict, get) -> dict:
         elif failed:
             row["status"] = ("mb_provider_unavailable" if any(x["status"] == "unavailable"
                                for x in row["barcode_searches"]) else "invalid_mb_barcode_search")
+        elif truncated_page:
+            # A relevant artist can still appear on a later unseen page.
+            row["status"] = "mb_barcode_first_page_inconclusive"
         elif collision:
             row["status"] = "barcode_hit_other_artist_only"
         elif zero_hit:
