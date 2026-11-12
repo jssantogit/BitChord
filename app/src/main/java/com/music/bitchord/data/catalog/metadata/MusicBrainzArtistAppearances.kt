@@ -78,18 +78,28 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                     val recording = entry["recording"] as? JsonObject
                     val recordingId = recording?.appearanceText("id")
                         ?.lowercase(Locale.ROOT)?.takeIf(ARTIST_APPEARANCE_MBID::matches)
-                    val trackCredit = entry["artist-credit"] as? JsonArray
-                    // Recording credit is valid only when this exact media
-                    // track proves a Recording MBID. Never credit another
-                    // unrelated track of the host album.
-                    val recordingCredit = if (recordingId != null)
-                        recording?.get("artist-credit") as? JsonArray else null
-                    val hasArtist = listOfNotNull(trackCredit, recordingCredit).any { parts ->
-                        parts.any { part ->
-                            val id = ((part as? JsonObject)?.get("artist")
-                                as? JsonObject)?.appearanceText("id")
-                            id?.equals(target, ignoreCase = true) == true
-                        }
+                    // The edition's Track credit is the authoritative
+                    // printed credit for this appearance. A Recording can be
+                    // reused by several releases with different Track credits:
+                    // a guest mentioned ONLY on the Recording must not turn
+                    // a host-only edition Track into a false "Incluído em".
+                    //
+                    // Fall back to the Recording credit only when the browse
+                    // response OMITS the Track credit entirely, and only for
+                    // the exact proven Recording MBID. An explicitly supplied
+                    // empty/malformed Track credit is not permission to borrow
+                    // another entity's evidence.
+                    val credits = if ("artist-credit" in entry) {
+                        entry["artist-credit"] as? JsonArray ?: return@track null
+                    } else {
+                        if (recordingId == null) return@track null
+                        recording?.get("artist-credit") as? JsonArray
+                            ?: return@track null
+                    }
+                    val hasArtist = credits.any { part ->
+                        val id = ((part as? JsonObject)?.get("artist")
+                            as? JsonObject)?.appearanceText("id")
+                        id?.equals(target, ignoreCase = true) == true
                     }
                     if (!hasArtist) return@track null
                     val trackTitle = recording?.appearanceText("title")
