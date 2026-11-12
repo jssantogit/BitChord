@@ -135,6 +135,85 @@ internal fun canonicalArtistCollapseLinkedTitleTrackSingles(
 }
 
 /**
+ * An expanded artist grid has historically held a snapshot of the shelf
+ * captured at tap time. Network pagination and editorial projections update
+ * the artist carousel, but the expanded page continued showing its *stale*
+ * cards. Resolve by stable section title on every recomposition instead.
+ * Never replace independent recommendation/editorial shelves.
+ */
+internal fun canonicalArtistCurrentExpandedShelf(
+    opened: HomeShelf?,
+    current: List<HomeShelf>,
+    albumsHeading: String = "Álbuns",
+    singlesHeading: String = "Singles e EPs",
+): HomeShelf? {
+    if (opened == null || opened.title !in setOf(albumsHeading, singlesHeading)) return opened
+    return current.firstOrNull { it.title == opened.title }
+}
+
+/**
+ * MusicBrainz may use "BOOMPALA" as the ReleaseGroup title for several remixes
+ * while carrying the actual differentiating collaboration in artist-credit.
+ * Disambiguate ONLY on a collision and ONLY from that typed group credit.
+ * The original MBID, search identity, tracklists and edition details never
+ * change; unknown credits remain unknown instead of receiving guessed labels.
+ */
+internal fun canonicalArtistDisambiguateCreditedCollisions(
+    shelves: List<HomeShelf>,
+    groups: List<CanonicalCatalogSearchRow>,
+    artistName: String,
+    albumsHeading: String = "Álbuns",
+    singlesHeading: String = "Singles e EPs",
+): List<HomeShelf> {
+    val artist = artistName.trim()
+    if (artist.isEmpty() || shelves.isEmpty() || groups.isEmpty()) return shelves
+    val typedHeadings = setOf(albumsHeading, singlesHeading)
+    val groupsById = groups.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+        .groupBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    val visibleCards = shelves.filter { it.title in typedHeadings }.flatMap { it.items }
+    val duplicates = visibleCards.groupingBy {
+        it.title.trim().lowercase(java.util.Locale.ROOT)
+    }.eachCount().filterValues { it > 1 }.keys
+    if (duplicates.isEmpty()) return shelves
+
+    fun qualifiedTitle(card: ShelfItem): String {
+        if (card.title.trim().lowercase(java.util.Locale.ROOT) !in duplicates) return card.title
+        val browseId = card.browseId ?: return card.title
+        val mbid = browseId.removePrefix("catalog:RELEASE_GROUP:")
+            .takeIf { "catalog:RELEASE_GROUP:$it" == browseId }
+            ?.lowercase(java.util.Locale.ROOT) ?: return card.title
+        val group = groupsById[mbid]?.singleOrNull() ?: return card.title
+        if (!group.title.trim().equals(card.title.trim(), ignoreCase = true)) return card.title
+        val credit = group.subtitle?.trim().orEmpty()
+        if (!credit.startsWith(artist, ignoreCase = true) || credit.length <= artist.length)
+            return card.title
+        val remainder = credit.substring(artist.length).trim()
+        val qualifier = when {
+            remainder.startsWith("feat. ", ignoreCase = true) &&
+                remainder.length > "feat. ".length -> remainder
+            remainder.startsWith("& ") && remainder.length > 2 ->
+                "com " + remainder.substring(2).trim()
+            else -> return card.title
+        }
+        return "${card.title} ($qualifier)"
+    }
+
+    var changed = false
+    val updated = shelves.map { shelf ->
+        if (shelf.title !in typedHeadings) return@map shelf
+        val newItems = shelf.items.map { card ->
+            val title = qualifiedTitle(card)
+            if (title == card.title) card else {
+                changed = true
+                card.copy(title = title)
+            }
+        }
+        if (newItems == shelf.items) shelf else shelf.copy(items = newItems)
+    }
+    return if (changed) updated else shelves
+}
+
+/**
  * Source-scoped overrides of existing native artist shelves. The MBID remains
  * the browse identity; never write this derived classification into MusicBrainz
  * Room tables. Disputes retain the canonical MusicBrainz classification.
@@ -145,11 +224,17 @@ internal fun discogsEditorialArtistShelves(
     groupProofs: Map<String, List<DiscogsGroupTypeProof>>,
     albumsHeading: String = "Álbuns",
     singlesHeading: String = "Singles e EPs",
+    artistName: String = "",
 ): List<HomeShelf> {
-    if (groupProofs.isEmpty() || musicBrainzGroups.isEmpty()) {
-        return canonicalArtistCollapseLinkedTitleTrackSingles(
-            original, musicBrainzGroups, albumsHeading, singlesHeading,
+    fun polish(shelves: List<HomeShelf>): List<HomeShelf> =
+        canonicalArtistDisambiguateCreditedCollisions(
+            canonicalArtistCollapseLinkedTitleTrackSingles(
+                shelves, musicBrainzGroups, albumsHeading, singlesHeading,
+            ),
+            musicBrainzGroups, artistName, albumsHeading, singlesHeading,
         )
+    if (groupProofs.isEmpty() || musicBrainzGroups.isEmpty()) {
+        return polish(original)
     }
     val evidenceByGroup = musicBrainzGroups.filter {
         it.kind == CanonicalSearchKind.RELEASE_GROUP
@@ -175,9 +260,7 @@ internal fun discogsEditorialArtistShelves(
         id to (row to format)
     }.toMap()
     if (changes.isEmpty()) {
-        return canonicalArtistCollapseLinkedTitleTrackSingles(
-            original, musicBrainzGroups, albumsHeading, singlesHeading,
-        )
+        return polish(original)
     }
 
     val affectedBrowseIds = changes.keys.mapTo(HashSet()) {
@@ -207,7 +290,7 @@ internal fun discogsEditorialArtistShelves(
         moved.filter { it.first == "EP" || it.first == "Single" }.map { it.third })
         .distinctBy { it.browseId }
     val extras = original.filterNot { it.title in setOf(albumsHeading, singlesHeading) }
-    return canonicalArtistCollapseLinkedTitleTrackSingles(buildList {
+    return polish(buildList {
         if (albums.isNotEmpty()) add(
             original.firstOrNull { it.title == albumsHeading }?.copy(items = albums)
                 ?: HomeShelf(albumsHeading, albums)
@@ -217,5 +300,5 @@ internal fun discogsEditorialArtistShelves(
                 ?: HomeShelf(singlesHeading, singles)
         )
         addAll(extras)
-    }, musicBrainzGroups, albumsHeading, singlesHeading)
+    })
 }
