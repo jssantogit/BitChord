@@ -101,11 +101,14 @@ private val musicBrainzLinkedTitleTrackSingles = mapOf(
 internal fun canonicalArtistCollapseLinkedTitleTrackSingles(
     shelves: List<HomeShelf>,
     groups: List<CanonicalCatalogSearchRow>,
+    albumsHeading: String = "Álbuns",
+    singlesHeading: String = "Singles e EPs",
 ): List<HomeShelf> {
     if (shelves.isEmpty() || groups.isEmpty()) return shelves
+    val typedHeadings = setOf(albumsHeading, singlesHeading)
     val groupsById = groups.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
         .groupBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
-    val visible = shelves.flatMap { it.items }
+    val visible = shelves.filter { it.title in typedHeadings }.flatMap { it.items }
         .mapNotNull { it.browseId?.removePrefix("catalog:RELEASE_GROUP:")
             ?.takeIf { id -> it.browseId == "catalog:RELEASE_GROUP:$id" }
             ?.lowercase(java.util.Locale.ROOT) }
@@ -125,6 +128,7 @@ internal fun canonicalArtistCollapseLinkedTitleTrackSingles(
     }.toSet()
     if (duplicateIds.isEmpty()) return shelves
     return shelves.map { shelf ->
+        if (shelf.title !in typedHeadings) return@map shelf
         val retained = shelf.items.filterNot { it.browseId in duplicateIds }
         if (retained.size == shelf.items.size) shelf else shelf.copy(items = retained)
     }.filter { it.items.isNotEmpty() }
@@ -142,8 +146,11 @@ internal fun discogsEditorialArtistShelves(
     albumsHeading: String = "Álbuns",
     singlesHeading: String = "Singles e EPs",
 ): List<HomeShelf> {
-    if (groupProofs.isEmpty() || musicBrainzGroups.isEmpty()) return
-        canonicalArtistCollapseLinkedTitleTrackSingles(original, musicBrainzGroups)
+    if (groupProofs.isEmpty() || musicBrainzGroups.isEmpty()) {
+        return canonicalArtistCollapseLinkedTitleTrackSingles(
+            original, musicBrainzGroups, albumsHeading, singlesHeading,
+        )
+    }
     val evidenceByGroup = musicBrainzGroups.filter {
         it.kind == CanonicalSearchKind.RELEASE_GROUP
     }.associateBy { it.musicBrainzId }
@@ -167,8 +174,11 @@ internal fun discogsEditorialArtistShelves(
         }
         id to (row to format)
     }.toMap()
-    if (changes.isEmpty()) return
-        canonicalArtistCollapseLinkedTitleTrackSingles(original, musicBrainzGroups)
+    if (changes.isEmpty()) {
+        return canonicalArtistCollapseLinkedTitleTrackSingles(
+            original, musicBrainzGroups, albumsHeading, singlesHeading,
+        )
+    }
 
     val affectedBrowseIds = changes.keys.mapTo(HashSet()) {
         "catalog:RELEASE_GROUP:$it"
@@ -207,5 +217,5 @@ internal fun discogsEditorialArtistShelves(
                 ?: HomeShelf(singlesHeading, singles)
         )
         addAll(extras)
-    }, musicBrainzGroups)
+    }, musicBrainzGroups, albumsHeading, singlesHeading)
 }
