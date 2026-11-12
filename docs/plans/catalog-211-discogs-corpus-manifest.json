@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211 strict independent editorial corpus 30/30: A 10 reviewed (9 source agreements, Christmas EveL JYP Single vs MusicBrainz EP editorial disagreement without automatic correction), B 10 reviewed (0 new Verified), C 10 independently reviewed audio-only distinct Discogs release IDs with no B overlap (all existing in MusicBrainz, zero source-only recoveries). Three excluded videos/multi-artist rows preserved separately; superseded duplicated C07/C08 evidence archived outside sample. No Android UI measurement.",
+  "description": "Discogs #211 strict independent editorial corpus 30/30: A 10 reviewed (9 source agreements, one marketing-term vs MusicBrainz type dispute (Christmas EveL) excluded from proven correction denominator), B 10 reviewed (0 new Verified), C 10 independently reviewed audio-only distinct Discogs release IDs with no B overlap (all existing in MusicBrainz, zero source-only recoveries). Three excluded videos/multi-artist rows preserved separately; superseded duplicated C07/C08 evidence archived outside sample. No Android UI measurement.",
   "cases": [
     {
       "id": "A-01",
@@ -95,7 +95,9 @@
       "visible": false,
       "absent_in_musicbrainz": false,
       "review_notes": "Genuine EDITORIAL TYPE DISAGREEMENT, not a proven automatic correction: official JYP Entertainment contemporary notices explicitly market the 29 November 2021 four-song Christmas EveL as Holiday Special Single, while exact MusicBrainz ReleaseGroup 62812a62-f532-490a-9b52-1feccb3fdaba is primary type EP. Official MB CD Release ba0e42d5-a720-4f86-b00f-502292f1a8e2 has a direct typed Discogs Release relation to 22076131, barcode 8809755509491, four tracks and JYP label; both the artist and label source describe the same project. But four songs and a special-single marketing category can coexist with MusicBrainz's EP style rules; a single label term does not establish that MB's EP is erroneous under its own editorial guidelines. The paired physical Discogs pressing has not undergone distinct packaging/independent version adjudication. Mark candidate/unmeasured app, raise for editorial review; never auto-change the canonical MB type or count a real correction.",
-      "musicbrainz_release_mbid": "ba0e42d5-a720-4f86-b00f-502292f1a8e2"
+      "musicbrainz_release_mbid": "ba0e42d5-a720-4f86-b00f-502292f1a8e2",
+      "editorial_type_dispute_only": true,
+      "type_dispute_note": "JYP Holiday Special Single is a marketing product label; MusicBrainz EP categorization of a four-song release can coexist with JYP wording. Do not treat as a confirmed taxonomy error or provider-driven correction without independent MusicBrainz style adjudication."
     },
     {
       "id": "A-04",
