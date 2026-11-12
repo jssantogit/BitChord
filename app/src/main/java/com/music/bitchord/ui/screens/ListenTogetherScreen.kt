@@ -100,6 +100,10 @@ import com.music.bitchord.data.listentogether.ServerUrlError
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+/** The host cannot evict occupied slots merely by reducing room capacity. */
+internal fun canDecreasePartyCapacity(capacity: Int, participantCount: Int): Boolean =
+    capacity > maxOf(2, participantCount)
+
 internal fun ServerUrlError.toMessageRes(): Int = when (this) {
     ServerUrlError.Whitespace -> R.string.listen_together_err_whitespace
     ServerUrlError.InvalidScheme -> R.string.listen_together_invalid_server_url
@@ -876,9 +880,17 @@ private fun InAParty(
                     )
                     Text(stringResource(R.string.listen_together_host_controls), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                TextButton(onClick = { onSetCapacity(state.maxMembers - 1) }, enabled = state.maxMembers > maxOf(2, state.members.size)) { Text("−", color = MaterialTheme.colorScheme.onSurface) }
+                PartyStepperControl(
+                    label = "−",
+                    enabled = canDecreasePartyCapacity(state.maxMembers, state.members.size),
+                    onClick = { onSetCapacity(state.maxMembers - 1) },
+                )
                 Text("${state.maxMembers}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.width(28.dp), textAlign = TextAlign.Center)
-                TextButton(onClick = { onSetCapacity(state.maxMembers + 1) }, enabled = state.maxMembers < 10) { Text("+", color = MaterialTheme.colorScheme.onSurface) }
+                PartyStepperControl(
+                    label = "+",
+                    enabled = state.maxMembers < 10,
+                    onClick = { onSetCapacity(state.maxMembers + 1) },
+                )
             }
             RowDivider()
             SettingsRow(
