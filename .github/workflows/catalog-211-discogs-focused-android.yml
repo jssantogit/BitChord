@@ -8,6 +8,7 @@ on:
       - catalog/210-discogs-provider-evidence-20261107
     paths:
       - app/src/main/java/com/music/bitchord/data/catalog/metadata/discogs/**
+      - app/src/main/java/com/music/bitchord/ui/screens/DiscogsArtistSupplementaryShelf.kt
       - app/src/test/java/com/music/bitchord/Discogs*Test.kt
       - app/src/test/java/com/music/bitchord/ui/screens/Discogs*Test.kt
       - .github/workflows/catalog-211-discogs-focused-android.yml
