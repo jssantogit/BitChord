@@ -15,8 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material3.Icon
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,6 +35,8 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeCompactOverflowMenu
+import com.music.bitchord.ui.components.NativeCompactMenuItem
 import com.music.bitchord.ui.components.contextClick
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -150,13 +150,13 @@ fun NativeSearchResultRow(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     iconSize = 22.dp,
                 )
-                DropdownMenu(
+                NativeCompactOverflowMenu(
                     expanded = moreExpanded,
                     onDismissRequest = { moreExpanded = false },
                 ) {
                     onMoreActions.forEach { action ->
-                        DropdownMenuItem(
-                            text = { Text(action.label) },
+                        NativeCompactMenuItem(
+                            label = action.label,
                             onClick = {
                                 moreExpanded = false
                                 action.onClick()
