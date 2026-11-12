@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -102,4 +103,33 @@ class NativeAlbumPlaylistToolbarTest {
             .assertDoesNotExist()
         assertEquals(1, taps)
     }
+    @Test fun librarySortPopupUsesSharedCompactMenuAndPreservesSelection() {
+        val expanded = mutableStateOf(false)
+        val selected = mutableStateOf(LibrarySort.DEFAULT)
+        val ascendingLabel = org.robolectric.RuntimeEnvironment.getApplication()
+            .getString(R.string.sort_title_ascending)
+        compose.setContent {
+            MaterialTheme {
+                NativeLibraryTopBarSortAction(
+                    expanded = expanded.value,
+                    current = selected.value,
+                    onOpen = { expanded.value = true },
+                    onClose = { expanded.value = false },
+                    onChange = { option ->
+                        selected.value = option
+                        expanded.value = false
+                    },
+                )
+            }
+        }
+        compose.onNodeWithTag("native-toolbar-library-sort-trigger")
+            .assertWidthIsEqualTo(40.dp).performClick()
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+        compose.onNodeWithText(ascendingLabel).performClick()
+        compose.runOnIdle { assertEquals(LibrarySort.TITLE_ASC, selected.value) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("native-toolbar-library-sort-trigger").performClick()
+        compose.onNodeWithText(ascendingLabel).assertIsSelected()
+    }
+
 }
