@@ -13,6 +13,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +53,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -73,6 +73,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
@@ -1072,8 +1074,36 @@ private fun MemberRow(member: PartyMember, isYou: Boolean, canKick: Boolean = fa
             Spacer(Modifier.width(8.dp))
             Badge(stringResource(R.string.listen_together_host))
         } else if (canKick) {
-            TextButton(onClick = onKick) { Text(stringResource(R.string.listen_together_remove)) }
+            PartyMemberRemoveAction(
+                label = stringResource(R.string.listen_together_remove),
+                onClick = onKick,
+            )
         }
+    }
+}
+
+/**
+ * A compact destructive row action, distinct from a generic Material 3
+ * text button. The 44dp target is BitChord accessibility geometry; the
+ * exact Apple Music member-management surface is not documented.
+ */
+@Composable
+internal fun PartyMemberRemoveAction(label: String, onClick: () -> Unit) {
+    val ink = MaterialTheme.colorScheme.error
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(role = Role.Button, onClick = onClick)
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag("party-member-remove-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = ink,
+        )
     }
 }
 
