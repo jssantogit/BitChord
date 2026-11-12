@@ -204,6 +204,18 @@ def report(document: dict) -> dict:
                ("reference_type", "musicbrainz_type", "app_type")):
             errors.append(f"case {cid}: release types must be explicit")
             continue
+        # A label's marketing term (e.g. JYP "Holiday Special Single")
+        # can conflict with MusicBrainz EP style classification without
+        # proving an MB classification *error*. Never count that semantic
+        # dispute as an eligible/implemented editorial correction.
+        dispute = case.get("editorial_type_dispute_only", False)
+        if (type(dispute) is not bool or
+            (dispute and (cohort != "type" or
+                          case["musicbrainz_type"] not in ("Album", "EP", "Single") or
+                          case["reference_type"] not in ("Album", "EP", "Single") or
+                          case["musicbrainz_type"] == case["reference_type"]))):
+            errors.append(f"case {cid}: invalid editorial type dispute")
+            continue
         if case.get("match_state") not in MATCH:
             errors.append(f"case {cid}: unknown match_state")
             continue
@@ -279,12 +291,15 @@ def report(document: dict) -> dict:
     ul = [x for x in cases if x["cohort"] == "unlinked"]
     so = [x for x in cases if x["cohort"] == "source_only"]
     incorrect = [x for x in ty if x["musicbrainz_type"] in {"Album", "EP", "Single"}
-                 and x["musicbrainz_type"] != x["reference_type"]]
+                 and x["musicbrainz_type"] != x["reference_type"]
+                 and x.get("editorial_type_dispute_only") is not True]
+    editorial_disputes = sum(x.get("editorial_type_dispute_only") is True for x in ty)
     unknown = [x for x in ty if x["musicbrainz_type"] == "Unknown"
                and x["reference_type"] != "Unknown"]
     verified = [x for x in cases if x["match_state"] == "verified"]
     confirmed = [x for x in so if x["absent_in_musicbrainz"]]
     output["metrics"] = {
+        "editorial_type_disputes": editorial_disputes,
         "type_correction": {
             "corrected": sum(x["app_type"] == x["reference_type"] for x in incorrect),
             "eligible": len(incorrect),
