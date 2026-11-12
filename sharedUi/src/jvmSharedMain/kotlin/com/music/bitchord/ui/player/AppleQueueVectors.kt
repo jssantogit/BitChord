@@ -155,6 +155,29 @@ internal object AppleQueueVectors {
         }.build()
     }
 
+    /** The same verified three-dot silhouette, without the player platter.
+     * Toolbar buttons already draw their own circular surface.
+     */
+    val MorePlain: ImageVector by lazy {
+        ImageVector.Builder(
+            name = "apple_queue_more_plain",
+            defaultWidth = 28.dp, defaultHeight = 28.dp,
+            viewportWidth = 28f, viewportHeight = 28f,
+        ).apply {
+            addPath(
+                pathData = addPathNodes(
+                    "M12,8C12,6.8954 12.8954,6 14,6C15.1046,6 16,6.8954 16,8C16,9.1046 15.1046,10 14,10C12.8954,10 12" +
+                    ",9.1046 12,8ZM12,14C12,12.8954 12.8954,12 14,12C15.1046,12 16,12.8954 16,14C16,15.1046 15.1046,1" +
+                    "6 14,16C12.8954,16 12,15.1046 12,14ZM12,20C12,18.8954 12.8954,18 14,18C15.1046,18 16,18.8954 16," +
+                    "20C16,21.1046 15.1046,22 14,22C12.8954,22 12,21.1046 12,20Z"
+                ),
+                fill = SolidColor(Color.Black),
+                fillAlpha = 0.9f,
+                pathFillType = PathFillType.EvenOdd,
+            )
+        }.build()
+    }
+
     val DragHandle: ImageVector by lazy {
         ImageVector.Builder(
             name = "apple_queue_draghandle", defaultWidth = 28.dp, defaultHeight = 28.dp,
