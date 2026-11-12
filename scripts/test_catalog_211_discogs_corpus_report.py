@@ -44,7 +44,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(14, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(17, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
@@ -186,7 +186,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual("candidate", c04["match_state"])
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(2, result["slots"]["source_only"]["reviewed"])
+        self.assertEqual(5, result["slots"]["source_only"]["reviewed"])
         self.assertIsNone(result["metrics"])
 
     def test_c05_daydream_repackage_is_existing_mb_release_inside_older_group(self):
@@ -212,6 +212,45 @@ class CorpusReportTests(unittest.TestCase):
         result = report(manifest)
         self.assertEqual([], result["errors"])
         self.assertEqual(2, result["slots"]["source_only"]["reviewed"])
+        self.assertIsNone(result["metrics"])
+
+    def test_three_more_c_negative_revisions_have_source_and_mb_group_evidence(self):
+        # Independent official announcements plus pre-existing exact MB RGs
+        # disprove these apparent Discogs-only catalog gaps. None proves
+        # the same physical Discogs pressing, user UI visibility or recovery.
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        expectations = {
+            "C-06": ("14e1a869-8378-47df-818e-07dfe1d0c7fc",
+                     28089088, "Single", "Single",
+                     "https://www.universal-music.co.jp/lesserafim/news/2023-07-25-2/"),
+            "C-07": ("cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
+                     38302455, "Single", "Single",
+                     "https://www.universal-music.co.jp/txt/news/2026-07-23/"),
+            "C-08": ("4e219d4e-c5e0-4ed9-acec-b948c7319b37",
+                     31008160, "EP", "Unknown",
+                     "https://weverse.io/enhypen/notice/19177"),
+        }
+        for case_id, (group, discogs_release, mb_kind, ref_kind, source) in expectations.items():
+            with self.subTest(case=case_id):
+                item = next(x for x in manifest["cases"] if x["id"] == case_id)
+                self.assertTrue(item["reviewed"])
+                self.assertEqual(group, item["musicbrainz_group_mbid"])
+                self.assertEqual(discogs_release, item["discogs_release_id"])
+                self.assertEqual(mb_kind, item["musicbrainz_type"])
+                self.assertEqual(ref_kind, item["reference_type"])
+                self.assertEqual(source, item["evidence_links"]["independent_editorial"])
+                self.assertEqual("candidate", item["match_state"])
+                self.assertEqual("Unknown", item["app_type"])
+                self.assertFalse(item["match_correct"])
+                self.assertFalse(item["visible"])
+                self.assertFalse(item["absent_in_musicbrainz"])
+                self.assertGreaterEqual(len(item["review_notes"]), 80)
+        result = report(manifest)
+        self.assertEqual([], result["errors"])
+        self.assertEqual(5, result["slots"]["source_only"]["reviewed"])
+        self.assertFalse(result["complete"])
         self.assertIsNone(result["metrics"])
 
     def test_missing_cases_cannot_invent_coverage(self):
