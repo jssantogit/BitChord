@@ -1,19 +1,24 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.R
@@ -57,32 +62,56 @@ internal fun PlaybackRecoveryBanner(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                TextButton(
+                PlaybackRecoveryTextAction(
+                    label = stringResource(R.string.playback_recovery_dismiss),
                     onClick = onDismiss,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    emphasized = false,
+                    tag = "playback-recovery-dismiss",
+                )
+                PlaybackRecoveryTextAction(
+                    label = stringResource(
+                        if (notice.status == PlaybackRecoveryStatus.RETRYING)
+                            R.string.playback_recovery_retrying
+                        else R.string.playback_recovery_retry,
                     ),
-                ) {
-                    Text(stringResource(R.string.playback_recovery_dismiss))
-                }
-                TextButton(
                     onClick = onRetry,
                     enabled = retryEnabled &&
                         notice.status == PlaybackRecoveryStatus.WAITING_FOR_USER,
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = appleMusicKeyColor(),
-                        disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                ) {
-                    Text(
-                        stringResource(
-                            if (notice.status == PlaybackRecoveryStatus.RETRYING)
-                                R.string.playback_recovery_retrying
-                            else R.string.playback_recovery_retry,
-                        ),
-                    )
-                }
+                    emphasized = true,
+                    tag = "playback-recovery-retry",
+                )
             }
         }
+    }
+}
+
+/**
+ * Explicit native text action inside the playback recovery notice.
+ * This is an accessible BitChord adaptation, not Apple Music measured geometry.
+ */
+@Composable
+private fun PlaybackRecoveryTextAction(
+    label: String,
+    onClick: () -> Unit,
+    emphasized: Boolean,
+    tag: String,
+    enabled: Boolean = true,
+) {
+    val ink = if (emphasized) appleMusicKeyColor()
+        else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 12.dp, vertical = 9.dp)
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = ink.copy(alpha = if (enabled) 1f else 0.4f),
+        )
     }
 }
