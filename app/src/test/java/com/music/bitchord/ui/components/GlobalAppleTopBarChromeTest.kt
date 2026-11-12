@@ -320,19 +320,17 @@ class GlobalAppleTopBarChromeTest {
 
     @Test fun refreshProgressUsesAppleKeyBlueInBothThemes() {
         var tint = Color.Unspecified
+        val useDarkTheme = mutableStateOf(false)
         compose.setContent {
-            MaterialTheme(colorScheme = lightColorScheme()) {
+            MaterialTheme(colorScheme = if (useDarkTheme.value) darkColorScheme() else lightColorScheme()) {
                 tint = refreshPuckProgressTint()
             }
         }
         compose.runOnIdle {
             assertEquals(com.music.bitchord.ui.theme.AppleMusicLightKey, tint)
+            useDarkTheme.value = true
         }
-        compose.setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
-                tint = refreshPuckProgressTint()
-            }
-        }
+        compose.waitForIdle()
         compose.runOnIdle {
             assertEquals(com.music.bitchord.ui.theme.AppleMusicDarkKey, tint)
         }
