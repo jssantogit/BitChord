@@ -73,7 +73,6 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
-import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Person
@@ -828,11 +827,8 @@ private fun BitChordApp(
     val homeLoadingMore by viewModel.homeLoadingMore.collectAsStateWithLifecycle()
     val homeRecentlyPlayedLoading by viewModel.homeRecentlyPlayedLoading.collectAsStateWithLifecycle()
 
-    // The top bar's icon is the quiet, always-there nudge; this is the
-    // once-per-launch popup version of the same news. `updateDialogShown`
-    // rides out configuration changes on rememberSaveable so a rotation
-    // doesn't bring it back — only a fresh launch does.
-    var updateDialogShown by rememberSaveable { mutableStateOf(false) }
+    // Fork builds never raise an upstream BitChord release alert on launch.
+    // Keep the passive top-bar affordance for an explicit user action.
     var showUpdateDialog by remember { mutableStateOf(false) }
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
 
@@ -842,13 +838,6 @@ private fun BitChordApp(
      * them made the top bar look like it had caught something the app hadn't.
      */
     val updateNotice = updateAvailable
-
-    LaunchedEffect(updateNotice) {
-        if (updateNotice != null && !updateDialogShown) {
-            updateDialogShown = true
-            showUpdateDialog = true
-        }
-    }
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
 
@@ -4788,19 +4777,6 @@ private fun BitChordApp(
                             }
                         }
                         if (!showSettings && !showAccountScrobbling && !showPlaylistLibrary) {
-                            // Left of the account photo, and only on Library itself:
-                            // a history is a record of what was played, which reads
-                            // as that tab's business rather than every tab's.
-                            if (!showHistory && !showReplay && !showDiscord && libraryShowAll == null &&
-                                detail == null && openedPublicPlaylist == null &&
-                                selectedTab == TAB_LIBRARY &&
-                                unifiedLibraryCategory == null
-                            ) {
-                                NativeHistoryTopBarAction(onClick = {
-                                    showHistory = true
-                                    viewModel.loadHistory()
-                                })
-                            }
                             // Left of the account photo, and only on a Library
                             // "Show all" grid — the same control the Downloads
                             // folder offers (see `LocalSearchField`), adapted to
@@ -7724,14 +7700,6 @@ private fun NativeArtistShareTopBarAction(title: String) {
         context.startActivity(Intent.createChooser(intent, title))
     }) {
         Icon(Icons.Rounded.IosShare, contentDescription = stringResource(R.string.share),
-            tint = MaterialTheme.colorScheme.onSurface)
-    }
-}
-
-@Composable
-private fun NativeHistoryTopBarAction(onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(Icons.Rounded.History, contentDescription = stringResource(R.string.listening_history),
             tint = MaterialTheme.colorScheme.onSurface)
     }
 }
