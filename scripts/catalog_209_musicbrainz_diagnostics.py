@@ -226,22 +226,40 @@ def diagnose_case(case: dict, get) -> list[dict]:
         formats = set()
         video_counts = {'true': 0, 'false': 0, 'unknown': 0}
         complete = isinstance(media, list) and len(media) > 0
+        medium_positions = []
         if complete:
             for medium in media:
                 if not isinstance(medium, dict) or not isinstance(medium.get('tracks'), list):
                     complete = False
                     break
+                medium_position = medium.get('position')
+                if type(medium_position) is not int or medium_position < 0:
+                    complete = False
+                else:
+                    medium_positions.append(medium_position)
+                # Kotlin accepts missing offsets as zero but never accepts
+                # nonzero/unknown offsets as proof of a full edition.
+                medium_offset = medium.get('track-offset', 0)
+                if type(medium_offset) is not int or medium_offset != 0:
+                    complete = False
                 fmt = medium.get('format')
                 if isinstance(fmt, str) and fmt.strip():
                     formats.add(fmt.strip())
                 entries = medium['tracks']
                 medium_count = medium.get('track-count')
-                if type(medium_count) is int and medium_count != len(entries):
+                if (type(medium_count) is not int or medium_count < 0 or
+                    medium_count != len(entries)):
                     complete = False
+                track_positions = []
                 for track in entries:
                     if not isinstance(track, dict):
                         complete = False
                         continue
+                    position = track.get('position')
+                    if type(position) is not int or position < 0:
+                        complete = False
+                    else:
+                        track_positions.append(position)
                     tid = track.get('id')
                     rec = track.get('recording')
                     rid = rec.get('id') if isinstance(rec, dict) else None
@@ -253,6 +271,12 @@ def diagnose_case(case: dict, get) -> list[dict]:
                     else:
                         track_ids.append(tid.lower())
                         recording_ids.append(rid.lower())
+                if (len(track_positions) != len(entries) or
+                    len(set(track_positions)) != len(entries)):
+                    complete = False
+        if (not isinstance(media, list) or len(medium_positions) != len(media) or
+            len(set(medium_positions)) != len(medium_positions)):
+            complete = False
         if not track_ids or len(track_ids) != len(set(track_ids)):
             complete = False
         parent = payload.get('release-group')
@@ -262,7 +286,9 @@ def diagnose_case(case: dict, get) -> list[dict]:
         return ('PASS' if valid else 'FAIL',
                 {'release_mbid': release, 'observed_release_mbid': payload.get('id'),
                  'observed_group_mbid': actual_group, 'status': payload.get('status'),
-                 'complete_track_graph': complete, 'track_count': len(track_ids),
+                 'complete_track_graph': complete,
+                 'json_reconciliation_eligible': complete,
+                 'track_count': len(track_ids),
                  'unique_recording_count': len(set(recording_ids)),
                  'edition_media_formats': sorted(formats),
                  'nested_recording_video_flags': video_counts,
