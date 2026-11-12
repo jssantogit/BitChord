@@ -50,6 +50,8 @@ import com.music.bitchord.ui.components.AppleRatingStarGlyph
 import com.music.bitchord.ui.components.appleRatingStarFill
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
@@ -84,6 +86,7 @@ import com.music.bitchord.ui.components.CompactRatingGeometry
 import com.music.bitchord.ui.components.CompactRatingStyle
 import com.music.bitchord.ui.components.LocalCompactRatingStyle
 import com.music.bitchord.ui.components.compactRatingColorStops
+import com.music.bitchord.ui.components.normalizedCompactRating
 
 /**
  * Both song actions and My Ratings use this *same* local rating dialog.
@@ -237,6 +240,26 @@ internal fun ratingSelectionFromDrag(positionX: Float, width: Float): Double {
 internal fun lastRatedStarIndex(selected: Double): Int =
     if (selected.isFinite() && selected in 1.0..5.0) ceil(selected).toInt() - 1 else -1
 
+/** Numeric rating never uses the color scale: every star is theme ink.
+ * Fractional color ratings carry both neighboring hues within each filled
+ * star; solid integer ratings keep their single explicit color.
+ */
+internal fun ratingEditorGradientStops(
+    selected: Double,
+    style: CompactRatingStyle,
+): List<Pair<Float, Color>> =
+    if (style == CompactRatingStyle.COLOR && normalizedCompactRating(selected) != null)
+        compactRatingColorStops(selected)
+    else emptyList()
+
+internal fun ratingEditorStarTint(
+    style: CompactRatingStyle,
+    selected: Double,
+    filled: Boolean,
+    neutral: Color,
+): Color = if (style == CompactRatingStyle.NUMERIC || !filled) neutral
+else compactRatingColorStops(selected).firstOrNull()?.second ?: neutral
+
 /** Fixed solid background matching the player's light/dark base layer. */
 internal fun ratingSheetSolidColor(dark: Boolean): androidx.compose.ui.graphics.Color =
     if (dark) androidx.compose.ui.graphics.Color.Black
@@ -275,9 +298,11 @@ internal fun CanonicalRecordingFeedbackPanel(
     val reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current
     val pulseIndex = ratingSelectionPulseIndex(selected, touched, reduceMotion)
     val terminalStar = lastRatedStarIndex(selected)
-    val numericStars = LocalCompactRatingStyle.current == CompactRatingStyle.NUMERIC
-    val selectedStarTint = compactRatingColorStops(selected).firstOrNull()?.second
-        ?: MaterialTheme.colorScheme.primary
+    val starStyle = LocalCompactRatingStyle.current
+    val numericStars = starStyle == CompactRatingStyle.NUMERIC
+    val colorStops = ratingEditorGradientStops(selected, starStyle)
+    val fractionalBrush = if (colorStops.map { it.second }.distinct().size > 1)
+        Brush.linearGradient(*colorStops.toTypedArray()) else null
     // Dismissing an edited value must not silently throw it away. A late Room
     // emission cannot erase the pending selection, and saving stays modal.
     val original = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
@@ -413,9 +438,15 @@ internal fun CanonicalRecordingFeedbackPanel(
                                     AppleRatingStarGlyph(
                                         fill = starFill,
                                         standalone = true,
-                                        tint = if (starFill ==
-                                            com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY)
-                                            sheetForeground else selectedStarTint,
+                                        tint = ratingEditorStarTint(
+                                            starStyle, selected,
+                                            starFill != com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY,
+                                            sheetForeground,
+                                        ),
+                                        colorBrush = if (numericStars ||
+                                            starFill == com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY)
+                                            null else fractionalBrush,
+                                        outlineTint = sheetForeground,
                                         modifier = Modifier.size(56.dp),
                                     )
                                 }
