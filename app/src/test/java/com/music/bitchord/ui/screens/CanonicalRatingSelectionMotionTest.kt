@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import com.music.bitchord.ui.components.CompactRatingStyle
 import org.junit.Test
 
 class CanonicalRatingSelectionMotionTest {
@@ -37,6 +38,21 @@ class CanonicalRatingSelectionMotionTest {
         assertEquals(2.0, ratingSelectionFromDrag(100f, 250f), 0.0)
         assertEquals(2.5, ratingSelectionFromDrag(125f, 250f), 0.0)
         assertEquals(5.0, ratingSelectionFromDrag(250f, 250f), 0.0)
+    }
+
+    @Test fun fractionalColorRatingBlendsBothAdjacentTonesButNumericStaysNeutral() {
+        val colored = ratingEditorGradientStops(2.5, CompactRatingStyle.COLOR)
+        assertEquals(4, colored.size)
+        assertEquals(0f, colored.first().first, 0f)
+        assertEquals(1f, colored.last().first, 0f)
+        assertEquals(false, colored.first().second == colored.last().second)
+        assertEquals(emptyList<Pair<Float, androidx.compose.ui.graphics.Color>>(),
+            ratingEditorGradientStops(2.5, CompactRatingStyle.NUMERIC))
+        val monochrome = androidx.compose.ui.graphics.Color.White
+        assertEquals(monochrome,
+            ratingEditorStarTint(CompactRatingStyle.NUMERIC, 2.5, true, monochrome))
+        assertEquals(monochrome,
+            ratingEditorStarTint(CompactRatingStyle.NUMERIC, 2.5, false, monochrome))
     }
 
     @Test fun numericEditorPlacesTheRatingOnlyInsideItsLastSelectedStar() {
