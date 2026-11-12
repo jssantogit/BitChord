@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -93,6 +94,7 @@ internal fun ReorderSaveAction(
     Box(
         modifier = Modifier
             .height(48.dp)
+            .widthIn(min = 120.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(fill)
             .clickable(enabled = enabled && !saving, role = Role.Button, onClick = onClick)
