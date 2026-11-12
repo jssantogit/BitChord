@@ -26,6 +26,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performImeAction
@@ -433,7 +434,8 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("Hurt").performClick()
         compose.runOnIdle { assertEquals(1, plays) }
         compose.runOnIdle { chosen = true }
-        compose.onNodeWithContentDescription("Selecionar Hurt").performClick()
+        compose.onNodeWithTag("native-library-selection-action").assertIsOn()
+        compose.onNodeWithContentDescription("Desmarcar Hurt").performClick()
         compose.runOnIdle {
             assertEquals(1, toggles)
             assertEquals(1, overflow) // selection mode has no overflow.
