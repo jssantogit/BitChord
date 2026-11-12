@@ -577,9 +577,9 @@ class SmartPlaylistBatchEvidenceRoomTest {
             dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
                 "rel:undated", "rec:linked", 1,
             ))
-            // The MusicBrainz importer now records exact release-track provenance.
-            // A legacy ReleaseTrack link alone is insufficient proof of a
-            // MusicBrainz-owned edition or its release year.
+            // The real MusicBrainz index records exact edge ownership alongside
+            // ReleaseTrack. A bare legacy link is intentionally insufficient to
+            // confer a positive MusicBrainz release date.
             dao.upsertCatalogReleaseTrackSource(
                 com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity(
                     "rel:2026", "rec:linked", "musicbrainz",

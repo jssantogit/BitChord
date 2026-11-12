@@ -27,10 +27,40 @@ import java.util.UUID
  * Search cannot infer local identity from title/artist. Only an already-claimed
  * strong MusicBrainz Recording MBID is reused.
  */
-internal class MusicBrainzCatalogIndex(
+internal class MusicBrainzCatalogIndex private constructor(
     private val database: CanonicalCatalogDatabase,
-    private val idFactory: () -> String = { UUID.randomUUID().toString() },
+    configuration: Configuration,
 ) {
+    private val proofClient = configuration.proofClient
+    private val idFactory = configuration.idFactory
+
+    private data class Configuration(
+        val idFactory: () -> String,
+        val proofClient: MusicBrainzClient,
+    )
+
+    /** Original constructor shape: keep positional, named, and trailing-lambda callers source-compatible. */
+    constructor(
+        database: CanonicalCatalogDatabase,
+        idFactory: () -> String = { UUID.randomUUID().toString() },
+    ) : this(database, Configuration(idFactory, MusicBrainzClient()))
+
+    constructor(
+        database: CanonicalCatalogDatabase,
+        idFactory: () -> String,
+        injectedProofClient: MusicBrainzClient,
+    ) : this(database, Configuration(idFactory, injectedProofClient))
+
+    constructor(database: CanonicalCatalogDatabase, proofClient: MusicBrainzClient) :
+        this(database, Configuration({ UUID.randomUUID().toString() }, proofClient))
+
+    /** Supports proof-client injection together with an existing trailing id factory. */
+    constructor(
+        database: CanonicalCatalogDatabase,
+        proofClient: MusicBrainzClient,
+        idFactory: () -> String,
+    ) : this(database, Configuration(idFactory, proofClient))
+
     suspend fun persistRecordings(
         hits: List<MusicBrainzRecordingHit>,
         /** A Release Track fallback lacks independent Recording display authority. */
@@ -390,18 +420,46 @@ internal class MusicBrainzCatalogIndex(
         val releaseMbid = detail.musicBrainzId.trim().lowercase(Locale.ROOT)
         if (!MBID.matches(releaseMbid) || detail.title.isBlank()) return null
         val groupMbid = detail.groupMbid?.trim()?.lowercase(Locale.ROOT)?.takeIf(MBID::matches)
-        // Recording identity claims are independently valid if the later release
-        // fails; they never attach artificial MediaAssets to the library.
-        val recordingIds = persistRecordings(detail.tracks.map { track ->
-            MusicBrainzRecordingHit(
-                musicBrainzId = track.recordingMbid,
-                title = track.recordingTitle?.takeIf(String::isNotBlank) ?: track.title,
-                artistDisplay = track.recordingArtistDisplay ?: detail.artistDisplay,
-                durationMs = track.recordingDurationMs ?: track.durationMs,
-            )
-        }, acceptSourceCorrections = false)
+        // Snapshot the entire release sidecar before any network request.
+        val snapshot = database.withTransaction {
+            val dao = database.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", releaseMbid)
+            releaseId?.let { it to dao.catalogMusicBrainzTracks(it) }
+        }
+        val incomingIds = detail.tracks.map { it.trackMbid.trim().lowercase(Locale.ROOT) }.toSet()
+        val obsolete = snapshot?.second.orEmpty().map { it.trackMbid }.filterNot(incomingIds::contains)
+        val previousRecordingIds = snapshot?.second.orEmpty().map { it.recordingId }.distinct()
+        val verifiedRemoval = if (obsolete.isNotEmpty() && detail.tracks.isNotEmpty() && detail.completeness.countsExplicitAndExact &&
+            detail.completeness.offsetsValid && detail.completeness.positionsExplicitUnique
+        ) {
+            val xml = try {
+                proofClient.getLimited(
+                    "release/$releaseMbid",
+                    mapOf("inc" to "recordings", "fmt" to "xml"),
+                    maxResponseBytes = MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES,
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null }
+            xml != null && MusicBrainzReleaseXmlProof.proves(xml, releaseMbid, detail)
+        } else false
         return database.withTransaction {
             val dao = database.catalogDao()
+            val currentReleaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", releaseMbid)
+            if (snapshot?.first != currentReleaseId) return@withTransaction null
+            if (snapshot != null && dao.catalogMusicBrainzTracks(snapshot.first) != snapshot.second)
+                return@withTransaction null
+            if (obsolete.isNotEmpty() && !verifiedRemoval) return@withTransaction null
+            // Nested Room withTransaction joins the active coroutine transaction;
+            // thus identities and sidecars commit or roll back together.
+            val recordingIds = persistRecordings(detail.tracks.map { track ->
+                MusicBrainzRecordingHit(
+                    musicBrainzId = track.recordingMbid,
+                    title = track.recordingTitle?.takeIf(String::isNotBlank) ?: track.title,
+                    artistDisplay = track.recordingArtistDisplay ?: detail.artistDisplay,
+                    durationMs = track.recordingDurationMs ?: track.durationMs,
+                )
+            }, acceptSourceCorrections = false)
             val groupId = groupMbid?.let { mbid ->
                 val existing = dao.entityIdForExternalIdentity("musicbrainz", "release-group", mbid)
                 if (existing != null) {
@@ -436,6 +494,11 @@ internal class MusicBrainzCatalogIndex(
                 ))
                 claim(dao, "release", releaseMbid, created)
                 created
+            }
+            if (verifiedRemoval && obsolete.isNotEmpty()) {
+                obsolete.chunked(500).forEach { chunk ->
+                    dao.deleteObsoleteCatalogMusicBrainzTracks(releaseId, chunk)
+                }
             }
             persistReleases(listOf(MusicBrainzReleaseHit(releaseMbid, detail.title,
                 detail.country, detail.releaseDate, detail.artistDisplay)))
@@ -504,6 +567,20 @@ internal class MusicBrainzCatalogIndex(
                 dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity(
                     releaseId, recordingId, "musicbrainz",
                 ))
+            }
+            // Reconcile only after ALL incoming Track sidecars were applied.
+            // The same Recording can occur on multiple Tracks, and a Track
+            // can be corrected to another Recording in the same edition.
+            // Operations remain inside the same Room transaction.
+            previousRecordingIds.chunked(400).forEach { chunk ->
+                dao.deleteObsoleteMusicBrainzOnlyReleaseTracks(releaseId, chunk)
+                dao.deleteObsoleteMusicBrainzReleaseTrackSources(releaseId, chunk)
+                if (detail.completeness.countsExplicitAndExact &&
+                    detail.completeness.offsetsValid &&
+                    detail.completeness.positionsExplicitUnique
+                ) {
+                    dao.refreshMusicBrainzOnlyLegacyTrackPositions(releaseId, chunk)
+                }
             }
             releaseId
         }

@@ -45,6 +45,14 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val tracks: List<MusicBrainzCatalogTrack>,
     /** Exact Release lookup only; not inferred from title or group type. */
     val isVideoOnlyContent: Boolean? = null,
+    val completeness: MusicBrainzReleaseJsonCompleteness = MusicBrainzReleaseJsonCompleteness(),
+)
+
+/** Transient source proof; defaults deliberately deny destructive reconciliation. */
+internal data class MusicBrainzReleaseJsonCompleteness(
+    val countsExplicitAndExact: Boolean = false,
+    val offsetsValid: Boolean = false,
+    val positionsExplicitUnique: Boolean = false,
 )
 
 internal class MusicBrainzCatalogGraph(
@@ -261,6 +269,27 @@ internal class MusicBrainzCatalogGraph(
                     decodedByMedium[index].size != expected ||
                     decodedByMedium[index].map { it.trackMbid }.distinct().size != expected
             }
+            val jsonCompleteness = MusicBrainzReleaseJsonCompleteness(
+                countsExplicitAndExact = media.isNotEmpty() && media.all { entry ->
+                    val medium = entry as? JsonObject ?: return@all false
+                    val count = medium.integer("track-count") ?: return@all false
+                    val rawTracks = medium["tracks"] as? JsonArray ?: return@all false
+                    count >= 0 && count == rawTracks.size &&
+                        rawTracks.mapNotNull { (it as? JsonObject)?.string("id").validMbid() }
+                            .distinct().size == count
+                },
+                offsetsValid = media.all { entry ->
+                    val medium = entry as? JsonObject ?: return@all false
+                    ("track-offset" !in medium || medium.integer("track-offset") == 0) &&
+                        medium.integer("position")?.let { it >= 0 } == true
+                },
+                positionsExplicitUnique = media.all { entry ->
+                    val medium = entry as? JsonObject ?: return@all false
+                    val tracks = medium["tracks"] as? JsonArray ?: return@all false
+                    tracks.all { (it as? JsonObject)?.integer("position")?.let { n -> n >= 0 } == true } &&
+                        tracks.mapNotNull { (it as? JsonObject)?.integer("position") }.distinct().size == tracks.size
+                } && media.mapNotNull { (it as? JsonObject)?.integer("position") }.distinct().size == media.size,
+            )
             if (declaredCountIncomplete ||
                 parsedTracks.map { it.trackMbid }.distinct().size != parsedTracks.size) {
                 return MusicBrainzCatalogGraphResult.Failure(
@@ -299,6 +328,7 @@ internal class MusicBrainzCatalogGraph(
                     mediaEvidence == false || recordingEvidence == false -> false
                     else -> null
                 },
+                completeness = jsonCompleteness,
             ))
         } catch (_: Exception) {
             MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)

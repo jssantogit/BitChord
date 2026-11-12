@@ -136,6 +136,78 @@ class MusicBrainzDiagnosticsTest(unittest.TestCase):
         self.assertEqual(1, browse['evidence']['raw_rows_consumed'])
         self.assertFalse(browse['evidence']['browse_complete'])
 
+
+    def test_release_source_proof_rejects_missing_counts_offsets_and_ambiguous_positions(self):
+        def absent_count(release):
+            del release['media'][0]['track-count']
+        def nonzero_offset(release):
+            release['media'][0]['track-offset'] = 1
+        def missing_medium_position(release):
+            del release['media'][0]['position']
+        def missing_track_position(release):
+            del release['media'][0]['tracks'][0]['position']
+        def duplicate_track_position(release):
+            medium = release['media'][0]
+            medium['track-count'] = 2
+            second = dict(medium['tracks'][0])
+            second['id'] = 'ffffffff-ffff-4fff-8fff-ffffffffffff'
+            medium['tracks'].append(second)
+        def duplicate_medium_position(release):
+            other = {
+                'position': 1, 'track-count': 1,
+                'tracks': [{'id': 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+                            'position': 1, 'recording': {'id': RECORDING, 'title': 'Magnetic'}}],
+            }
+            release['media'].append(other)
+        def invalid_track_count(release):
+            release['media'][0]['track-count'] = True
+
+        for label, mutation in (
+            ('absent count', absent_count),
+            ('nonzero track offset', nonzero_offset),
+            ('missing medium position', missing_medium_position),
+            ('missing track position', missing_track_position),
+            ('duplicate track position', duplicate_track_position),
+            ('duplicate medium position', duplicate_medium_position),
+            ('boolean count', invalid_track_count),
+        ):
+            with self.subTest(label=label):
+                base = FakeClient()
+                def changed_get(kind, ident, **params):
+                    payload = base.get(kind, ident, **params)
+                    if kind == 'release' and ident == WORLD:
+                        mutation(payload)
+                    return payload
+                result = next(row for row in diagnose_case(CASE, changed_get)
+                              if row['check'] == 'release_1')
+                self.assertEqual('FAIL', result['status'], label)
+                self.assertFalse(result['evidence']['complete_track_graph'], label)
+                self.assertFalse(result['evidence']['json_reconciliation_eligible'], label)
+
+    def test_release_source_proof_accepts_zero_positions_and_distinct_tracks_sharing_recording(self):
+        base = FakeClient()
+        def changed_get(kind, ident, **params):
+            payload = base.get(kind, ident, **params)
+            if kind == 'release' and ident == WORLD:
+                medium = payload['media'][0]
+                medium['position'] = 0
+                medium['track-offset'] = 0
+                medium['tracks'][0]['position'] = 0
+                medium['track-count'] = 2
+                medium['tracks'].append({
+                    'id': 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+                    'position': 1,
+                    'recording': {'id': RECORDING, 'title': 'Magnetic', 'video': False},
+                })
+            return payload
+        result = next(row for row in diagnose_case(CASE, changed_get)
+                      if row['check'] == 'release_1')
+        self.assertEqual('PASS', result['status'])
+        self.assertTrue(result['evidence']['complete_track_graph'])
+        self.assertTrue(result['evidence']['json_reconciliation_eligible'])
+        self.assertEqual(2, result['evidence']['track_count'])
+        self.assertEqual(1, result['evidence']['unique_recording_count'])
+
     def test_release_to_group_mismatch_is_detected(self):
         rows = diagnose_case(CASE, FakeClient(wrong_group=True).get)
         self.assertEqual(2, sum(x['status'] == 'FAIL' for x in rows))

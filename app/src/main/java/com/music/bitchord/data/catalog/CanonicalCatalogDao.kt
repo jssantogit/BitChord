@@ -419,6 +419,99 @@ internal interface CanonicalCatalogDao {
     @Upsert suspend fun upsertCatalogReleaseGroup(entity: CatalogReleaseGroupEntity)
     @Upsert suspend fun upsertCatalogReleaseGroupEdition(entity: CatalogReleaseGroupEditionEntity)
     @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
+    @Query("DELETE FROM catalog_musicbrainz_track WHERE releaseId = :releaseId AND trackMbid IN (:trackMbids)")
+    suspend fun deleteObsoleteCatalogMusicBrainzTracks(releaseId: String, trackMbids: List<String>)
+
+    /**
+     * Drop a legacy ReleaseTrack only when its sole explicit edge owner is
+     * MusicBrainz, the recording no longer appears on ANY edition Track,
+     * and the Release has no ambiguous ownership by another provider.
+     * Other-provider/legacy co-claims and their source markers stay intact.
+     */
+    @Query("""
+        DELETE FROM catalog_release_track
+        WHERE releaseId = :releaseId AND recordingId IN (:recordingIds)
+          AND EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider = 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider != 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_external_identity AS identity
+              WHERE identity.entityId = catalog_release_track.releaseId
+                AND identity.entityType = 'release'
+                AND identity.provider != 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_musicbrainz_track AS track
+              WHERE track.releaseId = catalog_release_track.releaseId
+                AND track.recordingId = catalog_release_track.recordingId
+          )
+    """)
+    suspend fun deleteObsoleteMusicBrainzOnlyReleaseTracks(releaseId: String, recordingIds: List<String>)
+
+    /**
+     * A co-owned legacy ReleaseTrack can survive, but an obsolete MusicBrainz
+     * source claim must not survive once no edition Track points to it.
+     */
+    @Query("""
+        DELETE FROM catalog_release_track_source
+        WHERE releaseId = :releaseId AND recordingId IN (:recordingIds)
+          AND provider = 'musicbrainz'
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_musicbrainz_track AS track
+              WHERE track.releaseId = catalog_release_track_source.releaseId
+                AND track.recordingId = catalog_release_track_source.recordingId
+          )
+    """)
+    suspend fun deleteObsoleteMusicBrainzReleaseTrackSources(releaseId: String, recordingIds: List<String>)
+
+    /**
+     * Refresh legacy sort order only for an already-known, MusicBrainz-exclusive
+     * ReleaseTrack. Edition-specific Track rows retain every exact medium/position;
+     * the legacy schema can represent only one position per Recording.
+     */
+    @Query("""
+        UPDATE catalog_release_track
+        SET trackNumber = (
+            SELECT track.trackNumber FROM catalog_musicbrainz_track AS track
+            WHERE track.releaseId = catalog_release_track.releaseId
+              AND track.recordingId = catalog_release_track.recordingId
+            ORDER BY track.mediumNumber, track.trackNumber, track.trackMbid LIMIT 1
+        )
+        WHERE releaseId = :releaseId AND recordingId IN (:recordingIds)
+          AND EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider = 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider != 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_external_identity AS identity
+              WHERE identity.entityId = catalog_release_track.releaseId
+                AND identity.entityType = 'release'
+                AND identity.provider != 'musicbrainz'
+          )
+          AND EXISTS (
+              SELECT 1 FROM catalog_musicbrainz_track AS track
+              WHERE track.releaseId = catalog_release_track.releaseId
+                AND track.recordingId = catalog_release_track.recordingId
+          )
+    """)
+    suspend fun refreshMusicBrainzOnlyLegacyTrackPositions(releaseId: String, recordingIds: List<String>)
     @Upsert suspend fun upsertMusicBrainzCoverArtCache(entity: MusicBrainzCoverArtCacheEntity)
     @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = :entityType AND mbid = :mbid LIMIT 1")
     suspend fun musicBrainzCoverArtCache(entityType: String, mbid: String): MusicBrainzCoverArtCacheEntity?
@@ -594,6 +687,8 @@ internal interface CanonicalCatalogDao {
     /**
      * Preserve NULL/un-enriched linked releases so a negative year predicate
      * cannot infer that an unknown release definitely fails to match.
+     * A co-owned ReleaseTrack alone cannot confer an MB edition date after
+     * its MB membership is retired; current Track/source evidence must remain.
      */
     @Query(
         """
@@ -616,6 +711,19 @@ internal interface CanonicalCatalogDao {
                   AND identity.entityType = 'release'
                   AND identity.entityId = rt.releaseId
            ) = 1
+           AND (
+                EXISTS (
+                    SELECT 1 FROM catalog_release_track_source AS sourceOwner
+                    WHERE sourceOwner.releaseId = rt.releaseId
+                      AND sourceOwner.recordingId = rt.recordingId
+                      AND sourceOwner.provider = 'musicbrainz'
+                )
+                OR EXISTS (
+                    SELECT 1 FROM catalog_musicbrainz_track AS exactTrack
+                    WHERE exactTrack.releaseId = rt.releaseId
+                      AND exactTrack.recordingId = rt.recordingId
+                )
+           )
         WHERE rt.recordingId IN (:recordingIds)
         ORDER BY rt.recordingId ASC, rt.releaseId ASC
         """,
