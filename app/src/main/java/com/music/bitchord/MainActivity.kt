@@ -7762,12 +7762,20 @@ private fun NativeArtistShareTopBarAction(title: String) {
 }
 
 @Composable
-private fun NativeUpdateTopBarAction(version: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+internal fun NativeUpdateTopBarAction(version: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(com.music.bitchord.ui.components.AppleFloatingControlMetrics.toolbarDiameter)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .testTag("native-update-topbar-action"),
+        contentAlignment = Alignment.Center,
+    ) {
         Icon(
             Icons.Rounded.Upgrade,
             contentDescription = stringResource(R.string.update_available, version),
-            tint = MaterialTheme.colorScheme.primary,
+            tint = com.music.bitchord.ui.theme.appleMusicKeyColor(),
+            modifier = Modifier.size(com.music.bitchord.ui.components.AppleFloatingControlMetrics.toolbarGlyphSize),
         )
     }
 }
