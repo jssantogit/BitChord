@@ -66,41 +66,50 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_source_only_title_triage.py' -v
       - name: Reconcile no-barcode C leads against MusicBrainz release title index
         run: python3 scripts/catalog_211_discogs_source_only_title_triage.py
-      - name: Observe C-05 in the real MusicBrainz Release title index (one GET)
+      - name: Observe C-05 exact and distinctive-term Release indices (max two GETs)
         run: |
           python3 - <<'PY'
           import json
           import sys
+          import time
           from pathlib import Path
           sys.path.insert(0, "scripts")
           from catalog_211_discogs_source_only_title_triage import (
-              release_title_query, parse_mb_release_search,
+              release_title_query, distinctive_release_term_query,
+              parse_mb_release_search,
           )
           from catalog_211_discogs_public_link_probe import read_json
           artist = "95663592-1447-4579-90f7-c94733476667"
           title = "Romance: Untold -Daydream-"
           expected_release = "4c42b226-24c8-4481-91ce-744ae59eaa5b"
-          query = release_title_query(title, artist)
-          outcome = {"case": "C-05", "query_kind": "artist_scoped_release_title",
+          outcome = {"case": "C-05", "query_kind": "artist_scoped_exact_then_distinctive_term",
                      "result": "unavailable", "http_requests": 0,
                      "matching_mb_release_ids": [], "reviewed": False,
                      "confirmed_missing_from_musicbrainz": False,
                      "verified_discogs_pressing": False}
-          if query is not None:
-              outcome["http_requests"] = 1
+          urls = [
+              ("exact_release_phrase", release_title_query(title, artist)),
+              ("distinctive_term", distinctive_release_term_query(title, artist)),
+          ]
+          for name, url in urls:
+              if url is None:
+                  continue
+              if outcome["http_requests"]:
+                  time.sleep(1.1)
+              outcome["http_requests"] += 1
               try:
-                  status, body = read_json(query)
+                  status, body = read_json(url)
                   matches = parse_mb_release_search(body, artist, title) if status == 200 else None
                   if matches is None:
-                      outcome["result"] = "invalid_or_unavailable_index"
-                  else:
+                      outcome["result"] = name + "_invalid_or_unavailable"
+                  elif expected_release in matches[0]:
                       outcome["matching_mb_release_ids"] = matches[0]
-                      outcome["result"] = (
-                          "c05_existing_release_seen_in_search" if expected_release in matches[0]
-                          else "no_c05_exact_release_in_first_page_not_absence"
-                      )
-              except (OSError, TimeoutError, ValueError, TypeError) as exc:
-                  outcome["result"] = "provider_unavailable"
+                      outcome["result"] = "c05_existing_mb_release_observed_via_" + name
+                      break
+                  else:
+                      outcome["result"] = name + "_no_first_page_match_not_absence"
+              except (OSError, TimeoutError, ValueError, TypeError):
+                  outcome["result"] = name + "_provider_unavailable"
           Path("discogs-211-c05-exact-release-search.json").write_text(
               json.dumps(outcome, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           print(json.dumps(outcome, sort_keys=True))
