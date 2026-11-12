@@ -68,6 +68,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import coil3.compose.AsyncImage
 import com.music.bitchord.data.model.BrowseItem
@@ -1745,12 +1746,12 @@ private fun SearchFilterTabs(
                 // Bitchord-only tint feedback. AM-DECOMP verifies selection
                 // colors but does not establish a timing for the indicator.
                 val textTint by animateColorAsState(
-                    targetValue = if (selected) AppleSearchBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                    targetValue = if (selected) appleMusicKeyColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                     animationSpec = tween(durationMillis = selectionDuration),
                     label = "appleResultTabTextTint",
                 )
                 val lineTint by animateColorAsState(
-                    targetValue = if (selected) AppleSearchBlue else Color.Transparent,
+                    targetValue = if (selected) appleMusicKeyColor() else Color.Transparent,
                     animationSpec = tween(durationMillis = selectionDuration),
                     label = "appleResultTabUnderlineTint",
                 )
@@ -1842,12 +1843,12 @@ fun AppleSearchOriginTabs(
         options.forEachIndexed { index, label ->
             val selected = index == selectedIndex
             val textTint by animateColorAsState(
-                targetValue = if (selected) AppleSearchBlue else MaterialTheme.colorScheme.onSurfaceVariant,
+                targetValue = if (selected) appleMusicKeyColor() else MaterialTheme.colorScheme.onSurfaceVariant,
                 animationSpec = tween(durationMillis = selectionDuration),
                 label = "appleOriginTabTextTint",
             )
             val lineTint by animateColorAsState(
-                targetValue = if (selected) AppleSearchBlue else Color.Transparent,
+                targetValue = if (selected) appleMusicKeyColor() else Color.Transparent,
                 animationSpec = tween(durationMillis = selectionDuration),
                 label = "appleOriginTabUnderlineTint",
             )
@@ -1878,6 +1879,5 @@ fun AppleSearchOriginTabs(
 
 /** Rounded, but well short of a capsule — the corner reads as a cut, not a curve. */
 /** Apple-style selected tabs are blue independently of the dynamic artwork theme. */
-private val AppleSearchBlue = Color(0xFF009CFF)
 
 private val FILTER_PILL_SHAPE = RoundedCornerShape(12.dp)

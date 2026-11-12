@@ -44,7 +44,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
-import com.music.bitchord.ui.theme.AccentRed
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.theme.themeArtworkPalette
 
 /**
@@ -220,7 +220,7 @@ internal fun PlaylistWizardPrimaryAction(
         modifier = Modifier.fillMaxWidth().height(50.dp),
         shape = RoundedCornerShape(25.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = AccentRed,
+            containerColor = appleMusicKeyColor(),
             contentColor = androidx.compose.ui.graphics.Color.White,
         ),
     ) {

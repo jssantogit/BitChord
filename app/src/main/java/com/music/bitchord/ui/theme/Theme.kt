@@ -22,28 +22,52 @@ import com.music.bitchord.R
 // spots (Replay's rank badge) that want that specific red regardless of theme.
 val AccentRed = Color(0xFFFA2D48)
 
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary = Color.White,
     onPrimary = Color.Black,
+    primaryContainer = Color(0xFF1C1C1E),
+    onPrimaryContainer = Color.White,
+    secondary = AppleMusicDarkKey,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF1C1C1E),
+    onSecondaryContainer = Color.White,
+    tertiary = Color(0xFF8E8E93),
+    onTertiary = Color.Black,
+    tertiaryContainer = Color(0xFF1C1C1E),
+    onTertiaryContainer = Color.White,
     background = Color.Black,
     onBackground = Color.White,
     surface = Color(0xFF0D0D0F),
     onSurface = Color.White,
     surfaceVariant = Color(0xFF1C1C1E),
     onSurfaceVariant = Color(0xFF8E8E93),
+    surfaceTint = Color.Transparent,
     outline = Color(0xFF2C2C2E),
+    outlineVariant = Color(0xFF38383A),
 )
 
-private val LightColors = lightColorScheme(
+internal val LightColors = lightColorScheme(
     primary = Color.Black,
     onPrimary = Color.White,
+    primaryContainer = Color(0xFFF2F2F7),
+    onPrimaryContainer = Color.Black,
+    secondary = AppleMusicLightKey,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFF2F2F7),
+    onSecondaryContainer = Color.Black,
+    tertiary = Color(0xFF6E6E73),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFF2F2F7),
+    onTertiaryContainer = Color.Black,
     background = Color.White,
     onBackground = Color.Black,
     surface = Color(0xFFF7F7F9),
     onSurface = Color.Black,
     surfaceVariant = Color(0xFFF2F2F7),
     onSurfaceVariant = Color(0xFF6E6E73),
+    surfaceTint = Color.Transparent,
     outline = Color(0xFFE5E5EA),
+    outlineVariant = Color(0xFFC6C6C8),
 )
 
 /**

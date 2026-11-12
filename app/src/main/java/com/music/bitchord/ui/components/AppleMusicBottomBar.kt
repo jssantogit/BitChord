@@ -45,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -87,7 +88,6 @@ import dev.chrisbanes.haze.materials.HazeMaterials
  * miniplayer), not a pixel-to-dp conversion of the cropped reference image.
  */
 private val AppleNightSurface = Color(0xFF2B2B2D)
-private val AppleBlue = Color(0xFF0091FF)
 private val AppleWhite = Color(0xFFF9F9FB)
 private val AppleSecondary = Color(0xFFB6B6BB)
 private val ApplePillShape = RoundedCornerShape(percent = 50)
@@ -279,6 +279,7 @@ fun AppleMusicBottomBar(
     val selectedVisibleIndex = appleMusicVisualIndexForDestination(selectedIndex)
     val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val haptics = rememberHaptics()
+    val selectionBlue = appleMusicKeyColor()
 
     Row(
         modifier = modifier
@@ -298,7 +299,7 @@ fun AppleMusicBottomBar(
             val selected = selectedVisibleIndex == visibleIndex
             val targetTint = when {
                 !enabled -> AppleWhite.copy(alpha = 0.34f)
-                selected -> AppleBlue
+                selected -> selectionBlue
                 else -> AppleWhite
             }
             val tint by animateColorAsState(
