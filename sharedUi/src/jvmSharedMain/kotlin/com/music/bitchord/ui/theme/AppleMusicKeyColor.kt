@@ -17,6 +17,19 @@ val AppleMusicDarkKey = Color(0xFF0091FF)
 fun appleMusicKeyColor(dark: Boolean): Color =
     if (dark) AppleMusicDarkKey else AppleMusicLightKey
 
+/** Selected UI accents use Apple key blue; inactive marks keep neutral ink. */
+fun appleSelectionAccentColor(selected: Boolean, dark: Boolean, neutral: Color): Color =
+    if (selected) appleMusicKeyColor(dark) else neutral
+
+@Composable
+fun appleSelectionAccentColor(selected: Boolean, neutral: Color): Color =
+    appleSelectionAccentColor(
+        selected = selected,
+        dark = MaterialTheme.colorScheme.background.luminance() < 0.5f,
+        neutral = neutral,
+    )
+
+
 @Composable
 fun appleMusicKeyColor(): Color =
     appleMusicKeyColor(dark = MaterialTheme.colorScheme.background.luminance() < 0.5f)

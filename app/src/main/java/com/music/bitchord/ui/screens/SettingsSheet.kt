@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.ui.components.appleSettingsSwitchColors
 import com.music.bitchord.ui.components.appleSettingsSliderColors
+import com.music.bitchord.ui.theme.appleSelectionAccentColor
 
 import com.music.bitchord.wear.WatchInstaller
 import android.content.Context
@@ -970,7 +971,7 @@ internal fun SettingsScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .border(
                                     width = if (selected) 1.5.dp else 0.dp,
-                                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    color = appleSelectionAccentColor(selected = selected, neutral = Color.Transparent),
                                     shape = RoundedCornerShape(16.dp),
                                 )
                                 .semantics { this.selected = selected }
@@ -1009,8 +1010,10 @@ internal fun SettingsScreen(
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = appleSelectionAccentColor(
+                                    selected = selected,
+                                    neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.padding(top = 6.dp),
                             )

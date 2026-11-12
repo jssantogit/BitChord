@@ -69,6 +69,7 @@ import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.theme.appleMusicKeyColor
+import com.music.bitchord.ui.theme.appleSelectionAccentColor
 import java.util.Locale
 
 /**
@@ -285,7 +286,10 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
         Icon(
             imageVector = if (selected) PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
             contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = appleSelectionAccentColor(
+                selected = selected,
+                neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
             modifier = Modifier.size(22.dp).testTag("playlist-picker-selection-icon"),
         )
     }
