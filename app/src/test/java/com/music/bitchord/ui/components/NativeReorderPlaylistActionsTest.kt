@@ -52,7 +52,7 @@ class NativeReorderPlaylistActionsTest {
         }
         compose.onNodeWithTag("reorder-save-native").assertHeightIsEqualTo(48.dp)
         assertTrue(compose.onNodeWithTag("reorder-save-native")
-            .getUnclippedBoundsInRoot().width >= 120.dp)
+            .getUnclippedBoundsInRoot().let { it.right - it.left >= 120.dp })
         compose.onNodeWithText("Salvar ordem").performClick()
         compose.runOnIdle { assertEquals(1, saves) }
     }
@@ -71,7 +71,7 @@ class NativeReorderPlaylistActionsTest {
         }
         compose.onNodeWithTag("reorder-save-native").assertIsNotEnabled()
         assertTrue(compose.onNodeWithTag("reorder-save-native")
-            .getUnclippedBoundsInRoot().width >= 120.dp)
+            .getUnclippedBoundsInRoot().let { it.right - it.left >= 120.dp })
         compose.onNodeWithTag("reorder-save-loading", useUnmergedTree = true).assertExists()
         compose.runOnIdle { assertEquals(0, saves) }
     }
