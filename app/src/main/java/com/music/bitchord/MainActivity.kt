@@ -83,8 +83,6 @@ import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Upgrade
 import com.music.bitchord.data.listentogether.ServerConnectionState
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -7707,28 +7705,32 @@ private fun NativeDetailAlbumTopBarActions(
 }
 
 @Composable
-private fun NativeLibraryTopBarSortAction(
+internal fun NativeLibraryTopBarSortAction(
     expanded: Boolean,
     current: LibrarySort,
     onOpen: () -> Unit,
     onClose: () -> Unit,
     onChange: (LibrarySort) -> Unit,
 ) {
-    Box {
-        IconButton(onClick = onOpen, modifier = Modifier.size(40.dp)) {
+    Box(Modifier.testTag("native-toolbar-library-sort-anchor")) {
+        IconButton(
+            onClick = onOpen,
+            modifier = Modifier.size(40.dp).testTag("native-toolbar-library-sort-trigger"),
+        ) {
             Icon(
                 Icons.Rounded.Sort,
                 contentDescription = stringResource(R.string.sort_library),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = onClose) {
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+            expanded = expanded,
+            onDismissRequest = onClose,
+        ) {
             LibrarySort.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.localizedLabel()) },
-                    trailingIcon = if (option == current) {
-                        { Icon(Icons.Rounded.Check, contentDescription = null) }
-                    } else null,
+                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                    label = option.localizedLabel(),
+                    selected = option == current,
                     onClick = { onChange(option) },
                 )
             }
