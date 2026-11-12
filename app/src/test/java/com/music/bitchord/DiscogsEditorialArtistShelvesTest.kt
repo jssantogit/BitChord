@@ -40,7 +40,7 @@ class DiscogsEditorialArtistShelvesTest {
             group(memberRemixId, "HOT (KAZUHA ver.)", "Single", "Remix"),
         )
         val cards = groups.map { row ->
-            ShelfItem(row.title, row.releaseKind, null, null,
+            ShelfItem(row.title, row.releaseKind.orEmpty(), null, null,
                 "catalog:RELEASE_GROUP:${row.musicBrainzId}")
         }
         val first = listOf(HomeShelf("Singles e EPs", cards))
