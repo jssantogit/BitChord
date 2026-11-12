@@ -35,7 +35,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -548,6 +547,38 @@ fun CompactTrackRow(
     }
 }
 
+/**
+ * Same 40dp native circular surface for the feed back and More controls.
+ * Only the visible shape is measured here; the AM-DECOMP static trace does
+ * not establish the final hit rectangle, shadow or pixel rendering.
+ * Keep the native button semantics and the caller's original callbacks.
+ */
+@Composable
+private fun NativeHomeHeaderIconAction(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    tag: String,
+    glyphSize: androidx.compose.ui.unit.Dp,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(glyphSize),
+        )
+    }
+}
+
 /** An Android Home action. Desktop has no in-feed title or overflow. */
 data class HomeHeaderAction(val label: String, val onClick: () -> Unit)
 
@@ -582,38 +613,24 @@ fun HomeTitle(
         // A genre page must line up with Home/Explore, not indent the title
         // by the back button's width. Keep Back reachable at the right.
         if (onBack != null) {
-            IconButton(
+            NativeHomeHeaderIconAction(
+                icon = PlaylistEditorIcons.Back,
+                description = "Voltar",
                 onClick = onBack,
-                modifier = Modifier.size(40.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                    .testTag("home-back"),
-            ) {
-                Icon(
-                    PlaylistEditorIcons.Back,
-                    contentDescription = "Voltar",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp),
-                )
-            }
+                tag = "home-back",
+                glyphSize = 20.dp,
+            )
         }
         trailing?.invoke()
         if (actions.isNotEmpty()) {
             Box {
-                IconButton(
+                NativeHomeHeaderIconAction(
+                    icon = PlaylistEditorIcons.More,
+                    description = stringResource(Res.string.more),
                     onClick = { expanded = true },
-                    // All header icon pucks use one visible 40dp diameter;
-                    // the platform keeps the broader accessible touch target.
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                        .testTag("home-overflow"),
-                ) {
-                    Icon(
-                        PlaylistEditorIcons.More,
-                        contentDescription = stringResource(Res.string.more),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                    tag = "home-overflow",
+                    glyphSize = 24.dp,
+                )
                 NativeCompactOverflowMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
