@@ -62,9 +62,7 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(true, shouldShowNativeArtistSearch(false, "aespa"))
     }
 
-    @Test fun artistShelfSeparatesAvailableLocalAlbumAndSinglesWhenReleaseGroupTypeIsMissing() {
-        // Browse-only fallback: local album tags provide a release membership
-        // even when a MusicBrainz ReleaseGroup classification was not indexed.
+    @Test fun artistShelfLeavesUnclassifiedReleaseGroupsUnclassifiedRegardlessOfRecordingCount() {
         val rows = listOf(release("Plot Twist"), release("Butterfly Doors"),
             release("Say It"), release("unresolved"))
         val sections = canonicalArtistReleaseSections(
@@ -76,29 +74,32 @@ class CanonicalArtistReleaseSectionsTest {
                 "Say It" to 1,
             ),
         )
-        assertEquals(listOf("Plot Twist"), sections.albums.map { it.id })
-        assertEquals(listOf("Butterfly Doors", "Say It"),
-            sections.singlesAndEps.map { it.id })
-        assertEquals(listOf("unresolved"), sections.unclassified.map { it.id })
+        assertTrue(sections.albums.isEmpty())
+        assertTrue(sections.singlesAndEps.isEmpty())
+        assertEquals(rows.map { it.id }, sections.unclassified.map { it.id })
         assertNull(sections.recentAlbum)
     }
 
     @Test fun officialReleaseGroupTypeOutranksProvisionalMembershipCount() {
         val rows = listOf(release("partial-album"), release("multi-track-ep"),
+            release("official-single-multiple-recordings"), release("official-album-one-recording"),
             release("unsupported-type"))
         val proof = mapOf(
             "partial-album" to CanonicalArtistReleaseEvidence("partial-album", "Album", "2025-04-01"),
             "multi-track-ep" to CanonicalArtistReleaseEvidence("multi-track-ep", "EP", null),
+            "official-single-multiple-recordings" to CanonicalArtistReleaseEvidence("official-single-multiple-recordings", "Single", null),
+            "official-album-one-recording" to CanonicalArtistReleaseEvidence("official-album-one-recording", "Album", null),
             "unsupported-type" to CanonicalArtistReleaseEvidence("unsupported-type", "Other", null),
         )
         val sections = canonicalArtistReleaseSections(
             releases = rows,
             evidence = proof,
             recordingCountsByRelease = mapOf("partial-album" to 1,
-                "multi-track-ep" to 4, "unsupported-type" to 8),
+                "multi-track-ep" to 4, "official-single-multiple-recordings" to 5,
+                "official-album-one-recording" to 1, "unsupported-type" to 8),
         )
-        assertEquals(listOf("partial-album"), sections.albums.map { it.id })
-        assertEquals(listOf("multi-track-ep"), sections.singlesAndEps.map { it.id })
+        assertEquals(listOf("partial-album", "official-album-one-recording"), sections.albums.map { it.id })
+        assertEquals(listOf("multi-track-ep", "official-single-multiple-recordings"), sections.singlesAndEps.map { it.id })
         assertEquals(listOf("unsupported-type"), sections.unclassified.map { it.id })
         assertEquals("partial-album", sections.recentAlbum?.id)
     }
@@ -190,10 +191,11 @@ class CanonicalArtistReleaseSectionsTest {
         )
         val result = canonicalArtistReleaseSections(rows, evidence,
             recordingCountsByRelease = mapOf("unknown-album" to 6))
-        assertEquals(listOf("new-album", "old-album", "unknown-album"),
+        assertEquals(listOf("new-album", "old-album"),
             result.albums.map { it.id })
         assertEquals(listOf("new-single", "old-single", "unknown-single"),
             result.singlesAndEps.map { it.id })
+        assertEquals(listOf("unknown-album"), result.unclassified.map { it.id })
         assertEquals("new-single", result.recentRelease?.id)
     }
 

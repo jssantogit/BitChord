@@ -164,7 +164,7 @@ internal fun rememberCanonicalArtistReleases(
                 val counts = releases.map { it.id }.chunked(300).flatMap { ids ->
                     dao.scopedReleaseRecordingCounts(ids, keys)
                 }.associate { it.releaseId to it.recordingCount }
-                val sections = canonicalArtistReleaseSections(releases, proofs, counts)
+                val sections = canonicalArtistReleaseSections(releases, proofs)
                 // Count-only diagnostics distinguish missing ReleaseGroup types
                 // from missing memberships without leaking account IDs/titles.
                 runCatching {

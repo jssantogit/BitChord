@@ -255,9 +255,7 @@ internal fun rememberLocalArtistExternallyDatedReleases(
     val newEvidence = native.evidence + matches.filter { (id, _) ->
         native.evidence[id]?.firstReleaseDate.isNullOrBlank()
     }
-    val counts = sections.albums.associate { it.id to 2 } +
-        sections.singlesAndEps.associate { it.id to 1 }
-    val updated = canonicalArtistReleaseSections(local, newEvidence, counts)
+    val updated = canonicalArtistReleaseSections(local, newEvidence)
     return rememberUpdatedState(
         if (updated.recentRelease != null)
             native.copy(sections = updated, evidence = newEvidence)

@@ -105,32 +105,21 @@ internal data class CanonicalArtistReleaseSections(
 /**
  * Preferred classification comes from a linked, verified ReleaseGroup type.
  *
- * When a user's local/remote album tag created a canonical Release without
- * the MusicBrainz edition edge, present a *browse-only* fallback based on
- * CURRENTLY available distinct release recordings: multiple => Albums,
- * exactly one => Singles e EPs. This is a UI grouping, not evidence that a
- * partially downloaded album is officially a single; never persist it as
- * ReleaseGroup truth or use it for metadata filters.
- *
- * Unknown/explicitly other types stay in "Lançamentos". A typed Album,
- * Single or EP with a verified full release date may become the hero release;
- * browse-only classifications cannot claim a new release.
+ * Types absent from MusicBrainz and explicitly unsupported types stay in
+ * "Lançamentos"; recording counts never determine release type. An officially
+ * typed Album, Single or EP with a verified full release date may become the
+ * hero release.
  */
 internal fun canonicalArtistReleaseSections(
     releases: List<ReleaseEntity>,
     evidence: Map<String, CanonicalArtistReleaseEvidence>,
-    recordingCountsByRelease: Map<String, Int> = emptyMap(),
+    _recordingCountsByRelease: Map<String, Int> = emptyMap(),
 ): CanonicalArtistReleaseSections {
     fun browseKind(release: ReleaseEntity): String {
         val type = evidence[release.id]?.primaryType?.trim()?.lowercase(java.util.Locale.ROOT)
         return when {
             type == "album" -> "album"
             type == "single" || type == "ep" -> "single"
-            type.isNullOrEmpty() -> when (recordingCountsByRelease[release.id]) {
-                1 -> "single"
-                null, 0 -> "other"
-                else -> "album"
-            }
             else -> "other"
         }
     }
