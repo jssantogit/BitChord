@@ -105,7 +105,7 @@ internal fun parseMusicBrainzTrackArtistAppearances(
                             if (part is JsonPrimitive && part.isString) false
                             else {
                                 val artist = (part as? JsonObject)?.get("artist") as? JsonObject
-                                val id = artist?.appearanceText("id")
+                                val id = artist?.appearanceText("id")?.lowercase(Locale.ROOT)
                                 id == null || !ARTIST_APPEARANCE_MBID.matches(id)
                             }
                         }

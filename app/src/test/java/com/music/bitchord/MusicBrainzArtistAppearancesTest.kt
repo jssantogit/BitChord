@@ -215,6 +215,46 @@ class MusicBrainzArtistAppearancesTest {
             parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
     }
 
+    @Test fun conflictingCommercialCreditOnFirstPageDoesNotBlockLaterProvenGuest() = runBlocking {
+        val pageOffsets = mutableListOf<Int>()
+        val fake = (1..25).joinToString(",") { number ->
+            val groupId = number.toString(16).padStart(8, '0') +
+                "-3333-4333-8333-333333333333"
+            """{"id":"55555555-5555-4555-8555-555555555555","status":"Official",
+                "barcode":"0196588123456",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+                "release-group":{"id":"$groupId","title":"Host album $number",
+                    "primary-type":"Album"},
+                "media":[{"tracks":[{
+                    "artist-credit":[{"artist":{"id":"$other"}}],
+                    "recording":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                        "title":"Wrong guest credit",
+                        "artist-credit":[{"artist":{"id":"$target"}}]}
+                }]}]}"""
+        }
+        val verified = """{"id":"77777777-7777-4777-8777-777777777777",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup",
+                "title":"Verified collaboration","primary-type":"Single"},
+            "media":[{"tracks":[{
+                "artist-credit":[{"artist":{"id":"$target"}}],
+                "recording":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    "title":"Verified guest track",
+                    "artist-credit":[{"artist":{"id":"$target"}}]}
+            }]}]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            pagedFetch = { _, offset ->
+                pageOffsets += offset
+                if (offset == 0) """{"release-count":26,"releases":[$fake]}"""
+                else """{"release-count":26,"releases":[$verified]}"""
+            },
+        )
+        val visible = client.browse(target)
+        assertEquals(listOf("Verified guest track"), visible.map { it.trackTitle })
+        assertEquals(listOf(0, 25), pageOffsets)
+    }
+
     @Test fun scrolledArtistAppearanceShelfUsesCachedProofAndExpires() = runBlocking {
         var now = 1_000L
         var requests = 0
