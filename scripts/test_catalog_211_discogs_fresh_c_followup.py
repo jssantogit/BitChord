@@ -135,6 +135,32 @@ class FreshCFollowupTest(unittest.TestCase):
         self.assertLessEqual(result["discogs_requests"], 16)
         self.assertLessEqual(result["musicbrainz_requests"], 24)
 
+    def test_exact_mb_release_title_ids_survive_to_public_followup_report(self):
+        # The title triage can find an exact MB Release while its RG uses a
+        # different title. The follow-up must not drop that typed identity.
+        release = "4c42b226-24c8-4481-91ce-744ae59eaa5b"
+        group = "0c668bdb-328c-4dba-8407-8eddb5373a5d"
+        expected_artist = ARTISTS[0][1]
+        def get(url):
+            if "/ws/2/release/?" in url:
+                if "arid%3A" + expected_artist in url:
+                    return {"count": 1, "releases": [{
+                        "id": release, "title": "Possible New",
+                        "artist-credit": [{"artist": {"id": expected_artist}}],
+                        "release-group": {"id": group},
+                    }]}
+                return {"count": 0, "releases": []}
+            return provider(url)
+        result = probe_followup(index(), observed(index()), MANIFEST, get)
+        hit = next(row for row in result["observations"]
+                   if row["discogs_release_id"] == 303)
+        self.assertEqual("mb_release_title_lead_not_edition", hit["title_status"])
+        self.assertEqual([release], hit["mb_release_candidate_mbids"])
+        self.assertEqual([group], hit["mb_group_candidate_mbids"])
+        self.assertFalse(hit["confirmed_missing_from_musicbrainz"])
+        self.assertEqual(0, result["confirmed_source_only_cases"])
+        self.assertEqual(0, result["reviewed_corpus_cases"])
+
     def test_fail_closed_for_mismatched_prior_index(self):
         doc = index()
         prev = observed(doc)
