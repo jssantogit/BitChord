@@ -64,7 +64,9 @@ class AudioBatchTest(unittest.TestCase):
 
     def test_malformed_artist_identity_cannot_trigger_network(self):
         index=primary_index()
-        index["artists"][0]["discogs_artist_id"]=False
+        # Index 0 is ENHYPEN and not in the seven-lead sample; invalidate
+        # the actual aespa artist anchor to prove no corresponding GET.
+        index["artists"][5]["discogs_artist_id"]=False
         called=[]
         output=inspect_audio_batch(page2_index(),index,set(),lambda url:called.append(url))
         self.assertLess(len(called),len(AUDIO_LEADS))
