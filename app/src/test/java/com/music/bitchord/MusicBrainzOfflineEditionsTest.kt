@@ -282,7 +282,14 @@ class MusicBrainzOfflineEditionsTest {
             index.persistGroupEditions(group, listOf(pageOne))
             index.persistGroupEditions(group, listOf(pageTwo))
             index.persistGroupEditions(group, emptyList())
-            assertEquals(setOf(pageOne, pageTwo), index.cachedGroupReleases(group).toSet())
+            // Exact GroupEdition membership now travels through the Room
+            // cache even if an old, sparse source Release omitted its parent.
+            // Both pages still accumulate without title-based deduplication.
+            assertEquals(
+                setOf(pageOne.copy(releaseGroupMbid = group),
+                    pageTwo.copy(releaseGroupMbid = group)),
+                index.cachedGroupReleases(group).toSet(),
+            )
         } finally { db.close() }
     }
 
