@@ -5,6 +5,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import com.music.bitchord.ui.CanonicalSearchPageCursors
 import com.music.bitchord.ui.canonicalArtistContinuationRows
+import com.music.bitchord.ui.canonicalSearchRowsWithoutRedundantEditions
 import com.music.bitchord.ui.canonicalSearchRowsWithOfficialEditionTitles
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -208,6 +209,86 @@ class CanonicalSearchPagingTest {
         assertEquals(1, rows.size)
         assertEquals("How Sweet", rows.single().title)
         assertEquals(row.artworkUri, rows.single().artworkUri)
+    }
+
+    @Test fun exactGroupTitleConsolidatesDuplicateReleaseButKeepsVariantEdition() {
+        val group = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val work = CanonicalCatalogSearchRow(
+            group, CanonicalSearchKind.RELEASE_GROUP, "How Sweet", "NewJeans",
+            releaseKind = "Single",
+        )
+        val same = CanonicalCatalogSearchRow(
+            "11111111-1111-4111-8111-111111111111",
+            CanonicalSearchKind.RELEASE, "How Sweet", "NewJeans",
+            coverGroupMbid = group,
+        )
+        val distinctEdition = same.copy(
+            musicBrainzId = "22222222-2222-4222-8222-222222222222",
+            title = "How Sweet (limited edition)",
+        )
+        val unrelatedSameTitle = same.copy(
+            musicBrainzId = "33333333-3333-4333-8333-333333333333",
+            coverGroupMbid = "44444444-4444-4444-8444-444444444444",
+        )
+        val result = canonicalSearchRowsWithoutRedundantEditions(
+            listOf(work, same, distinctEdition, unrelatedSameTitle),
+        )
+        assertEquals(listOf(
+            group, distinctEdition.musicBrainzId, unrelatedSameTitle.musicBrainzId,
+        ), result.map { it.musicBrainzId })
+        assertEquals("Single", result.first().releaseKind)
+    }
+
+    @Test fun exactReleaseGroupsForEasyEpAndEnglishSingleRemainSeparate() {
+        // Two genuinely distinct MusicBrainz ReleaseGroup MBIDs: an EP and a
+        // separately published Single. Similar words never merge their IDs.
+        val epGroup = "73403a9a-ef08-4747-8e5a-4a59eb65506c"
+        val englishSingleGroup = "b64d0fbf-a084-40e9-9087-b8c333ebb775"
+        val ep = CanonicalCatalogSearchRow(
+            epGroup, CanonicalSearchKind.RELEASE_GROUP, "EASY", "LE SSERAFIM",
+            releaseKind = "EP",
+        )
+        val englishSingle = CanonicalCatalogSearchRow(
+            englishSingleGroup, CanonicalSearchKind.RELEASE_GROUP,
+            "EASY (English ver.)", "LE SSERAFIM", releaseKind = "Single",
+        )
+        val epEdition = CanonicalCatalogSearchRow(
+            "1e2823b2-9388-4354-85f9-362983c5f284",
+            CanonicalSearchKind.RELEASE, " EASY  ", "LE SSERAFIM",
+            coverGroupMbid = epGroup,
+        )
+        val alternateEdition = epEdition.copy(
+            musicBrainzId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            title = "EASY (English ver.)",
+        )
+        val singleEdition = epEdition.copy(
+            musicBrainzId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            title = "EASY (English ver.)", coverGroupMbid = englishSingleGroup,
+        )
+        val combined = canonicalSearchRowsWithoutRedundantEditions(
+            listOf(ep, englishSingle, epEdition, alternateEdition, singleEdition),
+        )
+        assertEquals(listOf(epGroup, englishSingleGroup, alternateEdition.musicBrainzId),
+            combined.map { it.musicBrainzId })
+        assertEquals(listOf("EP", "Single"),
+            combined.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+                .map { it.releaseKind })
+    }
+
+    @Test fun incompleteMembershipCannotHideAReleaseJustBecauseTheTitlesMatch() {
+        val group = CanonicalCatalogSearchRow(
+            "9750354e-78df-4058-8758-b5a7a2eccf66",
+            CanonicalSearchKind.RELEASE_GROUP, "How Sweet", "NewJeans",
+        )
+        val unknown = CanonicalCatalogSearchRow(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            CanonicalSearchKind.RELEASE, "How Sweet", "NewJeans",
+            coverGroupMbid = null,
+        )
+        val original = listOf(group, unknown)
+        assertEquals(original, canonicalSearchRowsWithoutRedundantEditions(original))
+        assertEquals(listOf(unknown),
+            canonicalSearchRowsWithoutRedundantEditions(listOf(unknown)))
     }
 
     private fun page(
