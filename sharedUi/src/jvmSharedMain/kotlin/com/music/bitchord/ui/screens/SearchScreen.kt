@@ -41,16 +41,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.NorthWest
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,6 +65,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import com.music.bitchord.ui.theme.appleMusicKeyColor
+import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import coil3.compose.AsyncImage
 import com.music.bitchord.data.model.BrowseItem
@@ -760,7 +758,11 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     if (detail != null) {
         item(key = "musicbrainz:navigation") {
             Column(Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp)) {
-                OutlinedButton(onClick = onBack) { Text(stringResource(Res.string.canonical_back)) }
+                NativeSearchSecondaryAction(
+                    label = stringResource(Res.string.canonical_back),
+                    onClick = onBack,
+                    icon = PlaylistEditorIcons.Back,
+                )
                 if (detail is UiState.Success) {
                     detail.data.artworkUri?.let { art ->
                         AsyncImage(
@@ -864,31 +866,28 @@ private fun LazyListScope.canonicalMusicBrainzResults(
             }
             if (detail is UiState.Success && detail.data.nextOffset != null) {
                 item(key = "musicbrainz:load-more") {
-                    OutlinedButton(
+                    NativeSearchSecondaryAction(
+                        label = stringResource(Res.string.canonical_more_editions),
                         onClick = onLoadMore,
                         enabled = !loadingMore,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-                    ) {
-                        if (loadingMore) CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp), strokeWidth = 2.dp,
-                        ) else Text(stringResource(Res.string.canonical_more_editions))
-                    }
+                        loading = loadingMore,
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+                    )
                 }
             }
         }
     }
     if (detail == null && results is UiState.Success && searchHasMore) {
         item(key = "musicbrainz:search:load-more") {
-            OutlinedButton(
+            NativeSearchSecondaryAction(
+                label = stringResource(Res.string.canonical_more_results),
                 onClick = onSearchLoadMore,
                 enabled = !searchLoadingMore,
+                loading = searchLoadingMore,
                 modifier = Modifier.fillMaxWidth()
                     .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-            ) {
-                if (searchLoadingMore) CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp), strokeWidth = 2.dp,
-                ) else Text(stringResource(Res.string.canonical_more_results))
-            }
+            )
         }
     }
 }
@@ -1243,22 +1242,16 @@ private fun TopResultCard(
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(
+            NativeSearchSecondaryAction(
+                label = stringResource(Res.string.play),
                 onClick = onPlay,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.play))
-            }
-            OutlinedButton(
+                icon = BitChordIcons.Play,
+            )
+            NativeSearchSecondaryAction(
+                label = stringResource(Res.string.playlist_action),
                 onClick = onPlaylist,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-            ) {
-                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.playlist_action))
-            }
+                icon = PlaylistEditorIcons.Add,
+            )
         }
     }
 }
