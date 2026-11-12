@@ -6610,7 +6610,7 @@ private fun CanonicalPlaylistToolbarActions(
     overflowMenu: (@Composable () -> Unit)? = null,
 ) {
     if (!hasDetail && showCreate) {
-        IconButton(onClick = onCreate) {
+        IconButton(onClick = onCreate, modifier = Modifier.size(40.dp)) {
             Icon(
                 Icons.Rounded.PlaylistAdd,
                 contentDescription = "Nova playlist",
@@ -6664,7 +6664,7 @@ private fun NativeCollectionSearchAction(
     contentDescription: String,
     onClick: () -> Unit,
 ) {
-    IconButton(onClick = onClick) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(
             if (searching) Icons.Rounded.Close else BitChordIcons.Search,
             contentDescription = contentDescription,
@@ -6675,7 +6675,7 @@ private fun NativeCollectionSearchAction(
 
 @Composable
 private fun NativeCollectionSortAction(contentDescription: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(Icons.Rounded.Sort, contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface)
     }
@@ -6696,7 +6696,7 @@ internal fun NativeCollectionRatingToolbarAction(
         com.music.bitchord.ui.components.compactRatingAccessibility(rating)
     IconButton(
         onClick = onClick,
-        modifier = Modifier.semantics(mergeDescendants = true) {
+        modifier = Modifier.size(40.dp).semantics(mergeDescendants = true) {
             this.contentDescription = label
         },
     ) {
@@ -6769,7 +6769,7 @@ internal fun nativeCollectionOverflowGlyph(): ImageVector =
 
 @Composable
 private fun NativeCollectionOverflowAction(contentDescription: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
+    IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(nativeCollectionOverflowGlyph(), contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface)
     }
@@ -7715,7 +7715,7 @@ private fun NativeLibraryTopBarSortAction(
     onChange: (LibrarySort) -> Unit,
 ) {
     Box {
-        IconButton(onClick = onOpen) {
+        IconButton(onClick = onOpen, modifier = Modifier.size(40.dp)) {
             Icon(
                 Icons.Rounded.Sort,
                 contentDescription = stringResource(R.string.sort_library),
@@ -7745,7 +7745,7 @@ private fun NativeArtistShareTopBarAction(title: String) {
             putExtra(Intent.EXTRA_TEXT, title)
         }
         context.startActivity(Intent.createChooser(intent, title))
-    }) {
+    }, modifier = Modifier.size(40.dp)) {
         Icon(Icons.Rounded.IosShare, contentDescription = stringResource(R.string.share),
             tint = MaterialTheme.colorScheme.onSurface)
     }
