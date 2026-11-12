@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import android.app.Application
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +27,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -334,5 +336,26 @@ class GlobalAppleTopBarChromeTest {
         compose.runOnIdle {
             assertEquals(com.music.bitchord.ui.theme.AppleMusicDarkKey, tint)
         }
+    }
+
+    @Test fun flatToolbarBackPreservesFortyEightDpNativeTapTarget() {
+        var backs = 0
+        compose.setContent {
+            BitChordTheme {
+                CompositionLocalProvider(LocalLiquidGlassEnabled provides false) {
+                    FrostedTopBar(
+                        title = "Album",
+                        scrolled = false,
+                        onBack = { backs++ },
+                        showActions = false,
+                    )
+                }
+            }
+        }
+        compose.onNodeWithTag("native-flat-topbar-back")
+            .assertWidthIsEqualTo(48.dp)
+            .assertHasClickAction()
+            .performClick()
+        compose.runOnIdle { assertEquals(1, backs) }
     }
 }
