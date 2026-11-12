@@ -46,6 +46,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
@@ -2106,7 +2107,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             val current = (_canonicalDetail.value as? UiState.Success)?.data
                             if (current != null) {
                                 val known = current.rows.associateBy { it.musicBrainzId }
-                                val rows = hits.map { hit ->
+                                val incoming = hits.map { hit ->
                                     val previous = known[hit.musicBrainzId]
                                     CanonicalCatalogSearchRow(
                                         hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
@@ -2121,6 +2122,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                             artworkById[hit.musicBrainzId],
                                     )
                                 }
+                                // Earlier pages may already have verified art
+                                // and an edition-backed title. A continuation
+                                // cannot discard them or reintroduce raw labels.
+                                val rows = canonicalArtistContinuationRows(current.rows, incoming)
                                 _canonicalDetail.value = UiState.Success(current.copy(
                                     rows = rows,
                                     nextOffset = next,
@@ -4464,7 +4469,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _searchSource.value == SearchSource.CANONICAL &&
                 _query.value.trim() == query
             ) {
-                val fresh = groups.page.items.map { hit -> CanonicalCatalogSearchRow(
+                val fresh = groups.page.items.filter(::isCuratedMusicBrainzReleaseGroup)
+                    .map { hit -> CanonicalCatalogSearchRow(
                     musicBrainzId = hit.musicBrainzId,
                     kind = CanonicalSearchKind.RELEASE_GROUP,
                     title = hit.title,
@@ -4556,7 +4562,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 if (groups is MusicBrainzCatalogSearchResult.Success) {
-                    groups.page.items.forEach { hit ->
+                    groups.page.items.filter(::isCuratedMusicBrainzReleaseGroup).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             musicBrainzId = hit.musicBrainzId,
                             kind = CanonicalSearchKind.RELEASE_GROUP,
@@ -4628,7 +4634,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             )) }
                         }
                         if (CanonicalSearchKind.RELEASE_GROUP in failedKinds) {
-                            dao.searchKnownMusicBrainzGroups(query, 25).forEach { hit ->
+                            dao.searchKnownMusicBrainzGroups(query, 25)
+                                .filter(::isCuratedMusicBrainzReleaseGroup).forEach { hit ->
                                 add(CanonicalCatalogSearchRow(
                                     hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                     hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
@@ -4665,8 +4672,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
                 return@launch
             }
+            val mergedSearchRows = mergeCanonicalSearchRows(rows, cached, failedKinds)
+            val editionLabelRows = canonicalSearchRowsWithOfficialEditionTitles(
+                mergedSearchRows,
+                if (editions is MusicBrainzCatalogSearchResult.Success) editions.page.items
+                else emptyList(),
+            )
             val combined = withVerifiedLocalBadges(
-                mergeCanonicalSearchRows(rows, cached, failedKinds).filter { row ->
+                editionLabelRows.filter { row ->
                     row.kind != CanonicalSearchKind.RECORDING || canonicalStreamingTitleIsSafe(row.title)
                 },
             )
@@ -4764,7 +4777,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                     if (groups is MusicBrainzCatalogSearchResult.Success) {
-                        groups.page.items.forEach { hit ->
+                        groups.page.items.filter(::isCuratedMusicBrainzReleaseGroup).forEach { hit ->
                             add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                 hit.artistDisplay ?: hit.primaryType,
@@ -4795,9 +4808,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 val existing = (_canonicalResults.value as? UiState.Success)?.data ?: return@launch
-                val verified = withVerifiedLocalBadges(
-                    (existing + additional).distinctBy { it.kind to it.musicBrainzId },
+                val appended = (existing + additional).distinctBy { it.kind to it.musicBrainzId }
+                val named = canonicalSearchRowsWithOfficialEditionTitles(
+                    appended,
+                    if (editions is MusicBrainzCatalogSearchResult.Success) editions.page.items
+                    else emptyList(),
                 )
+                val verified = withVerifiedLocalBadges(named)
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != cursor.query ||
                     canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null

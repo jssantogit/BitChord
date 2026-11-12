@@ -424,12 +424,33 @@ internal class MusicBrainzCatalogIndex private constructor(
         val snapshot = database.withTransaction {
             val dao = database.catalogDao()
             val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", releaseMbid)
-            releaseId?.let { it to dao.catalogMusicBrainzTracks(it) }
+            releaseId?.let { id ->
+                val previousTracks = dao.catalogMusicBrainzTracks(id)
+                val byTrack = previousTracks.associateBy { it.trackMbid }
+                // Changing a Track's Recording changes catalog membership even
+                // when the Track MBID itself is unchanged. That is destructive
+                // and requires the same independent XML proof as removing Tracks.
+                var recordingReassigned = false
+                for (incoming in detail.tracks) {
+                    val old = byTrack[incoming.trackMbid.trim().lowercase(Locale.ROOT)]
+                        ?: continue
+                    val nextRecordingId = dao.entityIdForExternalIdentity(
+                        "musicbrainz", "recording", incoming.recordingMbid.trim().lowercase(Locale.ROOT),
+                    )
+                    if (old.recordingId != nextRecordingId) {
+                        recordingReassigned = true
+                        break
+                    }
+                }
+                Triple(id, previousTracks, recordingReassigned)
+            }
         }
         val incomingIds = detail.tracks.map { it.trackMbid.trim().lowercase(Locale.ROOT) }.toSet()
         val obsolete = snapshot?.second.orEmpty().map { it.trackMbid }.filterNot(incomingIds::contains)
         val previousRecordingIds = snapshot?.second.orEmpty().map { it.recordingId }.distinct()
-        val verifiedRemoval = if (obsolete.isNotEmpty() && detail.tracks.isNotEmpty() && detail.completeness.countsExplicitAndExact &&
+        val requiresXmlProof = obsolete.isNotEmpty() || snapshot?.third == true
+        val verifiedReconciliation = if (requiresXmlProof && detail.tracks.isNotEmpty() &&
+            detail.completeness.countsExplicitAndExact &&
             detail.completeness.offsetsValid && detail.completeness.positionsExplicitUnique
         ) {
             val xml = try {
@@ -449,7 +470,7 @@ internal class MusicBrainzCatalogIndex private constructor(
             if (snapshot?.first != currentReleaseId) return@withTransaction null
             if (snapshot != null && dao.catalogMusicBrainzTracks(snapshot.first) != snapshot.second)
                 return@withTransaction null
-            if (obsolete.isNotEmpty() && !verifiedRemoval) return@withTransaction null
+            if (requiresXmlProof && !verifiedReconciliation) return@withTransaction null
             // Nested Room withTransaction joins the active coroutine transaction;
             // thus identities and sidecars commit or roll back together.
             val recordingIds = persistRecordings(detail.tracks.map { track ->
@@ -495,7 +516,7 @@ internal class MusicBrainzCatalogIndex private constructor(
                 claim(dao, "release", releaseMbid, created)
                 created
             }
-            if (verifiedRemoval && obsolete.isNotEmpty()) {
+            if (verifiedReconciliation && obsolete.isNotEmpty()) {
                 obsolete.chunked(500).forEach { chunk ->
                     dao.deleteObsoleteCatalogMusicBrainzTracks(releaseId, chunk)
                 }

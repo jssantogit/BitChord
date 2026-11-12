@@ -127,6 +127,18 @@ internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
             hit.releaseGroupPrimaryType.trim().lowercase(Locale.ROOT) in
                 setOf("album", "ep", "single"))
 
+/**
+ * General Search is a music album/EP/single shelf, not the entire editable
+ * MusicBrainz corpus. Retain all raw groups in the canonical index and their
+ * MBIDs; only published-looking, typed groups with an actual artist credit
+ * and a safe title become mainstream result cards. Secondary Live/Remix
+ * tags alone are not proof of a bogus release.
+ */
+internal fun isCuratedMusicBrainzReleaseGroup(hit: MusicBrainzReleaseGroupHit): Boolean =
+    (hit.primaryType?.trim()?.lowercase(Locale.ROOT) ?: "") in
+        setOf("album", "ep", "single") &&
+        !hit.artistDisplay.isNullOrBlank() && canonicalStreamingTitleIsSafe(hit.title)
+
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
     hit.hasOfficialAudioRelease == true && hit.isVideo != true &&
         canonicalStreamingTitleIsSafe(hit.title)

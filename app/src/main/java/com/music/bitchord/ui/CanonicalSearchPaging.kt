@@ -69,12 +69,14 @@ internal data class CanonicalSearchPageCursors(
     }
 }
 
-
 /**
- * Progressive artist browse pages append new release groups without replacing
- * previously resolved editorial names or artwork. Stable MBIDs identify works,
- * regardless of the letter case returned by later MusicBrainz pages.
- * An authoritative full fetch may reconcile membership separately.
+ * Progressive artist browse pages ADD new ReleaseGroups. They must never
+ * replace earlier pages, artwork, or an edition-verified editorial display
+ * title (e.g. NewJeans: How Sweet instead of the raw composite Group label).
+ * Exact MBIDs, not displayed titles, define whether a work was already shown.
+ *
+ * A full authoritative browse can still reconcile obsolete membership only
+ * after its completeness gate; this is strictly a presentation merge.
  */
 internal fun canonicalArtistContinuationRows(
     previous: List<CanonicalCatalogSearchRow>,
@@ -85,9 +87,14 @@ internal fun canonicalArtistContinuationRows(
     }
 
 /**
- * Linked official Release editions may clarify the displayed title of a
- * composite ReleaseGroup, without a new network call or changing its MBID.
- * Text similarity alone never authorizes an identity or title replacement.
+ * Search already fetched exact Release -> ReleaseGroup MBIDs. Reuse those
+ * Official, audio-only editions to resolve composite user-facing labels
+ * immediately, without another HTTP request. Keep the ReleaseGroup MBID,
+ * raw Room title, classification, and all unrelated search rows untouched.
+ *
+ * Example: NewJeans' editorial Group "How Sweet & Bubble Gum" contains
+ * Official editions titled "How Sweet". A matching MBID and the existing
+ * strictly leading-title rule are required; free-text matching is forbidden.
  */
 internal fun canonicalSearchRowsWithOfficialEditionTitles(
     rows: List<CanonicalCatalogSearchRow>,

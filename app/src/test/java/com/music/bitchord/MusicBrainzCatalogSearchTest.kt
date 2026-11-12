@@ -1,6 +1,8 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
@@ -469,6 +471,46 @@ class MusicBrainzCatalogSearchTest {
         assertTrue(!check(good.copy(hasOfficialAudioRelease = false)))
     }
 
+
+    /**
+     * All raw release groups stay searchable/indexed by MBID; General's
+     * music-focused cards need the same editorial evidence gate already
+     * applied to Recordings/Releases. Other, untyped, and video/fan
+     * metadata should not be promoted as albums/EPs/singles.
+     */
+    @Test fun mainstreamSearchGroupsHideNonEditorialResultsButPreserveLegitimateWorkTypes() {
+        val id = "11111111-1111-4111-8111-111111111111"
+        val group = MusicBrainzReleaseGroupHit(
+            id, "How Sweet & Bubble Gum", "Single", "2024-05-24", "NewJeans",
+        )
+        assertTrue(isCuratedMusicBrainzReleaseGroup(group))
+        assertTrue(isCuratedMusicBrainzReleaseGroup(
+            group.copy(title = "Get Up", primaryType = "EP"),
+        ))
+        assertTrue(isCuratedMusicBrainzReleaseGroup(
+            group.copy(title = "Studio album", primaryType = "Album"),
+        ))
+        // Remix and live are real MusicBrainz secondary classifications:
+        // they do not by themselves prove that an audio work is garbage.
+        assertTrue(isCuratedMusicBrainzReleaseGroup(
+            group.copy(title = "Official live EP", primaryType = "EP", secondaryTypes = "Live"),
+        ))
+        assertTrue(!isCuratedMusicBrainzReleaseGroup(
+            group.copy(title = "Music video", primaryType = "Other"),
+        ))
+        assertTrue(!isCuratedMusicBrainzReleaseGroup(
+            group.copy(primaryType = null),
+        ))
+        assertTrue(!isCuratedMusicBrainzReleaseGroup(
+            group.copy(title = "OMG (Jersey flip)"),
+        ))
+        assertTrue(!isCuratedMusicBrainzReleaseGroup(
+            group.copy(title = "Hype Boy (dance practice)"),
+        ))
+        assertTrue(!isCuratedMusicBrainzReleaseGroup(
+            group.copy(artistDisplay = null),
+        ))
+    }
 
     @Test fun officialOtherAndBroadcastReleasesMustNotEnterStreamingEditionTiles() = runBlocking {
         val album = "11111111-1111-4111-8111-111111111111"

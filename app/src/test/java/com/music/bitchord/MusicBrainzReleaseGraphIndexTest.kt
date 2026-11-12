@@ -334,6 +334,88 @@ class MusicBrainzReleaseGraphIndexTest {
             assertEquals("concurrent edit", db.catalogDao().catalogMusicBrainzTrack(b)!!.title)
         } finally { db.close() }
     }
+
+    /**
+     * An existing Track MBID being pointed at another Recording is destructive:
+     * older library membership may disappear even when no Track MBID is deleted.
+     * The XML proof must agree before this is allowed.
+     */
+    @Test fun sameTrackRecordingChangeWithUnverifiedXmlPreservesTheEntirePreviousEdition() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val original = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val replacement = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            // A second API response is available, but contradicts the JSON
+            // change: this Track still points at the original Recording.
+            val xml = """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$track"><position>1</position><recording id="$original"/></track></track-list></medium></medium-list></release></metadata>"""
+            var xmlRequests = 0
+            val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    xmlRequests++
+                    return xml
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>, userAgent: String,
+                    maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = client)
+            val oldDetail = detail(release, listOf(track to original))
+            index.persistReleaseDetail(oldDetail)
+            val dao = db.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            val oldId = dao.entityIdForExternalIdentity("musicbrainz", "recording", original)!!
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset-old", oldId, "local", "old", "content://old", null, null, null, null,
+            ))
+            val rejected = index.persistReleaseDetail(detail(release, listOf(track to replacement)))
+
+            assertNull(rejected)
+            assertEquals(listOf(original), index.cachedRelease(release)!!.tracks.map { it.recordingMbid })
+            assertEquals(oldId, dao.catalogMusicBrainzTrack(track)!!.recordingId)
+            assertNull(dao.entityIdForExternalIdentity("musicbrainz", "recording", replacement))
+            assertEquals(listOf("musicbrainz"), dao.catalogReleaseTrackSources(
+                releaseId, oldId,
+            ).map { it.provider })
+            assertTrue(releaseId in dao.releaseIdsForVisibleRecordings(listOf(oldId)))
+            assertEquals("asset-old", dao.mediaAsset("local", "old")!!.id)
+            assertEquals(1, xmlRequests)
+        } finally { db.close() }
+    }
+
+    @Test fun sameTrackRecordingChangeWithoutExplicitJsonProofDoesNotFetchOrRetire() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val original = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val replacement = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            var requests = 0
+            val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    requests++
+                    error("XML proof should not be requested")
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>, userAgent: String,
+                    maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = client)
+            index.persistReleaseDetail(detail(release, listOf(track to original)))
+            val partial = detail(release, listOf(track to replacement)).copy(
+                completeness = MusicBrainzReleaseJsonCompleteness(),
+            )
+            val rejected = index.persistReleaseDetail(partial)
+
+            assertNull(rejected)
+            assertEquals(original, index.cachedRelease(release)!!.tracks.single().recordingMbid)
+            assertEquals(0, requests)
+        } finally { db.close() }
+    }
+
     @Test fun sameEditionTrackRecordingCorrectionPreservesOldRecordingOwnershipAndRejectsEditionReuse() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
@@ -344,7 +426,17 @@ class MusicBrainzReleaseGraphIndexTest {
             val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
             val recording1 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
             val recording2 = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
-            val index = MusicBrainzCatalogIndex(db)
+            val xml = """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$track"><position>1</position><recording id="$recording2"/></track></track-list></medium></medium-list></release></metadata>"""
+            var xmlRequests = 0
+            val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    xmlRequests++
+                    return xml
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>,
+                    userAgent: String, maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = client)
             val dao = db.catalogDao()
             index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
                 release, null, "Edition", null, null, null,
@@ -370,8 +462,10 @@ class MusicBrainzReleaseGraphIndexTest {
             index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
                 release, null, "Edition", null, null, null,
                 listOf(MusicBrainzCatalogTrack(track, recording2, "Corrected", 1, 1, null)),
+                completeness = MusicBrainzReleaseJsonCompleteness(true, true, true),
             ))
 
+            assertEquals(1, xmlRequests)
             assertEquals(newRecordingId, dao.catalogMusicBrainzTrack(track)!!.recordingId)
             assertEquals(recording2, index.cachedRelease(release)!!.tracks.single().recordingMbid)
             assertEquals(oldRecordingId, dao.recordingById(oldRecordingId)!!.id)
