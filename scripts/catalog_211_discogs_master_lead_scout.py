@@ -24,7 +24,7 @@ from catalog_211_discogs_master_versions_probe import (
 
 MANIFEST = Path("docs/plans/catalog-211-discogs-corpus-manifest.json")
 OUTPUT = Path("discogs-211-master-lead-scout.json")
-ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT = 10, 5, 25
+ARTIST_LIMIT, MASTER_LIMIT, REQUEST_LIMIT = 10, 8, 40
 GROUP_PAGE_LIMIT = 25
 
 def artist_index_url(mbid: str) -> str:
@@ -226,7 +226,7 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
     # unrelated groups cannot supply a unique edition claim.
     # A maximum of ten artist pages × 25 rows is already bounded at 250.
     # Truncating source rows here can conceal an explicit competing Master.
-    # A tight five-Master budget should not be consumed only by the
+    # An eight-Master batch budget should not be consumed only by the
     # alphabetically first large Albums. Single/EP lead candidates are
     # cheaper to exhaustively compare in principle; this is a *request
     # scheduling hint*, not editorial evidence about the MB primary type.
@@ -236,7 +236,7 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
                         item["primary_type_hint"], 3),
                      item["group_title"].casefold(),
                      item["group_mbid"], item["master_id"]))
-    # Do not spend all five Master-hydration slots on the first artist
+    # Do not spend all eight Master-hydration slots on the first artist
     # alphabetically. Take one bounded lead per artist per round; the
     # complete candidate universe remains intact below for detecting a
     # shared Master/ReleaseGroup, including candidates not hydrated.
