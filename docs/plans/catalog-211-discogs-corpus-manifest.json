@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: independent editorial A 2/10 (2022 Korean FEARLESS EP and 2023 Japanese FEARLESS Single both already correctly typed), B 10/10 negative or candidate exact-edition pairs, C 2/10 negatives (Stray Kids existing EP and ENHYPEN repackage as Release inside an existing MB group), total 14/30; zero automatic type corrections, new unlinked B Verified matches, C recoveries, or measured UI gains.",
+  "description": "Discogs #211: 17/30 independently reviewed: A 2/10 already correctly typed; B 10/10 negative/candidate exact-edition comparisons; C 5/10 confirmed negatives (Stray Kids Social Path, ENHYPEN ROMANCE repackage, LE SSERAFIM Jewelry, TXT Setsuna Hanabi, ENHYPEN MEMORABILIA), zero genuine MusicBrainz absences/Discogs-only recoveries, no Verified unlinked, no real type correction, no Android UI gain measured.",
   "cases": [
     {
       "id": "A-01",
@@ -529,17 +529,97 @@
     {
       "id": "C-06",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": true,
+      "label": "LE SSERAFIM · ジュエリー (Jewelry) [digital single already in MB]",
+      "musicbrainz_artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "musicbrainz_group_mbid": "14e1a869-8378-47df-818e-07dfe1d0c7fc",
+      "discogs_release_id": 28089088,
+      "artist_browse_complete": true,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/14e1a869-8378-47df-818e-07dfe1d0c7fc",
+        "discogs_release": "https://www.discogs.com/release/28089088",
+        "independent_editorial": "https://www.universal-music.co.jp/lesserafim/news/2023-07-25-2/",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43139788281"
+      },
+      "reviewed_at_utc": "2026-11-12T09:20:37Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Universal Music Japan's dated 25 July 2023 official announcement states that LE SSERAFIM's ジュエリー (Prod. imase) was released digitally in advance of the group's Japanese second single UNFORGIVEN, itself dated 23 August 2023. MusicBrainz's artist catalog already lists the Single release group ジュエリー (Jewelry), exact ReleaseGroup MBID 14e1a869, with three canonical editions. The public C title-index CI #43139788281 also returned that same group under the exact MB Artist ID; the public Discogs edition detail scan showed digital audio release 28089088 credited to the exact Discogs Artist ID 11171795. Therefore this is NOT an absent MusicBrainz release group; title/script differences in the Discogs index are not valid source-only evidence. Packaging/track-order equivalence of the specific digital Discogs Release to an MB Release was not independently certified. Do not promote to Verified or report an app UI gain; status candidate, app_type Unknown/visible false unmeasured."
     },
     {
       "id": "C-07",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": true,
+      "label": "TOMORROW X TOGETHER · セツナハナビ (Setsuna Hanabi) [already in MB]",
+      "musicbrainz_artist_mbid": "9d027d72-790e-40ec-bbb7-61aa613457de",
+      "musicbrainz_group_mbid": "cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
+      "discogs_release_id": 38302455,
+      "artist_browse_complete": true,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/9d027d72-790e-40ec-bbb7-61aa613457de",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
+        "discogs_release": "https://www.discogs.com/release/38302455",
+        "independent_editorial": "https://www.universal-music.co.jp/txt/news/2026-07-23/",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43139788281"
+      },
+      "reviewed_at_utc": "2026-11-12T09:20:37Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Universal Music Japan's dated 23 July 2026 official track-list publication confirms TOMORROW X TOGETHER's Japanese fifth single セツナハナビ (Setsuna Hanabi), with four tracks and physical CD editions scheduled 19 August 2026 (digital 17 August). The MusicBrainz canonical artist-catalog and title-index already contain the exact Single release group cb79234e, and MusicBrainz Official Release 6770b265 has the same four-song program and digital date, so it is not missing from MusicBrainz. CI #43139788281 independently observed Discogs CD Release 38302455 as Master 4331424 main release with exact Discogs artist 7164941, four track rows; a direct identical-pressing relationship between that CD and MB digital Release 6770b265 is not established. This is a C negative, not source-only recovery, and no Android rendering was inspected.",
+      "musicbrainz_release_mbid": "6770b265-719a-463b-af5e-50ac5aeac1e5"
     },
     {
       "id": "C-08",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": true,
+      "label": "ENHYPEN · DARK MOON SPECIAL ALBUM 'MEMORABILIA' [already in MB]",
+      "musicbrainz_artist_mbid": "95663592-1447-4579-90f7-c94733476667",
+      "musicbrainz_group_mbid": "4e219d4e-c5e0-4ed9-acec-b948c7319b37",
+      "discogs_release_id": 31008160,
+      "artist_browse_complete": true,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/95663592-1447-4579-90f7-c94733476667",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/4e219d4e-c5e0-4ed9-acec-b948c7319b37",
+        "discogs_release": "https://www.discogs.com/release/31008160",
+        "independent_editorial": "https://weverse.io/enhypen/notice/19177",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43139788281"
+      },
+      "reviewed_at_utc": "2026-11-12T09:20:37Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Unknown",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "BELIFT LAB's official Moon-version pre-order notice confirms DARK MOON SPECIAL ALBUM MEMORABILIA dated 13 May 2024 and distinguishes the Moon physical package (CD) from other separately announced products. The MusicBrainz ENHYPEN discography already includes ReleaseGroup 4e219d4e as EP with two editions, including Official digital Release d0c0cfe6 with six tracks and 13 May 2024 date. This proves an existing MusicBrainz title, not a Discogs-only recovery. Public Discogs C scouting CI #43139788281 observed physical Moon-or-main-version Discogs Release 31008160 in Master 3540736 and exact artist ID 8303009, six tracks; its exact packaging/label/catalog match to an MB physical edition remains unadjudicated. The label's marketing expression 'special album' alone is not independent proof of an Album-versus-EP classification error, so reference_type Unknown here and no type correction. App visibility remains unmeasured.",
+      "musicbrainz_release_mbid": "d0c0cfe6-0d31-469e-965a-3a5c18b1eb10"
     },
     {
       "id": "C-09",
