@@ -37,7 +37,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -221,7 +220,9 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                 )
             }
             if (session.busy) {
-                TextButton(
+                NativeInlineTextAction(
+                    label = stringResource(R.string.cancel_all),
+                    destructive = true,
                     onClick = {
                         // Only what is still going. Cancelling a finished row
                         // would drop it from the list, which is the one thing
@@ -229,18 +230,16 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                         items.filterNot { it.progress.settled }
                             .forEach { Downloads.cancel(it.videoId) }
                     },
-                ) {
-                    Text(stringResource(R.string.cancel_all))
-                }
+                )
             } else {
-                TextButton(
+                NativeInlineTextAction(
+                    label = stringResource(R.string.clear),
+                    subdued = true,
                     onClick = {
                         DownloadSession.clear()
                         onDismiss()
                     },
-                ) {
-                    Text(stringResource(R.string.clear))
-                }
+                )
             }
         }
 
