@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
@@ -670,11 +671,23 @@ private fun AlbumRow(
             modifier = Modifier.weight(1f),
         )
         if (selected) {
-            Icon(Icons.Rounded.Check, contentDescription = "Selecionado",
-                tint = palette.accent, modifier = Modifier.size(20.dp))
+            Icon(
+                imageVector = localFolderSelectionCheckIcon(),
+                contentDescription = "Selecionado",
+                tint = localFolderSelectionMarkColor(
+                    dark = MaterialTheme.colorScheme.background.luminance() < 0.5f,
+                ),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
+
+/** Group selection uses the same checked vector as the global native UI. */
+internal fun localFolderSelectionCheckIcon(): ImageVector = PlaylistEditorIcons.Check
+
+/** Selection is key-blue in light and dark themes, never artwork palette tint. */
+internal fun localFolderSelectionMarkColor(dark: Boolean): Color = appleMusicKeyColor(dark)
 
 @Composable
 private fun GroupLabels(title: String, subtitle: String, palette: ArtworkPalette, modifier: Modifier) {
