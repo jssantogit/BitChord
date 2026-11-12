@@ -234,6 +234,30 @@ def report(document: dict) -> dict:
             else:
                 source_identities.add(identity)
                 reviewed[cohort] += 1
+    # Excluded video/multi-artist source IDs are historical *screen-outs*.
+    # Validate their typed identity, but never count them as reviewed audio.
+    screenouts = document.get("screened_out_sources", [])
+    if not isinstance(screenouts, list) or len(screenouts) > 10:
+        errors.append("invalid screened-out sources archive")
+        screenouts = []
+    archive_seen = set()
+    for archived in screenouts:
+        cid = archived.get("original_slot") if isinstance(archived, dict) else None
+        source_id = selected_identity(archived) if isinstance(archived, dict) else None
+        if (not isinstance(archived, dict) or
+            archived.get("cohort") != "source_only" or
+            archived.get("reviewed") is not False or
+            archived.get("selection_state") != "excluded_by_provider_metadata" or
+            not isinstance(archived.get("exclusion_reason"), str) or
+            not archived["exclusion_reason"].strip() or
+            source_id is None):
+            errors.append(f"screened-out source {cid}: invalid archived evidence")
+        elif source_id in archive_seen or source_id in selected_identities or (
+            source_id in {str(r) for r in reviewed_discogs_source_ids}
+        ):
+            errors.append(f"screened-out source {cid}: duplicate source edition")
+        else:
+            archive_seen.add(source_id)
     if len(cases) != 30:
         errors.append(f"expected 30 slots, found {len(cases)}")
     for cohort in COHORTS:
@@ -246,6 +270,7 @@ def report(document: dict) -> dict:
                   "excluded_preliminary": excluded_triage[x],
                   "reviewed": reviewed[x], "required": 10}
                   for x in COHORTS},
+        "screened_out_not_reviewed": len(archive_seen),
         "errors": errors, "metrics": None,
     }
     if not complete:
