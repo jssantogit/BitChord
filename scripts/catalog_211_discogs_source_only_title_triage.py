@@ -21,7 +21,7 @@ INDEX = Path('discogs-211-corpus-candidates.json')
 EDITIONS = Path('discogs-211-corpus-edition-observations.json')
 BARCODE = Path('discogs-211-source-only-barcode-reconciliation.json')
 OUTPUT = Path('discogs-211-source-only-title-triage.json')
-MAX_REQUESTS = MAX_CANDIDATES * 3  # RG exact, bounded RG prefix, MB exact Release
+MAX_REQUESTS = MAX_CANDIDATES * 4  # RG exact/prefix, MB Release exact/distinct term
 SEARCH_LIMIT = 10
 
 
@@ -46,6 +46,31 @@ def release_title_query(title: object, artist_mbid: object) -> str | None:
     escaped = title.strip().replace('\\', '\\\\').replace('"', '\\"')
     return 'https://musicbrainz.org/ws/2/release/?' + urlencode({
         'query': f'release:"{escaped}" AND arid:{artist_mbid}',
+        'fmt': 'json', 'limit': SEARCH_LIMIT,
+    })
+
+
+def distinctive_release_term_query(title: object, artist_mbid: object) -> str | None:
+    """One bounded distinctive *literal* word, same artist; never fuzzy search.
+
+    The complete returned Release title is subsequently compared verbatim
+    after punctuation/case normalization; the broad word itself proves nothing.
+    """
+    if title_query(title, artist_mbid) is None:
+        return None
+    words = re.findall(r"[A-Za-z0-9]+", title)
+    if len(words) < 3:
+        return None
+    term = words[-1].lower()
+    generic = {
+        "remix", "version", "edition", "remastered", "instrumental",
+        "acoustic", "japanese", "english", "korean", "single",
+        "deluxe", "album", "official", "original", "explicit",
+    }
+    if not re.fullmatch(r"[a-z]{6,24}", term) or term in generic:
+        return None
+    return 'https://musicbrainz.org/ws/2/release/?' + urlencode({
+        'query': f'release:{term} AND arid:{artist_mbid}',
         'fmt': 'json', 'limit': SEARCH_LIMIT,
     })
 
@@ -126,8 +151,7 @@ def parse_mb_release_search(payload: object, artist_mbid: str,
             entry.get('release-group'), entry.get('artist-credit')
         )
         if (not isinstance(rid, str) or not MBID.fullmatch(rid) or
-            rid.lower() in seen or not isinstance(name, str) or
-            normalized(name) != expected_title or
+            rid.lower() in seen or not isinstance(name, str) or not name.strip() or
             not isinstance(parent, dict) or
             not isinstance(parent.get('id'), str) or
             not MBID.fullmatch(parent['id']) or
@@ -146,8 +170,11 @@ def parse_mb_release_search(payload: object, artist_mbid: str,
             artist_ids.append(mbid.lower())
         if artist_ids != [artist_mbid.lower()]:
             return None
-        releases.add(rid.lower())
-        groups.add(parent['id'].lower())
+        # A term-level search can also return unrelated titles on this
+        # artist. Those are valid index rows, not matching editions.
+        if normalized(name) == expected_title:
+            releases.add(rid.lower())
+            groups.add(parent['id'].lower())
     return sorted(releases), sorted(groups)
 
 
@@ -260,8 +287,36 @@ def triage(index: dict, editions: dict, barcode_report: dict, get) -> dict:
                 row['mb_release_candidate_mbids']=matched[0]
                 row['mb_group_candidate_mbids']=matched[1]
             else:
-                # Even a complete first-page miss is NOT absence evidence.
-                row['status']='no_title_index_hit_not_absence'
+                # An overly literal Lucene phrase can miss a Release already
+                # present under the same artist. Try only a distinctive
+                # trailing word, then demand the FULL exact normalized title.
+                term_url = distinctive_release_term_query(
+                    source.get('title'), expected['musicbrainz_artist_mbid'])
+                if term_url is None:
+                    row['status']='no_title_index_hit_not_absence'
+                    continue
+                if result['provider_requests'] >= MAX_REQUESTS:
+                    row['status']='release_term_not_checked_budget'
+                    continue
+                result['provider_requests'] += 1
+                try:
+                    term_payload = get(term_url)
+                except (HTTPError,URLError,OSError,TimeoutError,ValueError):
+                    row['status']='mb_release_title_provider_unavailable'
+                    continue
+                term_matches = parse_mb_release_search(
+                    term_payload, expected['musicbrainz_artist_mbid'],
+                    source['title'])
+                if term_matches is None:
+                    row['status']='invalid_mb_release_term_search'
+                elif term_matches[0]:
+                    row['status']='mb_release_title_lead_not_edition'
+                    row['mb_release_candidate_mbids']=term_matches[0]
+                    row['mb_group_candidate_mbids']=term_matches[1]
+                    row['lead_index_scope']='artist_scoped_distinctive_term'
+                else:
+                    # Negative first-page searches remain INCONCLUSIVE.
+                    row['status']='no_title_index_hit_not_absence'
     return result
 
 
