@@ -29,8 +29,8 @@ import java.util.UUID
  */
 internal class MusicBrainzCatalogIndex(
     private val database: CanonicalCatalogDatabase,
-    private val idFactory: () -> String = { UUID.randomUUID().toString() },
     private val proofClient: MusicBrainzClient = MusicBrainzClient(),
+    private val idFactory: () -> String = { UUID.randomUUID().toString() },
 ) {
     suspend fun persistRecordings(
         hits: List<MusicBrainzRecordingHit>,

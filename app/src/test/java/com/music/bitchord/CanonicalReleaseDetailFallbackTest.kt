@@ -23,6 +23,36 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class CanonicalReleaseDetailFallbackTest {
+    @Test fun catalogIndexKeepsTrailingIdFactoryWithNamedProofClientInjection() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            var generated = 0
+            val proofClient = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String) = "<metadata/>"
+                override suspend fun getLimited(
+                    path: String,
+                    parameters: Map<String, String>,
+                    userAgent: String,
+                    maxResponseBytes: Long,
+                ) = "<metadata/>"
+            })
+            val index = MusicBrainzCatalogIndex(db, proofClient = proofClient) {
+                "compat-recording-${++generated}"
+            }
+            val hits = listOf(
+                MusicBrainzRecordingHit("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Track", "Artist", null),
+            )
+
+            val indexed = index.persistRecordings(hits)
+
+            assertEquals("compat-recording-1", indexed.getValue(hits.single().musicBrainzId))
+        } finally {
+            db.close()
+        }
+    }
+
     @Test fun rejectedPartialRefreshDisplaysTrustedCachedRowsAndNeverPublishesPartialInput() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
