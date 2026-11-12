@@ -170,6 +170,12 @@ def probe_followup(index: dict, first: dict, manifest: dict, get) -> dict:
                              "edition_metadata_observed_not_adjudicated" else
                              "not_checked"),
             "mb_group_candidate_mbids": title.get("mb_group_candidate_mbids", []),
+            # Retain exact MusicBrainz Release leads from a title check.
+            # A group-only report would discard proof that a repackage
+            # exists under an older ReleaseGroup title. IDs are leads,
+            # never a cross-provider pressing match or an absence claim.
+            "mb_release_candidate_mbids": title.get("mb_release_candidate_mbids", []),
+            "title_lead_index_scope": title.get("lead_index_scope"),
             "reviewed": False,
             "confirmed_missing_from_musicbrainz": False,
         })
