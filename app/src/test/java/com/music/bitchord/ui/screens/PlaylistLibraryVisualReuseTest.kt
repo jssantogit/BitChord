@@ -216,24 +216,26 @@ class PlaylistLibraryVisualReuseTest {
         assertEquals(true, showPlaylistHeaderCreateAction(1))
     }
 
-    @Test fun playlistManagerNavigationUsesNativeBackAndSegments() {
-        var page by mutableStateOf(0)
+    @Test fun playlistManagerUsesSingleFiltersHeadingAndTopRightCreateAction() {
         var backs = 0
-         compose.setContent {
+        var creates = 0
+        compose.setContent {
             PlaylistManagerChrome(
-                selectedIndex = page,
-                onSelect = { page = it },
                 onBack = { backs++ },
+                onCreateFilter = { creates++ },
             )
         }
-        compose.onNodeWithText("Gerenciar coleções").assertExists()
-        compose.onNodeWithText("Clássicas").performClick()
+        compose.onNodeWithText("Seus filtros").assertExists()
+        compose.onNodeWithText("Gerenciar coleções").assertDoesNotExist()
+        compose.onNodeWithText("Clássicas").assertDoesNotExist()
+        compose.onNodeWithText("Inteligentes").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Criar filtro").performClick()
         compose.onNodeWithContentDescription(
             org.robolectric.RuntimeEnvironment.getApplication()
                 .getString(com.music.bitchord.R.string.back),
         ).performClick()
         compose.runOnIdle {
-            assertEquals(2, page)
+            assertEquals(1, creates)
             assertEquals(1, backs)
         }
     }
