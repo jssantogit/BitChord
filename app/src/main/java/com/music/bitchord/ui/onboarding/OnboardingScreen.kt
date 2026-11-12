@@ -439,10 +439,14 @@ private const val PAGE_CONNECT = 1
 /** Long enough for a full name; the party server keeps the first 80. */
 private const val NAME_LIMIT = 40
 
-/** The account page keeps leaning into YouTube's red while it moves. */
+/**
+ * Connection onboarding no longer echoes retired YouTube red.
+ * This restrained blue/navy mesh is a BitChord adaptation built around the
+ * documented key blue; AM-DECOMP does not establish onboarding background hues.
+ */
 private val ConnectPalettes = listOf(
-    MeshPalette(listOf(Color(0xFFFF1E3C), Color(0xFFC2185B), Color(0xFFFF8F3D), Color(0xFF4A1C8C))),
-    MeshPalette(listOf(Color(0xFFE53935), Color(0xFFFF6E40), Color(0xFFAD1457), Color(0xFF311B92))),
-    MeshPalette(listOf(Color(0xFFFF3D00), Color(0xFFD81B60), Color(0xFF8E24AA), Color(0xFFB71C1C))),
-    MeshPalette(listOf(Color(0xFFF50057), Color(0xFFFF9100), Color(0xFFC51162), Color(0xFF4527A0))),
+    MeshPalette(listOf(Color(0xFF08243E), Color(0xFF145A88), Color(0xFF007CD9), Color(0xFF16263F))),
+    MeshPalette(listOf(Color(0xFF11345A), Color(0xFF1B78B7), Color(0xFF244A78), Color(0xFF0D1D34))),
+    MeshPalette(listOf(Color(0xFF052B44), Color(0xFF007FA5), Color(0xFF4367B0), Color(0xFF12243A))),
+    MeshPalette(listOf(Color(0xFF143A63), Color(0xFF0091FF), Color(0xFF2A659E), Color(0xFF131F3D))),
 )

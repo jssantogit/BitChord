@@ -15,7 +15,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Color
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.LibraryMusic
 import org.jetbrains.compose.resources.painterResource
@@ -113,11 +117,27 @@ fun SpotifyLibraryScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = onOpenLogin) {
+                    Button(
+                        onClick = onOpenLogin,
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = appleMusicKeyColor(),
+                            contentColor = Color.White,
+                        ),
+                    ) {
                         Text(stringResource(R.string.spotify_sign_in))
                     }
                     Spacer(Modifier.height(8.dp))
-                    OutlinedButton(onClick = onOpenTokenSetup) {
+                    OutlinedButton(
+                        onClick = onOpenTokenSetup,
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface,
+                        ),
+                    ) {
                         Text(stringResource(R.string.spotify_use_spdc_token))
                     }
                 }

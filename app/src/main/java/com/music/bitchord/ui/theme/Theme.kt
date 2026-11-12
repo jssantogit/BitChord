@@ -18,8 +18,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
 
-// Apple Music's signature red. No longer the primary accent, but kept for the
-// spots (Replay's rank badge) that want that specific red regardless of theme.
+// Kept only as a source-compatibility alias while legacy callers are audited.
+// Selected states and primary actions use the verified light/night key blue.
+@Deprecated("Legacy red accent: use appleMusicKeyColor() for selected and affirmative actions")
 val AccentRed = Color(0xFFFA2D48)
 
 internal val DarkColors = darkColorScheme(

@@ -68,7 +68,7 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
-import com.music.bitchord.ui.theme.AccentRed
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import java.util.Locale
 
 /**
@@ -225,7 +225,7 @@ fun PlaylistPickerSheet(
                         .height(50.dp),
                     shape = RoundedCornerShape(25.dp),
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = AccentRed,
+                        containerColor = appleMusicKeyColor(),
                         contentColor = androidx.compose.ui.graphics.Color.White,
                     ),
                 ) {
@@ -500,7 +500,7 @@ private fun NewPlaylistForm(
                 .height(50.dp),
             shape = RoundedCornerShape(25.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = AccentRed,
+                containerColor = appleMusicKeyColor(),
                 contentColor = androidx.compose.ui.graphics.Color.White,
             ),
         ) {
@@ -647,7 +647,7 @@ internal fun RenamePlaylistForm(
                 .height(50.dp),
             shape = RoundedCornerShape(25.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = AccentRed,
+                containerColor = appleMusicKeyColor(),
                 contentColor = androidx.compose.ui.graphics.Color.White,
             ),
         ) {

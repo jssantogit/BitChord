@@ -91,6 +91,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.SolidColor
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -463,7 +464,7 @@ fun PillTextField(
             textStyle = AppleTextRoles.formInput(MaterialTheme.typography.bodyMedium).copy(
                 color = MaterialTheme.colorScheme.onBackground,
             ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            cursorBrush = SolidColor(appleMusicKeyColor()),
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,

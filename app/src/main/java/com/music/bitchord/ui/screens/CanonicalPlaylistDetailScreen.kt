@@ -79,7 +79,6 @@ import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
-import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.ui.icons.BitChordIcons
 import kotlinx.coroutines.CancellationException
