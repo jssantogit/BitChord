@@ -215,7 +215,7 @@ class CorpusReportTests(unittest.TestCase):
                 self.assertGreaterEqual(len(row["review_notes"].strip()), 80)
         self.assertEqual([], report(document)["errors"])
         self.assertFalse(report(document)["complete"])
-        self.assertEqual(9, report(document)["slots"]["type"]["reviewed"])
+        self.assertEqual(10, report(document)["slots"]["type"]["reviewed"])
         self.assertIsNone(report(document)["metrics"])
 
     def test_a10_ate_is_ep_according_to_jyp_without_exact_discogs_pressing_claim(self):
