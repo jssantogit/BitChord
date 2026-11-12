@@ -2,11 +2,16 @@ package com.music.bitchord
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
+import com.music.bitchord.ui.screens.PlaylistLibrarySort
 import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
@@ -27,6 +32,34 @@ class NativeAlbumPlaylistToolbarTest {
             com.music.bitchord.ui.icons.PlaylistEditorIcons.More,
             nativeCollectionOverflowGlyph(),
         )
+    }
+
+    @Test fun publicPlaylistSortAndOverflowAreAnchoredToTheirOwnToolbarButtons() {
+        val playlist = ListenBrainzPublicPlaylist(
+            mbid = "66dd7663-76a4-4e31-93ae-730ccd49d7d8",
+            title = "Public Playlist", creator = "Author", description = null,
+        )
+        val sortOpen = mutableStateOf(false)
+        val optionsOpen = mutableStateOf(false)
+        compose.setContent {
+            MaterialTheme {
+                NativePublicPlaylistTopBarActions(
+                    playlist = playlist, searching = false,
+                    onToggleSearch = {},
+                    sort = PlaylistLibrarySort.DEFAULT, onSort = {},
+                    sortOpen = sortOpen.value, optionsOpen = optionsOpen.value,
+                    onShowSort = { sortOpen.value = true },
+                    onShowOptions = { optionsOpen.value = true },
+                    onSortDismiss = { sortOpen.value = false },
+                    onOptionsDismiss = { optionsOpen.value = false },
+                )
+            }
+        }
+        compose.onNodeWithTag("native-toolbar-sort-anchor").assertExists()
+        compose.onNodeWithTag("native-toolbar-overflow-anchor").assertExists()
+        compose.onNodeWithContentDescription("Opções da playlist").performClick()
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+        compose.onNodeWithText("Compartilhar playlist").assertExists()
     }
 
     @Test fun nativeReleaseRatingButtonUsesExistingCanonicalEditorCallback() {

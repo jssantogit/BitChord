@@ -22,14 +22,12 @@ class CanonicalPublicPlaylistOverflowMenuTest {
     @Test fun publicPlaylistOverflowUsesCompactPopupWithoutLosingShare() {
         compose.setContent {
             MaterialTheme {
-                CanonicalPublicPlaylistToolbarMenus(
+                CanonicalPublicPlaylistOverflowMenu(
                     playlist = ListenBrainzPublicPlaylist(
                         mbid = "66dd7663-76a4-4e31-93ae-730ccd49d7d8",
                         title = "Test Playlist", creator = "Author", description = null,
                     ),
-                    sortOpen = false, optionsOpen = true,
-                    onSortDismiss = {}, onOptionsDismiss = {},
-                    sort = PlaylistLibrarySort.DEFAULT, onSort = {},
+                    expanded = true, onDismiss = {},
                 )
             }
         }
