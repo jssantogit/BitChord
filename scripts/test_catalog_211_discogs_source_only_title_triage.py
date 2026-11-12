@@ -178,6 +178,54 @@ class TitleTriageTest(unittest.TestCase):
         self.assertEqual(0, result["confirmed_source_only_cases"])
         self.assertTrue(all("arid%3A" in u for u in calls))
 
+    def test_c05_distinctive_term_fallback_recovers_only_exact_literal_mb_release(self):
+        # Live index C-05 control: an over-specific quoted title returned
+        # zero results despite a publicly existing exact MB Release. A
+        # bounded single distinctive word may locate a literal exact title.
+        doc = editions(barcodes=[])
+        doc["observations"][0]["title"] = "Romance: Untold -Daydream-"
+        correct = "4c42b226-24c8-4481-91ce-744ae59eaa5b"
+        other = "00000000-0000-4000-8000-000000000008"
+        group = "0c668bdb-328c-4dba-8407-8eddb5373a5d"
+        calls = []
+        def get(url):
+            calls.append(url)
+            if "/ws/2/release-group/?" in url:
+                return response(count=0)
+            if "release%3Adaydream" in url:
+                return {"count": 2, "releases": [
+                    {"id": other, "title": "Daydream Remix",
+                     "artist-credit": [{"artist": {"id": ARTIST}}],
+                     "release-group": {"id": GROUP}},
+                    {"id": correct, "title": "ROMANCE : UNTOLD -daydream-",
+                     "artist-credit": [{"artist": {"id": ARTIST}}],
+                     "release-group": {"id": group}}
+                ]}
+            if "/ws/2/release/?" in url:
+                return {"count": 0, "releases": []}
+            raise AssertionError("Unapproved GET " + url)
+        result = triage(index(), doc, prior(), get)
+        self.assertEqual(3, result["provider_requests"])
+        row = result["observations"][0]
+        self.assertEqual("mb_release_title_lead_not_edition", row["status"])
+        self.assertEqual([correct], row["mb_release_candidate_mbids"])
+        self.assertEqual([group], row["mb_group_candidate_mbids"])
+        self.assertFalse(row["confirmed_missing_from_musicbrainz"])
+        self.assertEqual(0, result["confirmed_source_only_cases"])
+        self.assertTrue(all("arid%3A" in url for url in calls))
+
+    def test_c_generic_or_short_last_word_has_no_broad_term_fallback(self):
+        doc = editions(barcodes=[])
+        doc["observations"][0]["title"] = "Romance: Untold -Remix-"
+        calls = []
+        def get(url):
+            calls.append(url)
+            return {"count": 0, "releases": []} if "/ws/2/release/?" in url else response(count=0)
+        result = triage(index(), doc, prior(), get)
+        self.assertEqual(2, len(calls))
+        self.assertEqual("no_title_index_hit_not_absence", result["observations"][0]["status"])
+        self.assertFalse(result["observations"][0]["confirmed_missing_from_musicbrainz"])
+
     def test_c05_wrong_artist_release_index_cannot_claim_existing_release(self):
         doc = editions(barcodes=[])
         doc["observations"][0]["title"] = "Romance: Untold -Daydream-"
