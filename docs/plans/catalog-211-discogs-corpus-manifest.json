@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: independent editorial review A 1/10 (FEARLESS EP already correctly classified); B 10/10 negative or candidate exact-edition pairs; C 1/10 negative (existing Stray Kids EP), total 12/30; no automatic type corrections, new Verified B matches, C recoveries, or measured UI gains.",
+  "description": "Discogs #211: independent editorial A 2/10 (2022 Korean FEARLESS EP and distinct 2023 Japanese FEARLESS Single both already correctly typed), B 10/10 negative or candidate exact-edition pairs, C 1/10 negative (existing Stray Kids EP), total 13/30; zero automatic type corrections, new unlinked B Verified matches, C recoveries, or measured UI gains.",
   "cases": [
     {
       "id": "A-01",
@@ -35,7 +35,35 @@
     {
       "id": "A-02",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "LE SSERAFIM · FEARLESS (Japanese debut Single, 2023)",
+      "musicbrainz_group_mbid": "c54392ad-7d95-447b-8b1a-bc5668d2f00d",
+      "musicbrainz_artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "musicbrainz_release_mbid": "49f40a51-d69c-4ef9-9ecf-c069fc70c11f",
+      "discogs_release_id": 26168966,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/c54392ad-7d95-447b-8b1a-bc5668d2f00d",
+        "musicbrainz_release": "https://musicbrainz.org/release/49f40a51-d69c-4ef9-9ecf-c069fc70c11f",
+        "discogs_release": "https://www.discogs.com/release/26168966",
+        "independent_editorial": "https://www.universal-music.co.jp/lesserafim/news/2022-11-25-2/",
+        "independent_artist": "https://www.le-sserafim.jp/news/ujbjnf",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43135307603"
+      },
+      "reviewed_at_utc": "2026-11-12T01:35:19Z",
+      "sources": [
+        "label",
+        "artist",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Single",
+      "musicbrainz_type": "Single",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "The official Universal Music Japan 25 November 2022 announcement explicitly identifies the 25 January 2023 FEARLESS product as LE SSERAFIM's first JAPAN Single, with three songs: FEARLESS -Japanese ver.-, Blue Flame -Japanese ver.- and Choices, plus distinct physical packages/catalogue numbers (UPCH-89511, UPCH-89512, UPCH-89513, etc.). This is a DIFFERENT ReleaseGroup c54392ad from the South Korean 2 May 2022 debut mini-album FEARLESS, group fb426d76 already reviewed separately as A-01 EP. Public CI #43135307603 rechecked MusicBrainz ReleaseGroup c54392ad as primary type Single, MusicBrainz Artist→Discogs Artist 11171795, ReleaseGroup→Discogs Master 2986856, and exact Official MB Release 49f40a51→Discogs Release 26168966 direct relation with same Discogs Master and correct artist ID. The type agrees with independent editorial sources: Single/Single; no Discogs correction. Exact package and press verification, full app display type and visual presence were NOT adjudicated, so match_state remains candidate, app_type Unknown and visible false are unmeasured, never evidence of a rendering failure. The corpus records neither a new unlinked Verified pair nor source-only recovery."
     },
     {
       "id": "A-03",
