@@ -1,12 +1,6 @@
 package com.music.bitchord.ui.screens
 
 import android.content.Intent
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,18 +18,22 @@ internal fun CanonicalPublicPlaylistSortMenu(
     sort: PlaylistLibrarySort,
     onSort: (PlaylistLibrarySort) -> Unit,
 ) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+    com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+    ) {
         listOf(
             PlaylistLibrarySort.DEFAULT to "Ordem original",
             PlaylistLibrarySort.TITLE_ASC to "Título (A–Z)",
             PlaylistLibrarySort.TITLE_DESC to "Título (Z–A)",
         ).forEach { (option, title) ->
-            DropdownMenuItem(
-                text = { Text(title) },
-                trailingIcon = if (sort == option) {
-                    { Icon(Icons.Rounded.Check, contentDescription = null) }
-                } else null,
-                onClick = { onSort(option); onDismiss() },
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = title,
+                selected = sort == option,
+                onClick = {
+                    onSort(option)
+                    onDismiss()
+                },
             )
         }
     }
