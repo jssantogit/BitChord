@@ -5,6 +5,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -124,6 +125,57 @@ class MusicBrainzXmlTransportLimitTest {
             assertEquals(1_000L, now)
             assertEquals("test-agent", server.takeRequest().getHeader("User-Agent"))
             assertEquals("test-agent", server.takeRequest().getHeader("User-Agent"))
+        } finally {
+            http.close()
+            server.shutdown()
+        }
+    }
+
+    @Test fun largeChunkedErrorBodiesKeepStatusAndRetryWithoutEmbeddingBodyText() = runBlocking {
+        val huge = "z".repeat(2_100_000)
+        for (status in listOf(429, 503)) {
+            val server = MockWebServer()
+            val http = HttpClient(OkHttp) { expectSuccess = true }
+            server.start()
+            try {
+                repeat(3) { server.enqueue(MockResponse().setResponseCode(status).setChunkedBody(huge, 8_192)) }
+                var now = 0L
+                val client = MusicBrainzClient(
+                    transport = KtorMusicBrainzTransport(server.url("/ws/2").toString(), http),
+                    rateLimiter = MusicBrainzRateLimiter(nowMillis = { now }, delayMillis = { now += it }),
+                    userAgent = "test-agent",
+                    retryDelayMillis = {},
+                )
+
+                val failure = runCatching {
+                    client.getLimited("release/test", mapOf("fmt" to "xml"), 64)
+                }.exceptionOrNull()
+
+                assertTrue(failure is ResponseException)
+                assertEquals(status, (failure as ResponseException).response.status.value)
+                assertTrue(requireNotNull(failure.message).length < 512)
+                assertEquals(3, server.requestCount)
+                assertEquals(2_000L, now)
+            } finally {
+                http.close()
+                server.shutdown()
+            }
+        }
+    }
+
+    @Test fun largeChunkedNotFoundBodyKeeps404WithoutEmbeddingBodyText() = runBlocking {
+        val server = MockWebServer()
+        val http = HttpClient(OkHttp) { expectSuccess = true }
+        server.start()
+        try {
+            server.enqueue(MockResponse().setResponseCode(404).setChunkedBody("z".repeat(2_100_000), 8_192))
+            val failure = runCatching {
+                client(server, http).getLimited("release/missing", mapOf("fmt" to "xml"), 64)
+            }.exceptionOrNull()
+            assertTrue(failure is ResponseException)
+            assertEquals(404, (failure as ResponseException).response.status.value)
+            assertTrue(requireNotNull(failure.message).length < 512)
+            assertEquals(1, server.requestCount)
         } finally {
             http.close()
             server.shutdown()

@@ -4,7 +4,11 @@ import com.music.bitchord.BuildConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.RedirectResponseException
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.ServerResponseException
+import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -80,15 +84,29 @@ internal class KtorMusicBrainzTransport(
         status = { response: Pair<Int, String> -> response.first },
     ) {
         require(maxResponseBytes > 0L && maxResponseBytes <= MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES)
-        val response = request(path, parameters, userAgent)
-        response.status.value to response.readBodyLimited(maxResponseBytes)
+        val response = request(path, parameters, userAgent, automaticStatusValidation = false)
+        val status = response.status.value
+        if (status !in 200..299) {
+            val text = "HTTP $status response body skipped by bounded request"
+            val statusFailure = when (status) {
+                in 300..399 -> RedirectResponseException(response, text)
+                in 400..499 -> ClientRequestException(response, text)
+                in 500..599 -> ServerResponseException(response, text)
+                else -> ResponseException(response, text)
+            }
+            response.bodyAsChannel().cancel(IOException("Discarding non-success MusicBrainz response body"))
+            throw statusFailure
+        }
+        status to response.readBodyLimited(maxResponseBytes)
     }.second
 
     private suspend fun request(
         path: String,
         parameters: Map<String, String>,
         userAgent: String,
+        automaticStatusValidation: Boolean = true,
     ): HttpResponse = client.get("${baseUrl.trimEnd('/')}/$path") {
+        if (!automaticStatusValidation) expectSuccess = false
         header(HttpHeaders.UserAgent, userAgent)
         parameters.forEach { (name, value) -> parameter(name, value) }
     }

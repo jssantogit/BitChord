@@ -15,7 +15,12 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
 import com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseJsonCompleteness
+import com.music.bitchord.data.catalog.metadata.KtorMusicBrainzTransport
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -78,6 +83,40 @@ class MusicBrainzReleaseGraphIndexTest {
                 cached.tracks.map { it.mediumNumber to it.trackNumber },
             )
         } finally { db.close() }
+    }
+
+    @Test fun largeHttpErrorBodyDuringProofPreservesCachedTrackSidecars() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        val server = MockWebServer()
+        val http = HttpClient(OkHttp) { expectSuccess = true }
+        server.start()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val ra = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val rb = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            val index = MusicBrainzCatalogIndex(db, proofClient = MusicBrainzClient(
+                transport = KtorMusicBrainzTransport(server.url("/ws/2").toString(), http),
+                rateLimiter = MusicBrainzRateLimiter(delayMillis = {}),
+            ))
+            index.persistReleaseDetail(detail(release, listOf(a to ra, b to rb)))
+            server.enqueue(MockResponse().setResponseCode(404)
+                .setChunkedBody("z".repeat(2_100_000), 8_192))
+
+            val result = index.persistReleaseDetail(detail(release, listOf(a to ra)))
+
+            val releaseId = db.catalogDao().entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            assertNull(result)
+            assertEquals(setOf(a, b), db.catalogDao().catalogMusicBrainzTracks(releaseId).map { it.trackMbid }.toSet())
+            assertEquals(1, server.requestCount)
+        } finally {
+            http.close()
+            server.shutdown()
+            db.close()
+        }
     }
 
     @Test fun completeXmlSnapshotAllowsOnlyObsoleteMusicBrainzTrackSidecarRemoval() = runBlocking {
