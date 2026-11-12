@@ -16,7 +16,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +49,7 @@ import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
@@ -438,9 +438,10 @@ internal fun CanonicalPinnedLibraryShelf(
             }
         }
         if (items.size > 6) {
-            TextButton(onClick = { expanded = !expanded }) {
-                Text(if (expanded) "Mostrar menos" else "Ver todos os fixados")
-            }
+            NativeInlineTextAction(
+                label = if (expanded) "Mostrar menos" else "Ver todos os fixados",
+                onClick = { expanded = !expanded },
+            )
         }
     }
     catalogOptionsFor?.let { pin ->
@@ -450,14 +451,23 @@ internal fun CanonicalPinnedLibraryShelf(
         ) {
             Column(Modifier.fillMaxWidth().padding(PAGE_GUTTER)) {
                 Text(pin.title, style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = {
-                    catalogOptionsFor = null
-                    ratingCatalogFor = pin
-                }) { Text("Avaliar") }
-                TextButton(onClick = {
-                    catalogPinRepo.toggle(pin)
-                    catalogOptionsFor = null
-                }) { Text("Desafixar da Biblioteca") }
+                NativeInlineTextAction(
+                    label = "Avaliar",
+                    onClick = {
+                        catalogOptionsFor = null
+                        ratingCatalogFor = pin
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                NativeInlineTextAction(
+                    label = "Desafixar da Biblioteca",
+                    onClick = {
+                        catalogPinRepo.toggle(pin)
+                        catalogOptionsFor = null
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    subdued = true,
+                )
             }
         }
     }
