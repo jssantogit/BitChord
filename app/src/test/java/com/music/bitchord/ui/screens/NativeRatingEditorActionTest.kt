@@ -76,7 +76,7 @@ class NativeRatingEditorActionTest {
             }
         }
         compose.onNodeWithText("Salvar avaliação").assertDoesNotExist()
-        compose.onNodeWithTag("native-rating-action-loading").assertExists()
+        compose.onNodeWithTag("native-rating-action-loading", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("rating-editor-save-action").assertIsNotEnabled()
         compose.runOnIdle { assertEquals(0, saves) }
     }
