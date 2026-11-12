@@ -317,19 +317,66 @@ class MusicBrainzCatalogGraphTest {
         }
     }
 
-    @Test fun invalidMbidRejectsBeforeNetworkAndFailedResponseDoesNotInventTracks() = runBlocking {
+    @Test fun invalidMbidRejectsBeforeNetworkAndExplicitEmptyMediaDoesNotInventTracks() = runBlocking {
         var calls = 0
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
             override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
                 calls++
-                return """{"id":"541adf5a-48d4-4f7b-a7bb-afd3cea5af27","title":"SUPER REAL ME","media":[{"tracks":[
-                    {"id":"incorrect","recording":{"id":"invalid"}}]}]}"""
+                return """{"id":"541adf5a-48d4-4f7b-a7bb-afd3cea5af27","title":"SUPER REAL ME","media":[]}"""
             }
         }))
         assertTrue(graph.lookupRelease("not-a-mbid") is MusicBrainzCatalogGraphResult.Failure)
         assertEquals(0, calls)
         val parsed = graph.lookupRelease(worldwide) as MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
         assertEquals(emptyList<String>(), parsed.value.tracks.map { it.recordingMbid })
+    }
+
+    // Synthetic malformed responses for incomplete or incompatible release structure.
+    @Test fun incompleteMediaAndInvalidExplicitFieldTypesCannotBecomeEmptySuccess() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val validTrack = """{"id":"$track","position":1,"title":"Track","recording":{"id":"$recording"}}"""
+        val invalidResponses = listOf(
+            // A missing media field is not proof of a release with no media.
+            """{"id":"$worldwide","title":"Missing media"}""",
+            """{"id":"$worldwide","title":"Wrong media type","media":"not-an-array"}""",
+            // A medium without tracks is incomplete; explicit [] remains valid.
+            """{"id":"$worldwide","title":"Missing tracks","media":[{}]}""",
+            """{"id":"$worldwide","title":"Wrong tracks type","media":[{"tracks":"not-an-array"}]}""",
+            """{"id":"$worldwide","title":"Negative count","media":[{"track-count":-1,"tracks":[$validTrack]}]}""",
+            """{"id":"$worldwide","title":"Non-numeric count","media":[{"track-count":"many","tracks":[$validTrack]}]}""",
+        )
+
+        invalidResponses.forEach { response ->
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+                object : MusicBrainzTransport {
+                    override suspend fun get(
+                        path: String, parameters: Map<String, String>, userAgent: String,
+                    ): String = response
+                },
+            ))
+            assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+        }
+    }
+
+    // Synthetic valid release structure: explicit empty arrays represent no track rows.
+    @Test fun explicitEmptyMediaAndTracksRemainValid() = runBlocking {
+        val responses = listOf(
+            """{"id":"$worldwide","title":"No media","media":[]}""",
+            """{"id":"$worldwide","title":"Empty medium","media":[{"position":1,"tracks":[] }]}""",
+        )
+        responses.forEach { response ->
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+                object : MusicBrainzTransport {
+                    override suspend fun get(
+                        path: String, parameters: Map<String, String>, userAgent: String,
+                    ): String = response
+                },
+            ))
+            val detail = (graph.lookupRelease(worldwide) as
+                MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+            assertEquals(emptyList<String>(), detail.tracks.map { it.trackMbid })
+        }
     }
 
     @Test fun graphPreservesNestedArtistCreditsWhenCreditDisplayNamesAreMissing() = runBlocking {
@@ -499,6 +546,163 @@ class MusicBrainzCatalogGraphTest {
                     ]}]}"""
             },
         ))
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
+    // Synthetic MusicBrainz-shaped response for an undecodable Track row.
+    @Test fun undecodableTrackWithoutDeclaredCountCannotPublishPartialEdition() = runBlocking {
+        val validTrack = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val validRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val invalidTrack = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Incomplete edition",
+                    "media":[{"position":1,"tracks":[
+                        {"id":"$validTrack","position":2,"title":"Available",
+                         "recording":{"id":"$validRecording","title":"Available"}},
+                        {"id":"$invalidTrack","position":9,"title":"Missing recording identity",
+                         "recording":{"title":"Undecodable"}}
+                    ]}]}"""
+            },
+        ))
+
+        // A partial result must not be handed to the cache writer, where it
+        // could replace a previously complete offline tracklist.
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
+    // Synthetic MusicBrainz-shaped responses for missing/duplicate Track IDs.
+    @Test fun invalidOrDuplicateTrackIdentityWithoutDeclaredCountCannotPublishPartialEdition() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val otherTrack = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val fixtures = listOf(
+            // A missing Track MBID is currently filtered from the decoded list.
+            """{"id":"$worldwide","title":"Missing Track identity","media":[{"tracks":[
+                {"id":"$track","position":3,"title":"Available","recording":{"id":"$recording"}},
+                {"position":8,"title":"Missing Track ID","recording":{"id":"$recording"}}
+            ]}]}""",
+            // Identical duplicate Track MBIDs currently collapse via distinctBy.
+            """{"id":"$worldwide","title":"Duplicate Track identity","media":[{"tracks":[
+                {"id":"$track","position":3,"title":"Available","recording":{"id":"$recording"}},
+                {"id":"$track","position":3,"title":"Available","recording":{"id":"$recording"}},
+                {"id":"$otherTrack","position":12,"title":"Also available","recording":{"id":"$recording"}}
+            ]}]}""",
+        )
+
+        fixtures.forEach { response ->
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+                object : MusicBrainzTransport {
+                    override suspend fun get(
+                        path: String, parameters: Map<String, String>, userAgent: String,
+                    ): String = response
+                },
+            ))
+            assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+        }
+    }
+
+    // Synthetic MusicBrainz-shaped response with sparse positions and shared Recordings.
+    @Test fun validTracklistWithoutDeclaredCountsIsOrderedByOfficialMediumAndTrackPositions() = runBlocking {
+        val sharedRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val recording = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        val mediumTwoLaterTrack = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+        val mediumOneTieLaterId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        val mediumOneTieEarlierId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val mediumOneEarlierTrack = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Valid reordered edition",
+                    "media":[
+                        {"position":2,"tracks":[
+                            {"id":"$mediumTwoLaterTrack","position":11,"title":"Disc two","recording":{"id":"$recording"}}
+                        ]},
+                        {"position":1,"tracks":[
+                            {"id":"$mediumOneTieLaterId","position":7,"title":"Tie later ID","recording":{"id":"$sharedRecording"}},
+                            {"id":"$mediumOneEarlierTrack","position":2,"title":"Earlier position","recording":{"id":"$recording"}},
+                            {"id":"$mediumOneTieEarlierId","position":7,"title":"Tie earlier ID","recording":{"id":"$sharedRecording"}}
+                        ]}
+                    ]}"""
+            },
+        ))
+
+        val detail = (graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+        assertEquals(
+            listOf(mediumOneEarlierTrack, mediumOneTieEarlierId, mediumOneTieLaterId, mediumTwoLaterTrack),
+            detail.tracks.map { it.trackMbid },
+        )
+        assertEquals(listOf(1, 1, 1, 2), detail.tracks.map { it.mediumNumber })
+        assertEquals(listOf(2, 7, 7, 11), detail.tracks.map { it.trackNumber })
+        assertEquals(sharedRecording, detail.tracks[1].recordingMbid)
+        assertEquals(sharedRecording, detail.tracks[2].recordingMbid)
+    }
+
+    @Test fun nonZeroTrackOffsetCannotPublishApparentlyCompleteEdition() = runBlocking {
+        val firstTrack = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val firstRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val secondTrack = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        val secondRecording = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Synthetic offset page",
+                    "media":[{"position":1,"track-count":2,"track-offset":1,"tracks":[
+                        {"id":"$firstTrack","position":1,"title":"First visible row","recording":{"id":"$firstRecording"}},
+                        {"id":"$secondTrack","position":2,"title":"Second visible row","recording":{"id":"$secondRecording"}}
+                    ]}]}"""
+            },
+        ))
+
+        // Synthetic fixture: a non-zero browse offset cannot certify a full
+        // edition or be handed to persistence over an existing cached tracklist.
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
+    @Test fun nonObjectMediumCannotBeIgnoredBesideValidMediumWithoutDeclaredCounts() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Synthetic malformed media entry",
+                    "media":[
+                        {"position":1,"tracks":[
+                            {"id":"$track","position":2,"title":"Valid medium track","recording":{"id":"$recording"}}
+                        ]},
+                        null
+                    ]}"""
+            },
+        ))
+
+        // Synthetic malformed response: silently discarding the non-object
+        // medium would publish an incomplete detail and risk replacing cache.
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
+    @Test fun duplicateTrackMbidWithinMediumWithoutCountCannotCollapseIntoOneTrack() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Synthetic repeated track identity",
+                    "media":[{"position":1,"tracks":[
+                        {"id":"$track","position":4,"title":"Repeated track","recording":{"id":"$recording"}},
+                        {"id":"$track","position":4,"title":"Repeated track","recording":{"id":"$recording"}}
+                    ]}]}"""
+            },
+        ))
+
+        // Synthetic fixture: identical Track rows in one medium must be
+        // rejected even though the medium declares no track-count.
         assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
     }
 

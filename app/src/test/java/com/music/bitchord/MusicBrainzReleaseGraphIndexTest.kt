@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -22,6 +23,86 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class MusicBrainzReleaseGraphIndexTest {
+    @Test fun malformedRefreshCannotAddPartialTracksToPreviouslyCachedEdition() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val cachedTrack = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val cachedRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val partialTrack = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val partialRecording = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
+                release, null, "Known cached edition", null, null, null,
+                listOf(MusicBrainzCatalogTrack(
+                    cachedTrack, cachedRecording, "Cached track", 1, 5, null,
+                )),
+            ))
+            val cachedBefore = index.cachedRelease(release)!!.tracks
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$release","title":"Synthetic incomplete refresh","media":[
+                    {"position":1,"tracks":[
+                        {"id":"$partialTrack","position":1,"title":"Partial track","recording":{"id":"$partialRecording"}}
+                    ]},
+                    {"position":2,"tracks":"not-an-array"}
+                ]}"""
+            }))
+
+            val refresh = graph.lookupRelease(release)
+            if (refresh is MusicBrainzCatalogGraphResult.Success) {
+                index.persistReleaseDetail(refresh.value)
+            }
+
+            assertEquals(cachedBefore, index.cachedRelease(release)!!.tracks)
+            assertTrue(refresh is MusicBrainzCatalogGraphResult.Failure)
+        } finally { db.close() }
+    }
+
+    // Synthetic MusicBrainz-shaped response, checked against the persisted cache ordering.
+    @Test fun onlineTrackOrderMatchesCachedOrderAndPreservesMissingPositionFallbacks() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val trackFallbackMedium = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val trackFallbackMediumRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val explicitLaterTrack = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val explicitLaterRecording = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            val trackFallback = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+            val trackFallbackRecording = "ffffffff-ffff-4fff-8fff-ffffffffffff"
+            val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$release","title":"Reordered edition","media":[
+                    {"position":3,"tracks":[
+                        {"id":"$explicitLaterTrack","position":10,"title":"Later position","recording":{"id":"$explicitLaterRecording"}},
+                        {"id":"$trackFallback","title":"Fallback position","recording":{"id":"$trackFallbackRecording"}}
+                    ]},
+                    {"tracks":[
+                        {"id":"$trackFallbackMedium","title":"Fallback medium and track","recording":{"id":"$trackFallbackMediumRecording"}}
+                    ]}
+                ]}"""
+            }))
+
+            val online = (graph.lookupRelease(release) as
+                MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>).value
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistReleaseDetail(online)
+            val cached = index.cachedRelease(release)!!
+
+            assertEquals(listOf(2, 3, 3), online.tracks.map { it.mediumNumber })
+            assertEquals(listOf(1, 2, 10), online.tracks.map { it.trackNumber })
+            assertEquals(online.tracks.map { it.trackMbid }, cached.tracks.map { it.trackMbid })
+            assertEquals(online.tracks.map { it.mediumNumber to it.trackNumber },
+                cached.tracks.map { it.mediumNumber to it.trackNumber })
+        } finally { db.close() }
+    }
+
     @Test fun recordingMetadataComesFromNestedRecordingWhileTrackKeepsEditionFields() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,

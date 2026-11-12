@@ -179,18 +179,47 @@ internal class MusicBrainzCatalogGraph(
             }
             val title = data.string("title")?.takeIf(String::isNotBlank)
                 ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE)
-            val media = data.array("media")
+            val media = data["media"] as? JsonArray
+                ?: return MusicBrainzCatalogGraphResult.Failure(
+                    MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                )
             val decodedByMedium = media.mapIndexed { mediumIndex, medium ->
-                val mediumObj = medium as? JsonObject ?: return@mapIndexed emptyList()
+                val mediumObj = medium as? JsonObject
+                    ?: return MusicBrainzCatalogGraphResult.Failure(
+                        MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                    )
+                if ("track-offset" in mediumObj && mediumObj.integer("track-offset") != 0) {
+                    return MusicBrainzCatalogGraphResult.Failure(
+                        MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                    )
+                }
                 val number = mediumObj.integer("position")?.takeIf { it > 0 } ?: (mediumIndex + 1)
-                mediumObj.array("tracks").mapIndexedNotNull { index, entry ->
-                    val track = entry as? JsonObject ?: return@mapIndexedNotNull null
-                    val recording = track["recording"] as? JsonObject ?: return@mapIndexedNotNull null
-                    val tid = track.string("id").validMbid() ?: return@mapIndexedNotNull null
-                    val rid = recording.string("id").validMbid() ?: return@mapIndexedNotNull null
+                val rawTracks = mediumObj["tracks"] as? JsonArray
+                    ?: return MusicBrainzCatalogGraphResult.Failure(
+                        MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                    )
+                rawTracks.mapIndexed { index, entry ->
+                    val track = entry as? JsonObject
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
+                    val recording = track["recording"] as? JsonObject
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
+                    val tid = track.string("id").validMbid()
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
+                    val rid = recording.string("id").validMbid()
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
                     val titleText = track.string("title")?.takeIf(String::isNotBlank)
                         ?: recording.string("title")?.takeIf(String::isNotBlank)
-                        ?: return@mapIndexedNotNull null
+                        ?: return MusicBrainzCatalogGraphResult.Failure(
+                            MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                        )
                     MusicBrainzCatalogTrack(
                         trackMbid = tid,
                         recordingMbid = rid,
@@ -218,14 +247,8 @@ internal class MusicBrainzCatalogGraph(
                     decodedByMedium[index].size != expected ||
                     decodedByMedium[index].map { it.trackMbid }.distinct().size != expected
             }
-            // Edition-scoped Track IDs cannot repeat across media either.
-            val declaredCountsPresent = media.any { medium ->
-                medium is JsonObject && "track-count" in medium
-            }
             if (declaredCountIncomplete ||
-                (declaredCountsPresent &&
-                    parsedTracks.map { it.trackMbid }.distinct().size != parsedTracks.size)
-            ) {
+                parsedTracks.map { it.trackMbid }.distinct().size != parsedTracks.size) {
                 return MusicBrainzCatalogGraphResult.Failure(
                     MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
                 )
@@ -238,7 +261,11 @@ internal class MusicBrainzCatalogGraph(
                     MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
                 )
             }
-            val tracks = parsedTracks.distinctBy(MusicBrainzCatalogTrack::trackMbid)
+            val tracks = parsedTracks.sortedWith(
+                compareBy<MusicBrainzCatalogTrack> { it.mediumNumber }
+                    .thenBy { it.trackNumber }
+                    .thenBy { it.trackMbid },
+            )
             val mediaEvidence = data.videoOnlyMediaEvidence()
             val recordingEvidence = data.videoOnlyRecordingEvidence()
             MusicBrainzCatalogGraphResult.Success(MusicBrainzCatalogReleaseDetail(
