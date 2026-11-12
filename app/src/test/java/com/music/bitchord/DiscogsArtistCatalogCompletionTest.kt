@@ -2,6 +2,8 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsArtistGroupPage
 import com.music.bitchord.data.catalog.metadata.discogs.collectCompleteDiscogsArtistGroupTitles
+import com.music.bitchord.data.catalog.metadata.discogs.collectCompleteDiscogsArtistReleaseTitles
+import com.music.bitchord.data.catalog.metadata.discogs.completeDiscogsArtistKnownTitles
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -30,6 +32,43 @@ class DiscogsArtistCatalogCompletionTest {
         }
         assertEquals(setOf("Album", "EP", "Single"), actual)
         assertEquals(listOf(0, 2), offsets)
+    }
+
+    @Test fun repackageTitleMustBeRecognizedInsideACompletedReleaseBrowse() = runBlocking {
+        val visited = mutableListOf<Int>()
+        val canonicalGroup = setOf("ROMANCE : UNTOLD")
+        val exactReleases = collectCompleteDiscogsArtistReleaseTitles { offset ->
+            visited += offset
+            when (offset) {
+                0 -> DiscogsArtistGroupPage(
+                    groups = (1..100).map { n -> group(n, "Album edition $n") },
+                    total = 101, offset = 0, consumedCount = 100,
+                )
+                100 -> DiscogsArtistGroupPage(
+                    groups = listOf(group(101, "ROMANCE : UNTOLD -daydream-")),
+                    total = 101, offset = 100, consumedCount = 1,
+                )
+                else -> error("No third network request")
+            }
+        }
+        assertEquals(listOf(0,100),visited)
+        assertEquals(true, exactReleases?.contains("ROMANCE : UNTOLD -daydream-"))
+        assertEquals(true, completeDiscogsArtistKnownTitles(
+            canonicalGroup, exactReleases
+        )?.contains("ROMANCE : UNTOLD -daydream-"))
+        assertEquals(true, completeDiscogsArtistKnownTitles(
+            canonicalGroup, exactReleases
+        )?.contains("ROMANCE : UNTOLD"))
+    }
+
+    @Test fun incompleteReleaseBrowseFailsClosedWithoutRenderingSourceOnly() = runBlocking {
+        val partial = collectCompleteDiscogsArtistReleaseTitles { offset ->
+            DiscogsArtistGroupPage(listOf(group(1, "Title Only")),
+                total = 301, offset = offset, consumedCount = 1)
+        }
+        assertNull(partial)
+        assertNull(completeDiscogsArtistKnownTitles(
+            setOf("Existing Group"), partial))
     }
 
     @Test fun completeEmptyArtistCanStillHaveDiscogsOnlyMetadata() = runBlocking {
