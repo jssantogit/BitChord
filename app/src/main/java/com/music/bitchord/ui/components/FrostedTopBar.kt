@@ -29,8 +29,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -492,8 +496,19 @@ internal fun AppleRootSettingsOverflow(
     }
 }
 
-/** Space below the global 40dp overflow button, including a 14dp visible gap. */
+/** Historic top-to-popup 54dp = a 40dp button plus 14dp of clear space. */
 internal val APPLE_SETTINGS_POPUP_OFFSET = 54.dp
+
+/** Reuse the same bounded, direction-aware positioning as native compact menus. */
+internal fun settingsPopupPosition(
+    anchorBounds: IntRect,
+    popupSize: IntSize,
+    windowSize: IntSize,
+    direction: LayoutDirection,
+    gapPx: Int,
+): IntOffset = compactOverflowPopupPosition(
+    anchorBounds, popupSize, windowSize, direction, gapPx,
+)
 
 /**
  * One shared menu across root tabs and pushed screens: the same compact
@@ -520,12 +535,25 @@ private fun AppleSettingsPopup(
     // still animating.
     if (!visibility.currentState && !visibility.targetState && visibility.isIdle) return
 
-    val offsetPx = with(LocalDensity.current) {
-        APPLE_SETTINGS_POPUP_OFFSET.roundToPx()
+    // Anchor to the real toolbar control, not the window's top edge.
+    // This also flips above the launcher or clamps on short/RTL windows.
+    val gapPx = with(LocalDensity.current) {
+        (APPLE_SETTINGS_POPUP_OFFSET - AppleFloatingControlMetrics.toolbarDiameter).roundToPx()
+    }
+    val popupPositionProvider = remember(gapPx) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset = settingsPopupPosition(
+                anchorBounds, popupContentSize, windowSize, layoutDirection, gapPx,
+            )
+        }
     }
     Popup(
-        alignment = Alignment.TopEnd,
-        offset = IntOffset(0, offsetPx),
+        popupPositionProvider = popupPositionProvider,
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
