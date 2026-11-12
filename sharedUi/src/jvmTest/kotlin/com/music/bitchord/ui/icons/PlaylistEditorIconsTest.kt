@@ -19,7 +19,8 @@ class PlaylistEditorIconsTest {
             PlaylistEditorIcons.Selected, PlaylistEditorIcons.Unselected,
         )
         assertEquals(native.size, native.map { it.name }.toSet().size)
-        assertEquals(AppleQueueVectors.More, PlaylistEditorIcons.More)
+        // Toolbars own the circular surface: the glyph itself is unplattered.
+        assertEquals(AppleQueueVectors.MorePlain, PlaylistEditorIcons.More)
         assertEquals(AppleQueueVectors.Favorite, PlaylistEditorIcons.Ratings)
         native.forEach {
             assertEquals(24f, it.viewportWidth, 0.0001f)
