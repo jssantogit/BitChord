@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.background
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -128,7 +129,7 @@ fun AccountProfileSelector(
             Text(profile.handle.ifBlank { stringResource(if (profile.isBrandAccount) R.string.brand_account else R.string.personal) },
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (selected && !managing) Icon(Icons.Rounded.Check, stringResource(R.string.selected_account), tint = MaterialTheme.colorScheme.primary)
+        if (selected && !managing) Icon(Icons.Rounded.Check, stringResource(R.string.selected_account), tint = appleMusicKeyColor())
         if (managing) Text(stringResource(R.string.sign_out), color = MaterialTheme.colorScheme.error)
     }
 }

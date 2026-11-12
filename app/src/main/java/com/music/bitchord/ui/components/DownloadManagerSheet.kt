@@ -278,8 +278,8 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .height(3.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                color = appleMusicKeyColor(),
+                trackColor = appleMusicKeyColor().copy(alpha = 0.18f),
                 strokeCap = StrokeCap.Round,
                 gapSize = 0.dp,
                 drawStopIndicator = {},
@@ -390,8 +390,8 @@ private fun DownloadManagerRow(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        color = appleMusicKeyColor(),
+                        trackColor = appleMusicKeyColor().copy(alpha = 0.18f),
                         strokeCap = StrokeCap.Round,
                         gapSize = 0.dp,
                         drawStopIndicator = {},

@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import com.music.bitchord.R
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -886,7 +887,7 @@ private fun ChoiceRow(
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = stringResource(R.string.selected),
-                tint = MaterialTheme.colorScheme.primary,
+                tint = appleMusicKeyColor(),
                 modifier = Modifier.size(19.dp),
             )
         }

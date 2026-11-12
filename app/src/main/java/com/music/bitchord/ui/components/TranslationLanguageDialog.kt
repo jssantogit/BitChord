@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import androidx.appcompat.app.AppCompatDelegate
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -258,7 +259,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
                     fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface,
                 ),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                cursorBrush = SolidColor(appleMusicKeyColor()),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -312,7 +313,7 @@ private fun LanguageChoiceRow(
             Icon(
                 imageVector = Icons.Rounded.Check,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = appleMusicKeyColor(),
                 modifier = Modifier.size(19.dp),
             )
         }
