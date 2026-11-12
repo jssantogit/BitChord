@@ -1726,6 +1726,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     getApplication<Application>(),
                                 ))
                                 index.persistArtistGroups(entry.musicBrainzId, result.value.items)
+                                // Full offset-zero one-page browses need no
+                                // continuation to prove a replacement set.
+                                val snapshot = MusicBrainzArtistDiscographyPager
+                                    .singlePageOutcome(result.value)
+                                if (snapshot.reconciliationEligible) {
+                                    index.reconcileVerifiedArtistGroups(entry.musicBrainzId, snapshot)
+                                }
                                 index.cachedArtistGroups(entry.musicBrainzId)
                                     .associateBy { it.musicBrainzId }
                             }
@@ -2073,7 +2080,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ) {
                 _canonicalLoadingMore.value = true
                 try {
-                MusicBrainzArtistDiscographyPager.collect(
+                val completedArtistBrowse = MusicBrainzArtistDiscographyPager.collect(
                     first, maxAdditionalPages = 4,
                     fetch = { offset ->
                         musicBrainzGraph.browseReleaseGroupsForArtist(
@@ -2136,6 +2143,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     },
                 )
+                // Progressive pages only ADD evidence while loading. Prune
+                // obsolete memberships once, after a complete contiguous
+                // source snapshot, never after a partial page or HTTP 503.
+                if (completedArtistBrowse.reconciliationEligible &&
+                    _searchSource.value == SearchSource.CANONICAL &&
+                    canonicalPath.lastOrNull() == entry
+                ) {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
+                                getApplication<Application>(),
+                            )).reconcileVerifiedArtistGroups(
+                                entry.musicBrainzId, completedArtistBrowse)
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // Preserve prior membership on any storage failure.
+                    }
+                }
                 if (_searchSource.value == SearchSource.CANONICAL &&
                     canonicalPath.lastOrNull() == entry
                 ) enrichCanonicalNativeDetailCovers(entry)

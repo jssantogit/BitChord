@@ -1,17 +1,59 @@
 package com.music.bitchord.data.catalog.metadata
 
+import java.util.Locale
+
 /**
  * Progressive artist discography continuation over MusicBrainz's **raw**
- * server offsets. An incomplete/failed browse is never an instruction to
- * remove cached release groups. Each successfully fetched page is published
- * to the caller immediately; no GUI waits for full completion.
+ * server offsets. Incomplete, filtered or unstable browsing is never a
+ * reason to remove existing artist -> ReleaseGroup associations.
  */
 internal object MusicBrainzArtistDiscographyPager {
     internal data class Outcome(
         val items: List<MusicBrainzReleaseGroupHit>,
         val nextOffset: Int?,
         val complete: Boolean,
+        /** Stronger than `complete`: every raw row was a unique, valid group. */
+        val reconciliationEligible: Boolean = false,
+        val sourceTotal: Int = 0,
     )
+
+    private val mbid = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+    private fun verifiedRawPage(
+        page: MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>,
+        expectedOffset: Int,
+        expectedTotal: Int,
+        seen: MutableSet<String>,
+    ): Boolean {
+        if (expectedTotal <= 0 || expectedOffset !in 0 until expectedTotal ||
+            page.offset != expectedOffset || page.total != expectedTotal ||
+            page.consumedCount <= 0 || page.consumedCount > expectedTotal - expectedOffset ||
+            page.items.size != page.consumedCount
+        ) return false
+        // The graph decoder drops malformed rows and deduplicates by MBID.
+        // Either event creates a raw/decoded mismatch, so it can NEVER
+        // authorize removing an older official association.
+        val ids = page.items.map { it.musicBrainzId.trim().lowercase(Locale.ROOT) }
+        if (page.items.any { it.title.isBlank() } ||
+            ids.any { !mbid.matches(it) } ||
+            ids.distinct().size != ids.size ||
+            ids.any { it in seen }
+        ) return false
+        seen.addAll(ids)
+        return true
+    }
+
+    /** Single-page, source-complete proof, including the offset-zero boundary. */
+    fun singlePageOutcome(
+        first: MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>,
+    ): Outcome {
+        val decoded = first.items.distinctBy { it.musicBrainzId }
+        val next = first.nextOffset
+        val eligible = next == null &&
+            verifiedRawPage(first, 0, first.total, mutableSetOf()) &&
+            decoded.size == first.total
+        return Outcome(decoded, next, next == null, eligible, first.total)
+    }
 
     suspend fun collect(
         first: MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>,
@@ -21,37 +63,41 @@ internal object MusicBrainzArtistDiscographyPager {
         onPage: suspend (rows: List<MusicBrainzReleaseGroupHit>, nextOffset: Int?) -> Unit,
     ): Outcome {
         val found = LinkedHashMap<String, MusicBrainzReleaseGroupHit>()
-        // An unstable browse may repeat one ReleaseGroup on later raw pages.
-        // Keep the first observed metadata for an exact MBID instead of
-        // letting a duplicate overwrite its title, type or date. The
-        // single-page graph decoder already uses first-wins deduplication.
+        // A later duplicate must not overwrite the first title/type/date.
         first.items.forEach { found.putIfAbsent(it.musicBrainzId, it) }
-        // A first raw page with zero rows while the upstream count is still
-        // positive is an incomplete/unstable browse, NOT evidence that the
-        // artist has no releases. Never publish a false complete cursor.
-        if (first.consumedCount <= 0 && first.offset < first.total)
-            return Outcome(found.values.toList(), first.offset, false)
-        var next = first.nextOffset
         val total = first.total
+        val seen = mutableSetOf<String>()
+        var sourceVerified = verifiedRawPage(first, 0, total, seen)
+        fun outcome(cursor: Int?, complete: Boolean) = Outcome(
+            found.values.toList(), cursor, complete,
+            reconciliationEligible = complete && cursor == null &&
+                sourceVerified && found.size == total,
+            sourceTotal = total,
+        )
+        if (first.consumedCount <= 0 && first.offset < first.total)
+            return outcome(first.offset, false)
+        var next = first.nextOffset
         val consumed = mutableSetOf<Int>()
         repeat(maxAdditionalPages.coerceIn(0, 8)) {
-            val offset = next ?: return Outcome(found.values.toList(), null, true)
-            if (!consumed.add(offset)) return Outcome(found.values.toList(), offset, false)
+            val offset = next ?: return outcome(null, true)
+            if (!consumed.add(offset)) return outcome(offset, false)
             when (val answer = fetch(offset)) {
                 is MusicBrainzCatalogGraphResult.Failure ->
-                    return Outcome(found.values.toList(), offset, false)
+                    return outcome(offset, false)
                 is MusicBrainzCatalogGraphResult.Success -> {
                     val page = answer.value
-                    // Backend pagination may change while browsing. Reject a
-                    // response for a different cursor, never invent one.
-                    if (page.offset != offset || page.total != total || page.consumedCount <= 0)
-                        return Outcome(found.values.toList(), offset, false)
+                    // Never fabricate a server cursor or trust a changed total.
+                    if (page.offset != offset || page.total != total ||
+                        page.consumedCount <= 0
+                    ) return outcome(offset, false)
+                    if (sourceVerified)
+                        sourceVerified = verifiedRawPage(page, offset, total, seen)
                     page.items.forEach { found.putIfAbsent(it.musicBrainzId, it) }
                     next = page.nextOffset
                     onPage(found.values.toList(), next)
                 }
             }
         }
-        return Outcome(found.values.toList(), next, next == null)
+        return outcome(next, next == null)
     }
 }

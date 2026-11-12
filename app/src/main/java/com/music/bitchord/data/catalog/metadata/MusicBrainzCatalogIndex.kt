@@ -215,6 +215,47 @@ internal class MusicBrainzCatalogIndex(
         }
     }
 
+    /**
+     * Reconcile ONLY the artist-MBID's published website-default-v1 links.
+     * A full, contiguous source browse with a positive stable total and an
+     * exact unique MBID for every raw row is required before *any* pruning.
+     * ReleaseGroups, local albums, Track/Recording IDs, media assets and
+     * other artists' associations are not touched.
+     */
+    suspend fun reconcileVerifiedArtistGroups(
+        artistMbid: String,
+        snapshot: MusicBrainzArtistDiscographyPager.Outcome,
+    ): Boolean {
+        if (!snapshot.complete || !snapshot.reconciliationEligible ||
+            snapshot.nextOffset != null || snapshot.sourceTotal !in 1..900 ||
+            snapshot.items.size != snapshot.sourceTotal
+        ) return false
+        val normalized = artistMbid.trim().lowercase(Locale.ROOT)
+        if (!MBID.matches(normalized)) return false
+        val ids = snapshot.items.map { it.musicBrainzId.trim().lowercase(Locale.ROOT) }
+        if (ids.distinct().size != ids.size ||
+            ids.any { !MBID.matches(it) } ||
+            snapshot.items.any { it.title.isBlank() }
+        ) return false
+        return database.withTransaction {
+            val dao = database.catalogDao()
+            val artistId = dao.entityIdForExternalIdentity("musicbrainz", "artist", normalized)
+                ?: return@withTransaction false
+            if (dao.artistById(artistId) == null) return@withTransaction false
+            val resolved = persistReleaseGroups(snapshot.items)
+            if (resolved.size != ids.size || ids.any { it !in resolved })
+                return@withTransaction false
+            val localIds = ids.map { resolved.getValue(it) }
+            localIds.forEach { groupId ->
+                dao.upsertMusicBrainzArtistGroup(CatalogMusicBrainzArtistGroupEntity(
+                    artistId, groupId, publicationEvidence = "website-default-v1",
+                ))
+            }
+            dao.pruneObsoleteMusicBrainzArtistGroups(artistId, localIds)
+            true
+        }
+    }
+
     suspend fun cachedArtistGroups(artistMbid: String): List<MusicBrainzReleaseGroupHit> =
         database.withTransaction {
             val normalized = artistMbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches)

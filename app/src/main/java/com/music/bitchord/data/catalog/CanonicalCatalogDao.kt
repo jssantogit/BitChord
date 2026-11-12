@@ -341,6 +341,22 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT COUNT(*) FROM catalog_musicbrainz_artist_group WHERE artistId = :artistId")
     suspend fun musicBrainzArtistGroupMembershipCount(artistId: String): Int
 
+    /**
+     * Sidecar-edge deletion only. A complete MusicBrainz artist-MBID browse
+     * may invalidate this artist's earlier website-default-v1 membership,
+     * but never delete the ReleaseGroup entity or any legacy/other-artist edge.
+     */
+    @Query("""
+        DELETE FROM catalog_musicbrainz_artist_group
+        WHERE artistId = :artistId
+          AND publicationEvidence = 'website-default-v1'
+          AND releaseGroupId NOT IN (:retainedGroupIds)
+    """)
+    suspend fun pruneObsoleteMusicBrainzArtistGroups(
+        artistId: String,
+        retainedGroupIds: List<String>,
+    ): Int
+
     @Query("""
         SELECT groupEntity.*
         FROM catalog_musicbrainz_artist_group AS association
