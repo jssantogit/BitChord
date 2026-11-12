@@ -1,10 +1,12 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.ReleaseEntity
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CanonicalArtistReleaseSectionsTest {
@@ -61,9 +63,7 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(true, shouldShowNativeArtistSearch(false, "aespa"))
     }
 
-    @Test fun artistShelfSeparatesAvailableLocalAlbumAndSinglesWhenReleaseGroupTypeIsMissing() {
-        // Browse-only fallback: local album tags provide a release membership
-        // even when a MusicBrainz ReleaseGroup classification was not indexed.
+    @Test fun artistShelfLeavesUnclassifiedReleaseGroupsUnclassifiedRegardlessOfRecordingCount() {
         val rows = listOf(release("Plot Twist"), release("Butterfly Doors"),
             release("Say It"), release("unresolved"))
         val sections = canonicalArtistReleaseSections(
@@ -75,29 +75,32 @@ class CanonicalArtistReleaseSectionsTest {
                 "Say It" to 1,
             ),
         )
-        assertEquals(listOf("Plot Twist"), sections.albums.map { it.id })
-        assertEquals(listOf("Butterfly Doors", "Say It"),
-            sections.singlesAndEps.map { it.id })
-        assertEquals(listOf("unresolved"), sections.unclassified.map { it.id })
+        assertTrue(sections.albums.isEmpty())
+        assertTrue(sections.singlesAndEps.isEmpty())
+        assertEquals(rows.map { it.id }, sections.unclassified.map { it.id })
         assertNull(sections.recentAlbum)
     }
 
     @Test fun officialReleaseGroupTypeOutranksProvisionalMembershipCount() {
         val rows = listOf(release("partial-album"), release("multi-track-ep"),
+            release("official-single-multiple-recordings"), release("official-album-one-recording"),
             release("unsupported-type"))
         val proof = mapOf(
             "partial-album" to CanonicalArtistReleaseEvidence("partial-album", "Album", "2025-04-01"),
             "multi-track-ep" to CanonicalArtistReleaseEvidence("multi-track-ep", "EP", null),
+            "official-single-multiple-recordings" to CanonicalArtistReleaseEvidence("official-single-multiple-recordings", "Single", null),
+            "official-album-one-recording" to CanonicalArtistReleaseEvidence("official-album-one-recording", "Album", null),
             "unsupported-type" to CanonicalArtistReleaseEvidence("unsupported-type", "Other", null),
         )
         val sections = canonicalArtistReleaseSections(
             releases = rows,
             evidence = proof,
             recordingCountsByRelease = mapOf("partial-album" to 1,
-                "multi-track-ep" to 4, "unsupported-type" to 8),
+                "multi-track-ep" to 4, "official-single-multiple-recordings" to 5,
+                "official-album-one-recording" to 1, "unsupported-type" to 8),
         )
-        assertEquals(listOf("partial-album"), sections.albums.map { it.id })
-        assertEquals(listOf("multi-track-ep"), sections.singlesAndEps.map { it.id })
+        assertEquals(listOf("partial-album", "official-album-one-recording"), sections.albums.map { it.id })
+        assertEquals(listOf("multi-track-ep", "official-single-multiple-recordings"), sections.singlesAndEps.map { it.id })
         assertEquals(listOf("unsupported-type"), sections.unclassified.map { it.id })
         assertEquals("partial-album", sections.recentAlbum?.id)
     }
@@ -189,10 +192,11 @@ class CanonicalArtistReleaseSectionsTest {
         )
         val result = canonicalArtistReleaseSections(rows, evidence,
             recordingCountsByRelease = mapOf("unknown-album" to 6))
-        assertEquals(listOf("new-album", "old-album", "unknown-album"),
+        assertEquals(listOf("new-album", "old-album"),
             result.albums.map { it.id })
         assertEquals(listOf("new-single", "old-single", "unknown-single"),
             result.singlesAndEps.map { it.id })
+        assertEquals(listOf("unknown-album"), result.unclassified.map { it.id })
         assertEquals("new-single", result.recentRelease?.id)
     }
 
@@ -255,6 +259,83 @@ class CanonicalArtistReleaseSectionsTest {
     }
 
 
+    @Test fun duplicateLocalTitlesCannotBothBorrowOneMusicBrainzGroupClassification() {
+        val local = listOf(
+            ReleaseEntity("edition-one", "Plot Twist", "AtHeart", null),
+            ReleaseEntity("edition-two", "  plot   twist  ", "AtHeart", null),
+            ReleaseEntity("unique-single", "Say It", "AtHeart", null),
+        )
+        val artists = listOf(MusicBrainzArtistHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "AtHeart", null, "KR",
+        ))
+        val groups = listOf(
+            MusicBrainzReleaseGroupHit(
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "Plot Twist", "Album", "2025-08-13", "AtHeart",
+            ),
+            MusicBrainzReleaseGroupHit(
+                "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "Say It", "Single", "2026-06-25", "AtHeart",
+            ),
+        )
+        val proof = canonicalLocalArtistExactReleaseDateEvidence(
+            "AtHeart", local, artists, groups,
+        )
+        // A shared title cannot prove which of two local editions owns the
+        // online group; never manufacture two Album/RecentRelease claims.
+        assertEquals(setOf("unique-single"), proof.keys)
+        assertEquals("Single", proof["unique-single"]?.primaryType)
+        assertEquals("2026-06-25", proof["unique-single"]?.firstReleaseDate)
+    }
+
+    @Test fun diskProofLookupRejectsWhitespaceEquivalentDuplicateTitles() {
+        val local = listOf(
+            ReleaseEntity("first", "Plot Twist", "AtHeart", null),
+            ReleaseEntity("second", "  plot   twist  ", "AtHeart", null),
+        )
+        // Both strings hash to the exact same canonical cache key. This
+        // must NOT allow one previously dated group to populate both IDs.
+        val key = canonicalRecentArtistProofCacheKey("AtHeart", "Plot Twist")
+        assertEquals(key, canonicalRecentArtistProofCacheKey(
+            "AtHeart", "  plot   twist  ",
+        ))
+        assertEquals(emptyMap<String, CanonicalArtistReleaseEvidence>(),
+            canonicalCachedRecentArtistProofs(
+                "AtHeart", local, mapOf(key to "Album|2025-08-13")::get,
+            ))
+    }
+
+    @Test fun incompleteArtistSearchCannotClaimThatAnExactNameIsGloballyUnique() {
+        val matched = MusicBrainzArtistHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "AtHeart", null, "KR",
+        )
+        val unrelated = MusicBrainzArtistHit(
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "AtHeart covers", null, "KR",
+        )
+        // Nineteen other raw hits may be filtered or have different names;
+        // the server still says later pages exist. A namesake could be there.
+        val incomplete = MusicBrainzCatalogPage(
+            items = listOf(matched), total = 45, offset = 0, consumedCount = 20,
+        )
+        assertNull(canonicalUniqueExactArtistFromCompleteSearch("AtHeart", incomplete))
+        assertNull(canonicalUniqueExactArtistFromCompleteSearch(
+            "AtHeart", incomplete.copy(offset = 20, total = 40),
+        ))
+        val complete = MusicBrainzCatalogPage(
+            items = listOf(matched, unrelated), total = 2, offset = 0, consumedCount = 2,
+        )
+        assertEquals(matched, canonicalUniqueExactArtistFromCompleteSearch(
+            "  atheart  ", complete,
+        ))
+        assertNull(canonicalUniqueExactArtistFromCompleteSearch(
+            "AtHeart", complete.copy(
+                items = listOf(matched, matched.copy(
+                    musicBrainzId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                )),
+            ),
+        ))
+    }
+
     @Test fun verifiedRecentLibraryReleaseSurvivesRestartAndChangedLocalIdsWithoutInternet() {
         val online = ReleaseEntity("old-scan-id", "Say It", "AtHeart", null)
         val offline = online.copy(id = "new-scan-id")
@@ -297,6 +378,10 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(key, canonicalLocalArtistRecentLookupKey("AtHeart", releases.reversed()))
         assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
             releases + ReleaseEntity("local-3", "Say It", "AtHeart", null)))
+        // A rescan may replace a local release ID while the artist/title
+        // remains unchanged. Its old external-date cache must not be reused.
+        assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
+            releases.map { if (it.id == "local-1") it.copy(id = "new-scan-id") else it }))
         assertEquals(false, key == canonicalLocalArtistRecentLookupKey("Other Artist", releases))
         assertEquals(false, key == canonicalLocalArtistRecentLookupKey("AtHeart",
             releases.map { if (it.id == "local-1") it.copy(title = "Another release") else it }))
