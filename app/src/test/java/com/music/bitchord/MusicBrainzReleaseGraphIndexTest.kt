@@ -147,15 +147,20 @@ class MusicBrainzReleaseGraphIndexTest {
                     maxResponseBytes: Long): String = get(path, parameters, userAgent)
             }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
             val index = MusicBrainzCatalogIndex(db, proofClient = client)
-            index.persistReleaseDetail(detail(release, listOf(a to ra, b to rb)))
+            index.persistReleaseDetail(detail(release, listOf(a to ra, b to rb))
+                .copy(releaseDate = "2024-03-25"))
             val dao = db.catalogDao()
             val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
             val recordingB = dao.entityIdForExternalIdentity("musicbrainz", "recording", rb)!!
+            val recordingA = dao.entityIdForExternalIdentity("musicbrainz", "recording", ra)!!
             dao.upsertMediaAsset(MediaAssetEntity("asset-b", recordingB, "local", "b", "content://b", null, null, null, null))
             dao.upsertReleaseTrack(ReleaseTrackEntity(releaseId, recordingB, 2))
             dao.upsertCatalogReleaseTrackSource(com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity(releaseId, recordingB, "third-party"))
+            assertEquals("2024-03-25",
+                dao.recordingReleaseDatesByIds(listOf(recordingB)).single().releaseDate)
 
-            index.persistReleaseDetail(detail(release, listOf(a to ra)))
+            index.persistReleaseDetail(detail(release, listOf(a to ra))
+                .copy(releaseDate = "2024-03-25"))
 
             assertEquals(listOf(a), dao.catalogMusicBrainzTracks(releaseId).map { it.trackMbid })
             assertEquals(recordingB, dao.recordingById(recordingB)!!.id)
@@ -166,6 +171,11 @@ class MusicBrainzReleaseGraphIndexTest {
             assertTrue(releaseId in dao.releaseIdsForVisibleRecordings(listOf(recordingB)))
             assertEquals(setOf("third-party"),
                 dao.catalogReleaseTrackSources(releaseId, recordingB).map { it.provider }.toSet())
+            // The shared legacy ReleaseTrack survives, but may no longer
+            // borrow an authoritative MusicBrainz date after its MB edge died.
+            assertNull(dao.recordingReleaseDatesByIds(listOf(recordingB)).single().releaseDate)
+            assertEquals("2024-03-25",
+                dao.recordingReleaseDatesByIds(listOf(recordingA)).single().releaseDate)
             assertEquals(1, xmlRequests)
         } finally { db.close() }
     }
@@ -397,6 +407,27 @@ class MusicBrainzReleaseGraphIndexTest {
         } finally { db.close() }
     }
 
+
+
+    @Test fun exactMusicBrainzTrackStillProvesDateWhenLegacySourceMarkerIsMissing() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val index = MusicBrainzCatalogIndex(db)
+            index.persistReleaseDetail(detail(release, listOf(track to recording))
+                .copy(releaseDate = "2024-03-25"))
+            val dao = db.catalogDao()
+            val recordingId = dao.entityIdForExternalIdentity("musicbrainz", "recording", recording)!!
+            dao.deleteReleaseTrackSourcesForRecording(recordingId, "musicbrainz")
+            assertTrue(dao.catalogReleaseTracksForRecording(recordingId).isNotEmpty())
+            assertEquals("2024-03-25",
+                dao.recordingReleaseDatesByIds(listOf(recordingId)).single().releaseDate)
+        } finally { db.close() }
+    }
 
     @Test fun exactEditionReorderUpdatesLegacyPositionForMusicBrainzOnlyOwnership() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
