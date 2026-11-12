@@ -13,6 +13,10 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sort
@@ -55,6 +59,27 @@ class GlobalAppleTopBarChromeTest {
         // Unlike the old 38dp offset, this cannot overlap the 40dp button.
         assertEquals(54.dp, APPLE_SETTINGS_POPUP_OFFSET)
         assertTrue(APPLE_SETTINGS_POPUP_OFFSET > AppleFloatingControlMetrics.toolbarDiameter)
+    }
+
+
+    @Test fun settingsPopupTracksRealLauncherBelowOrAboveInsteadOfWindowOrigin() {
+        val window = IntSize(360, 640)
+        val popup = IntSize(180, 104)
+        assertEquals(
+            IntOffset(140, 150),
+            settingsPopupPosition(IntRect(280, 96, 320, 136), popup, window,
+                LayoutDirection.Ltr, 14),
+        )
+        assertEquals(
+            IntOffset(140, 392),
+            settingsPopupPosition(IntRect(280, 510, 320, 550), popup, window,
+                LayoutDirection.Ltr, 14),
+        )
+        assertEquals(
+            IntOffset(30, 150),
+            settingsPopupPosition(IntRect(30, 96, 70, 136), popup, window,
+                LayoutDirection.Rtl, 14),
+        )
     }
 
     @Test fun accountAvatarBecomesThreeDotSettingsMenu() {
