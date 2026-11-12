@@ -336,6 +336,36 @@ class CanonicalSearchPagingTest {
         assertEquals("Single", afterGroup.single().releaseKind)
     }
 
+    @Test fun newJeansOfficialEditionRenamesCompositeWorkAndTransfersItsVerifiedCover() {
+        // Search fetches the original Group and Official release separately.
+        // Once the exact same Group MBID proves the edited public title,
+        // consolidation must preserve the edition cover as well as the Group.
+        val groupMbid = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val releaseMbid = "11111111-1111-4111-8111-111111111111"
+        val group = CanonicalCatalogSearchRow(
+            groupMbid, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+        )
+        val release = CanonicalCatalogSearchRow(
+            releaseMbid, CanonicalSearchKind.RELEASE, "How Sweet", "NewJeans",
+            coverGroupMbid = groupMbid,
+            artworkUri = "https://images.example/how-sweet-edition.jpg",
+        )
+        val official = MusicBrainzReleaseHit(
+            releaseMbid, "How Sweet", "XW", "2024-05-24", "NewJeans",
+            status = "Official", releaseGroupMbid = groupMbid,
+        )
+        val named = canonicalSearchRowsWithOfficialEditionTitles(
+            listOf(group, release), listOf(official),
+        )
+        val visible = canonicalSearchRowsWithoutRedundantEditions(named)
+        assertEquals(1, visible.size)
+        assertEquals(groupMbid, visible.single().musicBrainzId)
+        assertEquals("How Sweet", visible.single().title)
+        assertEquals("Single", visible.single().releaseKind)
+        assertEquals(release.artworkUri, visible.single().artworkUri)
+    }
+
     @Test fun consolidatingSameTitleEditionMustNotBorrowCoverFromOtherGroup() {
         val originalId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
         val otherId = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
