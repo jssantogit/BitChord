@@ -34,7 +34,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1341,7 +1340,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                 ) {
                     Text("Playlists clássicas", style = MaterialTheme.typography.titleMedium)
-                    TextButton(onClick = onClassic) { Text("Editor clássico") }
+                    PlaylistWizardInlineAction(label = "Editor clássico", onClick = onClassic)
                 }
                 if (legacyFailure) Text("Não foi possível carregar as playlists clássicas",
                     color = MaterialTheme.colorScheme.error)

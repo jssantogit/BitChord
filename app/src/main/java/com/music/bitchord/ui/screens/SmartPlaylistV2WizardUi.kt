@@ -41,7 +41,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -742,12 +741,11 @@ internal fun SmartPlaylistV2WizardUi(
                                     }
                                 }
                                 if (coverUri != null) {
-                                    TextButton(
+                                    PlaylistWizardInlineAction(
+                                        label = "Remover capa",
                                         onClick = onClearCover,
-                                        modifier = Modifier.heightIn(min = 44.dp),
-                                    ) {
-                                        Text("Remover capa", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                                        subdued = true,
+                                    )
                                 }
                             }
                         }

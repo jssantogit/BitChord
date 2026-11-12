@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
@@ -140,7 +141,7 @@ internal fun PlaylistWizardSecondaryAction(
     onClick: () -> Unit,
 ) {
     // Native neutral outlined action: unmistakable touch target without
-    // competing with the single red primary CTA or tinting text red.
+    // competing with the single blue primary CTA or tinting text red.
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
@@ -153,6 +154,38 @@ internal fun PlaylistWizardSecondaryAction(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
     ) {
         Text(label, style = MaterialTheme.typography.bodyLarge)
+    }
+}
+
+/**
+ * Plain BitChord inline action for small editor links. Apple Music's exact
+ * geometry here is unknown; blue marks a navigational action, while subdued
+ * actions remain neutral. Preserve a 44dp target and disabled semantics.
+ */
+@Composable
+internal fun PlaylistWizardInlineAction(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    subdued: Boolean = false,
+) {
+    val ink = if (subdued) MaterialTheme.colorScheme.onSurfaceVariant
+        else appleMusicKeyColor()
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .heightIn(min = 44.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .testTag("playlist-wizard-inline-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = ink.copy(alpha = if (enabled) 1f else 0.40f),
+        )
     }
 }
 
