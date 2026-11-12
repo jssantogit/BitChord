@@ -1,7 +1,5 @@
 package com.music.bitchord.ui.screens
 
-import com.music.bitchord.ui.components.applePrimaryButtonColors
-
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -27,9 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,6 +41,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,6 +55,8 @@ import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.listentogether.PartyPreview
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.QrCode
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 
 /**
  * Which of the party sheets is up, if any.
@@ -187,6 +186,52 @@ internal fun GlowingAvatar(
 }
 
 /**
+ * Primary action shared by create, code lookup, join confirmation and invite.
+ * 52dp is existing BitChord dialog geometry, not a recovered Apple metric.
+ * The party state machine retains ownership of all enabled/busy decisions.
+ */
+@Composable
+internal fun PartyPrimaryAction(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+) {
+    val ink = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(
+                if (enabled) appleMusicKeyColor()
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            )
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag("party-primary-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = ink,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = ink,
+            )
+        }
+    }
+}
+
+/**
  * What the screen is when there is no party yet.
  *
  * Two doors rather than one, and they are not equals: creating is the common
@@ -228,19 +273,11 @@ internal fun PartyLanding(
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(28.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(R.string.listen_together_create_action),
             onClick = onCreate,
             enabled = enabled,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = applePrimaryButtonColors(),
-        ) {
-            Text(
-                text = stringResource(R.string.listen_together_create_action),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         Spacer(Modifier.height(6.dp))
         PartySheetTextAction(
             label = stringResource(R.string.listen_together_join_existing),
@@ -403,21 +440,13 @@ internal fun CreatePartySheet(
             }
         }
         Spacer(Modifier.height(24.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(
+                if (busy) R.string.listen_together_creating else R.string.listen_together_create_action,
+            ),
             onClick = onCreate,
             enabled = enabled && !busy,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = applePrimaryButtonColors(),
-        ) {
-            Text(
-                text = stringResource(
-                    if (busy) R.string.listen_together_creating else R.string.listen_together_create_action,
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         SheetError(error)
         Spacer(Modifier.height(12.dp))
     }
@@ -507,21 +536,13 @@ internal fun JoinPartySheet(
             onSubmit = onSubmit,
         )
         Spacer(Modifier.height(20.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(
+                if (busy) R.string.listen_together_joining else R.string.listen_together_join_action,
+            ),
             onClick = onSubmit,
             enabled = enabled && !busy && code.length == ListenTogether.CODE_LENGTH,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = applePrimaryButtonColors(),
-        ) {
-            Text(
-                text = stringResource(
-                    if (busy) R.string.listen_together_joining else R.string.listen_together_join_action,
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         SheetError(error)
         Spacer(Modifier.height(16.dp))
     }
@@ -666,25 +687,17 @@ internal fun JoinConfirmSheet(
             )
         }
         Spacer(Modifier.height(20.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(
+                when {
+                    preview.isFull -> R.string.listen_together_full
+                    busy -> R.string.listen_together_joining
+                    else -> R.string.listen_together_join_action
+                },
+            ),
             onClick = onJoin,
             enabled = !busy && !preview.isFull,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = applePrimaryButtonColors(),
-        ) {
-            Text(
-                text = stringResource(
-                    when {
-                        preview.isFull -> R.string.listen_together_full
-                        busy -> R.string.listen_together_joining
-                        else -> R.string.listen_together_join_action
-                    },
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         SheetError(error)
         Spacer(Modifier.height(4.dp))
         PartySheetTextAction(
@@ -723,20 +736,11 @@ internal fun InviteSheet(
     ) {
         SheetHeader(title = stringResource(R.string.listen_together_invite_title))
         Spacer(Modifier.height(20.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(R.string.listen_together_share_link),
+            icon = PlaylistEditorIcons.Link,
             onClick = onShareLink,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            colors = applePrimaryButtonColors(),
-        ) {
-            Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = stringResource(R.string.listen_together_share_link),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         Spacer(Modifier.height(24.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
