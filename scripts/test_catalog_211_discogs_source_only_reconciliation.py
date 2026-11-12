@@ -117,5 +117,33 @@ class ReconciliationTest(unittest.TestCase):
         self.assertFalse(r["observations"][0]["confirmed_missing_from_musicbrainz"])
 
 
+    def test_musicbrainz_search_total_count_above_first_page_preserves_hits(self):
+        # MusicBrainz count is total matches, not the number in this page.
+        other = "49204a7a-ed85-407a-828f-6fd46f1d8126"
+        first_page = [mb_release(
+            artist=other, rid=f"00000000-0000-4000-8000-{n:012x}"
+        ) for n in range(9)] + [mb_release()]
+        payload = search(first_page, count=11)
+        parsed = read_barcode_search(payload, "8801234567890", ARTIST)
+        self.assertIsNotNone(parsed)
+        self.assertTrue(parsed["truncated"])
+        self.assertEqual([RELEASE], parsed["matching_release_mbids"])
+        result = reconcile(index(), editions(), lambda _: payload)
+        self.assertEqual("existing_mb_artist_barcode",
+                         result["observations"][0]["status"])
+        self.assertTrue(result["observations"][0]["barcode_searches"][0]["truncated"])
+
+    def test_truncated_barcode_page_without_artist_hit_is_inconclusive(self):
+        other = "49204a7a-ed85-407a-828f-6fd46f1d8126"
+        first_page = [mb_release(
+            artist=other, rid=f"00000000-0000-4000-8000-{n:012x}"
+        ) for n in range(10)]
+        result = reconcile(index(), editions(), lambda _: search(first_page, count=11))
+        self.assertEqual("mb_barcode_first_page_inconclusive",
+                         result["observations"][0]["status"])
+        self.assertEqual([], result["observations"][0]["matched_mb_release_mbids"])
+        self.assertFalse(result["observations"][0]["confirmed_missing_from_musicbrainz"])
+
+
 if __name__ == "__main__":
     unittest.main()
