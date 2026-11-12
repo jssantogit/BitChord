@@ -4641,8 +4641,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
                 return@launch
             }
+            val mergedSearchRows = mergeCanonicalSearchRows(rows, cached, failedKinds)
+            val editionLabelRows = canonicalSearchRowsWithOfficialEditionTitles(
+                mergedSearchRows,
+                if (editions is MusicBrainzCatalogSearchResult.Success) editions.page.items
+                else emptyList(),
+            )
             val combined = withVerifiedLocalBadges(
-                mergeCanonicalSearchRows(rows, cached, failedKinds).filter { row ->
+                editionLabelRows.filter { row ->
                     row.kind != CanonicalSearchKind.RECORDING || canonicalStreamingTitleIsSafe(row.title)
                 },
             )
@@ -4771,9 +4777,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 val existing = (_canonicalResults.value as? UiState.Success)?.data ?: return@launch
-                val verified = withVerifiedLocalBadges(
-                    (existing + additional).distinctBy { it.kind to it.musicBrainzId },
+                val appended = (existing + additional).distinctBy { it.kind to it.musicBrainzId }
+                val named = canonicalSearchRowsWithOfficialEditionTitles(
+                    appended,
+                    if (editions is MusicBrainzCatalogSearchResult.Success) editions.page.items
+                    else emptyList(),
                 )
+                val verified = withVerifiedLocalBadges(named)
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != cursor.query ||
                     canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null
