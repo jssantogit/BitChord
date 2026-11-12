@@ -44,7 +44,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
         self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(12, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(13, sum(x["reviewed"] for x in result["slots"].values()))
 
     def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
         manifest = json.loads(Path(
@@ -136,6 +136,38 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual([], report_data["errors"])
         self.assertIsNone(report_data["metrics"])
         self.assertEqual(1, report_data["slots"]["type"]["reviewed"])
+
+    def test_a02_japanese_fearless_is_distinct_2023_single_not_2022_ep(self):
+        manifest = json.loads(Path(
+            "docs/plans/catalog-211-discogs-corpus-manifest.json"
+        ).read_text(encoding="utf-8"))
+        a02 = next(x for x in manifest["cases"] if x["id"] == "A-02")
+        a01 = next(x for x in manifest["cases"] if x["id"] == "A-01")
+        self.assertTrue(a02["reviewed"])
+        self.assertNotEqual(a01["musicbrainz_group_mbid"],
+                            a02["musicbrainz_group_mbid"])
+        self.assertEqual("c54392ad-7d95-447b-8b1a-bc5668d2f00d",
+                         a02["musicbrainz_group_mbid"])
+        self.assertEqual("49f40a51-d69c-4ef9-9ecf-c069fc70c11f",
+                         a02["musicbrainz_release_mbid"])
+        self.assertEqual(26168966, a02["discogs_release_id"])
+        self.assertEqual("Single", a02["musicbrainz_type"])
+        self.assertEqual("Single", a02["reference_type"])
+        self.assertEqual("Unknown", a02["app_type"])
+        self.assertEqual("candidate", a02["match_state"])
+        self.assertFalse(a02["match_correct"])
+        self.assertFalse(a02["absent_in_musicbrainz"])
+        self.assertFalse(a02["visible"])
+        self.assertIn("2023", a02["review_notes"])
+        self.assertIn("2022", a02["review_notes"])
+        self.assertEqual("https://www.universal-music.co.jp/lesserafim/news/2022-11-25-2/",
+                         a02["evidence_links"]["independent_editorial"])
+        self.assertEqual("https://github.com/jssantogit/BitChord/actions/runs/43135307603",
+                         a02["evidence_links"]["observed_workflow"])
+        result = report(manifest)
+        self.assertEqual([], result["errors"])
+        self.assertEqual(2, result["slots"]["type"]["reviewed"])
+        self.assertIsNone(result["metrics"])
 
     def test_c04_stray_kids_slash_name_is_known_musicbrainz_ep_not_recovered(self):
         manifest = json.loads(Path(
