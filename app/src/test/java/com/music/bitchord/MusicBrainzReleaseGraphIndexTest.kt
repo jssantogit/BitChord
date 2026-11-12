@@ -161,6 +161,9 @@ class MusicBrainzReleaseGraphIndexTest {
             assertEquals(recordingB, dao.recordingById(recordingB)!!.id)
             assertEquals("asset-b", dao.mediaAsset("local", "b")!!.id)
             assertTrue(dao.catalogReleaseTracksForRecording(recordingB).any { it.releaseId == releaseId })
+            // Real DAO consumer used by native album/library discovery remains
+            // allowed to see this co-owned edition association.
+            assertTrue(releaseId in dao.releaseIdsForVisibleRecordings(listOf(recordingB)))
             assertEquals(setOf("third-party"),
                 dao.catalogReleaseTrackSources(releaseId, recordingB).map { it.provider }.toSet())
             assertEquals(1, xmlRequests)
@@ -197,6 +200,7 @@ class MusicBrainzReleaseGraphIndexTest {
                 "asset-old", oldRecordingId, "local", "old", "content://old", null, null, null, null,
             ))
             assertTrue(dao.catalogReleaseTracksForRecording(oldRecordingId).any { it.releaseId == releaseId })
+            assertTrue(releaseId in dao.releaseIdsForVisibleRecordings(listOf(oldRecordingId)))
             assertEquals(listOf("musicbrainz"),
                 dao.catalogReleaseTrackSources(releaseId, oldRecordingId).map { it.provider })
 
@@ -204,6 +208,7 @@ class MusicBrainzReleaseGraphIndexTest {
 
             assertEquals(listOf(trackA), dao.catalogMusicBrainzTracks(releaseId).map { it.trackMbid })
             assertTrue(dao.catalogReleaseTracksForRecording(oldRecordingId).none { it.releaseId == releaseId })
+            assertTrue(releaseId !in dao.releaseIdsForVisibleRecordings(listOf(oldRecordingId)))
             assertTrue(dao.catalogReleaseTrackSources(releaseId, oldRecordingId).isEmpty())
             assertEquals(oldRecordingId, dao.recordingById(oldRecordingId)!!.id)
             assertEquals("asset-old", dao.mediaAsset("local", "old")!!.id)
