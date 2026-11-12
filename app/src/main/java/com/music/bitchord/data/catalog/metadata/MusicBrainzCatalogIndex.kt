@@ -485,8 +485,8 @@ internal class MusicBrainzCatalogIndex(
                 }
                 val existingTrack = dao.catalogMusicBrainzTrack(trackMbid)
                 check(existingTrack == null ||
-                    (existingTrack.releaseId == releaseId && existingTrack.recordingId == recordingId)) {
-                    "MusicBrainz Track MBID conflicts with a different recording or edition"
+                    existingTrack.releaseId == releaseId) {
+                    "MusicBrainz Track MBID conflicts with a different edition"
                 }
                 dao.upsertCatalogMusicBrainzTrack(CatalogMusicBrainzTrackEntity(
                     trackMbid, releaseId, recordingId, track.mediumNumber,

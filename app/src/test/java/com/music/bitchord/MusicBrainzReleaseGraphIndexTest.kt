@@ -2,6 +2,9 @@ package com.music.bitchord
 
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.ExternalIdentityEntity
+import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.ReleaseTrackEntity
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
@@ -23,6 +26,80 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 @RunWith(RobolectricTestRunner::class)
 class MusicBrainzReleaseGraphIndexTest {
+    @Test fun sameEditionTrackRecordingCorrectionPreservesOldRecordingOwnershipAndRejectsEditionReuse() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val otherRelease = "271b31f8-8ab6-483c-97d9-8f0fabb2d4f4"
+            val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val recording1 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val recording2 = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            val index = MusicBrainzCatalogIndex(db)
+            val dao = db.catalogDao()
+            index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
+                release, null, "Edition", null, null, null,
+                listOf(MusicBrainzCatalogTrack(track, recording1, "Track", 1, 1, null)),
+            ))
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            val oldRecordingId = dao.entityIdForExternalIdentity("musicbrainz", "recording", recording1)!!
+            val newRecordingId = index.persistRecordings(listOf(
+                com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit(
+                    recording2, "Corrected", "Artist", null,
+                ),
+            ))[recording2]!!
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "existing-asset", oldRecordingId, "local", "source", "content://asset",
+                null, null, null, null,
+            ))
+            dao.upsertExternalIdentity(ExternalIdentityEntity("other-provider", "recording", "old-claim", oldRecordingId))
+            dao.upsertReleaseTrack(ReleaseTrackEntity(releaseId, oldRecordingId, 1))
+            dao.upsertCatalogReleaseTrackSource(com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity(
+                releaseId, oldRecordingId, "other-provider",
+            ))
+
+            index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
+                release, null, "Edition", null, null, null,
+                listOf(MusicBrainzCatalogTrack(track, recording2, "Corrected", 1, 1, null)),
+            ))
+
+            assertEquals(newRecordingId, dao.catalogMusicBrainzTrack(track)!!.recordingId)
+            assertEquals(recording2, index.cachedRelease(release)!!.tracks.single().recordingMbid)
+            assertEquals(oldRecordingId, dao.recordingById(oldRecordingId)!!.id)
+            assertEquals("existing-asset", dao.mediaAsset("local", "source")!!.id)
+            assertEquals(oldRecordingId, dao.entityIdForExternalIdentity("other-provider", "recording", "old-claim"))
+            val preservedSources = dao.catalogReleaseTrackSources(releaseId, oldRecordingId).map { it.provider }.toSet()
+            assertTrue("musicbrainz" in preservedSources)
+            assertTrue("other-provider" in preservedSources)
+            // Keep the old R1 edge alongside the new R2 edge. Without complete
+            // provenance, pruning legacy ownership edges would be unsafe.
+            assertTrue(dao.catalogReleaseTrackSources(releaseId, oldRecordingId).isNotEmpty())
+            assertTrue(dao.catalogReleaseTrackSources(releaseId, newRecordingId).any {
+                it.provider == "musicbrainz"
+            })
+
+            val failedReuse = runCatching {
+                index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
+                    otherRelease, null, "Other edition", null, null, null,
+                    listOf(MusicBrainzCatalogTrack(track, recording2, "Corrected", 1, 1, null)),
+                ))
+            }
+            assertTrue(failedReuse.isFailure)
+            // Recording 2 was persisted before persistReleaseDetail's transaction;
+            // only the rejected release identity and Track association must roll back.
+            assertNull(dao.entityIdForExternalIdentity("musicbrainz", "release", otherRelease))
+            assertEquals(releaseId, dao.catalogMusicBrainzTrack(track)!!.releaseId)
+
+            val sharedRecordingTrack = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+            index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
+                otherRelease, null, "Other edition", null, null, null,
+                listOf(MusicBrainzCatalogTrack(sharedRecordingTrack, recording2, "Another track", 1, 2, null)),
+            ))
+            assertEquals(newRecordingId, dao.catalogMusicBrainzTrack(sharedRecordingTrack)!!.recordingId)
+        } finally { db.close() }
+    }
+
     @Test fun malformedRefreshCannotAddPartialTracksToPreviouslyCachedEdition() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
