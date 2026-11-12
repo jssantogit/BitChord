@@ -66,6 +66,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.material.icons.Icons
