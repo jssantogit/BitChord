@@ -1436,3 +1436,84 @@ recuperações C comprovadas, zero ganho UI medido.
 PR #211 continua Draft/unmerged; nenhuma alteração
 em #209/main, nenhuma troca da autoridade MusicBrainz,
 APK ou smoke físico.
+
+## Coorte A — inspeção de relações Release exatas em Masters grandes (11/11/2026, Bahia)
+
+A investigação anterior identificara 52 MB Releases oficiais distribuídos em
+quatro ReleaseGroups, embora seus Discogs Masters tivessem **mais de oito
+versões** e, corretamente, não fossem comparáveis de forma exaustiva. O
+workflow agora roda uma sonda separada, versionada e sem token:
+`scripts/catalog_211_discogs_exact_release_link_probe.py`. Ela verifica
+novamente Artist MBID → Discogs Artist ID, ReleaseGroup MBID → Discogs Master
+ID, browse integral de até 25 MB Releases, status `Official` e identidade
+individual de Release. Examina **somente três MB Releases por grupo**, com
+prioridade operacional para mídia física, sem assumir que a seleção contém
+a edição correta. Segue exclusivamente URL tipada
+`MusicBrainz Release → Discogs Release`, se única; confere artista da
+edição Discogs e seu `master_id` contra o Master tipado observado. Dados de
+títulos, faixas, datas, país, barcode e gravadora/catálogo são diagnósticos
+de revisão, **não promotores a Verified**.
+
+Testes adversariais RED
+[CI #43135044232](https://github.com/jssantogit/BitChord/actions/runs/43135044232)
+(reproducibilidade de API nova ausente)
+→ implementação e
+[GREEN #43135307603](https://github.com/jssantogit/BitChord/actions/runs/43135307603)
+confirmada: 29 GETs HTTP públicos em quatro ReleaseGroups e
+12 edições amostradas.
+
+| RG (tipo MusicBrainz) | MB exatas amostradas | relações diretas válidas para mesmo Master/Artist | sem URL direta |
+|---|---:|---:|---:|
+| IVE — After LIKE (Single), Master 2803793 | 3 | 3 | 0 |
+| LE SSERAFIM — FEARLESS 2023 Japão (Single), Master 2986856 | 3 | 1 | 2 |
+| NewJeans — How Sweet & Bubble Gum (Single), Master 3499101 | 3 | 1 | 2 |
+| Stray Kids — ATE (EP), Master 3554257 | 3 | 0 | 3 |
+| **Total** | **12** | **5** | **7** |
+
+Cinco pares têm **URL de edição direta e Master/Artist tipados corroborados**:
+IVE MB Releases `0b971001`→Discogs `25758679`,
+`0e3b2edc`→`25758685`,
+`2115801c`→`24725813`;
+LE SSERAFIM `49f40a51`→`26168966`;
+NewJeans `bec858c4`→`30848370`.
+Todos receberam o estado diagnóstico
+`direct_release_in_typed_master_not_adjudicated`.
+Não os contar como novos `Verified` de B (são **vinculados**), nem como
+recuperação C ou melhora da UI. Os sete casos sem URL direta não provaram
+ausência de edição Discogs. Esta amostragem não substitui a leitura de
+todas as versões de um Master nem prova correção de tipo.
+
+### A-02 — FEARLESS de estreia japonesa já é Single; não confundir com o EP coreano
+
+O [anúncio oficial de 25/11/2022 da Universal Music Japan](https://www.universal-music.co.jp/lesserafim/news/2022-11-25-2/)
+e o [site oficial do artista](https://www.le-sserafim.jp/news/ujbjnf)
+definem FEARLESS de **25/01/2023** como primeiro **Japanese Single**
+com FEARLESS -Japanese ver.-, Blue Flame -Japanese ver.- e Choices.
+As embalagens CD têm catálogos próprios (UPCH-89511, UPCH-89512,
+UPCH-89513 etc.), não os volumes do EP de estreia de 2022. O ReleaseGroup
+MusicBrainz `c54392ad-7d95-447b-8b1a-bc5668d2f00d` já está corretamente
+tipado **Single**, e a sonda pública
+[CI #43135307603](https://github.com/jssantogit/BitChord/actions/runs/43135307603)
+achou o vínculo da MB Release oficial exata
+`49f40a51-d69c-4ef9-9ecf-c069fc70c11f` para o Discogs Release
+`26168966` no Master `2986856`, com artista confirmado por ID
+de ambas as fontes. Essa evidência separa o single japonês do
+**FEARLESS coreano EP** (A-01, ReleaseGroup `fb426d76`) sem inferir identidade
+por mesmo título. O corpus A-02 foi revisado como **concordância
+Single/Single**, não correção. Nenhuma equivalência de embalagem individual
+foi homologada nem houve validação visual Android; `match_state=candidate`,
+`app_type=Unknown` e `visible=false` registram essas limitações.
+
+Reproduzido o corpus RED em
+[CI #43135716003](https://github.com/jssantogit/BitChord/actions/runs/43135716003);
+os testes auxiliares ainda esperavam o total antigo de 12 na primeira CI
+após a alteração e foram atualizados. A
+[CI final do corpus #43135988008](https://github.com/jssantogit/BitChord/actions/runs/43135988008)
+encerrou em **COMPLETED/SUCCESS**.
+
+**Corpus vigente: 13/30**, A 2/10 (ambos já corretamente classificados),
+B 10/10 (zero novos Verified sem link), C 1/10 (não ausência); 17 slots
+não revisados. **Zero correções reais de tipo, zero recuperações C
+comprovadas e zero ganho de UI medido.** Sem APK/smoke,
+merge ou mudanças na #209/main. Discogs continua complementar a
+MusicBrainz no projeto.
