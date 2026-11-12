@@ -66,7 +66,6 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.IosShare
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 import com.music.bitchord.ui.components.CompactRatingGeometry
@@ -3355,7 +3354,7 @@ fun NowPlayingScreen(
                                 icon = when {
                                     lyricsShareGlyphVisible && lyricPicker.picking -> Icons.Rounded.Close
                                     lyricsShareGlyphVisible -> Icons.Rounded.IosShare
-                                    else -> Icons.Rounded.MoreHoriz
+                                    else -> nativeNowPlayingOverflowGlyph()
                                 },
                                 contentDescription = stringResource(
                                     when {
@@ -3778,3 +3777,6 @@ private suspend fun AwaitPointerEventScope.dragQueueIn(
     onHold(false)
     onSettle(open)
 }
+
+/** Unplattered ⋯ for the original circular Now Playing control. */
+internal fun nativeNowPlayingOverflowGlyph() = AppleQueueVectors.MorePlain

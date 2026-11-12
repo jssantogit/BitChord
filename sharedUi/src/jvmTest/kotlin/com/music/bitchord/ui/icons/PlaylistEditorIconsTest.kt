@@ -15,7 +15,7 @@ class PlaylistEditorIconsTest {
             PlaylistEditorIcons.ChevronUp,
             PlaylistEditorIcons.ChevronDown, PlaylistEditorIcons.Calendar,
             PlaylistEditorIcons.Audio, PlaylistEditorIcons.Artwork, PlaylistEditorIcons.Lock,
-            PlaylistEditorIcons.Link, PlaylistEditorIcons.Globe,
+            PlaylistEditorIcons.Link, PlaylistEditorIcons.Globe, PlaylistEditorIcons.Share,
             PlaylistEditorIcons.Selected, PlaylistEditorIcons.Unselected,
         )
         assertEquals(native.size, native.map { it.name }.toSet().size)

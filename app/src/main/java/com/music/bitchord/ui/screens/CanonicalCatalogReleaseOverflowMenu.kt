@@ -2,9 +2,6 @@ package com.music.bitchord.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,26 +36,38 @@ internal fun CanonicalCatalogReleaseOverflowMenu(
             onDismiss = { ratingOpen = false },
         )
     }
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+    com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+    ) {
         if (target != null) {
-            DropdownMenuItem(text = { Text("Avaliar álbum") }, onClick = {
-                onDismiss()
-                ratingOpen = true
-            })
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Avaliar álbum",
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.RatingPlain,
+                onClick = {
+                    onDismiss()
+                    ratingOpen = true
+                },
+            )
         }
         if (validCatalogMetadataPin(pin)) {
-            DropdownMenuItem(
-                text = { Text(if (isPinned) "Desafixar da Biblioteca" else "Fixar na Biblioteca") },
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = if (isPinned) "Desafixar da Biblioteca" else "Fixar na Biblioteca",
+                icon = com.music.bitchord.ui.icons.BitChordIcons.Pin,
                 onClick = { repo.toggle(pin); onDismiss() },
             )
         }
         if (target != null) {
-            DropdownMenuItem(text = { Text("Ver no MusicBrainz") }, onClick = {
-                onDismiss()
-                val endpoint = if (target.entityType == "RELEASE_GROUP") "release-group" else "release"
-                val url = Uri.parse("https://musicbrainz.org/$endpoint/" + target.entityId)
-                context.startActivity(Intent(Intent.ACTION_VIEW, url))
-            })
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Ver no MusicBrainz",
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Globe,
+                onClick = {
+                    onDismiss()
+                    val endpoint = if (target.entityType == "RELEASE_GROUP") "release-group" else "release"
+                    val url = Uri.parse("https://musicbrainz.org/$endpoint/" + target.entityId)
+                    context.startActivity(Intent(Intent.ACTION_VIEW, url))
+                },
+            )
         }
     }
 }

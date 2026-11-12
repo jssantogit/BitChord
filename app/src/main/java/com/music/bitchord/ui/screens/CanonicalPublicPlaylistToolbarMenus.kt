@@ -59,26 +59,38 @@ internal fun CanonicalPublicPlaylistToolbarMenus(
                 )
             }
         }
-        DropdownMenu(expanded = optionsOpen, onDismissRequest = onOptionsDismiss) {
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+            expanded = optionsOpen,
+            onDismissRequest = onOptionsDismiss,
+        ) {
             if (ratingTarget != null) {
-                DropdownMenuItem(text = { Text("Avaliar playlist") }, onClick = {
-                    onOptionsDismiss()
-                    editing = true
-                })
+                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                    label = "Avaliar playlist",
+                    icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.RatingPlain,
+                    onClick = {
+                        onOptionsDismiss()
+                        editing = true
+                    },
+                )
             }
-            DropdownMenuItem(
-                text = { Text(if (pinned) "Desafixar da Biblioteca" else "Fixar na Biblioteca") },
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = if (pinned) "Desafixar da Biblioteca" else "Fixar na Biblioteca",
+                icon = com.music.bitchord.ui.icons.BitChordIcons.Pin,
                 enabled = validLibraryPlaylistPin(pin),
                 onClick = { repository.toggle(pin); onOptionsDismiss() },
             )
-            DropdownMenuItem(text = { Text("Compartilhar playlist") }, onClick = {
-                onOptionsDismiss()
-                val share = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, playlist.title + " — " + playlist.creator)
-                }
-                context.startActivity(Intent.createChooser(share, "Compartilhar playlist"))
-            })
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Compartilhar playlist",
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Share,
+                onClick = {
+                    onOptionsDismiss()
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, playlist.title + " — " + playlist.creator)
+                    }
+                    context.startActivity(Intent.createChooser(share, "Compartilhar playlist"))
+                },
+            )
         }
     }
 }

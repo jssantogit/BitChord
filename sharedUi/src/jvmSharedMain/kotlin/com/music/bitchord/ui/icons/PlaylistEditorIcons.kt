@@ -115,6 +115,13 @@ object PlaylistEditorIcons {
         curveTo(8.5f, 2.5f, 15.5f, 2.5f, 15.5f, 7.5f)
         lineTo(15.5f, 10f)
     } }
+    /** Original outline share glyph; no Material icon or extracted resource. */
+    val Share by lazy { outlined("playlist_share") {
+        moveTo(12f, 15f); lineTo(12f, 3.5f)
+        moveTo(7.5f, 8f); lineTo(12f, 3.5f); lineTo(16.5f, 8f)
+        moveTo(5f, 12f); lineTo(5f, 20.5f); lineTo(19f, 20.5f)
+        lineTo(19f, 12f)
+    } }
     val Link by lazy { outlined("playlist_link") {
         moveTo(10f, 8f); lineTo(13f, 5f)
         curveTo(17.3f, 0.7f, 23f, 6.3f, 18.7f, 10.6f)
