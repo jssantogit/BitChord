@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.appleSettingsSwitchColors
+
 import android.content.Intent
 import android.text.format.DateFormat
 import android.widget.Toast
@@ -49,7 +51,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -888,10 +889,7 @@ private fun InAParty(
                     Switch(
                         checked = state.hostOnlyControl,
                         onCheckedChange = onSetHostOnlyControl,
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            checkedBorderColor = MaterialTheme.colorScheme.primary,
-                        ),
+                        colors = appleSettingsSwitchColors(),
                     )
                 },
                 onClick = { onSetHostOnlyControl(!state.hostOnlyControl) },

@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.appleSettingsSwitchColors
+
 import com.music.bitchord.auth.clearSpotifyWebSession
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.HorizontalDivider
@@ -22,7 +24,6 @@ import androidx.compose.material.icons.rounded.SwitchAccount
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -172,10 +173,7 @@ fun AccountAndScrobblingScreen(
                                     AppSettings.setListenBrainzEnabled(checked)
                                 }
                             },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = onOpenListenBrainzLogin,
@@ -190,10 +188,7 @@ fun AccountAndScrobblingScreen(
                             Switch(
                                 checked = listenBrainzPrimaryArtistOnly,
                                 onCheckedChange = AppSettings::setListenBrainzPrimaryArtistOnly,
-                                colors = SwitchDefaults.colors(
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
-                                ),
+                                colors = appleSettingsSwitchColors(),
                             )
                         },
                         onClick = { AppSettings.setListenBrainzPrimaryArtistOnly(!listenBrainzPrimaryArtistOnly) },
@@ -218,10 +213,7 @@ fun AccountAndScrobblingScreen(
                                     AppSettings.setLastfmEnabled(checked)
                                 }
                             },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = {
@@ -246,10 +238,7 @@ fun AccountAndScrobblingScreen(
                             Switch(
                                 checked = lastfmScrobbleEnabled,
                                 onCheckedChange = AppSettings::setLastfmScrobbleEnabled,
-                                colors = SwitchDefaults.colors(
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
-                                ),
+                                colors = appleSettingsSwitchColors(),
                             )
                         },
                         onClick = { AppSettings.setLastfmScrobbleEnabled(!lastfmScrobbleEnabled) },
@@ -263,10 +252,7 @@ fun AccountAndScrobblingScreen(
                             Switch(
                                 checked = lastfmPrimaryArtistOnly,
                                 onCheckedChange = AppSettings::setLastfmPrimaryArtistOnly,
-                                colors = SwitchDefaults.colors(
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
-                                ),
+                                colors = appleSettingsSwitchColors(),
                             )
                         },
                         onClick = { AppSettings.setLastfmPrimaryArtistOnly(!lastfmPrimaryArtistOnly) },
@@ -280,10 +266,7 @@ fun AccountAndScrobblingScreen(
                             Switch(
                                 checked = lastfmNowPlayingEnabled,
                                 onCheckedChange = AppSettings::setLastfmNowPlaying,
-                                colors = SwitchDefaults.colors(
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
-                                ),
+                                colors = appleSettingsSwitchColors(),
                             )
                         },
                         onClick = { AppSettings.setLastfmNowPlaying(!lastfmNowPlayingEnabled) },
