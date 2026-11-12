@@ -602,31 +602,25 @@ internal fun SmartPlaylistV2WizardUi(
                             onClick = { creatorMoreOpen = true },
                             size = 40.dp,
                         )
-                        DropdownMenu(
+                        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
                             expanded = creatorMoreOpen,
                             onDismissRequest = { creatorMoreOpen = false },
-                            modifier = Modifier.clip(RoundedCornerShape(16.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Seus filtros") },
-                                leadingIcon = {
-                                    Icon(PlaylistEditorIcons.Filters, contentDescription = null)
-                                },
+                            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                                label = "Seus filtros",
+                                icon = PlaylistEditorIcons.Filters,
                                 onClick = {
                                     creatorMoreOpen = false
                                     onManage()
                                 },
                             )
                             if (!normalMode && !filterMode) {
-                                DropdownMenuItem(
-                                    text = { Text(if (hasExportedFilter)
+                                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                                    label = if (hasExportedFilter)
                                         "Atualizar filtro reutilizável"
-                                        else "Salvar como filtro reutilizável") },
+                                    else "Salvar como filtro reutilizável",
+                                    icon = PlaylistEditorIcons.Add,
                                     enabled = canReview && !loading,
-                                    leadingIcon = {
-                                        Icon(PlaylistEditorIcons.Add, contentDescription = null)
-                                    },
                                     onClick = {
                                         creatorMoreOpen = false
                                         onSaveFilter()
@@ -635,20 +629,11 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                             if (page == WizardStep.EDIT && !filterMode &&
                                 (editingNormalId != null || editingId != null)) {
-                                HorizontalDivider(
-                                    thickness = 0.5.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant,
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Excluir playlist",
-                                        color = MaterialTheme.colorScheme.error) },
-                                    leadingIcon = {
-                                        Icon(
-                                            PlaylistEditorIcons.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                        )
-                                    },
+                                com.music.bitchord.ui.components.NativeCompactMenuDivider()
+                                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                                    label = "Excluir playlist",
+                                    icon = PlaylistEditorIcons.Delete,
+                                    destructive = true,
                                     enabled = !loading,
                                     onClick = {
                                         creatorMoreOpen = false
