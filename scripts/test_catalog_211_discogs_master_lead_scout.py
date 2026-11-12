@@ -250,6 +250,7 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual(H, report["leads"][0]["group_mbid"])
         self.assertEqual("complete_small_master_candidate", report["leads"][0]["status"])
         self.assertEqual([901], report["leads"][0]["version_ids"])
+        self.assertEqual(901, report["leads"][0]["discogs_master_main_release_id"])
         self.assertEqual(0, report["reviewed_corpus_cases"])
         self.assertEqual(0, report["verified_edition_count"])
         self.assertEqual(5, report["source_http_requests"])
@@ -290,6 +291,7 @@ class MasterLeadScoutTest(unittest.TestCase):
         large = next(x for x in result["leads"] if x["master_id"] == 500)
         self.assertEqual("master_too_large_not_exhaustive", large["status"])
         self.assertEqual([], large["version_ids"])
+        self.assertEqual(900, large["discogs_master_main_release_id"])
         self.assertEqual("complete_official_release_index",
                          large["mb_release_browse_status"])
         self.assertEqual([RELEASE],
