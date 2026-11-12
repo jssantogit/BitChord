@@ -87,6 +87,42 @@ class MusicBrainzOfflineEditionsTest {
         } finally { db.close() }
     }
 
+
+    @Test fun groupEditionCacheRejectsExplicitForeignGroupAndRestoresExactGroupOwnership() = runBlocking {
+        val db = database()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            val foreignGroup = "a01e48fc-9861-4ebc-88dd-aa31f61f4c11"
+            index.persistReleaseGroups(listOf(
+                MusicBrainzReleaseGroupHit(group, "EASY", "EP", "2024-02-19", "LE SSERAFIM"),
+                MusicBrainzReleaseGroupHit(
+                    foreignGroup, "EASY (English ver.)", "Single",
+                    "2024-02-23", "LE SSERAFIM",
+                ),
+            ))
+            val foreign = MusicBrainzReleaseHit(
+                worldwide, "EASY (English ver.)", "XW", "2024-02-23",
+                "LE SSERAFIM", status = "Official", releaseGroupMbid = foreignGroup,
+            )
+            // A caller's stale/mismatched group relation must not create a
+            // competing group membership solely because the titles overlap.
+            index.persistGroupEditions(group, listOf(foreign))
+            assertTrue(index.cachedGroupReleases(group).isEmpty())
+            // The same exact edition may belong to its *own* group.
+            index.persistGroupEditions(foreignGroup, listOf(foreign))
+            assertEquals(foreignGroup,
+                index.cachedGroupReleases(foreignGroup).single().releaseGroupMbid)
+            // Normal matching edition still remains available as an EP.
+            val own = foreign.copy(
+                musicBrainzId = japan, title = "EASY",
+                releaseGroupMbid = group,
+            )
+            index.persistGroupEditions(group, listOf(own))
+            assertEquals(group, index.cachedGroupReleases(group).single().releaseGroupMbid)
+            assertEquals(japan, index.cachedGroupReleases(group).single().musicBrainzId)
+        } finally { db.close() }
+    }
+
     @Test fun cachedGraphKeepsEditionTrackIdentityAndNeverPrunesOnSparseBrowse() = runBlocking {
         val db = database()
         try {

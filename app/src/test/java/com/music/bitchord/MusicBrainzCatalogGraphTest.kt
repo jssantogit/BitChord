@@ -32,6 +32,10 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(2, page.items.size)
         assertEquals(false, page.items.first().hasFrontCover)
         assertEquals(true, page.items.last().hasFrontCover)
+        // The exact scoped browse itself proves ReleaseGroup membership,
+        // even when MusicBrainz omits the nested release-group object.
+        assertEquals(listOf(group, group),
+            page.items.map { it.releaseGroupMbid })
         assertEquals(4, page.consumedCount)
         assertEquals(4, page.nextOffset)
     }
