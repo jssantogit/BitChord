@@ -316,6 +316,65 @@ class CanonicalSearchPagingTest {
         ))
     }
 
+    @Test fun redundantOfficialEditionCoverTransfersToExactGroupCardAfterLateArrival() {
+        val groupId = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val edition = CanonicalCatalogSearchRow(
+            "11111111-1111-4111-8111-111111111111",
+            CanonicalSearchKind.RELEASE, "How Sweet", "NewJeans",
+            coverGroupMbid = groupId,
+            artworkUri = "https://coverartarchive.org/release/11111111-1111-4111-8111-111111111111/front-250",
+        )
+        val group = CanonicalCatalogSearchRow(
+            groupId, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet", "NewJeans", releaseKind = "Single",
+            artworkUri = null,
+        )
+        val first = canonicalProgressiveSearchPreview(emptyList(), listOf(edition))
+        val afterGroup = canonicalProgressiveSearchPreview(first, listOf(group))
+        assertEquals(listOf(groupId), afterGroup.map { it.musicBrainzId })
+        assertEquals(edition.artworkUri, afterGroup.single().artworkUri)
+        assertEquals("Single", afterGroup.single().releaseKind)
+    }
+
+    @Test fun consolidatingSameTitleEditionMustNotBorrowCoverFromOtherGroup() {
+        val originalId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val otherId = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
+        val ownGroup = CanonicalCatalogSearchRow(
+            originalId, CanonicalSearchKind.RELEASE_GROUP, "HOT", "LE SSERAFIM",
+            releaseKind = "EP", artworkUri = null,
+        )
+        val otherGroup = ownGroup.copy(
+            musicBrainzId = otherId, releaseKind = "Single",
+        )
+        val foreignCover = CanonicalCatalogSearchRow(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            CanonicalSearchKind.RELEASE, "HOT", "LE SSERAFIM",
+            coverGroupMbid = otherId, artworkUri = "https://images.example/other-group.jpg",
+        )
+        val result = canonicalSearchRowsWithoutRedundantEditions(
+            listOf(ownGroup, foreignCover, otherGroup),
+        )
+        assertEquals(listOf(originalId, otherId), result.map { it.musicBrainzId })
+        assertEquals(null, result[0].artworkUri)
+        assertEquals(foreignCover.artworkUri, result[1].artworkUri)
+    }
+
+    @Test fun existingVerifiedGroupCoverWinsOverRedundantEditionCover() {
+        val groupId = "73403a9a-ef08-4747-8e5a-4a59eb65506c"
+        val group = CanonicalCatalogSearchRow(
+            groupId, CanonicalSearchKind.RELEASE_GROUP, "EASY", "LE SSERAFIM",
+            releaseKind = "EP", artworkUri = "https://images.example/group-verified.jpg",
+        )
+        val edition = CanonicalCatalogSearchRow(
+            "1e2823b2-9388-4354-85f9-362983c5f284",
+            CanonicalSearchKind.RELEASE, "EASY", "LE SSERAFIM",
+            coverGroupMbid = groupId, artworkUri = "https://images.example/edition.jpg",
+        )
+        val result = canonicalSearchRowsWithoutRedundantEditions(listOf(group, edition))
+        assertEquals(listOf(groupId), result.map { it.musicBrainzId })
+        assertEquals(group.artworkUri, result.single().artworkUri)
+    }
+
     @Test fun identicallyNamedHotEpAndSingleGroupsMustNeverMergeByTitle() {
         // MusicBrainz identifies HOT as two distinct official works.
         val hotEp = "50bcea80-692f-4e36-a7a5-825a3233cb13"
