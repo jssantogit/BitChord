@@ -46,6 +46,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
@@ -4440,7 +4441,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _searchSource.value == SearchSource.CANONICAL &&
                 _query.value.trim() == query
             ) {
-                val fresh = groups.page.items.map { hit -> CanonicalCatalogSearchRow(
+                val fresh = groups.page.items.filter(::isCuratedMusicBrainzReleaseGroup)
+                    .map { hit -> CanonicalCatalogSearchRow(
                     musicBrainzId = hit.musicBrainzId,
                     kind = CanonicalSearchKind.RELEASE_GROUP,
                     title = hit.title,
@@ -4532,7 +4534,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 if (groups is MusicBrainzCatalogSearchResult.Success) {
-                    groups.page.items.forEach { hit ->
+                    groups.page.items.filter(::isCuratedMusicBrainzReleaseGroup).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             musicBrainzId = hit.musicBrainzId,
                             kind = CanonicalSearchKind.RELEASE_GROUP,
@@ -4604,7 +4606,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             )) }
                         }
                         if (CanonicalSearchKind.RELEASE_GROUP in failedKinds) {
-                            dao.searchKnownMusicBrainzGroups(query, 25).forEach { hit ->
+                            dao.searchKnownMusicBrainzGroups(query, 25)
+                                .filter(::isCuratedMusicBrainzReleaseGroup).forEach { hit ->
                                 add(CanonicalCatalogSearchRow(
                                     hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                     hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
@@ -4746,7 +4749,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     }
                     if (groups is MusicBrainzCatalogSearchResult.Success) {
-                        groups.page.items.forEach { hit ->
+                        groups.page.items.filter(::isCuratedMusicBrainzReleaseGroup).forEach { hit ->
                             add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                                 hit.artistDisplay ?: hit.primaryType,
