@@ -2114,7 +2114,10 @@ private fun QualitySheet(
                     Icon(
                         Icons.Rounded.Check,
                         contentDescription = stringResource(R.string.selected),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = appleSelectionAccentColor(
+                            selected = true,
+                            neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -2191,7 +2194,10 @@ private fun AutomixPerformanceSheet(
                     Icon(
                         Icons.Rounded.Check,
                         contentDescription = stringResource(R.string.selected),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = appleSelectionAccentColor(
+                            selected = true,
+                            neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -2273,7 +2279,10 @@ private fun DownloadQualitySheet(
                     Icon(
                         Icons.Rounded.Check,
                         contentDescription = stringResource(R.string.selected),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = appleSelectionAccentColor(
+                            selected = true,
+                            neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.size(22.dp),
                     )
                 }
