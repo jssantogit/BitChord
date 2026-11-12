@@ -415,6 +415,57 @@ internal interface CanonicalCatalogDao {
     @Upsert suspend fun upsertCatalogMusicBrainzTrack(entity: CatalogMusicBrainzTrackEntity)
     @Query("DELETE FROM catalog_musicbrainz_track WHERE releaseId = :releaseId AND trackMbid IN (:trackMbids)")
     suspend fun deleteObsoleteCatalogMusicBrainzTracks(releaseId: String, trackMbids: List<String>)
+
+    /**
+     * Drop a legacy ReleaseTrack only when its sole explicit edge owner is
+     * MusicBrainz, the recording no longer appears on ANY edition Track,
+     * and the Release has no ambiguous ownership by another provider.
+     * Other-provider/legacy co-claims and their source markers stay intact.
+     */
+    @Query("""
+        DELETE FROM catalog_release_track
+        WHERE releaseId = :releaseId AND recordingId IN (:recordingIds)
+          AND EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider = 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider != 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_external_identity AS identity
+              WHERE identity.entityId = catalog_release_track.releaseId
+                AND identity.entityType = 'release'
+                AND identity.provider != 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_musicbrainz_track AS track
+              WHERE track.releaseId = catalog_release_track.releaseId
+                AND track.recordingId = catalog_release_track.recordingId
+          )
+    """)
+    suspend fun deleteObsoleteMusicBrainzOnlyReleaseTracks(releaseId: String, recordingIds: List<String>)
+
+    /**
+     * A co-owned legacy ReleaseTrack can survive, but an obsolete MusicBrainz
+     * source claim must not survive once no edition Track points to it.
+     */
+    @Query("""
+        DELETE FROM catalog_release_track_source
+        WHERE releaseId = :releaseId AND recordingId IN (:recordingIds)
+          AND provider = 'musicbrainz'
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_musicbrainz_track AS track
+              WHERE track.releaseId = catalog_release_track_source.releaseId
+                AND track.recordingId = catalog_release_track_source.recordingId
+          )
+    """)
+    suspend fun deleteObsoleteMusicBrainzReleaseTrackSources(releaseId: String, recordingIds: List<String>)
     @Upsert suspend fun upsertMusicBrainzCoverArtCache(entity: MusicBrainzCoverArtCacheEntity)
     @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = :entityType AND mbid = :mbid LIMIT 1")
     suspend fun musicBrainzCoverArtCache(entityType: String, mbid: String): MusicBrainzCoverArtCacheEntity?

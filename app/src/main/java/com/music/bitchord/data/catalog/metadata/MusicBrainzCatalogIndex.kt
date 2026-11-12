@@ -428,6 +428,7 @@ internal class MusicBrainzCatalogIndex private constructor(
         }
         val incomingIds = detail.tracks.map { it.trackMbid.trim().lowercase(Locale.ROOT) }.toSet()
         val obsolete = snapshot?.second.orEmpty().map { it.trackMbid }.filterNot(incomingIds::contains)
+        val previousRecordingIds = snapshot?.second.orEmpty().map { it.recordingId }.distinct()
         val verifiedRemoval = if (obsolete.isNotEmpty() && detail.tracks.isNotEmpty() && detail.completeness.countsExplicitAndExact &&
             detail.completeness.offsetsValid && detail.completeness.positionsExplicitUnique
         ) {
@@ -566,6 +567,14 @@ internal class MusicBrainzCatalogIndex private constructor(
                 dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity(
                     releaseId, recordingId, "musicbrainz",
                 ))
+            }
+            // Reconcile only after ALL incoming Track sidecars were applied.
+            // The same Recording can occur on multiple Tracks, and a Track
+            // can be corrected to another Recording in the same edition.
+            // Operations remain inside the same Room transaction.
+            previousRecordingIds.chunked(400).forEach { chunk ->
+                dao.deleteObsoleteMusicBrainzOnlyReleaseTracks(releaseId, chunk)
+                dao.deleteObsoleteMusicBrainzReleaseTrackSources(releaseId, chunk)
             }
             releaseId
         }
