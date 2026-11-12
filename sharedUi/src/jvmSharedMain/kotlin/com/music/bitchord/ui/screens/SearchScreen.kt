@@ -1556,7 +1556,7 @@ private fun LazyListScope.recentAddonSearches(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                Icons.Rounded.History,
+                Icons.Rounded.Search,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp),
@@ -1609,10 +1609,10 @@ private fun RecentSearchEntityRow(
     ) {
         Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
             if (entity.id.startsWith("q:")) {
-                // Reuse native History icon for search terms, never a fake
+                // Reuse the native search glyph for search terms, never a fake
                 // missing track artwork or playback indicator.
                 Icon(
-                    Icons.Rounded.History,
+                    Icons.Rounded.Search,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp),
