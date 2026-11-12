@@ -58,7 +58,9 @@ def provider(url):
             "year": 2026,
         }
     if "musicbrainz.org" in url:
-        return {"count": 0, "release-groups": []}
+        # Both search surfaces have independently typed response collections.
+        return {"count": 0, "releases": []} if "/ws/2/release/?" in url else {
+            "count": 0, "release-groups": []}
     raise AssertionError("Unexpected provider request " + url)
 
 
