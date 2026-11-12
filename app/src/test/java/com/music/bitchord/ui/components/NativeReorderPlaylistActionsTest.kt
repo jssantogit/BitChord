@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -11,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -49,6 +51,8 @@ class NativeReorderPlaylistActionsTest {
             }
         }
         compose.onNodeWithTag("reorder-save-native").assertHeightIsEqualTo(48.dp)
+        assertTrue(compose.onNodeWithTag("reorder-save-native")
+            .getUnclippedBoundsInRoot().width >= 120.dp)
         compose.onNodeWithText("Salvar ordem").performClick()
         compose.runOnIdle { assertEquals(1, saves) }
     }
@@ -66,6 +70,8 @@ class NativeReorderPlaylistActionsTest {
             }
         }
         compose.onNodeWithTag("reorder-save-native").assertIsNotEnabled()
+        assertTrue(compose.onNodeWithTag("reorder-save-native")
+            .getUnclippedBoundsInRoot().width >= 120.dp)
         compose.onNodeWithTag("reorder-save-loading", useUnmergedTree = true).assertExists()
         compose.runOnIdle { assertEquals(0, saves) }
     }
