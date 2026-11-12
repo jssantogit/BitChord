@@ -18,8 +18,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
@@ -255,17 +253,24 @@ internal fun PlaylistWizardPrimaryAction(
     enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth().height(50.dp),
-        shape = RoundedCornerShape(25.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = appleMusicKeyColor(),
-            contentColor = androidx.compose.ui.graphics.Color.White,
-        ),
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .clip(RoundedCornerShape(25.dp))
+            .background(
+                if (enabled) appleMusicKeyColor()
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            )
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag("playlist-wizard-primary-action"),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
