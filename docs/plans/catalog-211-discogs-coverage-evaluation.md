@@ -1517,3 +1517,60 @@ não revisados. **Zero correções reais de tipo, zero recuperações C
 comprovadas e zero ganho de UI medido.** Sem APK/smoke,
 merge ou mudanças na #209/main. Discogs continua complementar a
 MusicBrainz no projeto.
+
+### C-05 — ENHYPEN *ROMANCE : UNTOLD -daydream-* não está ausente do MusicBrainz
+
+O relatório público do follow-up C
+[CI #43124506344](https://github.com/jssantogit/BitChord/actions/runs/43124506344)
+observou a edição Discogs `32437206` sob ENHYPEN, com ID de artista
+Discogs válido. A reconciliação por barcode nessa execução estava
+indisponível, não negativa: não havia evidência para chamar a
+edição de ausente nem para certificar uma prensagem idêntica.
+
+A [discografia oficial BELIFT LAB](https://beliftlab.com/artist/discography/ENHYPEN/12)
+identifica o disco como **2nd Studio Repackage Album**, lançado em
+11/11/2024, com *Daydream* e *No Doubt* acrescentados ao álbum anterior.
+O [anúncio oficial](https://weverse.io/enhypen/notice/22943) comprova
+a cronologia.
+
+O [MusicBrainz ReleaseGroup `0c668bdb`](https://musicbrainz.org/release-group/0c668bdb-328c-4dba-8407-8eddb5373a5d)
+continua chamado `ROMANCE : UNTOLD` e classificado **Album**, mas
+**inclui explicitamente** o [MusicBrainz Release oficial
+`4c42b226`](https://musicbrainz.org/release/4c42b226-24c8-4481-91ce-744ae59eaa5b)
+com título `ROMANCE : UNTOLD -daydream-`, mídia CD,
+11 faixas e lançamento em novembro de 2024. Assim, uma
+comparação que use somente títulos de ReleaseGroups terá uma
+pista nova falsa, embora a edição já esteja registrada no MB.
+
+**C-05 foi marcado `reviewed=true` como negativo para ausência MB**:
+`absent_in_musicbrainz=false`, `musicbrainz_type=Album`,
+`reference_type=Album`, `match_state=candidate`.
+O estado candidato não afirma que Discogs Release `32437206`
+seja a MESMA prensagem física do MB Release `4c42b226`:
+os atributos de embalagem/catálogo não foram homologados.
+Os campos `app_type=Unknown`/`visible=false` continuam
+não medidos no Android, sem alegação de falha visual.
+
+A regressão em
+`scripts/test_catalog_211_discogs_fresh_c_followup.py`
+garante que um C-05 já revisado não reentre numa nova fila como
+Discogs-only inédito. Essa proteção usa o ID de Release conhecido
+somente no **scanner de investigação**; a estante Android atual
+compara primariamente títulos dos ReleaseGroups, e o problema
+genérico de `Release.title != ReleaseGroup.title` precisa de uma
+solução separada, com prova de existência de edição, sem suprimir
+legítimos álbuns/Singles de mesmo prefixo (como os dois FEARLESS).
+Nenhuma alteração de lógica nativa foi feita nesta rodada.
+
+TDD de corpus RED
+[CI #43136595058](https://github.com/jssantogit/BitChord/actions/runs/43136595058)
+→ [CI do corpus #43136777851](https://github.com/jssantogit/BitChord/actions/runs/43136777851)
+**COMPLETED/SUCCESS**. A CI pública de follow-up foi acionada
+separadamente para validar a não reciclagem de C-05 no conjunto
+de regressões e sondagens.
+
+**Novo corpus: 14/30** — A 2/10 (concordâncias), B 10/10
+(sem novos unlinked `Verified`), C 2/10 (dois negativos de
+ausência aparente). **Zero recuperação C comprovada, zero correção
+de tipo, zero ganho UI medido.** Não inferir métricas globais
+com 16 slots não revisados.
