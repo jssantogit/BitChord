@@ -87,42 +87,43 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(0,result["metrics"]["source_only_recovery"]["confirmed_absent"])
         self.assertEqual(0,result["metrics"]["source_only_recovery"]["visible"])
 
-    def test_real_staged_manifest_reports_selected_but_no_reviewed_or_metrics(self):
-        manifest = json.loads(Path(
+    def test_actual_corpus_complete_but_no_positive_provider_gain(self):
+        manifest=json.loads(Path(
             "docs/plans/catalog-211-discogs-corpus-manifest.json"
         ).read_text(encoding="utf-8"))
-        result = report(manifest)
+        result=report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertFalse(result["complete"])
-        self.assertIsNone(result["metrics"])
+        self.assertTrue(result["complete"])
         self.assertEqual(0, result["slots"]["unlinked"]["selected_unreviewed"])
-        self.assertEqual(3, result["slots"]["source_only"]["selected_unreviewed"])
-        self.assertEqual(3, result["slots"]["source_only"]["excluded_preliminary"])
-        self.assertEqual(25, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertEqual(0, result["slots"]["source_only"]["selected_unreviewed"])
+        self.assertEqual(0, result["slots"]["source_only"]["excluded_preliminary"])
+        self.assertEqual(3, result["screened_out_not_reviewed"])
+        self.assertEqual(30, sum(x["reviewed"] for x in result["slots"].values()))
+        self.assertIsNotNone(result["metrics"])
+        self.assertEqual(0, result["metrics"]["unlinked_matching"]["verified"])
+        self.assertEqual(0, result["metrics"]["source_only_recovery"]["confirmed_absent"])
+        self.assertEqual(0, result["metrics"]["type_correction"]["corrected"])
 
-    def test_unreviewed_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
-        manifest = json.loads(Path(
+    def test_archived_c_exclusions_reject_wrong_links_and_duplicate_ids(self):
+        manifest=json.loads(Path(
             "docs/plans/catalog-211-discogs-corpus-manifest.json"
         ).read_text(encoding="utf-8"))
-        first = manifest["cases"][20]
-        self.assertEqual("C-01", first["id"])
-        first["evidence_links"]["discogs_release"] = "https://www.discogs.com/release/123"
-        result = report(manifest)
-        self.assertTrue(any("invalid unreviewed selection evidence" in s
-                            for s in result["errors"]))
-        self.assertEqual(2, result["slots"]["source_only"]["selected_unreviewed"])
+        archived=manifest["screened_out_sources"]
+        first=archived[0]
+        self.assertEqual("C-01",first["original_slot"])
+        old=first["evidence_links"]["discogs_release"]
+        first["evidence_links"]["discogs_release"]="https://www.discogs.com/release/123"
+        result=report(manifest)
+        self.assertTrue(any("screened-out source C-01: invalid archived evidence" in e
+                            for e in result["errors"]))
         self.assertIsNone(result["metrics"])
-        first["evidence_links"]["discogs_release"] = (
-            f"https://www.discogs.com/release/{first['discogs_release_id']}"
-        )
-        second = manifest["cases"][21]
-        second["discogs_release_id"] = first["discogs_release_id"]
-        second["evidence_links"]["discogs_release"] = (
-            f"https://www.discogs.com/release/{second['discogs_release_id']}"
-        )
-        result = report(manifest)
-        self.assertTrue(any("duplicate unreviewed source edition" in s
-                            for s in result["errors"]))
+        first["evidence_links"]["discogs_release"]=old
+        second=archived[1]
+        second["discogs_release_id"]=first["discogs_release_id"]
+        second["evidence_links"]["discogs_release"]=old
+        result=report(manifest)
+        self.assertTrue(any("screened-out source C-02: duplicate source edition" in e
+                            for e in result["errors"]))
         self.assertIsNone(result["metrics"])
 
     def test_all_ten_b_controls_are_source_reviewed_without_verified_editions(self):
@@ -153,7 +154,7 @@ class CorpusReportTests(unittest.TestCase):
         result = report(manifest)
         self.assertEqual([], result["errors"])
         self.assertEqual(10, result["slots"]["unlinked"]["reviewed"])
-        self.assertIsNone(result["metrics"])
+        self.assertIsNotNone(result["metrics"])
         for case_id, mbid, discogs_id in (
             ("B-06", "6ca81526-ecfe-4bc9-be65-d5f20a23f084", 16620135),
             ("B-07", "cf60fbce-4c79-45d2-9249-293b17a8f8fc", 23314901),
@@ -188,7 +189,7 @@ class CorpusReportTests(unittest.TestCase):
                          a01["evidence_links"]["independent_editorial"])
         report_data = report(manifest)
         self.assertEqual([], report_data["errors"])
-        self.assertIsNone(report_data["metrics"])
+        self.assertIsNotNone(report_data["metrics"])
         self.assertEqual(10, report_data["slots"]["type"]["reviewed"])
 
     def test_a02_japanese_fearless_is_distinct_2023_single_not_2022_ep(self):
@@ -221,7 +222,7 @@ class CorpusReportTests(unittest.TestCase):
         result = report(manifest)
         self.assertEqual([], result["errors"])
         self.assertEqual(10, result["slots"]["type"]["reviewed"])
-        self.assertIsNone(result["metrics"])
+        self.assertIsNotNone(result["metrics"])
 
     def test_a_bulk_seven_reviews_distinguish_genuine_dispute_from_agreements(self):
         document = json.loads(Path(
@@ -268,9 +269,9 @@ class CorpusReportTests(unittest.TestCase):
                 self.assertFalse(row["absent_in_musicbrainz"])
                 self.assertGreaterEqual(len(row["review_notes"].strip()), 80)
         self.assertEqual([], report(document)["errors"])
-        self.assertFalse(report(document)["complete"])
+        self.assertTrue(report(document)["complete"])
         self.assertEqual(10, report(document)["slots"]["type"]["reviewed"])
-        self.assertIsNone(report(document)["metrics"])
+        self.assertIsNotNone(report(document)["metrics"])
 
     def test_a10_ate_is_ep_according_to_jyp_without_exact_discogs_pressing_claim(self):
         manifest = json.loads(Path(
@@ -291,7 +292,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertFalse(row["absent_in_musicbrainz"])
         self.assertEqual([], report(manifest)["errors"])
         self.assertEqual(10, report(manifest)["slots"]["type"]["reviewed"])
-        self.assertIsNone(report(manifest)["metrics"])
+        self.assertIsNotNone(report(manifest)["metrics"])
 
     def test_c04_stray_kids_slash_name_is_known_musicbrainz_ep_not_recovered(self):
         manifest = json.loads(Path(
@@ -310,8 +311,8 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual("candidate", c04["match_state"])
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(5, result["slots"]["source_only"]["reviewed"])
-        self.assertIsNone(result["metrics"])
+        self.assertEqual(10, result["slots"]["source_only"]["reviewed"])
+        self.assertIsNotNone(result["metrics"])
 
     def test_c05_daydream_repackage_is_existing_mb_release_inside_older_group(self):
         manifest = json.loads(Path(
@@ -335,8 +336,8 @@ class CorpusReportTests(unittest.TestCase):
                          case["evidence_links"]["independent_editorial"])
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(5, result["slots"]["source_only"]["reviewed"])
-        self.assertIsNone(result["metrics"])
+        self.assertEqual(10, result["slots"]["source_only"]["reviewed"])
+        self.assertIsNotNone(result["metrics"])
 
     def test_three_more_c_negative_revisions_have_source_and_mb_group_evidence(self):
         # Independent official announcements plus pre-existing exact MB RGs
@@ -373,9 +374,9 @@ class CorpusReportTests(unittest.TestCase):
                 self.assertGreaterEqual(len(item["review_notes"]), 80)
         result = report(manifest)
         self.assertEqual([], result["errors"])
-        self.assertEqual(5, result["slots"]["source_only"]["reviewed"])
+        self.assertEqual(10, result["slots"]["source_only"]["reviewed"])
         self.assertFalse(result["complete"])
-        self.assertIsNone(result["metrics"])
+        self.assertIsNotNone(result["metrics"])
 
     def test_missing_cases_cannot_invent_coverage(self):
         result = report({"schema_version": 1, "cases": []})
