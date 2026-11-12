@@ -1,12 +1,15 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsArtistGroupPage
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowCatalog
 import com.music.bitchord.data.catalog.metadata.discogs.collectCompleteDiscogsArtistGroupTitles
 import com.music.bitchord.data.catalog.metadata.discogs.collectCompleteDiscogsArtistReleaseTitles
 import com.music.bitchord.data.catalog.metadata.discogs.completeDiscogsArtistKnownTitles
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 /** Never declare a Discogs-only release absent from a partially read MB catalog. */
@@ -59,6 +62,19 @@ class DiscogsArtistCatalogCompletionTest {
         assertEquals(true, completeDiscogsArtistKnownTitles(
             canonicalGroup, exactReleases
         )?.contains("ROMANCE : UNTOLD"))
+    }
+
+    @Test fun knownReleaseTitleSuppressesDaydreamButNotDistinctRemix() {
+        val known = completeDiscogsArtistKnownTitles(
+            setOf("ROMANCE : UNTOLD"),
+            setOf("ROMANCE : UNTOLD -daydream-"),
+        ) ?: error("Complete MB title set")
+        val matcher = DiscogsShadowCatalog.knownTitlePredicate(
+            "ENHYPEN", known,
+        )
+        assertTrue(matcher("Romance: Untold -Daydream-"))
+        assertFalse(matcher("Romance: Untold -Daydream- (Live)"))
+        assertFalse(matcher("Romance: Untold -Daydream- / Acoustic"))
     }
 
     @Test fun incompleteReleaseBrowseFailsClosedWithoutRenderingSourceOnly() = runBlocking {
