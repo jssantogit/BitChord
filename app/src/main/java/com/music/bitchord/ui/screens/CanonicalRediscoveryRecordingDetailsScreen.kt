@@ -2,14 +2,12 @@ package com.music.bitchord.ui.screens
 
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -21,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.ui.unit.dp
 import androidx.room.InvalidationTracker
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
@@ -54,6 +54,19 @@ internal sealed interface CanonicalRediscoveryRecordingState {
         val title: String,
         val artistDisplay: String,
     ) : CanonicalRediscoveryRecordingState
+}
+
+/** Use the app's native vector and 40dp circle, not Material's back button. */
+@Composable
+internal fun RediscoveryBackAction(label: String, onClick: () -> Unit) {
+    Box(Modifier.size(40.dp).testTag("rediscovery-native-back")) {
+        CircleIconButton(
+            icon = PlaylistEditorIcons.Back,
+            contentDescription = label,
+            onClick = onClick,
+            size = 40.dp,
+        )
+    }
 }
 
 private suspend fun loadCanonicalRecordingDetails(
@@ -122,12 +135,10 @@ internal fun CanonicalRediscoveryRecordingContent(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = stringResource(Res.string.rediscovery_close),
-                    )
-                }
+                RediscoveryBackAction(
+                    label = stringResource(Res.string.rediscovery_close),
+                    onClick = onBack,
+                )
                 Text(
                     text = stringResource(Res.string.rediscovery_title),
                     style = MaterialTheme.typography.titleLarge,
