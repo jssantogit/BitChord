@@ -37,7 +37,9 @@ class TitleTriageTest(unittest.TestCase):
 
     def test_no_title_match_is_never_proof_absent(self):
         doc=editions(barcodes=[]);doc['observations'][0]['title']='Possible'
-        r=triage(index(),doc,prior(),lambda _: response(count=0))
+        def empty(url):
+            return {'count': 0, 'releases': []} if '/ws/2/release/?' in url else response(count=0)
+        r=triage(index(),doc,prior(),empty)
         self.assertEqual('no_title_index_hit_not_absence',r['observations'][0]['status'])
         self.assertFalse(r['observations'][0]['confirmed_missing_from_musicbrainz'])
 
@@ -69,9 +71,9 @@ class TitleTriageTest(unittest.TestCase):
         urls = []
         def get(url):
             urls.append(url)
-            return response(count=0)
+            return {'count': 0, 'releases': []} if '/ws/2/release/?' in url else response(count=0)
         result = triage(index(), doc, prior(), get)
-        self.assertEqual(1, len(urls))
+        self.assertEqual(2, len(urls))
         self.assertEqual("no_title_index_hit_not_absence",
                          result["observations"][0]["status"])
         self.assertFalse(result["observations"][0]["confirmed_missing_from_musicbrainz"])
