@@ -429,4 +429,79 @@ class MusicBrainzCatalogGraphTest {
         assertEquals(emptyList<String>(), graph.lookupRecordingCoverReleases(original))
     }
 
+
+    @Test fun declaredTrackCountLargerThanReturnedRowsMustNotBecomeEditionDetail() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Truncated edition",
+                    "media":[{"position":1,"track-count":2,"tracks":[{
+                        "id":"$track","title":"Only first track",
+                        "recording":{"id":"$recording","title":"Only first track"}
+                    }]}]}"""
+            },
+        ))
+        // Partial source data must not be accepted as a complete edition, cached
+        // as a complete tracklist or preferred over a previously cached edition.
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
+    @Test fun declaredTrackCountWithUndecodableRecordingCannotBecomeCompleteDetail() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Two declared tracks",
+                    "media":[{"position":1,"track-count":2,"tracks":[
+                        {"id":"$track","title":"Valid","recording":{"id":"$recording"}},
+                        {"id":"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                         "title":"Undecodable","recording":{"id":"not-an-mbid"}}
+                    ]}]}"""
+            },
+        ))
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
+    @Test fun missingTracksOfOneDeclaredMediumCannotPublishOtherMediumAsComplete() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Two media edition",
+                    "media":[
+                        {"position":1,"track-count":1,"tracks":[{
+                            "id":"$track","title":"Disc one",
+                            "recording":{"id":"$recording"}
+                        }]},
+                        {"position":2,"track-count":1}
+                    ]}"""
+            },
+        ))
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
+    @Test fun declaredTrackCountCannotBeSatisfiedByDuplicateTrackIds() = runBlocking {
+        val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = """{"id":"$worldwide","title":"Duplicate track identities",
+                    "media":[{"track-count":2,"tracks":[
+                        {"id":"$track","title":"Same","recording":{"id":"$recording"}},
+                        {"id":"$track","title":"Same","recording":{"id":"$recording"}}
+                    ]}]}"""
+            },
+        ))
+        assertTrue(graph.lookupRelease(worldwide) is MusicBrainzCatalogGraphResult.Failure)
+    }
+
 }
