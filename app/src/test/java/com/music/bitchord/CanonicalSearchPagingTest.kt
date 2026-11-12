@@ -291,6 +291,30 @@ class CanonicalSearchPagingTest {
             canonicalSearchRowsWithoutRedundantEditions(listOf(unknown)))
     }
 
+    @Test fun groupArrivingLaterReplacesIdenticallyTitledEditionCardWithoutHidingVariant() {
+        val groupMbid = "73403a9a-ef08-4747-8e5a-4a59eb65506c"
+        val edition = CanonicalCatalogSearchRow(
+            "1e2823b2-9388-4354-85f9-362983c5f284",
+            CanonicalSearchKind.RELEASE, "EASY", "LE SSERAFIM",
+            coverGroupMbid = groupMbid,
+        )
+        val group = CanonicalCatalogSearchRow(
+            groupMbid, CanonicalSearchKind.RELEASE_GROUP, "EASY", "LE SSERAFIM",
+            releaseKind = "EP",
+        )
+        val firstPage = canonicalProgressiveSearchPreview(emptyList(), listOf(edition))
+        assertEquals(listOf(edition), firstPage)
+        val secondPage = canonicalProgressiveSearchPreview(firstPage, listOf(group))
+        assertEquals(listOf(group), secondPage)
+        val distinct = edition.copy(
+            musicBrainzId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            title = "EASY (English ver.)",
+        )
+        assertEquals(listOf(distinct, group), canonicalProgressiveSearchPreview(
+            secondPage, listOf(distinct),
+        ))
+    }
+
     private fun page(
         total: Int, offset: Int, raw: Int,
     ): MusicBrainzCatalogSearchResult.Success<String> =
