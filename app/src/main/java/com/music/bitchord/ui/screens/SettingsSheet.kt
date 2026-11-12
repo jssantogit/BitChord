@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.ui.components.appleSettingsSwitchColors
+import com.music.bitchord.ui.components.appleSettingsSliderColors
 
 import com.music.bitchord.wear.WatchInstaller
 import android.content.Context
@@ -2656,11 +2657,7 @@ internal fun SliderRow(
     steps: Int,
     subtitle: String? = null,
 ) {
-    val colors = SliderDefaults.colors(
-        thumbColor = MaterialTheme.colorScheme.primary,
-        activeTrackColor = MaterialTheme.colorScheme.primary,
-        inactiveTrackColor = MaterialTheme.colorScheme.outline,
-    )
+    val colors = appleSettingsSliderColors()
     Column(Modifier.padding(start = ROW_INSET, end = ROW_INSET, top = 12.dp, bottom = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
