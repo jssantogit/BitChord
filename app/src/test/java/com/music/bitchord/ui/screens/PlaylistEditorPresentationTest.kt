@@ -2,7 +2,9 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -56,6 +58,37 @@ class PlaylistEditorPresentationTest {
         compose.onNodeWithTag("native-compact-overflow").assertExists()
         compose.onNodeWithText("Seus filtros").performClick()
         compose.runOnIdle { assertEquals(1, opened) }
+    }
+
+    @Test fun exitingCompactMenuKeepsItsAnimationButPreventsRepeatActions() {
+        val expanded = mutableStateOf(true)
+        var actions = 0
+        compose.setContent {
+            MaterialTheme {
+                com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+                    expanded = expanded.value,
+                    onDismissRequest = { expanded.value = false },
+                ) {
+                    com.music.bitchord.ui.components.NativeCompactMenuItem(
+                        label = "Ação temporária",
+                        onClick = {
+                            actions++
+                            expanded.value = false
+                        },
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText("Ação temporária").assertExists()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("Ação temporária").performClick()
+        compose.mainClock.advanceTimeByFrame()
+        compose.runOnIdle { assertEquals(1, actions) }
+        // The exit transition remains visible, but its clickable row is now disabled.
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+        compose.onNodeWithTag("native-compact-menu-item").assertIsNotEnabled()
+        compose.mainClock.advanceTimeBy(300L)
+        compose.onNodeWithTag("native-compact-overflow").assertDoesNotExist()
     }
 
     @Test fun filterManagerUsesPlainTitleAndTopRightCreateControl() {
