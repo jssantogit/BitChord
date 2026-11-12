@@ -1,6 +1,8 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 
@@ -81,6 +83,29 @@ internal fun canonicalArtistContinuationRows(
     (previous + incoming).distinctBy {
         it.kind to it.musicBrainzId.lowercase(java.util.Locale.ROOT)
     }
+
+/**
+ * Linked official Release editions may clarify the displayed title of a
+ * composite ReleaseGroup, without a new network call or changing its MBID.
+ * Text similarity alone never authorizes an identity or title replacement.
+ */
+internal fun canonicalSearchRowsWithOfficialEditionTitles(
+    rows: List<CanonicalCatalogSearchRow>,
+    editions: List<MusicBrainzReleaseHit>,
+): List<CanonicalCatalogSearchRow> {
+    if (rows.none { it.kind == CanonicalSearchKind.RELEASE_GROUP && it.title.contains(" & ") } ||
+        editions.isEmpty()) return rows
+    val byGroup = editions.filter {
+        it.releaseGroupMbid != null && isCuratedMusicBrainzRelease(it)
+    }.groupBy { requireNotNull(it.releaseGroupMbid).lowercase(java.util.Locale.ROOT) }
+    return rows.map { row ->
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP || !row.title.contains(" & "))
+            return@map row
+        val official = byGroup[row.musicBrainzId.lowercase(java.util.Locale.ROOT)].orEmpty()
+        val title = canonicalOfficialGroupDisplayTitle(row.title, official)
+        if (title == row.title) row else row.copy(title = title)
+    }
+}
 
 /** Live facts win over cache. Only failed entity kinds may use stale evidence. */
 internal fun mergeCanonicalSearchRows(
