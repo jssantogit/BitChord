@@ -40,6 +40,8 @@ class NativeSearchLongPressComposeTest {
         }
         compose.onNodeWithTag("native-search-result-row")
             .performTouchInput { longClick() }
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+        compose.onNodeWithTag("native-compact-menu-item").assertExists()
         compose.onNodeWithText("Ver detalhes").assertExists()
         compose.onNodeWithText("Ver detalhes").performClick()
         compose.runOnIdle { assertEquals(1, details) }
