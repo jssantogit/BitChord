@@ -104,7 +104,7 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual(0, result["reviewed_corpus_cases"])
         self.assertEqual(0, result["verified_edition_count"])
 
-    def test_five_lead_budget_is_distributed_across_artists_not_first_name(self):
+    def test_eight_lead_budget_is_distributed_across_artists_not_first_name(self):
         # Previously a sort by artist name put the first five groups from
         # one artist into the entire five-Master budget. This defeats
         # multi-artist A-type catalog research even with complete source rows.
@@ -131,7 +131,7 @@ class MasterLeadScoutTest(unittest.TestCase):
                 return edition_page(gid, artists[n][1])
             raise AssertionError(url)
         result = scout(artists, set(), get)
-        self.assertEqual(5, len(result["leads"]))
+        self.assertEqual(MASTER_LIMIT, len(result["leads"]))
         self.assertEqual({name for name, _ in artists},
                          {lead["artist"] for lead in result["leads"]})
         self.assertEqual(0, result["verified_edition_count"])
@@ -212,7 +212,7 @@ class MasterLeadScoutTest(unittest.TestCase):
                 return edition_page(group, A)
             raise AssertionError(url)
         result = scout([("Artist A", A)], set(), get)
-        self.assertEqual(MASTER_LIMIT, len(result["leads"]))
+        self.assertEqual(6, len(result["leads"]))
         self.assertIn("ZZZ Single", [x["group_title"] for x in result["leads"]])
         self.assertEqual("Single", result["leads"][0]["primary_type_hint"])
         self.assertEqual(0, result["verified_edition_count"])
