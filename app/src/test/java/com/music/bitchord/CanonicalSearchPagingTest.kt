@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import com.music.bitchord.ui.CanonicalSearchPageCursors
 import com.music.bitchord.ui.canonicalArtistContinuationRows
+import com.music.bitchord.ui.canonicalSearchRowsWithOfficialEditionTitles
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
@@ -109,6 +111,46 @@ class CanonicalSearchPagingTest {
         )
         val merged = canonicalArtistContinuationRows(listOf(first), listOf(rawDuplicate, next))
         assertEquals(listOf(first, next), merged)
+    }
+
+
+    @Test fun officialEditionCanClarifyCompositeReleaseGroupButNeverChangeItsIdentity() {
+        val id = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val row = CanonicalCatalogSearchRow(
+            id, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+        )
+        val official = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "How Sweet", "KR",
+            "2024-05-24", "NewJeans", status = "Official", releaseGroupMbid = id,
+        )
+        val result = canonicalSearchRowsWithOfficialEditionTitles(listOf(row), listOf(official))
+        assertEquals(id, result.single().musicBrainzId)
+        assertEquals("How Sweet", result.single().title)
+        assertEquals("Single", result.single().releaseKind)
+        assertEquals("How Sweet & Bubble Gum", row.title)
+    }
+
+    @Test fun officialTitleProofNeverComesFromAnotherGroupOrBootleg() {
+        val id = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val row = CanonicalCatalogSearchRow(
+            id, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+        )
+        val candidate = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "How Sweet", "KR",
+            "2024-05-24", "NewJeans", status = "Official", releaseGroupMbid = id,
+        )
+        val invalid = listOf(
+            candidate.copy(releaseGroupMbid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            candidate.copy(status = "Bootleg"),
+            candidate.copy(isVideoOnlyMedia = true),
+            candidate.copy(releaseGroupMbid = null),
+        )
+        invalid.forEach { edition ->
+            assertEquals(row,
+                canonicalSearchRowsWithOfficialEditionTitles(listOf(row), listOf(edition)).single())
+        }
     }
 
     private fun page(
