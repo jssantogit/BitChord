@@ -13,6 +13,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -38,6 +41,12 @@ class LocalFolderSelectionPresentationTest {
             .assertHeightIsAtLeast(44.dp)
         compose.onNodeWithText("Cancelar").performClick()
         compose.runOnIdle { assertEquals(1, clears) }
+    }
+
+    @Test fun groupedSelectionUsesNativeCheckAndAppleBlueForBothThemes() {
+        assertSame(PlaylistEditorIcons.Check, localFolderSelectionCheckIcon())
+        assertEquals(appleMusicKeyColor(false), localFolderSelectionMarkColor(dark = false))
+        assertEquals(appleMusicKeyColor(true), localFolderSelectionMarkColor(dark = true))
     }
 
     @Test fun unavailableDestructiveDeleteCannotFire() {
