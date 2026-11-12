@@ -317,6 +317,88 @@ class MusicBrainzPublicMetadataIndexTest {
         } finally { db.close() }
     }
 
+    @Test fun completeOfficialArtistBrowsePrunesOnlyObsoleteMembershipForExactArtist() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            val artistA = "b51c672b-85e0-48fe-8648-470a2422229f"
+            val artistB = "49204a7a-ed85-407a-828f-6fd46f1d8126"
+            val retained = MusicBrainzReleaseGroupHit(
+                "11111111-1111-4111-8111-111111111111", "Correct album", "Album",
+                "2025-01-01", "aespa")
+            val obsolete = MusicBrainzReleaseGroupHit(
+                "22222222-2222-4222-8222-222222222222", "Wrong old attribution",
+                "EP", "2024-01-01", "aespa")
+            val legacy = MusicBrainzReleaseGroupHit(
+                "33333333-3333-4333-8333-333333333333", "Legacy unverified",
+                "Single", "2023-01-01", "aespa")
+            val artists = index.persistArtists(listOf(
+                MusicBrainzArtistHit(artistA, "aespa", null, "KR"),
+                MusicBrainzArtistHit(artistB, "NewJeans", null, "KR"),
+            ))
+            val groupIds = index.persistReleaseGroups(listOf(retained, obsolete, legacy))
+            index.persistArtistGroups(artistA, listOf(retained, obsolete))
+            index.persistArtistGroups(artistB, listOf(obsolete))
+            db.catalogDao().upsertMusicBrainzArtistGroup(
+                CatalogMusicBrainzArtistGroupEntity(
+                    requireNotNull(artists[artistA]), requireNotNull(groupIds[legacy.musicBrainzId]),
+                    publicationEvidence = null,
+                ))
+            assertEquals(3, db.catalogDao().musicBrainzArtistGroupMembershipCount(
+                requireNotNull(artists[artistA])))
+            val snapshot = com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPager
+                .singlePageOutcome(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage(
+                    listOf(retained), total = 1, offset = 0, consumedCount = 1))
+            assertEquals(true, snapshot.reconciliationEligible)
+            assertEquals(true, index.reconcileVerifiedArtistGroups(artistA, snapshot))
+            assertEquals(listOf(retained.musicBrainzId),
+                index.cachedArtistGroups(artistA).map { it.musicBrainzId })
+            assertEquals(listOf(obsolete.musicBrainzId),
+                index.cachedArtistGroups(artistB).map { it.musicBrainzId })
+            assertEquals(2, db.catalogDao().musicBrainzArtistGroupMembershipCount(
+                requireNotNull(artists[artistA])))
+            // Never delete the ReleaseGroup identity, the other artist link,
+            // or the legacy association that has no website-default-v1 proof.
+            assertEquals(requireNotNull(groupIds[obsolete.musicBrainzId]),
+                db.catalogDao().entityIdForExternalIdentity(
+                    "musicbrainz", "release-group", obsolete.musicBrainzId))
+            assertEquals(requireNotNull(groupIds[legacy.musicBrainzId]),
+                db.catalogDao().entityIdForExternalIdentity(
+                    "musicbrainz", "release-group", legacy.musicBrainzId))
+            assertEquals(false, index.reconcileVerifiedArtistGroups(artistB,
+                com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPager
+                    .singlePageOutcome(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage(
+                        emptyList<MusicBrainzReleaseGroupHit>(), 0, 0, 0))))
+            assertEquals(listOf(obsolete.musicBrainzId),
+                index.cachedArtistGroups(artistB).map { it.musicBrainzId })
+        } finally { db.close() }
+    }
+
+    @Test fun incompleteBrowseNeverPrunesPriorOfficialArtistMembership() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            val index = MusicBrainzCatalogIndex(db)
+            val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
+            val a = MusicBrainzReleaseGroupHit(
+                "11111111-1111-4111-8111-111111111111", "First EP", "EP",
+                "2024-01-01", "aespa")
+            val b = MusicBrainzReleaseGroupHit(
+                "22222222-2222-4222-8222-222222222222", "Second EP", "EP",
+                "2024-05-01", "aespa")
+            index.persistArtists(listOf(MusicBrainzArtistHit(artist, "aespa", null, "KR")))
+            index.persistArtistGroups(artist, listOf(a, b))
+            val incomplete = com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPager
+                .singlePageOutcome(com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage(
+                    listOf(a), 2, 0, 1))
+            assertEquals(false, incomplete.reconciliationEligible)
+            assertEquals(false, index.reconcileVerifiedArtistGroups(artist, incomplete))
+            assertEquals(setOf(a.musicBrainzId, b.musicBrainzId),
+                index.cachedArtistGroups(artist).map { it.musicBrainzId }.toSet())
+        } finally { db.close() }
+    }
+
     @Test fun cachedArtistDiscographyReusesVerifiedCoverWithoutRequestingCAAAgain() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()

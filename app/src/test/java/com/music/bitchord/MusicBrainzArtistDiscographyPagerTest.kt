@@ -86,6 +86,57 @@ class MusicBrainzArtistDiscographyPagerTest {
         assertEquals(null, emptyArtist.nextOffset)
     }
 
+    @Test fun onlyAnExactPositiveUnfilteredFirstPageCanReconcileArtistMembership() {
+        val a = group("11111111-1111-4111-8111-111111111111")
+        val b = group("22222222-2222-4222-8222-222222222222")
+        val complete = MusicBrainzCatalogPage(listOf(a, b), 2, 0, consumedCount = 2)
+        assertTrue(MusicBrainzArtistDiscographyPager.singlePageOutcome(complete)
+            .reconciliationEligible)
+        // A zero total must not erase old associations: zero can be
+        // transient/filtered even if the client calls this page complete.
+        assertFalse(MusicBrainzArtistDiscographyPager.singlePageOutcome(
+            complete.copy(total = 0, consumedCount = 0, items = emptyList()))
+            .reconciliationEligible)
+        assertFalse(MusicBrainzArtistDiscographyPager.singlePageOutcome(
+            complete.copy(offset = 1)).reconciliationEligible)
+        assertFalse(MusicBrainzArtistDiscographyPager.singlePageOutcome(
+            complete.copy(items = listOf(a), consumedCount = 2)).reconciliationEligible)
+        assertFalse(MusicBrainzArtistDiscographyPager.singlePageOutcome(
+            complete.copy(items = listOf(a, a))).reconciliationEligible)
+        assertFalse(MusicBrainzArtistDiscographyPager.singlePageOutcome(
+            complete.copy(items = listOf(a, group("not-a-mbid")))).reconciliationEligible)
+    }
+
+    @Test fun stableFullyDecodedMultiPageBrowseCanReconcileButDuplicateCannot() = runBlocking {
+        val a = group("11111111-1111-4111-8111-111111111111")
+        val b = group("22222222-2222-4222-8222-222222222222")
+        val c = group("33333333-3333-4333-8333-333333333333")
+        val first = MusicBrainzCatalogPage(listOf(a, b), 3, 0, consumedCount = 2)
+        val complete = MusicBrainzArtistDiscographyPager.collect(first,
+            fetch = { offset ->
+                assertEquals(2, offset)
+                MusicBrainzCatalogGraphResult.Success(
+                    MusicBrainzCatalogPage(listOf(c), 3, 2, consumedCount = 1))
+            },
+            onPage = { _, _ -> },
+        )
+        assertTrue(complete.complete)
+        assertTrue(complete.reconciliationEligible)
+        val duplicate = MusicBrainzArtistDiscographyPager.collect(first,
+            fetch = { MusicBrainzCatalogGraphResult.Success(
+                MusicBrainzCatalogPage(listOf(a), 3, 2, consumedCount = 1)) },
+            onPage = { _, _ -> },
+        )
+        assertTrue(duplicate.complete)
+        assertFalse(duplicate.reconciliationEligible)
+        val partial = MusicBrainzArtistDiscographyPager.collect(first,
+            fetch = { MusicBrainzCatalogGraphResult.Failure(
+                MusicBrainzCatalogSearchFailure.UNAVAILABLE) },
+            onPage = { _, _ -> },
+        )
+        assertFalse(partial.reconciliationEligible)
+    }
+
     @Test fun boundedContinuationLeavesExplicitCursorAndDoesNotClaimCompleteness() = runBlocking {
         val first = MusicBrainzCatalogPage(listOf(group("a")), 300, 0, consumedCount = 75)
         val calls = mutableListOf<Int>()
