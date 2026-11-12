@@ -481,10 +481,7 @@ internal fun CanonicalRecentAdditionsGrid(
         if (viewType == LibraryViewType.LIST) {
             items(recent, key = { it.id }) { track ->
                 var actionsOpen by remember(track.id) { mutableStateOf(false) }
-                Box(Modifier.fillMaxWidth().longPressMenuClickable(
-                    onClick = { onPlayTrack(track.id) },
-                    onLongClick = if (onTrackAction != null) ({ actionsOpen = true }) else null,
-                )) {
+                Box(Modifier.fillMaxWidth()) {
                 LibraryRow(
                     title = track.title,
                     subtitle = track.artist,
@@ -493,6 +490,8 @@ internal fun CanonicalRecentAdditionsGrid(
                         SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
                     },
                     onClick = { onPlayTrack(track.id) },
+                    onLongPress = if (onTrackAction != null)
+                        ({ actionsOpen = true }) else null,
                     horizontalPadding = PAGE_GUTTER,
                     artworkSize = 52.dp,
                 )
