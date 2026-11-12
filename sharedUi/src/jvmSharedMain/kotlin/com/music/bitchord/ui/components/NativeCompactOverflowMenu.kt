@@ -37,6 +37,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntOffset
@@ -186,6 +189,7 @@ fun NativeCompactMenuItem(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     destructive: Boolean = false,
+    selected: Boolean = false,
 ) {
     val actionGate = LocalNativeCompactMenuActionGate.current
     val actionEnabled = enabled && LocalNativeCompactMenuActionsEnabled.current &&
@@ -196,6 +200,7 @@ fun NativeCompactMenuItem(
     Row(
         modifier = Modifier.fillMaxWidth()
             .testTag("native-compact-menu-item")
+            .semantics { this.selected = selected }
             .clickable(enabled = actionEnabled) {
                 if (actionGate?.consumeOnce() != false) onClick()
             }
@@ -208,7 +213,12 @@ fun NativeCompactMenuItem(
             Icon(icon, contentDescription = null, tint = ink,
                 modifier = Modifier.size(22.dp))
         }
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = ink)
+        Text(label, modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge, color = ink)
+        if (selected) {
+            Icon(PlaylistEditorIcons.Check, contentDescription = null,
+                tint = ink, modifier = Modifier.size(18.dp))
+        }
     }
 }
 
