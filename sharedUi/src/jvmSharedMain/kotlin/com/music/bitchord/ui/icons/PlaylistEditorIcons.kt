@@ -145,6 +145,6 @@ object PlaylistEditorIcons {
         arcToRelative(9f, 9f, 0f, true, true, 18f, 0f)
         moveTo(7.5f, 12f); lineTo(10.5f, 15f); lineTo(16.5f, 9f)
     } }
-    // Same vertical three-dot glyph on a circular platter as Now Playing.
-    val More = AppleQueueVectors.More
+    // Toolbar draws one circle of its own; the glyph cannot include another.
+    val More = AppleQueueVectors.MorePlain
 }
