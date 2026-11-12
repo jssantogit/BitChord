@@ -3,6 +3,7 @@ package com.music.bitchord.ui.screens
 import android.os.Build
 import com.music.bitchord.R
 import com.music.bitchord.ui.discogsEditorialArtistShelves
+import com.music.bitchord.ui.canonicalArtistCurrentExpandedShelf
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsGroupEditorialEvidence
 
 import androidx.compose.animation.AnimatedContent
@@ -410,6 +411,7 @@ fun DetailScreen(
             groupProofs = groupProofs,
             albumsHeading = albumHeading,
             singlesHeading = singlesHeading,
+            artistName = page.title,
         )
     }
     LaunchedEffect(groupProofs) {
@@ -642,8 +644,15 @@ fun DetailScreen(
         }
     }
 
+    // The Show All grid must render the current projected artist shelf, not
+    // the stale raw HomeShelf captured when the user first tapped More.
+    val displayedActiveShelf = if (publicArtistMbid != null)
+        canonicalArtistCurrentExpandedShelf(
+            activeShelf, editorialArtistSections, albumHeading, singlesHeading,
+        )
+    else activeShelf
     AnimatedContent(
-        targetState = activeShelf,
+        targetState = displayedActiveShelf,
         transitionSpec = {
             fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
         },
