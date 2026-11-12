@@ -29,6 +29,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,6 +81,21 @@ internal fun compactOverflowPopupPosition(
 /** Keep exiting menu rows visible for the fade, but no longer actionable. */
 private val LocalNativeCompactMenuActionsEnabled = compositionLocalOf { true }
 
+/** One tap consumes the whole popup's action gate before its dismiss animation. */
+private class NativeCompactMenuActionGate {
+    var consumed by mutableStateOf(false)
+        private set
+
+    fun consumeOnce(): Boolean {
+        if (consumed) return false
+        consumed = true
+        return true
+    }
+}
+
+private val LocalNativeCompactMenuActionGate =
+    compositionLocalOf<NativeCompactMenuActionGate?> { null }
+
 /**
  * One compact popup surface for Home/Explore and the playlist editor.
  *
@@ -98,6 +116,8 @@ fun NativeCompactOverflowMenu(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val visible = remember { MutableTransitionState(false) }
+    // A new opening gets a new gate, including when reopening mid-exit.
+    val actionGate = remember(expanded) { NativeCompactMenuActionGate() }
     LaunchedEffect(expanded) { visible.targetState = expanded }
     val reduceMotion = LocalReduceAnimations.current
     val duration = if (reduceMotion) 0 else 170
@@ -144,7 +164,10 @@ fun NativeCompactOverflowMenu(
                     shadowElevation = 10.dp,
                     border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    CompositionLocalProvider(LocalNativeCompactMenuActionsEnabled provides expanded) {
+                    CompositionLocalProvider(
+                        LocalNativeCompactMenuActionsEnabled provides expanded,
+                        LocalNativeCompactMenuActionGate provides actionGate,
+                    ) {
                         Column(
                             modifier = Modifier.padding(vertical = 5.dp),
                             content = content,
@@ -164,14 +187,18 @@ fun NativeCompactMenuItem(
     enabled: Boolean = true,
     destructive: Boolean = false,
 ) {
-    val actionEnabled = enabled && LocalNativeCompactMenuActionsEnabled.current
+    val actionGate = LocalNativeCompactMenuActionGate.current
+    val actionEnabled = enabled && LocalNativeCompactMenuActionsEnabled.current &&
+        (actionGate?.consumed != true)
     val color = if (destructive) MaterialTheme.colorScheme.error
         else MaterialTheme.colorScheme.onSurface
     val ink = color.copy(alpha = if (enabled) 1f else 0.4f)
     Row(
         modifier = Modifier.fillMaxWidth()
             .testTag("native-compact-menu-item")
-            .clickable(enabled = actionEnabled, onClick = onClick)
+            .clickable(enabled = actionEnabled) {
+                if (actionGate?.consumeOnce() != false) onClick()
+            }
             .heightIn(min = 54.dp)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
