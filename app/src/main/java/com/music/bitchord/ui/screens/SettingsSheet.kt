@@ -3,6 +3,7 @@ package com.music.bitchord.ui.screens
 import com.music.bitchord.ui.components.appleSettingsSwitchColors
 import com.music.bitchord.ui.components.appleSettingsSliderColors
 import com.music.bitchord.ui.theme.appleSelectionAccentColor
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 
 import com.music.bitchord.wear.WatchInstaller
 import android.content.Context
@@ -2638,10 +2639,10 @@ internal fun Badge(text: String) {
     Text(
         text = text.uppercase(Locale.ROOT),
         style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = appleMusicKeyColor(),
         modifier = Modifier
             .clip(RoundedCornerShape(5.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+            .background(appleMusicKeyColor().copy(alpha = 0.16f))
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
