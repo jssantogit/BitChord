@@ -273,17 +273,24 @@ def scout(artists: list[tuple[str, str]], known_b_groups: set[str],
                 continue
             version_state, ids = versions(fetch(
                 f"https://api.discogs.com/masters/{mid}/versions?page=1&per_page=8"))
-            if version_state != "complete_bounded_versions":
+            if version_state not in (
+                    "complete_bounded_versions", "master_too_large_not_exhaustive"):
                 lead["status"] = version_state
                 continue
-            if master["main_release"] not in ids:
-                lead["status"] = "main_release_not_in_versions"
-                continue
-            lead["status"] = "complete_small_master_candidate"
-            lead["version_ids"] = ids
-            # A complete Discogs Master is NOT the same thing as identifying
-            # one corresponding MB Release. List exact candidate MB editions
-            # separately, with no cross-provider identity promotion.
+            if version_state == "complete_bounded_versions":
+                if master["main_release"] not in ids:
+                    lead["status"] = "main_release_not_in_versions"
+                    continue
+                lead["status"] = "complete_small_master_candidate"
+                lead["version_ids"] = ids
+            else:
+                # We have NOT observed every Discogs version, and must not
+                # name a corresponding pressing. An independent, complete MB
+                # Release browse can still list exact *canonical* edition IDs
+                # for future review without selecting a Discogs version.
+                lead["status"] = version_state
+            # Only source-complete Official MusicBrainz Release IDs are leads;
+            # no cross-provider correspondence is promoted by this browse.
             try:
                 editions, state = release_browse(
                     fetch(release_index_url(lead["group_mbid"])),
