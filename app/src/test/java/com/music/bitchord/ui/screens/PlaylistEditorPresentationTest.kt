@@ -121,6 +121,32 @@ class PlaylistEditorPresentationTest {
         }
     }
 
+    @Test fun compactPopupRearmsActionsAfterItHasActuallyBeenReopened() {
+        val expanded = mutableStateOf(true)
+        var actions = 0
+        compose.setContent {
+            MaterialTheme {
+                com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+                    expanded = expanded.value,
+                    onDismissRequest = { expanded.value = false },
+                ) {
+                    com.music.bitchord.ui.components.NativeCompactMenuItem(
+                        label = "Reabrir menu",
+                        onClick = {
+                            actions++
+                            expanded.value = false
+                        },
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText("Reabrir menu").performClick()
+        compose.onNodeWithTag("native-compact-overflow").assertDoesNotExist()
+        compose.runOnIdle { expanded.value = true }
+        compose.onNodeWithText("Reabrir menu").performClick()
+        compose.runOnIdle { assertEquals(2, actions) }
+    }
+
     @Test fun filterManagerUsesPlainTitleAndTopRightCreateControl() {
         var created = 0
         compose.setContent {

@@ -94,6 +94,9 @@ private class NativeCompactMenuActionGate {
         consumed = true
         return true
     }
+
+    fun close() { consumed = true }
+    fun reset() { consumed = false }
 }
 
 private val LocalNativeCompactMenuActionGate =
@@ -119,9 +122,13 @@ fun NativeCompactOverflowMenu(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val visible = remember { MutableTransitionState(false) }
-    // A new opening gets a new gate, including when reopening mid-exit.
-    val actionGate = remember(expanded) { NativeCompactMenuActionGate() }
-    LaunchedEffect(expanded) { visible.targetState = expanded }
+    // Keep the same gate through the exit fade: recreating it at dismiss
+    // re-enabled rows held by the old Popup subcomposition.
+    val actionGate = remember { NativeCompactMenuActionGate() }
+    LaunchedEffect(expanded) {
+        if (expanded) actionGate.reset() else actionGate.close()
+        visible.targetState = expanded
+    }
     val reduceMotion = LocalReduceAnimations.current
     val duration = if (reduceMotion) 0 else 170
     val exitDuration = if (reduceMotion) 0 else 130

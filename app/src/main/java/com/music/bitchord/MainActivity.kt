@@ -87,6 +87,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.Surface
@@ -6692,19 +6693,23 @@ internal fun NativeCollectionRatingToolbarAction(
 ) {
     val label = "Avaliar $subject · " +
         com.music.bitchord.ui.components.compactRatingAccessibility(rating)
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier.size(40.dp).semantics(mergeDescendants = true) {
-            this.contentDescription = label
-        },
-    ) {
-        com.music.bitchord.ui.components.CompactRatingIndicator(
-            value = rating,
-            geometry = com.music.bitchord.ui.components.CompactRatingGeometry.STANDALONE,
-            showUnrated = true,
-            size = 30.dp,
-            neutralColor = MaterialTheme.colorScheme.onSurface,
-        )
+    // Preserve the global 40dp control geometry even when rendered alone.
+    // Compose still expands touch hit targets when the visual bounds are small.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(40.dp).semantics(mergeDescendants = true) {
+                this.contentDescription = label
+            },
+        ) {
+            com.music.bitchord.ui.components.CompactRatingIndicator(
+                value = rating,
+                geometry = com.music.bitchord.ui.components.CompactRatingGeometry.STANDALONE,
+                showUnrated = true,
+                size = 30.dp,
+                neutralColor = MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 
