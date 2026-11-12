@@ -256,10 +256,14 @@ class TitleTriageTest(unittest.TestCase):
             {"count": 11, "releases": [valid_row]},
             {"count": 1, "releases": [dict(valid_row, id="invalid")]},
             {"count": 2, "releases": [valid_row, valid_row]},
-            {"count": 1, "releases": [dict(valid_row, title="Different Remix")]},
         ):
             self.assertIsNone(parse_mb_release_search(
                 invalid, ARTIST, "Romance: Untold -Daydream-"))
+        # Legitimate same-artist search hits with other titles are ignored,
+        # never treated as an identical release or as provider corruption.
+        self.assertEqual(([], []), parse_mb_release_search(
+            {"count": 1, "releases": [dict(valid_row, title="Different Remix")]},
+            ARTIST, "Romance: Untold -Daydream-"))
 
 
 if __name__=='__main__': unittest.main()
