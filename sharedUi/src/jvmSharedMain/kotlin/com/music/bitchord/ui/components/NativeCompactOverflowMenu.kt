@@ -10,6 +10,8 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.ui.semantics.selected
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -123,6 +126,7 @@ fun NativeCompactOverflowMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
+    maxContentHeight: Dp? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val visible = remember { MutableTransitionState(false) }
@@ -185,8 +189,13 @@ fun NativeCompactOverflowMenu(
                         LocalNativeCompactMenuActionsEnabled provides expanded,
                         LocalNativeCompactMenuActionGate provides actionGate,
                     ) {
+                        // Long lists (e.g. saved remote filters) scroll inside
+                        // their bounded popup; short menus keep natural height.
+                        val scrollModifier = if (maxContentHeight == null) Modifier else
+                            Modifier.heightIn(max = maxContentHeight)
+                                .verticalScroll(rememberScrollState())
                         Column(
-                            modifier = Modifier.padding(vertical = 5.dp),
+                            modifier = scrollModifier.padding(vertical = 5.dp),
                             content = content,
                         )
                     }
