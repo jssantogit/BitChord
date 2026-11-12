@@ -4,6 +4,9 @@ import android.app.Application
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.catalog.CanonicalLibraryAvailabilityReader
 import com.music.bitchord.data.catalog.RecordingEntity
@@ -60,6 +63,8 @@ class AdaptiveCollectionsLibraryTest {
             )
         }
         compose.runOnIdle { assertEquals(emptyList<CanonicalCollectionIntent>(), actions) }
+        compose.onAllNodesWithTag("native-inline-text-action").assertCountEquals(2)
+        compose.onNodeWithTag("native-adaptive-collection-card").assertExists()
         compose.onNodeWithText("Add to queue").performClick()
         compose.runOnIdle { assertEquals(listOf(CanonicalCollectionIntent.ADD_TO_QUEUE), actions) }
         compose.onNodeWithText("Play").performClick()
