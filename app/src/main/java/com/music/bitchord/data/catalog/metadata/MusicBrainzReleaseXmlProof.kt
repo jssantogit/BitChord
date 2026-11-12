@@ -41,7 +41,10 @@ internal object MusicBrainzReleaseXmlProof {
     ): Boolean {
         val parser = XmlPullParserFactory.newInstance().newPullParser().apply {
             setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, true)
-            setFeature("http://xmlpull.org/v1/doc/features.html#process-docdecl", false)
+            // proves() rejects every DOCTYPE lexically before this parser sees
+            // the input. Do not configure process-docdecl here: some providers
+            // (including KXmlParser) default it to false but throw when asked
+            // to set that unsupported feature explicitly.
             setInput(StringReader(xml))
         }
         val stack = ArrayDeque<Frame>()

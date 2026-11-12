@@ -375,6 +375,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("androidx.compose.ui:ui-test-junit4")
+    // Exercise the concrete XmlPull provider used by the JVM probe for release XML proof.
+    testImplementation("net.sf.kxml:kxml2:2.3.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     // A real HTTP server for the addon tests. The addon protocol is entirely
     // "what does this app send, and what does it do with what comes back", and

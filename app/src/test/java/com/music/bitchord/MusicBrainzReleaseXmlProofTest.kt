@@ -4,9 +4,12 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogTrack
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseJsonCompleteness
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseXmlProof
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
 
 class MusicBrainzReleaseXmlProofTest {
     private val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
@@ -22,6 +25,27 @@ class MusicBrainzReleaseXmlProofTest {
             MusicBrainzCatalogTrack(trackA, recording, "A", 1, 1, null),
             MusicBrainzCatalogTrack(trackB, recording, "B", 1, 2, null),
         ), completeness = completeness)
+
+    @Test fun kxmlDefaultFeatureStillProvesValidZeroPositionsAndRejectsExternalDtdEntities() {
+        val parser = XmlPullParserFactory.newInstance().newPullParser()
+        assertEquals("org.kxml2.io.KXmlParser", parser.javaClass.name)
+        assertFalse(parser.getFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL))
+        assertFalse(runCatching {
+            parser.setFeature(XmlPullParser.FEATURE_PROCESS_DOCDECL, false)
+        }.isSuccess)
+
+        val zeroXml = xml().replace("<position>1</position>", "<position>0</position>")
+            .replace("<position>2</position>", "<position>1</position>")
+        val zeroDetail = detail().copy(tracks = listOf(
+            MusicBrainzCatalogTrack(trackA, recording, "A", 0, 0, null),
+            MusicBrainzCatalogTrack(trackB, recording, "B", 0, 1, null),
+        ))
+        assertTrue(MusicBrainzReleaseXmlProof.proves(zeroXml, release, zeroDetail))
+
+        val externalEntityXml = """<!DOCTYPE metadata [<!ENTITY x SYSTEM "file:///etc/passwd">]>""" +
+            xml().replace("<metadata>", "<metadata>&x;")
+        assertFalse(MusicBrainzReleaseXmlProof.proves(externalEntityXml, release, detail()))
+    }
 
     @Test fun acceptsDistinctTracksSharingRecordingAndRequiresExactListCountsAndOffsets() {
         assertTrue(MusicBrainzReleaseXmlProof.proves(xml(), release, detail()))
