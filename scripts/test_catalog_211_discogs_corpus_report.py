@@ -339,7 +339,7 @@ class CorpusReportTests(unittest.TestCase):
         self.assertEqual(10, result["slots"]["source_only"]["reviewed"])
         self.assertIsNotNone(result["metrics"])
 
-    def test_three_more_c_negative_revisions_have_source_and_mb_group_evidence(self):
+    def test_three_latest_distinct_c_audio_replacements_have_existing_mb_groups(self):
         # Independent official announcements plus pre-existing exact MB RGs
         # disprove these apparent Discogs-only catalog gaps. None proves
         # the same physical Discogs pressing, user UI visibility or recovery.
@@ -350,12 +350,12 @@ class CorpusReportTests(unittest.TestCase):
             "C-06": ("14e1a869-8378-47df-818e-07dfe1d0c7fc",
                      28089088, "Single", "Single",
                      "https://www.universal-music.co.jp/lesserafim/news/2023-07-25-2/"),
-            "C-07": ("cb79234e-c3d3-4973-a3e3-6ec603b3d1f4",
-                     38302455, "Single", "Single",
-                     "https://www.universal-music.co.jp/txt/news/2026-07-23/"),
-            "C-08": ("4e219d4e-c5e0-4ed9-acec-b948c7319b37",
-                     31008160, "EP", "Unknown",
-                     "https://weverse.io/enhypen/notice/19177"),
+            "C-07": ("829216ed-7ab6-434f-a3ab-a504ac32819f",
+                     27107343, "Single", "Single",
+                     "https://www.soompi.com/article/1573203wpp/ive-confirms-april-comeback-date-in-teaser-for-1st-full-album-ive-ive"),
+            "C-08": ("f95117e6-cd4f-4d7b-8e92-f7d216a156cd",
+                     34417612, "Single", "Unknown",
+                     "https://www.enmixx.com/en/discography/a-midsummer-nmixx-dream"),
         }
         for case_id, (group, discogs_release, mb_kind, ref_kind, source) in expectations.items():
             with self.subTest(case=case_id):
@@ -375,7 +375,7 @@ class CorpusReportTests(unittest.TestCase):
         result = report(manifest)
         self.assertEqual([], result["errors"])
         self.assertEqual(10, result["slots"]["source_only"]["reviewed"])
-        self.assertFalse(result["complete"])
+        self.assertTrue(result["complete"])
         self.assertIsNotNone(result["metrics"])
 
     def test_missing_cases_cannot_invent_coverage(self):
