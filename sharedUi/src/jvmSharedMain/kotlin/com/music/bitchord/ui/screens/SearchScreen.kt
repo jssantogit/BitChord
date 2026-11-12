@@ -1491,7 +1491,7 @@ private fun LazyListScope.recentSearches(
             Text(
                 text = stringResource(Res.string.clear),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = appleMusicKeyColor(),
                 modifier = Modifier
                     .clip(RoundedCornerShape(percent = 50))
                     .clickable(onClick = onClear)
@@ -1533,7 +1533,7 @@ private fun LazyListScope.recentAddonSearches(
             Text(
                 text = stringResource(Res.string.clear),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = appleMusicKeyColor(),
                 modifier = Modifier
                     .clip(RoundedCornerShape(percent = 50))
                     .clickable(onClick = onClear)

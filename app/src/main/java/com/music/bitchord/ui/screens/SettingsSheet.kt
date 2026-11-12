@@ -1623,7 +1623,7 @@ internal fun SettingsScreen(
                 append("BitChord $version  ")
                 val linkStyles = TextLinkStyles(
                     style = SpanStyle(
-                        color = MaterialTheme.colorScheme.primary,
+                        color = appleMusicKeyColor(),
                         textDecoration = TextDecoration.Underline,
                     ),
                 )
