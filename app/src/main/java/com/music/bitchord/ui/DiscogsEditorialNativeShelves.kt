@@ -104,33 +104,54 @@ internal fun canonicalArtistCollapseLinkedTitleTrackSingles(
     albumsHeading: String = "Álbuns",
     singlesHeading: String = "Singles e EPs",
 ): List<HomeShelf> {
-    if (shelves.isEmpty() || groups.isEmpty()) return shelves
+    if (shelves.isEmpty()) return shelves
     val typedHeadings = setOf(albumsHeading, singlesHeading)
     val groupsById = groups.filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
         .groupBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
     val visible = shelves.filter { it.title in typedHeadings }.flatMap { it.items }
-        .mapNotNull { it.browseId?.removePrefix("catalog:RELEASE_GROUP:")
-            ?.takeIf { id -> it.browseId == "catalog:RELEASE_GROUP:$id" }
-            ?.lowercase(java.util.Locale.ROOT) }
-        .toSet()
-    val duplicateIds = musicBrainzLinkedTitleTrackSingles.mapNotNull { (singleId, epId) ->
-        val single = groupsById[singleId]?.singleOrNull() ?: return@mapNotNull null
-        val ep = groupsById[epId]?.singleOrNull() ?: return@mapNotNull null
-        // The linked parent must actually be on the screen. Progressive
-        // paging/cached partial results may not yet include the parent.
-        if (singleId !in visible || epId !in visible ||
-            !single.releaseKind.equals("Single", ignoreCase = true) ||
-            !ep.releaseKind.equals("EP", ignoreCase = true) ||
-            single.title.trim() != ep.title.trim() ||
-            single.subtitle.isNullOrBlank() ||
-            !single.subtitle.equals(ep.subtitle, ignoreCase = true)
-        ) null else "catalog:RELEASE_GROUP:$singleId"
+        .mapNotNull { card ->
+            val id = card.browseId?.removePrefix("catalog:RELEASE_GROUP:")
+                ?.takeIf { "catalog:RELEASE_GROUP:$it" == card.browseId }
+                ?.lowercase(java.util.Locale.ROOT) ?: return@mapNotNull null
+            id to card
+        }.groupBy({ it.first }, { it.second })
+
+    val redundantIds = musicBrainzLinkedTitleTrackSingles.mapNotNull { (singleId, epId) ->
+        val singleCard = visible[singleId]?.singleOrNull() ?: return@mapNotNull null
+        val parentCard = visible[epId]?.singleOrNull() ?: return@mapNotNull null
+        // The group browse is independent and can lag the native typed
+        // shelf. Never require BOTH lookups merely to recognize two exact
+        // source-linked MBIDs that are already present as native cards.
+        // A conflicting decoded group or an unrelated title still vetoes it.
+        val singleRows = groupsById[singleId].orEmpty()
+        val parentRows = groupsById[epId].orEmpty()
+        if (singleRows.size > 1 || parentRows.size > 1) return@mapNotNull null
+        val single = singleRows.singleOrNull()
+        val parent = parentRows.singleOrNull()
+        val singleTitle = single?.title ?: singleCard.title
+        val parentTitle = parent?.title ?: parentCard.title
+        val singleKind = single?.releaseKind ?:
+            singleCard.subtitle.substringBefore("·").trim()
+        val parentKind = parent?.releaseKind ?:
+            parentCard.subtitle.substringBefore("·").trim()
+        if (!singleKind.equals("Single", ignoreCase = true) ||
+            !parentKind.equals("EP", ignoreCase = true) ||
+            !singleCard.title.trim().equals(parentCard.title.trim(), ignoreCase = true) ||
+            !singleTitle.trim().equals(parentTitle.trim(), ignoreCase = true) ||
+            !singleTitle.trim().equals(singleCard.title.trim(), ignoreCase = true) ||
+            !parentTitle.trim().equals(parentCard.title.trim(), ignoreCase = true) ||
+            (single != null && parent != null &&
+                (single.subtitle.isNullOrBlank() ||
+                    !single.subtitle.equals(parent.subtitle, ignoreCase = true)))
+        ) return@mapNotNull null
+        "catalog:RELEASE_GROUP:$singleId"
     }.toSet()
-    if (duplicateIds.isEmpty()) return shelves
+
+    if (redundantIds.isEmpty()) return shelves
     return shelves.map { shelf ->
         if (shelf.title !in typedHeadings) return@map shelf
-        val retained = shelf.items.filterNot { it.browseId in duplicateIds }
-        if (retained.size == shelf.items.size) shelf else shelf.copy(items = retained)
+        val kept = shelf.items.filterNot { it.browseId in redundantIds }
+        if (kept.size == shelf.items.size) shelf else shelf.copy(items = kept)
     }.filter { it.items.isNotEmpty() }
 }
 
