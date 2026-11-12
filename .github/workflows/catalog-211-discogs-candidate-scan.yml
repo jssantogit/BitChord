@@ -9,6 +9,8 @@ on:
     paths:
       - scripts/catalog_211_discogs_corpus_candidates.py
       - scripts/catalog_211_discogs_c_second_page_probe.py
+      - scripts/catalog_211_discogs_c_audio_batch.py
+      - scripts/test_catalog_211_discogs_c_audio_batch.py
       - scripts/test_catalog_211_discogs_c_second_page_probe.py
       - scripts/test_catalog_211_discogs_corpus_candidates.py
       - scripts/catalog_211_discogs_candidate_details.py
@@ -60,6 +62,10 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_c_second_page_probe.py' -v
       - name: Observe additional artist-scoped second-page audio leads without tokens
         run: python3 scripts/catalog_211_discogs_c_second_page_probe.py
+      - name: Test seven distinct typed C audio leads without relying on title alone
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_c_audio_batch.py' -v
+      - name: Hydrate seven source-only C audio candidates with exact artist IDs
+        run: python3 scripts/catalog_211_discogs_c_audio_batch.py
       - name: Test bounded public Release/Master detail hydration
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_candidate_details.py' -v
       - name: Inspect bounded candidate Edition metadata, without editorial claims
@@ -142,6 +148,7 @@ jobs:
           path: |
             discogs-211-corpus-candidates.json
             discogs-211-c-second-page.json
+            discogs-211-c-audio-batch.json
             discogs-211-corpus-edition-observations.json
             discogs-211-source-only-barcode-reconciliation.json
             discogs-211-source-only-title-triage.json
