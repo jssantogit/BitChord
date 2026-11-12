@@ -79,6 +79,7 @@ import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.icons.BitChordIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -251,7 +252,7 @@ internal fun CanonicalPlaylistTrackRow(
     titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
     subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
     rowBackground: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.background,
-    activeTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    activeTint: androidx.compose.ui.graphics.Color = appleMusicKeyColor(),
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
 ) {

@@ -89,6 +89,7 @@ import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
 import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -643,9 +644,9 @@ private fun WebDavUploadRow(
  *
  * [tint] is for rows whose icon carries state — a filled heart on a liked
  * track — and is otherwise the ordinary foreground. [accent] colours the
- * trailing [value], and defaults to the app's own red: a sheet tinted from
- * artwork passes the artwork's accent instead, so the row belongs to the sheet
- * it is drawn on.
+ * trailing [value] and defaults to Apple Music's key blue. An artwork-tinted
+ * sheet passes its own palette accent explicitly; error rows retain semantic
+ * red.
  */
 @Composable
 internal fun ActionRow(
@@ -653,7 +654,7 @@ internal fun ActionRow(
     label: String,
     value: String? = null,
     tint: Color? = null,
-    accent: Color = MaterialTheme.colorScheme.primary,
+    accent: Color = appleMusicKeyColor(),
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
