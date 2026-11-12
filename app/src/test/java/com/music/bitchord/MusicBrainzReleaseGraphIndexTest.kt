@@ -161,8 +161,86 @@ class MusicBrainzReleaseGraphIndexTest {
             assertEquals(recordingB, dao.recordingById(recordingB)!!.id)
             assertEquals("asset-b", dao.mediaAsset("local", "b")!!.id)
             assertTrue(dao.catalogReleaseTracksForRecording(recordingB).any { it.releaseId == releaseId })
-            assertTrue(dao.catalogReleaseTrackSources(releaseId, recordingB).any { it.provider == "third-party" })
+            assertEquals(setOf("third-party"),
+                dao.catalogReleaseTrackSources(releaseId, recordingB).map { it.provider }.toSet())
             assertEquals(1, xmlRequests)
+        } finally { db.close() }
+    }
+
+
+    @Test fun verifiedXmlRemovesExclusiveMusicBrainzMembershipButKeepsTheLocalAsset() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val trackA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val trackB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val recordingA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val recordingB = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+            val xml = """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$trackA"><position>1</position><recording id="$recordingA"/></track></track-list></medium></medium-list></release></metadata>"""
+            var proofRequests = 0
+            val proof = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    proofRequests++
+                    return xml
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>,
+                    userAgent: String, maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = proof)
+            index.persistReleaseDetail(detail(release, listOf(trackA to recordingA, trackB to recordingB)))
+            val dao = db.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            val oldRecordingId = dao.entityIdForExternalIdentity("musicbrainz", "recording", recordingB)!!
+            dao.upsertMediaAsset(MediaAssetEntity(
+                "asset-old", oldRecordingId, "local", "old", "content://old", null, null, null, null,
+            ))
+            assertTrue(dao.catalogReleaseTracksForRecording(oldRecordingId).any { it.releaseId == releaseId })
+            assertEquals(listOf("musicbrainz"),
+                dao.catalogReleaseTrackSources(releaseId, oldRecordingId).map { it.provider })
+
+            index.persistReleaseDetail(detail(release, listOf(trackA to recordingA)))
+
+            assertEquals(listOf(trackA), dao.catalogMusicBrainzTracks(releaseId).map { it.trackMbid })
+            assertTrue(dao.catalogReleaseTracksForRecording(oldRecordingId).none { it.releaseId == releaseId })
+            assertTrue(dao.catalogReleaseTrackSources(releaseId, oldRecordingId).isEmpty())
+            assertEquals(oldRecordingId, dao.recordingById(oldRecordingId)!!.id)
+            assertEquals("asset-old", dao.mediaAsset("local", "old")!!.id)
+            assertEquals(listOf("musicbrainz"),
+                dao.catalogReleaseTrackSources(releaseId,
+                    dao.entityIdForExternalIdentity("musicbrainz", "recording", recordingA)!!
+                ).map { it.provider })
+            assertEquals(1, proofRequests)
+        } finally { db.close() }
+    }
+
+    @Test fun aSecondTrackForTheSameRecordingRetainsItsMusicBrainzMembership() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val release = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+            val trackA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+            val trackB = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+            val recording = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+            val xml = """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$trackA"><position>1</position><recording id="$recording"/></track></track-list></medium></medium-list></release></metadata>"""
+            val proof = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String) = xml
+                override suspend fun getLimited(path: String, parameters: Map<String, String>,
+                    userAgent: String, maxResponseBytes: Long) = xml
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = proof)
+            index.persistReleaseDetail(detail(release, listOf(trackA to recording, trackB to recording)))
+            index.persistReleaseDetail(detail(release, listOf(trackA to recording)))
+
+            val dao = db.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", release)!!
+            val recordingId = dao.entityIdForExternalIdentity("musicbrainz", "recording", recording)!!
+            assertEquals(listOf(trackA), dao.catalogMusicBrainzTracks(releaseId).map { it.trackMbid })
+            assertEquals(listOf("musicbrainz"),
+                dao.catalogReleaseTrackSources(releaseId, recordingId).map { it.provider })
+            assertTrue(dao.catalogReleaseTracksForRecording(recordingId).any { it.releaseId == releaseId })
         } finally { db.close() }
     }
 
@@ -197,6 +275,10 @@ class MusicBrainzReleaseGraphIndexTest {
             index.persistReleaseDetail(detail(release, listOf(a to ra)))
             val releaseId = db.catalogDao().entityIdForExternalIdentity("musicbrainz", "release", release)!!
             assertEquals(setOf(a, b), db.catalogDao().catalogMusicBrainzTracks(releaseId).map { it.trackMbid }.toSet())
+            val recordingBId = db.catalogDao().entityIdForExternalIdentity("musicbrainz", "recording", rb)!!
+            assertTrue(db.catalogDao().catalogReleaseTracksForRecording(recordingBId).any { it.releaseId == releaseId })
+            assertEquals(listOf("musicbrainz"),
+                db.catalogDao().catalogReleaseTrackSources(releaseId, recordingBId).map { it.provider })
             assertEquals(1, xmlCalls)
             index.persistReleaseDetail(detail(release, emptyList()))
             assertEquals(setOf(a, b), db.catalogDao().catalogMusicBrainzTracks(releaseId).map { it.trackMbid }.toSet())
@@ -281,10 +363,9 @@ class MusicBrainzReleaseGraphIndexTest {
             assertEquals("existing-asset", dao.mediaAsset("local", "source")!!.id)
             assertEquals(oldRecordingId, dao.entityIdForExternalIdentity("other-provider", "recording", "old-claim"))
             val preservedSources = dao.catalogReleaseTrackSources(releaseId, oldRecordingId).map { it.provider }.toSet()
-            assertTrue("musicbrainz" in preservedSources)
-            assertTrue("other-provider" in preservedSources)
-            // Keep the old R1 edge alongside the new R2 edge. Without complete
-            // provenance, pruning legacy ownership edges would be unsafe.
+            assertEquals(setOf("other-provider"), preservedSources)
+            // Other-provider ownership retains the old R1 edge, but MusicBrainz
+            // must stop claiming a Recording that no longer appears on any Track.
             assertTrue(dao.catalogReleaseTrackSources(releaseId, oldRecordingId).isNotEmpty())
             assertTrue(dao.catalogReleaseTrackSources(releaseId, newRecordingId).any {
                 it.provider == "musicbrainz"
