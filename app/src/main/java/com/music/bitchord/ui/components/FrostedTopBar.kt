@@ -54,7 +54,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Person
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.material3.HorizontalDivider
@@ -355,7 +354,7 @@ fun FrostedTopBar(
                         modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            artworkPageBackIcon(),
                             contentDescription = stringResource(R.string.back),
                             tint = MaterialTheme.colorScheme.onSurface,
                         )
@@ -399,6 +398,9 @@ fun FrostedTopBar(
     }
 }
 
+/** The same authored back glyph is used in every Android toolbar branch. */
+internal fun artworkPageBackIcon() = PlaylistEditorIcons.Back
+
 /**
  * One visually identical 40dp back surface across Library, Downloads, recent
  * additions, artist/album detail, Home and Explore. Preserve Android's
@@ -428,7 +430,7 @@ internal fun ArtworkPageBackButton(
             ),
         ) {
             Icon(
-                Icons.AutoMirrored.Rounded.ArrowBack,
+                artworkPageBackIcon(),
                 contentDescription = stringResource(R.string.back),
                 tint = contentColor,
             )
