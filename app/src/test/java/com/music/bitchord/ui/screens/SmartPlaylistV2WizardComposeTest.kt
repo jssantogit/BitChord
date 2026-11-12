@@ -21,6 +21,8 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.runtime.CompositionLocalProvider
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
@@ -1233,7 +1235,10 @@ class SmartPlaylistV2WizardComposeTest {
         }
         compose.onAllNodesWithTag("playlist-navigation-chevron").assertCountEquals(0)
         // Choose the tappable native row, not its unmerged text descendant.
-        compose.onNodeWithTag("playlist-choice-option-Não contém").performClick()
+        // ModalBottomSheet's test window can intercept simulated pointer taps.
+        // Invoke the row's declared accessibility click, not its text child.
+        compose.onNodeWithTag("playlist-choice-option-Não contém")
+            .performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle {
             assertEquals("Não contém", selected)
             assertTrue(closed)
@@ -1271,7 +1276,10 @@ class SmartPlaylistV2WizardComposeTest {
         // Returning must preserve the search scope and query, not fall into
         // the initial "Músicas e metadados" field tabs.
         compose.onNodeWithText("Adicionar condição").assertExists()
-        compose.onNodeWithText("Avaliação em estrelas").assertExists()
+        // The query and result both contain the same title; text-only lookup
+        // matches two nodes. Assert the actual search-result surface instead.
+        compose.onNodeWithContentDescription("Buscar condições").assertExists()
+        compose.onAllNodesWithTag("playlist-field-row").assertCountEquals(1)
         compose.onNodeWithText("Músicas e metadados").assertDoesNotExist()
     }
 
