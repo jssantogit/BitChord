@@ -58,6 +58,35 @@ class NativeSettingsSecondaryActionTest {
         compose.runOnIdle { assertEquals(1, opened) }
     }
 
+    @Test fun primarySettingsActionRetains50DpAndSavesOnce() {
+        var saves = 0
+        compose.setContent {
+            MaterialTheme {
+                NativeSettingsPrimaryAction(label = "Conectar", onClick = { saves++ })
+            }
+        }
+        compose.onNodeWithTag("native-settings-primary-action")
+            .assertHasClickAction()
+            .assertHeightIsAtLeast(50.dp)
+        compose.onNodeWithText("Conectar").performClick()
+        compose.runOnIdle { assertEquals(1, saves) }
+    }
+
+    @Test fun busyPrimarySettingsActionCannotSubmitCredentials() {
+        var saves = 0
+        compose.setContent {
+            MaterialTheme {
+                NativeSettingsPrimaryAction(
+                    label = "Conectar e salvar conta",
+                    enabled = false,
+                    onClick = { saves++ },
+                )
+            }
+        }
+        compose.onNodeWithTag("native-settings-primary-action").assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(0, saves) }
+    }
+
     @Test fun disabledActionCannotRequestCredentialRemoval() {
         var calls = 0
         compose.setContent {
