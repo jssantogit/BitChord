@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,11 +30,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -243,17 +242,48 @@ internal fun PartyLanding(
             )
         }
         Spacer(Modifier.height(6.dp))
-        TextButton(
+        PartySheetTextAction(
+            label = stringResource(R.string.listen_together_join_existing),
             onClick = onJoin,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.listen_together_join_existing),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        )
+    }
+}
+
+/**
+ * Centered native text action for the join and invite sheets. The 48dp row
+ * and neutral presentation are BitChord adaptations, not unverified Apple
+ * dimensions. The invite code keeps its original bold, widely spaced text.
+ */
+@Composable
+internal fun PartySheetTextAction(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    compact: Boolean = false,
+    codeStyle: Boolean = false,
+) {
+    val ink = if (codeStyle) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = modifier
+            .then(if (compact) Modifier else Modifier.fillMaxWidth())
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag("party-sheet-text-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = if (codeStyle) MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 3.sp,
+            ) else MaterialTheme.typography.titleMedium,
+            color = ink.copy(alpha = if (enabled) 1f else 0.4f),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -657,16 +687,10 @@ internal fun JoinConfirmSheet(
         }
         SheetError(error)
         Spacer(Modifier.height(4.dp))
-        TextButton(
+        PartySheetTextAction(
+            label = stringResource(R.string.listen_together_not_now),
             onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.listen_together_not_now),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.listen_together_preview_footer),
@@ -735,20 +759,13 @@ internal fun InviteSheet(
                 // somebody on the phone the party was made on — reading six
                 // characters out is still the fastest way into a party in the
                 // same room.
-                TextButton(
+                PartySheetTextAction(
+                    label = code,
                     onClick = onCopyCode,
-                    contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
                     modifier = Modifier.offset(x = (-12).dp),
-                ) {
-                    Text(
-                        text = code,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 3.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+                    compact = true,
+                    codeStyle = true,
+                )
             }
             QrCode(content = link, size = 132.dp)
         }
