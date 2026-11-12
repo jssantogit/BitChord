@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211 editorial coverage 24/30: A 9/10 (A-03 JYP Holiday Special Single Christmas EveL vs MB EP is a source-type disagreement NEEDS editorial decision; remaining eight A controls already agree with source; ZERO automatic type corrections), B 10/10 negative/candidate pressing reviews and zero new Verified, C 5/10 negative apparent absences already in MB and zero Discogs-only recoveries. Six slots pending, no Android UI gains measured.",
+  "description": "Discogs #211: 25/30 independently reviewed; A 10/10 (1 real JYP Single vs MusicBrainz EP editorial disagreement A03 not automatically corrected; nine type agreements), B 10/10 negative/candidate without new Verified, C 5/10 source-only negatives and zero proven recoveries. Only C09-C10 and C01-C03 pending; no Android UI gains measured.",
   "cases": [
     {
       "id": "A-01",
@@ -281,7 +281,32 @@
     {
       "id": "A-10",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "Stray Kids · ATE — JYP Mini Album / MusicBrainz EP",
+      "musicbrainz_artist_mbid": "142b343d-bf5a-428c-a64f-6d1a7566bbe9",
+      "musicbrainz_group_mbid": "350ea536-dbf2-437d-913f-40040a3932ab",
+      "discogs_release_id": 31284695,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/350ea536-dbf2-437d-913f-40040a3932ab",
+        "discogs_release": "https://www.discogs.com/release/31284695",
+        "independent_editorial": "https://straykids.jype.com/discography/37ab301d",
+        "independent_label_discography": "https://straykids.jype.com/discography/6hldjvn5",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43191673198"
+      },
+      "reviewed_at_utc": "2026-11-12T09:40:00Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Official JYP Entertainment artist-discography texts for Falling Up (7 October 2024) and GIANT (13 November 2024) explicitly describe the 19 July 2024 ATE as a mini album. The exact MusicBrainz ReleaseGroup 350ea536-dbf2-437d-913f-40040a3932ab is EP, so the label and MB already agree at group type level. The eight-Master source scout CI #43191673198 rechecked the typed Discogs Master link 3554257 with its main Discogs Release 31284695, but the Discogs Master contains more than eight versions and cannot be exhaustively matched; the MB Official Release index is complete at 13 entries but provides no pressing correspondence by itself. Its main Release ID here is only a Discogs release lead, not a Verified pairing with any MusicBrainz edition. No type correction, no source-only recovery, no Android inspection or appearance measurements; candidate and Unknown UI states are intentional."
     },
     {
       "id": "B-01",
