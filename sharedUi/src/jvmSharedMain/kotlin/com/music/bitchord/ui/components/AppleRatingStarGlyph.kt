@@ -41,12 +41,12 @@ fun AppleRatingStarGlyph(
     fill: AppleRatingStarFill,
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.onSurface,
+    /** Preserve positional API compatibility with existing player calls. */
+    standalone: Boolean = false,
     /** Optional fractional score tint: mask the gradient into the existing SVG. */
     colorBrush: Brush? = null,
     /** Outline stays theme-neutral even when a half-star fill is colored. */
     outlineTint: Color = tint,
-    /** Five-star editors need standalone silhouettes, not five player platters. */
-    standalone: Boolean = false,
 ) {
     val empty = if (standalone) AppleQueueVectors.RatingStarOutline
         else AppleQueueVectors.Favorite
