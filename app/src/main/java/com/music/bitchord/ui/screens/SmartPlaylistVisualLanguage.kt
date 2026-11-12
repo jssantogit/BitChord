@@ -251,10 +251,11 @@ internal fun PlaylistWizardCompactAction(
 internal fun PlaylistWizardPrimaryAction(
     label: String,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(50.dp)
             .clip(RoundedCornerShape(25.dp))

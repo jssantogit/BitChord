@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -368,8 +367,12 @@ internal fun SmartPlaylistBuilderScreen(
                 field(draft.limit, { draft = draft.copy(limit = it) },
                     stringResource(Res.string.smart_playlist_limit))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        if (busy) return@Button
+                    PlaylistWizardPrimaryAction(
+                        label = stringResource(Res.string.smart_playlist_save),
+                        modifier = Modifier.weight(1f),
+                        enabled = !busy,
+                        onClick = {
+                        if (busy) return@PlaylistWizardPrimaryAction
                         busy = true
                         scope.launch {
                             try {
@@ -387,9 +390,8 @@ internal fun SmartPlaylistBuilderScreen(
                                 busy = false
                             }
                         }
-                    }, enabled = !busy, colors = applePrimaryButtonColors(), shape = RoundedCornerShape(25.dp)) {
-                        Text(stringResource(Res.string.smart_playlist_save))
-                    }
+                    },
+                    )
                     PlaylistWizardInlineAction(
                         label = stringResource(Res.string.smart_playlist_preview),
                         onClick = {
