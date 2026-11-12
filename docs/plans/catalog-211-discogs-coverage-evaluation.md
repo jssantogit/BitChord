@@ -1945,3 +1945,20 @@ lacuna identificada é a **redução dos falsos inéditos** no
 shelf complementar de artista, ainda não validada visualmente
 no Android físico. A decisão de merge exige testes de dispositivo
 e avaliação do proprietário.
+
+## Smoke A54 — HOT duplicado em LE SSERAFIM (12/11/2026)
+
+O proprietário instalou o APK smoke da [execução #43208196723](https://github.com/jssantogit/BitChord/actions/runs/43208196723), marcou **todos os dez checks anteriores como aprovados** (instalação/navegação, ENHYPEN daydream, LE SSERAFIM EASY, IVE CRUSH/ALIVE, estantes, rodapé, configuração, navegação e modo offline), mas identificou **defeito novo** na comparação com a referência Apple Music: a estante do artista LE SSERAFIM exibe simultaneamente cards `HOT` marcados `Single` e `EP`, apesar de o Apple Music apresentar o EP principal e produtos ingleses distintos sem o single-título redundante.
+
+### Causa identificada em fonte MusicBrainz, não classificação Discogs
+
+A discografia MusicBrainz tem **dois ReleaseGroups tipados e distintos**:
+- [HOT Single, MBID `44adb7df-66bd-4ebe-a43a-3ea45a93529d`](https://musicbrainz.org/release-group/44adb7df-66bd-4ebe-a43a-3ea45a93529d), com CD single/versões de integrantes e uma edição digital derivada; sua relação MusicBrainz explícita **`single/EP which was taken from`** aponta ao HOT EP.
+- [HOT EP, MBID `50bcea80-692f-4e36-a7a5-825a3233cb13`](https://musicbrainz.org/release-group/50bcea80-692f-4e36-a7a5-825a3233cb13), minialbum principal de cinco faixas, com relação de saída para o single `HOT`.
+- Apple Music também possui produtos **separados** [HOT English ver. - Single](https://music.apple.com/us/album/hot-english-ver-single/1807948718) e [HOT English ver. - EP](https://music.apple.com/us/album/hot-english-ver-ep/1802579829), com 2 e 5 faixas: **não devem ser fundidos por mero título igual**. HOT (KAZUHA ver.) também é versão diferenciada, não duplicata genérica.
+
+### Correção restrita e regressão
+
+A projeção read-only `DiscogsEditorialNativeShelves.kt` apresenta só o EP principal quando ambas as obras aparecem **simultaneamente no grid tipado do artista**, possuem os MBIDs exatos ligados em MusicBrainz, tipos `Single`/`EP`, título e artista exatos. Não mexe no catálogo MusicBrainz, ReleaseIds, busca, biblioteca, listas, mídia, avaliações ou edição física; se o EP ainda não chegou por paginação, o single **não é escondido**. Não afeta prateleiras independentes como `Para descobrir`, nem versões inglesas/solo/remixes. A regra é **source-linked ID**, não heurística de nome ou número de faixas.
+
+Testes TDD em `DiscogsEditorialArtistShelvesTest.kt` cobrem os três estados (ambos visíveis, EP ausente, fonte/tipo incompatível), a preservação de inglês/remix e a separação de seleções independentes. Workflow focused Android passou a observar a mudança de projeção de estante. **A compilação/CI ainda precisa aprovação no novo HEAD**; nenhuma afirmação de APK/smoke novo antes da execução.
