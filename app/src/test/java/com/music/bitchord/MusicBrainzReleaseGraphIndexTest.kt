@@ -426,7 +426,17 @@ class MusicBrainzReleaseGraphIndexTest {
             val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
             val recording1 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
             val recording2 = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
-            val index = MusicBrainzCatalogIndex(db)
+            val xml = """<metadata xmlns="http://musicbrainz.org/ns/mmd-2.0#"><release id="$release"><medium-list count="1"><medium><position>1</position><track-list count="1"><track id="$track"><position>1</position><recording id="$recording2"/></track></track-list></medium></medium-list></release></metadata>"""
+            var xmlRequests = 0
+            val client = MusicBrainzClient(object : MusicBrainzTransport, BoundedMusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>, userAgent: String): String {
+                    xmlRequests++
+                    return xml
+                }
+                override suspend fun getLimited(path: String, parameters: Map<String, String>,
+                    userAgent: String, maxResponseBytes: Long): String = get(path, parameters, userAgent)
+            }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
+            val index = MusicBrainzCatalogIndex(db, proofClient = client)
             val dao = db.catalogDao()
             index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
                 release, null, "Edition", null, null, null,
@@ -452,8 +462,10 @@ class MusicBrainzReleaseGraphIndexTest {
             index.persistReleaseDetail(MusicBrainzCatalogReleaseDetail(
                 release, null, "Edition", null, null, null,
                 listOf(MusicBrainzCatalogTrack(track, recording2, "Corrected", 1, 1, null)),
+                completeness = MusicBrainzReleaseJsonCompleteness(true, true, true),
             ))
 
+            assertEquals(1, xmlRequests)
             assertEquals(newRecordingId, dao.catalogMusicBrainzTrack(track)!!.recordingId)
             assertEquals(recording2, index.cachedRelease(release)!!.tracks.single().recordingMbid)
             assertEquals(oldRecordingId, dao.recordingById(oldRecordingId)!!.id)
