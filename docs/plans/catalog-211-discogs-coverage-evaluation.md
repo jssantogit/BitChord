@@ -1653,3 +1653,26 @@ IDs Discogs já revisados. **O novo scanner é pesquisa
 investigativa; a estante Android ainda não usa esses resultados.**
 Nenhuma mudança de UI foi feita e o corpus permanece
 **14/30 (A2, B10, C2), zero recuperações C comprovadas**.
+
+### Integridade do relatório C após o novo índice
+
+O diagnóstico `source_only_title_triage` agora distingue
+`mb_release_candidate_mbids` (IDs de **edições MusicBrainz
+exatas**, com título completo e artista validados) de
+`mb_group_candidate_mbids` (grupos que contêm essas edições).
+Quando um resultado positivo vem da consulta por termo
+distintivo, o registro traz também
+`lead_index_scope=artist_scoped_distinctive_term`.
+
+Foi encontrada uma segunda lacuna independente: o
+`catalog_211_discogs_fresh_c_followup.py` copiava apenas os
+grupos e descartava a lista de MBIDs de Release na saída
+agregada. A regressão
+[RED #43139571373](https://github.com/jssantogit/BitChord/actions/runs/43139571373)
+reproduziu `KeyError: mb_release_candidate_mbids` depois de
+uma busca positiva. A correção [`44d6dea7`](https://github.com/jssantogit/BitChord/commit/44d6dea760763bbb2d0426a99f03a6804e6f1ca9)
+preserva os dois conjuntos de MBIDs e o escopo da busca
+sem alterar `reviewed=false` ou
+`confirmed_missing_from_musicbrainz=false`.
+É correção de **rastreabilidade de evidência**, não
+uma recuperação de Discogs-only ou modificação do app.
