@@ -37,8 +37,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Album
@@ -1852,14 +1850,11 @@ internal fun CanonicalTrackRow(
         },
         actions = {
             if (selectionMode && onToggleSelection != null) {
-                IconButton(onClick = onToggleSelection, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        if (selected) Icons.Rounded.CheckCircle
-                        else Icons.Rounded.RadioButtonUnchecked,
-                        contentDescription = if (selected) "Desmarcar faixa" else "Selecionar faixa",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                NativeLibrarySelectionAction(
+                    selected = selected,
+                    label = if (selected) "Desmarcar faixa" else "Selecionar faixa",
+                    onToggle = onToggleSelection,
+                )
             } else {
                 if (showInlineOptions) {
                     CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
@@ -2407,13 +2402,12 @@ private fun NativeUnifiedLibraryBody(
                                 onLongPress = if (selectedItems.isEmpty()) ({ onAlbumOptions(album) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
-                                        IconButton(onClick = { onToggleSelection(target) }) {
-                                            Icon(
-                                                if (target in selectedItems) Icons.Rounded.CheckCircle
-                                                else Icons.Rounded.RadioButtonUnchecked,
-                                                contentDescription = "Selecionar álbum",
-                                            )
-                                        }
+                                        NativeLibrarySelectionAction(
+                                            selected = target in selectedItems,
+                                            label = if (target in selectedItems) "Desmarcar álbum"
+                                                else "Selecionar álbum",
+                                            onToggle = { onToggleSelection(target) },
+                                        )
                                     } else Row(verticalAlignment = Alignment.CenterVertically) {
                                         canonicalLibraryEntityRatingForRow(
                                             entityRatings, target,
@@ -2498,13 +2492,12 @@ private fun NativeUnifiedLibraryBody(
                                 onLongPress = if (selectedItems.isEmpty()) ({ onArtistOptions(artist) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
-                                        IconButton(onClick = { onToggleSelection(target) }) {
-                                            Icon(
-                                                if (target in selectedItems) Icons.Rounded.CheckCircle
-                                                else Icons.Rounded.RadioButtonUnchecked,
-                                                contentDescription = "Selecionar artista",
-                                            )
-                                        }
+                                        NativeLibrarySelectionAction(
+                                            selected = target in selectedItems,
+                                            label = if (target in selectedItems) "Desmarcar artista"
+                                                else "Selecionar artista",
+                                            onToggle = { onToggleSelection(target) },
+                                        )
                                     } else Row(verticalAlignment = Alignment.CenterVertically) {
                                         canonicalLibraryEntityRatingForRow(
                                             entityRatings, target,
@@ -2630,16 +2623,12 @@ internal fun NativeLibraryEntityCard(
                 )
             }
             if (selectionMode && onToggleSelection != null) {
-                IconButton(
-                    onClick = onToggleSelection,
+                NativeLibrarySelectionAction(
+                    selected = selected,
+                    label = if (selected) "Desmarcar ${title}" else "Selecionar ${title}",
+                    onToggle = onToggleSelection,
                     modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    Icon(
-                        if (selected) Icons.Rounded.CheckCircle
-                        else Icons.Rounded.RadioButtonUnchecked,
-                        contentDescription = "Selecionar ${title}",
-                    )
-                }
+                )
             } else if (onMore != null) {
                 RowMoreButton(
                     onClick = onMore,
