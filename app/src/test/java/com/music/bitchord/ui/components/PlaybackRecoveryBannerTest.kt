@@ -2,6 +2,9 @@ package com.music.bitchord.ui.components
 
 import android.app.Application
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -31,6 +34,16 @@ class PlaybackRecoveryBannerTest {
         mediaAssetId = "asset-1", providerKey = "server",
         reason = PlaybackRecoveryReason.REMOTE_UNAVAILABLE,
     )
+
+    @Test fun nativeRecoveryActionsKeep44DpTargets() {
+        compose.setContent {
+            BitChordTheme {
+                PlaybackRecoveryBanner(notice, onRetry = {}, onDismiss = {})
+            }
+        }
+        compose.onNodeWithTag("playback-recovery-retry").assertHeightIsAtLeast(44.dp)
+        compose.onNodeWithTag("playback-recovery-dismiss").assertHeightIsAtLeast(44.dp)
+    }
 
     @Test fun retryIsUserInitiatedAndDismissRemainsIndependent() {
         var retry = 0
