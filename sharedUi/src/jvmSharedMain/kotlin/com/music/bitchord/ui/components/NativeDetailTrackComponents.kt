@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.ui.AppUi
+import com.music.bitchord.ui.player.AppleQueueVectors
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.sharedui.resources.Res
@@ -62,7 +63,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.layout
 import com.music.bitchord.sharedui.resources.more
@@ -331,6 +331,9 @@ fun RowScope.NativeTrackRowText(
 }
 
 
+/** Shared plain overflow glyph across toolbars and contextual row menus. */
+internal fun nativeRowMoreGlyph() = AppleQueueVectors.MorePlain
+
 /**
  * The ⋮ at the end of a row. Its circle is a touch target nobody sees, so it
  * hangs [ROW_MORE_OUTSET] into the page gutter: the dots end at the row's
@@ -354,7 +357,7 @@ fun RowMoreButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Rounded.MoreVert,
+            nativeRowMoreGlyph(),
             contentDescription = contentDescription ?: stringResource(Res.string.more),
             tint = tint,
             modifier = Modifier.size(iconSize),
