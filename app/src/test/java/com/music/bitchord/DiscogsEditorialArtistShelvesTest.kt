@@ -19,6 +19,70 @@ class DiscogsEditorialArtistShelvesTest {
     private val unknown = row("00000000-0000-4000-8000-000000000102", "Other")
     private val ep = row("00000000-0000-4000-8000-000000000103", "EP")
 
+    @Test fun musicBrainzLinkedHotTitleSingleCollapsesOnlyOnArtistWhenParentEpCardPresent() {
+        // Exact public MusicBrainz release-group relation:
+        // HOT Single 44adb7df -> HOT EP 50bcea80 (single/EP taken from).
+        val singleId = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
+        val epId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val englishSingleId = "00000000-0000-4000-8000-000000000201"
+        val englishEpId = "00000000-0000-4000-8000-000000000202"
+        val memberRemixId = "00000000-0000-4000-8000-000000000203"
+        fun group(id: String, title: String, kind: String, extra: String? = null) =
+            CanonicalCatalogSearchRow(
+                musicBrainzId = id, kind = CanonicalSearchKind.RELEASE_GROUP,
+                title = title, subtitle = "LE SSERAFIM", releaseKind = kind,
+                secondaryTypes = extra, releaseDate = "2025-03-14",
+            )
+        val groups = listOf(
+            group(singleId, "HOT", "Single"), group(epId, "HOT", "EP"),
+            group(englishSingleId, "HOT (English ver.)", "Single"),
+            group(englishEpId, "HOT (English ver.)", "EP"),
+            group(memberRemixId, "HOT (KAZUHA ver.)", "Single", "Remix"),
+        )
+        val cards = groups.map { row ->
+            ShelfItem(row.title, row.releaseKind, null, null,
+                "catalog:RELEASE_GROUP:${row.musicBrainzId}")
+        }
+        val first = listOf(HomeShelf("Singles e EPs", cards))
+        val displayed = discogsEditorialArtistShelves(first, groups, emptyMap())
+        val items = displayed.single().items
+        assertEquals(4, items.size)
+        assertTrue(items.none { it.browseId == "catalog:RELEASE_GROUP:$singleId" })
+        assertTrue(items.any { it.browseId == "catalog:RELEASE_GROUP:$epId" })
+        assertTrue(items.any { it.browseId == "catalog:RELEASE_GROUP:$memberRemixId" })
+        assertEquals(2, items.count { it.title == "HOT (English ver.)" })
+        // Canonical rows are still all present: only the artist UI projection changes.
+        assertEquals(5, groups.size)
+    }
+
+    @Test fun linkedHotSingleMustStayWhenParentOrTypedRelationNotVisible() {
+        val singleId = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
+        val epId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val hot = CanonicalCatalogSearchRow(
+            singleId, CanonicalSearchKind.RELEASE_GROUP, "HOT",
+            "LE SSERAFIM", releaseKind = "Single",
+        )
+        val otherArtist = hot.copy(musicBrainzId = epId, subtitle = "Other Artist",
+            releaseKind = "EP")
+        val cards = listOf(HomeShelf("Singles e EPs", listOf(
+            ShelfItem("HOT", "Single", null, null, "catalog:RELEASE_GROUP:$singleId")
+        )))
+        assertEquals(cards, discogsEditorialArtistShelves(cards, listOf(hot), emptyMap()))
+        assertEquals(cards, discogsEditorialArtistShelves(
+            cards, listOf(hot, otherArtist), emptyMap()))
+        val noParentCard = discogsEditorialArtistShelves(
+            cards, listOf(hot, hot.copy(musicBrainzId = epId, releaseKind = "EP")),
+            emptyMap())
+        assertEquals(cards, noParentCard)
+        val wrongType = discogsEditorialArtistShelves(
+            listOf(HomeShelf("Singles e EPs", cards.single().items +
+                ShelfItem("HOT", "EP", null, null, "catalog:RELEASE_GROUP:$epId"))),
+            listOf(hot, hot.copy(musicBrainzId = epId, releaseKind = "Single")),
+            emptyMap(),
+        )
+        assertEquals(2, wrongType.single().items.size)
+    }
+
     @Test fun provenCorrectionMovesAlbumToNativeSinglesAndEpsWithoutChangingIdentity() {
         val groups = listOf(album, ep, unknown)
         val first = HomeShelf("Álbuns", listOf(
