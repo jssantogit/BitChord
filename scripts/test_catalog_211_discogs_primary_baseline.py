@@ -17,12 +17,14 @@ class DiscogsPrimaryBaselineTest(unittest.TestCase):
         self.assertEqual("research_only_not_ready", result["status"])
         self.assertEqual("exploratory_not_approved", result["decision"])
         self.assertFalse(result["automatic_switch_authorized"])
-        self.assertFalse(result["corpus_complete"])
-        self.assertEqual(25, result["corpus_reviewed"])
+        self.assertTrue(result["corpus_complete"])
+        self.assertEqual(30, result["corpus_reviewed"])
         self.assertEqual(30, result["corpus_required"])
         self.assertEqual(0, result["corpus_selected_unreviewed"]["unlinked"])
-        self.assertEqual(3, result["corpus_selected_unreviewed"]["source_only"])
-        self.assertIsNone(result["corpus_metrics"])
+        self.assertEqual(0, result["corpus_selected_unreviewed"]["source_only"])
+        self.assertIsNotNone(result["corpus_metrics"])
+        self.assertEqual(0,result["corpus_metrics"]["source_only_recovery"]["visible"])
+        self.assertIn("no_demonstrated_source_only_recovery",result["unresolved"])
 
     def test_existing_runtime_sources_still_bind_to_musicbrainz(self):
         document = json.loads(MANIFEST.read_text(encoding="utf-8"))
