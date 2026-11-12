@@ -28,6 +28,36 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistEditorPresentationTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun creatorAndGlobalMenuCanShareCompactAnimatedPopupRows() {
+        var opened = 0
+        compose.setContent {
+            MaterialTheme {
+                androidx.compose.foundation.layout.Box {
+                    com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+                        expanded = true,
+                        onDismissRequest = {},
+                    ) {
+                        com.music.bitchord.ui.components.NativeCompactMenuItem(
+                            label = "Seus filtros",
+                            icon = PlaylistEditorIcons.Filters,
+                            onClick = { opened++ },
+                        )
+                        com.music.bitchord.ui.components.NativeCompactMenuDivider()
+                        com.music.bitchord.ui.components.NativeCompactMenuItem(
+                            label = "Excluir playlist",
+                            icon = PlaylistEditorIcons.Delete,
+                            destructive = true,
+                            onClick = { opened++ },
+                        )
+                    }
+                }
+            }
+        }
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+        compose.onNodeWithText("Seus filtros").performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
+    }
+
     @Test fun filterManagerUsesPlainTitleAndTopRightCreateControl() {
         var created = 0
         compose.setContent {
