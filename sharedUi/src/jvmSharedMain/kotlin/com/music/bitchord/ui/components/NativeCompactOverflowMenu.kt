@@ -26,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -72,6 +74,9 @@ internal fun compactOverflowPopupPosition(
     }.coerceIn(0, (windowSize.height - popupSize.height).coerceAtLeast(0))
     return IntOffset(x, y)
 }
+
+/** Keep exiting menu rows visible for the fade, but no longer actionable. */
+private val LocalNativeCompactMenuActionsEnabled = compositionLocalOf { true }
 
 /**
  * One compact popup surface for Home/Explore and the playlist editor.
@@ -139,10 +144,12 @@ fun NativeCompactOverflowMenu(
                     shadowElevation = 10.dp,
                     border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(vertical = 5.dp),
-                        content = content,
-                    )
+                    CompositionLocalProvider(LocalNativeCompactMenuActionsEnabled provides expanded) {
+                        Column(
+                            modifier = Modifier.padding(vertical = 5.dp),
+                            content = content,
+                        )
+                    }
                 }
             }
         }
@@ -157,13 +164,14 @@ fun NativeCompactMenuItem(
     enabled: Boolean = true,
     destructive: Boolean = false,
 ) {
+    val actionEnabled = enabled && LocalNativeCompactMenuActionsEnabled.current
     val color = if (destructive) MaterialTheme.colorScheme.error
         else MaterialTheme.colorScheme.onSurface
     val ink = color.copy(alpha = if (enabled) 1f else 0.4f)
     Row(
         modifier = Modifier.fillMaxWidth()
             .testTag("native-compact-menu-item")
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = actionEnabled, onClick = onClick)
             .heightIn(min = 54.dp)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
