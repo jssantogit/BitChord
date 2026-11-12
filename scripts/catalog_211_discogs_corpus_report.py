@@ -140,6 +140,7 @@ def report(document: dict) -> dict:
     cases = document["cases"]
     seen = set()
     source_identities = set()
+    reviewed_discogs_source_ids = set()
     counts = Counter()
     reviewed = Counter()
     selected = Counter()
@@ -219,6 +220,15 @@ def report(document: dict) -> dict:
                 (cohort, mbid.lower(), release_id) if cohort == "unlinked" else
                 (cohort, release_id)
             )
+            # Cohort A is group-level editorial evidence and may share a
+            # physical release with B; B and C, however, both measure a
+            # specific Discogs edition. Reusing B in C inflates the sample.
+            if cohort in ("unlinked", "source_only"):
+                if release_id in reviewed_discogs_source_ids:
+                    errors.append(
+                        f"case {cid}: duplicate reviewed Discogs edition across cohorts"
+                    )
+                reviewed_discogs_source_ids.add(release_id)
             if identity in source_identities:
                 errors.append(f"case {cid}: duplicate source identity")
             else:
