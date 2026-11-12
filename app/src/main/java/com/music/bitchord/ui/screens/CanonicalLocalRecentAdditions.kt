@@ -429,7 +429,6 @@ private fun CanonicalRecentAdditionCard(
 internal fun CanonicalRecentAdditionsGrid(
     recent: List<V2DisplayRow>,
     onPlayTrack: (String) -> Unit,
-    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(),
     loading: Boolean = false,
     error: Boolean = false,
@@ -438,6 +437,7 @@ internal fun CanonicalRecentAdditionsGrid(
     onQueryChange: (String) -> Unit = {},
     viewType: LibraryViewType = LibraryViewType.GRID,
     filterActive: Boolean = false,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     if (loading && recent.isEmpty()) {
         // Initial MediaStore projection can be expensive. The same native
