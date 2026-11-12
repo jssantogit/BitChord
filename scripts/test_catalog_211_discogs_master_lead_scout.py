@@ -137,6 +137,41 @@ class MasterLeadScoutTest(unittest.TestCase):
         self.assertEqual(0, result["verified_edition_count"])
         self.assertEqual(0, result["reviewed_corpus_cases"])
 
+    def test_batch_eight_a_master_leads_not_capped_at_five(self):
+        # Throughput of A research must scale to the remaining eight slots
+        # without ever treating an unexhausted Master as a matching edition.
+        artists = [(f"Artist-{i}", f"{i:08x}-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+                   for i in range(1, 9)]
+        pages = {
+            url_artist(aid): page([row(
+                f"{i:08x}-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                10000 + i, aid, title=f"Candidate {i}", kind="Single")])
+            for i, (_, aid) in enumerate(artists, start=1)
+        }
+        def get(url):
+            if url in pages:
+                return pages[url]
+            if "/versions?" in url:
+                return listing([901])
+            if "/masters/" in url:
+                return {"id": int(url.rsplit("/", 1)[1]), "main_release": 901}
+            if "/ws/2/release/?" in url:
+                gid = url.split("release-group=", 1)[1].split("&", 1)[0]
+                i = int(gid[:8], 16)
+                return edition_page(gid, artists[i-1][1])
+            raise AssertionError("Unapproved lookup " + url)
+        result = scout(artists, set(), get)
+        self.assertEqual(8, MASTER_LIMIT)
+        self.assertEqual(8, len(result["leads"]))
+        self.assertEqual({name for name, _ in artists},
+                         {lead["artist"] for lead in result["leads"]})
+        self.assertEqual(32, result["source_http_requests"])
+        self.assertLessEqual(result["source_http_requests"], REQUEST_LIMIT)
+        self.assertTrue(all(x["mb_release_browse_status"] ==
+                            "complete_official_release_index" for x in result["leads"]))
+        self.assertEqual(0, result["verified_edition_count"])
+        self.assertEqual(0, result["reviewed_corpus_cases"])
+
     def test_a_type_discovery_can_continue_after_all_b_review_slots_filled(self):
         # The completed B sample is not a reason to stop researching
         # independently selected A-type metadata signals.
