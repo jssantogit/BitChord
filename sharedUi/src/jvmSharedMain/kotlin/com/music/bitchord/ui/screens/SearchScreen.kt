@@ -40,8 +40,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NorthWest
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
