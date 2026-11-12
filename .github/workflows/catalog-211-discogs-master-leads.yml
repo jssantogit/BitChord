@@ -36,7 +36,7 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_master_lead_scout.py' -v
       - name: Test exact-Release link evidence without assuming Master equivalence
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_exact_release_link_probe.py' -v
-      - name: Research five artist-balanced typed Masters for A type controls
+      - name: Research eight artist-balanced typed Masters for A type controls
         run: python3 scripts/catalog_211_discogs_master_lead_scout.py --scope A
       - name: Trace exact MusicBrainz Release to Discogs Release links inside large Masters
         run: python3 scripts/catalog_211_discogs_exact_release_link_probe.py
