@@ -1628,12 +1628,25 @@ A regressão de ReleaseGroup diferente já havia passado em
 [CI #43138056041](https://github.com/jssantogit/BitChord/actions/runs/43138056041).
 A insuficiência do literal foi reproduzida em
 [RED #43138903490](https://github.com/jssantogit/BitChord/actions/runs/43138903490).
-O workflow público foi atualizado para realizar até dois GETs
-no controle C-05 (frase literal e termo distintivo) e guardar
-`discogs-211-c05-exact-release-search.json`. A observação do
-fallback de termo ainda depende do último resultado público;
-não antecipar recuperação, equivalência de edição, correção
-de tipo ou Android.
+O workflow público executou os dois GETs (frase literal e
+termo distintivo) no controle C-05 e preservou
+`discogs-211-c05-exact-release-search.json`.
+[CI pública #43139235151](https://github.com/jssantogit/BitChord/actions/runs/43139235151)
+encerrou **COMPLETED/SUCCESS** no HEAD `0a651eed`.
+A pesquisa da frase literal isolada continuou sem o Release;
+o termo `release:daydream` restrito ao mesmo artista retornou,
+após a comparação literal dos títulos e créditos, **cinco
+MusicBrainz Release MBIDs**: `4c42b226-24c8-4481-91ce-744ae59eaa5b`,
+`6315e724-cf49-40cb-9096-6c427396bfe6`,
+`97d384e6-372e-4ac4-a32c-abcbdc0abb60`,
+`da0f5bf1-959b-44ec-8504-69871f122b40` e
+`f91ebc0a-d6e0-4ff4-bd21-2921ea2c4065`.
+Esse resultado comprova a capacidade de **localizar registros
+MusicBrainz previamente existentes por busca mais robusta**,
+não recuperar um lançamento ausente, nem confirmar a exata
+prensagem Discogs. O corpus C-05 permanece negativo e
+`reviewed=false` no artefato da consulta isolada, que não pode
+alterar sozinho a adjudicação do manifesto.
 
 O follow-up C reproduz a mesma decisão sem reciclar os
 IDs Discogs já revisados. **O novo scanner é pesquisa
