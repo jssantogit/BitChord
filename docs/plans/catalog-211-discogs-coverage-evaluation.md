@@ -1343,3 +1343,96 @@ calculável**.
 Sem APK, smoke físico, merge, prioridade Discogs-first,
 alteração da #209/main, gravação de MBID inventado
 ou mudança da autoridade de MusicBrainz.
+
+
+## Proteção source-only nativa e primeiro controle editorial A (11/11/2026, Bahia)
+
+### C-04 — corrigido também no fluxo real do BitChord, não só no diagnóstico
+
+O primeiro fallback Python de título fornecia pistas de ReleaseGroup
+apenas ao scanner de investigação. O app, por sua vez, ainda aplicava
+`DiscogsShadowCatalog.knownTitlePredicate` ao índice público e às
+edições hidratadas. Ele não reconhecia a diferença de separação
+`"Superbowl"` versus `"Super Bowl"`, apesar de ambos os nomes
+compartilharem o mesmo prefixo `"Social Path"` e o mesmo sufixo
+`"Japanese Ver."`. Isso poderia produzir **falsa novidade na
+estante source-only**, sem comprovar uma ausência MusicBrainz.
+
+A regra nova é local, determinística e usada **somente para
+suprimir duplicata de grupo conhecido**: título normalizado possui
+uma única barra; a primeira parte deve ser rigorosamente igual
+e conter 2–4 palavras latinas distintas (cada uma de 3–24
+caracteres); a segunda deve ter de 2–8 tokens latinos (2–24
+caracteres) cujas letras e números concatenados sejam
+**integralmente idênticos**, no mesmo ordenamento, com 12–100
+caracteres. Não supõe tradução, fuzzy matching, distância de
+edição, nem identifica Recording, Track, áudio ou prensagem.
+Remix, Live, Acoustic, Instrumental, Sped Up e Slowed são
+expressamente **excluídos dessa equivalência**, assim como
+outra versão (English/Japanese), prefixo genérico de uma palavra
+e título com múltiplas barras. Só se aplica contra o conjunto
+de grupos MusicBrainz já obtidos em uma consulta completa
+para o **mesmo artista**.
+
+- **Android:** testes RED
+  [`d87b390a`](https://github.com/jssantogit/BitChord/commit/d87b390afd2923eec6ca7087dd5f674881f2df48),
+  [CI RED #43123188253](https://github.com/jssantogit/BitChord/actions/runs/43123188253)
+  — 171 testes, uma falha esperada no caso C-04. Implementação
+  [`efa69b56`](https://github.com/jssantogit/BitChord/commit/efa69b56e8bd9bea072f98587b8b2014c09682a7).
+  [CI Android/JVM #43123899508](https://github.com/jssantogit/BitChord/actions/runs/43123899508)
+  **SUCCESS**, `BUILD SUCCESSFUL in 5m 54s`; a seleção
+  `DiscogsShadowCatalog.select` não reintroduz C-04 no
+  catálogo source-only sob título variante.
+- **Scanner público:** regressão RED
+  [`310982c5`](https://github.com/jssantogit/BitChord/commit/310982c5680f7824a7b72110c925ad78817aea8d)
+  e [CI RED #43123559722](https://github.com/jssantogit/BitChord/actions/runs/43123559722)
+  reproduziram a falsa novidade em
+  `known_group_title`. A correção Python
+  [`fa7451e1`](https://github.com/jssantogit/BitChord/commit/fa7451e11389dbc2348c98dd276196c151820efa)
+  usa a mesma condição estrita; a
+  [CI #43123668213](https://github.com/jssantogit/BitChord/actions/runs/43123668213)
+  **SUCCESS**. A prevenção de reciclagem da
+  edição C-04 já revisada também passou em
+  [CI #43122645293](https://github.com/jssantogit/BitChord/actions/runs/43122645293).
+  Essas regressões não equivalem a teste em dispositivo físico
+  ou a uma recuperação C, ainda igual a zero.
+
+### A-01 — FEARLESS já é EP; Discogs não corrigiu nada
+
+O primeiro controle A independentemente revisto é
+**LE SSERAFIM — FEARLESS**, ReleaseGroup MusicBrainz
+[`fb426d76-525d-4b25-90d1-fa4d1b3140c9`](https://musicbrainz.org/release-group/fb426d76-525d-4b25-90d1-fa4d1b3140c9)
+com tipo primário **EP**. A
+[SOURCE MUSIC](https://sourcemusic.com/artist/discography/LE%20SSERAFIM/8)
+o define explicitamente como **1st Mini Album**,
+cinco faixas; o
+[anúncio de pré-venda](https://weverse.io/lesserafim/notice/2469)
+de 13/04/2022 registra 02/05/2022 e **duas
+embalagens físicas** Vol.1 e Vol.2. A matriz real
+[#43120411787](https://github.com/jssantogit/BitChord/actions/runs/43120411787)
+confirma relação tipada entre o ReleaseGroup e Discogs
+Master 2653076; Discogs Release 23314901 é uma
+edição física vinculada diretamente a **outro exato
+Release MB** que não o par B-07 negativo. Não
+inferir que a edição source-only foi recuperada nem
+que uma simples versão do Master altera o tipo do
+grupo. A revisão A-01 é **concordância
+editorial EP/EP**, nenhuma correção. O
+`match_state=candidate` conserva inconclusiva a
+identidade da prensagem, `app_type=Unknown` e
+`visible=false` significam Android não medido,
+não erro de UI. TDD RED
+[CI #43124399182](https://github.com/jssantogit/BitChord/actions/runs/43124399182)
+→ registro e baseline GREEN
+[CI #43124562605](https://github.com/jssantogit/BitChord/actions/runs/43124562605)
+**SUCCESS**.
+
+**Corpus resultante:** 30 vagas, **12 revisões**
+(A 1/10: tipo correto, B 10/10: sem novas
+ligações `Verified`, C 1/10: não ausência),
+18 ainda não revisadas, métricas globais ainda
+indisponíveis. Zero correções efetivas, zero
+recuperações C comprovadas, zero ganho UI medido.
+PR #211 continua Draft/unmerged; nenhuma alteração
+em #209/main, nenhuma troca da autoridade MusicBrainz,
+APK ou smoke físico.
