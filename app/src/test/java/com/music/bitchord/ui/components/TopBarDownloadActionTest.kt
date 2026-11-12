@@ -5,6 +5,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -40,6 +41,23 @@ class TopBarDownloadActionTest {
             .assertWidthIsEqualTo(40.dp)
             .assertHeightIsEqualTo(40.dp)
         compose.onNodeWithContentDescription("Downloads concluídos").performClick()
+        compose.runOnIdle { assertEquals(1, opens) }
+    }
+
+    @Test fun downloadTaggedSurfaceOwnsClickAction() {
+        var opens = 0
+        compose.setContent {
+            MaterialTheme {
+                TopBarDownloadAction(onClick = { opens++ }) {
+                    Icon(Icons.Rounded.DownloadDone, contentDescription = "Downloads")
+                }
+            }
+        }
+        // The 40dp native surface, not a nested Material 3 button with its
+        // own touch geometry, owns the click semantics and callback.
+        compose.onNodeWithTag("apple-topbar-download-action")
+            .assertHasClickAction()
+            .performClick()
         compose.runOnIdle { assertEquals(1, opens) }
     }
 }
