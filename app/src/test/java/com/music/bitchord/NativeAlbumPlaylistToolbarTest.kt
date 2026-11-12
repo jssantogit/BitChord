@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,6 +21,13 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class NativeAlbumPlaylistToolbarTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun collectionOverflowReusesTheSamePlainVectorAsTheOtherThreeDotMenus() {
+        assertSame(
+            com.music.bitchord.ui.icons.PlaylistEditorIcons.More,
+            nativeCollectionOverflowGlyph(),
+        )
+    }
 
     @Test fun nativeReleaseRatingButtonUsesExistingCanonicalEditorCallback() {
         var taps = 0
