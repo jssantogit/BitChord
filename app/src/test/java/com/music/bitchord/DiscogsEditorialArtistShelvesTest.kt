@@ -19,6 +19,27 @@ class DiscogsEditorialArtistShelvesTest {
     private val unknown = row("00000000-0000-4000-8000-000000000102", "Other")
     private val ep = row("00000000-0000-4000-8000-000000000103", "EP")
 
+    @Test fun exactMusicBrainzHotPairStillCollapsesWhenArtistGroupRowsAreNotCached() {
+        // Native shelves can arrive before the independent public browse
+        // exposes its current rows. The two typed original MBIDs are enough
+        // because their single/EP relation was independently established.
+        val singleId = "44adb7df-66bd-4ebe-a43a-3ea45a93529d"
+        val epId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val single = ShelfItem("HOT", "Single", null, null,
+            "catalog:RELEASE_GROUP:$singleId")
+        val ep = ShelfItem("HOT", "EP", null, null,
+            "catalog:RELEASE_GROUP:$epId")
+        val english = ShelfItem("HOT (English ver.)", "Single", null, null,
+            "catalog:RELEASE_GROUP:00000000-0000-4000-8000-000000000404")
+        val originals = listOf(HomeShelf("Singles e EPs", listOf(single, ep, english)))
+        assertEquals(listOf(HomeShelf("Singles e EPs", listOf(ep, english))),
+            discogsEditorialArtistShelves(originals, emptyList(), emptyMap()))
+        val wrongParentType = listOf(HomeShelf("Singles e EPs", listOf(
+            single, ep.copy(subtitle = "Single"), english)))
+        assertEquals(wrongParentType,
+            discogsEditorialArtistShelves(wrongParentType, emptyList(), emptyMap()))
+    }
+
     @Test fun expandedArtistGridMustUseCurrentProjectionNotOldClickedShelfSnapshot() {
         val stale = HomeShelf("Singles e EPs", listOf(
             ShelfItem("HOT", "Single", null, null, "catalog:RELEASE_GROUP:44adb7df-66bd-4ebe-a43a-3ea45a93529d"),
