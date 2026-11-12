@@ -1,11 +1,36 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: ten independently source-reviewed negative B edition pairs; one source-reviewed negative C existing EP control; A 0/10, B 10/10, C 1/10, full corpus 11/30; no proven B Verified, C recovery or UI gains; three preliminary C exclusions.",
+  "description": "Discogs #211: independent editorial review A 1/10 (FEARLESS EP already correctly classified); B 10/10 negative or candidate exact-edition pairs; C 1/10 negative (existing Stray Kids EP), total 12/30; no automatic type corrections, new Verified B matches, C recoveries, or measured UI gains.",
   "cases": [
     {
       "id": "A-01",
       "cohort": "type",
-      "reviewed": false
+      "reviewed": true,
+      "label": "LE SSERAFIM · FEARLESS (debut EP)",
+      "musicbrainz_group_mbid": "fb426d76-525d-4b25-90d1-fa4d1b3140c9",
+      "musicbrainz_artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "discogs_release_id": 23314901,
+      "evidence_links": {
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/fb426d76-525d-4b25-90d1-fa4d1b3140c9",
+        "discogs_release": "https://www.discogs.com/release/23314901",
+        "independent_editorial": "https://weverse.io/lesserafim/notice/2469",
+        "independent_label_discography": "https://sourcemusic.com/artist/discography/LE%20SSERAFIM/8",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43120411787"
+      },
+      "reviewed_at_utc": "2026-11-12T00:03:15Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "EP",
+      "musicbrainz_type": "EP",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "Official SOURCE MUSIC’s FEARLESS pre-order notice (13 April 2022) explicitly calls the 2 May 2022 LE SSERAFIM debut a 1st Mini Album and documents two separate physical CD variants (Vol.1 and Vol.2). The independent SOURCE MUSIC discography confirms the five-song first mini album and its track sequence. The public exact-ID MusicBrainz→Discogs typed Master matrix #43120411787 independently observed MusicBrainz ReleaseGroup fb426d76 as primary type EP with Discogs Master 2653076; Discogs Release 23314901 is one five-track physical CD version and is directly linked to the exact MB Release cd7fa327 in the matrix. Therefore the ReleaseGroup EP classification already agrees with the label, and Discogs supplies NO new correction or missing type here. The observed pair is retained as Candidate for this corpus type review because no separate physical packaging/pressing adjudication or Android UI measurement was made: candidate is not a Verified unlinked match, app_type Unknown / visible false are unmeasured, and canonical MusicBrainz classification was not rewritten. This A review is independent of previously reviewed B-07, which compared a different MusicBrainz Release against the same Discogs physical edition to test exact pressing identity."
     },
     {
       "id": "A-02",
