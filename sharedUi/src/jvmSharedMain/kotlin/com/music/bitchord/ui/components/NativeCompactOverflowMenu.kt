@@ -10,6 +10,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -37,8 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -189,7 +189,7 @@ fun NativeCompactMenuItem(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     destructive: Boolean = false,
-    selected: Boolean = false,
+    selected: Boolean? = null,
 ) {
     val actionGate = LocalNativeCompactMenuActionGate.current
     val actionEnabled = enabled && LocalNativeCompactMenuActionsEnabled.current &&
@@ -197,13 +197,17 @@ fun NativeCompactMenuItem(
     val color = if (destructive) MaterialTheme.colorScheme.error
         else MaterialTheme.colorScheme.onSurface
     val ink = color.copy(alpha = if (enabled) 1f else 0.4f)
+    val activate = { if (actionGate?.consumeOnce() != false) onClick() }
+    val actionModifier = if (selected != null) {
+        Modifier.selectable(selected = selected, enabled = actionEnabled,
+            role = Role.RadioButton, onClick = activate)
+    } else {
+        Modifier.clickable(enabled = actionEnabled, onClick = activate)
+    }
     Row(
         modifier = Modifier.fillMaxWidth()
             .testTag("native-compact-menu-item")
-            .semantics { this.selected = selected }
-            .clickable(enabled = actionEnabled) {
-                if (actionGate?.consumeOnce() != false) onClick()
-            }
+            .then(actionModifier)
             .heightIn(min = 54.dp)
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -215,7 +219,7 @@ fun NativeCompactMenuItem(
         }
         Text(label, modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyLarge, color = ink)
-        if (selected) {
+        if (selected == true) {
             Icon(PlaylistEditorIcons.Check, contentDescription = null,
                 tint = ink, modifier = Modifier.size(18.dp))
         }
