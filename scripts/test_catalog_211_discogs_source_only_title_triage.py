@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Offline tests: group C title-index leads cannot prove identity or absence."""
 import unittest
-from catalog_211_discogs_source_only_title_triage import triage, parse_mb_group_search
+from catalog_211_discogs_source_only_title_triage import triage, parse_mb_group_search, parse_mb_release_search
 from test_catalog_211_discogs_source_only_reconciliation import index, editions, ARTIST
 
 GROUP = '4e219d4e-c5e0-4ed9-acec-b948c7319b37'
@@ -145,6 +145,71 @@ class TitleTriageTest(unittest.TestCase):
              'artist-credit': [{'artist': {'id': ARTIST}}]}
         ]}
         self.assertIsNone(parse_mb_group_search(page, ARTIST))
+
+
+    def test_c05_release_title_found_within_older_named_group_after_rg_index_miss(self):
+        # Discogs "Romance: Untold -Daydream-" is an MB Release title,
+        # while its RG is "ROMANCE : UNTOLD" without the repackage suffix.
+        doc = editions(barcodes=[])
+        doc["observations"][0]["title"] = "Romance: Untold -Daydream-"
+        release_id = "4c42b226-24c8-4481-91ce-744ae59eaa5b"
+        group_id = "0c668bdb-328c-4dba-8407-8eddb5373a5d"
+        calls = []
+        def get(url):
+            calls.append(url)
+            if "/ws/2/release-group/?" in url:
+                return response(count=0)
+            if "/ws/2/release/?" in url:
+                return {"count": 1, "releases": [{
+                    "id": release_id, "title": "ROMANCE : UNTOLD -daydream-",
+                    "artist-credit": [{"artist": {"id": ARTIST}}],
+                    "release-group": {"id": group_id}
+                }]}
+            raise AssertionError("Unexpected source GET " + url)
+        result = triage(index(), doc, prior("mb_provider_unavailable"), get)
+        row = result["observations"][0]
+        self.assertEqual(2, result["provider_requests"])
+        self.assertEqual("mb_release_title_lead_not_edition", row["status"])
+        self.assertEqual([release_id], row["mb_release_candidate_mbids"])
+        self.assertEqual([group_id], row["mb_group_candidate_mbids"])
+        self.assertFalse(row["confirmed_missing_from_musicbrainz"])
+        self.assertEqual(0, result["confirmed_source_only_cases"])
+        self.assertTrue(all("arid%3A" in u for u in calls))
+
+    def test_c05_wrong_artist_release_index_cannot_claim_existing_release(self):
+        doc = editions(barcodes=[])
+        doc["observations"][0]["title"] = "Romance: Untold -Daydream-"
+        def get(url):
+            if "/ws/2/release-group/?" in url:
+                return response(count=0)
+            return {"count": 1, "releases": [{
+                "id": "4c42b226-24c8-4481-91ce-744ae59eaa5b",
+                "title": "ROMANCE : UNTOLD -daydream-",
+                "release-group": {"id": "0c668bdb-328c-4dba-8407-8eddb5373a5d"},
+                "artist-credit": [{"artist": {"id": "49204a7a-ed85-407a-828f-6fd46f1d8126"}}]
+            }]}
+        out = triage(index(), doc, prior(), get)["observations"][0]
+        self.assertEqual("invalid_mb_release_title_search", out["status"])
+        self.assertEqual([], out["mb_group_candidate_mbids"])
+        self.assertFalse(out["confirmed_missing_from_musicbrainz"])
+
+    def test_invalid_or_incomplete_mb_release_search_never_becomes_absence(self):
+        valid_row = {"id": "4c42b226-24c8-4481-91ce-744ae59eaa5b",
+                     "title": "ROMANCE : UNTOLD -daydream-",
+                     "release-group": {"id": "0c668bdb-328c-4dba-8407-8eddb5373a5d"},
+                     "artist-credit": [{"artist": {"id": ARTIST}}]}
+        self.assertEqual(([valid_row["id"]], [valid_row["release-group"]["id"]]),
+                         parse_mb_release_search(
+                             {"count": 1, "releases": [valid_row]},
+                             ARTIST, "Romance: Untold -Daydream-"))
+        for invalid in (
+            {"count": 11, "releases": [valid_row]},
+            {"count": 1, "releases": [dict(valid_row, id="invalid")]},
+            {"count": 2, "releases": [valid_row, valid_row]},
+            {"count": 1, "releases": [dict(valid_row, title="Different Remix")]},
+        ):
+            self.assertIsNone(parse_mb_release_search(
+                invalid, ARTIST, "Romance: Untold -Daydream-"))
 
 
 if __name__=='__main__': unittest.main()
