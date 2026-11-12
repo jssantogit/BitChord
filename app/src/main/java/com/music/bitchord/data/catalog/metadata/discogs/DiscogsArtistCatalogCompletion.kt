@@ -75,3 +75,43 @@ internal suspend fun loadCompleteMusicBrainzArtistGroupTitles(
         is MusicBrainzCatalogGraphResult.Failure -> null
     }
 }
+
+
+/**
+ * Exact Official MusicBrainz Release titles are needed in addition to
+ * ReleaseGroup names: a repackage can live inside an older-named group.
+ *
+ * Bound the *additional* read to three 100-edition pages. If the index is
+ * larger, partial, malformed or unavailable, return null. Do not infer
+ * catalog absence or create an anonymous Discogs shadow from a partial index.
+ */
+internal suspend fun collectCompleteDiscogsArtistReleaseTitles(
+    fetchPage: suspend (offset: Int) -> DiscogsArtistGroupPage?,
+): Set<String>? = collectCompleteDiscogsArtistGroupTitles(
+    pageSize = 100, maxGroups = 300, fetchPage = fetchPage,
+)
+
+/** A release index failure is not proof that Discogs found a new title. */
+internal fun completeDiscogsArtistKnownTitles(
+    groupTitles: Set<String>,
+    releaseTitles: Set<String>?,
+): Set<String>? = releaseTitles?.let { groupTitles + it }
+
+internal suspend fun loadCompleteMusicBrainzArtistReleaseTitles(
+    artistMbid: String,
+    graph: MusicBrainzCatalogGraph = MusicBrainzCatalogGraph(),
+): Set<String>? = collectCompleteDiscogsArtistReleaseTitles { offset ->
+    when (val result = graph.browseOfficialReleasesForArtist(
+        artistMbid, limit = 100, offset = offset,
+    )) {
+        is MusicBrainzCatalogGraphResult.Success -> result.value.let { page ->
+            DiscogsArtistGroupPage(
+                groups = page.items.map { it.musicBrainzId to it.title },
+                total = page.total,
+                offset = page.offset,
+                consumedCount = page.consumedCount,
+            )
+        }
+        is MusicBrainzCatalogGraphResult.Failure -> null
+    }
+}
