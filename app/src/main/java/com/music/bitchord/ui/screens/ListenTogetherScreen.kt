@@ -93,6 +93,7 @@ import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.NativeAlertHost
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.data.listentogether.JamInviteLink
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.listentogether.PartyActivity
@@ -1082,29 +1083,15 @@ private fun MemberRow(member: PartyMember, isYou: Boolean, canKick: Boolean = fa
     }
 }
 
-/**
- * A compact destructive row action, distinct from a generic Material 3
- * text button. The 44dp target is BitChord accessibility geometry; the
- * exact Apple Music member-management surface is not documented.
- */
+/** Destructive member action shares the global native text-control geometry. */
 @Composable
 internal fun PartyMemberRemoveAction(label: String, onClick: () -> Unit) {
-    val ink = MaterialTheme.colorScheme.error
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .heightIn(min = 44.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag("party-member-remove-action"),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = ink,
-        )
-    }
+    NativeInlineTextAction(
+        label = label,
+        onClick = onClick,
+        destructive = true,
+        tag = "party-member-remove-action",
+    )
 }
 
 @Composable

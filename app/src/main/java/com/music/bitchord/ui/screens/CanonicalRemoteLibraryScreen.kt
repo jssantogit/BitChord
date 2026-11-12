@@ -96,6 +96,7 @@ import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.ui.components.NativeDetailTrackNumber
 import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.NativeTrackRowText
@@ -1649,7 +1650,7 @@ internal fun RemoteSongSavedFilterMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
-        PlaylistWizardInlineAction(
+        NativeInlineTextAction(
             label = "Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"),
             onClick = { expanded = true },
         )

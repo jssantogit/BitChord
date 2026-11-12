@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
@@ -78,8 +79,7 @@ import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Compact native action for personal ratings; the geometry is a BitChord
- * adaptation, not a measurement of Apple Music's rating editor.
+ * Ratings-specific wrapper keeps the established action tag and star glyph.
  */
 @Composable
 internal fun MyRatingsInlineAction(
@@ -89,32 +89,14 @@ internal fun MyRatingsInlineAction(
     enabled: Boolean = true,
     subdued: Boolean = false,
 ) {
-    val ink = if (subdued) MaterialTheme.colorScheme.onSurfaceVariant
-        else appleMusicKeyColor()
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .heightIn(min = 44.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag("my-ratings-inline-action"),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (icon != null) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = ink.copy(alpha = if (enabled) 1f else 0.4f),
-            )
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = ink.copy(alpha = if (enabled) 1f else 0.4f),
-        )
-    }
+    NativeInlineTextAction(
+        label = label,
+        onClick = onClick,
+        icon = icon,
+        enabled = enabled,
+        subdued = subdued,
+        tag = "my-ratings-inline-action",
+    )
 }
 
 /** Library entry works independently of YouTube login and Rediscovery eligibility. */

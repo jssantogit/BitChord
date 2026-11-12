@@ -37,7 +37,7 @@ class RemoteSongFilterPresentationTest {
                 )
             }
         }
-        compose.onNodeWithTag("playlist-wizard-inline-action")
+        compose.onNodeWithTag("native-inline-text-action")
             .assertHeightIsAtLeast(44.dp)
         compose.onNodeWithText("Filtro: Todas").performClick()
         compose.onNodeWithText("Todas as músicas").performClick()

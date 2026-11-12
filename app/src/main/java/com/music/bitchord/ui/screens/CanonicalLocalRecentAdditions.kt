@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.NativeCompactOverflowMenu
 import com.music.bitchord.ui.components.NativeCompactMenuItem
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -13,7 +14,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -358,7 +358,7 @@ internal fun CanonicalRecentAdditionsShelf(
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            TextButton(onClick = onSeeAll) { Text("Ver todos") }
+            NativeInlineTextAction(label = "Ver todos", onClick = onSeeAll)
         }
         // The Library already has a snapping/lazy shelf; reuse it rather than
         // recreating a horizontalScroll Row for recent local recordings.

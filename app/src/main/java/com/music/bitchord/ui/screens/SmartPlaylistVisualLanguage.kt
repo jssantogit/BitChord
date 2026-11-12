@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.music.bitchord.ui.components.PillTextField
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ArtworkPageBackButton
 import androidx.compose.material3.Text
@@ -157,9 +158,8 @@ internal fun PlaylistWizardSecondaryAction(
 }
 
 /**
- * Plain BitChord inline action for small editor links. Apple Music's exact
- * geometry here is unknown; blue marks a navigational action, while subdued
- * actions remain neutral. Preserve a 44dp target and disabled semantics.
+ * Playlist-specific wrapper keeps existing test tags/callers while delegating
+ * its visual language to the shared BitChord inline action.
  */
 @Composable
 internal fun PlaylistWizardInlineAction(
@@ -170,26 +170,15 @@ internal fun PlaylistWizardInlineAction(
     subdued: Boolean = false,
     destructive: Boolean = false,
 ) {
-    val ink = when {
-        destructive -> MaterialTheme.colorScheme.error
-        subdued -> MaterialTheme.colorScheme.onSurfaceVariant
-        else -> appleMusicKeyColor()
-    }
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .heightIn(min = 44.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .testTag("playlist-wizard-inline-action"),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = ink.copy(alpha = if (enabled) 1f else 0.40f),
-        )
-    }
+    NativeInlineTextAction(
+        label = label,
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        subdued = subdued,
+        destructive = destructive,
+        tag = "playlist-wizard-inline-action",
+    )
 }
 
 /** Secondary actions belong to the footer, but must not compete with Save. */
