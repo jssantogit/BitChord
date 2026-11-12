@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Discogs #211: independent editorial A 2/10 (2022 Korean FEARLESS EP and distinct 2023 Japanese FEARLESS Single both already correctly typed), B 10/10 negative or candidate exact-edition pairs, C 1/10 negative (existing Stray Kids EP), total 13/30; zero automatic type corrections, new unlinked B Verified matches, C recoveries, or measured UI gains.",
+  "description": "Discogs #211: independent editorial A 2/10 (2022 Korean FEARLESS EP and 2023 Japanese FEARLESS Single both already correctly typed), B 10/10 negative or candidate exact-edition pairs, C 2/10 negatives (Stray Kids existing EP and ENHYPEN repackage as Release inside an existing MB group), total 14/30; zero automatic type corrections, new unlinked B Verified matches, C recoveries, or measured UI gains.",
   "cases": [
     {
       "id": "A-01",
@@ -495,7 +495,36 @@
     {
       "id": "C-05",
       "cohort": "source_only",
-      "reviewed": false
+      "reviewed": true,
+      "label": "ENHYPEN · ROMANCE : UNTOLD -daydream- (repackage already in MusicBrainz)",
+      "musicbrainz_artist_mbid": "95663592-1447-4579-90f7-c94733476667",
+      "musicbrainz_group_mbid": "0c668bdb-328c-4dba-8407-8eddb5373a5d",
+      "musicbrainz_release_mbid": "4c42b226-24c8-4481-91ce-744ae59eaa5b",
+      "artist_browse_complete": true,
+      "discogs_release_id": 32437206,
+      "evidence_links": {
+        "musicbrainz_artist": "https://musicbrainz.org/artist/95663592-1447-4579-90f7-c94733476667",
+        "musicbrainz_release_group": "https://musicbrainz.org/release-group/0c668bdb-328c-4dba-8407-8eddb5373a5d",
+        "musicbrainz_release": "https://musicbrainz.org/release/4c42b226-24c8-4481-91ce-744ae59eaa5b",
+        "discogs_release": "https://www.discogs.com/release/32437206",
+        "independent_editorial": "https://beliftlab.com/artist/discography/ENHYPEN/12",
+        "independent_release_notice": "https://weverse.io/enhypen/notice/22943",
+        "observed_workflow": "https://github.com/jssantogit/BitChord/actions/runs/43124506344"
+      },
+      "reviewed_at_utc": "2026-11-12T01:44:50Z",
+      "sources": [
+        "label",
+        "discogs",
+        "musicbrainz"
+      ],
+      "reference_type": "Album",
+      "musicbrainz_type": "Album",
+      "app_type": "Unknown",
+      "match_state": "candidate",
+      "match_correct": false,
+      "visible": false,
+      "absent_in_musicbrainz": false,
+      "review_notes": "The BELIFT LAB official discography explicitly identifies ENHYPEN ROMANCE : UNTOLD -daydream- as a 2nd Studio Repackage Album, released 11 November 2024, with two new songs and the remaining tracks from the second album. The public Discogs C follow-up CI #43124506344 observed Release 32437206 with correct exact Discogs artist ID 8303009, but its barcode lookup was unavailable and never proved source absence. Independent MusicBrainz Release 4c42b226 is an Official 2024 South Korean CD with the same daydream repackage title and 11-song tracklist, stored in ReleaseGroup 0c668bdb, whose canonical group title is ROMANCE : UNTOLD (Album). Therefore MusicBrainz ALREADY HAS a repackage edition even though ReleaseGroup title alone does not contain -daydream-. This is a C negative, not a new Discogs-only recovery or evidence of false MB artist relations. Source Discogs 32437206 and the MB physical pressing have not been confirmed identical by label/catalog/packaging, hence candidate, not Verified. App_type Unknown and visible false represent not measured on Android, not observed rendering failure; MusicBrainz ReleaseGroup and types remain unchanged."
     },
     {
       "id": "C-06",
