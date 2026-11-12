@@ -8,6 +8,8 @@ on:
       - catalog/210-discogs-provider-evidence-20261107
     paths:
       - scripts/catalog_211_discogs_corpus_candidates.py
+      - scripts/catalog_211_discogs_c_second_page_probe.py
+      - scripts/test_catalog_211_discogs_c_second_page_probe.py
       - scripts/test_catalog_211_discogs_corpus_candidates.py
       - scripts/catalog_211_discogs_candidate_details.py
       - scripts/test_catalog_211_discogs_candidate_details.py
@@ -54,6 +56,10 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_corpus_candidates.py' -v
       - name: Observe bounded public Artist and ReleaseGroup index leads
         run: python3 scripts/catalog_211_discogs_corpus_candidates.py
+      - name: Test bounded Discogs Artist page-two research index
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_c_second_page_probe.py' -v
+      - name: Observe additional artist-scoped second-page audio leads without tokens
+        run: python3 scripts/catalog_211_discogs_c_second_page_probe.py
       - name: Test bounded public Release/Master detail hydration
         run: python3 -m unittest discover -s scripts -p 'test_catalog_211_discogs_candidate_details.py' -v
       - name: Inspect bounded candidate Edition metadata, without editorial claims
@@ -135,6 +141,7 @@ jobs:
           name: discogs-211-corpus-candidate-observations
           path: |
             discogs-211-corpus-candidates.json
+            discogs-211-c-second-page.json
             discogs-211-corpus-edition-observations.json
             discogs-211-source-only-barcode-reconciliation.json
             discogs-211-source-only-title-triage.json
