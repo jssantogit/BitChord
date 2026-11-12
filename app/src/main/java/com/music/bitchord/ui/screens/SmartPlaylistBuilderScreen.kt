@@ -1,10 +1,12 @@
 package com.music.bitchord.ui.screens
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.components.applePrimaryButtonColors
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -384,7 +386,7 @@ internal fun SmartPlaylistBuilderScreen(
                                 busy = false
                             }
                         }
-                    }, enabled = !busy) {
+                    }, enabled = !busy, colors = applePrimaryButtonColors(), shape = RoundedCornerShape(25.dp)) {
                         Text(stringResource(Res.string.smart_playlist_save))
                     }
                     TextButton(onClick = {
