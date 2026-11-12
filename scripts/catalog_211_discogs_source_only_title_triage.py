@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""C-cohort: bounded MusicBrainz title-index check when Discogs has no barcode.
+"""C-cohort: bounded MusicBrainz title-index checks for unresolved Discogs leads.
 
 This searches MusicBrainz's release title index, scoped to an exact artist MBID.
 Even a hit is just a release-group lead, not proof of the same pressing.
@@ -14,14 +14,14 @@ import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from catalog_211_discogs_candidate_details import candidate_queue, valid_id, MAX_CANDIDATES
-from catalog_211_discogs_corpus_candidates import MBID
+from catalog_211_discogs_corpus_candidates import MBID, normalized
 from catalog_211_discogs_public_link_probe import read_json
 
 INDEX = Path('discogs-211-corpus-candidates.json')
 EDITIONS = Path('discogs-211-corpus-edition-observations.json')
 BARCODE = Path('discogs-211-source-only-barcode-reconciliation.json')
 OUTPUT = Path('discogs-211-source-only-title-triage.json')
-MAX_REQUESTS = MAX_CANDIDATES * 2  # one exact query plus one safe slash-prefix query
+MAX_REQUESTS = MAX_CANDIDATES * 3  # RG exact, bounded RG prefix, MB exact Release
 SEARCH_LIMIT = 10
 
 
@@ -37,6 +37,17 @@ def title_query(title: object, artist_mbid: object) -> str | None:
         'query': phrase, 'fmt':'json','limit':SEARCH_LIMIT,
     })
 
+
+
+def release_title_query(title: object, artist_mbid: object) -> str | None:
+    """Artist-scoped literal MB *Release* search, not a ReleaseGroup title."""
+    if title_query(title, artist_mbid) is None:
+        return None
+    escaped = title.strip().replace('\\', '\\\\').replace('"', '\\"')
+    return 'https://musicbrainz.org/ws/2/release/?' + urlencode({
+        'query': f'release:"{escaped}" AND arid:{artist_mbid}',
+        'fmt': 'json', 'limit': SEARCH_LIMIT,
+    })
 
 
 def title_prefix_query(title: object, artist_mbid: object) -> str | None:
@@ -95,6 +106,51 @@ def parse_mb_group_search(payload: object, artist_mbid: str) -> list[str] | None
     return sorted(seen)
 
 
+def parse_mb_release_search(payload: object, artist_mbid: str,
+                            literal_title: str) -> tuple[list[str], list[str]] | None:
+    """Positive exact Release-title hits only; does not prove a Discogs pressing."""
+    if (not isinstance(payload, dict) or not MBID.fullmatch(artist_mbid) or
+        not isinstance(literal_title, str)):
+        return None
+    total, rows = payload.get('count'), payload.get('releases')
+    if (type(total) is not int or total < 0 or
+        not isinstance(rows, list) or len(rows) != min(total, SEARCH_LIMIT)):
+        return None
+    seen, releases, groups = set(), set(), set()
+    expected_title = normalized(literal_title)
+    for entry in rows:
+        if not isinstance(entry, dict):
+            return None
+        rid, name, parent, credits = (
+            entry.get('id'), entry.get('title'),
+            entry.get('release-group'), entry.get('artist-credit')
+        )
+        if (not isinstance(rid, str) or not MBID.fullmatch(rid) or
+            rid.lower() in seen or not isinstance(name, str) or
+            normalized(name) != expected_title or
+            not isinstance(parent, dict) or
+            not isinstance(parent.get('id'), str) or
+            not MBID.fullmatch(parent['id']) or
+            not isinstance(credits, list) or not 1 <= len(credits) <= 40):
+            return None
+        seen.add(rid.lower())
+        artist_ids = []
+        for credit in credits:
+            if isinstance(credit, str):
+                continue
+            if not isinstance(credit, dict) or not isinstance(credit.get('artist'), dict):
+                return None
+            mbid = credit['artist'].get('id')
+            if not isinstance(mbid, str) or not MBID.fullmatch(mbid):
+                return None
+            artist_ids.append(mbid.lower())
+        if artist_ids != [artist_mbid.lower()]:
+            return None
+        releases.add(rid.lower())
+        groups.add(parent['id'].lower())
+    return sorted(releases), sorted(groups)
+
+
 def triage(index: dict, editions: dict, barcode_report: dict, get) -> dict:
     result={'schema_version':1,'observed_utc':dt.datetime.now(dt.timezone.utc).isoformat(),
             'provider_requests':0, 'reviewed_corpus_cases':0,
@@ -115,7 +171,7 @@ def triage(index: dict, editions: dict, barcode_report: dict, get) -> dict:
         key=(source.get('source_kind'),source.get('source_id'))
         row={'source_kind':key[0], 'source_id':key[1],
              'status':'ineligible_or_identity_mismatch','mb_group_candidate_mbids':[],
-             'reviewed':False, 'confirmed_missing_from_musicbrainz':False}
+             'mb_release_candidate_mbids':[], 'reviewed':False, 'confirmed_missing_from_musicbrainz':False}
         result['observations'].append(row)
         expected=allowed.get(key)
         if (key in seen or expected is None or
@@ -130,7 +186,10 @@ def triage(index: dict, editions: dict, barcode_report: dict, get) -> dict:
         seen.add(key)
         if (source.get('status') != 'edition_metadata_observed_not_adjudicated' or
             source.get('artist_id_matches_relation') is not True or
-            prev.get('status') != 'source_barcode_unavailable'):
+            prev.get('status') not in (
+                'source_barcode_unavailable', 'mb_provider_unavailable',
+                'no_exact_barcode_result_not_absence') or
+            prev.get('matched_mb_release_mbids') != []):
             continue
         url=title_query(source.get('title'), expected['musicbrainz_artist_mbid'])
         if url is None:
@@ -152,32 +211,56 @@ def triage(index: dict, editions: dict, barcode_report: dict, get) -> dict:
             row['status']='mb_title_index_lead_not_edition'
             row['mb_group_candidate_mbids']=matches
         else:
-            # An exact release-title phrase can miss a known ReleaseGroup
-            # whose canonical title spells the second slash segment
-            # differently. Query only an unchanged multiword prefix, still
-            # bound to the same exact MB artist ID; never infer absence.
+            # A canonical RG title may differ from one of its Release titles
+            # (e.g. ROMANCE : UNTOLD vs ROMANCE : UNTOLD -daydream-).
+            # First try the existing safe slash-prefix RG lead, when eligible;
+            # otherwise also check the exact Release title for the same artist.
             prefix_url = title_prefix_query(
                 source.get('title'), expected['musicbrainz_artist_mbid'])
-            if prefix_url is None:
-                row['status']='no_title_index_hit_not_absence'
+            if prefix_url is not None:
+                if result['provider_requests'] >= MAX_REQUESTS:
+                    row['status']='title_prefix_not_checked_budget'
+                    continue
+                result['provider_requests'] += 1
+                try:
+                    fallback=get(prefix_url)
+                except (HTTPError,URLError,OSError,TimeoutError,ValueError):
+                    row['status']='mb_title_provider_unavailable'
+                    continue
+                candidates=parse_mb_group_search(
+                    fallback,expected['musicbrainz_artist_mbid'])
+                if candidates is None:
+                    row['status']='invalid_mb_title_search'
+                    continue
+                if candidates:
+                    row['status']='mb_title_prefix_lead_not_edition'
+                    row['mb_group_candidate_mbids']=candidates
+                    continue
+            release_url = release_title_query(
+                source.get('title'), expected['musicbrainz_artist_mbid'])
+            if release_url is None:
+                row['status']='invalid_source_title'
                 continue
             if result['provider_requests'] >= MAX_REQUESTS:
-                row['status']='title_prefix_not_checked_budget'
+                row['status']='release_title_not_checked_budget'
                 continue
             result['provider_requests'] += 1
             try:
-                fallback=get(prefix_url)
+                release_payload = get(release_url)
             except (HTTPError,URLError,OSError,TimeoutError,ValueError):
-                row['status']='mb_title_provider_unavailable'
+                row['status']='mb_release_title_provider_unavailable'
                 continue
-            candidates=parse_mb_group_search(
-                fallback,expected['musicbrainz_artist_mbid'])
-            if candidates is None:
-                row['status']='invalid_mb_title_search'
-            elif candidates:
-                row['status']='mb_title_prefix_lead_not_edition'
-                row['mb_group_candidate_mbids']=candidates
+            matched = parse_mb_release_search(
+                release_payload, expected['musicbrainz_artist_mbid'],
+                source['title'])
+            if matched is None:
+                row['status']='invalid_mb_release_title_search'
+            elif matched[0]:
+                row['status']='mb_release_title_lead_not_edition'
+                row['mb_release_candidate_mbids']=matched[0]
+                row['mb_group_candidate_mbids']=matched[1]
             else:
+                # Even a complete first-page miss is NOT absence evidence.
                 row['status']='no_title_index_hit_not_absence'
     return result
 
