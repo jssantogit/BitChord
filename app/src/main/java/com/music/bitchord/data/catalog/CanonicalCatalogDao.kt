@@ -466,6 +466,46 @@ internal interface CanonicalCatalogDao {
           )
     """)
     suspend fun deleteObsoleteMusicBrainzReleaseTrackSources(releaseId: String, recordingIds: List<String>)
+
+    /**
+     * Refresh legacy sort order only for an already-known, MusicBrainz-exclusive
+     * ReleaseTrack. Edition-specific Track rows retain every exact medium/position;
+     * the legacy schema can represent only one position per Recording.
+     */
+    @Query("""
+        UPDATE catalog_release_track
+        SET trackNumber = (
+            SELECT track.trackNumber FROM catalog_musicbrainz_track AS track
+            WHERE track.releaseId = catalog_release_track.releaseId
+              AND track.recordingId = catalog_release_track.recordingId
+            ORDER BY track.mediumNumber, track.trackNumber, track.trackMbid LIMIT 1
+        )
+        WHERE releaseId = :releaseId AND recordingId IN (:recordingIds)
+          AND EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider = 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_release_track_source AS owner
+              WHERE owner.releaseId = catalog_release_track.releaseId
+                AND owner.recordingId = catalog_release_track.recordingId
+                AND owner.provider != 'musicbrainz'
+          )
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog_external_identity AS identity
+              WHERE identity.entityId = catalog_release_track.releaseId
+                AND identity.entityType = 'release'
+                AND identity.provider != 'musicbrainz'
+          )
+          AND EXISTS (
+              SELECT 1 FROM catalog_musicbrainz_track AS track
+              WHERE track.releaseId = catalog_release_track.releaseId
+                AND track.recordingId = catalog_release_track.recordingId
+          )
+    """)
+    suspend fun refreshMusicBrainzOnlyLegacyTrackPositions(releaseId: String, recordingIds: List<String>)
     @Upsert suspend fun upsertMusicBrainzCoverArtCache(entity: MusicBrainzCoverArtCacheEntity)
     @Query("SELECT * FROM catalog_cover_art_cache WHERE entityType = :entityType AND mbid = :mbid LIMIT 1")
     suspend fun musicBrainzCoverArtCache(entityType: String, mbid: String): MusicBrainzCoverArtCacheEntity?

@@ -575,6 +575,12 @@ internal class MusicBrainzCatalogIndex private constructor(
             previousRecordingIds.chunked(400).forEach { chunk ->
                 dao.deleteObsoleteMusicBrainzOnlyReleaseTracks(releaseId, chunk)
                 dao.deleteObsoleteMusicBrainzReleaseTrackSources(releaseId, chunk)
+                if (detail.completeness.countsExplicitAndExact &&
+                    detail.completeness.offsetsValid &&
+                    detail.completeness.positionsExplicitUnique
+                ) {
+                    dao.refreshMusicBrainzOnlyLegacyTrackPositions(releaseId, chunk)
+                }
             }
             releaseId
         }
