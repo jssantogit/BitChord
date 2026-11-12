@@ -63,6 +63,12 @@ object PlaylistEditorIcons {
         moveTo(18f, 18f); lineTo(20f, 18f)
         moveTo(16f, 16f); lineTo(16f, 20f)
     } }
+    /** Plain original descending lines; the toolbar supplies its own circular surface. */
+    val Sort by lazy { outlined("playlist_sort") {
+        moveTo(4f, 6f); lineTo(20f, 6f)
+        moveTo(4f, 12f); lineTo(16f, 12f)
+        moveTo(4f, 18f); lineTo(11f, 18f)
+    } }
     val Edit by lazy { outlined("playlist_edit") {
         moveTo(4f, 20f); lineTo(9f, 19f); lineTo(19.5f, 8.5f)
         curveTo(21f, 7f, 17f, 3f, 15.5f, 4.5f)

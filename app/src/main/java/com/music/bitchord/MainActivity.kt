@@ -73,14 +73,11 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudOff
-import androidx.compose.material.icons.rounded.IosShare
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Sort
 import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Upgrade
 import com.music.bitchord.data.listentogether.ServerConnectionState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -296,6 +293,7 @@ import com.music.bitchord.ui.components.UpdateAvailableDialog
 import com.music.bitchord.ui.components.WebDavConflictAlert
 import com.music.bitchord.ui.components.FieldConfig
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.media3.common.Player
 import com.music.bitchord.ui.player.NowPlayingScreen
 import com.music.bitchord.ui.player.PlayerSheetMotion
@@ -4661,7 +4659,7 @@ private fun BitChordApp(
                                 }
                                 com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
                                     IconButton(onClick = { unifiedControls.sortMenuOpen = true }) {
-                                        Icon(Icons.Rounded.Sort, contentDescription = "Filtros da biblioteca",
+                                        Icon(PlaylistEditorIcons.Sort, contentDescription = "Filtros da biblioteca",
                                             tint = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
@@ -4669,7 +4667,7 @@ private fun BitChordApp(
                             if (applePlaylistCategoryChrome) {
                                 com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
                                     IconButton(onClick = { playlistLibraryOptionsMenu = true }) {
-                                        Icon(Icons.Rounded.Sort, contentDescription = "Filtros de playlists",
+                                        Icon(PlaylistEditorIcons.Sort, contentDescription = "Filtros de playlists",
                                             tint = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
@@ -4678,7 +4676,7 @@ private fun BitChordApp(
                                 com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
                                     IconButton(onClick = { folderMenuOpen = true }) {
                                         Icon(
-                                            Icons.Rounded.Sort,
+                                            PlaylistEditorIcons.Sort,
                                             contentDescription = "Filtros de Downloads",
                                             tint = MaterialTheme.colorScheme.onSurface,
                                         )
@@ -6611,7 +6609,7 @@ private fun CanonicalPlaylistToolbarActions(
     if (!hasDetail && showCreate) {
         IconButton(onClick = onCreate, modifier = Modifier.size(40.dp)) {
             Icon(
-                Icons.Rounded.PlaylistAdd,
+                PlaylistEditorIcons.Add,
                 contentDescription = "Nova playlist",
                 tint = MaterialTheme.colorScheme.onSurface,
             )
@@ -6665,7 +6663,7 @@ private fun NativeCollectionSearchAction(
 ) {
     IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
         Icon(
-            if (searching) Icons.Rounded.Close else BitChordIcons.Search,
+            if (searching) PlaylistEditorIcons.Close else BitChordIcons.Search,
             contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface,
         )
@@ -6675,7 +6673,7 @@ private fun NativeCollectionSearchAction(
 @Composable
 private fun NativeCollectionSortAction(contentDescription: String, onClick: () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) {
-        Icon(Icons.Rounded.Sort, contentDescription = contentDescription,
+        Icon(PlaylistEditorIcons.Sort, contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface)
     }
 }
@@ -7723,7 +7721,7 @@ internal fun NativeLibraryTopBarSortAction(
             modifier = Modifier.size(40.dp).testTag("native-toolbar-library-sort-trigger"),
         ) {
             Icon(
-                Icons.Rounded.Sort,
+                PlaylistEditorIcons.Sort,
                 contentDescription = stringResource(R.string.sort_library),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
@@ -7753,7 +7751,7 @@ private fun NativeArtistShareTopBarAction(title: String) {
         }
         context.startActivity(Intent.createChooser(intent, title))
     }, modifier = Modifier.size(40.dp)) {
-        Icon(Icons.Rounded.IosShare, contentDescription = stringResource(R.string.share),
+        Icon(PlaylistEditorIcons.Share, contentDescription = stringResource(R.string.share),
             tint = MaterialTheme.colorScheme.onSurface)
     }
 }

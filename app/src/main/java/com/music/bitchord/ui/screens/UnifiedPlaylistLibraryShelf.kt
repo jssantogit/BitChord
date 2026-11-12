@@ -65,7 +65,6 @@ import kotlinx.coroutines.launch
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.themeArtworkPalette
-import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers

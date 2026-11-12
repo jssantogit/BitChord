@@ -396,7 +396,12 @@ fun MessageState(
             textAlign = TextAlign.Center,
         )
         if (actionLabel != null && onAction != null) {
-            Button(onClick = onAction) { Text(actionLabel) }
+            Button(
+                onClick = onAction,
+                modifier = Modifier.height(50.dp).testTag("native-message-action"),
+                shape = RoundedCornerShape(25.dp),
+                colors = applePrimaryButtonColors(),
+            ) { Text(actionLabel) }
         }
     }
 }

@@ -19,9 +19,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.Button
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -89,7 +89,7 @@ fun ReorderPlaylistSheet(
         ) {
             IconButton(onClick = onClose) {
                 Icon(
-                    Icons.Rounded.Close,
+                    PlaylistEditorIcons.Close,
                     contentDescription = stringResource(R.string.back),
                     tint = MaterialTheme.colorScheme.onBackground,
                 )
@@ -108,7 +108,13 @@ fun ReorderPlaylistSheet(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Button(onClick = { onSave(order.toList()) }, enabled = changed && !saving) {
+            Button(
+                onClick = { onSave(order.toList()) },
+                enabled = changed && !saving,
+                modifier = Modifier.height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = applePrimaryButtonColors(),
+            ) {
                 if (saving) {
                     CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                 } else {

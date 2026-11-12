@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.applePrimaryButtonColors
+
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -229,6 +231,7 @@ internal fun PartyLanding(
             enabled = enabled,
             shape = RoundedCornerShape(percent = 50),
             modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = applePrimaryButtonColors(),
         ) {
             Text(
                 text = stringResource(R.string.listen_together_create_action),
@@ -372,6 +375,7 @@ internal fun CreatePartySheet(
             enabled = enabled && !busy,
             shape = RoundedCornerShape(percent = 50),
             modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = applePrimaryButtonColors(),
         ) {
             Text(
                 text = stringResource(
@@ -456,6 +460,7 @@ internal fun JoinPartySheet(
             enabled = enabled && !busy && code.length == ListenTogether.CODE_LENGTH,
             shape = RoundedCornerShape(percent = 50),
             modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = applePrimaryButtonColors(),
         ) {
             Text(
                 text = stringResource(
@@ -614,6 +619,7 @@ internal fun JoinConfirmSheet(
             enabled = !busy && !preview.isFull,
             shape = RoundedCornerShape(percent = 50),
             modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = applePrimaryButtonColors(),
         ) {
             Text(
                 text = stringResource(
@@ -675,6 +681,7 @@ internal fun InviteSheet(
             onClick = onShareLink,
             shape = RoundedCornerShape(percent = 50),
             modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = applePrimaryButtonColors(),
         ) {
             Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
