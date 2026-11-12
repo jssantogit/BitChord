@@ -1889,7 +1889,7 @@ internal fun CanonicalCatalogRatingMenu(
         ) {
             com.music.bitchord.ui.components.NativeCompactMenuItem(
                 label = sharedStringResource(Res.string.recording_feedback_edit),
-                icon = com.music.bitchord.ui.player.AppleQueueVectors.RatingStarOutline,
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.RatingPlain,
                 onClick = {
                     expanded = false
                     onEdit()
