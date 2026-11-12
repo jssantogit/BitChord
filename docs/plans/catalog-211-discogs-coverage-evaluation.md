@@ -1808,3 +1808,107 @@ classificação.
   0 Discogs-only recuperados**; C-01…03 e C-09…10 pendentes.
 - Sem APK/smoke físico, alterações em #209/main, inversão de
   provedores nem ganhos de UI medidos.
+
+## Encerramento do corpus editorial — 30/30 edições únicas após auditoria B/C (12/11/2026, Bahia)
+
+### Correção de integridade: edições B indevidamente contadas novamente em C
+
+Uma auditoria ao aumentar o lote C encontrou que os antigos C-07
+(TXT *Setsuna Hanabi*, Discogs **38302455**) e C-08 (ENHYPEN
+*MEMORABILIA*, Discogs **31008160**) reutilizavam **exatamente os
+mesmos Discogs Release IDs** de B-02 e B-01. Essa duplicação havia
+passado por uma checagem anterior que só exigia identidade única
+**dentro de cada coorte**, inflando o 25/30 relatado anteriormente.
+As revisões históricas dessas obras não foram apagadas: foram movidas
+para `superseded_cross_cohort_reviews` com notas do par B correspondente,
+**fora do novo denominador**. O validador
+`catalog_211_discogs_corpus_report.py` agora rejeita edição Discogs
+reutilizada entre B e C, inclusive em amostras sintéticas de regressão.
+
+Três antigos candidatos C-01 (aespa *World Tour in Cinemas*,
+Blu-ray), C-02 (Stray Kids *The DominATE Experience*, DVD) e
+C-03 (ENHYPEN *Confessions*, créditos de três artistas) nunca
+foram exemplos elegíveis de álbum/single/EP só do artista. Seus
+IDs Discogs **35180680, 38613330, 33375572** e os fatos
+observados ficam conservados em `screened_out_sources`, validados
+mas não contados como trabalhos musicais ausentes. O parser
+verifica identidade e URL de cada exclusão; duplicações com
+qualquer B/C revisado causam erro.
+
+### Descoberta adicional em lote — sete casos realmente distintos
+
+Para preencher slots independentes, `catalog_211_discogs_c_second_page_probe.py`
+verificou no máximo **uma página 2 por artista validado** (9 GETs
+públicos, [CI #43195818037](https://github.com/jssantogit/BitChord/actions/runs/43195818037)),
+sem token e sem pressupor ausência MusicBrainz. A hidratação
+`catalog_211_discogs_c_audio_batch.py` realizou **7 GETs**
+de IDs de *Discogs Release* tipados, validando crédito de **um
+único Discogs Artist ID correto**, faixa(s) de áudio, formato
+e ano; [CI #43197529440](https://github.com/jssantogit/BitChord/actions/runs/43197529440)
+passou nesses controles públicos. Essa CI falhou mais tarde nos
+testes de follow-up C por causa da duplicação detectada no
+manifesto antigo; não declarar a execução inteira GREEN.
+Após a substituição independente, o
+[scanner público #43198079285](https://github.com/jssantogit/BitChord/actions/runs/43198079285)
+foi **GREEN** sem promoções automáticas.
+
+| Caso novo | Edição Discogs e tipo | Evidência de que a obra já existia no MusicBrainz | Fonte editorial adicional |
+|---|---|---|---|
+| C-01 aespa — *SYNK : PARALLEL LINE* | **31961039**, arquivo FLAC, 4 tracks, crédito solo aespa | RG `b51a484e` (Single), MB Release `4a1b8bc3` | SM via Korea JoongAng Daily e distribuição oficial |
+| C-02 NMIXX — *Funky Glitter Christmas* | **31781147**, MP3, 1 track, JYP | RG `56384077` (Single), Release `2b4e2a89` | [JYP oficial](https://www.enmixx.com/en/discography/funky-glitter-christmas) |
+| C-03 IVE — *CRUSH* | **31422908**, FLAC promocional, 1 track, Starship | RG `518945b0` (Single), distinto de *ALIVE* EP | [Sony Music Japan](https://www.sonymusic.co.jp/artist/IVE/info/566706) |
+| C-07 IVE — *Kitsch* | **27107343**, FLAC promocional, 1 track, Starship | RG `829216ed` (Single), Release `a34cdc42` | [Comunicado Starship repercutido](https://www.soompi.com/article/1573203wpp/ive-confirms-april-comeback-date-in-teaser-for-1st-full-album-ive-ive) |
+| C-08 NMIXX — *Roller Coaster* | **34417612**, AIFF, 1 track, JYP | RG `f95117e6` (Single), separado do EP *A Midsummer NMIXX's Dream* | [JYP oficial](https://www.enmixx.com/en/discography/a-midsummer-nmixx-dream) |
+| C-09 LE SSERAFIM — *EASY (English ver.)* | **29892898**, AAC, 3 tracks, SOURCE MUSIC | RG `b64d0fbf` (Single), não o EP coreano *EASY* | [NME](https://www.nme.com/news/music/le-sserafim-english-version-easy-3591757) |
+| C-10 IVE — *I WANT* | **27690417**, FLAC, 1 track, Starship/Pepsi | RG `72f51e2e` (Single), Pepsi 2023 | [Soompi](https://www.soompi.com/article/1600451wpp/watch-ive-drops-fun-and-refreshing-i-want-mv-for-2023-pepsi-campaign) |
+
+As três revisões independentes C-04 Stray Kids *Social Path*,
+C-05 ENHYPEN *daydream* e C-06 LE SSERAFIM *Jewelry*
+continuam, sem alteração. O conjunto C tem **dez Discogs
+Release IDs distintos, zero sobreposição com os dez B**.
+Todos dez são obras já documentadas no MusicBrainz; nenhum
+é um lançamento faltante recuperado pelo Discogs. Os pares
+digitais com títulos iguais **não foram certificados como
+a mesma edição física/digital** por barcode ou relação exata.
+Nenhum foi promovido a `Verified`, criado com MBID sintético
+ou medido no Android.
+
+### Gate final, autoridade e implicações
+
+[**CI de corpus #43198518126**](https://github.com/jssantogit/BitChord/actions/runs/43198518126)
+terminou **COMPLETED/SUCCESS**, com as trinta revisões aceitas
+pelos testes de identidade, fontes editoriais, datas e ausência
+de reutilização de B em C. Contagens:
+**A 10/10**, **B 10/10**, **C 10/10**, mais **3 exclusões
+conservadas fora da amostra**. Os denominadores existem, mas as
+medições realmente demonstradas são **0/10 novas edições sem
+vínculo Verified**, **0/10 obras Discogs-only confirmadas
+ausentes do MusicBrainz**, **0 recuperações visualmente confirmadas**,
+**0 correções de tipo aplicadas**. A-03 Stray Kids *Christmas EveL*
+continua **divergência semântica editorial** Single promocional
+JYP versus EP MusicBrainz, não prova de alteração necessária segundo
+regras editoriais MB. **Não relatar taxas percentuais de precisão
+em amostras sem positivos homologados**.
+
+### Proteção Android em implementação
+
+A estante complementar de artista consultava apenas títulos
+completos de MusicBrainz **ReleaseGroups**; por isso reedições
+com título próprio dentro de RG antigo (por exemplo ENHYPEN
+`ROMANCE : UNTOLD -daydream-`) podiam escapar da deduplicação.
+
+A proteção proposta é ampliar o lookup apenas quando o
+usuário abre o artista e a cache de sugestões não fornece
+uma entrada válida: buscar também todos os títulos **Official
+MusicBrainz Releases** sob Artist MBID, em no máximo três
+páginas de 100, validando count/offset, MBID de cada Release,
+sem repetição ou página parcial. A estante compara a **união
+dos títulos de RG e Release**, preservando a autorização original
+por Artist→Discogs Artist. Se o índice for maior que o limite ou
+inconsistente, **não mostrar como novidade uma edição potencialmente
+existente**. Isso é fail-closed: pode ocultar temporariamente
+sugestões em discografias grandes, mas não fabrica descoberta.
+A implementação não altera o catálogo MusicBrainz, tags, Room,
+playback, listas ou seleção automática de prensagem. A validação
+da compilação Android e teste físico permanece separada do
+corpus Python.
