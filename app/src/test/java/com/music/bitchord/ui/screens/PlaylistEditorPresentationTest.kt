@@ -91,6 +91,36 @@ class PlaylistEditorPresentationTest {
         compose.onNodeWithTag("native-compact-overflow").assertDoesNotExist()
     }
 
+    @Test fun selectingOneRowImmediatelyLocksTheOtherRowsOfTheSamePopup() {
+        var primary = 0
+        var secondary = 0
+        compose.setContent {
+            MaterialTheme {
+                com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+                    expanded = true,
+                    onDismissRequest = {},
+                ) {
+                    com.music.bitchord.ui.components.NativeCompactMenuItem(
+                        label = "Primeira ação",
+                        onClick = { primary++ },
+                    )
+                    com.music.bitchord.ui.components.NativeCompactMenuItem(
+                        label = "Segunda ação",
+                        onClick = { secondary++ },
+                    )
+                }
+            }
+        }
+        compose.onNodeWithText("Primeira ação").performClick()
+        compose.onAllNodesWithTag("native-compact-menu-item").assertCountEquals(2)
+        compose.onAllNodesWithTag("native-compact-menu-item")[0].assertIsNotEnabled()
+        compose.onAllNodesWithTag("native-compact-menu-item")[1].assertIsNotEnabled()
+        compose.runOnIdle {
+            assertEquals(1, primary)
+            assertEquals(0, secondary)
+        }
+    }
+
     @Test fun filterManagerUsesPlainTitleAndTopRightCreateControl() {
         var created = 0
         compose.setContent {
