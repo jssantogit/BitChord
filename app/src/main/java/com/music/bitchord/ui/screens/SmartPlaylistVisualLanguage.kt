@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.theme.appleMusicKeyColor
+import com.music.bitchord.ui.theme.appleSelectionAccentColor
 import com.music.bitchord.ui.theme.themeArtworkPalette
 
 /**
@@ -673,7 +674,10 @@ internal fun PlaylistWizardSelectionRow(
                 Icon(
                     PlaylistEditorIcons.Check,
                     contentDescription = "Selecionado",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = appleSelectionAccentColor(
+                        selected = true,
+                        neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                     modifier = Modifier.size(20.dp),
                 )
             }
