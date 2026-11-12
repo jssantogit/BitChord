@@ -104,3 +104,25 @@ Regerar apenas o APK `devDebug` da PR #211, **não** publicar release, **não** 
 ### Repetição obrigatória por correção de compilação do fixture (12/11/2026)
 
 O gate focused [#43215915310](https://github.com/jssantogit/BitChord/actions/runs/43215915310) chegou à compilação de testes e identificou exclusivamente a falha de nulabilidade em `DiscogsEditorialArtistShelvesTest.kt` (linha que usava `row.releaseKind: String?` no subtítulo `ShelfItem: String`). O fixture foi corrigido em [`178d0e01`](https://github.com/jssantogit/BitChord/commit/178d0e01c9ef6625fb72f394d4a5098b4a9837b7), com `row.releaseKind.orEmpty()`, sem mudança no código de produto nem redução de cobertura. Solicitar APK **novo** incluindo o fix e refazer todos os gates no SHA publicado; o run anterior não comprova a versão final.
+
+## A54 — revalidação de duplicatas HOT e BOOMPALA (12/11/2026)
+
+**Relato após o smoke anterior aprovado #43216920985:** capturas físicas do A54 continuam com **HOT** lado a lado como `Single` e `EP`; três `BOOMPALA` lado a lado como `Single · Remix` sem créditos diferenciadores. Os cards têm fundo roxo (BitChord); a referência anterior preta era do Apple Music. O usuário esclareceu que versões legítimas distintas não devem ser ocultadas sem evidência, mas o nome deve indicar as diferenças. Não atribuir erro ao Discogs quando as três ReleaseGroups já existem no MusicBrainz.
+
+**Fonte MB real:**
+- `HOT` Single RG `44adb7df-66bd-4ebe-a43a-3ea45a93529d` tem relação `single/EP taken from` ao EP `50bcea80-692f-4e36-a7a5-825a3233cb13`. São identidades diferentes; suprimir o card secundário somente na discografia tipada quando o pai aparece, sem excluir da busca / detalhes / biblioteca e sem aplicar tipo Discogs.
+- `BOOMPALA` com SANTOS BRAVOS RG `d5b6c2ec-0f4f-4f8f-83f5-3011df277964`, GURU RANDHAWA `b40e8dd7-05c9-4b71-8439-03a213647e5a` e Ayra Starr `8c524416-07c2-42a6-bae1-2bf85bf612fa` compartilham o título, mas possuem créditos MusicBrainz diferentes. Identificá-los na interface como `BOOMPALA (feat. SANTOS BRAVOS)`, `BOOMPALA (feat. GURU RANDHAWA)` e `BOOMPALA (feat. Ayra Starr)`, somente quando o ArtistCredit tipado confirma; não inventar nome a partir do Discogs ou da tracklist.
+
+**Causa do falso sucesso anterior:** a UI em `DetailScreen.kt` usava `activeShelf: HomeShelf` como snapshot do momento do clique em Ver tudo. O `editorialArtistSections` reagia aos grupos MB e à projeção, mas o grid expandido `ArtistShelfGridPage(shelf = targetShelf)` continuava no snapshot anterior. Além disso, a regra `HOT` exigia simultaneamente a chegada de MusicBrainz rows mesmo quando ambos os cards nativos com MBIDs tipados já estavam presentes; o retorno prematuro deixava a duplicação. A nova projeção lê a estante expandida atual em vez do snapshot e permite a relação MBID exata nas cartas nativas. Os testes antigos verificavam só o helper, não o fluxo de grid expandido.
+
+**Novos gates:** regressões Kotlin `DiscogsEditorialArtistShelvesTest.kt`: grid expandido obsoleto, três créditos de remixes BOOMPALA, coexistência de dois HOT com rows ainda incompletas, nenhuma equivalência sem fonte, sem perda de English Single/EP, KAZUHA/remixes, seleção independente e identidades originais preservadas. Compilar `:app:testDevDebugUnitTest` e `:shared:jvmTest`, montar `:app:assembleDevDebug`, publicar SHA256/commit em ZIP do APK apenas com CI verde.
+
+### Smoke físico novo
+- [ ] LE SSERAFIM → Singles e EPs → Ver tudo, **HOT EP principal aparece sem HOT Single genérico redundante** após conclusão dos grupos.
+- [ ] `HOT (English ver.)` Single e EP permanecem distintos quando existentes; remixes/versões de integrantes continuam.
+- [ ] Nas três cartas de `BOOMPALA`, o colaborador aparece no **título**, distinguindo SANTOS BRAVOS, GURU RANDHAWA e Ayra Starr; nenhum MBID ou card desaparece por coincidência textual.
+- [ ] Reabrir Ver tudo durante e após paginação; evitar o retorno de duplicatas por snapshot antigo.
+- [ ] Pesquisa direta de HOT e BOOMPALA mantém entidades MusicBrainz separadas; sem alterações de playback, avaliações ou metadados Discogs verificados.
+- [ ] Se ficar sem capa, registrar como problema visual separado; não associar capa vazia a prova de identidade Discogs.
+
+**Não fazer merge automático.** Manter PR #211 Draft e #209/main intactos; esse APK é novo e ainda exige validação física posterior.
