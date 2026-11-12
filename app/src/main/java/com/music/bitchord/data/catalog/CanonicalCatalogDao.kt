@@ -662,6 +662,8 @@ internal interface CanonicalCatalogDao {
     /**
      * Preserve NULL/un-enriched linked releases so a negative year predicate
      * cannot infer that an unknown release definitely fails to match.
+     * A co-owned ReleaseTrack alone cannot confer an MB edition date after
+     * its MB membership is retired; current Track/source evidence must remain.
      */
     @Query(
         """
@@ -684,6 +686,19 @@ internal interface CanonicalCatalogDao {
                   AND identity.entityType = 'release'
                   AND identity.entityId = rt.releaseId
            ) = 1
+           AND (
+                EXISTS (
+                    SELECT 1 FROM catalog_release_track_source AS sourceOwner
+                    WHERE sourceOwner.releaseId = rt.releaseId
+                      AND sourceOwner.recordingId = rt.recordingId
+                      AND sourceOwner.provider = 'musicbrainz'
+                )
+                OR EXISTS (
+                    SELECT 1 FROM catalog_musicbrainz_track AS exactTrack
+                    WHERE exactTrack.releaseId = rt.releaseId
+                      AND exactTrack.recordingId = rt.recordingId
+                )
+           )
         WHERE rt.recordingId IN (:recordingIds)
         ORDER BY rt.recordingId ASC, rt.releaseId ASC
         """,
