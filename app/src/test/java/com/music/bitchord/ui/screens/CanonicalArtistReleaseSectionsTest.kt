@@ -69,7 +69,7 @@ class CanonicalArtistReleaseSectionsTest {
         val sections = canonicalArtistReleaseSections(
             releases = rows,
             evidence = emptyMap(),
-            recordingCountsByRelease = mapOf(
+            mapOf(
                 "Plot Twist" to 4,
                 "Butterfly Doors" to 1,
                 "Say It" to 1,
@@ -95,7 +95,7 @@ class CanonicalArtistReleaseSectionsTest {
         val sections = canonicalArtistReleaseSections(
             releases = rows,
             evidence = proof,
-            recordingCountsByRelease = mapOf("partial-album" to 1,
+            mapOf("partial-album" to 1,
                 "multi-track-ep" to 4, "official-single-multiple-recordings" to 5,
                 "official-album-one-recording" to 1, "unsupported-type" to 8),
         )
@@ -141,7 +141,7 @@ class CanonicalArtistReleaseSectionsTest {
         assertNull(sections.recentAlbum)
         assertEquals("dated-ep", sections.recentRelease?.id)
         assertNull(canonicalArtistReleaseSections(listOf(ep), emptyMap(),
-            recordingCountsByRelease = mapOf(ep.id to 1)).recentRelease)
+            mapOf(ep.id to 1)).recentRelease)
     }
 
     @Test fun nativeHeroCanUseARealReleaseDateEvenWithoutReleaseGroupType() {
@@ -149,7 +149,7 @@ class CanonicalArtistReleaseSectionsTest {
         val undated = release("untagged")
         val result = canonicalArtistReleaseSections(listOf(undated, dated),
             mapOf(dated.id to CanonicalArtistReleaseEvidence(dated.id, null, "2026-08-18")),
-            recordingCountsByRelease = mapOf(undated.id to 3, dated.id to 1))
+            mapOf(undated.id to 3, dated.id to 1))
         assertEquals("verified-edition", result.recentRelease?.id)
         assertNull(result.recentAlbum)
     }
@@ -191,7 +191,7 @@ class CanonicalArtistReleaseSectionsTest {
             "new-album" to CanonicalArtistReleaseEvidence("new-album", "Album", "2026-07-30"),
         )
         val result = canonicalArtistReleaseSections(rows, evidence,
-            recordingCountsByRelease = mapOf("unknown-album" to 6))
+            mapOf("unknown-album" to 6))
         assertEquals(listOf("new-album", "old-album"),
             result.albums.map { it.id })
         assertEquals(listOf("new-single", "old-single", "unknown-single"),
@@ -232,7 +232,7 @@ class CanonicalArtistReleaseSectionsTest {
         assertEquals(2, matched.size)
         assertEquals("2026-05-12", matched["Butterfly Doors"]?.firstReleaseDate)
         assertEquals("Butterfly Doors", canonicalArtistReleaseSections(
-            local, matched, recordingCountsByRelease = mapOf("Plot Twist" to 4,
+            local, matched, mapOf("Plot Twist" to 4,
                 "Butterfly Doors" to 1, "Fan Remix" to 4)).recentRelease?.id)
     }
 
