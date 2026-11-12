@@ -61,3 +61,23 @@ Observação do usuário no APK anterior: a seção agora aparece, inclusive em 
 **Próxima investigação, não incluída neste APK:** ampliar descoberta quando falta relação MusicBrainz→Discogs, pois pesquisa na base Discogs exige autenticação. Qualquer modo opcional deve armazenar credencial localmente de modo seguro, não embutir token no APK, limitar requisições e validar os candidatos da edição antes de exibir informações. Nem título coincidente nem número de faixas são critérios suficientes.
 
 **Critério:** workflow de smoke e Android CI em SUCCESS no mesmo SHA; depois teste físico Galaxy A54. Não mesclar a #211 ou a #209.
+
+## Solicitação de smoke final — corpus Discogs 30/30 + proteção repackage (12/11/2026)
+
+**Solicitação explícita do proprietário:** gerar APK `devDebug` de instalação para validar em Galaxy A54 as alterações finais da PR #211, mantendo a branch Draft, sem merge, sem release de produção e sem alterar a PR #209. Corte anterior ao disparo: `1410ee9511c136545f46ce790d8f40a8c696afac`. O APK deve conter o próprio commit desta solicitação, registrado no artefato com SHA-256.
+
+### Checklist físico direcionado
+
+- [ ] Instalar e abrir sem crash; Home, Pesquisa, Biblioteca e detalhes de artista/álbum funcionam.
+- [ ] Em artista ENHYPEN, abrir *ROMANCE : UNTOLD* e localizar a edição/repackage *ROMANCE : UNTOLD -daydream-* já presente no MusicBrainz: **não** criar uma segunda obra fictícia como `Discogs-only`; o título da edição difere do título do ReleaseGroup. Não assumir que os dois produtos físicos são a mesma prensagem.
+- [ ] Conferir ao menos dois artistas adicionais, por exemplo LE SSERAFIM (*EASY* EP vs *EASY (English ver.)* Single) e IVE (*CRUSH* Single vs *ALIVE* EP). Não fundir obras distintas nem sugerir reedições já existentes como inéditas.
+- [ ] Checar artist shelves `Álbuns / EPs / Singles`: somente itens de áudio, crédito do artista correto e sem itens novos suspeitos por nome, tradução ou edição.
+- [ ] Abrir álbum online via Pesquisa, pelo artista e pela Biblioteca; `Sobre esta edição` preserva gravadora, data, país e estado de publicação do MusicBrainz. Campos Discogs e `Data provided by Discogs.` somente com edição realmente verificada.
+- [ ] Configurações → Avançado → `Exibir metadados dos álbuns`: ocultar e restaurar seção em várias rotas, sem esconder faixas, reprodução, avaliações, fixação ou biblioteca.
+- [ ] Repetir com internet desligada e depois restabelecer rede; não perder conteúdo MusicBrainz/local, não inventar link Discogs ou edição. Navegar entre dois álbuns rapidamente, sem detalhes de um vazarem no outro.
+- [ ] Se houver lista muito grande de edições MusicBrainz (>300) ou timeout, é aceitável **não** mostrar sugestão complementar; não é aceitável exibir falso inédito ou perder discografia principal. Nenhuma recuperação C foi comprovada em corpus, logo ausência de card Discogs-only não implica falha.
+- [ ] Se falhar, guardar capturas, artista, título, caminho/rota, tipo incorreto, momento da execução e diagnóstico exportado, sem dados privados.
+
+### Gates do APK
+
+Workflow `Discogs 211 Android native smoke APK` tem `:app:testDevDebugUnitTest`, `:shared:jvmTest` de playback e `:app:assembleDevDebug` como pré-condições para publicar o artefato; também anexa SHA-256 e commit exato. Corpus editorial [30/30 aprovado](https://github.com/jssantogit/BitChord/actions/runs/43200460173) e [Android JVM Discogs focused aprovado](https://github.com/jssantogit/BitChord/actions/runs/43199315323) no corte de código anterior à solicitação. Se teste completo falhar, reportar bloqueio em vez de chamar APK de gerado. Nenhum merge automático.
