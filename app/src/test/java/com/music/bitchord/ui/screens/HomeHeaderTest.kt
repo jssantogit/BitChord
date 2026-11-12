@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.music.bitchord.ui.components.FrostedTopBar
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHasClickAction
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsProperties

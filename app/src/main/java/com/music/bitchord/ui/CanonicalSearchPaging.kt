@@ -67,6 +67,21 @@ internal data class CanonicalSearchPageCursors(
     }
 }
 
+
+/**
+ * Progressive artist browse pages append new release groups without replacing
+ * previously resolved editorial names or artwork. Stable MBIDs identify works,
+ * regardless of the letter case returned by later MusicBrainz pages.
+ * An authoritative full fetch may reconcile membership separately.
+ */
+internal fun canonicalArtistContinuationRows(
+    previous: List<CanonicalCatalogSearchRow>,
+    incoming: List<CanonicalCatalogSearchRow>,
+): List<CanonicalCatalogSearchRow> =
+    (previous + incoming).distinctBy {
+        it.kind to it.musicBrainzId.lowercase(java.util.Locale.ROOT)
+    }
+
 /** Live facts win over cache. Only failed entity kinds may use stale evidence. */
 internal fun mergeCanonicalSearchRows(
     live: List<CanonicalCatalogSearchRow>,

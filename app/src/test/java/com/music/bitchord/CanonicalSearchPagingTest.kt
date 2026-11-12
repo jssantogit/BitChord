@@ -4,6 +4,9 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import com.music.bitchord.ui.CanonicalSearchPageCursors
+import com.music.bitchord.ui.canonicalArtistContinuationRows
+import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -85,6 +88,27 @@ class CanonicalSearchPagingTest {
         )
         val stopped = first.advance(recordings = page(10, 5, 0))
         assertFalse(stopped.hasMore)
+    }
+
+
+    @Test fun artistContinuationKeepsEarlierArtworkAndEditionTitleOnOverlap() {
+        val first = CanonicalCatalogSearchRow(
+            "9750354e-78df-4058-8758-b5a7a2eccf66",
+            CanonicalSearchKind.RELEASE_GROUP, "How Sweet", "NewJeans",
+            releaseKind = "Single", artworkUri = "https://images.example/cover.jpg",
+        )
+        val rawDuplicate = first.copy(
+            title = "How Sweet & Bubble Gum",
+            musicBrainzId = first.musicBrainzId.uppercase(java.util.Locale.ROOT),
+            artworkUri = null,
+        )
+        val next = CanonicalCatalogSearchRow(
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            CanonicalSearchKind.RELEASE_GROUP, "Get Up", "NewJeans",
+            releaseKind = "EP",
+        )
+        val merged = canonicalArtistContinuationRows(listOf(first), listOf(rawDuplicate, next))
+        assertEquals(listOf(first, next), merged)
     }
 
     private fun page(
