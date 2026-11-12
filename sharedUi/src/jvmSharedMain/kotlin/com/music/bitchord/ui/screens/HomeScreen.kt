@@ -582,8 +582,18 @@ fun HomeTitle(
         // A genre page must line up with Home/Explore, not indent the title
         // by the back button's width. Keep Back reachable at the right.
         if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.testTag("home-back")) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier.size(40.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+                    .testTag("home-back"),
+            ) {
+                Icon(
+                    PlaylistEditorIcons.Back,
+                    contentDescription = "Voltar",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
         trailing?.invoke()
