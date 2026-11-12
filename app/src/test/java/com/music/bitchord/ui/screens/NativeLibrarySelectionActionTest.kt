@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -42,6 +43,26 @@ class NativeLibrarySelectionActionTest {
             .assertIsOff()
             .performClick()
         compose.runOnIdle { assertEquals(1, toggles) }
+    }
+
+    @Test fun wizardPickerRetainsItsOwnSemanticTagAndBusyGuard() {
+        var toggles = 0
+        compose.setContent {
+            MaterialTheme {
+                NativeLibrarySelectionAction(
+                    selected = true,
+                    label = "Remover música",
+                    enabled = false,
+                    tag = "playlist-wizard-track-selection",
+                    onToggle = { toggles++ },
+                )
+            }
+        }
+        compose.onNodeWithTag("playlist-wizard-track-selection")
+            .assertWidthIsEqualTo(40.dp)
+            .assertHeightIsEqualTo(40.dp)
+            .assertIsNotEnabled()
+        compose.runOnIdle { assertEquals(0, toggles) }
     }
 
     @Test fun checkedControlAnnouncesSelectedStateAndCanBeUnselected() {
