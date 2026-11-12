@@ -2,13 +2,16 @@ package com.music.bitchord
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist
 import com.music.bitchord.ui.screens.PlaylistLibrarySort
@@ -43,7 +46,8 @@ class NativeAlbumPlaylistToolbarTest {
         val optionsOpen = mutableStateOf(false)
         compose.setContent {
             MaterialTheme {
-                NativePublicPlaylistTopBarActions(
+                Row {
+                    NativePublicPlaylistTopBarActions(
                     playlist = playlist, searching = false,
                     onToggleSearch = {},
                     sort = PlaylistLibrarySort.DEFAULT, onSort = {},
@@ -52,12 +56,15 @@ class NativeAlbumPlaylistToolbarTest {
                     onShowOptions = { optionsOpen.value = true },
                     onSortDismiss = { sortOpen.value = false },
                     onOptionsDismiss = { optionsOpen.value = false },
-                )
+                    )
+                }
             }
         }
         compose.onNodeWithTag("native-toolbar-sort-anchor").assertExists()
         compose.onNodeWithTag("native-toolbar-overflow-anchor").assertExists()
-        compose.onNodeWithContentDescription("Opções da playlist").performClick()
+        compose.onNodeWithContentDescription("Ordenar músicas").assertWidthIsEqualTo(40.dp)
+        compose.onNodeWithContentDescription("Opções da playlist")
+            .assertWidthIsEqualTo(40.dp).performClick()
         compose.onNodeWithTag("native-compact-overflow").assertExists()
         compose.onNodeWithText("Compartilhar playlist").assertExists()
     }
@@ -72,7 +79,7 @@ class NativeAlbumPlaylistToolbarTest {
             }
         }
         compose.onNodeWithContentDescription("Avaliar álbum", substring = true)
-            .assertIsDisplayed().performClick()
+            .assertIsDisplayed().assertWidthIsEqualTo(40.dp).performClick()
         compose.onNodeWithContentDescription("4,5 de 5 estrelas", substring = true)
             .assertExists()
         compose.onNodeWithContentDescription("Adicionar álbum à playlist")
