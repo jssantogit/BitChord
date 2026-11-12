@@ -4,6 +4,9 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import com.music.bitchord.ui.CanonicalSearchPageCursors
+import com.music.bitchord.ui.canonicalArtistContinuationRows
+import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -85,6 +88,57 @@ class CanonicalSearchPagingTest {
         )
         val stopped = first.advance(recordings = page(10, 5, 0))
         assertFalse(stopped.hasMore)
+    }
+
+
+    @Test fun artistProgressivePagesAppendWithoutLosingAlreadyPublishedAlbumsAndSingles() {
+        // Artist browse first page can already have verified cover and official
+        // "How Sweet" edition display name. Later pages must not erase it.
+        val howSweet = CanonicalCatalogSearchRow(
+            "9750354e-78df-4058-8758-b5a7a2eccf66",
+            CanonicalSearchKind.RELEASE_GROUP, "How Sweet", "NewJeans",
+            releaseKind = "Single", artworkUri = "https://images.example/how-sweet.jpg",
+        )
+        val getUp = CanonicalCatalogSearchRow(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            CanonicalSearchKind.RELEASE_GROUP, "Get Up", "NewJeans",
+            releaseKind = "EP",
+        )
+        val next = CanonicalCatalogSearchRow(
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            CanonicalSearchKind.RELEASE_GROUP, "Older Single", "NewJeans",
+            releaseKind = "Single",
+        )
+        val combined = canonicalArtistContinuationRows(listOf(howSweet, getUp), listOf(next))
+
+        assertEquals(listOf(howSweet.musicBrainzId, getUp.musicBrainzId, next.musicBrainzId),
+            combined.map { it.musicBrainzId })
+        assertEquals("How Sweet", combined[0].title)
+        assertEquals("https://images.example/how-sweet.jpg", combined[0].artworkUri)
+        assertEquals("EP", combined[1].releaseKind)
+    }
+
+    @Test fun artistPageOverlapCannotUndoVerifiedOfficialNameOrAddDuplicateWork() {
+        val mbid = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val prior = CanonicalCatalogSearchRow(
+            mbid, CanonicalSearchKind.RELEASE_GROUP, "How Sweet", "NewJeans",
+            releaseKind = "Single", artworkUri = "https://images.example/cover.jpg",
+        )
+        val rawAgain = prior.copy(
+            title = "How Sweet & Bubble Gum", artworkUri = null,
+        )
+        val next = CanonicalCatalogSearchRow(
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            CanonicalSearchKind.RELEASE_GROUP, "New Single", "NewJeans",
+            releaseKind = "Single",
+        )
+        val result = canonicalArtistContinuationRows(
+            canonicalArtistContinuationRows(listOf(prior), listOf(rawAgain, next)),
+            listOf(rawAgain, next),
+        )
+        assertEquals(2, result.size)
+        assertEquals("How Sweet", result.single { it.musicBrainzId == mbid }.title)
+        assertEquals(prior.artworkUri, result.first().artworkUri)
     }
 
     private fun page(
