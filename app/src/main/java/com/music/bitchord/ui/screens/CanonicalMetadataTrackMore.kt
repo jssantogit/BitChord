@@ -37,23 +37,38 @@ internal fun CanonicalMetadataTrackMore(
             contentDescription = "Ações da faixa",
             modifier = Modifier.testTag(tag),
         )
-        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-            DropdownMenuItem(text = { Text("Avaliar faixa") }, onClick = {
-                onDismiss()
-                onRate(recordingId)
-            })
-            DropdownMenuItem(text = { Text("Adicionar à playlist") }, onClick = {
-                onDismiss()
-                onAddToPlaylist(recordingId, title, artist)
-            })
-            DropdownMenuItem(text = { Text("Ver no MusicBrainz") }, onClick = {
-                onDismiss()
-                val url = "https://musicbrainz.org/recording/$recordingId"
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                }
-            })
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+            expanded = expanded,
+            onDismissRequest = onDismiss,
+        ) {
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Avaliar faixa",
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.RatingPlain,
+                onClick = {
+                    onDismiss()
+                    onRate(recordingId)
+                },
+            )
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Adicionar à playlist",
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Add,
+                onClick = {
+                    onDismiss()
+                    onAddToPlaylist(recordingId, title, artist)
+                },
+            )
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Ver no MusicBrainz",
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Link,
+                onClick = {
+                    onDismiss()
+                    val url = "https://musicbrainz.org/recording/$recordingId"
+                    runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    }
+                },
+            )
         }
     }
 }

@@ -4,6 +4,7 @@ import com.music.bitchord.data.listening.SmartPlaylistRule
 import com.music.bitchord.data.listening.SmartPlaylistRuleField
 import com.music.bitchord.data.listening.SmartPlaylistRuleJoin
 import com.music.bitchord.data.listening.SmartPlaylistRuleOperator
+import com.music.bitchord.data.listening.SmartPlaylistV2Query
 import com.music.bitchord.data.listening.allowedOperators
 import com.music.bitchord.data.listening.isTextField
 import java.text.Normalizer
@@ -12,8 +13,9 @@ import java.util.Locale
 /**
  * Capability-driven catalog for the 05/06 condition screens in the approved
  * docs/design/playlists. Only V2 rules implemented by the evaluator appear.
- * A future folder, codec or favorite-date predicate MUST NOT be offered
- * as selectable before canonical evidence and serialization are implemented.
+ * Any future predicate MUST NOT become selectable before canonical evidence,
+ * evaluation and serialization are implemented. Local MediaStore fields below
+ * already have dedicated evaluator branches and are not inferred from servers.
  */
 internal data class SmartConditionCategory(
     val id: String,
@@ -27,7 +29,8 @@ internal val smartConditionCategories = listOf(
         SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
         SmartPlaylistRuleField.RELEASE_TITLE, SmartPlaylistRuleField.ALBUM_ARTIST,
         SmartPlaylistRuleField.TRACK_ARTIST, SmartPlaylistRuleField.TRACK_NUMBER,
-        SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.MOOD,
+        SmartPlaylistRuleField.GENRE, SmartPlaylistRuleField.LOCAL_GENRE,
+        SmartPlaylistRuleField.MOOD,
         SmartPlaylistRuleField.BPM, SmartPlaylistRuleField.STYLE,
         SmartPlaylistRuleField.COMPOSER,
         SmartPlaylistRuleField.DISC_NUMBER, SmartPlaylistRuleField.RELEASE_GROUP_TYPE,
@@ -49,6 +52,7 @@ internal val smartConditionCategories = listOf(
     SmartConditionCategory("library", "Biblioteca e pastas", "Origem das músicas e localização dos arquivos", listOf(
         SmartPlaylistRuleField.SOURCE_KIND,
         SmartPlaylistRuleField.FILE_PATH, SmartPlaylistRuleField.FOLDER_PATH,
+        SmartPlaylistRuleField.LOCAL_FOLDER, SmartPlaylistRuleField.LOCAL_FILE_PATH,
     )),
     SmartConditionCategory("audio", "Áudio", "Duração comprovada das faixas", listOf(
         SmartPlaylistRuleField.DURATION_MS, SmartPlaylistRuleField.LOCAL_FILE_EXTENSION,
@@ -60,6 +64,61 @@ internal val smartConditionCategories = listOf(
         listOf(SmartPlaylistRuleField.RELEASE_ARTWORK_REFERENCE),
     ),
 )
+
+/** Search-style sub-tabs partition fields without adding section headings to lists. */
+internal data class SmartConditionFieldTab(
+    val key: String,
+    val label: String,
+    val fields: List<SmartPlaylistRuleField>,
+)
+
+internal fun smartConditionFieldTabs(category: SmartConditionCategory): List<SmartConditionFieldTab> {
+    val all = SmartConditionFieldTab("all", "Todos", category.fields)
+    return when (category.id) {
+        "music" -> {
+            val identity = setOf(
+                SmartPlaylistRuleField.TITLE, SmartPlaylistRuleField.ARTIST_DISPLAY,
+                SmartPlaylistRuleField.RELEASE_TITLE,
+            )
+            val credits = setOf(
+                SmartPlaylistRuleField.ALBUM_ARTIST, SmartPlaylistRuleField.TRACK_ARTIST,
+                SmartPlaylistRuleField.COMPOSER, SmartPlaylistRuleField.ARTIST_COUNTRY,
+            )
+            listOf(
+                all,
+                SmartConditionFieldTab("identity", "Identidade",
+                    category.fields.filter { it in identity }),
+                SmartConditionFieldTab("credits", "Créditos",
+                    category.fields.filter { it in credits }),
+                SmartConditionFieldTab("organization", "Organização",
+                    category.fields.filter { it !in identity && it !in credits }),
+            )
+        }
+        "history" -> {
+            val plays = setOf(
+                SmartPlaylistRuleField.AUDIBLE_COMPLETIONS,
+                SmartPlaylistRuleField.DAYS_SINCE_LAST_AUDIBLE,
+            )
+            listOf(
+                all,
+                SmartConditionFieldTab("plays", "Reproduções",
+                    category.fields.filter { it in plays }),
+                SmartConditionFieldTab("skips", "Pulos",
+                    category.fields.filter { it !in plays }),
+            )
+        }
+        "library" -> listOf(
+            all,
+            SmartConditionFieldTab("sources", "Origem",
+                category.fields.filter { it == SmartPlaylistRuleField.SOURCE_KIND }),
+            SmartConditionFieldTab("paths", "Arquivos e pastas",
+                category.fields.filter { it != SmartPlaylistRuleField.SOURCE_KIND }),
+        )
+        // One- to three-field categories need no extra tab row:
+        // the extra navigation would compete with the entire list.
+        else -> emptyList()
+    }
+}
 
 internal fun smartConditionLabel(field: SmartPlaylistRuleField): String = when (field) {
     SmartPlaylistRuleField.TITLE -> "Título da música"
@@ -212,6 +271,14 @@ internal fun smartConditionSearch(
         ).contains(term)
     }
 }
+
+/**
+ * A draft's Add/Save action uses the same typed validation contract as the
+ * persisted query. "Nonblank" and "finite" alone accept impossible years,
+ * negative counters and text beyond the persisted limit.
+ */
+internal fun smartConditionDraftValid(draft: SmartPlaylistRule.Comparison): Boolean =
+    runCatching { SmartPlaylistV2Query(rules = draft) }.isSuccess
 
 /** Rule paths index Group children; traverse a NOT-wrapped Group transparently. */
 internal fun smartRuleAtPath(root: SmartPlaylistRule, path: List<Int>): SmartPlaylistRule =

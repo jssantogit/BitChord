@@ -39,7 +39,7 @@ class CanonicalRatingStarInteractionTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("5/5", substring = true).performClick()
+        compose.onNodeWithContentDescription("Avaliação: 5 de 5 estrelas", substring = true).performClick()
         compose.runOnIdle { assertEquals(1, opens) }
     }
 
@@ -53,7 +53,7 @@ class CanonicalRatingStarInteractionTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4.5/5", substring = true).performClick()
+        compose.onNodeWithContentDescription("Avaliação: 4,5 de 5 estrelas", substring = true).performClick()
         compose.runOnIdle { assertEquals(1, opens) }
     }
 
@@ -71,7 +71,7 @@ class CanonicalRatingStarInteractionTest {
                 }
             }
         }
-        val stars = compose.onNodeWithContentDescription("4/5", substring = true)
+        val stars = compose.onNodeWithContentDescription("Avaliação: 4 de 5 estrelas", substring = true)
             .fetchSemanticsNode()
         compose.runOnIdle {
             assertFalse(stars.config.contains(SemanticsActions.OnClick))
@@ -93,7 +93,7 @@ class CanonicalRatingStarInteractionTest {
                 }
             }
         }
-        compose.onNodeWithContentDescription("3.5/5", substring = true).performClick()
+        compose.onNodeWithContentDescription("Avaliação: 3,5 de 5 estrelas", substring = true).performClick()
         compose.runOnIdle { assertEquals(1, opens) }
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -23,6 +24,19 @@ import org.robolectric.annotation.ConscryptMode
 @ConscryptMode(ConscryptMode.Mode.OFF)
 class CanonicalCatalogRatingMenuTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun catalogReleaseThreeDotMenuUsesTheSharedNativePopup() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalCatalogReleaseOverflowMenu(
+                    browseId = "catalog:RELEASE:66dd7663-76a4-4e31-93ae-730ccd49d7d8",
+                    title = "Test Album", subtitle = "Test Artist", cover = null,
+                    expanded = true, onDismiss = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+    }
 
     @Test fun threeDotMenuOpensFirstNativeRatingEditorWithoutStarPlaceholder() {
         var edits = 0

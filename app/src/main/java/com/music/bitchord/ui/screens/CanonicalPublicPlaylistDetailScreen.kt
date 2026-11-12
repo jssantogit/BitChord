@@ -38,7 +38,6 @@ import android.net.Uri
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,6 +55,7 @@ import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.NativeDetailTrackArtwork
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -252,10 +252,11 @@ internal fun CanonicalPublicPlaylistDetailScreen(
             is UiState.Error -> item(key = "public-playlist-error") {
                 Text(state.message, color = palette.onBackgroundVariant,
                     modifier = Modifier.padding(horizontal = PAGE_GUTTER))
-                TextButton(onClick = onRetry,
-                    modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
-                    Text("Tentar novamente")
-                }
+                NativeInlineTextAction(
+                    label = "Tentar novamente",
+                    onClick = onRetry,
+                    modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                )
             }
             is UiState.Success -> {
                 if (entries.isEmpty()) item(key = "public-playlist-empty") {

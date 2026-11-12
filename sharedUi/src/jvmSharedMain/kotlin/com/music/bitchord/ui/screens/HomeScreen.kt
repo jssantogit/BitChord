@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import com.music.bitchord.ui.components.contextClick
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.AppUi
 import com.music.bitchord.sharedui.resources.*
 import org.jetbrains.compose.resources.painterResource
@@ -35,7 +36,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -65,7 +65,7 @@ import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Cached
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.MoreVert
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.material.icons.rounded.Storage
 import com.music.bitchord.ui.icons.BitChordIcons
 import coil3.compose.AsyncImage
@@ -83,9 +83,12 @@ import com.music.bitchord.ui.components.HERO_CARD_RATIO
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeCompactOverflowMenu
+import com.music.bitchord.ui.components.NativeCompactMenuItem
 import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
+import com.music.bitchord.ui.components.NativeMediaCardMetrics
 import com.music.bitchord.ui.components.SearchPlayingBars
 import com.music.bitchord.ui.components.SignInBanner
 import com.music.bitchord.ui.components.feedMoreSkeleton
@@ -545,6 +548,38 @@ fun CompactTrackRow(
     }
 }
 
+/**
+ * Same 40dp native circular surface for the feed back and More controls.
+ * Only the visible shape is measured here; the AM-DECOMP static trace does
+ * not establish the final hit rectangle, shadow or pixel rendering.
+ * Keep the native button semantics and the caller's original callbacks.
+ */
+@Composable
+private fun NativeHomeHeaderIconAction(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    tag: String,
+    glyphSize: androidx.compose.ui.unit.Dp,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(glyphSize),
+        )
+    }
+}
+
 /** An Android Home action. Desktop has no in-feed title or overflow. */
 data class HomeHeaderAction(val label: String, val onClick: () -> Unit)
 
@@ -579,38 +614,33 @@ fun HomeTitle(
         // A genre page must line up with Home/Explore, not indent the title
         // by the back button's width. Keep Back reachable at the right.
         if (onBack != null) {
-            IconButton(onClick = onBack, modifier = Modifier.testTag("home-back")) {
-                Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
-            }
+            NativeHomeHeaderIconAction(
+                icon = PlaylistEditorIcons.Back,
+                description = "Voltar",
+                onClick = onBack,
+                tag = "home-back",
+                glyphSize = 20.dp,
+            )
         }
         trailing?.invoke()
         if (actions.isNotEmpty()) {
             Box {
-                IconButton(
+                NativeHomeHeaderIconAction(
+                    icon = PlaylistEditorIcons.More,
+                    description = stringResource(Res.string.more),
                     onClick = { expanded = true },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                        .testTag("home-overflow"),
-                ) {
-                    Icon(
-                        Icons.Rounded.MoreVert,
-                        contentDescription = stringResource(Res.string.more),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                DropdownMenu(
+                    tag = "home-overflow",
+                    glyphSize = 24.dp,
+                )
+                NativeCompactOverflowMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
                 ) {
                     actions.forEach { action ->
-                        DropdownMenuItem(
-                            text = { Text(action.label) },
-                            onClick = {
-                                expanded = false
-                                action.onClick()
-                            },
-                        )
+                        NativeCompactMenuItem(label = action.label, onClick = {
+                            expanded = false
+                            action.onClick()
+                        })
                     }
                 }
             }
@@ -657,7 +687,7 @@ internal fun SectionHeader(title: String, subtitle: String = "", onShowAll: (() 
             Text(
                 text = stringResource(Res.string.show_all),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
+                color = appleMusicKeyColor(),
                 modifier = Modifier
                     .clickable(onClick = onShowAll)
                     .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
@@ -914,8 +944,8 @@ private fun HeroCard(
     Box(
         modifier = modifier
             .aspectRatio(HERO_CARD_RATIO)
-            .clip(RoundedCornerShape(18.dp))
-            .thumbnailBorder(RoundedCornerShape(18.dp))
+            .clip(NativeMediaCardMetrics.heroShape)
+            .thumbnailBorder(NativeMediaCardMetrics.heroShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
             .contextClick(onLongPress),
@@ -939,7 +969,7 @@ private fun HeroCard(
                 .align(Alignment.BottomStart)
                 .background(
                     Brush.verticalGradient(
-                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f)),
+                        listOf(Color.Transparent, Color.Black.copy(alpha = NativeMediaCardMetrics.heroScrimAlpha)),
                     ),
                 )
                 .padding(start = 16.dp, end = 16.dp, top = 34.dp, bottom = 14.dp),
@@ -1025,7 +1055,7 @@ internal fun NewShelfCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
+                .clip(NativeMediaCardMetrics.squareCoverShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center,
         ) {
@@ -1047,7 +1077,7 @@ internal fun NewShelfCard(
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(NativeMediaCardMetrics.shelfCaptionGap))
         Text(
             text = label,
             style = MaterialTheme.typography.titleMedium,
@@ -1077,7 +1107,7 @@ private fun ServiceCard(colors: List<Color>, trackKey: String, icon: ImageVector
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .clip(RoundedCornerShape(12.dp)),
+            .clip(NativeMediaCardMetrics.squareCoverShape),
         contentAlignment = Alignment.Center,
     ) {
         MeshGradientBackground(
@@ -1125,7 +1155,7 @@ internal fun ShelfCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp)),
+                        .clip(NativeMediaCardMetrics.squareCoverShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     MeshGradientBackground(
@@ -1175,7 +1205,7 @@ internal fun ShelfCard(
                     val index = (item.browseId.orEmpty().hashCode() and Int.MAX_VALUE) % palettes.size
                     Box(
                         modifier = Modifier.fillMaxWidth().aspectRatio(1f)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(NativeMediaCardMetrics.squareCoverShape)
                             .background(Brush.linearGradient(palettes[index]))
                             .testTag("explore-genre-card"),
                         contentAlignment = Alignment.CenterStart,
@@ -1193,8 +1223,8 @@ internal fun ShelfCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .thumbnailBorder(RoundedCornerShape(12.dp))
+                        .clip(NativeMediaCardMetrics.squareCoverShape)
+                        .thumbnailBorder(NativeMediaCardMetrics.squareCoverShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true

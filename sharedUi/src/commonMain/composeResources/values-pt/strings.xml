@@ -278,6 +278,8 @@
     <string name="smart_collection_batch_empty">Nenhuma gravação elegível</string>
     <string name="smart_collection_batch_failed">Coleção indisponível ou ação de fila recusada</string>
     <string name="canonical_filter_all">Tudo</string>
+    <string name="apple_search_top_results">Principais resultados</string>
+    <string name="apple_search_view_details">Ver detalhes</string>
     <string name="canonical_filter_songs">Músicas</string>
     <string name="canonical_filter_videos">Vídeos</string>
     <string name="canonical_search_hint">Pesquise no catálogo musical. Metadados não representam áudio disponível.</string>
@@ -300,4 +302,8 @@
     <string name="search_server_hint">Pesquisar nos servidores e addons</string>
     <string name="search_server_empty">Pesquise músicas dos servidores conectados ou addons disponíveis.</string>
     <string name="search_server_no_results">Nenhum servidor ou addon encontrou “%1$s”.</string>
+    <string name="apple_queue_history">Histórico</string>
+    <string name="apple_queue_continue">Continuar Reproduzindo</string>
+    <string name="apple_queue_empty">Não há músicas na fila</string>
+    <string name="apple_queue_similar">Reprodução automática de músicas similares</string>
 </resources>

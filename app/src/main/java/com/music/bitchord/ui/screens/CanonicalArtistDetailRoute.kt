@@ -39,6 +39,7 @@ internal fun CanonicalArtistDetailRoute(
     searching: Boolean,
     nestedBackToken: Int,
     onNestedDetailChanged: (Boolean) -> Unit,
+    onNestedAlbumRatingTargetChanged: (CanonicalLibrarySelection?) -> Unit = {},
     albumSort: SongSort = SongSort.DEFAULT,
     albumMenuToken: Int = 0,
     albumPlaylistToken: Int = 0,
@@ -109,6 +110,11 @@ internal fun CanonicalArtistDetailRoute(
     )
 
     val selectedAlbum = nestedNavigation.openedRelease
+    LaunchedEffect(selectedAlbum?.id) {
+        onNestedAlbumRatingTargetChanged(selectedAlbum?.let {
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, it.id)
+        })
+    }
     if (selectedAlbum != null) {
         val albumSelection = CanonicalLibrarySelection(
             CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,

@@ -742,6 +742,7 @@ fun DetailScreen(
                         onRateArtist = if (catalogRatingTarget?.entityType == "ARTIST")
                             ({ editingCatalogRating = true }) else null,
                         artistRated = catalogRating != null,
+                        artistRating = catalogRating,
                         bottomSpace = 22.dp,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )

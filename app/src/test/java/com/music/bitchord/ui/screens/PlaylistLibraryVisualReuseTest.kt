@@ -10,7 +10,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onParent
 import androidx.compose.ui.test.performTouchInput
@@ -18,13 +20,16 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -212,24 +217,26 @@ class PlaylistLibraryVisualReuseTest {
         assertEquals(true, showPlaylistHeaderCreateAction(1))
     }
 
-    @Test fun playlistManagerNavigationUsesNativeBackAndSegments() {
-        var page by mutableStateOf(0)
+    @Test fun playlistManagerUsesSingleFiltersHeadingAndTopRightCreateAction() {
         var backs = 0
-         compose.setContent {
+        var creates = 0
+        compose.setContent {
             PlaylistManagerChrome(
-                selectedIndex = page,
-                onSelect = { page = it },
                 onBack = { backs++ },
+                onCreateFilter = { creates++ },
             )
         }
-        compose.onNodeWithText("Gerenciar coleções").assertExists()
-        compose.onNodeWithText("Clássicas").performClick()
+        compose.onNodeWithText("Seus filtros").assertExists()
+        compose.onNodeWithText("Gerenciar coleções").assertDoesNotExist()
+        compose.onNodeWithText("Clássicas").assertDoesNotExist()
+        compose.onNodeWithText("Inteligentes").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Criar filtro").performClick()
         compose.onNodeWithContentDescription(
             org.robolectric.RuntimeEnvironment.getApplication()
                 .getString(com.music.bitchord.R.string.back),
         ).performClick()
         compose.runOnIdle {
-            assertEquals(2, page)
+            assertEquals(1, creates)
             assertEquals(1, backs)
         }
     }
@@ -331,7 +338,9 @@ class PlaylistLibraryVisualReuseTest {
                 placeholder = "Buscar faixas",
             )
         }
-        compose.onNodeWithTag("native-detail-search-field").assertExists()
+        // A Library search background token does not prove geometry on detail pages.
+        // Keep the pre-migration native detail height independently of collection search.
+        compose.onNodeWithTag("native-detail-search-field").assertHeightIsEqualTo(46.dp)
         compose.onNodeWithContentDescription("Buscar faixas").performTextInput("Magnetic")
         compose.onNodeWithText("Magnetic").assertExists()
     }
@@ -367,8 +376,38 @@ class PlaylistLibraryVisualReuseTest {
                 onQueryChange = { query = it },
             )
         }
-        compose.onNodeWithText("Buscar em Playlists").assertExists()
-        compose.onNodeWithContentDescription("Buscar em Playlists").performTextInput("newjeans")
+        val resources = org.robolectric.RuntimeEnvironment.getApplication().resources
+        val expectedHint = resources.getString(
+            com.music.bitchord.R.string.apple_library_search_in_category,
+            resources.getString(com.music.bitchord.R.string.playlists),
+        )
+        compose.onNodeWithText(expectedHint).assertExists()
+        compose.onNodeWithTag("native-detail-search-field").assertHeightIsEqualTo(48.dp)
+        compose.onNodeWithContentDescription(expectedHint).performTextInput("newjeans")
+        compose.runOnIdle { assertEquals("newjeans", query) }
+    }
+
+    @Test fun librarySearchUsesSearchImeWithoutClearingTheActiveFilter() {
+        var query by mutableStateOf("")
+        compose.setContent {
+            PlaylistLibrarySearchField(
+                query = query,
+                onQueryChange = { query = it },
+            )
+        }
+        val hint = org.robolectric.RuntimeEnvironment.getApplication().resources.let {
+            it.getString(com.music.bitchord.R.string.apple_library_search_in_category,
+                it.getString(com.music.bitchord.R.string.playlists))
+        }
+        val field = compose.onNodeWithContentDescription(hint)
+        field.assert(
+            androidx.compose.ui.test.SemanticsMatcher.expectValue(
+                androidx.compose.ui.semantics.SemanticsProperties.ImeAction,
+                androidx.compose.ui.text.input.ImeAction.Search,
+            ),
+        )
+        field.performTextInput("newjeans")
+        field.performImeAction()
         compose.runOnIdle { assertEquals("newjeans", query) }
     }
 
@@ -395,11 +434,29 @@ class PlaylistLibraryVisualReuseTest {
         compose.onNodeWithText("Hurt").performClick()
         compose.runOnIdle { assertEquals(1, plays) }
         compose.runOnIdle { chosen = true }
-        compose.onNodeWithContentDescription("Selecionar Hurt").performClick()
+        compose.onNodeWithTag("native-library-selection-action").assertIsOn()
+        compose.onNodeWithContentDescription("Desmarcar Hurt").performClick()
         compose.runOnIdle {
             assertEquals(1, toggles)
             assertEquals(1, overflow) // selection mode has no overflow.
         }
+    }
+
+    @Test fun libraryRootGridCardOmitsInlineOverflowWithoutLosingNavigation() {
+        var opened = 0
+        compose.setContent {
+            NativeLibraryEntityCard(
+                title = "Get Up",
+                subtitle = "NewJeans",
+                imageUrl = null,
+                isArtist = false,
+                onClick = { opened++ },
+                onMore = null, // The category root has no ellipsis.
+            )
+        }
+        compose.onAllNodesWithContentDescription("Opções de Get Up").assertCountEquals(0)
+        compose.onNodeWithText("Get Up").performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
     }
 
     @Test fun longPressSelectsNativeGridCardWithoutPlayingAndClickStillPlays() {
@@ -511,7 +568,7 @@ class PlaylistLibraryVisualReuseTest {
                 onPlayTrack = { playedRecordingId = it },
             )
         }
-        compose.onNodeWithText("Adições recentes").assertExists()
+        compose.onNodeWithText("Adições Recentes").assertExists()
         compose.onNodeWithText("Hurt").assertExists()
         compose.onNodeWithText("NewJeans").assertExists()
         compose.onNodeWithText("Hurt").performClick()
@@ -709,20 +766,23 @@ class PlaylistLibraryVisualReuseTest {
         compose.runOnIdle { assertEquals("history", opened) }
     }
 
-    @Test fun conditionCategoriesUseSevenNativeCardsInsteadOfOneCompactBlock() {
+    @Test fun conditionCategoriesShowSixGridCellsAndSeventhWideCell() {
         compose.setContent {
-            PlaylistWizardNavigationList(
+            PlaylistWizardCategoryGrid(
                 (1..7).map { n ->
                     PlaylistWizardNavOption(
                         title = "Categoria $n",
                         description = "Descrição $n",
-                        icon = androidx.compose.material.icons.Icons.Rounded.LibraryMusic,
+                        icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Music,
                         onClick = {},
                     )
                 },
             )
         }
-        compose.onAllNodesWithTag("native-settings-group-surface").assertCountEquals(7)
+        compose.onNodeWithTag("playlist-category-grid", useUnmergedTree = true).assertExists()
+        compose.onAllNodesWithTag("playlist-category-tile", useUnmergedTree = true)
+            .assertCountEquals(7)
+        compose.onNodeWithTag("playlist-category-wide-tile", useUnmergedTree = true).assertExists()
         compose.onNodeWithText("Categoria 7").assertExists()
     }
 

@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import com.music.bitchord.ui.LocalPullToRefreshEnabled
 import com.music.bitchord.ui.AppUiHost
 import com.music.bitchord.ui.AppUi
+import com.music.bitchord.ui.LocalReduceAnimations
 import com.music.bitchord.sharedui.resources.*
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -11,6 +12,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.semantics.contentDescription
@@ -71,6 +73,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.foundation.shape.CircleShape
@@ -78,7 +81,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -88,7 +90,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.SolidColor
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -159,7 +163,7 @@ val FLOATING_BAR_MAX_WIDTH = 440.dp
  * Sized so a phone-width row shows two cards whole with the edge of a third
  * showing: enough to say the row scrolls without a card being half a card.
  */
-val SHELF_CARD_WIDTH = 150.dp
+val SHELF_CARD_WIDTH = NativeMediaCardMetrics.shelfWidth
 
 /** Share of the row a lead-shelf card takes, so the next one peeks in past it. */
 private const val HERO_CARD_FRACTION = 0.70f
@@ -313,7 +317,12 @@ fun PullToRefresh(
 fun SignInBanner(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.98f else 1f, spring(stiffness = 900f), label = "signInScale")
+    val reduceMotion = LocalReduceAnimations.current
+    val scale by animateFloatAsState(
+        targetValue = GlobalMotionPolicy.pressedScale(pressed, reduceMotion),
+        animationSpec = if (reduceMotion) snap() else spring(stiffness = 900f),
+        label = "signInScale",
+    )
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -358,8 +367,7 @@ fun SignInBanner(onSignIn: () -> Unit, modifier: Modifier = Modifier) {
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = stringResource(Res.string.sign_in_with_google),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontSize = 15.sp,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.W700,
                     color = Color.Black,
                 )
@@ -389,7 +397,23 @@ fun MessageState(
             textAlign = TextAlign.Center,
         )
         if (actionLabel != null && onAction != null) {
-            Button(onClick = onAction) { Text(actionLabel) }
+            Box(
+                modifier = Modifier
+                    .height(50.dp)
+                    .widthIn(min = 88.dp)
+                    .clip(RoundedCornerShape(25.dp))
+                    .background(appleMusicKeyColor())
+                    .clickable(role = Role.Button, onClick = onAction)
+                    .testTag("native-message-action"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    actionLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 18.dp),
+                )
+            }
         }
     }
 }
@@ -441,7 +465,7 @@ fun PillTextField(
         if (value.isEmpty()) {
             Text(
                 text = placeholder,
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                style = AppleTextRoles.formInput(MaterialTheme.typography.bodyMedium),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (multiline) 3 else 1,
                 overflow = TextOverflow.Ellipsis,
@@ -454,11 +478,10 @@ fun PillTextField(
             singleLine = !multiline,
             minLines = if (multiline) 3 else 1,
             maxLines = if (multiline) 8 else 1,
-            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                fontSize = 15.sp,
+            textStyle = AppleTextRoles.formInput(MaterialTheme.typography.bodyMedium).copy(
                 color = MaterialTheme.colorScheme.onBackground,
             ),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            cursorBrush = SolidColor(appleMusicKeyColor()),
             visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,

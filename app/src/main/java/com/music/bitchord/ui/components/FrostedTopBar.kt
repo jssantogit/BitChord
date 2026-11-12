@@ -2,20 +2,39 @@ package com.music.bitchord.ui.components
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +45,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -34,8 +54,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Person
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -43,6 +63,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -54,14 +75,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.SubcomposeLayout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,6 +99,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.music.bitchord.R
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.data.model.Account
 import com.music.bitchord.data.settings.AppSettings
 import dev.chrisbanes.haze.HazeState
@@ -173,16 +201,22 @@ fun FrostedTopBar(
     accessory: (@Composable () -> Unit)? = null,
     /** No empty action capsule on the Home root when its menu lives in the header. */
     showActions: Boolean = true,
+    separateActions: Boolean = false,
+    /** Only root tabs with large in-list titles need the actions lowered to match. */
+    rootActionsOffset: Dp = 0.dp,
+    categoryBackButton: Boolean = false,
+    backButtonOffset: Dp = 0.dp,
     /** Only Home opts in: other pages retain their own large page headings. */
     showScrolledTitle: Boolean = false,
     actions: @Composable () -> Unit = {},
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val useFloatingChrome = artworkPageChrome ||
         (LocalLiquidGlassEnabled.current && isGlassSupported())
     val titleAlpha by animateFloatAsState(
         targetValue = if (scrolled || trailingTitle != null) 1f else 0f,
-        animationSpec = tween(220),
+        animationSpec = tween(GlobalMotionPolicy.duration(GlobalMotionPolicy.headerChromeMillis, reduceMotion)),
         label = "topBarTitleAlpha",
     )
     // Every bounded bar uses the same hairline, whether its pane is blurred or
@@ -194,7 +228,7 @@ fun FrostedTopBar(
                 else -> 0.6f
             },
         ),
-        animationSpec = tween(220),
+        animationSpec = tween(GlobalMotionPolicy.duration(GlobalMotionPolicy.headerChromeMillis, reduceMotion)),
         label = "topBarDivider",
     )
 
@@ -307,22 +341,35 @@ fun FrostedTopBar(
                     ArtworkPageBackButton(
                         onClick = onBack,
                         hazeState = backButtonHazeState,
-                        // The surface edge aligns with the floating navbar. The
-                        // padding belongs outside the circle; its icon remains
-                        // centred in the same 44dp control in every material.
+                        isCategory = categoryBackButton,
+                        // Navigation and all floating actions now draw the same
+                        // 40dp circle; route offsets and hit targets stay intact.
                         modifier = Modifier
                             .align(Alignment.CenterStart)
-                            .padding(start = BAR_GUTTER),
+                            .padding(start = BAR_GUTTER)
+                            .offset(y = backButtonOffset),
                     )
                 } else {
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp),
+                    // Preserve the old 48dp accessible hit target in this
+                    // flat/legacy toolbar path, without a Material 3 button.
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .padding(start = 4.dp)
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .clickable(
+                                role = androidx.compose.ui.semantics.Role.Button,
+                                onClick = onBack,
+                            )
+                            .testTag("native-flat-topbar-back"),
+                        contentAlignment = Alignment.Center,
                     ) {
                         Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
+                            artworkPageBackIcon(),
                             contentDescription = stringResource(R.string.back),
                             tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp),
                         )
                     }
                 }
@@ -336,6 +383,7 @@ fun FrostedTopBar(
                 Row(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
+                        .offset(y = rootActionsOffset)
                         .then(if (accessory != null) Modifier.fillMaxWidth().padding(start = edge) else Modifier)
                         .padding(end = edge),
                     verticalAlignment = Alignment.CenterVertically,
@@ -346,7 +394,11 @@ fun FrostedTopBar(
                     }
                     if (showActions) {
                         if (useFloatingChrome) {
-                            ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
+                            if (separateActions) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { actions() }
+                            } else {
+                                ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
+                            }
                         } else {
                             actions()
                         }
@@ -355,19 +407,26 @@ fun FrostedTopBar(
             }
         }
         HorizontalDivider(thickness = 0.5.dp, color = dividerColor)
-        RefreshPuck(refreshing = refreshing, pullFraction = pullFraction)
+        RefreshPuck(refreshing = refreshing, pullFraction = pullFraction, reduceMotion = reduceMotion)
     }
 }
 
-/** Circular floating back affordance, material-matched to the navbar. */
+/** The same authored back glyph is used in every Android toolbar branch. */
+internal fun artworkPageBackIcon() = PlaylistEditorIcons.Back
+
+/**
+ * One visually identical 40dp back surface across Library, Downloads, recent
+ * additions, artist/album detail, Home and Explore. Preserve Android's
+ * accessible click target and the route-specific back action.
+ */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun ArtworkPageBackButton(
     onClick: () -> Unit,
     hazeState: HazeState?,
     modifier: Modifier = Modifier,
+    isCategory: Boolean = false,
 ) {
-    val shape = CircleShape
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val useLiquidGlass = LocalLiquidGlassEnabled.current && isGlassSupported()
     val contentColor = if (useLiquidGlass && !reduceDynamicBlur) {
@@ -376,68 +435,265 @@ internal fun ArtworkPageBackButton(
         MaterialTheme.colorScheme.onSurface
     }
 
-    IconButton(
-        onClick = onClick,
-        modifier = modifier
-            .size(44.dp)
-            .then(artworkPageSurface(shape = shape, hazeState = hazeState)),
-    ) {
-        Icon(
-            Icons.AutoMirrored.Rounded.ArrowBack,
-            contentDescription = stringResource(R.string.back),
-            tint = contentColor,
-        )
-    }
-}
-
-/** One shared pill for every action at the right of a floating top bar. */
-@Composable
-private fun ArtworkPageActions(
-    hazeState: HazeState?,
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
-) {
-    Row(
-        modifier = modifier
-            .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
-            // Keep the right edge fixed while a new action opens room to its
-            // left. The surface itself therefore grows instead of jumping to
-            // its new width in a single frame.
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow,
-                ),
+    FloatingLibraryTopBarCircle(hazeState = hazeState, modifier = modifier) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.testTag(
+                if (isCategory) "apple-category-back-button" else "apple-toolbar-back-button",
+            ),
+        ) {
+            Icon(
+                artworkPageBackIcon(),
+                contentDescription = stringResource(R.string.back),
+                tint = contentColor,
             )
-            // One 48dp profile target with no inset is a true 48x48 circle.
-            // Once another action exists, restore the navbar's PILL_INSET at
-            // both edges. This is layout padding inside the surface, not an
-            // outer margin, so BAR_GUTTER remains unchanged.
-            .artworkActionEdgePadding(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        content()
+        }
     }
 }
 
 /**
- * Navbar edge padding that collapses only for the profile-only state.
- *
- * Invisible/animating action slots can measure between zero and 48dp, so the
- * natural content width—not the number of emitted composables—is the reliable
- * source of truth. At exactly one icon target the pill stays circular; above
- * that it gains the same inset as the navbar while retaining fully round ends.
+ * One Library floating-circle compositor for back, sources, filters and more.
+ * The am-descomp More Options chain supplies 40dp as a modifier input only;
+ * rendered runtime touch bounds remain unverified.
  */
-private fun Modifier.artworkActionEdgePadding(): Modifier = layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints.copy(minWidth = 0))
-    val oneActionWidth = 48.dp.roundToPx()
-    val extraActionFraction = ((placeable.width - oneActionWidth).toFloat() / oneActionWidth)
-        .coerceIn(0f, 1f)
-    val edgePadding = (PILL_INSET.roundToPx() * extraActionFraction).roundToInt()
-    val width = (placeable.width + edgePadding * 2).coerceIn(constraints.minWidth, constraints.maxWidth)
+@Composable
+internal fun FloatingLibraryTopBarCircle(
+    hazeState: HazeState?,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .size(AppleFloatingControlMetrics.libraryDiameter)
+            .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
+            .testTag("apple-library-floating-circle"),
+        contentAlignment = Alignment.Center,
+    ) { content() }
+}
 
-    layout(width, placeable.height) {
-        placeable.placeRelative(edgePadding, 0)
+/**
+ * Root Explore and Library share this compact Apple-style menu.
+ *
+ * am-descomp/docs/components/overflow-menu.md confirms a dark rounded popup
+ * anchored near the top-right, but leaves exact dimensions and placement
+ * unknown. The compact 180dp width, 17dp corner radius and 38dp offset are
+ * screenshot-guided Bitchord values, not recovered Apple constants.
+ *
+ * Only Settings is exposed: Edit Pins remains blocked by am-descomp #1 and
+ * account actions are intentionally not copied.
+ */
+@Composable
+internal fun AppleRootSettingsOverflow(
+    hazeState: HazeState?,
+    description: String,
+    onSettings: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        FloatingLibraryTopBarCircle(hazeState) {
+            IconButton(onClick = { expanded = true }) {
+                Icon(
+                    imageVector = PlaylistEditorIcons.More,
+                    contentDescription = description,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        AppleSettingsPopup(
+            expanded = expanded,
+            hazeState = hazeState,
+            onDismiss = { expanded = false },
+            onSettings = {
+                expanded = false
+                onSettings()
+            },
+        )
+    }
+}
+
+/** Historic top-to-popup 54dp = a 40dp button plus 14dp of clear space. */
+internal val APPLE_SETTINGS_POPUP_OFFSET = 54.dp
+
+/** Reuse the same bounded, direction-aware positioning as native compact menus. */
+internal fun settingsPopupPosition(
+    anchorBounds: IntRect,
+    popupSize: IntSize,
+    windowSize: IntSize,
+    direction: LayoutDirection,
+    gapPx: Int,
+): IntOffset = compactOverflowPopupPosition(
+    anchorBounds, popupSize, windowSize, direction, gapPx,
+)
+
+/**
+ * One shared menu across root tabs and pushed screens: the same compact
+ * Settings action, not a per-screen fake account shortcut.
+ * The 180dp/17dp/38dp measurements are screenshot-calibrated Bitchord
+ * approximations; REA confirms popup content/placement class, not exact size.
+ */
+@Composable
+private fun AppleSettingsPopup(
+    expanded: Boolean,
+    hazeState: HazeState?,
+    onDismiss: () -> Unit,
+    onSettings: () -> Unit,
+) {
+    // Keep the Popup window alive just long enough to draw its exit.
+    // A normal if (!expanded) return drops the whole window in one frame.
+    // The measured Apple popup animation is unknown; these are restrained
+    // BitChord timings, shared by the root and pushed-screen ⋮ actions.
+    val reduced by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val visibility = remember { MutableTransitionState(false) }
+    visibility.targetState = expanded
+    // A very fast second tap may reverse the entrance before currentState
+    // reaches true. Do not drop the Popup window while that reversal is
+    // still animating.
+    if (!visibility.currentState && !visibility.targetState && visibility.isIdle) return
+
+    // Anchor to the real toolbar control, not the window's top edge.
+    // This also flips above the launcher or clamps on short/RTL windows.
+    val gapPx = with(LocalDensity.current) {
+        (APPLE_SETTINGS_POPUP_OFFSET - AppleFloatingControlMetrics.toolbarDiameter).roundToPx()
+    }
+    val popupPositionProvider = remember(gapPx) {
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset = settingsPopupPosition(
+                anchorBounds, popupContentSize, windowSize, layoutDirection, gapPx,
+            )
+        }
+    }
+    Popup(
+        popupPositionProvider = popupPositionProvider,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true),
+    ) {
+        AnimatedVisibility(
+            visibleState = visibility,
+            enter = if (reduced) EnterTransition.None else
+                fadeIn(tween(200)) + scaleIn(
+                    animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    initialScale = 0.92f,
+                    transformOrigin = TransformOrigin(1f, 0f),
+                ),
+            exit = if (reduced) ExitTransition.None else
+                fadeOut(tween(160)) + scaleOut(
+                    animationSpec = tween(160, easing = FastOutSlowInEasing),
+                    targetScale = 0.96f,
+                    transformOrigin = TransformOrigin(1f, 0f),
+                ),
+        ) {
+            Box(
+                Modifier.width(180.dp)
+                    .then(artworkPageSurface(shape = RoundedCornerShape(17.dp), hazeState = hazeState))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = .18f))
+                    .testTag("apple-root-settings-popup"),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                        .clickable(enabled = expanded, onClick = onSettings)
+                        .testTag("apple-root-settings-item")
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Independent circular surfaces for top-bar icon actions across all routes.
+ *
+ * All icon-only floating controls use the same 40dp Bitchord diameter as
+ * Library's reference-backed More Options control. The source supports the
+ * Library 40dp modifier, while app-wide parity is the user's product decision.
+ *
+ * Each direct action is measured on its own before a separate surface is
+ * subcomposed behind it. Text badges keep their existing width and do not
+ * become fake circular buttons. Menus, callbacks and content remain untouched.
+ */
+@Composable
+internal fun ArtworkPageActions(
+    hazeState: HazeState?,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val circleSize = AppleFloatingControlMetrics.toolbarDiameter
+    val gap = AppleFloatingControlMetrics.preferredGap
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
+    SubcomposeLayout(
+        modifier = modifier.animateContentSize(
+            animationSpec = if (reduceMotion) snap() else spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow,
+            ),
+        ),
+    ) { constraints ->
+        val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+        val children = subcompose("actions", content).map { it.measure(childConstraints) }
+        val diameter = circleSize.roundToPx()
+        val gapPx = gap.roundToPx()
+        val minIconBounds = AppleFloatingControlMetrics.libraryDiameter.roundToPx()
+        // Material3 IconButton commonly measures 48dp for accessibility.
+        // Accept its larger measured slot, but paint only a 40dp circle.
+        val maxIconBounds = maxOf(
+            diameter + 4.dp.roundToPx(),
+            AppleFloatingControlMetrics.minimumActionTouchTarget.roundToPx(),
+        )
+        val surfaces = children.mapIndexed { index, child ->
+            // Only genuine icon-sized slots receive a surface. Compact
+            // informational badges and collapsed animations are not buttons.
+            if (child.width < minIconBounds || child.height < minIconBounds ||
+                child.width > maxIconBounds || child.height > maxIconBounds) null
+            else subcompose("circle:$index") {
+                Box(
+                    Modifier.size(circleSize)
+                        .then(artworkPageSurface(shape = CircleShape, hazeState = hazeState))
+                        .testTag("apple-toolbar-action-circle"),
+                )
+            }.first().measure(Constraints.fixed(diameter, diameter))
+        }
+        val widths = children.indices.map { index ->
+            maxOf(children[index].width, surfaces[index]?.width ?: 0)
+        }
+        val visibleIndices = children.indices.filter { index ->
+            children[index].width > 0 && children[index].height > 0
+        }
+        val fittedGapPx = fittingToolbarActionGapPx(
+            itemWidths = visibleIndices.map { widths[it] },
+            availableWidthPx = constraints.maxWidth,
+            preferredGapPx = gapPx,
+        )
+        val naturalWidth = visibleIndices.sumOf { widths[it] } +
+            fittedGapPx * (visibleIndices.size - 1).coerceAtLeast(0)
+        val naturalHeight = (visibleIndices.maxOfOrNull { index ->
+            maxOf(children[index].height, surfaces[index]?.height ?: 0)
+        } ?: 0)
+        val width = naturalWidth.coerceIn(constraints.minWidth, constraints.maxWidth)
+        val height = naturalHeight.coerceIn(constraints.minHeight, constraints.maxHeight)
+        layout(width, height) {
+            var x = 0
+            visibleIndices.forEachIndexed { order, index ->
+                if (order > 0) x += fittedGapPx
+                val child = children[index]
+                val slotWidth = widths[index]
+                surfaces[index]?.let { surface ->
+                    surface.placeRelative(x + (slotWidth - surface.width) / 2, (height - surface.height) / 2)
+                }
+                child.placeRelative(x + (slotWidth - child.width) / 2, (height - child.height) / 2)
+                x += slotWidth
+            }
+        }
     }
 }
 
@@ -471,97 +727,112 @@ private fun artworkPageSurface(
 }
 
 /**
- * The account affordance at the right end of the bar.
+ * Shared Settings overflow on every pushed screen and root outside the special
+ * Library chrome. Old account-photo entry is intentionally retired: ⋮ opens a
+ * small popup and Settings remains the existing destination. Account switching
+ * stays available from Settings, not by a hidden gesture on a different glyph.
  *
- * It is the signed-in Google account's own photo — the same one YouTube Music
- * shows there — and tapping it opens Settings, where the account lives. Signed
- * out, or before the account menu has come back, it falls back to a person
- * glyph on a filled circle so the tap target never disappears.
- *
- * The hairline ring is what keeps a photo with light edges from dissolving into
- * the bar's glass; it is the same one thumbnails elsewhere carry.
+ * Keep the legacy parameters for callers while the toolbar routes are unified.
  */
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun TopBarAccountButton(
     account: Account?,
     onClick: () -> Unit,
     onSwipeProfile: ((forward: Boolean) -> Boolean)? = null,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
 ) {
-    val translation = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    // Wrapped in an IconButton so it keeps the 48dp target, the ripple and the
-    // spacing every other action in this bar has.
-    IconButton(
-        onClick = onClick,
-        modifier = modifier
-            .graphicsLayer { translationY = translation.value }
-            .pointerInput(onSwipeProfile) {
-                if (onSwipeProfile == null) return@pointerInput
-                var drag = 0f
-                detectVerticalDragGestures(
-                    onVerticalDrag = { change, amount -> change.consume(); drag += amount },
-                    onDragEnd = {
-                        if (kotlin.math.abs(drag) < 28f) return@detectVerticalDragGestures
-                        if (!onSwipeProfile.invoke(drag > 0f)) scope.launch {
-                            translation.snapTo(if (drag > 0f) 9f else -9f)
-                            translation.animateTo(0f, spring())
-                        }
-                    },
-                )
-            },
-    ) {
-        val photo = account?.thumbnailUrl
-        if (photo != null) {
-            AsyncImage(
-                model = photo,
-                contentDescription = stringResource(R.string.switch_account),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(AVATAR_SIZE)
-                    .clip(CircleShape)
-                    .thumbnailBorder(CircleShape),
+    var expanded by remember { mutableStateOf(false) }
+    Box(modifier = modifier) {
+        IconButton(
+            onClick = { expanded = true },
+            modifier = Modifier.size(AppleFloatingControlMetrics.toolbarDiameter)
+                .testTag("apple-global-more-options"),
+        ) {
+            Icon(
+                imageVector = PlaylistEditorIcons.More,
+                contentDescription = stringResource(R.string.more),
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(AppleFloatingControlMetrics.toolbarGlyphSize),
             )
-        } else {
-            Box(
-                modifier = Modifier
-                    .size(AVATAR_SIZE)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .thumbnailBorder(CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.Person,
-                    contentDescription = stringResource(R.string.switch_account),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
         }
+        AppleSettingsPopup(
+            expanded = expanded,
+            hazeState = hazeState,
+            onDismiss = { expanded = false },
+            onSettings = {
+                expanded = false
+                onClick()
+            },
+        )
     }
 }
 
 /**
- * The refresh indicator: a round puck that slides out from under the bar's
- * bottom edge as the list is pulled, Chrome-style.
+ * Shared refresh puck in Home, Explore, Library and other frosted-bar routes.
  *
- * It is drawn by the bar rather than by the pull-to-refresh box, so it lands on
- * top of the glass instead of behind it, and it is clipped to the band just
- * below the bar so it emerges from the edge instead of appearing over the
- * status bar. Its position is the pull state's own distance fraction — which
- * the pull box holds at 1 while refreshing and animates back to 0 when done —
- * so the slide down, the rest while loading and the slide back up are all one
- * value. The arc fills with the drag, then spins once the refresh is away.
+ * Its drag position is still derived from pullFraction in graphicsLayer,
+ * avoiding full app recomposition for each pointer frame. A *completed*
+ * refresh gets a bounded, alpha-only 400ms exit. This adapts the traced
+ * conditional Loader.c exit, not an assertion that Apple's pull puck
+ * itself has the same animator (am-descomp docs/motion/home-and-content.md).
  *
- * Laid out at zero height, so the bar keeps its size and the puck overhangs
- * the content without taking any touches from it.
+ * No exit animation is played for a cancelled pull. Reduce animations hides
+ * the puck immediately. Nothing in this layer delays loaded page content.
  */
 @Composable
-private fun RefreshPuck(refreshing: Boolean, pullFraction: () -> Float, modifier: Modifier = Modifier) {
+internal fun RefreshPuck(
+    refreshing: Boolean,
+    pullFraction: () -> Float,
+    reduceMotion: Boolean,
+    modifier: Modifier = Modifier,
+) {
     val currentFraction by rememberUpdatedState(pullFraction)
     val pulling by remember { derivedStateOf { currentFraction() > 0f } }
-    if (!refreshing && !pulling) return
+
+    // Keep the visual composed while a real refresh's exit is running.
+    // A cancelled drag never sets refreshWasRunning, so it simply retracts.
+    var refreshWasRunning by remember { mutableStateOf(refreshing) }
+    var exiting by remember { mutableStateOf(false) }
+    val exitAlpha = remember { Animatable(1f) }
+    val finishing = !refreshing && refreshWasRunning
+
+    LaunchedEffect(refreshing, reduceMotion) {
+        if (refreshing) {
+            refreshWasRunning = true
+            exiting = false
+            exitAlpha.snapTo(1f)
+        } else if (refreshWasRunning) {
+            exiting = true
+            if (reduceMotion) {
+                exitAlpha.snapTo(0f)
+            } else {
+                exitAlpha.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(
+                        durationMillis = GlobalMotionPolicy.duration(
+                            GlobalMotionPolicy.loaderExitMillis, reduced = false,
+                        ),
+                        // The reference uses a DecelerateInterpolator with an
+                        // unverified factor; this is a controlled approximation.
+                        easing = LinearOutSlowInEasing,
+                    ),
+                )
+            }
+            exiting = false
+            refreshWasRunning = false
+        }
+    }
+
+    val fading = finishing || exiting
+    if (!GlobalMotionPolicy.keepRefreshPuckVisible(
+            refreshing = refreshing,
+            pulling = pulling,
+            completedRefreshExit = fading,
+            reduced = reduceMotion,
+        )
+    ) return
 
     val travel = with(LocalDensity.current) { (PUCK_REST + PUCK_SIZE).toPx() }
     Box(
@@ -578,33 +849,46 @@ private fun RefreshPuck(refreshing: Boolean, pullFraction: () -> Float, modifier
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    val f = currentFraction().coerceIn(0f, 2f)
-                    // Past the threshold the puck keeps following, but
-                    // reluctantly, like the list under it.
+                    val f = if (fading) 1f else currentFraction().coerceIn(0f, 2f)
+                    // Preserve the puck's rest position during the exit, even
+                    // though the pull state has already snapped back to zero.
                     val eased = if (f <= 1f) f else 1f + (f - 1f) * 0.35f
                     translationY = travel * eased - PUCK_SIZE.toPx()
-                    alpha = (f * 3f).coerceAtMost(1f)
+                    val dragAlpha = if (fading) 1f else (f * 3f).coerceAtMost(1f)
+                    alpha = dragAlpha * if (fading) exitAlpha.value else 1f
                 }
                 .shadow(6.dp, CircleShape)
                 .size(PUCK_SIZE)
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                .testTag("apple-refresh-puck"),
             contentAlignment = Alignment.Center,
         ) {
             val indicatorModifier = Modifier.size(22.dp)
-            if (refreshing) {
+            if (GlobalMotionPolicy.indeterminateRefreshEnabled(refreshing || fading, reduceMotion)) {
                 CircularProgressIndicator(
                     modifier = indicatorModifier,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = refreshPuckProgressTint(),
                     strokeWidth = 2.5.dp,
                     strokeCap = StrokeCap.Round,
                 )
             } else {
                 CircularProgressIndicator(
-                    progress = { (currentFraction() * 0.8f).coerceIn(0f, 0.8f) },
-                    modifier = indicatorModifier.graphicsLayer {
-                        rotationZ = currentFraction().coerceIn(0f, 2f) * 180f
+                    progress = {
+                        if (refreshing || fading) 0.8f
+                        else (currentFraction() * 0.8f).coerceIn(0f, 0.8f)
                     },
-                    color = MaterialTheme.colorScheme.primary,
+                    modifier = indicatorModifier
+                        .graphicsLayer {
+                            rotationZ = GlobalMotionPolicy.refreshPuckRotationDegrees(
+                                currentFraction(), reduced = reduceMotion,
+                            )
+                        }
+                        .clearAndSetSemantics {
+                            // The 80% arc represents a loading/drag affordance,
+                            // NOT measured progress of the network request.
+                            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+                        },
+                    color = refreshPuckProgressTint(),
                     trackColor = Color.Transparent,
                     strokeWidth = 2.5.dp,
                     strokeCap = StrokeCap.Round,
@@ -614,6 +898,10 @@ private fun RefreshPuck(refreshing: Boolean, pullFraction: () -> Float, modifier
         }
     }
 }
+
+/** Active refresh affordance follows the theme-specific Apple Music key color. */
+@Composable
+internal fun refreshPuckProgressTint(): Color = appleMusicKeyColor()
 
 private val PUCK_SIZE = 40.dp
 

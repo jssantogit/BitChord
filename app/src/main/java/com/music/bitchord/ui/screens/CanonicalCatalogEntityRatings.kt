@@ -93,14 +93,18 @@ internal fun CanonicalCatalogEntityRatingDialog(
                 scope.launch {
                     val saved = try {
                         if (!canPersistCanonicalCatalogRating(target) ||
-                            !isValidCanonicalEntityRating(score)) false
+                            (score != 0.0 && !isValidCanonicalEntityRating(score))) false
                         else withContext(Dispatchers.IO) {
-                            dao.upsert(CanonicalEntityRatingEntity(
-                                entityType = target.entityType,
-                                entityId = target.entityId,
-                                ratingValue = score,
-                                ratedAtEpochMs = System.currentTimeMillis(),
-                            ))
+                            if (score == 0.0) {
+                                dao.clear(target.entityType, target.entityId)
+                            } else {
+                                dao.upsert(CanonicalEntityRatingEntity(
+                                    entityType = target.entityType,
+                                    entityId = target.entityId,
+                                    ratingValue = score,
+                                    ratedAtEpochMs = System.currentTimeMillis(),
+                                ))
+                            }
                             true
                         }
                     } catch (cancelled: CancellationException) { throw cancelled }

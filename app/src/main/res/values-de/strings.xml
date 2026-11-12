@@ -416,6 +416,14 @@
     <string name="pause_countdown">%1$s bis die Wiedergabe pausiert</string>
     <string name="play_to_preview">Spiele etwas ab, um die Vorschau zu füllen.</string>
     <string name="playlist_name">Playlist-Name</string>
+    <string name="editor_discard_title">Änderungen verwerfen?</string>
+    <string name="editor_discard_rating_body">Deine neue Bewertung wurde noch nicht gespeichert.</string>
+    <string name="editor_discard_playlist_body">Die Änderungen an der Playlist wurden noch nicht gespeichert.</string>
+    <string name="editor_discard_confirm">Verwerfen</string>
+    <string name="editor_keep_editing">Weiter bearbeiten</string>
+    <string name="playlist_editor_name_required">Gib einen Playlistnamen ein.</string>
+    <string name="playlist_editor_name_too_long">Verwende höchstens 80 Zeichen.</string>
+    <string name="playlist_editor_save_failed">Die Playlist konnte nicht gespeichert werden. Versuche es erneut.</string>
     <string name="presence">Presence</string>
     <string name="preview">Vorschau</string>
     <string name="prioritize_syllable_lyrics">Silben-Songtexte priorisieren</string>
@@ -1386,7 +1394,7 @@
     <string name="canonical_discovery_refresh">Gespeicherten Katalog aktualisieren</string>
     <string name="legacy_library_youtube_disabled">Aktiviere YouTube Music in den Einstellungen, um diese Onlinebibliothek zu laden. Lokale Playlists und Sammlungen bleiben verfügbar.</string>
     <string name="spotify_import_youtube_required">Der Import von Spotify-Playlists benötigt derzeit die Suche über YouTube Music. Aktiviere YouTube Music und deaktiviere die katalogbasierte Entdeckung.</string>
-    <string name="search_origin_general">Allgemein</string>
+    <string name="search_origin_general">Katalog</string>
     <string name="search_origin_server">Server</string>
     <string name="search_origin_local">Lokal</string>
     <string name="pause_resume_fade">Ein-/Ausblenden beim Pausieren und Fortsetzen</string>
@@ -1419,4 +1427,10 @@
     <string name="visual_offline_confirm_title">Offline-Grafiken löschen?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline-Grafiken gelöscht</string>
+    <string name="apple_music_tab_radio">Radio</string>
+    <string name="apple_music_tab_radio_unavailable">Radio, demnächst</string>
+    <string name="apple_player_add_to_playlist">Zu einer Playlist hinzufügen…</string>
+    <string name="apple_player_share_song">Song teilen</string>
+    <string name="apple_player_share_lyrics">Songtext teilen…</string>
+    <string name="apple_library_search_in_category">In %1$s suchen</string>
 </resources>

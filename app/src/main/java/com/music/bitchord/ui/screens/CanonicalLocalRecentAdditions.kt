@@ -3,13 +3,17 @@ package com.music.bitchord.ui.screens
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.foundation.clickable
+import com.music.bitchord.ui.components.longPressMenuClickable
+import com.music.bitchord.ui.components.NativeCompactOverflowMenu
+import com.music.bitchord.ui.components.NativeCompactMenuItem
+import com.music.bitchord.ui.components.NativeInlineTextAction
+import com.music.bitchord.playback.CanonicalCollectionIntent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +52,7 @@ import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ShelfRow
+import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -198,6 +203,7 @@ internal fun CanonicalLocalRecentAdditions(
     viewType: LibraryViewType = LibraryViewType.GRID,
     sourceKey: String? = null,
     stars: Int? = null,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val database = remember(context) { CanonicalCatalogDatabase.get(context) }
@@ -297,6 +303,7 @@ internal fun CanonicalLocalRecentAdditions(
                     dates = RecentLocalAdditionsSnapshot.dates(),
                 ),
                 onPlayTrack = onPlayTrack,
+                onTrackAction = onTrackAction,
                 contentPadding = contentPadding,
                 loading = recent == null && !loadFailed,
                 error = loadFailed,
@@ -309,7 +316,8 @@ internal fun CanonicalLocalRecentAdditions(
             )
         }
     } else if (recent != null) {
-        CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll)
+        CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll,
+            onTrackAction = onTrackAction)
     } else if (loadFailed) {
         Text(
             "Não foi possível consultar as adições locais.",
@@ -332,6 +340,7 @@ internal fun CanonicalRecentAdditionsShelf(
     recent: List<V2DisplayRow>,
     onPlayTrack: (String) -> Unit,
     onSeeAll: () -> Unit = {},
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     if (recent.isEmpty()) return
     Column(
@@ -345,11 +354,11 @@ internal fun CanonicalRecentAdditionsShelf(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                "Adições recentes",
+                "Adições Recentes",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            TextButton(onClick = onSeeAll) { Text("Ver todos") }
+            NativeInlineTextAction(label = "Ver todos", onClick = onSeeAll)
         }
         // The Library already has a snapping/lazy shelf; reuse it rather than
         // recreating a horizontalScroll Row for recent local recordings.
@@ -360,8 +369,9 @@ internal fun CanonicalRecentAdditionsShelf(
             items(recent, key = { it.id }) { track ->
                 CanonicalRecentAdditionCard(
                     track = track,
-                    modifier = Modifier.width(142.dp),
+                    modifier = Modifier.width(SHELF_CARD_WIDTH),
                     onClick = { onPlayTrack(track.id) },
+                    onTrackAction = onTrackAction,
                 )
             }
         }
@@ -374,15 +384,28 @@ private fun CanonicalRecentAdditionCard(
     track: V2DisplayRow,
     modifier: Modifier,
     onClick: () -> Unit,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
+    var actionsOpen by remember(track.id) { mutableStateOf(false) }
     Column(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier
+            .testTag("canonical-recent-card")
+            .longPressMenuClickable(
+                onClick = onClick,
+                onLongClick = if (onTrackAction != null) ({ actionsOpen = true }) else null,
+            ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         androidx.compose.foundation.layout.Box(
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
         ) {
             SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
+            RecentTrackActionsPopup(
+                expanded = actionsOpen,
+                onDismissRequest = { actionsOpen = false },
+                track = track,
+                onTrackAction = onTrackAction,
+            )
         }
         Text(
             track.title.takeIf { it.isNotBlank() } ?: "Título indisponível",
@@ -414,6 +437,7 @@ internal fun CanonicalRecentAdditionsGrid(
     onQueryChange: (String) -> Unit = {},
     viewType: LibraryViewType = LibraryViewType.GRID,
     filterActive: Boolean = false,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
 ) {
     if (loading && recent.isEmpty()) {
         // Initial MediaStore projection can be expensive. The same native
@@ -456,6 +480,8 @@ internal fun CanonicalRecentAdditionsGrid(
         }
         if (viewType == LibraryViewType.LIST) {
             items(recent, key = { it.id }) { track ->
+                var actionsOpen by remember(track.id) { mutableStateOf(false) }
+                Box(Modifier.fillMaxWidth()) {
                 LibraryRow(
                     title = track.title,
                     subtitle = track.artist,
@@ -464,17 +490,60 @@ internal fun CanonicalRecentAdditionsGrid(
                         SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
                     },
                     onClick = { onPlayTrack(track.id) },
+                    onLongPress = if (onTrackAction != null)
+                        ({ actionsOpen = true }) else null,
                     horizontalPadding = PAGE_GUTTER,
                     artworkSize = 52.dp,
                 )
+                RecentTrackActionsPopup(
+                    expanded = actionsOpen,
+                    onDismissRequest = { actionsOpen = false },
+                    track = track,
+                    onTrackAction = onTrackAction,
+                )
+                }
             }
         } else {
             gridRows(recent, columns = 2, key = { it.id }) { track ->
                 CanonicalRecentAdditionCard(
                     track = track, modifier = Modifier.fillMaxWidth(),
                     onClick = { onPlayTrack(track.id) },
+                    onTrackAction = onTrackAction,
                 )
             }
         }
+    }
+}
+
+/** Recent recordings have canonical RecordingIds, not guessed Song/videoIds.
+ * Both queue actions reuse the same validation and playback gate as the rest
+ * of the native Library. Dismiss the menu before dispatching either action.
+ */
+@Composable
+private fun RecentTrackActionsPopup(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    track: V2DisplayRow,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)?,
+) {
+    if (onTrackAction == null) return
+    NativeCompactOverflowMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+    ) {
+        NativeCompactMenuItem(
+            label = "Tocar a seguir",
+            onClick = {
+                onDismissRequest()
+                onTrackAction(track.id, CanonicalCollectionIntent.ADD_NEXT)
+            },
+        )
+        NativeCompactMenuItem(
+            label = "Adicionar à fila",
+            onClick = {
+                onDismissRequest()
+                onTrackAction(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+            },
+        )
     }
 }

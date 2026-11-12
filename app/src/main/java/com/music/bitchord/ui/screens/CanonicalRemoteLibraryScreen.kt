@@ -34,24 +34,17 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -73,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
@@ -98,12 +92,14 @@ import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.ui.components.NativeDetailTrackNumber
 import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.data.catalog.ArtistEntity
@@ -265,6 +261,7 @@ internal fun CanonicalRemoteLibraryScreen(
     detailBackToken: Int = 0,
     onDetailChanged: (Boolean) -> Unit = {},
     onNestedAlbumChanged: (Boolean) -> Unit = {},
+    onAlbumRatingTargetChanged: (CanonicalLibrarySelection?) -> Unit = {},
     initialPinnedSelection: CanonicalLibraryPin? = null,
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
     selectedSourceKey: String? = null,
@@ -476,10 +473,22 @@ internal fun CanonicalRemoteLibraryScreen(
                 artistNestedReleaseOpen,
         )
     }
+    // The floating rating button follows a verified ReleaseId. Nested
+    // artist releases publish their own selection from CanonicalArtistDetailRoute.
+    LaunchedEffect(unified, selectedContext, selectedEntity?.id) {
+        if (unified && selectedContext == CanonicalSmartFilterContext.ALBUMS) {
+            onAlbumRatingTargetChanged(selectedEntity?.let { selected ->
+                CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, selected.id)
+            })
+        } else {
+            onAlbumRatingTargetChanged(null)
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             onDetailChanged(false)
             onNestedAlbumChanged(false)
+            onAlbumRatingTargetChanged(null)
         }
     }
     var selectedFilterId by remember(providerKey, selectedContext) {
@@ -978,11 +987,19 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
+    // Nested category/detail navigation had an immediate replacement even
+    // while the parent Library tab already used the new route arrival.
+    // One current page moves; no extra content copy or repository re-query.
+    val nestedLibraryArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
+        routeKey = "library:${selectedContext.name}:${selectedEntity?.id ?: "shelf"}",
+        reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current,
+        forward = selectedEntity != null,
+    )
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(nestedLibraryArrival)) {
         if (unified) {
             // Selected albums/artists keep the exact native page chrome.
             // Only their revalidated RecordingId membership changes.
@@ -1018,6 +1035,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     searching = searchVisible,
                     nestedBackToken = artistNestedBackToken,
                     onNestedDetailChanged = { artistNestedReleaseOpen = it },
+                    onNestedAlbumRatingTargetChanged = onAlbumRatingTargetChanged,
                     albumSort = albumSort,
                     albumMenuToken = albumMenuToken,
                     albumPlaylistToken = albumPlaylistToken,
@@ -1329,6 +1347,8 @@ internal fun CanonicalRemoteLibraryScreen(
             }
             ModalBottomSheet(
                 onDismissRequest = { libraryMenu = null },
+                shape = androidx.compose.ui.graphics.RectangleShape,
+                dragHandle = null,
                 containerColor = MaterialTheme.colorScheme.background,
             ) {
                 BrowseActionsSheet(
@@ -1619,7 +1639,7 @@ private fun RemoteCanonicalEntityList(
 
 /** Only fields supported by the selected canonical media context are offered. */
 @Composable
-private fun RemoteSongSavedFilterMenu(
+internal fun RemoteSongSavedFilterMenu(
     selectedName: String?,
     options: List<SavedSmartPlaylistV2Filter>,
     selectedFilterId: String?,
@@ -1627,17 +1647,27 @@ private fun RemoteSongSavedFilterMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
-        TextButton(onClick = { expanded = true }) {
-            Text("Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Todas as músicas") },
+        NativeInlineTextAction(
+            label = "Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"),
+            onClick = { expanded = true },
+        )
+        // This may contain dozens of filters, so cap the viewport instead of
+        // letting the native popup extend beyond the available display.
+        val maxPopupHeight = LocalConfiguration.current.screenHeightDp.dp * 0.68f
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            maxContentHeight = maxPopupHeight,
+        ) {
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Todas as músicas",
+                selected = selectedFilterId == null,
                 onClick = { expanded = false; onSelect(null) },
             )
             options.forEach { filter ->
-                DropdownMenuItem(
-                    text = { Text(filter.name) },
+                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                    label = filter.name,
+                    selected = selectedFilterId == filter.id,
                     onClick = { expanded = false; onSelect(filter.id) },
                 )
             }
@@ -1646,7 +1676,7 @@ private fun RemoteSongSavedFilterMenu(
 }
 
 @Composable
-private fun RemoteBrowseTopBar(
+internal fun RemoteBrowseTopBar(
     title: String,
     onBack: () -> Unit,
 ) {
@@ -1657,12 +1687,12 @@ private fun RemoteBrowseTopBar(
             .heightIn(min = 56.dp)
             .padding(horizontal = 8.dp),
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = stringResource(R.string.remote_library_back),
-            )
-        }
+        CircleIconButton(
+            icon = PlaylistEditorIcons.Back,
+            contentDescription = stringResource(R.string.remote_library_back),
+            onClick = onBack,
+        )
+        Spacer(Modifier.width(8.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
@@ -1759,6 +1789,7 @@ internal fun CanonicalTrackRow(
     // Only a category's row enters selection on long press; detail pages don't.
     onLongPress: (() -> Unit)? = null,
     compactForArtist: Boolean = false,
+    showInlineOptions: Boolean = true,
     palette: ArtworkPalette? = null,
     albumTrackNumber: Int? = null,
 ) {
@@ -1769,7 +1800,7 @@ internal fun CanonicalTrackRow(
             else onClick()
         },
         onLongPress = onLongPress,
-        onMore = onOptions,
+        onMore = onOptions.takeIf { showInlineOptions },
         horizontalInset = if (compactForArtist) 0.dp else PAGE_GUTTER,
         modifier = if (compactForArtist) Modifier else Modifier.heightIn(min = 68.dp),
         textGap = if (albumTrackNumber != null) PAGE_GUTTER
@@ -1818,16 +1849,15 @@ internal fun CanonicalTrackRow(
         },
         actions = {
             if (selectionMode && onToggleSelection != null) {
-                IconButton(onClick = onToggleSelection, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        if (selected) Icons.Rounded.CheckCircle
-                        else Icons.Rounded.RadioButtonUnchecked,
-                        contentDescription = if (selected) "Desmarcar faixa" else "Selecionar faixa",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
+                NativeLibrarySelectionAction(
+                    selected = selected,
+                    label = if (selected) "Desmarcar faixa" else "Selecionar faixa",
+                    onToggle = onToggleSelection,
+                )
             } else {
-                CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
+                if (showInlineOptions) {
+                    CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
+                }
             }
         },
     )
@@ -1856,13 +1886,13 @@ internal fun CanonicalCatalogRatingMenu(
             onClick = { expanded = true },
             contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
         )
-        DropdownMenu(
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
         ) {
-            DropdownMenuItem(
-                text = { Text(sharedStringResource(Res.string.recording_feedback_edit)) },
-                leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) },
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = sharedStringResource(Res.string.recording_feedback_edit),
+                icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.RatingPlain,
                 onClick = {
                     expanded = false
                     onEdit()
@@ -2018,25 +2048,26 @@ internal fun NativeUnifiedLibraryCategoryHeader(
 ) {
     Column(
         Modifier.fillMaxWidth()
-            .padding(top = topBarContentPadding(), bottom = 12.dp),
+            .padding(top = topBarContentPadding() + 8.dp, bottom = 12.dp),
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
             color = palette.onBackground,
-            modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            modifier = Modifier.padding(start = PAGE_GUTTER + 16.dp, end = PAGE_GUTTER),
         )
-        Spacer(Modifier.height(12.dp))
-        DetailSearchField(
+        Spacer(Modifier.height(8.dp))
+        NativeDetailSearchField(
             query = query,
             onQueryChange = onQueryChange,
             onClose = { onQueryChange("") },
             autoFocus = searching,
             onFocused = {},
             palette = palette,
-            placeholder = "Buscar em $title",
-            horizontalInset = PAGE_GUTTER,
+            placeholder = stringResource(R.string.apple_library_search_in_category, title),
+            horizontalInset = PAGE_GUTTER + 4.dp,
+            appleLibraryCategoryStyle = true,
         )
         if (shouldShowCanonicalLibraryCategoryPlayback(
                 context, isAlbumDetail = false, hasPlayableTracks = hasPlayableTracks,
@@ -2173,7 +2204,9 @@ private fun NativeUnifiedLibraryBody(
     BoxWithConstraints(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     ) {
-        val dragModifier = if (canLongPressSelect) {
+        // A hold opens the existing contextual ⋯ menu. Once the user enters
+        // selection mode, holding and dragging continues to paint selections.
+        val dragModifier = if (canLongPressSelect && selectedItems.isNotEmpty()) {
             Modifier.pointerInput(dragRows, dragIndices, gridMode) {
                 val visited = mutableSetOf<CanonicalLibrarySelection>()
                 var previousIndex: Int? = null
@@ -2273,8 +2306,8 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onTrackPlay(track)
                                 },
-                                onMore = { onTrackOptions(track) },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onMore = null, // Category root has no inline overflow.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onTrackOptions(track) }) else null,
                                 selectionMode = selectedItems.isNotEmpty(),
                                 selected = target in selectedItems,
                                 onToggleSelection = { onToggleSelection(target) },
@@ -2292,7 +2325,8 @@ private fun NativeUnifiedLibraryBody(
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
-                            onLongPress = null, // The list-level gesture handles hold and drag.
+                            showInlineOptions = false,
+                            onLongPress = if (selectedItems.isEmpty()) ({ onTrackOptions(track) }) else null,
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = target in selectedItems,
                             onToggleSelection = { onToggleSelection(target) },
@@ -2337,8 +2371,8 @@ private fun NativeUnifiedLibraryBody(
                                             album.id, album.title, album.artworkUri,
                                         ))
                                     },
-                                    onMore = { onAlbumOptions(album) },
-                                    onLongPress = null, // The list-level gesture handles hold and drag.
+                                    onMore = null, // Category root has no inline overflow.
+                                    onLongPress = if (selectedItems.isEmpty()) ({ onAlbumOptions(album) }) else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -2364,16 +2398,15 @@ private fun NativeUnifiedLibraryBody(
                                         album.id, album.title, album.artworkUri,
                                     ))
                                 },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onAlbumOptions(album) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
-                                        IconButton(onClick = { onToggleSelection(target) }) {
-                                            Icon(
-                                                if (target in selectedItems) Icons.Rounded.CheckCircle
-                                                else Icons.Rounded.RadioButtonUnchecked,
-                                                contentDescription = "Selecionar álbum",
-                                            )
-                                        }
+                                        NativeLibrarySelectionAction(
+                                            selected = target in selectedItems,
+                                            label = if (target in selectedItems) "Desmarcar álbum"
+                                                else "Selecionar álbum",
+                                            onToggle = { onToggleSelection(target) },
+                                        )
                                     } else Row(verticalAlignment = Alignment.CenterVertically) {
                                         canonicalLibraryEntityRatingForRow(
                                             entityRatings, target,
@@ -2384,7 +2417,6 @@ private fun NativeUnifiedLibraryBody(
                                                 modifier = Modifier.padding(end = 8.dp),
                                             )
                                         }
-                                        RowMoreButton(onClick = { onAlbumOptions(album) })
                                     }
                                 },
                                 artworkSize = 52.dp,
@@ -2430,8 +2462,8 @@ private fun NativeUnifiedLibraryBody(
                                         if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                         else onEntitySelect(artist)
                                     },
-                                    onMore = { onArtistOptions(artist) },
-                                    onLongPress = null, // The list-level gesture handles hold and drag.
+                                    onMore = null, // Category root has no inline overflow.
+                                    onLongPress = if (selectedItems.isEmpty()) ({ onArtistOptions(artist) }) else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
@@ -2456,16 +2488,15 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onEntitySelect(artist)
                                 },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onArtistOptions(artist) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
-                                        IconButton(onClick = { onToggleSelection(target) }) {
-                                            Icon(
-                                                if (target in selectedItems) Icons.Rounded.CheckCircle
-                                                else Icons.Rounded.RadioButtonUnchecked,
-                                                contentDescription = "Selecionar artista",
-                                            )
-                                        }
+                                        NativeLibrarySelectionAction(
+                                            selected = target in selectedItems,
+                                            label = if (target in selectedItems) "Desmarcar artista"
+                                                else "Selecionar artista",
+                                            onToggle = { onToggleSelection(target) },
+                                        )
                                     } else Row(verticalAlignment = Alignment.CenterVertically) {
                                         canonicalLibraryEntityRatingForRow(
                                             entityRatings, target,
@@ -2476,7 +2507,6 @@ private fun NativeUnifiedLibraryBody(
                                                 modifier = Modifier.padding(end = 8.dp),
                                             )
                                         }
-                                        RowMoreButton(onClick = { onArtistOptions(artist) })
                                     }
                                 },
                                 artworkSize = 52.dp,
@@ -2592,16 +2622,12 @@ internal fun NativeLibraryEntityCard(
                 )
             }
             if (selectionMode && onToggleSelection != null) {
-                IconButton(
-                    onClick = onToggleSelection,
+                NativeLibrarySelectionAction(
+                    selected = selected,
+                    label = if (selected) "Desmarcar ${title}" else "Selecionar ${title}",
+                    onToggle = onToggleSelection,
                     modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    Icon(
-                        if (selected) Icons.Rounded.CheckCircle
-                        else Icons.Rounded.RadioButtonUnchecked,
-                        contentDescription = "Selecionar ${title}",
-                    )
-                }
+                )
             } else if (onMore != null) {
                 RowMoreButton(
                     onClick = onMore,

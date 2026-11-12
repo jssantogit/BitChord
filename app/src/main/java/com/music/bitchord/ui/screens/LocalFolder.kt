@@ -2,7 +2,6 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,8 +22,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Album
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -32,10 +29,8 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
@@ -48,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.pluralStringResource
@@ -73,6 +69,7 @@ import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.ExplicitSongTitle
 import com.music.bitchord.ui.components.LIBRARY_GRID_SPACING
 import com.music.bitchord.ui.components.MessageState
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.SearchPlayingBars
@@ -81,6 +78,8 @@ import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.rememberRemoteArtworkUrl
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
 import com.music.bitchord.ui.theme.ArtworkPalette
 
@@ -407,7 +406,7 @@ private fun FolderDivider(palette: ArtworkPalette) {
 /** Tinted behind a card that is part of the Downloads selection. */
 @Composable
 private fun selectionFill(selected: Boolean): Color =
-    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f) else Color.Transparent
+    if (selected) appleMusicKeyColor().copy(alpha = 0.14f) else Color.Transparent
 
 private val CARD_SHAPE = RoundedCornerShape(12.dp)
 
@@ -672,11 +671,23 @@ private fun AlbumRow(
             modifier = Modifier.weight(1f),
         )
         if (selected) {
-            Icon(Icons.Rounded.Check, contentDescription = "Selecionado",
-                tint = palette.accent, modifier = Modifier.size(20.dp))
+            Icon(
+                imageVector = localFolderSelectionCheckIcon(),
+                contentDescription = "Selecionado",
+                tint = localFolderSelectionMarkColor(
+                    dark = MaterialTheme.colorScheme.background.luminance() < 0.5f,
+                ),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }
+
+/** Group selection uses the same checked vector as the global native UI. */
+internal fun localFolderSelectionCheckIcon(): ImageVector = PlaylistEditorIcons.Check
+
+/** Selection is key-blue in light and dark themes, never artwork palette tint. */
+internal fun localFolderSelectionMarkColor(dark: Boolean): Color = appleMusicKeyColor(dark)
 
 @Composable
 private fun GroupLabels(title: String, subtitle: String, palette: ArtworkPalette, modifier: Modifier) {
@@ -703,9 +714,9 @@ private fun GroupLabels(title: String, subtitle: String, palette: ArtworkPalette
 @Composable
 private fun TrailingGlyph(selected: Boolean, palette: ArtworkPalette) {
     Icon(
-        imageVector = if (selected) Icons.Rounded.CheckCircle else BitChordIcons.ChevronRight,
+        imageVector = if (selected) PlaylistEditorIcons.Selected else BitChordIcons.ChevronRight,
         contentDescription = if (selected) stringResource(R.string.selected) else null,
-        tint = if (selected) MaterialTheme.colorScheme.primary else palette.onBackgroundVariant,
+        tint = if (selected) appleMusicKeyColor() else palette.onBackgroundVariant,
         modifier = Modifier.size(if (selected) 22.dp else 16.dp),
     )
 }
@@ -727,7 +738,6 @@ internal fun LocalFolderSelectionBar(
     val allSelected = songs.isNotEmpty() && songs.all { it.videoId in state.selectedIds }
     fun chosen() = songs.filter { it.videoId in state.selectedIds }.also { state.clear() }
     val shape = RoundedCornerShape(14.dp)
-    val dark = isSystemInDarkTheme()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -737,52 +747,67 @@ internal fun LocalFolderSelectionBar(
             .padding(horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = { state.selectAll(songs) }, enabled = !allSelected) {
-            Icon(
-                Icons.Rounded.Check,
-                contentDescription = stringResource(R.string.select_all),
-                tint = if (dark) Color.White else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp),
-            )
-        }
+        CircleIconButton(
+            icon = PlaylistEditorIcons.Check,
+            contentDescription = stringResource(R.string.select_all),
+            onClick = { state.selectAll(songs) },
+            enabled = !allSelected,
+            size = 40.dp,
+            tint = appleMusicKeyColor(),
+        )
         Text(
             text = "$count ${stringResource(R.string.selected)}",
             style = MaterialTheme.typography.titleSmall,
-            color = if (dark) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
         folder.onUpload?.let { upload ->
-            SelectionAction(
+            LocalFolderInlineAction(
                 icon = Icons.Rounded.FileUpload,
                 label = stringResource(R.string.upload_to_webdav),
-                color = MaterialTheme.colorScheme.primary,
                 enabled = count > 0,
                 onClick = { upload(chosen()) },
             )
         }
         folder.onDelete?.let { delete ->
-            SelectionAction(
+            LocalFolderInlineAction(
                 icon = Icons.Rounded.Delete,
                 label = stringResource(R.string.delete),
-                color = DESTRUCTIVE,
+                destructive = true,
                 enabled = count > 0,
                 onClick = { delete(chosen()) },
             )
         }
-        TextButton(onClick = state::clear) { Text(stringResource(R.string.cancel)) }
+        LocalFolderInlineAction(
+            label = stringResource(R.string.cancel),
+            onClick = state::clear,
+        )
     }
 }
 
+/**
+ * Compact text actions for the Downloads selection bar. Calls and selection
+ * mutation remain in LocalFolderSelectionBar; color and semantics are shared
+ * with the rest of the native Library.
+ */
 @Composable
-private fun SelectionAction(icon: ImageVector, label: String, color: Color, enabled: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(4.dp))
-        Text(label, color = color)
-    }
+internal fun LocalFolderInlineAction(
+    label: String,
+    onClick: () -> Unit,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    destructive: Boolean = false,
+) {
+    NativeInlineTextAction(
+        label = label,
+        onClick = onClick,
+        icon = icon,
+        enabled = enabled,
+        destructive = destructive,
+        subdued = !destructive,
+        tag = "local-folder-inline-action",
+    )
 }
-
-private val DESTRUCTIVE = Color(0xFFFF453A)
 
 @Composable
 internal fun LocalMusicSort.localizedLabel(): String = when (this) {

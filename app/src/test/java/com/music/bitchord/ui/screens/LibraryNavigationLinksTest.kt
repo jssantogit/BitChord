@@ -5,6 +5,12 @@ import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Folder
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.settings.LibraryViewType
+import com.music.bitchord.sharedui.resources.Res
+import com.music.bitchord.sharedui.resources.ic_apple_library_playlists
+import com.music.bitchord.sharedui.resources.ic_apple_library_artists
+import com.music.bitchord.sharedui.resources.ic_apple_library_albums
+import com.music.bitchord.sharedui.resources.ic_apple_library_songs
+import com.music.bitchord.sharedui.resources.ic_apple_library_downloads
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -35,6 +41,7 @@ class LibraryNavigationLinksTest {
 
     @Test fun libraryHomeIsCategoryFirstAndKeepsOnlyDownloadsFromDeviceLinks() {
         val result = libraryNavigationLinks(
+            labels = LibraryCategoryLabels("Playlists", "Artistas", "Álbuns", "Músicas"),
             deviceLinks = listOf(
                 deviceLink("Downloads", "local:downloads"),
                 deviceLink("Música local", "local:all"),
@@ -44,14 +51,53 @@ class LibraryNavigationLinksTest {
         )
         assertEquals(
             listOf(
-                "Playlists", "Artistas", "Álbuns", "Músicas",
-                "Rádios", "Downloads",
+                "Playlists", "Artistas", "Álbuns", "Músicas", "Downloads",
             ),
             result.map { it.item.title },
         )
-        assertFalse(result[4].enabled)
+        assertEquals("local:downloads", result.last().item.browseId)
+        assertEquals(true, result.all { it.enabled })
+    }
+    @Test fun libraryCategoriesUseTracedAppleReferenceVectorsWithoutChangingRoutes() {
+        val links = libraryNavigationLinks(
+            labels = LibraryCategoryLabels("Playlists", "Artists", "Albums", "Songs"),
+            deviceLinks = listOf(deviceLink("Downloads", "local:downloads")),
+            onOpenPlaylists = {},
+            onOpenLocalCategory = {},
+        )
+        assertEquals(
+            listOf(
+                Res.drawable.ic_apple_library_playlists,
+                Res.drawable.ic_apple_library_artists,
+                Res.drawable.ic_apple_library_albums,
+                Res.drawable.ic_apple_library_songs,
+                Res.drawable.ic_apple_library_downloads,
+            ),
+            links.map { it.logo },
+        )
+        assertEquals("local:downloads", links.last().item.browseId)
+    }
+
+    @Test fun localizedCategoryNamesKeepTheSameNavigationAndDownloadRoute() {
+        val destinations = mutableListOf<LocalFolderTab>()
+        var playlistOpened = 0
+        val result = libraryNavigationLinks(
+            labels = LibraryCategoryLabels("Playlists", "Artists", "Albums", "Songs"),
+            deviceLinks = listOf(deviceLink("Downloads", "local:downloads")),
+            onOpenPlaylists = { playlistOpened++ },
+            onOpenLocalCategory = { destinations += it },
+        )
+        assertEquals(listOf("Playlists", "Artists", "Albums", "Songs", "Downloads"),
+            result.map { it.item.title })
+        result[0].onClick?.invoke()
+        result[1].onClick?.invoke()
+        result[2].onClick?.invoke()
+        result[3].onClick?.invoke()
+        assertEquals(1, playlistOpened)
+        assertEquals(listOf(LocalFolderTab.ARTISTS, LocalFolderTab.ALBUMS, LocalFolderTab.SONGS), destinations)
         assertEquals("local:downloads", result.last().item.browseId)
     }
+
     @Test fun unifiedLibraryRequestsMissingAudioPermissionWithoutBlockingNavigation() {
         val transitions = mutableListOf<String>()
         openUnifiedLibraryCategory(

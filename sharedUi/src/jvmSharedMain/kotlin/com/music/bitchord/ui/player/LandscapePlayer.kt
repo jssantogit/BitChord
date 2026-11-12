@@ -1,5 +1,6 @@
 package com.music.bitchord.ui.player
 
+
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
 
 import com.music.bitchord.sharedui.resources.*
@@ -35,7 +36,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Undo
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -414,6 +414,7 @@ internal fun LandscapeMainPane(
 internal fun LandscapeCredits(
     song: Song,
     onEditCanonicalRating: () -> Unit,
+    showPlayerRatingStar: Boolean = false,
     onOpenMenu: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     /** Null browse id for anyone but the lead credit — see [NowPlayingScreen]. */
@@ -456,15 +457,19 @@ internal fun LandscapeCredits(
                 )
             }
         }
-        CanonicalSongRatingStars(
-            song = song,
-            modifier = Modifier.padding(start = 8.dp),
-            color = Color.White.copy(alpha = 0.84f),
-            onClick = onEditCanonicalRating,
-        )
+        if (showPlayerRatingStar) {
+            PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
+        } else {
+            CanonicalSongRatingStars(
+                song = song,
+                modifier = Modifier.padding(start = 8.dp),
+                color = Color.White.copy(alpha = 0.84f),
+                onClick = onEditCanonicalRating,
+            )
+        }
         Spacer(Modifier.width(10.dp))
         CircleGlyph(
-            icon = Icons.Rounded.MoreHoriz,
+            icon = nativeLandscapePlayerOverflowGlyph(),
             contentDescription = stringResource(Res.string.more),
             onClick = onOpenMenu,
         )
@@ -550,3 +555,6 @@ internal fun LandscapeLyricsPane(
         }
     }
 }
+
+/** Landscape CircleGlyph supplies its own platter, so only the plain ⋯ belongs inside. */
+internal fun nativeLandscapePlayerOverflowGlyph() = AppleQueueVectors.MorePlain

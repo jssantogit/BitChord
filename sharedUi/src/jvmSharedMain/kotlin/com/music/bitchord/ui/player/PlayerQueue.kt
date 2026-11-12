@@ -1,15 +1,20 @@
 package com.music.bitchord.ui.player
 
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
+import com.music.bitchord.ui.components.CompactRatingGeometry
 
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.ExplicitSongTitle
 
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +22,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.draw.alpha
 import kotlin.math.abs
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -33,10 +39,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -72,6 +80,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Velocity
 import coil3.compose.AsyncImage
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -122,6 +131,40 @@ internal fun keepScrollInList(listState: LazyListState) = object : NestedScrollC
  * spring is still visibly settling that trade long after the track changed.
  */
 private val QUEUE_ROW_MOTION = tween<IntOffset>(durationMillis = 200, easing = FastOutSlowInEasing)
+
+/** One timeline and tier split; only the visual treatment changes. */
+internal fun queueTracksForPresentation(queue: List<Song>, currentIndex: Int, appleStyle: Boolean): QueueTracks =
+    if (appleStyle) splitQueue(queue, currentIndex, showHistory = true)
+    else visibleNowPlayingQueue(queue, currentIndex)
+
+/** Uses only the pending context entry: a manual queue must not inherit album provenance. */
+internal fun appleQueueContextOrigin(tracks: QueueTracks): String? {
+    if (tracks.user.isNotEmpty()) return null
+    val next = tracks.context.firstOrNull()?.song ?: return null
+    val nextOrigin = next.playbackSource?.takeIf(String::isNotBlank)
+        ?: next.albumName?.takeIf(String::isNotBlank)
+    if (nextOrigin != null) return nextOrigin
+    // Queue entries may omit source metadata even when the playback context
+    // still has it. Only borrow the active source for same-artist context entries.
+    val current = tracks.nowPlaying?.song ?: return null
+    if (!current.artist.equals(next.artist, ignoreCase = true)) return null
+    return current.playbackSource?.takeIf(String::isNotBlank)
+        ?: current.albumName?.takeIf(String::isNotBlank)
+}
+
+internal fun appleQueueHasUpcoming(tracks: QueueTracks): Boolean =
+    tracks.user.isNotEmpty() || tracks.context.isNotEmpty() || tracks.autoplay.isNotEmpty()
+
+internal fun appleQueueShouldShowEmpty(tracks: QueueTracks): Boolean =
+    !appleQueueHasUpcoming(tracks)
+
+/** Swipe-to-remove accepts either horizontal direction, never the reorder gesture. */
+internal fun appleQueueShouldCommitSwipe(offsetPx: Float, thresholdPx: Float): Boolean =
+    thresholdPx > 0f && kotlin.math.abs(offsetPx) >= thresholdPx
+
+/** Played history is never swipe-removable; locked queues aren't editable. */
+internal fun appleQueueMaySwipeRemove(appleStyle: Boolean, history: Boolean, locked: Boolean, lifted: Boolean): Boolean =
+    appleStyle && !history && !locked && !lifted
 
 /** Softens the list where it meets the header and the scrubber. */
 internal fun Modifier.fadingEdges(): Modifier = this
@@ -228,6 +271,9 @@ internal fun InlineQueue(
     onRemove: (Int) -> Unit,
     onMove: (Int, Int) -> Unit,
     onClear: () -> Unit,
+    onClearHistory: () -> Unit = {},
+    appleStyle: Boolean = false,
+    verifiedQueueAlbumTitle: String? = null,
     onScrollingChange: (Boolean) -> Unit = {},
     onDragActiveChange: (Boolean) -> Unit = {},
     /** Phone only: let queue scrolling dismiss/restore the lower half player. */
@@ -246,9 +292,10 @@ internal fun InlineQueue(
         onReveal = onRevealPlayer,
         onHide = onHidePlayer,
     )
-    // Playback history remains in the queue engine but not above the music
-    // on this surface. Keep the active and upcoming sections first.
-    val tracks = remember(queue, currentIndex) { visibleNowPlayingQueue(queue, currentIndex) }
+    // History is previously played timeline entries, not fabricated music.
+    val tracks = remember(queue, currentIndex, appleStyle) {
+        queueTracksForPresentation(queue, currentIndex, appleStyle)
+    }
     val drag = rememberQueueDrag(listState, tracks, onMove, onDragActiveChange)
     val nowPlaying = tracks.nowPlaying
     val contextSong = tracks.context.firstOrNull()?.song
@@ -260,7 +307,8 @@ internal fun InlineQueue(
     // Keep Now playing in view; history is available by scrolling upwards.
     // Include the entry key because trimming history can leave the index unchanged.
     var hasScrolledOnce by remember { mutableStateOf(false) }
-    LaunchedEffect(currentIndex, nowPlaying?.key) {
+    LaunchedEffect(currentIndex, nowPlaying?.key, appleStyle) {
+        if (appleStyle) return@LaunchedEffect
         val nowPlayingRow = 1
         val scrolledAway = listState.firstVisibleItemIndex != nowPlayingRow || listState.firstVisibleItemScrollOffset != 0
         if (drag.held == null && nowPlaying != null && scrolledAway) {
@@ -274,6 +322,7 @@ internal fun InlineQueue(
     }
 
     Column(modifier.fillMaxWidth()) {
+        if (!appleStyle) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -291,6 +340,7 @@ internal fun InlineQueue(
             }
         }
         Spacer(Modifier.height(4.dp))
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -307,7 +357,46 @@ internal fun InlineQueue(
                     .then(if (collapsePlayerOnScroll) Modifier.nestedScroll(controlsOnScroll) else Modifier),
                 contentPadding = PaddingValues(horizontal = PLAYER_GUTTER),
             ) {
-                if (nowPlaying != null) {
+                if (appleStyle) {
+                    item(key = "apple-queue-history-heading") {
+                        QueueHeading(
+                            title = stringResource(Res.string.apple_queue_history),
+                            appleStyle = true,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
+                            trailing = {
+                                QueueClearButton(
+                                    MaterialTheme.typography.bodyLarge,
+                                    controlsLocked || tracks.history.isEmpty(),
+                                    onClearHistory,
+                                )
+                            },
+                        )
+                    }
+                    items(tracks.history, key = { it.key }) { past ->
+                        InlineQueueRow(
+                            song = past.song,
+                            isCurrent = false,
+                            isHistory = true,
+                            appleStyle = true,
+                            locked = controlsLocked,
+                            onClick = { onJumpTo(past.timelineIndex) },
+                            onRemove = {},
+                            modifier = queueMotion(),
+                        )
+                    }
+                }
+                if (appleStyle && appleQueueShouldShowEmpty(tracks)) {
+                    item(key = "apple-queue-empty") {
+                        Box(Modifier.fillMaxWidth().height(300.dp), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = stringResource(Res.string.apple_queue_empty),
+                                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp),
+                                color = Color.White.copy(alpha = 0.45f),
+                            )
+                        }
+                    }
+                }
+                if (!appleStyle && nowPlaying != null) {
                     item(key = "header-now-playing") {
                         QueueHeading(
                             title = stringResource(Res.string.now_playing),
@@ -325,17 +414,54 @@ internal fun InlineQueue(
                         )
                     }
                 }
+                if (appleStyle && appleQueueHasUpcoming(tracks)) {
+                    item(key = "apple-continuation-heading") {
+                        Column(Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp).then(queueMotion())) {
+                            Text(
+                                text = stringResource(Res.string.apple_queue_continue),
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = Color.White,
+                            )
+                            // Do not infer a queued song's origin from the currently playing track.
+                            val description = when {
+                                tracks.context.isNotEmpty() && tracks.user.isEmpty() ->
+                                    verifiedQueueAlbumTitle?.takeIf(String::isNotBlank)
+                                        ?: appleQueueContextOrigin(tracks)
+                                        ?: stringResource(Res.string.apple_queue_similar)
+                                tracks.autoplay.isNotEmpty() || tracks.user.isNotEmpty() ->
+                                    stringResource(Res.string.apple_queue_similar)
+                                else -> null
+                            }
+                            if (description != null) {
+                                Text(
+                                    text = description,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    maxLines = 2,
+                                )
+                            }
+                        }
+                    }
+                }
                 if (tracks.user.isNotEmpty()) {
-                    item(key = "header-user-queue") {
+                    if (!appleStyle) item(key = "header-user-queue") {
                         QueueHeading(
-                            title = stringResource(Res.string.next_in_queue),
+                            title = stringResource(if (appleStyle) Res.string.apple_queue_continue else Res.string.next_in_queue),
                             modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).then(queueMotion()),
+                            appleStyle = appleStyle,
+                            trailing = {
+                                if (appleStyle) QueueClearButton(
+                                    MaterialTheme.typography.bodyLarge, controlsLocked, onClear,
+                                )
+                            },
                         )
                     }
-                    queueSection(tracks.user, QueueSection.USER, drag, controlsLocked, onJumpTo, onRemove)
+                    queueSection(tracks.user, QueueSection.USER, drag, controlsLocked, onJumpTo, onRemove, appleStyle)
                 }
                 if (tracks.context.isNotEmpty()) {
-                    item(key = "header-context") {
+                    if (!appleStyle) item(key = "header-context") {
                         QueueHeading(
                             title = if (contextTitle != null) {
                                 stringResource(Res.string.next_from, contextTitle)
@@ -343,15 +469,36 @@ internal fun InlineQueue(
                                 stringResource(Res.string.queue)
                             },
                             modifier = Modifier.padding(top = 16.dp, bottom = 6.dp).then(queueMotion()),
+                            appleStyle = appleStyle,
                         )
                     }
-                    queueSection(tracks.context, QueueSection.CONTEXT, drag, controlsLocked, onJumpTo, onRemove)
+                    queueSection(tracks.context, QueueSection.CONTEXT, drag, controlsLocked, onJumpTo, onRemove, appleStyle)
                 }
-                if (autoplayEnabled || tracks.autoplay.isNotEmpty()) {
-                    item(key = "autoplay-heading") {
-                        AutoplayHeading(hasTracks = tracks.autoplay.isNotEmpty(), modifier = queueMotion())
+                if ((!appleStyle && autoplayEnabled) || tracks.autoplay.isNotEmpty()) {
+                    if (!appleStyle) item(key = "autoplay-heading") {
+                        if (appleStyle) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(top = 22.dp, bottom = 12.dp).then(queueMotion()),
+                            ) {
+                                Text(
+                                    text = stringResource(Res.string.apple_queue_continue),
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                                    ),
+                                    color = Color.White,
+                                )
+                                Text(
+                                    text = stringResource(Res.string.apple_queue_similar),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    maxLines = 2,
+                                )
+                            }
+                        } else {
+                            AutoplayHeading(hasTracks = tracks.autoplay.isNotEmpty(), modifier = queueMotion())
+                        }
                     }
-                    queueSection(tracks.autoplay, QueueSection.AUTOPLAY, drag, controlsLocked, onJumpTo, onRemove)
+                    queueSection(tracks.autoplay, QueueSection.AUTOPLAY, drag, controlsLocked, onJumpTo, onRemove, appleStyle)
                 }
             }
             // The held row, drawn over the list where the finger is. Positioned
@@ -366,6 +513,7 @@ internal fun InlineQueue(
                         onRemove = {},
                         draggable = true,
                         lifted = true,
+                        appleStyle = appleStyle,
                         modifier = Modifier.offset { IntOffset(0, drag.heldTop.roundToInt()) },
                     )
                 }
@@ -387,6 +535,7 @@ private fun LazyListScope.queueSection(
     locked: Boolean,
     onJumpTo: (Int) -> Unit,
     onRemove: (Int) -> Unit,
+    appleStyle: Boolean = false,
 ) {
     items(rows, key = { it.key }) { track ->
         val held = drag.held?.key == track.key
@@ -402,6 +551,7 @@ private fun LazyListScope.queueSection(
             onRemove = { onRemove(track.timelineIndex) },
             locked = locked,
             draggable = !locked,
+            appleStyle = appleStyle,
             onDragStart = { drag.start(track.key, section) },
             onDrag = drag::drag,
             onDragEnd = { drag.end(track.key) },
@@ -415,12 +565,15 @@ private fun QueueHeading(
     title: String,
     modifier: Modifier = Modifier,
     trailing: @Composable () -> Unit = {},
+    appleStyle: Boolean = false,
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = Color.White.copy(alpha = 0.75f),
+            style = if (appleStyle) MaterialTheme.typography.titleLarge.copy(
+                fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+            ) else MaterialTheme.typography.titleMedium,
+            color = if (appleStyle) Color.White else Color.White.copy(alpha = 0.75f),
             modifier = Modifier.weight(1f),
         )
         trailing()
@@ -714,22 +867,71 @@ private fun InlineQueueRow(
     draggable: Boolean = false,
     /** The copy drawn under the finger while the row is being moved. */
     lifted: Boolean = false,
+    appleStyle: Boolean = false,
+    isHistory: Boolean = false,
     onDragStart: () -> Unit = {},
     onDrag: (Float) -> Unit = {},
     onDragEnd: () -> Unit = {},
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (lifted) Color.White.copy(alpha = 0.06f) else Color.Transparent)
-            // Disabled rather than ignored: a tap that ripples and then does
-            // nothing reads as the app having missed it.
-            .clickable(enabled = !locked, onClick = onClick)
-            .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (draggable) {
+    val canSwipeRemove = appleQueueMaySwipeRemove(appleStyle, isHistory, locked, lifted)
+    val swipeLimitPx = with(LocalDensity.current) { 132.dp.toPx() }
+    val swipeCommitPx = with(LocalDensity.current) { 72.dp.toPx() }
+    var swipeOffset by remember(song.queueEntryId, song.videoId) { mutableFloatStateOf(0f) }
+    var swiping by remember { mutableStateOf(false) }
+    val swipeTranslation by animateFloatAsState(
+        targetValue = swipeOffset,
+        animationSpec = if (swiping) snap() else spring(stiffness = 500f),
+        label = "appleQueueSwipe",
+    )
+    Box(modifier.fillMaxWidth()) {
+        if (canSwipeRemove && kotlin.math.abs(swipeTranslation) > 2f) {
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    modifier = Modifier
+                        .align(if (swipeTranslation > 0f) Alignment.CenterStart else Alignment.CenterEnd)
+                        .width(with(LocalDensity.current) { kotlin.math.abs(swipeTranslation).toDp() })
+                        .fillMaxHeight()
+                        .background(Color(0xFF0091FF)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Delete,
+                        contentDescription = stringResource(Res.string.remove_from_queue),
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp),
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer { translationX = swipeTranslation }
+                .clip(RoundedCornerShape(8.dp))
+                .background(if (lifted) Color.White.copy(alpha = 0.06f) else Color.Transparent)
+                .then(
+                    if (canSwipeRemove) Modifier.pointerInput(song.queueEntryId, song.videoId) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { swiping = true },
+                            onDragCancel = { swiping = false; swipeOffset = 0f },
+                            onDragEnd = {
+                                val remove = appleQueueShouldCommitSwipe(swipeOffset, swipeCommitPx)
+                                swiping = false
+                                swipeOffset = 0f
+                                if (remove) onRemove()
+                            },
+                            onHorizontalDrag = { change, amount ->
+                                change.consume()
+                                swipeOffset = (swipeOffset + amount).coerceIn(-swipeLimitPx, swipeLimitPx)
+                            },
+                        )
+                    } else Modifier,
+                )
+                .clickable(enabled = !locked, onClick = onClick)
+                .padding(vertical = if (appleStyle) 7.dp else 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+        if (draggable && !appleStyle) {
             Icon(
                 Icons.Rounded.DragHandle,
                 contentDescription = stringResource(Res.string.drag_to_reorder),
@@ -760,7 +962,7 @@ private fun InlineQueueRow(
             model = rememberPlaybackArtworkImageModel(song, com.music.bitchord.data.model.ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
-                .size(44.dp)
+                .size(if (appleStyle) 48.dp else 44.dp)
                 .clip(RoundedCornerShape(6.dp))
                 .thumbnailBorder(RoundedCornerShape(6.dp))
                 .background(Color.White.copy(alpha = 0.08f)),
@@ -769,12 +971,15 @@ private fun InlineQueueRow(
         Column(Modifier.weight(1f)) {
             ExplicitSongTitle(
                 song = song,
-                style = MaterialTheme.typography.titleMedium,
+                style = if (appleStyle) MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 17.sp, fontWeight = FontWeight.Normal,
+                ) else MaterialTheme.typography.titleMedium,
                 color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.92f),
             )
             Text(
                 text = song.artist,
-                style = MaterialTheme.typography.bodyMedium,
+                style = if (appleStyle) MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp)
+                    else MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.55f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -784,10 +989,29 @@ private fun InlineQueueRow(
         // ExplicitSongTitle ellipsizes earlier instead of pushing stars away.
         CanonicalSongRatingStars(
             song = song,
+            geometry = CompactRatingGeometry.CIRCULAR,
             modifier = Modifier.padding(start = 8.dp, end = 6.dp),
             color = Color.White.copy(alpha = 0.8f),
         )
-        if (!locked) {
+        if (appleStyle && draggable) {
+            Icon(
+                imageVector = AppleQueueVectors.DragHandle,
+                contentDescription = stringResource(Res.string.drag_to_reorder),
+                tint = Color.White.copy(alpha = 0.34f),
+                modifier = Modifier.size(32.dp).pointerInput(song.queueEntryId, song.videoId) {
+                    detectDragGestures(
+                        onDragStart = { onDragStart() },
+                        onDragEnd = { onDragEnd() },
+                        onDragCancel = { onDragEnd() },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            onDrag(amount.y)
+                        },
+                    )
+                },
+            )
+        }
+        if (!locked && !appleStyle && !isHistory) {
             Box(
                 modifier = Modifier
                     .size(32.dp)
@@ -802,6 +1026,7 @@ private fun InlineQueueRow(
                     modifier = Modifier.size(18.dp),
                 )
             }
+        }
         }
     }
 }

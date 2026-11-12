@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,13 +19,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.DeleteForever
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,7 +52,12 @@ import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.download.DownloadState
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import java.util.Locale
+
+/** Original, shared vector identities for rating and playlist destructive actions. */
+internal fun browseRatingActionIcon() = PlaylistEditorIcons.RatingPlain
+internal fun browsePlaylistDeleteIcon() = PlaylistEditorIcons.Delete
 
 /**
  * The album or playlist a long-press is acting on.
@@ -195,6 +199,7 @@ fun BrowseActionsSheet(
      */
     onRenameInSheet: (() -> Unit)? = null,
     startRenaming: Boolean = false,
+    onRenameDraftChanged: (Boolean) -> Unit = {},
 ) {
     val menu = presentation == SongActionsPresentation.Menu
     var renaming by remember { mutableStateOf(startRenaming) }
@@ -208,15 +213,19 @@ fun BrowseActionsSheet(
             onBack = { renaming = false },
             onRename = onRename,
             modifier = modifier,
+            onDraftChanged = onRenameDraftChanged,
         )
         return
     }
 
-    CompositionLocalProvider(LocalActionRowStyle provides if (menu) ActionRowStyle.Menu else ActionRowStyle.Sheet) {
+    CompositionLocalProvider(
+        LocalActionRowStyle provides if (menu) ActionRowStyle.Menu else ActionRowStyle.AppleSolid,
+    ) {
         Column(
             modifier
                 .fillMaxWidth()
-                .then(if (menu) Modifier.verticalScroll(rememberScrollState()) else Modifier),
+                .heightIn(max = LocalConfiguration.current.screenHeightDp.dp * 0.85f)
+                .verticalScroll(rememberScrollState()),
         ) {
             if (!menu) {
                 BrowseSheetHeader(target, headerArtwork)
@@ -244,7 +253,7 @@ fun BrowseActionsSheet(
                     "Adicionar à playlist", onClick = add)
             }
             onEditRating?.let { edit ->
-                ActionRow(Icons.Rounded.Star, "Editar avaliação", onClick = edit)
+                ActionRow(browseRatingActionIcon(), "Editar avaliação", onClick = edit)
             }
             onSelect?.let { select ->
                 ActionRow(Icons.Rounded.CheckCircle, "Selecionar", onClick = select)
@@ -308,7 +317,7 @@ fun BrowseActionsSheet(
                 )
             }
             if (onRename != null) {
-                ActionRow(Icons.Rounded.Edit, stringResource(R.string.rename)) {
+                ActionRow(PlaylistEditorIcons.Edit, stringResource(R.string.rename)) {
                     if (menu && onRenameInSheet != null) {
                         onRenameInSheet()
                     } else {
@@ -317,7 +326,7 @@ fun BrowseActionsSheet(
                 }
             }
             onEdit?.let { edit ->
-                ActionRow(Icons.Rounded.Edit, "Editar playlist", onClick = edit)
+                ActionRow(PlaylistEditorIcons.Edit, "Editar playlist", onClick = edit)
             }
             onReorder?.let {
                 ActionRow(Icons.Rounded.SwapVert, stringResource(R.string.reorder_songs), onClick = it)
@@ -325,30 +334,29 @@ fun BrowseActionsSheet(
             if (onDelete != null) {
                 if (confirmingDelete) {
                     ActionRow(
-                        icon = Icons.Rounded.DeleteForever,
+                        icon = browsePlaylistDeleteIcon(),
                         label = stringResource(R.string.delete_playlist_confirmation, target.title),
                         tint = MaterialTheme.colorScheme.error,
                         onClick = onDelete,
                     )
                 } else {
-                    ActionRow(Icons.Rounded.Delete, stringResource(R.string.delete_playlist)) { confirmingDelete = true }
+                    ActionRow(browsePlaylistDeleteIcon(), stringResource(R.string.delete_playlist)) { confirmingDelete = true }
                 }
             }
             if (onDeleteDownload != null) {
                 if (confirmingDeleteDownload) {
                     ActionRow(
-                        icon = Icons.Rounded.DeleteForever,
+                        icon = browsePlaylistDeleteIcon(),
                         label = stringResource(R.string.delete_download_confirmation, target.title),
                         tint = MaterialTheme.colorScheme.error,
                         onClick = onDeleteDownload,
                     )
                 } else {
-                    ActionRow(Icons.Rounded.Delete, stringResource(R.string.delete_download)) {
+                    ActionRow(browsePlaylistDeleteIcon(), stringResource(R.string.delete_download)) {
                         confirmingDeleteDownload = true
                     }
                 }
             }
-            if (!menu) Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -363,12 +371,13 @@ private fun BrowseSheetHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .testTag("native-solid-browse-header")
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(80.dp)
                 .clip(shape)
                 .thumbnailBorder(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -384,8 +393,8 @@ private fun BrowseSheetHeader(
         Column(Modifier.weight(1f)) {
             Text(
                 text = target.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -401,7 +410,7 @@ private fun BrowseSheetHeader(
                             .orEmpty()
                     }
                 },
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

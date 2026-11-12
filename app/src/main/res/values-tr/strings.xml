@@ -445,6 +445,14 @@
     <string name="pause_countdown">Çalma duraklatılana kadar %1$s</string>
     <string name="play_to_preview">Önizlemeyi doldurmak için bir şey çal.</string>
     <string name="playlist_name">Çalma listesi adı</string>
+    <string name="editor_discard_title">Değişiklikler silinsin mi?</string>
+    <string name="editor_discard_rating_body">Yeni puanın henüz kaydedilmedi.</string>
+    <string name="editor_discard_playlist_body">Çalma listesindeki değişiklikler henüz kaydedilmedi.</string>
+    <string name="editor_discard_confirm">Sil</string>
+    <string name="editor_keep_editing">Düzenlemeye devam et</string>
+    <string name="playlist_editor_name_required">Çalma listesi adı gir.</string>
+    <string name="playlist_editor_name_too_long">En fazla 80 karakter kullan.</string>
+    <string name="playlist_editor_save_failed">Çalma listesi kaydedilemedi. Tekrar dene.</string>
     <string name="presence">Varlık</string>
     <string name="preview">Önizleme</string>
     <string name="prioritize_syllable_lyrics">Heceli sözlere öncelik ver</string>
@@ -1343,7 +1351,7 @@
     <string name="canonical_discovery_refresh">Kayıtlı kataloğu yenile</string>
     <string name="legacy_library_youtube_disabled">Bu çevrimiçi kitaplığı yüklemek için Ayarlar kısmından YouTube Music uygulamasını etkinleştirin. Yerel çalma listeleri ve koleksiyonlar kullanılabilir.</string>
     <string name="spotify_import_youtube_required">Spotify çalma listelerini içe aktarmak hâlâ YouTube Music üzerinden eşleştirme gerektiriyor. YouTube Music uygulamasını etkinleştirin ve katalog odaklı keşfi kapatın.</string>
-    <string name="search_origin_general">Genel</string>
+    <string name="search_origin_general">Katalog</string>
     <string name="search_origin_server">Sunucu</string>
     <string name="search_origin_local">Yerel</string>
     <string name="pause_resume_fade">Duraklatma ve devam ettirmede ses geçişi</string>
@@ -1376,4 +1384,10 @@
     <string name="visual_offline_confirm_title">Clear offline visuals?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline visuals cleared</string>
+    <string name="apple_music_tab_radio">Radyo</string>
+    <string name="apple_music_tab_radio_unavailable">Radyo, yakında</string>
+    <string name="apple_player_add_to_playlist">Çalma listesine ekle…</string>
+    <string name="apple_player_share_song">Şarkıyı paylaş</string>
+    <string name="apple_player_share_lyrics">Şarkı sözlerini paylaş…</string>
+    <string name="apple_library_search_in_category">%1$s içinde ara</string>
 </resources>

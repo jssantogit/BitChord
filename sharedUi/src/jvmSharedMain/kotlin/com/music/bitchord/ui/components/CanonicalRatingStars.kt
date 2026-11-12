@@ -2,14 +2,8 @@ package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.rounded.StarHalf
-import androidx.compose.material3.Icon
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.MaterialTheme
@@ -94,16 +88,22 @@ fun CanonicalRatingStars(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
     onClick: (() -> Unit)? = null,
+    geometry: CompactRatingGeometry = CompactRatingGeometry.STANDALONE,
 ) {
+    // A malformed persisted/provider score must not leave an invisible row
+    // with a misleading "Sem avaliação · fonte" accessibility node.
     val values = rating?.visibleStarValues().orEmpty()
+        .filter { normalizedCompactRating(it) != null }
     if (values.isEmpty()) return
 
     val localName = stringResource(Res.string.my_ratings_local_source)
     val remoteName = stringResource(Res.string.my_ratings_remote_source)
     val remoteUnavailable = stringResource(Res.string.my_ratings_remote_unavailable)
     val description = listOfNotNull(
-        rating?.localValue?.let { "$it/5 · $localName" },
-        rating?.remoteValue?.let { "$it/5 · $remoteName" },
+        rating?.localValue?.takeIf { normalizedCompactRating(it) != null }
+            ?.let { compactRatingAccessibility(it) + " · " + localName },
+        rating?.remoteValue?.takeIf { normalizedCompactRating(it.toDouble()) != null }
+            ?.let { compactRatingAccessibility(it.toDouble()) + " · " + remoteName },
         rating?.takeIf { !it.remoteAvailable }?.let { remoteUnavailable },
     ).joinToString("; ")
     Column(
@@ -114,26 +114,12 @@ fun CanonicalRatingStars(
             },
         horizontalAlignment = Alignment.End,
     ) {
-        values.forEach { value -> RatingStarsLine(value, color) }
-    }
-}
-
-@Composable
-private fun RatingStarsLine(value: Double, color: Color) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(1.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        repeat(5) { index ->
-            Icon(
-                imageVector = when {
-                    value >= index + 1.0 -> Icons.Rounded.Star
-                    value >= index + 0.5 -> Icons.Rounded.StarHalf
-                    else -> Icons.Rounded.StarBorder
-                },
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(12.dp),
+        values.forEach { value ->
+            CompactRatingIndicator(
+                value = value,
+                geometry = geometry,
+                size = 30.dp,
+                neutralColor = color,
             )
         }
     }
@@ -145,11 +131,12 @@ fun CanonicalSongRatingStars(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
     onClick: (() -> Unit)? = null,
+    geometry: CompactRatingGeometry = CompactRatingGeometry.STANDALONE,
 ) {
     val rating = LocalCanonicalRatingDisplay.current.forSong(song)
     // Before the first *native* rating, the three-dot song menu is the only
     // entry to the local editor. Remote evidence stays visible but read-only.
     // Once Room supplies a local score, touching these stars may edit it.
     val nativeEdit = onClick?.takeIf { rating?.localValue != null }
-    CanonicalRatingStars(rating, modifier, color, onClick = nativeEdit)
+    CanonicalRatingStars(rating, modifier, color, onClick = nativeEdit, geometry = geometry)
 }

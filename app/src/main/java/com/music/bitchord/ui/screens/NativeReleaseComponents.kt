@@ -31,9 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
-import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.components.SourceQualityBadge
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -155,6 +153,7 @@ internal fun NativeReleaseActionRow(
     }
 }
 
+@Suppress("UNUSED_PARAMETER") // Rating/editing are owned by the top toolbar, kept for existing caller API.
 @Composable
 internal fun NativeReleaseHeaderLayout(
     title: String,
@@ -183,6 +182,8 @@ internal fun NativeReleaseHeaderLayout(
             content = artwork,
         )
         Spacer(Modifier.height(20.dp))
+        // Ratings are shown by the shared top-right circular toolbar action.
+        // Keep album/playlist identity centred and free of inline badges.
         Text(
             text = title,
             style = MaterialTheme.typography.headlineMedium,
@@ -190,7 +191,8 @@ internal fun NativeReleaseHeaderLayout(
             textAlign = TextAlign.Center,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = HEADER_GUTTER),
+            modifier = Modifier.padding(horizontal = HEADER_GUTTER)
+                .testTag("native-release-title"),
         )
         if (credit.isNotBlank()) {
             Spacer(Modifier.height(2.dp))
@@ -204,46 +206,18 @@ internal fun NativeReleaseHeaderLayout(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = HEADER_GUTTER)
+                    .testTag("native-release-credit")
                     .let { m -> if (onCreditClick == null) m
                         else m.clip(RoundedCornerShape(6.dp)).clickable(onClick = onCreditClick) },
             )
         }
-        // The original rating slot shows first-party stars when saved. With
-        // no rating it uses the exact Now Playing source badge; never invent
-        // "Hi-Res" from bitrate or claim provider evidence was played.
-        // A verified source-quality badge has priority over an EMPTY rating.
-        // When the user has actually rated the release, show the stars instead.
-        // Keep the native rating editor reachable from the badge as well as
-        // from the existing album overflow; never hide genuine audio quality.
-        if (onRate != null && (rating != null || quality == null)) {
-            Spacer(Modifier.height(8.dp))
-            Box(
-                modifier = Modifier.clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onRate)
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .testTag("native-album-rating"),
-            ) {
-                if (rating != null) {
-                    CanonicalRatingStars(
-                        rating = RatingDisplay(localValue = rating),
-                        color = palette.onBackground,
-                    )
-                } else Text(
-                    text = "☆ Avaliar",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = palette.onBackgroundVariant,
-                )
-            }
-        } else if (quality != null) {
+        if (quality != null) {
             Spacer(Modifier.height(8.dp))
             SourceQualityBadge(
                 quality = quality,
                 color = palette.onBackgroundVariant,
                 style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.testTag("native-album-source-quality")
-                    .then(if (onRate == null) Modifier else Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClickLabel = "Avaliar álbum", onClick = onRate)),
+                modifier = Modifier.testTag("native-album-source-quality"),
             )
         }
         if (meta.isNotBlank()) {
@@ -261,5 +235,3 @@ internal fun NativeReleaseHeaderLayout(
         actions()
     }
 }
-
-

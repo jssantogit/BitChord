@@ -402,6 +402,14 @@
     <string name="pause_countdown">あと%1$sで再生が一時停止します</string>
     <string name="play_to_preview">プレビューを表示するには何かを再生してください。</string>
     <string name="playlist_name">プレイリスト名</string>
+    <string name="editor_discard_title">変更を破棄しますか？</string>
+    <string name="editor_discard_rating_body">新しい評価はまだ保存されていません。</string>
+    <string name="editor_discard_playlist_body">プレイリストの変更はまだ保存されていません。</string>
+    <string name="editor_discard_confirm">破棄</string>
+    <string name="editor_keep_editing">編集を続ける</string>
+    <string name="playlist_editor_name_required">プレイリスト名を入力してください。</string>
+    <string name="playlist_editor_name_too_long">80文字以内で入力してください。</string>
+    <string name="playlist_editor_save_failed">プレイリストを保存できませんでした。もう一度お試しください。</string>
     <string name="presence">プレゼンス</string>
     <string name="preview">プレビュー</string>
     <string name="prioritize_syllable_lyrics">音節単位の歌詞を優先</string>
@@ -1364,7 +1372,7 @@
     <string name="canonical_discovery_refresh">保存済みカタログを更新</string>
     <string name="legacy_library_youtube_disabled">このオンラインライブラリを読み込むには設定でYouTube Musicを有効にしてください。ローカルのプレイリストとコレクションは引き続き利用できます。</string>
     <string name="spotify_import_youtube_required">Spotifyのプレイリストのインポートには、現在YouTube Musicでの照合が必要です。YouTube Musicを有効にして、カタログ優先の検索をオフにしてください。</string>
-    <string name="search_origin_general">全般</string>
+    <string name="search_origin_general">カタログ</string>
     <string name="search_origin_server">サーバー</string>
     <string name="search_origin_local">ローカル</string>
     <string name="pause_resume_fade">一時停止・再開時のフェード</string>
@@ -1397,4 +1405,10 @@
     <string name="visual_offline_confirm_title">Clear offline visuals?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline visuals cleared</string>
+    <string name="apple_music_tab_radio">ラジオ</string>
+    <string name="apple_music_tab_radio_unavailable">ラジオ、近日公開</string>
+    <string name="apple_player_add_to_playlist">プレイリストに追加…</string>
+    <string name="apple_player_share_song">曲を共有</string>
+    <string name="apple_player_share_lyrics">歌詞を共有…</string>
+    <string name="apple_library_search_in_category">%1$sを検索</string>
 </resources>

@@ -210,6 +210,66 @@ class CanonicalSearchPagingTest {
         assertEquals(row.artworkUri, rows.single().artworkUri)
     }
 
+    @Test fun artistContinuationKeepsEarlierArtworkAndEditionTitleOnOverlap() {
+        val first = CanonicalCatalogSearchRow(
+            "9750354e-78df-4058-8758-b5a7a2eccf66",
+            CanonicalSearchKind.RELEASE_GROUP, "How Sweet", "NewJeans",
+            releaseKind = "Single", artworkUri = "https://images.example/cover.jpg",
+        )
+        val rawDuplicate = first.copy(
+            title = "How Sweet & Bubble Gum",
+            musicBrainzId = first.musicBrainzId.uppercase(java.util.Locale.ROOT),
+            artworkUri = null,
+        )
+        val next = CanonicalCatalogSearchRow(
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            CanonicalSearchKind.RELEASE_GROUP, "Get Up", "NewJeans",
+            releaseKind = "EP",
+        )
+        val merged = canonicalArtistContinuationRows(listOf(first), listOf(rawDuplicate, next))
+        assertEquals(listOf(first, next), merged)
+    }
+
+
+    @Test fun officialEditionCanClarifyCompositeReleaseGroupButNeverChangeItsIdentity() {
+        val id = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val row = CanonicalCatalogSearchRow(
+            id, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+        )
+        val official = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "How Sweet", "KR",
+            "2024-05-24", "NewJeans", status = "Official", releaseGroupMbid = id,
+        )
+        val result = canonicalSearchRowsWithOfficialEditionTitles(listOf(row), listOf(official))
+        assertEquals(id, result.single().musicBrainzId)
+        assertEquals("How Sweet", result.single().title)
+        assertEquals("Single", result.single().releaseKind)
+        assertEquals("How Sweet & Bubble Gum", row.title)
+    }
+
+    @Test fun officialTitleProofNeverComesFromAnotherGroupOrBootleg() {
+        val id = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val row = CanonicalCatalogSearchRow(
+            id, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+        )
+        val candidate = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "How Sweet", "KR",
+            "2024-05-24", "NewJeans", status = "Official", releaseGroupMbid = id,
+        )
+        val invalid = listOf(
+            candidate.copy(releaseGroupMbid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            candidate.copy(status = "Bootleg"),
+            candidate.copy(isVideoOnlyMedia = true),
+            candidate.copy(releaseGroupMbid = null),
+        )
+        invalid.forEach { edition ->
+            assertEquals(row,
+                canonicalSearchRowsWithOfficialEditionTitles(listOf(row), listOf(edition)).single())
+        }
+    }
+
     private fun page(
         total: Int, offset: Int, raw: Int,
     ): MusicBrainzCatalogSearchResult.Success<String> =

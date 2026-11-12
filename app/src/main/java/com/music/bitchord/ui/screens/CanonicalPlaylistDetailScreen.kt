@@ -35,7 +35,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -79,8 +78,8 @@ import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
-import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.icons.BitChordIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -253,7 +252,7 @@ internal fun CanonicalPlaylistTrackRow(
     titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
     subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
     rowBackground: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.background,
-    activeTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    activeTint: androidx.compose.ui.graphics.Color = appleMusicKeyColor(),
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
 ) {
@@ -367,10 +366,16 @@ private fun CanonicalTrackActionSheet(
         sheetState = androidx.compose.material3.rememberModalBottomSheetState(
             skipPartiallyExpanded = true,
         ),
+        shape = androidx.compose.ui.graphics.RectangleShape,
+        dragHandle = null,
         containerColor = MaterialTheme.colorScheme.background,
     ) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            com.music.bitchord.ui.components.LocalActionRowStyle provides
+                com.music.bitchord.ui.components.ActionRowStyle.AppleSolid,
+        ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            modifier = Modifier.fillMaxWidth(),
         ) {
             ActionRow(Icons.Rounded.PlayArrow, "Reproduzir daqui") {
                 onPlay()
@@ -392,6 +397,7 @@ private fun CanonicalTrackActionSheet(
                     onDismiss()
                 }
             }
+        }
         }
     }
 }
@@ -709,16 +715,12 @@ internal fun CanonicalPlaylistDetailScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    IconButton(
-                                        onClick = { suggestionPage++ },
+                                    PlaylistSuggestionAction(
+                                        icon = Icons.Rounded.Refresh,
+                                        label = "Atualizar sugestões",
                                         enabled = availableSuggestions.size > 5,
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Refresh,
-                                            contentDescription = "Atualizar sugestões",
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
+                                        onClick = { suggestionPage++ },
+                                    )
                                 }
                                 suggestions.forEach { suggested ->
                                     LibraryRow(
@@ -734,16 +736,12 @@ internal fun CanonicalPlaylistDetailScreen(
                                         },
                                         horizontalPadding = 16.dp,
                                         trailing = {
-                                            IconButton(
-                                                onClick = { addSuggested(suggested.id) },
+                                            PlaylistSuggestionAction(
+                                                icon = Icons.Rounded.AddCircleOutline,
+                                                label = "Adicionar ${suggested.title}",
                                                 enabled = pendingSuggestionId == null,
-                                            ) {
-                                                Icon(
-                                                    Icons.Rounded.AddCircleOutline,
-                                                    contentDescription = "Adicionar ${suggested.title}",
-                                                    tint = MaterialTheme.colorScheme.onSurface,
-                                                )
-                                            }
+                                                onClick = { addSuggested(suggested.id) },
+                                            )
                                         },
                                     )
                                 }

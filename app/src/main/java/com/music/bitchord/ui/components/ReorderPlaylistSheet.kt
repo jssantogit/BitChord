@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.scrollBy
@@ -14,14 +15,15 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DragHandle
-import androidx.compose.material3.Button
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -40,6 +42,10 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -54,6 +60,63 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.data.model.UserPlaylist
 import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
+
+/** The header uses the same 40dp native close puck as other editor tools. */
+@Composable
+internal fun ReorderCloseAction(onClose: () -> Unit) {
+    IconButton(
+        onClick = onClose,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .testTag("reorder-close-native"),
+    ) {
+        Icon(
+            PlaylistEditorIcons.Close,
+            contentDescription = stringResource(R.string.back),
+            tint = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+/** Native 48dp solid save button; mutation is still gated by the parent. */
+@Composable
+internal fun ReorderSaveAction(
+    label: String,
+    enabled: Boolean,
+    saving: Boolean,
+    onClick: () -> Unit,
+) {
+    val fill = if (enabled && !saving) appleMusicKeyColor()
+        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    Box(
+        modifier = Modifier
+            .height(48.dp)
+            .widthIn(min = 120.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(fill)
+            .clickable(enabled = enabled && !saving, role = Role.Button, onClick = onClick)
+            .testTag("reorder-save-native"),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (saving) {
+            CircularProgressIndicator(
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp).testTag("reorder-save-loading"),
+            )
+        } else {
+            Text(
+                label,
+                color = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
+    }
+}
 
 /**
  * Rearranges one of the account's playlists: every entry with a handle to drag
@@ -87,13 +150,7 @@ fun ReorderPlaylistSheet(
                 .padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onClose) {
-                Icon(
-                    Icons.Rounded.Close,
-                    contentDescription = stringResource(R.string.back),
-                    tint = MaterialTheme.colorScheme.onBackground,
-                )
-            }
+            ReorderCloseAction(onClose = onClose)
             Column(Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.reorder_songs),
@@ -108,13 +165,12 @@ fun ReorderPlaylistSheet(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Button(onClick = { onSave(order.toList()) }, enabled = changed && !saving) {
-                if (saving) {
-                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                } else {
-                    Text(stringResource(R.string.save_order))
-                }
-            }
+            ReorderSaveAction(
+                label = stringResource(R.string.save_order),
+                enabled = changed && !saving,
+                saving = saving,
+                onClick = { onSave(order.toList()) },
+            )
         }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 

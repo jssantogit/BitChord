@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.R
+
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -39,9 +41,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.music.bitchord.data.listening.SavedSmartPlaylistV2Definition
 import com.music.bitchord.data.listening.SavedCanonicalStaticPlaylist
 import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
@@ -60,7 +65,6 @@ import kotlinx.coroutines.launch
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.theme.themeArtworkPalette
-import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.components.CoverPlaceholder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -144,15 +148,17 @@ internal fun PlaylistLibrarySearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit = {},
+    autoFocus: Boolean = false,
 ) {
     NativeDetailSearchField(
         query = query,
         onQueryChange = onQueryChange,
         onClose = onClose,
-        autoFocus = true,
+        autoFocus = autoFocus,
         onFocused = {},
         palette = themeArtworkPalette(),
-        placeholder = "Buscar em Playlists",
+        placeholder = stringResource(R.string.apple_library_search_in_category, stringResource(R.string.playlists)),
+        appleLibraryCategoryStyle = true,
     )
 }
 
@@ -299,19 +305,34 @@ internal fun UnifiedPlaylistLibraryShelf(
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        // Page title belongs to the native floating top bar, not a second
-        // scrollable header that may vanish or restore at a stale offset.
-        if (searching || query.isNotBlank()) {
-            item(key = "playlist-search") {
-                PlaylistLibrarySearchField(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    onClose = {
-                        onQueryChange("")
-                        onSearchingChange(false)
-                    },
-                )
-            }
+        // The Apple Library collection has a large scrollable heading,
+        // below the independent floating controls. The compact top-bar
+        // title is not rendered at rest on this route.
+        item(key = "playlist-category-title") {
+            Text(
+                stringResource(R.string.playlists),
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(
+                    start = PAGE_GUTTER + 16.dp,
+                    end = PAGE_GUTTER,
+                    top = 8.dp,
+                ),
+            )
+        }
+        // Apple keeps the search field visible without keyboard autofocus.
+        item(key = "playlist-search") {
+            PlaylistLibrarySearchField(
+                query = query,
+                onQueryChange = onQueryChange,
+                autoFocus = searching,
+                onClose = {
+                    onQueryChange("")
+                    onSearchingChange(false)
+                },
+            )
         }
         if (failed) item(key = "smart-error") {
             Text(
@@ -710,9 +731,7 @@ private fun UnifiedPlaylistCompactRow(
         imageUrl = (card as? LibraryPlaylistCard.Normal)?.shelfItem?.thumbnailUrl,
         onClick = onClick,
         onLongPress = onMore,
-        trailing = {
-            RowMoreButton(onClick = onMore, contentDescription = "Opções de ${card.title}")
-        },
+        trailing = {}, // Root list options remain available on long press.
         modifier = modifier,
         horizontalPadding = 4.dp,
         // Keep Library rows compact. The large hero belongs to the

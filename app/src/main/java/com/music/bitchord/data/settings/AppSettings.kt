@@ -21,6 +21,7 @@ import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.playback.EqLayout
 import com.music.bitchord.playback.EqualizerPreset
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.music.bitchord.ui.components.CompactRatingStyle
 
 
 /**
@@ -134,6 +135,11 @@ enum class SongSort {
     DATE_ADDED_ASC,
     DATE_ADDED_DESC,
 }
+
+/** Pure preference decoder, shared by cold-start hydration and regression tests. */
+internal fun compactRatingStyleFromPersisted(name: String?): CompactRatingStyle =
+    runCatching { CompactRatingStyle.valueOf(name ?: CompactRatingStyle.COLOR.name) }
+        .getOrDefault(CompactRatingStyle.COLOR)
 
 /**
  * App settings, backed by SharedPreferences and exposed as flows.
@@ -290,6 +296,7 @@ object AppSettings {
 
     val playbackSpeed = MutableStateFlow(1.0f)
     val themeMode = MutableStateFlow(ThemeMode.DARK)
+    val compactRatingStyle = MutableStateFlow(CompactRatingStyle.COLOR)
 
     /** Keep playing similar music once the queue runs out. */
     val autoplay = MutableStateFlow(true)
@@ -835,6 +842,7 @@ object AppSettings {
         themeMode.value = runCatching {
             ThemeMode.valueOf(prefs.getString(KEY_THEME, null) ?: "DARK")
         }.getOrDefault(ThemeMode.DARK)
+        refreshCompactRatingStyleFromPreferences()
         autoplay.value = prefs.getBoolean(KEY_AUTOPLAY, true)
         shuffleEnabled.value = prefs.getBoolean(KEY_SHUFFLE_ENABLED, false)
         repeatMode.value = prefs.getInt(KEY_REPEAT_MODE, Player.REPEAT_MODE_OFF)
@@ -1212,6 +1220,18 @@ object AppSettings {
         return List(EqLayout.MANUAL_COUNT) {
             stored.getOrElse(it) { 0f }.coerceIn(-EqLayout.MANUAL_RANGE_DB, EqLayout.MANUAL_RANGE_DB)
         }
+    }
+
+    /** Used on cold launch and imports; kept separate from protected auth prefs. */
+    internal fun refreshCompactRatingStyleFromPreferences() {
+        compactRatingStyle.value = compactRatingStyleFromPersisted(
+            prefs.getString(KEY_COMPACT_RATING_STYLE, null),
+        )
+    }
+
+    fun setCompactRatingStyle(value: CompactRatingStyle) {
+        compactRatingStyle.value = value
+        prefs.edit().putString(KEY_COMPACT_RATING_STYLE, value.name).apply()
     }
 
     fun setPlaybackSpeed(value: Float) {
@@ -2092,6 +2112,7 @@ object AppSettings {
     private const val KEY_EQ_BANDS = "equalizer_bands"
     private const val KEY_SPEED = "playback_speed"
     private const val KEY_THEME = "theme_mode"
+    private const val KEY_COMPACT_RATING_STYLE = "compact_rating_style"
     private const val KEY_AUTOPLAY = "autoplay"
     private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
     private const val KEY_REPEAT_MODE = "repeat_mode"

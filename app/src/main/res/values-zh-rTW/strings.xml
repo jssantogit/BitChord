@@ -402,6 +402,14 @@
     <string name="pause_countdown">還有 %1$s 播放將暫停</string>
     <string name="play_to_preview">播放一些內容即可填充預覽。</string>
     <string name="playlist_name">播放列表名稱</string>
+    <string name="editor_discard_title">捨棄變更？</string>
+    <string name="editor_discard_rating_body">新的評分尚未儲存。</string>
+    <string name="editor_discard_playlist_body">播放清單的變更尚未儲存。</string>
+    <string name="editor_discard_confirm">捨棄</string>
+    <string name="editor_keep_editing">繼續編輯</string>
+    <string name="playlist_editor_name_required">請輸入播放清單名稱。</string>
+    <string name="playlist_editor_name_too_long">最多輸入 80 個字元。</string>
+    <string name="playlist_editor_save_failed">無法儲存播放清單，請再試一次。</string>
     <string name="presence">狀態</string>
     <string name="preview">預覽</string>
     <string name="prioritize_syllable_lyrics">優先使用逐字歌詞</string>
@@ -1356,7 +1364,7 @@
     <string name="canonical_discovery_refresh">重新整理已儲存的目錄</string>
     <string name="legacy_library_youtube_disabled">請在設定中啟用 YouTube Music，以載入此線上音樂庫。本機播放清單與合輯仍可使用。</string>
     <string name="spotify_import_youtube_required">匯入 Spotify 播放清單目前仍需要透過 YouTube Music 比對歌曲。請啟用 YouTube Music 並關閉以目錄為優先的探索模式。</string>
-    <string name="search_origin_general">一般</string>
+    <string name="search_origin_general">音樂目錄</string>
     <string name="search_origin_server">伺服器</string>
     <string name="search_origin_local">本機</string>
     <string name="pause_resume_fade">暫停與繼續播放時淡入淡出</string>
@@ -1389,4 +1397,10 @@
     <string name="visual_offline_confirm_title">清除离线视觉内容？</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">已清除离线视觉内容</string>
+    <string name="apple_music_tab_radio">廣播</string>
+    <string name="apple_music_tab_radio_unavailable">廣播，即將推出</string>
+    <string name="apple_player_add_to_playlist">加入播放清單…</string>
+    <string name="apple_player_share_song">分享歌曲</string>
+    <string name="apple_player_share_lyrics">分享歌詞…</string>
+    <string name="apple_library_search_in_category">在%1$s中搜尋</string>
 </resources>

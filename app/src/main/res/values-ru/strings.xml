@@ -435,6 +435,14 @@
     <string name="pause_countdown">%1$s до паузы</string>
     <string name="play_to_preview">Воспроизведите что-нибудь, чтобы заполнить предпросмотр.</string>
     <string name="playlist_name">Название плейлиста</string>
+    <string name="editor_discard_title">Отменить изменения?</string>
+    <string name="editor_discard_rating_body">Новая оценка ещё не сохранена.</string>
+    <string name="editor_discard_playlist_body">Изменения плейлиста ещё не сохранены.</string>
+    <string name="editor_discard_confirm">Отменить</string>
+    <string name="editor_keep_editing">Продолжить редактирование</string>
+    <string name="playlist_editor_name_required">Введите название плейлиста.</string>
+    <string name="playlist_editor_name_too_long">Используйте не более 80 символов.</string>
+    <string name="playlist_editor_save_failed">Не удалось сохранить плейлист. Повторите попытку.</string>
     <string name="presence">Presence</string>
     <string name="preview">Предпросмотр</string>
     <string name="prioritize_syllable_lyrics">Приоритизировать текст по слогам</string>
@@ -1418,7 +1426,7 @@
     <string name="canonical_discovery_refresh">Обновить каталог</string>
     <string name="legacy_library_youtube_disabled">Включите YouTube Music в настройках, чтобы загрузить эту онлайн-медиатеку. Локальные плейлисты и коллекции останутся доступны.</string>
     <string name="spotify_import_youtube_required">Для импорта плейлистов Spotify пока требуется поиск совпадений в YouTube Music. Включите YouTube Music и отключите поиск на основе каталога.</string>
-    <string name="search_origin_general">Общее</string>
+    <string name="search_origin_general">Каталог</string>
     <string name="search_origin_server">Сервер</string>
     <string name="search_origin_local">Локально</string>
     <string name="pause_resume_fade">Плавное затухание при паузе и возобновлении</string>
@@ -1451,4 +1459,10 @@
     <string name="visual_offline_confirm_title">Очистить офлайн-изображения?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Офлайн-изображения очищены</string>
+    <string name="apple_music_tab_radio">Радио</string>
+    <string name="apple_music_tab_radio_unavailable">Радио, скоро</string>
+    <string name="apple_player_add_to_playlist">Добавить в плейлист…</string>
+    <string name="apple_player_share_song">Поделиться песней</string>
+    <string name="apple_player_share_lyrics">Поделиться текстом…</string>
+    <string name="apple_library_search_in_category">Поиск в %1$s</string>
 </resources>

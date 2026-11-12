@@ -18,9 +18,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,6 +34,9 @@ import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeCompactOverflowMenu
+import com.music.bitchord.ui.components.NativeCompactMenuItem
 import com.music.bitchord.ui.components.contextClick
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -48,6 +56,12 @@ data class NativeSearchRowUi(
     val durationLabel: String? = null,
 )
 
+/** User actions are supplied by the source adapter, never inferred from an MBID. */
+data class NativeSearchRowAction(
+    val label: String,
+    val onClick: () -> Unit,
+)
+
 /**
  * Original 52dp native search row, now shared by legacy Search, MusicBrainz
  * public metadata search and server/local search. The caller decides whether
@@ -60,13 +74,22 @@ fun NativeSearchResultRow(
     onClick: (() -> Unit)?,
     onLongPress: (() -> Unit)? = null,
     horizontalPadding: androidx.compose.ui.unit.Dp = PAGE_GUTTER,
+    onMoreActions: List<NativeSearchRowAction> = emptyList(),
 ) {
+    var moreExpanded by remember { mutableStateOf(false) }
+    // A held search result opens exactly the actions shown by its ⋯ button.
+    // Metadata-only hits retain this menu without inventing a play action.
+    val rowHold: (() -> Unit)? = onLongPress ?: if (onMoreActions.isNotEmpty())
+        ({ moreExpanded = true }) else null
+    val rowClick: (() -> Unit)? = onClick ?: if (onMoreActions.isNotEmpty())
+        ({ moreExpanded = true }) else null
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) {
-                Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-                    .contextClick(onLongPress)
+            .testTag("native-search-result-row")
+            .then(if (rowClick != null || rowHold != null) {
+                Modifier.longPressMenuClickable(onClick = rowClick ?: {}, onLongClick = rowHold)
+                    .contextClick(rowHold)
             } else Modifier)
             .padding(horizontal = horizontalPadding, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -117,13 +140,31 @@ fun NativeSearchResultRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        row.durationLabel?.let { duration ->
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+        // Apple-style search places contextual actions here, never a duration.
+        // An action only appears when the owning source supplies a real callback.
+        if (onMoreActions.isNotEmpty()) {
+            Box {
+                RowMoreButton(
+                    onClick = { moreExpanded = true },
+                    modifier = Modifier.testTag("search-row-more-actions"),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    iconSize = 22.dp,
+                )
+                NativeCompactOverflowMenu(
+                    expanded = moreExpanded,
+                    onDismissRequest = { moreExpanded = false },
+                ) {
+                    onMoreActions.forEach { action ->
+                        NativeCompactMenuItem(
+                            label = action.label,
+                            onClick = {
+                                moreExpanded = false
+                                action.onClick()
+                            },
+                        )
+                    }
+                }
+            }
         }
     }
 }

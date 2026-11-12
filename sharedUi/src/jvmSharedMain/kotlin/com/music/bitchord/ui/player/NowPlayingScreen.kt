@@ -66,10 +66,10 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.IosShare
-import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import com.music.bitchord.ui.components.CanonicalSongRatingStars
+import com.music.bitchord.ui.components.CompactRatingGeometry
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -226,8 +226,8 @@ internal const val SEEK_SETTLE_TOLERANCE_MS = 1_500L
  */
 internal const val SEEK_SETTLE_TIMEOUT_MS = 4_000L
 
-private val THUMB_SIZE = 54.dp
-private val HEADER_HEIGHT = 60.dp
+private val THUMB_SIZE = 60.dp
+private val HEADER_HEIGHT = 64.dp
 private val ART_TITLE_GAP = 20.dp
 /**
  * How long the sleeve takes to travel the whole way between the full player and
@@ -641,6 +641,14 @@ private fun SlidingPlayerDeck(
  * glyphs, a volume capsule flanked by speaker icons, and lyrics / AirPlay /
  * queue along the bottom.
  */
+/** Original Apple 7.0 vector button for the queue overflow. */
+@Composable
+private fun AppleQueueHeaderAction(imageVector: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
+    Box(Modifier.size(40.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(imageVector = imageVector, contentDescription = description, tint = Color.White, modifier = Modifier.size(34.dp))
+    }
+}
+
 @Composable
 @OptIn(ExperimentalHazeApi::class, ExperimentalHazeMaterialsApi::class)
 fun NowPlayingScreen(
@@ -670,6 +678,10 @@ fun NowPlayingScreen(
     signedIn: Boolean,
     accountName: String?,
     onEditCanonicalRating: () -> Unit = {},
+    appleQueueStyle: Boolean = false,
+    verifiedQueueAlbumTitle: String? = null,
+    lyricsShareRequestToken: Int = 0,
+    onLyricsShareRequestConsumed: () -> Unit = {},
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -708,8 +720,11 @@ fun NowPlayingScreen(
      */
     onQueueDragActiveChange: (Boolean) -> Unit = {},
     onClearQueue: () -> Unit,
+    onClearQueueHistory: () -> Unit = {},
     /** Pass the already-resolved cover along with the menu action. */
     onOpenMenu: (Any?) -> Unit,
+    /** Only the dedicated queue's top ⋮ uses this menu variant. */
+    onOpenQueueMenu: ((Any?) -> Unit)? = null,
     onOpenAlbum: (String) -> Unit,
     /**
      * Opens an artist's page. [browseId] is null for anyone but the lead credit:
@@ -1000,6 +1015,16 @@ fun NowPlayingScreen(
         haptics = haptics,
         onCard = { lyricsShare = it },
     )
+    // Entry from the player overflow uses the existing native verse picker and
+    // card share pipeline; it never constructs a competing lyrics share screen.
+    LaunchedEffect(lyricsShareRequestToken) {
+        if (lyricsShareRequestToken > 0) {
+            onLyricsShareRequestConsumed()
+            queueOpen = false
+            lyricsOpen = true
+            if (lyricsShareAvailable) lyricPicker.beginPicking()
+        }
+    }
     // Nothing here resets [lyricsOpen] on a track change, deliberately. The
     // panel is a place, not a property of the track: someone reading along who
     // skips — or who simply lets the queue run on — means to carry on reading,
@@ -1903,6 +1928,7 @@ fun NowPlayingScreen(
                                 LandscapeCredits(
                                     song = song,
                                     onEditCanonicalRating = onEditCanonicalRating,
+                                    showPlayerRatingStar = appleQueueStyle,
                                     onOpenMenu = openMenuWithArtwork,
                                     onOpenAlbum = onOpenAlbum,
                                     onOpenArtist = onOpenArtist,
@@ -1926,6 +1952,7 @@ fun NowPlayingScreen(
                             },
                             scrubber = {
                                 PlayerScrubber(
+                        appleStyle = appleQueueStyle,
                                     shown = shown,
                                     durationMs = durationMs,
                                     loading = versionAligning || audioVersionSwitching,
@@ -1937,6 +1964,7 @@ fun NowPlayingScreen(
                                     onScrubFinished = onScrubFinished,
                                 ) {
                                     PlaybackQualityLabel(
+                            appleStyle = appleQueueStyle,
                                         song = song,
                                         isLoading = isLoading,
                                         modifier = Modifier
@@ -1972,6 +2000,13 @@ fun NowPlayingScreen(
                         )
                     },
                     lyricsPane = {
+                        Column(Modifier.fillMaxSize()) {
+                        if (appleQueueStyle) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(Modifier.weight(1f))
+                                PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
+                            }
+                        }
                         LandscapeLyricsPane(
                             hasLyrics = lyricsTranslation.displayedLyrics.isNotEmpty(),
                             placeholder = if (lyricsUnavailable) {
@@ -2006,6 +2041,7 @@ fun NowPlayingScreen(
                                     onClick = lyricsTranslation.toggleTranslation,
                                 )
                             },
+                            modifier = Modifier.weight(1f),
                         ) { panelModifier ->
                             LyricsTranslationMotion(
                                 trigger = lyricsTranslation.transition,
@@ -2039,8 +2075,21 @@ fun NowPlayingScreen(
                                 )
                             }
                         }
+                        }
                     },
                     queuePane = {
+                        Column(Modifier.fillMaxSize()) {
+                            if (appleQueueStyle) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Spacer(Modifier.weight(1f))
+                                    PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
+                                    AppleQueueHeaderAction(
+                                        imageVector = AppleQueueVectors.More,
+                                        description = stringResource(Res.string.more),
+                                        onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                    )
+                                }
+                            }
                         InlineQueue(
                             queue = queue,
                             currentIndex = queueIndex,
@@ -2051,8 +2100,12 @@ fun NowPlayingScreen(
                             onMove = onMoveInQueue,
                             onClear = onClearQueue,
                             onDragActiveChange = onQueueDragActiveChange,
-                            modifier = Modifier.fillMaxSize(),
+                            appleStyle = appleQueueStyle,
+                            verifiedQueueAlbumTitle = verifiedQueueAlbumTitle,
+                            onClearHistory = onClearQueueHistory,
+                            modifier = Modifier.weight(1f),
                         )
+                        }
                     },
                 )
                 playerOverlays()
@@ -3254,11 +3307,15 @@ fun NowPlayingScreen(
                                     }
                                 }
                             }
-                            // During Queue the current track is already rated in
-                            // its queue row: do not repeat stars in this header.
-                            if (!queueOpen) {
+                            // One first-party rating button on the experimental
+                            // player, even before a first native score. Other
+                            // shared-platform hosts retain their old rating strip.
+                            if (appleQueueStyle) {
+                                PlayerRatingStar(song = song, onClick = onEditCanonicalRating)
+                            } else if (!queueOpen) {
                                 CanonicalSongRatingStars(
                                     song = song,
+                                    geometry = CompactRatingGeometry.CIRCULAR,
                                     modifier = Modifier.padding(end = 8.dp),
                                     color = Color.White.copy(alpha = 0.84f),
                                     onClick = onEditCanonicalRating,
@@ -3278,11 +3335,26 @@ fun NowPlayingScreen(
                             // whichever way the controls are.
                             val lyricsShareGlyphVisible = lyricsOpen && collapseDone && lyricsShareEnabled &&
                                 !lyrics.isNullOrEmpty() && (!lyricsControlsOpen || lyricPicker.picking)
+                            if (queueOpen && appleQueueStyle) {
+                                AppleQueueHeaderAction(
+                                    imageVector = AppleQueueVectors.More,
+                                    description = stringResource(Res.string.more),
+                                    onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                )
+                            } else if (appleQueueStyle && !lyricsShareGlyphVisible) {
+                                // Same glyph, dimensions, and contextual sheet
+                                // as the Apple-derived queue overflow.
+                                AppleQueueHeaderAction(
+                                    imageVector = AppleQueueVectors.More,
+                                    description = stringResource(Res.string.more),
+                                    onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                )
+                            } else {
                             CircleGlyph(
                                 icon = when {
                                     lyricsShareGlyphVisible && lyricPicker.picking -> Icons.Rounded.Close
                                     lyricsShareGlyphVisible -> Icons.Rounded.IosShare
-                                    else -> Icons.Rounded.MoreHoriz
+                                    else -> nativeNowPlayingOverflowGlyph()
                                 },
                                 contentDescription = stringResource(
                                     when {
@@ -3302,6 +3374,7 @@ fun NowPlayingScreen(
                                     Haptic.Tap
                                 },
                             )
+                            }
                         }
 
                         // [lyricsOpen] asked first: a close has already hidden the
@@ -3460,6 +3533,8 @@ fun NowPlayingScreen(
                                     onClear = onClearQueue,
                                     onScrollingChange = { queueScrolling = it },
                                     onDragActiveChange = onQueueDragActiveChange,
+                                    appleStyle = appleQueueStyle,
+                                    onClearHistory = onClearQueueHistory,
                                     collapsePlayerOnScroll = true,
                                     onRevealPlayer = { queueControlsOpen = true },
                                     onHidePlayer = { queueControlsOpen = false },
@@ -3559,6 +3634,7 @@ fun NowPlayingScreen(
                     }
                     val transitionWindow by PlayerSettings.smartTransitionWindow.collectAsStateWithLifecycle()
                     PlayerScrubber(
+                        appleStyle = appleQueueStyle,
                         shown = shown,
                         durationMs = durationMs,
                         loading = versionSwitching,
@@ -3574,6 +3650,7 @@ fun NowPlayingScreen(
                         onScrubFinished = onScrubFinished,
                     ) {
                         PlaybackQualityLabel(
+                            appleStyle = appleQueueStyle,
                             song = song,
                             isLoading = isLoading,
                             modifier = Modifier
@@ -3700,3 +3777,6 @@ private suspend fun AwaitPointerEventScope.dragQueueIn(
     onHold(false)
     onSettle(open)
 }
+
+/** Unplattered ⋯ for the original circular Now Playing control. */
+internal fun nativeNowPlayingOverflowGlyph() = AppleQueueVectors.MorePlain

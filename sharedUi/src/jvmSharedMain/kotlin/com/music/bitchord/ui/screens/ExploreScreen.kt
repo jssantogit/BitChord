@@ -50,6 +50,7 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.NativeMediaCardMetrics
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.ShimmerBox
 import com.music.bitchord.ui.components.feedSkeleton
@@ -82,7 +83,16 @@ fun ExploreScreen(
             val columns = moodColumns(maxWidth)
             LazyColumn(
                 state = listState,
-                contentPadding = contentPadding,
+                // Match the observed Apple genre grid position under the large
+                // heading; this 40dp correction is screenshot-informed, not a
+                // statically verified Apple layout dimension.
+                contentPadding = PaddingValues(
+                    start = contentPadding.calculateLeftPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    end = contentPadding.calculateRightPadding(androidx.compose.ui.unit.LayoutDirection.Ltr),
+                    top = (contentPadding.calculateTopPadding() - if (showTitle) 40.dp else 0.dp)
+                        .coerceAtLeast(0.dp),
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (showTitle) {
@@ -185,12 +195,13 @@ private fun MoodGenreCard(
 }
 
 /**
- * A solid stripe down the left and the category's cover filling the rest,
- * redrawn as a duotone of the stripe's colour so every card reads as one
- * tinted sleeve rather than a photo pasted onto a swatch.
+ * Genre-first Apple-style Explore cards, reusing Bitchord's existing data
+ * and navigation. The full card is tinted artwork, with the title at its
+ * lower-left. No Apple editorial images or extra Search UI are introduced.
  *
- * Only the artwork: the caller sizes, clips and makes it clickable, which is
- * how the TV app wraps the same sleeve in its own focus treatment.
+ * The source REA documents a two-column landing tile, overlaid bottom title
+ * and rounded artwork, but not a verified per-device corner radius or font
+ * measurement; these are Bitchord-owned visual choices.
  */
 @Composable
 fun MoodGenreSleeve(
@@ -202,7 +213,7 @@ fun MoodGenreSleeve(
     NativeExploreCategorySleeve(item.title, item.thumbnailUrl, tone, modifier, titleStyle)
 }
 
-/** Catalog categories reuse the same native genre sleeve, never a Home tile. */
+/** Catalog genres reuse the same native sleeve, not a parallel Search screen. */
 @Composable
 private fun CanonicalGenreSleeve(
     item: ShelfItem,
@@ -214,7 +225,7 @@ private fun CanonicalGenreSleeve(
     )
 }
 
-/** Shared renderer for legacy category entries and canonical genre navigation. */
+/** Shared card renderer for existing genre routes. */
 @Composable
 private fun NativeExploreCategorySleeve(
     title: String,
@@ -224,25 +235,22 @@ private fun NativeExploreCategorySleeve(
     titleStyle: TextStyle,
 ) {
     Box(modifier = modifier.background(tone.stripe)) {
-        Box(
-            Modifier.align(Alignment.CenterEnd).fillMaxHeight()
-                .fillMaxWidth(1f - MOOD_STRIPE_FRACTION)
-                .background(tone.placeholder),
-        ) {
-            thumbnailUrl?.let { artwork ->
-                AsyncImage(
-                    model = artwork, contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    colorFilter = tone.duotone,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
+        thumbnailUrl?.let { artwork ->
+            AsyncImage(
+                model = artwork,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                colorFilter = tone.duotone,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
+        // Contrast under the title without inserting a separate stripe.
         Box(
             Modifier.matchParentSize().background(
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = .24f),
-                    .62f to Color.Transparent,
+                    0f to Color.Transparent,
+                    .56f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = NativeMediaCardMetrics.discoveryScrimAlpha),
                 ),
             ),
         )
@@ -250,16 +258,16 @@ private fun NativeExploreCategorySleeve(
             text = title,
             style = titleStyle.copy(
                 shadow = Shadow(
-                    Color.Black.copy(alpha = .35f),
-                    offset = Offset(0f, 1f), blurRadius = 6f,
+                    Color.Black.copy(alpha = NativeMediaCardMetrics.discoveryTitleShadowAlpha),
+                    offset = Offset(0f, 1f), blurRadius = 4f,
                 ),
             ),
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Medium,
             color = Color.White,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.align(Alignment.TopStart)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.align(Alignment.BottomStart)
+                .padding(horizontal = NativeMediaCardMetrics.discoveryTitleInset, vertical = 10.dp),
         )
     }
 }
@@ -317,13 +325,14 @@ private fun fallbackMoodColor(title: String): Color = when ((title.hashCode() an
 /** Gap between mood cards, in both directions. */
 private val MOOD_SPACING = 12.dp
 
-private val MOOD_CARD_SHAPE = RoundedCornerShape(18.dp)
+private val MOOD_CARD_SHAPE = NativeMediaCardMetrics.discoveryShape
 
-/** Width over height; a two-column phone row lands at about 100dp tall. */
-const val MOOD_CARD_ASPECT = 1.72f
-
-/** How much of the card the solid stripe covers before the artwork starts. */
-private const val MOOD_STRIPE_FRACTION = .28f
+/**
+ * A card geometry role adapted from the Apple search landing tile's
+ * declared 1.777 ratio. Layout selection in the original capture is not
+ * verified; this is not an app-wide album cover aspect ratio.
+ */
+const val MOOD_CARD_ASPECT = NativeMediaCardMetrics.discoveryAspect
 
 /**
  * The narrowest a mood card is let get before the row drops a column.

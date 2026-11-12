@@ -3,6 +3,7 @@ package com.music.bitchord.ui.components
 import com.music.bitchord.sharedui.resources.*
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -19,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,6 +56,9 @@ fun SearchField(
     /** What the empty field says it is for — the one part that changes per screen. */
     placeholder: String = stringResource(Res.string.search_hint),
     modifier: Modifier = Modifier,
+    /** Only the Android search root opts into the Apple-inspired inline back field. */
+    appleSearchChrome: Boolean = false,
+    onBack: () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -66,12 +72,16 @@ fun SearchField(
         modifier = modifier
             .fillMaxWidth()
             // Fixed height prevents the row from growing when text is entered
-            .height(46.dp)
+            .height(if (appleSearchChrome) 48.dp else 46.dp)
+            .then(if (appleSearchChrome) Modifier.testTag("apple-search-field") else Modifier)
             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp))
+            .then(if (appleSearchChrome)
+                Modifier.border(0.5.dp, MaterialTheme.colorScheme.outlineVariant,
+                    RoundedCornerShape(11.dp)) else Modifier)
             // Asymmetric: the magnifier is a button now and wants a real touch
             // target, so it's given the room by pulling the field's own start
             // padding in rather than by pushing the glyph and the text along.
-            .padding(start = 8.dp, end = 12.dp),
+            .padding(start = if (appleSearchChrome) 0.dp else 8.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // The search button. It reads as one — a magnifier at the head of a
@@ -79,14 +89,20 @@ fun SearchField(
         // pressing it is the only thing that runs a search, leaving it
         // decorative would mean the keyboard's own key was the single way in.
         Icon(
-            Icons.Rounded.Search,
-            contentDescription = stringResource(Res.string.search),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            if (appleSearchChrome) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Search,
+            contentDescription = if (appleSearchChrome) stringResource(Res.string.canonical_back)
+                else stringResource(Res.string.search),
+            tint = if (appleSearchChrome) MaterialTheme.colorScheme.onSurface
+                else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
-                .size(32.dp)
+                .size(if (appleSearchChrome) 48.dp else 32.dp)
                 .clip(CircleShape)
-                .clickable(enabled = query.isNotBlank(), onClick = submit)
-                .padding(6.dp),
+                .then(if (appleSearchChrome) Modifier.testTag("apple-search-back") else Modifier)
+                .clickable(
+                    enabled = appleSearchChrome || query.isNotBlank(),
+                    onClick = if (appleSearchChrome) onBack else submit,
+                )
+                .padding(if (appleSearchChrome) 15.dp else 6.dp),
         )
         Spacer(Modifier.width(4.dp))
         Box(Modifier.weight(1f)) {

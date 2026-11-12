@@ -18,32 +18,57 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
 
-// Apple Music's signature red. No longer the primary accent, but kept for the
-// spots (Replay's rank badge) that want that specific red regardless of theme.
+// Kept only as a source-compatibility alias while legacy callers are audited.
+// Selected states and primary actions use the verified light/night key blue.
+@Deprecated("Legacy red accent: use appleMusicKeyColor() for selected and affirmative actions")
 val AccentRed = Color(0xFFFA2D48)
 
-private val DarkColors = darkColorScheme(
+internal val DarkColors = darkColorScheme(
     primary = Color.White,
     onPrimary = Color.Black,
+    primaryContainer = Color(0xFF1C1C1E),
+    onPrimaryContainer = Color.White,
+    secondary = AppleMusicDarkKey,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF1C1C1E),
+    onSecondaryContainer = Color.White,
+    tertiary = Color(0xFF8E8E93),
+    onTertiary = Color.Black,
+    tertiaryContainer = Color(0xFF1C1C1E),
+    onTertiaryContainer = Color.White,
     background = Color.Black,
     onBackground = Color.White,
     surface = Color(0xFF0D0D0F),
     onSurface = Color.White,
     surfaceVariant = Color(0xFF1C1C1E),
     onSurfaceVariant = Color(0xFF8E8E93),
+    surfaceTint = Color.Transparent,
     outline = Color(0xFF2C2C2E),
+    outlineVariant = Color(0xFF38383A),
 )
 
-private val LightColors = lightColorScheme(
+internal val LightColors = lightColorScheme(
     primary = Color.Black,
     onPrimary = Color.White,
+    primaryContainer = Color(0xFFF2F2F7),
+    onPrimaryContainer = Color.Black,
+    secondary = AppleMusicLightKey,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFF2F2F7),
+    onSecondaryContainer = Color.Black,
+    tertiary = Color(0xFF6E6E73),
+    onTertiary = Color.White,
+    tertiaryContainer = Color(0xFFF2F2F7),
+    onTertiaryContainer = Color.Black,
     background = Color.White,
     onBackground = Color.Black,
     surface = Color(0xFFF7F7F9),
     onSurface = Color.Black,
     surfaceVariant = Color(0xFFF2F2F7),
     onSurfaceVariant = Color(0xFF6E6E73),
+    surfaceTint = Color.Transparent,
     outline = Color(0xFFE5E5EA),
+    outlineVariant = Color(0xFFC6C6C8),
 )
 
 /**
@@ -59,17 +84,36 @@ val SFProDisplay = FontFamily(
     Font(R.font.sf_pro_display_heavy, FontWeight.W800),
 )
 
-// Heavy, tight typography — the backbone of the Apple Music look.
-private val BitChordTypography = Typography(
-    displayLarge = TextStyle(fontWeight = FontWeight.W800, fontSize = 34.sp, letterSpacing = (-0.8).sp),
-    headlineLarge = TextStyle(fontWeight = FontWeight.W800, fontSize = 30.sp, letterSpacing = (-0.7).sp),
-    headlineMedium = TextStyle(fontWeight = FontWeight.W700, fontSize = 22.sp, letterSpacing = (-0.4).sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.W700, fontSize = 20.sp, letterSpacing = (-0.3).sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.W600, fontSize = 16.sp, letterSpacing = (-0.2).sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.W400, fontSize = 16.sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight.W400, fontSize = 14.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.W600, fontSize = 12.sp),
-    labelSmall = TextStyle(fontWeight = FontWeight.W600, fontSize = 11.sp),
+/**
+ * Global Android phone scale for the shared native BitChord components.
+ *
+ * am-descomp (Android 7.0.0/1614, typography-components.md) statically links
+ * the library detail title to 28sp/700, a candidate editorial header to
+ * 20sp/700, a header link to 17sp/400 and the base miniplayer to 13sp/510
+ * plus 12sp/400. These are reference roles, not a measured Compose-wide
+ * style map. The remaining roles below are cohesive Bitchord adaptations.
+ *
+ * This build already bundles SF Pro Display: do not silently replace it with
+ * the separately archived, copyright-sensitive SF Pro Android UI reference.
+ * No global letter spacing is forced: the REA's tracking calculation is
+ * conditional and has not been shown to apply to Compose text.
+ */
+internal val BitChordTypography = Typography(
+    displayLarge = TextStyle(fontWeight = FontWeight.W700, fontSize = 34.sp),
+    displayMedium = TextStyle(fontWeight = FontWeight.W700, fontSize = 32.sp),
+    displaySmall = TextStyle(fontWeight = FontWeight.W700, fontSize = 30.sp),
+    headlineLarge = TextStyle(fontWeight = FontWeight.W700, fontSize = 28.sp),
+    headlineMedium = TextStyle(fontWeight = FontWeight.W700, fontSize = 20.sp),
+    headlineSmall = TextStyle(fontWeight = FontWeight.W600, fontSize = 20.sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.W700, fontSize = 20.sp),
+    titleMedium = TextStyle(fontWeight = FontWeight.W600, fontSize = 17.sp),
+    titleSmall = TextStyle(fontWeight = FontWeight.W600, fontSize = 15.sp),
+    bodyLarge = TextStyle(fontWeight = FontWeight.W400, fontSize = 17.sp),
+    bodyMedium = TextStyle(fontWeight = FontWeight.W400, fontSize = 15.sp),
+    bodySmall = TextStyle(fontWeight = FontWeight.W400, fontSize = 13.sp),
+    labelLarge = TextStyle(fontWeight = FontWeight.W600, fontSize = 15.sp),
+    labelMedium = TextStyle(fontWeight = FontWeight.W600, fontSize = 13.sp),
+    labelSmall = TextStyle(fontWeight = FontWeight.W500, fontSize = 11.sp),
 ).withFamily(SFProDisplay)
 
 /** Applies [family] to every style in the scale, so nothing is left on Roboto. */

@@ -8,6 +8,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.performClick
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.provider.RemoteNumericRating
 import com.music.bitchord.data.catalog.provider.RemoteNumericRatingKind
@@ -49,6 +52,19 @@ class RemoteRatingsPresentationTest {
         starred = starred,
     )
 
+    @Test fun fallbackThreeDotRatingMenuUsesTheNativeCompactPopup() {
+        var edits = 0
+        compose.setContent {
+            MaterialTheme {
+                CanonicalCatalogRatingMenu(onEdit = { edits++ })
+            }
+        }
+        compose.onNode(hasClickAction()).performClick()
+        compose.onNodeWithTag("native-compact-overflow").assertExists()
+        compose.onNodeWithTag("native-compact-menu-item").performClick()
+        compose.runOnIdle { assertEquals(1, edits) }
+    }
+
     @Test fun remoteOnlyCanonicalRatingIsVisibleWhenLocalRoomIsEmpty() {
         compose.setContent {
             MaterialTheme(colorScheme = lightColorScheme()) {
@@ -64,7 +80,7 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Remote track").assertIsDisplayed()
-        compose.onNodeWithContentDescription("4/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("OpenSubsonic", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Remote rating: 4/5").assertDoesNotExist()
         compose.onNodeWithText("OpenSubsonic (remote)").assertDoesNotExist()
@@ -88,8 +104,8 @@ class RemoteRatingsPresentationTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4,5 de 5 estrelas", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Rating: 4.5").assertDoesNotExist()
         compose.onNodeWithText("Remote rating: 5/5").assertDoesNotExist()
         compose.onNodeWithText("Local and remote ratings differ").assertIsDisplayed()
@@ -125,7 +141,7 @@ class RemoteRatingsPresentationTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4,5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Remote ratings unavailable").assertIsDisplayed()
     }
 
@@ -145,8 +161,8 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Remote sources disagree").assertIsDisplayed()
-        compose.onNodeWithContentDescription("3/5", substring = true).assertIsDisplayed()
-        compose.onNodeWithContentDescription("5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 3 de 5 estrelas", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Remote rating: 3/5").assertDoesNotExist()
         compose.onNodeWithText("Remote rating: 5/5").assertDoesNotExist()
     }
@@ -208,7 +224,7 @@ class RemoteRatingsPresentationTest {
             }
         }
         compose.onNodeWithText("Could not load ratings. Try reopening this page.").assertIsDisplayed()
-        compose.onNodeWithContentDescription("4/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4 de 5 estrelas", substring = true).assertIsDisplayed()
     }
 
     @Test fun partialCanonicalMatchingIsVisibleWithoutGuessingUnknownRecordings() {

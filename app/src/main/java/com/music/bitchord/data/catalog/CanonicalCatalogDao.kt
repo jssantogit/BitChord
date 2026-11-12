@@ -193,6 +193,12 @@ internal data class CanonicalRecordingReleaseTitleRow(
     val releaseTitle: String,
 )
 
+/** Verified Recording→ReleaseTrack→ReleaseGroupEdition association. */
+internal data class CanonicalRecordingReleaseGroupLinkRow(
+    val recordingId: String,
+    val releaseGroupId: String,
+)
+
 /** Asset-scoped optional tags; missing row / NULL is unknown, "[]" is verified empty. */
 internal data class CanonicalScopedTagRow(
     val recordingId: String,
@@ -658,6 +664,25 @@ internal interface CanonicalCatalogDao {
     suspend fun recordingReleaseTitlesByIds(
         recordingIds: List<String>,
     ): List<CanonicalRecordingReleaseTitleRow>
+
+    /**
+     * Exact group navigation fallback for recordings found on multiple
+     * editions. This never groups by matching album names or artists.
+     */
+    @Query("""
+        SELECT DISTINCT rt.recordingId AS recordingId,
+                        edition.releaseGroupId AS releaseGroupId
+        FROM catalog_release_track AS rt
+        INNER JOIN catalog_release_group_edition AS edition
+          ON edition.releaseId = rt.releaseId
+        INNER JOIN catalog_release_group AS grp
+          ON grp.id = edition.releaseGroupId
+        WHERE rt.recordingId IN (:recordingIds)
+        ORDER BY rt.recordingId, edition.releaseGroupId
+    """)
+    suspend fun recordingReleaseGroupLinksByIds(
+        recordingIds: List<String>,
+    ): List<CanonicalRecordingReleaseGroupLinkRow>
 
     /**
      * Preserve NULL/un-enriched linked releases so a negative year predicate

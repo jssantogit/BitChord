@@ -416,6 +416,14 @@
     <string name="pause_countdown">प्लेबैक रुकने में %1$s बाकी</string>
     <string name="play_to_preview">प्रीव्यू भरने के लिए कुछ चलाएं।</string>
     <string name="playlist_name">प्लेलिस्ट का नाम</string>
+    <string name="editor_discard_title">बदलाव हटाएँ?</string>
+    <string name="editor_discard_rating_body">आपकी नई रेटिंग अभी सहेजी नहीं गई है।</string>
+    <string name="editor_discard_playlist_body">प्लेलिस्ट में किए गए बदलाव अभी सहेजे नहीं गए हैं।</string>
+    <string name="editor_discard_confirm">हटाएँ</string>
+    <string name="editor_keep_editing">संपादन जारी रखें</string>
+    <string name="playlist_editor_name_required">प्लेलिस्ट का नाम दर्ज करें।</string>
+    <string name="playlist_editor_name_too_long">अधिकतम 80 अक्षर इस्तेमाल करें।</string>
+    <string name="playlist_editor_save_failed">प्लेलिस्ट सहेजी नहीं जा सकी। फिर से कोशिश करें।</string>
     <string name="presence">प्रेज़ेंस</string>
     <string name="preview">प्रीव्यू</string>
     <string name="prioritize_syllable_lyrics">सिलेबल लिरिक्स को प्राथमिकता दें</string>
@@ -1386,7 +1394,7 @@
     <string name="canonical_discovery_refresh">सेव कैटलॉग रीफ़्रेश करें</string>
     <string name="legacy_library_youtube_disabled">ऑनलाइन लाइब्रेरी लोड करने के लिए सेटिंग में YouTube Music चालू करें। स्थानीय प्लेलिस्ट और संग्रह उपलब्ध रहेंगे।</string>
     <string name="spotify_import_youtube_required">Spotify प्लेलिस्ट आयात करने के लिए अभी YouTube Music से मिलान आवश्यक है। YouTube Music चालू करें और कैटलॉग-आधारित खोज बंद करें।</string>
-    <string name="search_origin_general">सामान्य</string>
+    <string name="search_origin_general">कैटलॉग</string>
     <string name="search_origin_server">सर्वर</string>
     <string name="search_origin_local">स्थानीय</string>
     <string name="pause_resume_fade">पॉज़ और फिर चलाने पर फ़ेड</string>
@@ -1419,4 +1427,10 @@
     <string name="visual_offline_confirm_title">Clear offline visuals?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline visuals cleared</string>
+    <string name="apple_music_tab_radio">रेडियो</string>
+    <string name="apple_music_tab_radio_unavailable">रेडियो, जल्द आ रहा है</string>
+    <string name="apple_player_add_to_playlist">प्लेलिस्ट में जोड़ें…</string>
+    <string name="apple_player_share_song">गीत साझा करें</string>
+    <string name="apple_player_share_lyrics">बोल साझा करें…</string>
+    <string name="apple_library_search_in_category">%1$s में खोजें</string>
 </resources>

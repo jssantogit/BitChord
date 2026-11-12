@@ -4,9 +4,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Collections
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Radio
 import androidx.compose.material.icons.rounded.Star
@@ -36,6 +36,11 @@ import com.music.bitchord.download.Downloads
 import com.music.bitchord.download.SavedCollection
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.spotify_logo
+import com.music.bitchord.sharedui.resources.ic_apple_library_playlists
+import com.music.bitchord.sharedui.resources.ic_apple_library_artists
+import com.music.bitchord.sharedui.resources.ic_apple_library_albums
+import com.music.bitchord.sharedui.resources.ic_apple_library_songs
+import com.music.bitchord.sharedui.resources.ic_apple_library_downloads
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ReplayCardRowSkeleton
 import com.music.bitchord.ui.replay.ReplayCardRow
@@ -175,34 +180,42 @@ internal fun openUnifiedLibraryCategory(
  * LocalFolder tab state. Categories are routes, not one-off playlist shelves.
  * The standalone playlist page owns its own saved collection list.
  */
+data class LibraryCategoryLabels(
+    val playlists: String,
+    val artists: String,
+    val albums: String,
+    val songs: String,
+)
+
 fun libraryNavigationLinks(
+    labels: LibraryCategoryLabels,
     deviceLinks: List<LibraryLink>,
     onOpenPlaylists: () -> Unit,
     onOpenLocalCategory: (LocalFolderTab) -> Unit,
 ): List<LibraryLink> {
-    fun destination(title: String, icon: ImageVector, onClick: () -> Unit) =
+    fun destination(title: String, icon: ImageVector, logo: org.jetbrains.compose.resources.DrawableResource, onClick: () -> Unit) =
         LibraryLink(
             item = ShelfItem(
                 title = title, subtitle = "", thumbnailUrl = null,
                 browseId = null, videoId = null,
             ),
             icon = icon,
+            logo = logo,
             onClick = onClick,
         )
-    val radios = destination("Rádios", Icons.Rounded.Radio) { }.copy(enabled = false)
     return listOf(
-        destination("Playlists", Icons.Rounded.QueueMusic, onOpenPlaylists),
-        destination("Artistas", Icons.Rounded.Person) {
+        destination(labels.playlists, Icons.Rounded.QueueMusic, Res.drawable.ic_apple_library_playlists, onOpenPlaylists),
+        destination(labels.artists, Icons.Rounded.Mic, Res.drawable.ic_apple_library_artists) {
             onOpenLocalCategory(LocalFolderTab.ARTISTS)
         },
-        destination("Álbuns", Icons.Rounded.Album) {
+        destination(labels.albums, Icons.Rounded.Collections, Res.drawable.ic_apple_library_albums) {
             onOpenLocalCategory(LocalFolderTab.ALBUMS)
         },
-        destination("Músicas", Icons.Rounded.MusicNote) {
+        destination(labels.songs, Icons.Rounded.MusicNote, Res.drawable.ic_apple_library_songs) {
             onOpenLocalCategory(LocalFolderTab.SONGS)
         },
-        radios,
     ) + deviceLinks.filter { it.item.browseId == "local:downloads" }
+        .map { it.copy(logo = Res.drawable.ic_apple_library_downloads) }
 }
 
 /**

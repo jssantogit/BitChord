@@ -26,6 +26,8 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.BugReport
@@ -74,6 +76,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.music.bitchord.data.model.ROW_ART_PX
@@ -86,6 +89,7 @@ import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
 import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -122,6 +126,9 @@ fun SongActionsSheet(
     onAddToPlaylist: () -> Unit,
     onOpenAlbum: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
+    /** Canonical Release or ReleaseGroup route, only with verified links. */
+    verifiedCanonicalAlbumRoute: String? = null,
+    onOpenCanonicalAlbum: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
@@ -145,6 +152,10 @@ fun SongActionsSheet(
     preloadedArtworkModel: Any? = null,
     /** The only rating action shown: canonical stars by Recording identity. */
     canonicalRatingContent: (@Composable () -> Unit)? = null,
+    appleQueuePlayerMenu: Boolean = false,
+    verifiedAlbumTitle: String? = null,
+    onPinToLibrary: (() -> Unit)? = null,
+    onShareLyrics: (() -> Unit)? = null,
 ) {
     val menu = presentation == SongActionsPresentation.Menu
     // Read from the thumbnail the row that opened this sheet was already
@@ -155,16 +166,100 @@ fun SongActionsSheet(
     // The popup stays neutral instead: it floats over a blurred page rather
     // than sitting on the sleeve's own ground, and an accent pitched against
     // that tint is not guaranteed to read against the theme's surface.
-    val palette = if (menu) {
-        neutralMenuPalette()
+    val palette = if (appleQueuePlayerMenu) {
+        // Preserve the original artwork-dependent blurred gradient the user
+        // selected. Lock foreground contrast only; do not replace the
+        // underlying sleeve palette with a flat charcoal colour.
+        rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX).copy(
+            accent = Color.White,
+            onBackground = Color.White,
+            onBackgroundVariant = Color.White.copy(alpha = 0.64f),
+            divider = Color.White.copy(alpha = 0.09f),
+        )
     } else {
-        rememberArtworkPalette(song.thumbnailUrl, artPx = ROW_ART_PX)
+        // Outside Now Playing every ⋯ sheet is a theme-solid Apple-style
+        // surface; artwork blur is exclusively the player's identity.
+        neutralMenuPalette()
+    }
+    // Show the native pin's actual state where the verified Recording is already
+    // in the canonical presentation snapshot. The click still revalidates it.
+    val context = LocalContext.current.applicationContext
+    val pinnedSelections by com.music.bitchord.ui.screens.CanonicalLibraryPinRepository
+        .get(context).pins.collectAsStateWithLifecycle()
+    val recordingId = LocalCanonicalRatingDisplay.current.recordingIdForSong(song)
+    val alreadyPinned = recordingId != null && pinnedSelections.any {
+        it.selection.type == com.music.bitchord.ui.screens.CanonicalLibraryEntityType.TRACK &&
+            it.selection.entityId == recordingId
     }
     // A local file may not have a provider-managed playlist entry.
     val isOffline = song.localUri != null
 
     val rows: @Composable ColumnScope.() -> Unit = {
-        if (signedIn && !isOffline) {
+        if (appleQueuePlayerMenu) {
+            // Only approved actions; preserve order in the tested policy.
+            for (action in APPLE_PLAYER_MENU_ACTIONS) {
+                when (action) {
+                    ApplePlayerMenuAction.LIBRARY -> ActionRow(
+                        icon = Icons.Rounded.Add,
+                        label = stringResource(
+                            if (alreadyPinned) R.string.remove_from_library else R.string.add_to_library,
+                        ),
+                        accent = palette.accent,
+                        enabled = onPinToLibrary != null,
+                        onClick = { onPinToLibrary?.invoke() },
+                    )
+                    ApplePlayerMenuAction.PLAYLIST -> ActionRow(
+                        icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                        label = stringResource(R.string.apple_player_add_to_playlist),
+                        accent = palette.accent,
+                        onClick = onAddToPlaylist,
+                    )
+                    ApplePlayerMenuAction.SHARE_SONG -> onShare?.let { share ->
+                        ActionRow(
+                            icon = Icons.Rounded.Share,
+                            label = stringResource(R.string.apple_player_share_song),
+                            accent = palette.accent,
+                            onClick = share,
+                        )
+                    }
+                    ApplePlayerMenuAction.SHARE_LYRICS -> ActionRow(
+                        icon = Icons.Rounded.ChatBubbleOutline,
+                        label = stringResource(R.string.apple_player_share_lyrics),
+                        accent = palette.accent,
+                        enabled = onShareLyrics != null,
+                        onClick = { onShareLyrics?.invoke() },
+                    )
+                    ApplePlayerMenuAction.PLAY_NEXT -> ActionRow(
+                        icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
+                        label = stringResource(R.string.play_next),
+                        accent = palette.accent,
+                        onClick = onPlayNext,
+                    )
+                    ApplePlayerMenuAction.ADD_TO_QUEUE -> ActionRow(
+                        icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                        label = stringResource(R.string.add_to_queue),
+                        accent = palette.accent,
+                        onClick = onAddToQueue,
+                    )
+                }
+            }
+            // The Apple queue's six playback actions do not include discovery.
+            // A verified release route is still an essential track action.
+            if (song.albumId != null || verifiedCanonicalAlbumRoute != null) {
+                ActionRow(
+                    icon = Icons.Rounded.Album,
+                    label = stringResource(R.string.open_album),
+                    accent = palette.accent,
+                    onClick = {
+                        if (verifiedCanonicalAlbumRoute != null && onOpenCanonicalAlbum != null)
+                            onOpenCanonicalAlbum(verifiedCanonicalAlbumRoute)
+                        else song.albumId?.let(onOpenAlbum)
+                    },
+                )
+            }
+        } else {
+        // Native playlists work for local and canonical playback without login.
+        if (appleQueuePlayerMenu || (signedIn && !isOffline)) {
             ActionRow(
                 icon = Icons.AutoMirrored.Rounded.PlaylistAdd,
                 label = stringResource(R.string.add_to_playlist),
@@ -187,12 +282,15 @@ fun SongActionsSheet(
 
         DownloadRow(song, palette, isOffline, onDownload)
         WebDavUploadRow(song, palette, isOffline, onUploadToWebDav)
-        ActionRow(
-            icon = Icons.Rounded.Radio,
-            label = stringResource(R.string.start_radio),
-            accent = palette.accent,
-            onClick = onStartRadio,
-        )
+        // Station generation is not implemented for the Apple queue variant.
+        if (!appleQueuePlayerMenu) {
+            ActionRow(
+                icon = Icons.Rounded.Radio,
+                label = stringResource(R.string.start_radio),
+                accent = palette.accent,
+                onClick = onStartRadio,
+            )
+        }
         ActionRow(
             icon = Icons.AutoMirrored.Rounded.PlaylistPlay,
             label = stringResource(R.string.play_next),
@@ -205,15 +303,22 @@ fun SongActionsSheet(
             accent = palette.accent,
             onClick = onAddToQueue,
         )
-        when (val id = song.albumId) {
-            null -> if (resolvingLinks) {
-                LoadingActionRow(Icons.Rounded.Album, stringResource(R.string.open_album), palette)
-            }
-            else -> ActionRow(
+        val verifiedRelease = verifiedCanonicalAlbumRoute
+            ?.takeIf { onOpenCanonicalAlbum != null }
+        when {
+            verifiedRelease != null -> ActionRow(
                 Icons.Rounded.Album,
                 stringResource(R.string.open_album),
                 accent = palette.accent,
-            ) { onOpenAlbum(id) }
+            ) { onOpenCanonicalAlbum?.invoke(verifiedRelease) }
+            song.albumId != null -> ActionRow(
+                Icons.Rounded.Album,
+                stringResource(R.string.open_album),
+                accent = palette.accent,
+            ) { song.albumId?.let(onOpenAlbum) }
+            resolvingLinks -> LoadingActionRow(
+                Icons.Rounded.Album, stringResource(R.string.open_album), palette,
+            )
         }
         when (val id = song.artistId) {
             null -> if (resolvingLinks) {
@@ -228,6 +333,7 @@ fun SongActionsSheet(
         onShare?.let {
             ActionRow(Icons.Rounded.Share, stringResource(R.string.share), accent = palette.accent, onClick = it)
         }
+        }
     }
 
     if (menu) {
@@ -237,15 +343,28 @@ fun SongActionsSheet(
         return
     }
 
-    TintedSheet(palette = palette, imageUrl = song.thumbnailUrl, modifier = modifier) {
+    TintedSheet(
+        palette = palette,
+        imageUrl = if (appleQueuePlayerMenu) song.thumbnailUrl else null,
+        modifier = modifier,
+        appleStyle = true,
+        solidTheme = !appleQueuePlayerMenu,
+    ) {
         SheetTrackHeader(
             song,
             subtitleColor = palette.onBackgroundVariant,
             preloadedArtworkModel = preloadedArtworkModel,
+            appleStyle = true,
+            solidTheme = !appleQueuePlayerMenu,
+            verifiedAlbumTitle = verifiedAlbumTitle,
         )
         HorizontalDivider(thickness = 0.5.dp, color = palette.divider)
-        rows()
-        Spacer(Modifier.height(24.dp))
+        CompositionLocalProvider(
+            LocalActionRowStyle provides if (appleQueuePlayerMenu)
+                ActionRowStyle.Apple else ActionRowStyle.AppleSolid,
+        ) {
+            rows()
+        }
     }
 }
 
@@ -253,7 +372,7 @@ fun SongActionsSheet(
 enum class SongActionsPresentation { Sheet, Menu }
 
 /** Row density and layout, set by whichever surface the rows are drawn on. */
-internal enum class ActionRowStyle { Sheet, Menu }
+internal enum class ActionRowStyle { Sheet, Menu, Apple, AppleSolid }
 
 internal val LocalActionRowStyle = staticCompositionLocalOf { ActionRowStyle.Sheet }
 
@@ -321,41 +440,54 @@ private fun TintedSheet(
     palette: ArtworkPalette,
     imageUrl: String?,
     modifier: Modifier = Modifier,
+    appleStyle: Boolean = false,
+    solidTheme: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val maxHeight = LocalConfiguration.current.screenHeightDp.dp * 0.85f
     Box(
         modifier
             .fillMaxWidth()
-            .clip(SHEET_SHAPE),
+            .clip(if (appleStyle) RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp) else SHEET_SHAPE),
     ) {
-        ArtworkBackdrop(
-            palette = palette,
-            imageUrl = imageUrl,
-            modifier = Modifier.matchParentSize(),
-            // A sheet is a fraction of the height of a page, so the wash has
-            // to resolve over a much shorter run to read the same way.
-            washFraction = 0.75f,
-            artPx = ROW_ART_PX,
-        )
-        Column(Modifier.fillMaxWidth().heightIn(max = maxHeight)) {
+        if (solidTheme) {
+            Box(
+                Modifier.matchParentSize().background(MaterialTheme.colorScheme.background),
+            )
+        } else {
+            // Now Playing alone retains the artwork-derived blurred gradient.
+            ArtworkBackdrop(
+                palette = palette,
+                imageUrl = imageUrl,
+                modifier = Modifier.matchParentSize(),
+                washFraction = 0.75f,
+                artPx = ROW_ART_PX,
+            )
+        }
+        Column(
+            // Let the six Apple actions determine the sheet's actual height.
+            // The earlier 70%-of-screen minimum left a large empty block.
+            Modifier.fillMaxWidth().heightIn(max = maxHeight),
+        ) {
             // Drawn rather than taken from BottomSheetDefaults, whose handle
             // carries 22dp of padding on each side — half a row's worth of
             // nothing between the grip and the track it is about. Kept outside
             // the scrolling rows below so it stays put as a grab target rather
             // than travelling with the list.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 4.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+            if (!appleStyle) {
                 Box(
-                    Modifier
-                        .size(width = 34.dp, height = 4.dp)
-                        .clip(CircleShape)
-                        .background(palette.onBackground.copy(alpha = 0.35f)),
-                )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .size(width = 34.dp, height = 4.dp)
+                            .clip(CircleShape)
+                            .background(palette.onBackground.copy(alpha = 0.35f)),
+                    )
+                }
             }
             Column(
                 Modifier
@@ -512,9 +644,9 @@ private fun WebDavUploadRow(
  *
  * [tint] is for rows whose icon carries state — a filled heart on a liked
  * track — and is otherwise the ordinary foreground. [accent] colours the
- * trailing [value], and defaults to the app's own red: a sheet tinted from
- * artwork passes the artwork's accent instead, so the row belongs to the sheet
- * it is drawn on.
+ * trailing [value] and defaults to Apple Music's key blue. An artwork-tinted
+ * sheet passes its own palette accent explicitly; error rows retain semantic
+ * red.
  */
 @Composable
 internal fun ActionRow(
@@ -522,22 +654,26 @@ internal fun ActionRow(
     label: String,
     value: String? = null,
     tint: Color? = null,
-    accent: Color = MaterialTheme.colorScheme.primary,
+    accent: Color = appleMusicKeyColor(),
     enabled: Boolean = true,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val menu = LocalActionRowStyle.current == ActionRowStyle.Menu
-    // The popup sits on a surface rather than the page background, so its
-    // text follows the surface's colour — the two differ in light mode.
-    val foreground = if (menu) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onBackground
+    val apple = LocalActionRowStyle.current == ActionRowStyle.Apple
+    val appleSolid = LocalActionRowStyle.current == ActionRowStyle.AppleSolid
+    val playerGeometry = apple || appleSolid
+    // Identical player geometry; on every other page the foreground follows
+    // its solid theme background instead of being hardcoded white.
+    val foreground = if (apple) Color.White else if (menu || appleSolid)
+        MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onBackground
     val alpha = if (enabled) 1f else 0.4f
     val iconView: @Composable () -> Unit = {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = (tint ?: foreground).copy(alpha = alpha),
-            modifier = Modifier.size(if (menu) 20.dp else 22.dp),
+            modifier = Modifier.size(if (playerGeometry) 18.dp else if (menu) 20.dp else 22.dp),
         )
     }
     Row(
@@ -548,6 +684,8 @@ internal fun ActionRow(
             .then(
                 if (menu) {
                     Modifier.heightIn(min = 46.dp).padding(horizontal = 18.dp, vertical = 11.dp)
+                } else if (playerGeometry) {
+                    Modifier.heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 9.dp)
                 } else {
                     Modifier.padding(horizontal = 22.dp, vertical = 15.dp)
                 },
@@ -558,11 +696,11 @@ internal fun ActionRow(
         // the sheet keeps the glyph leading, like every other list in the app.
         if (!menu) {
             iconView()
-            Spacer(Modifier.width(18.dp))
+            Spacer(Modifier.width(if (playerGeometry) 22.dp else 18.dp))
         }
         Text(
             text = label,
-            style = MaterialTheme.typography.bodyLarge,
+            style = if (playerGeometry) MaterialTheme.typography.bodyLarge.copy(fontSize = 15.sp) else MaterialTheme.typography.bodyLarge,
             color = foreground.copy(alpha = alpha),
             maxLines = if (menu) 2 else Int.MAX_VALUE,
             overflow = TextOverflow.Ellipsis,
@@ -641,11 +779,14 @@ internal fun SheetTrackHeader(
     modifier: Modifier = Modifier,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     preloadedArtworkModel: Any? = null,
+    appleStyle: Boolean = false,
+    solidTheme: Boolean = false,
+    verifiedAlbumTitle: String? = null,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = if (appleStyle) 16.dp else 20.dp, vertical = if (appleStyle) 16.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         AsyncImage(
@@ -653,7 +794,7 @@ internal fun SheetTrackHeader(
                 ?: com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel(song, ROW_ART_PX),
             contentDescription = null,
             modifier = Modifier
-                .size(52.dp)
+                .size(if (appleStyle) 80.dp else 52.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .thumbnailBorder(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
@@ -662,16 +803,29 @@ internal fun SheetTrackHeader(
         Column(Modifier.weight(1f)) {
             ExplicitSongTitle(
                 song = song,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = if (appleStyle) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
+                color = if (appleStyle && !solidTheme) Color.White
+                    else MaterialTheme.colorScheme.onBackground,
             )
             Text(
                 text = song.artist,
-                style = MaterialTheme.typography.bodyMedium,
-                color = subtitleColor,
+                style = if (appleStyle) MaterialTheme.typography.titleMedium
+                    else MaterialTheme.typography.bodyMedium,
+                color = if (appleStyle && !solidTheme) Color.White else subtitleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (appleStyle) {
+                (verifiedAlbumTitle ?: song.albumName)?.takeIf(String::isNotBlank)?.let { album ->
+                    Text(
+                        text = album,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = subtitleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
     }
 }

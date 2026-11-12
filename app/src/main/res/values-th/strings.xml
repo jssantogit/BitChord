@@ -430,6 +430,14 @@
     <string name="pause_countdown">อีก %1$s จะหยุดเล่นชั่วคราว</string>
     <string name="play_to_preview">เล่นอะไรสักอย่างเพื่อดูตัวอย่าง</string>
     <string name="playlist_name">ชื่อเพลย์ลิสต์</string>
+    <string name="editor_discard_title">ละทิ้งการเปลี่ยนแปลงหรือไม่</string>
+    <string name="editor_discard_rating_body">ยังไม่ได้บันทึกคะแนนใหม่ของคุณ</string>
+    <string name="editor_discard_playlist_body">ยังไม่ได้บันทึกการเปลี่ยนแปลงเพลย์ลิสต์</string>
+    <string name="editor_discard_confirm">ละทิ้ง</string>
+    <string name="editor_keep_editing">แก้ไขต่อ</string>
+    <string name="playlist_editor_name_required">ป้อนชื่อเพลย์ลิสต์</string>
+    <string name="playlist_editor_name_too_long">ใช้ได้ไม่เกิน 80 อักขระ</string>
+    <string name="playlist_editor_save_failed">บันทึกเพลย์ลิสต์ไม่ได้ โปรดลองอีกครั้ง</string>
     <string name="presence">การแสดงสถานะ</string>
     <string name="preview">ตัวอย่าง</string>
     <string name="prioritize_syllable_lyrics">จัดลำดับความสำคัญเนื้อเพลงแบบพยางค์</string>
@@ -1369,7 +1377,7 @@
     <string name="canonical_discovery_refresh">รีเฟรชแค็ตตาล็อกที่บันทึกไว้</string>
     <string name="legacy_library_youtube_disabled">เปิด YouTube Music ในการตั้งค่าเพื่อโหลดคลังเพลงออนไลน์นี้ เพลย์ลิสต์และคอลเล็กชันในเครื่องยังใช้งานได้</string>
     <string name="spotify_import_youtube_required">การนำเข้าเพลย์ลิสต์ Spotify ยังต้องอาศัยการจับคู่ผ่าน YouTube Music เปิดใช้ YouTube Music และปิดการค้นพบจากแค็ตตาล็อกก่อนนำเข้า</string>
-    <string name="search_origin_general">ทั่วไป</string>
+    <string name="search_origin_general">แคตตาล็อก</string>
     <string name="search_origin_server">เซิร์ฟเวอร์</string>
     <string name="search_origin_local">ในเครื่อง</string>
     <string name="pause_resume_fade">เฟดเมื่อหยุดชั่วคราวและเล่นต่อ</string>
@@ -1402,4 +1410,10 @@
     <string name="visual_offline_confirm_title">Clear offline visuals?</string>
     <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
     <string name="visual_offline_cleared">Offline visuals cleared</string>
+    <string name="apple_music_tab_radio">วิทยุ</string>
+    <string name="apple_music_tab_radio_unavailable">วิทยุ เร็ว ๆ นี้</string>
+    <string name="apple_player_add_to_playlist">เพิ่มลงในเพลย์ลิสต์…</string>
+    <string name="apple_player_share_song">แชร์เพลง</string>
+    <string name="apple_player_share_lyrics">แชร์เนื้อเพลง…</string>
+    <string name="apple_library_search_in_category">ค้นหาใน %1$s</string>
 </resources>

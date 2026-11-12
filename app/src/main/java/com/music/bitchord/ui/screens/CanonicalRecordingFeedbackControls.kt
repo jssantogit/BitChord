@@ -1,6 +1,13 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,18 +16,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.StarBorder
-import androidx.compose.material.icons.rounded.StarHalf
-import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
@@ -34,9 +37,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.music.bitchord.ui.components.ActionRow
+import com.music.bitchord.ui.components.ConfirmationAlert
+import com.music.bitchord.ui.components.NativeAlertHost
+import com.music.bitchord.ui.components.NativeStatusAlert
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.R
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.music.bitchord.ui.components.AppleRatingStarGlyph
+import com.music.bitchord.ui.components.appleRatingStarFill
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
@@ -61,6 +79,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
+import kotlin.math.ceil
+import kotlin.math.roundToInt
+import com.music.bitchord.ui.components.CompactRatingIndicator
+import com.music.bitchord.ui.components.CompactRatingGeometry
+import com.music.bitchord.ui.components.CompactRatingStyle
+import com.music.bitchord.ui.components.LocalCompactRatingStyle
+import com.music.bitchord.ui.components.compactRatingColorStops
+import com.music.bitchord.ui.components.normalizedCompactRating
 
 /**
  * Both song actions and My Ratings use this *same* local rating dialog.
@@ -87,11 +113,14 @@ internal fun CanonicalRecordingFeedbackEntry(recordingId: String) {
 @Composable
 internal fun CanonicalRecordingFeedbackAction(onClick: () -> Unit) {
     ActionRow(
-        icon = Icons.Rounded.Star,
+        icon = ratingActionIcon(),
         label = stringResource(Res.string.recording_feedback_edit),
         onClick = onClick,
     )
 }
+
+/** One icon identity across the expanded player, rating picker and action menus. */
+internal fun ratingActionIcon() = PlaylistEditorIcons.RatingPlain
 
 /** The player never guesses a provider-native ID or track title for a local rating. */
 private data class RatingTargetResolution(val pending: Boolean, val recordingId: String?)
@@ -129,20 +158,16 @@ internal fun CanonicalSongRatingDialog(song: Song, onDismiss: () -> Unit) {
     if (id != null) {
         CanonicalRecordingRatingDialog(recordingId = id, onDismiss = onDismiss)
     } else {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(stringResource(Res.string.recording_feedback_dialog_title)) },
-            text = {
-                if (resolution.pending) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                } else {
-                    Text(stringResource(Res.string.recording_feedback_unavailable))
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = onDismiss) { Text(stringResource(Res.string.cancel)) }
-            },
-        )
+        NativeAlertHost(onDismiss = onDismiss) {
+            NativeStatusAlert(
+                hazeState = null,
+                title = stringResource(Res.string.recording_feedback_dialog_title),
+                description = stringResource(Res.string.recording_feedback_unavailable),
+                loading = resolution.pending,
+                dismissLabel = stringResource(Res.string.cancel),
+                onDismiss = onDismiss,
+            )
+        }
     }
 }
 
@@ -176,7 +201,10 @@ internal fun CanonicalRecordingRatingDialog(recordingId: String, onDismiss: () -
                 denied = false
                 scope.launch {
                     val succeeded = try {
-                        withContext(Dispatchers.IO) { editor.set(recordingId, value) }
+                        withContext(Dispatchers.IO) {
+                            if (value == 0.0) editor.clear(recordingId)
+                            else editor.set(recordingId, value)
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) {
@@ -191,10 +219,59 @@ internal fun CanonicalRecordingRatingDialog(recordingId: String, onDismiss: () -
 }
 
 /**
+ * Only an explicit, valid selection gets one star's restrained pulse.
+ * Loading a persisted rating never pulses; Reduce animations stays static.
+ */
+internal fun ratingSelectionPulseIndex(selected: Double, touched: Boolean, reducedMotion: Boolean): Int? =
+    if (!touched || reducedMotion || !selected.isFinite() || selected !in 1.0..5.0) null
+    else ceil(selected).toInt() - 1
+
+/** Dragging outside the first star clears the whole local rating. */
+internal fun ratingSelectionFromDrag(positionX: Float, width: Float): Double {
+    if (!positionX.isFinite() || !width.isFinite() || width <= 0f) return 0.0
+    val halfSteps = (positionX.coerceIn(0f, width) / width * 10f).roundToInt()
+    return if (halfSteps == 0) 0.0 else (halfSteps / 2.0).coerceAtLeast(1.0)
+}
+
+internal fun lastRatedStarIndex(selected: Double): Int =
+    if (selected.isFinite() && selected in 1.0..5.0) ceil(selected).toInt() - 1 else -1
+
+/** Numeric rating never uses the color scale: every star is theme ink.
+ * Fractional color ratings carry both neighboring hues within each filled
+ * star; solid integer ratings keep their single explicit color.
+ */
+internal fun ratingEditorGradientStops(
+    selected: Double,
+    style: CompactRatingStyle,
+): List<Pair<Float, Color>> =
+    if (style == CompactRatingStyle.COLOR && normalizedCompactRating(selected) != null)
+        compactRatingColorStops(selected)
+    else emptyList()
+
+internal fun ratingEditorStarTint(
+    style: CompactRatingStyle,
+    selected: Double,
+    filled: Boolean,
+    neutral: Color,
+): Color = if (style == CompactRatingStyle.NUMERIC || !filled) neutral
+else compactRatingColorStops(selected).firstOrNull()?.second ?: neutral
+
+/** Fixed solid background matching the player's light/dark base layer. */
+internal fun ratingSheetSolidColor(dark: Boolean): androidx.compose.ui.graphics.Color =
+    if (dark) androidx.compose.ui.graphics.Color.Black
+    else androidx.compose.ui.graphics.Color.White
+
+internal data class RatingDialogEntranceFrame(val alpha: Float, val scale: Float)
+internal fun ratingDialogEntranceFrame(progress: Float, reducedMotion: Boolean): RatingDialogEntranceFrame {
+    val p = if (reducedMotion || !progress.isFinite()) 1f else progress.coerceIn(0f, 1f)
+    return RatingDialogEntranceFrame(alpha = 0.96f + 0.04f * p, scale = 0.97f + 0.03f * p)
+}
+
+/**
  * Icon-based, locally editable 1–5 star modal. Each star has a left (half)
  * and right (whole) touch target; every increment is explicit and accessible.
  * Neither opening nor changing selection persists anything until Save.
- * Deliberately NO clear/reset rating action.
+ * Dragging left of the first star selects zero and removes a persisted rating.
  */
 @Composable
 internal fun CanonicalRecordingFeedbackPanel(
@@ -207,57 +284,166 @@ internal fun CanonicalRecordingFeedbackPanel(
 ) {
     var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
     var touched by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     // Room may deliver the persisted rating after the dialog opens. Hydrate
     // untouched selections, but never erase the user's pending choice.
     LaunchedEffect(rating) {
         if (!touched) selected = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
     }
     val selectedDescription = stringResource(Res.string.recording_feedback_stars_selected, selected.toString())
-    // Native Settings-group design, keeping the same explicit half-star editor.
+    val reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current
+    val pulseIndex = ratingSelectionPulseIndex(selected, touched, reduceMotion)
+    val terminalStar = lastRatedStarIndex(selected)
+    val starStyle = LocalCompactRatingStyle.current
+    val numericStars = starStyle == CompactRatingStyle.NUMERIC
+    val colorStops = ratingEditorGradientStops(selected, starStyle)
+    val fractionalBrush = if (colorStops.map { it.second }.distinct().size > 1)
+        Brush.linearGradient(*colorStops.toTypedArray()) else null
+    // Dismissing an edited value must not silently throw it away. A late Room
+    // emission cannot erase the pending selection, and saving stays modal.
+    val original = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
+    val requestDismiss: () -> Unit = {
+        if (!saving) {
+            if (touched && selected != original) confirmDiscard = true
+            else onDismiss()
+        }
+    }
+    // The dialog previously appeared in one frame. Entrance affects only
+    // its drawing, never star hit targets, the save path, or the dialog window.
+    val dialogEntrance = remember { Animatable(0f) }
+    LaunchedEffect(reduceMotion) {
+        if (reduceMotion) dialogEntrance.snapTo(1f)
+        else dialogEntrance.animateTo(
+            1f,
+            tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        )
+    }
+    // Rating is a contextual bottom sheet, not a Settings card or a centered
+    // alert. Follow the user's marked composition: stars and two equal actions,
+    // no artwork, text summary, visible title or drag handle. The pane title
+    // remains exposed to accessibility services.
+    val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val sheetBackground = ratingSheetSolidColor(darkTheme)
+    val sheetForeground = if (darkTheme) androidx.compose.ui.graphics.Color.White
+        else androidx.compose.ui.graphics.Color.Black
+    val sheetTitle = title ?: stringResource(Res.string.recording_feedback_dialog_title)
     androidx.compose.ui.window.Dialog(
-        onDismissRequest = { if (!saving) onDismiss() },
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        onDismissRequest = requestDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(
+            usePlatformDefaultWidth = false,
+        ),
     ) {
-        SettingsGroupSurface(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
+        // A genuine bottom-aligned surface without a drag handle or blur.
+        // Dialog preserves the app's already-tested pointer/Back behavior;
+        // ModalBottomSheet did not dispatch several Robolectric touches.
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.BottomCenter,
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+            androidx.compose.material3.Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+                color = sheetBackground,
+                contentColor = sheetForeground,
             ) {
-                Text(
-                    title ?: stringResource(Res.string.recording_feedback_dialog_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+        Column(
+            modifier = Modifier.fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 20.dp)
+                .testTag("native-rating-bottom-sheet")
+                .semantics { paneTitle = sheetTitle }
+                .graphicsLayer {
+                    val entrance = ratingDialogEntranceFrame(dialogEntrance.value, reduceMotion)
+                    alpha = entrance.alpha
+                    scaleX = entrance.scale
+                    scaleY = entrance.scale
+                },
+            verticalArrangement = Arrangement.spacedBy(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .semantics { contentDescription = selectedDescription },
+                        .testTag("native-rating-editor-star-row")
+                        .semantics { contentDescription = selectedDescription }
+                        .pointerInput(saving) {
+                            detectDragGestures(onDrag = { change, _ ->
+                                if (!saving) {
+                                    change.consume()
+                                    touched = true
+                                    selected = ratingSelectionFromDrag(
+                                        change.position.x, size.width.toFloat(),
+                                    )
+                                }
+                            })
+                        },
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     repeat(5) { i ->
                         val index = i.toDouble()
+                        val starPulse = remember { Animatable(1f) }
+                        // Re-trigger for half→whole on the same star, not
+                        // only when the chosen star index changes.
+                        LaunchedEffect(selected, touched, reduceMotion) {
+                            if (pulseIndex == i && !reduceMotion) {
+                                starPulse.snapTo(0.88f)
+                                starPulse.animateTo(
+                                    1f,
+                                    spring(
+                                        dampingRatio = 0.70f,
+                                        stiffness = Spring.StiffnessMedium,
+                                    ),
+                                )
+                            } else {
+                                starPulse.snapTo(1f)
+                            }
+                        }
                         val half = (index + 0.5).coerceAtLeast(1.0)
                         val halfDescription = stringResource(Res.string.recording_feedback_stars_value, half.toString())
                         val wholeDescription = stringResource(Res.string.recording_feedback_stars_value, (index + 1.0).toString().removeSuffix(".0"))
+                        val starFill = appleRatingStarFill(selected, i)
                         Box(
-                            modifier = Modifier.size(width = 42.dp, height = 48.dp),
+                            modifier = Modifier.weight(1f).height(56.dp),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Icon(
-                                imageVector = when {
-                                    selected >= index + 1.0 -> Icons.Rounded.Star
-                                    selected >= index + 0.5 -> Icons.Rounded.StarHalf
-                                    else -> Icons.Rounded.StarBorder
-                                },
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(38.dp),
-                            )
+                            // Retain the player's exact original star
+                            // contours but drop the circular *button* platter.
+                            // Five repeated platters looked like generic chips.
+                            // A 48dp glyph viewport keeps the visible star
+                            // near 28dp while maintaining generous touch slots.
+                            Box(
+                                modifier = Modifier.size(56.dp)
+                                    .testTag("rating-editor-star-$i-${starFill.name.lowercase()}")
+                                    .graphicsLayer {
+                                        scaleX = starPulse.value
+                                        scaleY = starPulse.value
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (numericStars && i == terminalStar) {
+                                    CompactRatingIndicator(
+                                        value = selected,
+                                        geometry = CompactRatingGeometry.STANDALONE,
+                                        size = 56.dp,
+                                    )
+                                } else {
+                                    AppleRatingStarGlyph(
+                                        fill = starFill,
+                                        standalone = true,
+                                        tint = ratingEditorStarTint(
+                                            starStyle, selected,
+                                            starFill != com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY,
+                                            sheetForeground,
+                                        ),
+                                        colorBrush = if (numericStars ||
+                                            starFill == com.music.bitchord.ui.components.AppleRatingStarFill.EMPTY)
+                                            null else fractionalBrush,
+                                        outlineTint = sheetForeground,
+                                        modifier = Modifier.size(56.dp),
+                                    )
+                                }
+                            }
                             Row(Modifier.fillMaxSize()) {
                                 Box(
                                     modifier = Modifier.weight(1f).fillMaxHeight()
@@ -287,40 +473,57 @@ internal fun CanonicalRecordingFeedbackPanel(
                         }
                     }
                 }
-                if (denied) {
-                    Text(
-                        stringResource(Res.string.recording_feedback_unavailable),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+            if (denied) {
+                Text(
+                    stringResource(Res.string.recording_feedback_unavailable),
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                )
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = onDismiss, enabled = !saving,
-                        modifier = Modifier.weight(1f),
-                        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    ) { Text(stringResource(Res.string.cancel)) }
-                    androidx.compose.material3.Button(
-                        onClick = { onSave(selected) },
-                        enabled = selected in 1.0..5.0 && !saving,
-                        modifier = Modifier.weight(1f),
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = com.music.bitchord.ui.theme.AccentRed,
-                            contentColor = androidx.compose.ui.graphics.Color.White,
-                        ),
-                    ) {
-                        if (saving) CircularProgressIndicator(modifier = Modifier.size(18.dp))
-                        else Text(stringResource(Res.string.recording_feedback_dialog_save))
-                    }
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NativeRatingEditorAction(
+                    label = stringResource(Res.string.cancel),
+                    onClick = requestDismiss,
+                    enabled = !saving,
+                    emphasized = false,
+                    darkTheme = darkTheme,
+                    modifier = Modifier.weight(1f),
+                    tag = "rating-editor-cancel-action",
+                )
+                NativeRatingEditorAction(
+                    label = if (selected == 0.0) "Remover avaliação"
+                        else stringResource(Res.string.recording_feedback_dialog_save),
+                    onClick = { onSave(selected) },
+                    enabled = (selected in 1.0..5.0 || (selected == 0.0 && original != 0.0)) && !saving,
+                    emphasized = true,
+                    darkTheme = darkTheme,
+                    loading = saving,
+                    modifier = Modifier.weight(1f),
+                    tag = "rating-editor-save-action",
+                )
             }
         }
+            }
+        }
+        if (confirmDiscard) {
+        ConfirmationAlert(
+            hazeState = null,
+            title = androidx.compose.ui.res.stringResource(R.string.editor_discard_title),
+            description = androidx.compose.ui.res.stringResource(R.string.editor_discard_rating_body),
+            confirmLabel = androidx.compose.ui.res.stringResource(R.string.editor_discard_confirm),
+            dismissLabel = androidx.compose.ui.res.stringResource(R.string.editor_keep_editing),
+            destructive = true,
+            onConfirm = {
+                confirmDiscard = false
+                onDismiss()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
+        }
     }
-
 }
