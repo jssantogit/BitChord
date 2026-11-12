@@ -80,6 +80,8 @@ class HomeHeaderTest {
         }
         compose.onNodeWithText("K-pop").assertIsDisplayed()
         compose.onNodeWithTag("home-back").assertIsDisplayed()
+        compose.onNodeWithTag("home-back").assertWidthIsEqualTo(40.dp)
+        compose.onNodeWithTag("home-back").assertHeightIsEqualTo(40.dp)
         compose.onNodeWithTag("home-back").performClick()
         compose.runOnIdle { assertEquals(1, backs) }
     }
