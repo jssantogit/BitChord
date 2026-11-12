@@ -191,9 +191,10 @@ fun NativeCompactOverflowMenu(
                     ) {
                         // Long lists (e.g. saved remote filters) scroll inside
                         // their bounded popup; short menus keep natural height.
+                        val scrollState = rememberScrollState()
                         val scrollModifier = if (maxContentHeight == null) Modifier else
                             Modifier.heightIn(max = maxContentHeight)
-                                .verticalScroll(rememberScrollState())
+                                .verticalScroll(scrollState)
                         Column(
                             modifier = scrollModifier.padding(vertical = 5.dp),
                             content = content,
