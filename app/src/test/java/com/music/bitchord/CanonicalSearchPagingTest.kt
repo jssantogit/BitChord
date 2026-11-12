@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import com.music.bitchord.ui.CanonicalSearchPageCursors
 import com.music.bitchord.ui.canonicalArtistContinuationRows
+import com.music.bitchord.ui.canonicalSearchRowsWithOfficialEditionTitles
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
@@ -139,6 +141,73 @@ class CanonicalSearchPagingTest {
         assertEquals(2, result.size)
         assertEquals("How Sweet", result.single { it.musicBrainzId == mbid }.title)
         assertEquals(prior.artworkUri, result.first().artworkUri)
+    }
+
+
+    @Test fun officialLinkedReleaseRenamesCompositeGroupInFirstSearchWithoutNewFetch() {
+        val groupMbid = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val group = CanonicalCatalogSearchRow(
+            groupMbid, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+        )
+        val edition = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "How Sweet", "XW",
+            "2024-05-24", "NewJeans", status = "Official",
+            releaseGroupMbid = groupMbid,
+        )
+        val result = canonicalSearchRowsWithOfficialEditionTitles(
+            listOf(group), listOf(edition),
+        )
+        assertEquals("How Sweet", result.single().title)
+        assertEquals(groupMbid, result.single().musicBrainzId)
+        assertEquals("Single", result.single().releaseKind)
+        assertEquals("How Sweet & Bubble Gum", group.title)
+    }
+
+    @Test fun searchCannotBorrowWrongGroupOrNonOfficialEditionTitle() {
+        val groupMbid = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val group = CanonicalCatalogSearchRow(
+            groupMbid, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+        )
+        val official = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "How Sweet", "XW",
+            "2024-05-24", "NewJeans", status = "Official",
+            releaseGroupMbid = groupMbid,
+        )
+        val candidates = listOf(
+            official.copy(releaseGroupMbid = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            official.copy(status = "Bootleg"),
+            official.copy(isVideoOnlyMedia = true),
+            official.copy(releaseGroupMbid = null),
+            official.copy(title = "Bubble Gum"),
+        )
+        candidates.forEach { candidate ->
+            assertEquals(group.title,
+                canonicalSearchRowsWithOfficialEditionTitles(
+                    listOf(group), listOf(candidate),
+                ).single().title)
+        }
+    }
+
+    @Test fun searchPaginationMayCorrectExistingCompositeCardWithoutASecondIdentity() {
+        val groupMbid = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val row = CanonicalCatalogSearchRow(
+            groupMbid, CanonicalSearchKind.RELEASE_GROUP,
+            "How Sweet & Bubble Gum", "NewJeans", releaseKind = "Single",
+            artworkUri = "https://images.example/verified.jpg",
+        )
+        val edition = MusicBrainzReleaseHit(
+            "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "How Sweet", "KR",
+            "2024-05-24", "NewJeans", status = "Official", releaseGroupMbid = groupMbid,
+        )
+        val rows = canonicalSearchRowsWithOfficialEditionTitles(
+            canonicalArtistContinuationRows(listOf(row), emptyList()),
+            listOf(edition),
+        )
+        assertEquals(1, rows.size)
+        assertEquals("How Sweet", rows.single().title)
+        assertEquals(row.artworkUri, rows.single().artworkUri)
     }
 
     private fun page(
