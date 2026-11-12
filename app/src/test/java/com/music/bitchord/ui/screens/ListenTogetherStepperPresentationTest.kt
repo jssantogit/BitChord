@@ -24,6 +24,12 @@ import org.robolectric.annotation.ConscryptMode
 class ListenTogetherStepperPresentationTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun occupiedPartyCannotShrinkBelowMemberCount() {
+        org.junit.Assert.assertFalse(canDecreasePartyCapacity(capacity = 3, participantCount = 3))
+        org.junit.Assert.assertFalse(canDecreasePartyCapacity(capacity = 2, participantCount = 1))
+        org.junit.Assert.assertTrue(canDecreasePartyCapacity(capacity = 4, participantCount = 3))
+    }
+
     @Test fun enabledStepperUses40dpAndKeepsItsCallback() {
         var clicks = 0
         compose.setContent {
