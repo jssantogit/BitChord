@@ -77,6 +77,7 @@ import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.data.sources.SourceRegistry
 import com.music.bitchord.ui.components.AddonEditorAlert
 import com.music.bitchord.ui.components.appleSettingsSwitchColors
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -611,7 +612,7 @@ private const val SWAP_THRESHOLD = 0.6f
  * put another one in here".
  */
 @Composable
-private fun AddSourceRow(onClick: () -> Unit) {
+internal fun AddSourceRow(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -626,7 +627,7 @@ private fun AddSourceRow(onClick: () -> Unit) {
         Icon(
             imageVector = Icons.Rounded.Add,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
+            tint = appleMusicKeyColor(),
             modifier = Modifier.size(ICON_SIZE),
         )
         Spacer(Modifier.width(ICON_GAP))
@@ -634,7 +635,7 @@ private fun AddSourceRow(onClick: () -> Unit) {
             Text(
                 text = stringResource(R.string.add_addon),
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
+                color = appleMusicKeyColor(),
             )
             Text(
                 text = stringResource(R.string.add_addon_detail),
@@ -702,7 +703,7 @@ private fun BluetoothCodecPermissionRow() {
         Icon(
             imageVector = Icons.Rounded.Bluetooth,
             contentDescription = null,
-            tint = if (denied) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            tint = if (denied) MaterialTheme.colorScheme.error else appleMusicKeyColor(),
             modifier = Modifier.size(ICON_SIZE),
         )
         Spacer(Modifier.width(ICON_GAP))
@@ -712,7 +713,7 @@ private fun BluetoothCodecPermissionRow() {
                     if (denied) R.string.lossless_output_permission_denied else R.string.lossless_output_permission,
                 ),
                 style = MaterialTheme.typography.bodyLarge,
-                color = if (denied) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                color = if (denied) MaterialTheme.colorScheme.error else appleMusicKeyColor(),
             )
             Text(
                 text = stringResource(
