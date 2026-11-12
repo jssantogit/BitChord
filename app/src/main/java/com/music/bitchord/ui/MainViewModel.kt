@@ -2091,7 +2091,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             val current = (_canonicalDetail.value as? UiState.Success)?.data
                             if (current != null) {
                                 val known = current.rows.associateBy { it.musicBrainzId }
-                                val rows = hits.map { hit ->
+                                val incoming = hits.map { hit ->
                                     val previous = known[hit.musicBrainzId]
                                     CanonicalCatalogSearchRow(
                                         hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
@@ -2106,6 +2106,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                             artworkById[hit.musicBrainzId],
                                     )
                                 }
+                                // Earlier pages may already have verified art
+                                // and an edition-backed title. A continuation
+                                // cannot discard them or reintroduce raw labels.
+                                val rows = canonicalArtistContinuationRows(current.rows, incoming)
                                 _canonicalDetail.value = UiState.Success(current.copy(
                                     rows = rows,
                                     nextOffset = next,

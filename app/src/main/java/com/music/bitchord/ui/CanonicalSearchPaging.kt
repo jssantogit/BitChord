@@ -67,6 +67,23 @@ internal data class CanonicalSearchPageCursors(
     }
 }
 
+/**
+ * Progressive artist browse pages ADD new ReleaseGroups. They must never
+ * replace earlier pages, artwork, or an edition-verified editorial display
+ * title (e.g. NewJeans: How Sweet instead of the raw composite Group label).
+ * Exact MBIDs, not displayed titles, define whether a work was already shown.
+ *
+ * A full authoritative browse can still reconcile obsolete membership only
+ * after its completeness gate; this is strictly a presentation merge.
+ */
+internal fun canonicalArtistContinuationRows(
+    previous: List<CanonicalCatalogSearchRow>,
+    incoming: List<CanonicalCatalogSearchRow>,
+): List<CanonicalCatalogSearchRow> =
+    (previous + incoming).distinctBy {
+        it.kind to it.musicBrainzId.lowercase(java.util.Locale.ROOT)
+    }
+
 /** Live facts win over cache. Only failed entity kinds may use stale evidence. */
 internal fun mergeCanonicalSearchRows(
     live: List<CanonicalCatalogSearchRow>,
