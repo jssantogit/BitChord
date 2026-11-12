@@ -51,7 +51,7 @@ import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material.icons.rounded.MoreVert
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -473,7 +473,7 @@ internal fun AppleRootSettingsOverflow(
         FloatingLibraryTopBarCircle(hazeState) {
             IconButton(onClick = { expanded = true }) {
                 Icon(
-                    imageVector = Icons.Rounded.MoreVert,
+                    imageVector = PlaylistEditorIcons.More,
                     contentDescription = description,
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
@@ -707,7 +707,7 @@ fun TopBarAccountButton(
                 .testTag("apple-global-more-options"),
         ) {
             Icon(
-                imageVector = Icons.Rounded.MoreVert,
+                imageVector = PlaylistEditorIcons.More,
                 contentDescription = stringResource(R.string.more),
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(AppleFloatingControlMetrics.toolbarGlyphSize),
