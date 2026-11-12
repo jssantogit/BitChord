@@ -32,7 +32,8 @@ class PlaylistPickerEditorPresentationTest {
     @get:Rule val compose = createComposeRule()
 
     @Test fun contextualRatingAndPlaylistDeleteReuseOriginalEditorVectors() {
-        assertSame(PlaylistEditorIcons.Ratings, browseRatingActionIcon())
+        // Contextual actions use the standalone outline, not the filled player disc.
+        assertSame(PlaylistEditorIcons.RatingPlain, browseRatingActionIcon())
         assertSame(PlaylistEditorIcons.Delete, browsePlaylistDeleteIcon())
     }
 
