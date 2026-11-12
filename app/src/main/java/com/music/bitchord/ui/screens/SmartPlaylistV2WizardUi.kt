@@ -1164,20 +1164,22 @@ internal fun SmartPlaylistV2WizardUi(
                                                         icon = PlaylistEditorIcons.More,
                                                         onClick = { actionsOpen = true },
                                                     )
-                                                    androidx.compose.material3.DropdownMenu(
+                                                    com.music.bitchord.ui.components.NativeCompactOverflowMenu(
                                                         expanded = actionsOpen,
                                                         onDismissRequest = { actionsOpen = false },
                                                     ) {
-                                                        androidx.compose.material3.DropdownMenuItem(
-                                                            text = { Text("Editar condição") },
+                                                        com.music.bitchord.ui.components.NativeCompactMenuItem(
+                                                            label = "Editar condição",
+                                                            icon = PlaylistEditorIcons.Edit,
                                                             onClick = {
                                                                 actionsOpen = false
                                                                 editAt(path, WizardStep.GROUP)
                                                             },
                                                         )
                                                         if (i > 0) {
-                                                            androidx.compose.material3.DropdownMenuItem(
-                                                                text = { Text("Mover para cima") },
+                                                            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                                                                label = "Mover para cima",
+                                                                icon = PlaylistEditorIcons.ChevronUp,
                                                                 onClick = {
                                                                     actionsOpen = false
                                                                     onRuleChange(smartRuleUpdateGroup(
@@ -1187,8 +1189,9 @@ internal fun SmartPlaylistV2WizardUi(
                                                             )
                                                         }
                                                         if (i < group.children.lastIndex) {
-                                                            androidx.compose.material3.DropdownMenuItem(
-                                                                text = { Text("Mover para baixo") },
+                                                            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                                                                label = "Mover para baixo",
+                                                                icon = PlaylistEditorIcons.ChevronDown,
                                                                 onClick = {
                                                                     actionsOpen = false
                                                                     onRuleChange(smartRuleUpdateGroup(
