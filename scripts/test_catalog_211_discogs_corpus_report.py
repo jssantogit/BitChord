@@ -135,7 +135,7 @@ class CorpusReportTests(unittest.TestCase):
         report_data = report(manifest)
         self.assertEqual([], report_data["errors"])
         self.assertIsNone(report_data["metrics"])
-        self.assertEqual(1, report_data["slots"]["type"]["reviewed"])
+        self.assertEqual(2, report_data["slots"]["type"]["reviewed"])
 
     def test_a02_japanese_fearless_is_distinct_2023_single_not_2022_ep(self):
         manifest = json.loads(Path(
