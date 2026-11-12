@@ -83,6 +83,8 @@ import com.music.bitchord.ui.components.HERO_CARD_RATIO
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeCompactOverflowMenu
+import com.music.bitchord.ui.components.NativeCompactMenuItem
 import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
@@ -600,18 +602,15 @@ fun HomeTitle(
                         tint = MaterialTheme.colorScheme.onSurface,
                     )
                 }
-                DropdownMenu(
+                NativeCompactOverflowMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false },
                 ) {
                     actions.forEach { action ->
-                        DropdownMenuItem(
-                            text = { Text(action.label) },
-                            onClick = {
-                                expanded = false
-                                action.onClick()
-                            },
-                        )
+                        NativeCompactMenuItem(label = action.label, onClick = {
+                            expanded = false
+                            action.onClick()
+                        })
                     }
                 }
             }
