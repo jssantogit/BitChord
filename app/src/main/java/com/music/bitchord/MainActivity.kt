@@ -2131,11 +2131,15 @@ private fun BitChordApp(
         }
         // Storefront-scoped Apple cards cannot fall through to old MB browse
         // or playback navigation. No title-to-MBID lookup is performed here.
-        if (viewModel.openAppleHomeAlbum(
-            item.browseId, item.title, item.subtitle, item.thumbnailUrl,
-        )) {
-            appleShelfReturnTab = selectedTab
-            selectedTab = TAB_SEARCH
+        if (item.browseId?.startsWith("itunes:") == true) {
+            if (viewModel.openAppleHomeAlbum(
+                item.browseId, item.title, item.subtitle, item.thumbnailUrl,
+            )) {
+                appleShelfReturnTab = selectedTab
+                selectedTab = TAB_SEARCH
+            }
+            // Even a malformed Apple ID must not fall through to the old
+            // album browse or playback path.
             return@click
         }
         val selectedLocal = canonicalHomeLocalPicks.firstOrNull {
