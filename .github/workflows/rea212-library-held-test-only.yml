@@ -1,0 +1,48 @@
+# Pin source to the second REA #212 held-menu commit; isolated from #209 conflict.
+# No APK, merge or release.
+name: REA 212 · Unified Library held menus (test only)
+
+on:
+  push:
+    branches: [validation/rea212-library-held-d9e12234-20261113]
+    paths: [.github/workflows/rea212-library-held-test-only.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact PR 212 SHA
+        uses: actions/checkout@v4
+        with:
+          ref: d9e12234dfa70bad32a1139b183680b90a8574fc
+      - name: Assert exact source under test
+        run: test "$(git rev-parse HEAD)" = "d9e12234dfa70bad32a1139b183680b90a8574fc"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure unit-test environment
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app unit tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared native UI regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Retain failure reports only
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-library-held-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
