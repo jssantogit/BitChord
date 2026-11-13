@@ -49,6 +49,42 @@ class MusicBrainzCatalogSearchTest {
         assertEquals(2, calls.size)
     }
 
+    @Test fun editionBarcodeAndTitleArtistQueriesCarryRawMusicBrainzOffsets() =
+        runBlocking {
+            val requests = mutableListOf<Map<String, String>>()
+            val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+                transport = object : MusicBrainzTransport {
+                    override suspend fun get(
+                        path: String, parameters: Map<String, String>, userAgent: String,
+                    ): String {
+                        assertEquals("release", path)
+                        requests += parameters
+                        return """{"count":30,"offset":12,"releases":[]}"""
+                    }
+                },
+            ))
+            assertTrue(search.searchReleasesByBarcode(
+                "8801234567890", limit = 12, offset = 12,
+            ) is MusicBrainzCatalogSearchResult.Success)
+            assertTrue(search.searchOfficialReleasesForTitleArtist(
+                "SUPER REAL ME", "ILLIT", limit = 12, offset = 12,
+            ) is MusicBrainzCatalogSearchResult.Success)
+            assertEquals(listOf("12", "12"), requests.map { it["offset"] })
+            assertEquals("barcode:8801234567890", requests[0]["query"])
+            assertEquals(
+                """release:"SUPER REAL ME" AND artist:"ILLIT" AND status:official""",
+                requests[1]["query"],
+            )
+            assertEquals(listOf("false", "false"), requests.map { it["dismax"] })
+            assertTrue(search.searchOfficialReleasesForTitleArtist(
+                "Album", "ILLIT", offset = -1,
+            ) is MusicBrainzCatalogSearchResult.Failure)
+            assertTrue(search.searchReleasesByBarcode(
+                "8801234567890", offset = -1,
+            ) is MusicBrainzCatalogSearchResult.Failure)
+            assertEquals(2, requests.size)
+        }
+
     @Test fun barcodeEditionSearchUsesExactFieldAndRejectsUnsafeQueries() = runBlocking {
         val calls = mutableListOf<Pair<String, Map<String, String>>>()
         val search = MusicBrainzCatalogSearch(MusicBrainzClient(
