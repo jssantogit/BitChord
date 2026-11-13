@@ -792,7 +792,6 @@ private fun BitChordApp(
     val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
     val appleGenreReleases by viewModel.appleGenreReleases.collectAsStateWithLifecycle()
-    val canonicalExploreGenreCovers by viewModel.canonicalExploreGenreCovers.collectAsStateWithLifecycle()
     var activeCanonicalGenre by remember {
         mutableStateOf<com.music.bitchord.ui.CanonicalExploreGenre?>(null)
     }
@@ -1342,6 +1341,19 @@ private fun BitChordApp(
         }
     }
 
+    // Explore genre thumbnails must belong to an Apple product whose own
+    // primary genre is independently compatible with that category.
+    val appleExploreGenreCovers = remember(appleHomeReleases, appleGenreReleases) {
+        val homeProducts = (appleHomeReleases as? UiState.Success)?.data.orEmpty()
+        val genreProducts = appleGenreReleases.values.flatMap { state ->
+            (state as? UiState.Success)?.data.orEmpty()
+        }
+        com.music.bitchord.ui.appleExploreGenreCoverMap(
+            appleAlbums = homeProducts + genreProducts,
+            tags = com.music.bitchord.ui.canonicalExploreGenres.map { it.tag },
+        )
+    }
+
     val homeListState = rememberLazyListState()
     val exploreListState = rememberLazyListState()
     // Keep expensive coroutine/composition machinery outside BitChordApp's
@@ -1355,7 +1367,7 @@ private fun BitChordApp(
         showExplore = selectedTab == TAB_EXPLORE,
         showGenreDetail = activeCanonicalGenre != null,
         genreState = canonicalGenreState,
-        genreCovers = canonicalExploreGenreCovers,
+        genreCovers = appleExploreGenreCovers,
     )
     // Preserve the native genre-grid scroll when visiting an editorial detail.
     val genreListState = rememberLazyListState()
@@ -3747,7 +3759,7 @@ private fun BitChordApp(
                                 contentPadding = listPadding,
                                 canonicalGenres = com.music.bitchord.ui
                                     .canonicalExploreGenreShelf(
-                                        canonicalGenresHeading, canonicalExploreGenreCovers,
+                                        canonicalGenresHeading, appleExploreGenreCovers,
                                     ).items,
                                 onCanonicalGenreClick = { item ->
                                     onCanonicalShelfClick(
