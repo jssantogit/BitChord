@@ -21,7 +21,7 @@ class AppleArtistDiscographyPagerTest {
             if (capped) AppleEditorialReadState.POSSIBLY_TRUNCATED
             else AppleEditorialReadState.COMPLETE)
 
-    private class Fake(
+    private inner class Fake(
         var first: AppleEditorialLoad,
         var broad: AppleEditorialLoad = AppleEditorialLoad.Success(
             emptyList(), AppleEditorialReadState.COMPLETE),
