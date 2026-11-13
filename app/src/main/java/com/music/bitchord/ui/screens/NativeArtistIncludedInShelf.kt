@@ -44,14 +44,17 @@ internal fun nativeArtistEditorialGuestTracks(
     // One editorial song can be represented by several MusicBrainz
     // Recordings and alternate editions of the SAME host release.
     // Prefer the first verified official row, but never duplicate the card.
-    // The host credit is part of the key: another artist recording a song
-    // with the same title is still a different collaboration.
+    // Both host credit and published work identity belong to the key:
+    // the same guest recording may occur on a single and later album.
     .distinctBy { appearance ->
         val host = appearance.artistCredit.normalizeGuestDisplayKey()
         val song = requireNotNull(appearance.trackTitle).normalizeGuestDisplayKey()
-        "$host|$song"
+        Triple(appearance.releaseGroupMbid.lowercase(java.util.Locale.ROOT), host, song)
     }
-    .distinctBy { it.recordingMbid }
+    .distinctBy { appearance ->
+        appearance.releaseGroupMbid.lowercase(java.util.Locale.ROOT) to
+            appearance.recordingMbid?.lowercase(java.util.Locale.ROOT)
+    }
     .take(12)
     .toList()
 
@@ -167,7 +170,7 @@ internal fun NativeArtistIncludedInShelf(
         palette = palette,
         horizontalPadding = PAGE_GUTTER,
         topPadding = 22.dp,
-        itemKey = { it.recordingMbid ?: it.releaseGroupMbid },
+        itemKey = { it.releaseGroupMbid to (it.recordingMbid ?: it.releaseMbid) },
     ) { appearance ->
         val page = CanonicalCatalogSearchRow(
             musicBrainzId = appearance.releaseGroupMbid,
