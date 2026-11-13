@@ -588,4 +588,43 @@ class MusicBrainzArtistAppearancesTest {
     }
 
 
+    @Test fun realNewJeansWorldMusicRadioGuestDoesNotConflateJointSingleWithGuestAlbum() {
+        // MusicBrainz-verified artist/ReleaseGroup IDs (Nov 2026).
+        // Edition/Recording IDs below are controlled fixture IDs, not claims
+        // about live edition membership. This tests the credit boundary.
+        val newJeans = "49204a7a-ed85-407a-828f-6fd46f1d8126"
+        val jonBatiste = "a2a72dba-3a08-43c4-859c-4c7f5fcc9599"
+        val jointSingleGroup = "2817894d-e004-4de0-a575-da1fc3675dd0"
+        val hostAlbumGroup = "4c894acb-b0fd-49ce-93ad-7cea649d8ab8"
+        val body = """{"releases":[
+            {"id":"55555555-5555-4555-8555-555555555555",
+             "status":"Official","barcode":"00602455811936",
+             "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}},
+                 {"artist":{"id":"$newJeans","name":"NewJeans"}}],
+             "release-group":{"id":"$jointSingleGroup",
+                 "title":"Be Who You Are (Real Magic)","primary-type":"Single",
+                 "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}},
+                     {"artist":{"id":"$newJeans","name":"NewJeans"}}]},
+             "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$newJeans"}}],
+                 "recording":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                     "title":"Be Who You Are (Real Magic)"}}]}]},
+            {"id":"66666666-6666-4666-8666-666666666666",
+             "status":"Official","barcode":"602455882738",
+             "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}}],
+             "release-group":{"id":"$hostAlbumGroup","title":"World Music Radio",
+                 "primary-type":"Album",
+                 "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}}]},
+             "media":[{"tracks":[{"artist-credit":[
+                 {"artist":{"id":"$jonBatiste"}},
+                 {"artist":{"id":"$newJeans"}}],
+                 "recording":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                     "title":"Be Who You Are"}}]}]}
+        ]}"""
+        val results = parseMusicBrainzTrackArtistAppearances(body, newJeans)
+        assertEquals(listOf(hostAlbumGroup), results.map { it.releaseGroupMbid })
+        assertEquals(listOf("Be Who You Are"), results.map { it.trackTitle })
+        assertEquals(listOf("World Music Radio"), results.map { it.title })
+    }
+
+
 }
