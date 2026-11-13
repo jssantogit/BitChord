@@ -8,6 +8,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.ui.appleNativeAlbumDetail
 import com.music.bitchord.ui.appleNativeSearchRows
+import com.music.bitchord.ui.appleNativeAlbumSearchRowsInSourceOrder
 import com.music.bitchord.ui.screens.AppleEditorialReleaseCategory
 import org.junit.Assert.*
 import org.junit.Test
@@ -71,6 +72,21 @@ class AppleEditorialNativeSearchBridgeTest {
             AppleEditorialReleaseCategory.EP,
             AppleEditorialReleaseCategory.EP,
         ), rows.map { it.category })
+    }
+
+    @Test fun appleSearchPaginationPreservesRemoteRankingWhenNewReleasesArrive() {
+        fun item(id: Long, date: String) = ItunesCatalogItem(
+            type = ItunesCatalogItemType.ALBUM, id = id, storefront = "br",
+            title = "Release $id", artistName = "Artist", artistId = 77,
+            collectionId = id, storeUrl = null, releaseDate = date,
+            genre = null, durationMs = null, trackNumber = null, discNumber = null,
+        )
+        val rows = appleNativeAlbumSearchRowsInSourceOrder(listOf(
+            item(1, "2001-01-01"), item(2, "2026-01-01"),
+            item(3, "2012-01-01"),
+        ), "br")
+        assertEquals(listOf("itunes:br:album:1", "itunes:br:album:2",
+            "itunes:br:album:3"), rows.map { it.browseId })
     }
 
     @Test fun detailedAppleTracklistKeepsItsOwnIdentityAndNeverReturnsPlayableSong() {
