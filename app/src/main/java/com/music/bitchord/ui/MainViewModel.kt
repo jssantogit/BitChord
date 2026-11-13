@@ -4831,6 +4831,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _appleEditorialArtistDetail.value = null
     }
 
+    /**
+     * Home/Explore cards are already Apple products, not MB browse rows.
+     * Enter the existing Apple detail route without submitting an unrelated
+     * search query, resolving any retired legacy playback context.
+     */
+    fun openAppleHomeAlbum(
+        browseId: String?,
+        title: String,
+        artistName: String,
+        artworkUri: String?,
+    ): Boolean {
+        val route = AppleCatalogBrowseRoute.parse(browseId)
+            ?.takeIf { it.kind ==
+                com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType.ALBUM }
+            ?: return false
+        if (title.isBlank() || artistName.isBlank()) return false
+        searchSourceExplicitlySelected = true
+        switchSearchSource(SearchSource.CANONICAL, rerunCurrentQuery = false)
+        backAppleEditorialArtist()
+        openAppleEditorialAlbum(AppleEditorialSearchRow(
+            browseId = "itunes:${route.storefront}:album:${route.id}",
+            title = title,
+            artistName = artistName,
+            artworkUri = artworkUri,
+            releaseDate = null,
+        ))
+        return true
+    }
+
     /** Apple storefront IDs are not MBIDs and bypass the old canonical stack. */
     fun openAppleEditorialAlbum(row: AppleEditorialSearchRow) {
         val route = AppleCatalogBrowseRoute.parse(row.browseId)
