@@ -308,4 +308,5 @@
     <string name="apple_eps">EPs</string>
     <string name="apple_singles">Singles</string>
     <string name="apple_other_releases">Outros lançamentos</string>
+    <string name="apple_no_tracks">Nenhuma música encontrada no catálogo da Apple.</string>
 </resources>
