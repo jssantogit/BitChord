@@ -7883,19 +7883,39 @@ internal fun NativeLibraryTopBarSortAction(
     }
 }
 
+/** Keep artist Share on the same native 40dp toolbar geometry as other actions.
+ *  The system Sharesheet remains the owner of the actual share presentation. */
+@Composable
+internal fun NativeArtistShareTopBarButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(com.music.bitchord.ui.components.AppleFloatingControlMetrics.toolbarDiameter)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .testTag("native-artist-share-toolbar"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            PlaylistEditorIcons.Share,
+            contentDescription = stringResource(R.string.share),
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(
+                com.music.bitchord.ui.components.AppleFloatingControlMetrics.toolbarGlyphSize,
+            ),
+        )
+    }
+}
+
 @Composable
 private fun NativeArtistShareTopBarAction(title: String) {
     val context = LocalContext.current
-    IconButton(onClick = {
+    NativeArtistShareTopBarButton(onClick = {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, title)
         }
         context.startActivity(Intent.createChooser(intent, title))
-    }, modifier = Modifier.size(40.dp)) {
-        Icon(PlaylistEditorIcons.Share, contentDescription = stringResource(R.string.share),
-            tint = MaterialTheme.colorScheme.onSurface)
-    }
+    })
 }
 
 @Composable
