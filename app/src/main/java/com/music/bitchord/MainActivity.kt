@@ -3286,6 +3286,25 @@ private fun BitChordApp(
                                     type = BrowseType.ALBUM,
                                 )
                             },
+                            onOpenNativeAlbum = { releaseId, albumTitle, albumArtist ->
+                                // Source-backed albums already have verified
+                                // Release → Recording → MediaAsset membership.
+                                // Do not send local/Navidrome tracks through a
+                                // MusicBrainz online ReleaseGroup lookup.
+                                pinnedLibraryRequest =
+                                    com.music.bitchord.ui.screens.CanonicalLibraryPin(
+                                        com.music.bitchord.ui.screens.CanonicalLibrarySelection(
+                                            com.music.bitchord.ui.screens.CanonicalLibraryEntityType.ALBUM,
+                                            releaseId,
+                                        ),
+                                        albumTitle,
+                                        albumArtist,
+                                    )
+                                unifiedLibrarySearching = false
+                                unifiedLibraryBackToken = 0
+                                unifiedLibraryCategory =
+                                    com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
+                            },
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
                             onDetailChanged = { unifiedLibraryDetailOpen = it },
