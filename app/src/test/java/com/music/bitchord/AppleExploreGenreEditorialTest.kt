@@ -88,6 +88,36 @@ class AppleExploreGenreEditorialTest {
         assertEquals(2, result.size)
     }
 
+    @Test fun genreKeepsUnderlyingAppleProbeCostEvenWhenOnlyOneGenreMatches() =
+        runBlocking {
+            var calls = 0
+            val collector = AppleExploreGenreDiscovery(
+                catalog = AppleHomeEditorialDiscovery(
+                    source = AppleHomeAlbumSearchSource { title, _ ->
+                        calls++
+                        AppleEditorialLoad.Success(
+                            listOf(edition(
+                                if (title == "Music 1") 1 else 2,
+                                if (title == "Music 1") "K-Pop" else "Pop",
+                            )),
+                            AppleEditorialReadState.COMPLETE,
+                        )
+                    },
+                ),
+            )
+            val result = collector.discover(
+                "k-pop", listOf(
+                    AppleHomeEditorialSeed("Music 1", "Band"),
+                    AppleHomeEditorialSeed("Music 2", "Band"),
+                ), "br",
+            ) as AppleEditorialLoad.Success
+            assertEquals(2, calls)
+            assertEquals(1, result.releases.size)
+            assertEquals(2, result.probeReport?.probesMade)
+            assertEquals(2, result.probeReport?.matchingProducts)
+            assertEquals(0, result.probeReport?.failedRequests)
+        }
+
     @Test fun unsupportedTagFailsClosedWithoutAnyAppleQuery() = runBlocking {
         var called = false
         val collector = AppleExploreGenreDiscovery(
