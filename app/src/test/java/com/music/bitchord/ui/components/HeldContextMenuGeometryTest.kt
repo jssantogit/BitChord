@@ -37,4 +37,16 @@ class HeldContextMenuGeometryTest {
         assertFalse(shouldBlurHeldContextBackdrop(heldVisible = false, reduceDynamicBlur = false))
         assertFalse(shouldBlurHeldContextBackdrop(heldVisible = true, reduceDynamicBlur = true))
     }
+
+    @Test fun parentBlurringAndHazeSamplingAreMutuallyExclusive() {
+        assertFalse(heldMenuNeedsOwnHazeSource(
+            hostProvidesBlur = true, reduceDynamicBlur = false,
+        ))
+        assertTrue(heldMenuNeedsOwnHazeSource(
+            hostProvidesBlur = false, reduceDynamicBlur = false,
+        ))
+        assertFalse(heldMenuNeedsOwnHazeSource(
+            hostProvidesBlur = false, reduceDynamicBlur = true,
+        ))
+    }
 }
