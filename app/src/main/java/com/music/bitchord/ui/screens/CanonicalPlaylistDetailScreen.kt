@@ -70,6 +70,8 @@ import com.music.bitchord.data.catalog.CanonicalRecordingReleaseGroupLinkRow
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeCompactOverflowMenu
+import com.music.bitchord.ui.components.NativeCompactMenuItem
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.SongRow
@@ -334,19 +336,18 @@ internal fun CanonicalPlaylistTrackRow(
                             onClick = { menuExpanded = true }, tint = subtitleColor,
                             contentDescription = "Ações da música",
                         )
-                        if (menuExpanded) {
-                            CanonicalTrackActionSheet(
-                                onDismiss = { menuExpanded = false },
-                                onPlay = { onPlay(track.id) },
-                                onPlayNext = onQueue?.let { queue ->
-                                    { queue(track.id, CanonicalCollectionIntent.ADD_NEXT) }
-                                },
-                                onAddToQueue = onQueue?.let { queue ->
-                                    { queue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE) }
-                                },
-                                onOpenAlbum = onOpenAlbum,
-                            )
-                        }
+                        CanonicalTrackActionSheet(
+                            expanded = menuExpanded,
+                            onDismiss = { menuExpanded = false },
+                            onPlay = { onPlay(track.id) },
+                            onPlayNext = onQueue?.let { queue ->
+                                { queue(track.id, CanonicalCollectionIntent.ADD_NEXT) }
+                            },
+                            onAddToQueue = onQueue?.let { queue ->
+                                { queue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE) }
+                            },
+                            onOpenAlbum = onOpenAlbum,
+                        )
                     }
                 }
             },
@@ -367,65 +368,59 @@ internal fun canonicalPlaylistSwipeIntent(playNext: Boolean): CanonicalCollectio
     else CanonicalCollectionIntent.ADD_TO_QUEUE
 
 /**
- * Native action-row presentation reused from SongActionsSheet / BrowseActionsSheet.
- * The actions carry only the clicked canonical RecordingId, never a legacy Song.
+ * Track overflow is anchored to its own ⋯, not a full-width Material 3 sheet.
+ * The caller provides the real RecordingId-backed actions, never guessed links.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun CanonicalTrackActionSheet(
+    expanded: Boolean,
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
     onPlayNext: (() -> Unit)?,
     onAddToQueue: (() -> Unit)?,
     onOpenAlbum: (() -> Unit)?,
 ) {
-    androidx.compose.material3.ModalBottomSheet(
+    NativeCompactOverflowMenu(
+        expanded = expanded,
         onDismissRequest = onDismiss,
-        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
-            skipPartiallyExpanded = true,
-        ),
-        shape = androidx.compose.ui.graphics.RectangleShape,
-        dragHandle = null,
-        containerColor = MaterialTheme.colorScheme.background,
     ) {
-        androidx.compose.runtime.CompositionLocalProvider(
-            com.music.bitchord.ui.components.LocalActionRowStyle provides
-                com.music.bitchord.ui.components.ActionRowStyle.AppleSolid,
-        ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            ActionRow(Icons.Rounded.PlayArrow, "Reproduzir daqui") {
-                onPlay()
+        NativeCompactMenuItem(
+            label = "Reproduzir daqui",
+            icon = Icons.Rounded.PlayArrow,
+            onClick = {
                 onDismiss()
-            }
-            onPlayNext?.let { next ->
-                ActionRow(Icons.Rounded.SkipNext, "Reproduzir a seguir") {
+                onPlay()
+            },
+        )
+        onPlayNext?.let { next ->
+            NativeCompactMenuItem(
+                label = "Reproduzir a seguir",
+                icon = Icons.Rounded.SkipNext,
+                onClick = {
+                    onDismiss()
                     next()
+                },
+            )
+        }
+        onAddToQueue?.let { queue ->
+            NativeCompactMenuItem(
+                label = "Adicionar à fila",
+                icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                onClick = {
                     onDismiss()
-                }
-            }
-            onAddToQueue?.let { queue ->
-                ActionRow(
-                    Icons.AutoMirrored.Rounded.QueueMusic,
-                    "Adicionar à fila",
-                    modifier = Modifier.testTag("canonical-track-queue-action"),
-                ) {
                     queue()
-                    onDismiss()
-                }
-            }
-            onOpenAlbum?.let { openAlbum ->
-                ActionRow(
-                    Icons.Rounded.Album,
-                    "Abrir álbum",
-                    modifier = Modifier.testTag("canonical-track-open-album-action"),
-                ) {
+                },
+            )
+        }
+        onOpenAlbum?.let { openAlbum ->
+            NativeCompactMenuItem(
+                label = "Abrir álbum",
+                icon = Icons.Rounded.Album,
+                onClick = {
                     onDismiss()
                     openAlbum()
-                }
-            }
-        }
+                },
+            )
         }
     }
 }
