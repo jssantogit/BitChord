@@ -1,0 +1,47 @@
+# Validate latest PR #212 source after replacing artist's Material3 actions.
+# No APK/merge.
+name: REA 212 · Artist top-menu and playlist album regressions
+
+on:
+  push:
+    branches: [validation/rea212-artist-menu-1a88825a-20261113]
+    paths: [.github/workflows/rea212-artist-menu-test.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  latest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Exact source checkout
+        uses: actions/checkout@v4
+        with:
+          ref: 1a88825a50c7938b77058cb47e83d08ca958f9be
+      - name: Verify checkout
+        run: test "$(git rev-parse HEAD)" = "1a88825a50c7938b77058cb47e83d08ca958f9be"
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure build
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared native UI regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Report failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-latest-ui-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
