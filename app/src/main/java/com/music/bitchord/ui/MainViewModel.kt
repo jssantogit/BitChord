@@ -3435,7 +3435,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleHomeJob = viewModelScope.launch(Dispatchers.IO) {
             val result = try {
                 com.music.bitchord.data.catalog.metadata
-                    .AppleHomeEditorialDiscovery().discover(seeds, "br", maxProbes = 8)
+                    .AppleHomeEditorialDiscovery().discover(
+                        seeds, "br", maxProbes = 8,
+                        onProgress = { releases ->
+                            if (appleHomeEpoch.isCurrent(generation) &&
+                                isCanonicalDiscoverySelected()
+                            ) _appleHomeReleases.value = UiState.Success(releases)
+                        },
+                    )
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -3747,7 +3754,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleGenreJob = viewModelScope.launch(Dispatchers.IO) {
             val result = try {
                 com.music.bitchord.data.catalog.metadata
-                    .AppleExploreGenreDiscovery().discover(tag, seeds, "br")
+                    .AppleExploreGenreDiscovery().discover(
+                        tag, seeds, "br",
+                        onProgress = { releases ->
+                            if (releases.isNotEmpty() &&
+                                appleGenreEpoch.isCurrent(generation) &&
+                                appleGenreActiveTag == tag
+                            ) _appleGenreReleases.update {
+                                it + (tag to UiState.Success(releases))
+                            }
+                        },
+                    )
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
