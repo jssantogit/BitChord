@@ -27,11 +27,12 @@ internal fun CanonicalMetadataTrackMore(
     onRate: (String) -> Unit,
     onAddToPlaylist: (String, String, String) -> Unit,
     tag: String,
+    showButton: Boolean = true,
 ) {
     if (recordingId == null || !isVerifiedCatalogRecordingId(recordingId)) return
     val context = LocalContext.current.applicationContext
     Box {
-        RowMoreButton(
+        if (showButton) RowMoreButton(
             onClick = onOpen,
             tint = palette.onBackgroundVariant,
             contentDescription = "Ações da faixa",
@@ -40,6 +41,7 @@ internal fun CanonicalMetadataTrackMore(
         com.music.bitchord.ui.components.NativeCompactOverflowMenu(
             expanded = expanded,
             onDismissRequest = onDismiss,
+            plateTint = palette.elevated,
         ) {
             com.music.bitchord.ui.components.NativeCompactMenuItem(
                 label = "Avaliar faixa",
