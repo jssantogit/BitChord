@@ -166,6 +166,25 @@ class AppleArtistDiscographyPagerTest {
             assertEquals(1, fake.broadCalls)
         }
 
+    @Test fun titleSuggestionsAlreadyPresentInAppleListAreNotProbedAgain() =
+        runBlocking {
+            val fake = Fake(
+                loaded(album(1, "Known Album - EP"), capped = true),
+                loaded(),
+                mutableMapOf("New Edition" to loaded(album(2, "New Edition"))),
+            )
+            val pager = AppleArtistDiscographyPager(
+                77, "Artist", "br", 1, fake,
+                titleHintSource = AppleArtistTitleHintSource { _, _ ->
+                    listOf("Known Album", "New Edition")
+                },
+            )
+            pager.start()
+            pager.loadMore()
+            assertEquals(listOf("New Edition"), fake.searched)
+            assertEquals(listOf(1L, 2L), pager.snapshot().visible.map { it.appleCollectionId })
+        }
+
     @Test fun malformedHintIsRejectedWithoutNetworkCall() = runBlocking {
         val fake = Fake(loaded())
         val pager = AppleArtistDiscographyPager(77, "Artist", "br", 10, fake)
