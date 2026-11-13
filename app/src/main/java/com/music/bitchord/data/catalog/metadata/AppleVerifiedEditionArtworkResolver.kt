@@ -23,8 +23,10 @@ internal fun interface AppleArtworkUpcSource {
  */
 internal class AppleVerifiedEditionArtworkResolver(
     private val edition: AppleArtworkEditionSource = AppleArtworkEditionSource { mbid ->
-        (MusicBrainzCatalogGraph().lookupRelease(mbid) as?
-            MusicBrainzCatalogGraphResult.Success)?.value
+        when (val result = MusicBrainzCatalogGraph().lookupRelease(mbid)) {
+            is MusicBrainzCatalogGraphResult.Success -> result.value
+            is MusicBrainzCatalogGraphResult.Failure -> null
+        }
     },
     private val upc: AppleArtworkUpcSource = AppleArtworkUpcSource { barcode, country ->
         ItunesCatalogClient().lookupUpc(barcode, country)
