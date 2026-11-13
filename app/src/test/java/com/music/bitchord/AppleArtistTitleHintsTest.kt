@@ -66,6 +66,25 @@ class AppleArtistTitleHintsTest {
         assertTrue(hints.all { it.startsWith("Album ") })
     }
 
+    @Test fun verifiedDiscogsHintsAreNotStarvedByTwentyFourMusicBrainzGroups() {
+        val suggestions = AppleArtistTitleHintPolicy.select(
+            artistName = "ILLIT",
+            mbGroups = (1..80).map { mb("MB Album $it") },
+            discogsEditions = listOf(
+                discogs("Discogs Exclusive Edition"),
+                discogs("Another Discogs Edition").copy(
+                    key = "discogs:release:124", discogsReleaseId = 124L,
+                    attributionUrl = "https://www.discogs.com/release/124",
+                ),
+            ),
+            existingAppleTitles = emptyList(),
+        )
+        assertEquals(24, suggestions.size)
+        assertTrue("Discogs Exclusive Edition" in suggestions)
+        assertTrue("Another Discogs Edition" in suggestions)
+        assertEquals(24, suggestions.distinct().size)
+    }
+
     @Test fun oneCharacterStageNameCanStillFindAppleVerifiedReleaseCandidates() {
         val titles = AppleArtistTitleHintPolicy.select(
             artistName = "V",
