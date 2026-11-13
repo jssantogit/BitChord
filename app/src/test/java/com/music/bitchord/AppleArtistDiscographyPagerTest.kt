@@ -113,6 +113,59 @@ class AppleArtistDiscographyPagerTest {
         assertTrue(pager.snapshot().allowsTargetedSearch)
     }
 
+    @Test fun cappedArtistAutomaticallyFetchesMbTitleSuggestionsAfterBroadAppleSearch() =
+        runBlocking {
+            val fake = Fake(
+                loaded(album(1), capped = true),
+                loaded(album(1)),
+                mutableMapOf(
+                    "Already known" to loaded(),
+                    "Apple only edition" to loaded(album(3, "Apple only edition")),
+                ),
+            )
+            var hintCalls = 0
+            val source = AppleArtistTitleHintSource { artist, verifiedId ->
+                hintCalls++
+                assertEquals("Artist", artist)
+                assertNull(verifiedId) // Never synthesize MB Artist ID from name.
+                listOf("Already known", "Apple only edition")
+            }
+            val pager = AppleArtistDiscographyPager(
+                77, "Artist", "br", 1, fake, titleHintSource = source,
+            )
+            pager.start()
+            val loaded = pager.loadMore() as AppleArtistPageLoad.Success
+            assertEquals(1, hintCalls)
+            assertEquals(2, loaded.snapshot.visible.size)
+            assertEquals(listOf("Already known", "Apple only edition"), fake.searched)
+            assertEquals(listOf(1L, 3L), loaded.snapshot.visible.map { it.appleCollectionId })
+            assertTrue(loaded.snapshot.coverageUncertain)
+        }
+
+    @Test fun hintsWaitUntilLocalPagesAreConsumedAndNeverRepeatAfterExhaustion() =
+        runBlocking {
+            val fake = Fake(loaded(album(1), album(2), capped = true), loaded())
+            var calls = 0
+            val pager = AppleArtistDiscographyPager(
+                77, "Artist", "br", 1, fake,
+                titleHintSource = AppleArtistTitleHintSource { _, _ ->
+                    calls++
+                    listOf("Absent")
+                },
+            )
+            pager.start()
+            assertEquals(0, calls)
+            pager.loadMore() // local album #2
+            assertEquals(0, calls)
+            pager.loadMore() // broad search, then one MB candidate probe
+            assertEquals(1, calls)
+            assertEquals(listOf("Absent"), fake.searched)
+            assertFalse(pager.snapshot().hasMore)
+            pager.loadMore()
+            assertEquals(1, calls)
+            assertEquals(1, fake.broadCalls)
+        }
+
     @Test fun malformedHintIsRejectedWithoutNetworkCall() = runBlocking {
         val fake = Fake(loaded())
         val pager = AppleArtistDiscographyPager(77, "Artist", "br", 10, fake)
