@@ -249,10 +249,14 @@ internal fun CanonicalSearchMetadataPlaylistPicker(
                                                     actual.recordingIds, state.labels,
                                                 ) ?: kotlin.error("Identidade inválida")
                                                 val changed = planned.size - actual.recordingIds.size
-                                                if (changed > 0) {
+                                                // Persist display-only labels FIRST. The
+                                                // user's playlist must never gain an MBID
+                                                // that would later appear as an anonymous
+                                                // playable Song if this write fails.
+                                                if (!labelRepository.rememberLabels(state.labels))
+                                                    kotlin.error("Falha ao guardar rótulos")
+                                                if (changed > 0)
                                                     repository.save(actual.copy(recordingIds = planned))
-                                                    labelRepository.rememberLabels(state.labels)
-                                                }
                                                 changed
                                             }
                                             Toast.makeText(app, if (added > 0)
