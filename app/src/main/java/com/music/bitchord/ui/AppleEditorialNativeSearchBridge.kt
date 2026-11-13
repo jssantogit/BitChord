@@ -157,10 +157,22 @@ internal fun appleNativeReconciledAlbumDetail(
         proof.release.trackCount != apple.trackCount ||
         proof.release.tracks != apple.tracks
     ) return original
-    return appleNativeAlbumDetail(
+    val refined = appleNativeAlbumDetail(
         source.copy(releases = listOf(apple.copy(format = classification.format))),
         browseId,
-    ) ?: original
+    ) ?: return original
+    val attributed = proof.discogsEdition?.takeIf {
+        Regex("^https://www\\.discogs\\.com/release/[1-9][0-9]{0,11}$")
+            .matches(it.attributionUrl)
+    }
+    return refined.copy(
+        discogsAttributionText = attributed?.attributionText,
+        discogsAttributionUrl = attributed?.attributionUrl,
+        discogsNonAffiliationNotice = attributed?.let {
+            com.music.bitchord.data.catalog.metadata.discogs
+                .DiscogsEditionAccess.NON_AFFILIATION_NOTICE
+        },
+    )
 }
 
 /** Apple artist IDs remain distinct even for identical stage names. */
