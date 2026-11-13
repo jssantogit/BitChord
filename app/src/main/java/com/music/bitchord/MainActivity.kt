@@ -2419,6 +2419,12 @@ private fun BitChordApp(
     }
     var playlistLibrarySortMenu by remember { mutableStateOf(false) }
     var playlistLibraryOptionsMenu by remember { mutableStateOf(false) }
+    var playlistSortOrFilterAnchor by remember {
+        mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    }
+    var playlistOverflowAnchor by remember {
+        mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    }
     var playlistLibraryCount by remember { mutableIntStateOf(0) }
     val playlistLibraryListState = rememberLazyListState()
     val playlistDetailListState = rememberLazyListState()
@@ -4828,6 +4834,8 @@ private fun BitChordApp(
                                     if (openedCanonicalPlaylist == null) playlistLibraryOptionsMenu = true
                                     else playlistDetailSortMenu = true
                                 },
+                                onSortAnchor = { playlistSortOrFilterAnchor = it },
+                                onOverflowAnchor = { playlistOverflowAnchor = it },
                                 onOverflow = {
                                     if (openedCanonicalPlaylist == null) playlistLibrarySortMenu = true
                                     else playlistDetailOptionsMenu = true
@@ -5852,6 +5860,8 @@ private fun BitChordApp(
         if (showPlaylistLibrary && !showSmartPlaylistBuilder && detail == null) {
             CanonicalPlaylistMenus(
                 hazeState = hazeState,
+                sortOrFilterAnchor = playlistSortOrFilterAnchor,
+                overflowAnchor = playlistOverflowAnchor,
                 librarySortOpen = playlistLibrarySortMenu,
                 onLibrarySortDismiss = { playlistLibrarySortMenu = false },
                 librarySort = playlistLibrarySort,
@@ -6746,6 +6756,8 @@ private fun CanonicalPlaylistToolbarActions(
     onSearch: () -> Unit,
     onSortOrFilter: () -> Unit,
     onOverflow: () -> Unit,
+    onSortAnchor: (androidx.compose.ui.unit.IntRect) -> Unit = {},
+    onOverflowAnchor: (androidx.compose.ui.unit.IntRect) -> Unit = {},
     sortMenu: (@Composable () -> Unit)? = null,
     overflowMenu: (@Composable () -> Unit)? = null,
 ) {
@@ -6772,11 +6784,18 @@ private fun CanonicalPlaylistToolbarActions(
     }
     val sortDescription = if (hasDetail) "Ordenar músicas" else "Filtrar playlists"
     if (sortMenu == null) {
-        NativeCollectionSortAction(
-            contentDescription = sortDescription, onClick = onSortOrFilter,
-        )
+        Box(Modifier.onGloballyPositioned { coords ->
+            onSortAnchor(nativeMenuAnchorBounds(coords))
+        }) {
+            NativeCollectionSortAction(
+                contentDescription = sortDescription, onClick = onSortOrFilter,
+            )
+        }
     } else {
-        Box(Modifier.testTag("native-toolbar-sort-anchor")) {
+        Box(Modifier.testTag("native-toolbar-sort-anchor")
+            .onGloballyPositioned { coords ->
+                onSortAnchor(nativeMenuAnchorBounds(coords))
+            }) {
             NativeCollectionSortAction(
                 contentDescription = sortDescription, onClick = onSortOrFilter,
             )
@@ -6785,11 +6804,18 @@ private fun CanonicalPlaylistToolbarActions(
     }
     val overflowDescription = if (hasDetail) "Opções da playlist" else "Ordenar playlists"
     if (overflowMenu == null) {
-        NativeCollectionOverflowAction(
-            contentDescription = overflowDescription, onClick = onOverflow,
-        )
+        Box(Modifier.onGloballyPositioned { coords ->
+            onOverflowAnchor(nativeMenuAnchorBounds(coords))
+        }) {
+            NativeCollectionOverflowAction(
+                contentDescription = overflowDescription, onClick = onOverflow,
+            )
+        }
     } else {
-        Box(Modifier.testTag("native-toolbar-overflow-anchor")) {
+        Box(Modifier.testTag("native-toolbar-overflow-anchor")
+            .onGloballyPositioned { coords ->
+                onOverflowAnchor(nativeMenuAnchorBounds(coords))
+            }) {
             NativeCollectionOverflowAction(
                 contentDescription = overflowDescription, onClick = onOverflow,
             )
@@ -6930,6 +6956,8 @@ private fun NativeCollectionOverflowAction(contentDescription: String, onClick: 
 @Composable
 private fun CanonicalPlaylistMenus(
     hazeState: HazeState,
+    sortOrFilterAnchor: androidx.compose.ui.unit.IntRect?,
+    overflowAnchor: androidx.compose.ui.unit.IntRect?,
     librarySortOpen: Boolean,
     onLibrarySortDismiss: () -> Unit,
     librarySort: com.music.bitchord.ui.screens.PlaylistLibrarySort,
@@ -6954,7 +6982,8 @@ private fun CanonicalPlaylistMenus(
 ) {
     if (librarySortOpen && selectedCard == null) {
         BackHandler { onLibrarySortDismiss() }
-        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibrarySortDismiss) {
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibrarySortDismiss,
+            anchorBounds = overflowAnchor) {
             listOf(
                 com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem padrão",
                 com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Nome: A a Z",
@@ -6970,7 +6999,8 @@ private fun CanonicalPlaylistMenus(
     }
     if (libraryFilterOpen && selectedCard == null) {
         BackHandler { onLibraryFilterDismiss() }
-        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibraryFilterDismiss) {
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onLibraryFilterDismiss,
+            anchorBounds = sortOrFilterAnchor) {
             listOf(
                 com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.ALL to "Todas as playlists",
                 com.music.bitchord.ui.screens.PlaylistLibraryTypeFilter.NORMAL to "Playlists normais",
@@ -6986,7 +7016,8 @@ private fun CanonicalPlaylistMenus(
     }
     if (detailSortOpen && selectedCard != null) {
         BackHandler { onDetailSortDismiss() }
-        FrostedMenuPanel(hazeState = hazeState, onDismiss = onDetailSortDismiss) {
+        FrostedMenuPanel(hazeState = hazeState, onDismiss = onDetailSortDismiss,
+            anchorBounds = sortOrFilterAnchor) {
             listOf(
                 com.music.bitchord.ui.screens.PlaylistLibrarySort.DEFAULT to "Ordem da playlist",
                 com.music.bitchord.ui.screens.PlaylistLibrarySort.TITLE_ASC to "Música: A a Z",
