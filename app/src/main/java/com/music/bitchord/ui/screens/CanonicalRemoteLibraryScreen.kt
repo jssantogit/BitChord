@@ -80,6 +80,7 @@ import com.music.bitchord.R
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
 import com.music.bitchord.data.model.BrowseType
@@ -279,6 +280,8 @@ internal fun CanonicalRemoteLibraryScreen(
     albumPlaylistToken: Int = 0,
     artistMenuToken: Int = 0,
     onSourceKeysChanged: (List<String>) -> Unit = {},
+    /** Actual canonical album route; null means the parent cannot navigate. */
+    onOpenCatalogAlbum: ((String, String, String) -> Unit)? = null,
     selectionBarBottomPadding: Dp = 140.dp,
     hazeState: HazeState? = null,
 ) {
@@ -1348,6 +1351,29 @@ internal fun CanonicalRemoteLibraryScreen(
             }
         }
         (libraryMenu ?: exitLibraryMenu)?.let { menu ->
+            // A track's album is unrelated to its display title. Require the
+            // exact canonical Recording → ReleaseGroup link before exposing
+            // a navigation option; do this once per opened menu off-main.
+            val linkedAlbum by produceState<CatalogReleaseGroupEntity?>(
+                initialValue = null, key1 = menu.selection, key2 = libraryMenu != null,
+            ) {
+                value = if (libraryMenu != null &&
+                    menu.selection.type == CanonicalLibraryEntityType.TRACK &&
+                    isVerifiedCatalogRecordingId(menu.selection.entityId)
+                ) try {
+                    withContext(Dispatchers.IO) {
+                        val id = menu.selection.entityId
+                        val links = catalogDao.recordingReleaseGroupLinksByIds(listOf(id))
+                        canonicalPlaylistAlbumForRecording(id, links)
+                            ?.let { catalogDao.catalogReleaseGroup(it) }
+                            ?.takeIf { it.title.isNotBlank() }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                } else null
+            }
             val sourceForAction = if (unified) selectedSource else providerKey
             val art = when (menu.selection.type) {
                 CanonicalLibraryEntityType.TRACK -> library.tracks.firstOrNull {
@@ -1418,6 +1444,19 @@ internal fun CanonicalRemoteLibraryScreen(
                     onAddToPlaylist = {
                         playlistPickerSelection = listOf(menu.selection)
                         libraryMenu = null
+                    },
+                    onOpenAlbum = linkedAlbum?.let { group ->
+                        onOpenCatalogAlbum?.let { open ->
+                            {
+                                libraryMenu = null
+                                heldLibraryMenuOrigin = null
+                                open(
+                                    "catalog:RELEASE_GROUP:${group.id}",
+                                    group.title,
+                                    group.artistDisplay.orEmpty(),
+                                )
+                            }
+                        }
                     },
                     onSelect = if (selectedEntity == null) {
                         {
