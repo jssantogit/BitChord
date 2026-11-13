@@ -40,4 +40,21 @@ class CanonicalSearchHeldMenuPolicyTest {
         assertTrue(canonicalSearchHeldShowsDownload(CanonicalSearchKind.RELEASE_GROUP))
         assertFalse(canonicalSearchHeldShowsDownload(CanonicalSearchKind.ARTIST))
     }
+
+    @Test fun catalogMetadataPlaylistPreservesOrderedVerifiedRecordingIdsWithoutAudio() {
+        val labels = listOf(
+            CatalogMetadataRecordingLabel("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Track A", "Artist"),
+            CatalogMetadataRecordingLabel("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "Track B", "Artist"),
+        )
+        val proposed = planCatalogMetadataCollectionMembers(
+            listOf("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), labels,
+        )
+        org.junit.Assert.assertEquals(
+            listOf("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"),
+            proposed,
+        )
+        org.junit.Assert.assertNull(planCatalogMetadataCollectionMembers(
+            emptyList(), labels + CatalogMetadataRecordingLabel("invalid", "Bad", "Artist"),
+        ))
+    }
 }
