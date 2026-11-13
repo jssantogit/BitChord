@@ -3,6 +3,7 @@ package com.music.bitchord.ui
 import com.music.bitchord.data.catalog.metadata.AppleTriSourceEditorialEntry
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+import com.music.bitchord.data.catalog.metadata.AppleExploreGenrePolicy
 import java.time.LocalDate
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.data.model.HomeShelf
@@ -170,5 +171,47 @@ internal fun appleFirstHomeShelves(
             discoveryHeading, cards(remaining),
         ))
         addAll(local)
+    }
+}
+
+
+/**
+ * Explore's static category grid remains navigation. Opening a category
+ * displays only Apple catalog albums whose independent primaryGenreName
+ * agrees with that category; MB tag hits are never copied into these rows.
+ */
+internal fun appleFirstGenreShelves(
+    tag: String,
+    appleAlbums: List<ItunesEditorialRelease>,
+    publicPlaylists: HomeShelf?,
+    releaseHeading: String,
+): List<HomeShelf> {
+    val releases = appleAlbums.asSequence()
+        .filter { album ->
+            AppleExploreGenrePolicy.matches(tag, album.genre) &&
+                album.appleCollectionId > 0L &&
+                album.artistId?.let { it > 0L } == true &&
+                album.appleScopedId ==
+                    "itunes:${album.storefront}:album:${album.appleCollectionId}" &&
+                AppleCatalogBrowseRoute.parse(album.appleScopedId)?.kind ==
+                    ItunesCatalogItemType.ALBUM
+        }
+        .groupBy { it.appleScopedId }
+        .values.mapNotNull { rows ->
+            rows.firstOrNull()?.takeIf { first -> rows.all { it == first } }
+        }
+        .sortedWith(compareByDescending<ItunesEditorialRelease> {
+            it.releaseDate.orEmpty()
+        }.thenBy { it.appleScopedId })
+        .take(24)
+        .map { album ->
+            ShelfItem(
+                album.title, album.artistName, album.artworkUrl,
+                videoId = null, browseId = album.appleScopedId,
+            )
+        }
+    return buildList {
+        if (releases.isNotEmpty()) add(HomeShelf(releaseHeading, releases))
+        publicPlaylists?.takeIf { it.items.isNotEmpty() }?.let(::add)
     }
 }
