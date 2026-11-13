@@ -353,6 +353,33 @@ internal class MusicBrainzCatalogSearch(
         )
     }
 
+    /**
+     * Release and credited artist are official Lucene search fields. Escaping
+     * both as literal quoted phrases prevents untrusted Apple display text
+     * from becoming a query operator or borrowing an unrelated artist result.
+     * This finds candidates only; exact edition identity still requires graph,
+     * UPC association and complete tracklist proof.
+     */
+    suspend fun searchOfficialReleasesForTitleArtist(
+        title: String,
+        artist: String,
+        limit: Int = 12,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> {
+        if (title.length !in 2..100 || artist.length !in 1..100 ||
+            title.isBlank() || artist.isBlank() || limit !in 1..12 ||
+            title.any(Char::isISOControl) || artist.any(Char::isISOControl)
+        ) return MusicBrainzCatalogSearchResult.Failure(
+            MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+        )
+        fun quote(value: String): String =
+            "\"" + value.trim().replace("\\", "\\\\")
+                .replace("\"", "\\\"") + "\""
+        return searchReleasesInternal(
+            "release:${quote(title)} AND artist:${quote(artist)} AND status:official",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
     suspend fun searchReleasesForArtistMbid(
         artistMbid: String,
         limit: Int = 25,
