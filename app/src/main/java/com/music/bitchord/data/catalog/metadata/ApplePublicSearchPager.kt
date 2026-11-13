@@ -46,7 +46,6 @@ internal class ApplePublicSearchPager(
     private val source: ApplePublicSearchSource = ItunesPublicSearchSource(),
 ) {
     init {
-        require(query.trim().length in 2..120 && query.none(Char::isISOControl))
         require(Regex("[a-z]{2}").matches(country))
         require(pageSize in 1..100)
     }
@@ -103,6 +102,9 @@ internal class ApplePublicSearchPager(
 
     suspend fun start(): ApplePublicSearchPageLoad {
         if (initialized) return ApplePublicSearchPageLoad.Success(snapshot())
+        if (query.trim().isEmpty() || query.length > 120 ||
+            query.any(Char::isISOControl)
+        ) return ApplePublicSearchPageLoad.Failure(ItunesCatalogFailure.INVALID_QUERY)
         return when (val result = source.search(query, entity, country, null)) {
             is ItunesCatalogResult.Failure ->
                 ApplePublicSearchPageLoad.Failure(result.reason)
