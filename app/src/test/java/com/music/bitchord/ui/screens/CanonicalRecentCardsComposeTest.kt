@@ -81,7 +81,7 @@ class CanonicalRecentCardsComposeTest {
             .assertWidthIsEqualTo(SHELF_CARD_WIDTH)
     }
     @Test fun expandedRecentSearchStartsBelowFloatingToolbar() {
-        assertTrue(recentAdditionsSearchTopClearance in 8.dp..20.dp)
+        assertTrue(recentAdditionsSearchTopClearance in 0.dp..4.dp)
     }
 
     @Test fun recentShelfDelegatesHeldCardToGlobalNativePreview() {
