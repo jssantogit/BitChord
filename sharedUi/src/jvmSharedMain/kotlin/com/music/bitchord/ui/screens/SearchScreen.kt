@@ -723,11 +723,45 @@ private fun LazyListScope.appleEditorialArtistDetail(
                     }
                 }
             }
-            appleEditorialAlbumRows(
-                UiState.Success(detail.data.albums),
-                onAlbumOpen,
-                showHeading = true,
-            )
+            if (detail.data.albums.isEmpty()) {
+                item(key = "apple:artist:detail:empty") {
+                    MessageState(stringResource(Res.string.apple_no_albums))
+                }
+            } else {
+                val categories = listOf(
+                    AppleEditorialReleaseCategory.ALBUM,
+                    AppleEditorialReleaseCategory.EP,
+                    AppleEditorialReleaseCategory.SINGLE,
+                    AppleEditorialReleaseCategory.UNCLASSIFIED,
+                )
+                categories.forEach { category ->
+                    val matching = detail.data.albums.filter { it.category == category }
+                    if (matching.isNotEmpty()) {
+                        item(key = "apple:artist:category:${category.name}") {
+                            val heading = when (category) {
+                                AppleEditorialReleaseCategory.ALBUM -> Res.string.albums
+                                AppleEditorialReleaseCategory.EP -> Res.string.apple_eps
+                                AppleEditorialReleaseCategory.SINGLE -> Res.string.apple_singles
+                                AppleEditorialReleaseCategory.UNCLASSIFIED ->
+                                    Res.string.apple_other_releases
+                            }
+                            Text(
+                                stringResource(heading),
+                                modifier = Modifier.padding(
+                                    start = PAGE_GUTTER, end = PAGE_GUTTER,
+                                    top = 16.dp, bottom = 6.dp,
+                                ),
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                        }
+                        appleEditorialAlbumRows(
+                            UiState.Success(matching),
+                            onAlbumOpen,
+                            showHeading = false,
+                        )
+                    }
+                }
+            }
         }
     }
 }
