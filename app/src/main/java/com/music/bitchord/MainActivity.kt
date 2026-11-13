@@ -2069,6 +2069,19 @@ private fun BitChordApp(
     // Public recording metadata is a detail-only destination, not a local
     // RecordingId or a synthetic media item. Reuse the native recording shell.
     var communityMetadataRecording by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
+    // Home/Explore Apple cards use the existing Search-owned Apple detail.
+    // Track the original tab so album back restores its origin, not Search.
+    var appleShelfReturnTab by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(selectedTab) {
+        if (selectedTab != TAB_SEARCH) appleShelfReturnTab = null
+    }
+    val backAppleAlbum: () -> Unit = {
+        viewModel.backAppleEditorialAlbum()
+        appleShelfReturnTab?.let { origin ->
+            appleShelfReturnTab = null
+            selectedTab = origin
+        }
+    }
     val onCanonicalShelfClick: (ShelfItem, String, PlaybackSourceType) -> Unit =
         click@{ item, shelfTitle, tabOrigin ->
         com.music.bitchord.data.catalog.metadata.publicPlaylistMbid(item.browseId)?.let { id ->
@@ -2083,6 +2096,15 @@ private fun BitChordApp(
         com.music.bitchord.ui.canonicalExploreGenreForBrowseId(item.browseId)?.let { genre ->
             activeCanonicalGenre = genre
             viewModel.loadCanonicalGenre(genre.tag)
+            return@click
+        }
+        // Storefront-scoped Apple cards cannot fall through to old MB browse
+        // or playback navigation. No title-to-MBID lookup is performed here.
+        if (viewModel.openAppleHomeAlbum(
+            item.browseId, item.title, item.subtitle, item.thumbnailUrl,
+        )) {
+            appleShelfReturnTab = selectedTab
+            selectedTab = TAB_SEARCH
             return@click
         }
         val selectedLocal = canonicalHomeLocalPicks.firstOrNull {
@@ -2813,7 +2835,7 @@ private fun BitChordApp(
                 enabled = selectedTab == TAB_SEARCH && detail == null &&
                     !showSettings && !showReplay && !showSources &&
                     !showSmartPlaylistBuilder && appleAlbumDetail != null,
-            ) { viewModel.backAppleEditorialAlbum() }
+            ) { backAppleAlbum() }
             BackHandler(
                 enabled = selectedTab == TAB_SEARCH && detail == null &&
                     !showSettings && !showReplay && !showSources &&
@@ -3656,9 +3678,17 @@ private fun BitChordApp(
                                 // A cold install has no local catalog to refill;
                                 // retry the public MusicBrainz release query too.
                                 viewModel.loadCanonicalWorldwideReleases(force = true)
+                                viewModel.loadAppleHomeEditorial(
+                                    canonicalWorldwideReleases, force = true,
+                                )
                             },
                             refreshing = MainViewModel.Feed.HOME in refreshing,
-                            onRefresh = { viewModel.refresh(MainViewModel.Feed.HOME) },
+                            onRefresh = {
+                                viewModel.refresh(MainViewModel.Feed.HOME)
+                                viewModel.loadAppleHomeEditorial(
+                                    canonicalWorldwideReleases, force = true,
+                                )
+                            },
                             pullState = homePull,
                             contentPadding = listPadding,
                             title = stringResource(R.string.home),
@@ -3916,7 +3946,7 @@ private fun BitChordApp(
                             appleArtistDetail = appleArtistDetail,
                             onAppleOpen = viewModel::openAppleEditorialEntry,
                             onAppleTrackOpen = viewModel::openAppleEditorialTrackAlbum,
-                            onAppleBack = viewModel::backAppleEditorialAlbum,
+                            onAppleBack = backAppleAlbum,
                             onAppleArtistBack = viewModel::backAppleEditorialArtist,
                             onAppleArtistLoadMore = viewModel::loadMoreAppleEditorialArtist,
                             onAppleArtistSearchMore = viewModel::searchMoreAppleEditorialArtist,
