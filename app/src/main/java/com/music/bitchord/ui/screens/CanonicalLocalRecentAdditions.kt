@@ -444,7 +444,7 @@ private fun CanonicalRecentAdditionCard(
 
 /** The parent already uses topBarContentPadding(). Only a small animated
  * breathing space belongs between that bar and the inline search field. */
-internal val recentAdditionsSearchTopClearance = 12.dp
+internal val recentAdditionsSearchTopClearance = 2.dp
 
 /** Reuses LocalFolder's canonical two-column grid layout and card. */
 @Composable
@@ -490,7 +490,7 @@ internal fun CanonicalRecentAdditionsGrid(
             ) {
                 Column(Modifier.padding(
                     top = recentAdditionsSearchTopClearance,
-                    bottom = 12.dp,
+                    bottom = 8.dp,
                 )) {
                     DetailSearchField(
                         query = query,
