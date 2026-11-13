@@ -1,0 +1,50 @@
+# Dedicated, code-pinned CI for the experimental PR #212 while #209 is changing.
+# No APK, no production publish and no PR merge.
+name: REA 212 · Screenshots Android regressions (test only)
+
+on:
+  push:
+    branches: [validation/rea212-screenshots-f0f5c163-20261112]
+    paths: [.github/workflows/rea212-screenshots-test-only.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact PR 212 source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: f0f5c1633911c73c8f5f2b0b2f09fecc05469b74
+      - name: Assert exact source under test
+        run: test "$(git rev-parse HEAD)" = "f0f5c1633911c73c8f5f2b0b2f09fecc05469b74"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure unit-test environment
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared playback planner regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+      - name: Shared native UI presentation regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Retain failure test reports only
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-screenshots-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
