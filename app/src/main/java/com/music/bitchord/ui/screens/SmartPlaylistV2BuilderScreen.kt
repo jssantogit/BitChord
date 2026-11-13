@@ -12,6 +12,13 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.components.ConfirmationAlert
+import com.music.bitchord.ui.components.HeldContextMenu
+import com.music.bitchord.ui.components.HeldItem
+import com.music.bitchord.ui.components.LongPressOrigin
+import com.music.bitchord.ui.components.NativeCompactMenuDivider
+import com.music.bitchord.ui.components.NativeCompactMenuItem
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Surface
@@ -141,6 +148,40 @@ internal fun savedFilterActionsForDraft(
     add("Excluir filtro")
 }
 
+/** Reuse identical action rows for the ⋯ popup and the lifted filter card. */
+@Composable
+internal fun SavedFilterMenuActions(
+    options: List<String>,
+    onChoose: (String) -> Unit,
+) {
+    options.forEach { option ->
+        val destructive = option == "Excluir filtro"
+        if (destructive) NativeCompactMenuDivider()
+        NativeCompactMenuItem(
+            icon = when (option) {
+                "Criar playlist com este filtro" ->
+                    com.music.bitchord.ui.icons.PlaylistEditorIcons.Music
+                "Excluir filtro" ->
+                    com.music.bitchord.ui.icons.PlaylistEditorIcons.Delete
+                "Combinar com o rascunho (E)",
+                "Combinar com o rascunho (OU)" ->
+                    com.music.bitchord.ui.icons.PlaylistEditorIcons.Link
+                "Editar filtro" ->
+                    com.music.bitchord.ui.icons.PlaylistEditorIcons.Edit
+                else -> com.music.bitchord.ui.icons.PlaylistEditorIcons.Filters
+            },
+            label = when (option) {
+                "Aplicar regras ao rascunho" -> "Aplicar regras"
+                "Combinar com o rascunho (E)" -> "Combinar (E)"
+                "Combinar com o rascunho (OU)" -> "Combinar (OU)"
+                "Criar playlist com este filtro" -> "Criar playlist"
+                else -> option
+            },
+            destructive = destructive,
+            onClick = { onChoose(option) },
+        )
+    }
+}
 
 /** A nested create flow must not inherit the parent Library edit intent. */
 internal fun shouldOpenPlaylistAsEdit(
@@ -324,6 +365,8 @@ internal fun SmartPlaylistV2BuilderScreen(
     var showWizard by remember { mutableStateOf(true) }
     var manageTab by remember { mutableStateOf(SmartPlaylistManageTab.FILTERS) }
     var pendingDeletion by remember { mutableStateOf<PendingSmartDeletion?>(null) }
+    var heldSavedFilter by remember { mutableStateOf<SavedSmartPlaylistV2Filter?>(null) }
+    var heldSavedFilterOrigin by remember { mutableStateOf<HeldItem?>(null) }
     var pendingEditorNavigation by remember { mutableStateOf<PendingEditorNavigation?>(null) }
     // Selecting a different library section starts at its own heading,
     // instead of inheriting the prior tab's last LazyColumn scroll index.
@@ -517,6 +560,30 @@ internal fun SmartPlaylistV2BuilderScreen(
             Diagnostics.event(DiagnosticCategory.UI, "smart_filter_apply_invalid",
                 level = DiagnosticLevel.WARN, metadata = diagnosticMeta)
             error = "As regras combinadas excedem os limites do motor."
+        }
+    }
+
+    val chooseSavedFilterAction: (SavedSmartPlaylistV2Filter, String) -> Unit = { filter, option ->
+        when (option) {
+            "Editar filtro" ->
+                requestEditorDestination(PendingEditorNavigation(
+                    filter.id, EditorDestination.EDIT_FILTER,
+                ))
+            "Aplicar regras ao rascunho" -> {
+                if (hasConfiguredRules && rule != filter.rules)
+                    pendingFilterReplacementId = filter.id
+                else applyManagerFilter(filter, SavedFilterApplication.REPLACE)
+            }
+            "Combinar com o rascunho (E)" ->
+                applyManagerFilter(filter, SavedFilterApplication.ALL)
+            "Combinar com o rascunho (OU)" ->
+                applyManagerFilter(filter, SavedFilterApplication.ANY)
+            "Criar playlist com este filtro" ->
+                requestEditorDestination(PendingEditorNavigation(
+                    filter.id, EditorDestination.CREATE_FROM_FILTER,
+                ))
+            "Excluir filtro" ->
+                pendingDeletion = PendingSmartDeletion(filter.id, filter.name, true)
         }
     }
 
@@ -792,6 +859,9 @@ internal fun SmartPlaylistV2BuilderScreen(
             decorFitsSystemWindows = false,
         ),
     ) {
+        // This wizard is drawn in its own Android Dialog window; its own
+        // HazeState must sample the manager page, not the underlying Activity.
+        val savedFilterHaze = remember { HazeState() }
         Box(
             modifier = if (embeddedInLibrary) Modifier
                 .fillMaxWidth(0.95f).fillMaxHeight(0.90f)
@@ -1144,7 +1214,7 @@ internal fun SmartPlaylistV2BuilderScreen(
             // return from reusable filters just like the first-party back icon.
             BackHandler(enabled = pendingDeletion == null) { showWizard = true }
             Surface(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().hazeSource(savedFilterHaze),
                 color = MaterialTheme.colorScheme.background,
             ) {
                 Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -1196,7 +1266,17 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 filter.id, EditorDestination.EDIT_FILTER,
                             ))
                         },
-                        onLongPress = { more = true },
+                        onLongPress = {
+                            more = false
+                            val captured = LongPressOrigin.consume()
+                            if (captured != null) {
+                                heldSavedFilterOrigin = captured
+                                heldSavedFilter = filter
+                            } else {
+                                // A mouse or accessibility path can still use ⋯.
+                                more = true
+                            }
+                        },
                         modifier = Modifier.testTag("playlist-saved-filter-row"),
                         trailing = {
                             Box {
@@ -1209,55 +1289,14 @@ internal fun SmartPlaylistV2BuilderScreen(
                                     onDismissRequest = { more = false },
                                     homePlateStyle = true,
                                 ) {
-                                    savedFilterActionsForDraft(normalMode, editingNormalId)
-                                        .filterNot { it == "Editar filtro" }
-                                        .forEach { option ->
-                                            val destructive = option == "Excluir filtro"
-                                            if (destructive)
-                                                com.music.bitchord.ui.components.NativeCompactMenuDivider()
-                                            com.music.bitchord.ui.components.NativeCompactMenuItem(
-                                                icon = when (option) {
-                                                    "Criar playlist com este filtro" ->
-                                                        com.music.bitchord.ui.icons.PlaylistEditorIcons.Music
-                                                    "Excluir filtro" ->
-                                                        com.music.bitchord.ui.icons.PlaylistEditorIcons.Delete
-                                                    "Combinar com o rascunho (E)",
-                                                    "Combinar com o rascunho (OU)" ->
-                                                        com.music.bitchord.ui.icons.PlaylistEditorIcons.Link
-                                                    else -> com.music.bitchord.ui.icons.PlaylistEditorIcons.Filters
-                                                },
-                                                label = when (option) {
-                                                    "Aplicar regras ao rascunho" -> "Aplicar regras"
-                                                    "Combinar com o rascunho (E)" -> "Combinar (E)"
-                                                    "Combinar com o rascunho (OU)" -> "Combinar (OU)"
-                                                    "Criar playlist com este filtro" -> "Criar playlist"
-                                                    else -> option
-                                                },
-                                                destructive = destructive,
-                                                onClick = {
-                                                    more = false
-                                                    when (option) {
-                                                        "Aplicar regras ao rascunho" -> {
-                                                            if (hasConfiguredRules && rule != filter.rules)
-                                                                pendingFilterReplacementId = filter.id
-                                                            else applyManagerFilter(filter, SavedFilterApplication.REPLACE)
-                                                        }
-                                                        "Combinar com o rascunho (E)" ->
-                                                            applyManagerFilter(filter, SavedFilterApplication.ALL)
-                                                        "Combinar com o rascunho (OU)" ->
-                                                            applyManagerFilter(filter, SavedFilterApplication.ANY)
-                                                        "Criar playlist com este filtro" ->
-                                                            requestEditorDestination(PendingEditorNavigation(
-                                                                filter.id, EditorDestination.CREATE_FROM_FILTER,
-                                                            ))
-                                                        "Excluir filtro" ->
-                                                            pendingDeletion = PendingSmartDeletion(
-                                                                filter.id, filter.name, true,
-                                                            )
-                                                    }
-                                                },
-                                            )
-                                        }
+                                    SavedFilterMenuActions(
+                                        options = savedFilterActionsForDraft(normalMode, editingNormalId)
+                                            .filterNot { it == "Editar filtro" },
+                                        onChoose = { option ->
+                                            more = false
+                                            chooseSavedFilterAction(filter, option)
+                                        },
+                                    )
                                 }
                             }
                         },
@@ -1382,6 +1421,35 @@ internal fun SmartPlaylistV2BuilderScreen(
 
                     }
                 }
+            }
+        }
+        if (!showWizard) {
+            // Not conditional on the item: keep the host composed so the held
+            // bitmap animates back into its original list row on dismissal.
+            HeldContextMenu(
+                item = heldSavedFilter,
+                held = heldSavedFilterOrigin,
+                hazeState = savedFilterHaze,
+                onDismiss = {
+                    heldSavedFilter = null
+                    heldSavedFilterOrigin = null
+                },
+                onPreviewClick = { filter ->
+                    heldSavedFilter = null
+                    heldSavedFilterOrigin = null
+                    requestEditorDestination(PendingEditorNavigation(
+                        filter.id, EditorDestination.EDIT_FILTER,
+                    ))
+                },
+            ) { filter ->
+                SavedFilterMenuActions(
+                    options = savedFilterActionsForDraft(normalMode, editingNormalId),
+                    onChoose = { option ->
+                        heldSavedFilter = null
+                        heldSavedFilterOrigin = null
+                        chooseSavedFilterAction(filter, option)
+                    },
+                )
             }
         }
         pendingDeletion?.let { pending ->
