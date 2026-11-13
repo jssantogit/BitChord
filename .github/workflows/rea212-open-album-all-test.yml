@@ -1,0 +1,47 @@
+# Smoke fixes + catalog identity navigation, exact source, test only.
+name: REA 212 · Album navigation and seven smoke regressions
+
+on:
+  push:
+    branches: [validation/rea212-open-album-all-7485cb0f-20261113]
+    paths: [.github/workflows/rea212-open-album-all-test.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact PR 212 source
+        uses: actions/checkout@v4
+        with:
+          ref: 7485cb0f532b60a697b95842e801bf868919ed21
+      - name: Assert source revision
+        run: test "$(git rev-parse HEAD)" = "7485cb0f532b60a697b95842e801bf868919ed21"
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure unit tests
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared native interface regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Save reports if failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-album-navigation-failed-tests
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
