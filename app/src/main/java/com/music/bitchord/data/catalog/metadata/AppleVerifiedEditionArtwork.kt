@@ -104,11 +104,13 @@ internal fun bestCertifiedAppleOrArchiveCover(
     if (currentArchiveUrl.isNullOrBlank()) return officialApple
     val applePath = runCatching { URI(officialApple).path }.getOrNull().orEmpty()
     val dims = Regex(
-        """/([0-9]{2,4})x([0-9]{2,4})(?:bb|-[0-9]{2,3})\\.(?:jpg|jpeg|png|webp)$""",
+        """/([0-9]{2,4})x([0-9]{2,4})(?:bb|-[0-9]{2,3})\.(?:jpg|jpeg|png|webp)$""",
         RegexOption.IGNORE_CASE,
     ).find(applePath)
-    val appleSize = dims?.groupValues?.get(1)?.toIntOrNull()
-        ?.takeIf { it == dims.groupValues[2].toIntOrNull() } ?: return currentArchiveUrl
+    val appleSize = dims?.let { match ->
+        val width = match.groupValues[1].toIntOrNull()
+        width?.takeIf { it == match.groupValues[2].toIntOrNull() }
+    } ?: return currentArchiveUrl
     val archiveSize = Regex("""/front-([0-9]{2,4})$""")
         .find(currentArchiveUrl)?.groupValues?.get(1)?.toIntOrNull()
         ?: return currentArchiveUrl
