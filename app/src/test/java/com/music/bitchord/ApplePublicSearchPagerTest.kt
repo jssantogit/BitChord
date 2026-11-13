@@ -85,7 +85,7 @@ class ApplePublicSearchPagerTest {
         runBlocking {
             val fake = Fake(ItunesCatalogResult.Success(emptyList()))
             val pager = ApplePublicSearchPager(
-                query = "Invalid\\nName", entity = ItunesCatalogEntity.ALBUM,
+                query = "Invalid\nName", entity = ItunesCatalogEntity.ALBUM,
                 country = "br", source = fake,
             )
             assertTrue(pager.start() is ApplePublicSearchPageLoad.Failure)
