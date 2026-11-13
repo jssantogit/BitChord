@@ -5,12 +5,15 @@ package com.music.bitchord.ui.screens
  * MusicBrainz IDs, Song/videoId assets or a source of playable media.
  * Browse IDs remain storefront-scoped and must be routed by Apple handlers.
  */
+enum class AppleEditorialSearchKind { ARTIST, ALBUM }
+
 data class AppleEditorialSearchRow(
     val browseId: String,
     val title: String,
     val artistName: String,
     val artworkUri: String?,
     val releaseDate: String?,
+    val kind: AppleEditorialSearchKind = AppleEditorialSearchKind.ALBUM,
 )
 
 data class AppleEditorialTrackRow(
@@ -25,4 +28,10 @@ data class AppleEditorialAlbumDetailPage(
     val album: AppleEditorialSearchRow,
     val tracks: List<AppleEditorialTrackRow>,
     val partialTracklist: Boolean,
+)
+
+data class AppleEditorialArtistDetailPage(
+    val artist: AppleEditorialSearchRow,
+    val albums: List<AppleEditorialSearchRow>,
+    val possiblyTruncated: Boolean,
 )
