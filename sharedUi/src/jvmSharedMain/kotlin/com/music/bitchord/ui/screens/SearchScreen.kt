@@ -83,7 +83,6 @@ import com.music.bitchord.data.model.EntityType
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
-import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.ui.components.SongRow
@@ -645,7 +644,7 @@ fun SearchScreen(
                                     isCurrent = isCurrentRow(row.song),
                                     isPlaying = isPlaying && isCurrentRow(row.song),
                                     searchPlayingStyle = true,
-                                    activeTint = PlayingAccent,
+                                    activeTint = appleMusicKeyColor(),
                                 )
                                 is SearchResult.Browse -> BrowseRow(
                                     item = row.item,
@@ -1185,7 +1184,7 @@ private fun LazyListScope.librarySearchResults(
                     isCurrent = isCurrentRow(song),
                     isPlaying = isPlaying && isCurrentRow(song),
                     searchPlayingStyle = true,
-                    activeTint = PlayingAccent,
+                    activeTint = appleMusicKeyColor(),
                     showSourceQuality = addons,
                 )
                 if (!appleStyle && index < tracks.lastIndex) {
@@ -1458,7 +1457,7 @@ private fun TypeaheadSongRow(
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) PlayingAccent else MaterialTheme.colorScheme.onBackground,
+                color = if (isCurrent) appleMusicKeyColor() else MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1643,7 +1642,7 @@ private fun RecentSearchEntityRow(
             Text(
                 text = entity.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) PlayingAccent else MaterialTheme.colorScheme.onBackground,
+                color = if (isCurrent) appleMusicKeyColor() else MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
