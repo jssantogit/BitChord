@@ -1,0 +1,33 @@
+name: REA212 Android Held Menu Consistency Gate
+on:
+  push:
+    branches:
+      - validation/rea212-held-menu-unification-20261113
+permissions:
+  contents: read
+jobs:
+  android-held-menu-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Assert validated code is exactly PR212
+        run: git diff --exit-code cf8283140c69041cdac9886f30d78d7f9aba0b78 HEAD -- app sharedUi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure local build
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: New menu regressions
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.HeldContextMenuPlateTest --tests com.music.bitchord.ui.screens.CanonicalRecentHeldActionsComposeTest
+      - name: Android full unit suite
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI JVM
+        run: ./gradlew -Pbitchord.bundleWear=false :sharedUi:jvmTest
