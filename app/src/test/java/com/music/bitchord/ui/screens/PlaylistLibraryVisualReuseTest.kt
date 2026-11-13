@@ -650,9 +650,9 @@ class PlaylistLibraryVisualReuseTest {
         }
         compose.onNodeWithContentDescription("Ações da música").performClick()
         compose.waitForIdle()
-        // Target the clickable ActionRow, never the label or sheet container.
-        compose.onNodeWithTag("canonical-track-queue-action")
-            .assertHasClickAction()
+        // The native popup is anchored at ⋯ (no Material3 bottom sheet).
+        // Its selected action is the exact queue intent for this RecordingId.
+        compose.onNodeWithText("Adicionar à fila")
             .performSemanticsAction(SemanticsActions.OnClick) { it() }
         compose.runOnIdle {
             assertEquals(
