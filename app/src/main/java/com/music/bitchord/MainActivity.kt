@@ -766,6 +766,14 @@ private fun BitChordApp(
     var heldCatalogSearchOrigin by remember { mutableStateOf<HeldItem?>(null) }
     var heldPublicPlaylistSearchRow by remember { mutableStateOf<CanonicalPublicPlaylistSearchRow?>(null) }
     var heldPublicPlaylistSearchOrigin by remember { mutableStateOf<HeldItem?>(null) }
+    // Catalog-only Recording IDs are valid playlist members without a playable
+    // MediaAsset. The native picker never invents a Song or queues metadata.
+    var searchMetadataPlaylistTarget by remember {
+        mutableStateOf<com.music.bitchord.ui.screens.CatalogSearchPlaylistTarget?>(null)
+    }
+    var searchMetadataRatingTarget by remember {
+        mutableStateOf<Pair<String, String>?>(null)
+    }
     /** Rename asked for from the popup, which hands it on to the sheet's form. */
     var browseRenameInSheet by remember { mutableStateOf(false) }
     /** The playlist being rearranged, or null when the reorder sheet is shut. */
@@ -5937,11 +5945,105 @@ private fun BitChordApp(
                         communityMetadataRecording = row
                     else viewModel.openCanonicalNativeDetail(row)
                 },
-                onQueueCatalog = { mbid ->
-                    executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                },
                 onOpenPublicPlaylist = openPublicSearchPlaylist,
+                onAddCatalogToPlaylist = { row ->
+                    searchMetadataPlaylistTarget = com.music.bitchord.ui.screens.CatalogSearchPlaylistTarget(
+                        kind = row.kind, id = row.musicBrainzId,
+                        title = row.title, artist = row.subtitle.orEmpty(),
+                    )
+                },
+                onAddPublicPlaylistToPlaylist = { row ->
+                    searchMetadataPlaylistTarget = com.music.bitchord.ui.screens.CatalogSearchPlaylistTarget(
+                        kind = null, id = row.mbid,
+                        title = row.title, artist = row.creator,
+                    )
+                },
+                onRateCatalog = { row ->
+                    searchMetadataRatingTarget =
+                        ("catalog:${row.kind.name}:${row.musicBrainzId}") to row.title
+                },
+                onRatePublicPlaylist = { row ->
+                    searchMetadataRatingTarget = ("public:${row.mbid}") to row.title
+                },
+                onPinCatalog = { row ->
+                    val route = "catalog:${row.kind.name}:${row.musicBrainzId}"
+                    val pinned = com.music.bitchord.ui.screens.CatalogMetadataPinRepository
+                        .get(context).toggle(com.music.bitchord.ui.screens.CatalogMetadataPin(
+                            browseId = route,
+                            title = row.title.trim(),
+                            subtitle = row.subtitle.orEmpty().take(240),
+                            artworkUrl = com.music.bitchord.ui.screens
+                                .trustedCatalogMetadataPinArtwork(row.artworkUri),
+                        ))
+                    Toast.makeText(context,
+                        if (pinned) "Fixado na Biblioteca" else "Item desafixado",
+                        Toast.LENGTH_SHORT).show()
+                },
+                onPinPublicPlaylist = { row ->
+                    val pinned = com.music.bitchord.ui.screens.LibraryPlaylistPinRepository
+                        .get(context).toggle(com.music.bitchord.ui.screens.LibraryPlaylistPin(
+                            "public:${row.mbid}", row.title, row.creator,
+                        ))
+                    Toast.makeText(context,
+                        if (pinned) "Playlist fixada" else "Playlist desafixada",
+                        Toast.LENGTH_SHORT).show()
+                },
+                onShareCatalog = { row ->
+                    val kind = when (row.kind) {
+                        CanonicalSearchKind.ARTIST -> "artist"
+                        CanonicalSearchKind.RELEASE_GROUP -> "release-group"
+                        CanonicalSearchKind.RELEASE -> "release"
+                        CanonicalSearchKind.RECORDING -> "recording"
+                    }
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT,
+                            "${row.title} — ${row.subtitle.orEmpty()}\n" +
+                                "https://musicbrainz.org/$kind/${row.musicBrainzId}")
+                    }
+                    context.startActivity(Intent.createChooser(share, "Compartilhar catálogo"))
+                },
+                onSharePublicPlaylist = { row ->
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, "${row.title} — ${row.creator}\n" +
+                            "https://listenbrainz.org/playlist/${row.mbid}")
+                    }
+                    context.startActivity(Intent.createChooser(share, "Compartilhar playlist"))
+                },
+                onDownloadCatalog = { row ->
+                    // An MBID identifies metadata, not an authorized stream.
+                    // The button is exposed but cannot launch a fake download.
+                    Toast.makeText(context,
+                        "Sem fonte de áudio verificada para baixar este item.",
+                        Toast.LENGTH_LONG).show()
+                },
+                onDownloadPublicPlaylist = { _ ->
+                    Toast.makeText(context,
+                        "Playlists públicas não fornecem arquivos de áudio para baixar.",
+                        Toast.LENGTH_LONG).show()
+                },
             )
+            searchMetadataPlaylistTarget?.let { target ->
+                com.music.bitchord.ui.screens.CanonicalSearchMetadataPlaylistPicker(
+                    target = target,
+                    onDismiss = { searchMetadataPlaylistTarget = null },
+                )
+            }
+            searchMetadataRatingTarget?.let { (id, title) ->
+                val rating = if (id.startsWith("public:")) {
+                    com.music.bitchord.ui.screens.canonicalPublicPlaylistRatingTarget(
+                        id.removePrefix("public:"),
+                    )
+                } else com.music.bitchord.ui.screens.canonicalCatalogEntityRatingTarget(id)
+                if (rating != null) {
+                    com.music.bitchord.ui.screens.CanonicalCatalogEntityRatingDialog(
+                        target = rating,
+                        title = title,
+                        onDismiss = { searchMetadataRatingTarget = null },
+                    )
+                }
+            }
             LaunchedEffect(browseActions == null) {
                 if (browseActions == null) {
                     browseMenuOrigin = null
