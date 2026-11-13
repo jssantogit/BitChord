@@ -424,6 +424,10 @@ private fun CanonicalRecentAdditionCard(
     }
 }
 
+/** The toolbar is drawn over this route. Opening inline search must reserve
+ * its own space rather than asking the user to scroll away from the overlap. */
+internal val recentAdditionsSearchTopClearance = 88.dp
+
 /** Reuses LocalFolder's canonical two-column grid layout and card. */
 @Composable
 internal fun CanonicalRecentAdditionsGrid(
@@ -456,16 +460,21 @@ internal fun CanonicalRecentAdditionsGrid(
         contentPadding = contentPadding,
     ) {
         if (showSearch) item(key = "recent-search") {
-            DetailSearchField(
-                query = query,
-                onQueryChange = onQueryChange,
-                onClose = { onQueryChange("") },
-                autoFocus = true,
-                onFocused = {},
-                palette = themeArtworkPalette(),
-                placeholder = "Pesquisar em adições recentes",
-                horizontalInset = PAGE_GUTTER,
-            )
+            Column {
+                // Native search lives in content, below the floating 40dp
+                // navigation/actions. It must clear the bar on the first frame.
+                Spacer(Modifier.height(recentAdditionsSearchTopClearance))
+                DetailSearchField(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onClose = { onQueryChange("") },
+                    autoFocus = true,
+                    onFocused = {},
+                    palette = themeArtworkPalette(),
+                    placeholder = "Pesquisar em adições recentes",
+                    horizontalInset = PAGE_GUTTER,
+                )
+            }
         }
         if (recent.isEmpty()) item {
             Text(
