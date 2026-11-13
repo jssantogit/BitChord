@@ -435,7 +435,7 @@ fun SearchScreen(
                                 onClick = when {
                                     row.kind != CanonicalSearchKind.RECORDING -> ({ onCanonicalOpen(row) })
                                     row.hasCatalogedAsset -> ({ onCanonicalPlay(row.musicBrainzId) })
-                                    else -> null
+                                    else -> ({ onCanonicalRecordingInfo(row) })
                                 },
                                 onMoreActions = listOf(
                                     NativeSearchRowAction(stringResource(Res.string.apple_search_view_details)) {
@@ -852,7 +852,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                     onClick = when {
                         row.kind != CanonicalSearchKind.RECORDING -> ({ onOpen(row) })
                         row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
-                        else -> null
+                        else -> ({ onRecordingInfo(row) })
                     },
                     onMoreActions = listOf(
                         NativeSearchRowAction(stringResource(Res.string.apple_search_view_details)) {
