@@ -38,6 +38,8 @@ internal class AppleHomeEditorialDiscovery(
         seeds: List<AppleHomeEditorialSeed>,
         storefront: String,
         maxProbes: Int = 8,
+        /** On each changed Apple-confirmed snapshot, before later probes finish. */
+        onProgress: suspend (List<ItunesEditorialRelease>) -> Unit = {},
     ): AppleEditorialLoad {
         if (!Regex("^[a-z]{2}$").matches(storefront) || maxProbes !in 1..12) {
             return AppleEditorialLoad.Failure(ItunesCatalogFailure.INVALID_QUERY)
@@ -60,6 +62,12 @@ internal class AppleHomeEditorialDiscovery(
         var succeeded = false
         val verified = linkedMapOf<String, ItunesEditorialRelease>()
         val disputed = mutableSetOf<String>()
+        var lastPublished: List<ItunesEditorialRelease>? = null
+        fun snapshot(): List<ItunesEditorialRelease> =
+            verified.values.sortedWith(
+                compareByDescending<ItunesEditorialRelease> { it.releaseDate.orEmpty() }
+                    .thenBy { it.appleCollectionId },
+            )
         for (seed in selected) {
             val response = try {
                 source.search(seed.title, storefront)
@@ -100,15 +108,19 @@ internal class AppleHomeEditorialDiscovery(
                             uncertain = true
                         }
                     }
+                    val current = snapshot()
+                    if (current != lastPublished &&
+                        (current.isNotEmpty() || lastPublished != null)
+                    ) {
+                        lastPublished = current
+                        onProgress(current)
+                    }
                 }
             }
         }
         if (!succeeded) return AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
         return AppleEditorialLoad.Success(
-            releases = verified.values.sortedWith(
-                compareByDescending<ItunesEditorialRelease> { it.releaseDate.orEmpty() }
-                    .thenBy { it.appleCollectionId },
-            ),
+            releases = snapshot(),
             state = when {
                 uncertain -> AppleEditorialReadState.POSSIBLY_TRUNCATED
                 verified.isEmpty() -> AppleEditorialReadState.NOT_IN_STOREFRONT
