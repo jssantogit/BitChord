@@ -1619,7 +1619,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // to that different sleeve; only display it when Apple
                 // actually supplies the selected detail edition's cover.
                 if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                    chosenArtwork != proof.artworkUrl
+                    com.music.bitchord.data.catalog.metadata
+                        .verifiedAppleArtworkForDisplayedGroupCover(
+                            proof, entry.musicBrainzId, displayedGroupReleaseMbid,
+                            current.artworkUri,
+                        ) == null
                 ) return@launch
                 _canonicalAppleArtworkPromotion.value = route to proof
                 if (chosenArtwork != null && chosenArtwork != current.artworkUri) {
