@@ -85,7 +85,6 @@ import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeCompactOverflowMenu
 import com.music.bitchord.ui.components.NativeCompactMenuItem
-import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.NativeMediaCardMetrics
@@ -530,7 +529,7 @@ fun CompactTrackRow(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) PlayingAccent else MaterialTheme.colorScheme.onBackground,
+                color = if (isCurrent) appleMusicKeyColor() else MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -977,7 +976,7 @@ private fun HeroCard(
             Text(
                 text = item.title,
                 style = MaterialTheme.typography.titleLarge,
-                color = if (isCurrent) PlayingAccent else Color.White,
+                color = if (isCurrent) appleMusicKeyColor() else Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
