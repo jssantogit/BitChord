@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertWidthIsEqualTo
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -82,6 +83,42 @@ class CanonicalRecentCardsComposeTest {
     }
     @Test fun expandedRecentSearchStartsBelowFloatingToolbar() {
         assertTrue(recentAdditionsSearchTopClearance >= 80.dp)
+    }
+
+    @Test fun recentShelfDelegatesHeldCardToGlobalNativePreview() {
+        var openedId: String? = null
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecentAdditionsShelf(
+                    recent = listOf(V2DisplayRow("verified-recording", "Recent song", "Artist")),
+                    onPlayTrack = {},
+                    onTrackAction = { _, _ -> },
+                    onTrackHold = { openedId = it.id },
+                )
+            }
+        }
+        compose.onNodeWithTag("canonical-recent-card", useUnmergedTree = true)
+            .performTouchInput { longClick() }
+        compose.runOnIdle { assertEquals("verified-recording", openedId) }
+        compose.onNodeWithText("Tocar a seguir").assertDoesNotExist()
+    }
+
+    @Test fun recentGridDelegatesHoldWithoutOpeningLegacyPopup() {
+        var openedId: String? = null
+        compose.setContent {
+            MaterialTheme {
+                CanonicalRecentAdditionsGrid(
+                    recent = listOf(V2DisplayRow("recording", "Held track", "Artist")),
+                    onPlayTrack = {},
+                    onTrackAction = { _, _ -> },
+                    onTrackHold = { openedId = it.id },
+                    viewType = com.music.bitchord.data.settings.LibraryViewType.LIST,
+                )
+            }
+        }
+        compose.onNodeWithText("Held track").performTouchInput { longClick() }
+        compose.runOnIdle { assertEquals("recording", openedId) }
+        compose.onNodeWithText("Tocar a seguir").assertDoesNotExist()
     }
 
 }
