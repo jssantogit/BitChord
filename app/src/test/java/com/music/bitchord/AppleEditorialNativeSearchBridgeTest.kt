@@ -57,6 +57,26 @@ class AppleEditorialNativeSearchBridgeTest {
             discNumber = 1,
         )
 
+    @Test fun AppleAlbumHeaderCarriesOnlyItsOwnApprovedStorePromotionBadge() {
+        val url = "https://music.apple.com/br/album/hot/101"
+        val verified = appleNativeAlbumDetail(
+            AppleEditorialLoad.Success(listOf(edition().copy(storeUrl = url)),
+                AppleEditorialReadState.COMPLETE),
+            "itunes:br:album:101",
+        )!!
+        assertEquals(url, verified.appleStoreUrl)
+        assertEquals("https://www.apple.com/ca/itunes/link/images/link-badge-music.png",
+            verified.appleStoreBadgeUrl)
+        val unsafe = appleNativeAlbumDetail(
+            AppleEditorialLoad.Success(listOf(edition().copy(
+                storeUrl = "https://music.apple.com.attacker.example/br/album/hot",
+            )), AppleEditorialReadState.COMPLETE),
+            "itunes:br:album:101",
+        )!!
+        assertNull(unsafe.appleStoreUrl)
+        assertNull(unsafe.appleStoreBadgeUrl)
+    }
+
     @Test fun appSearchRowsPreserveExactAppleProductIdentityAndArtwork() {
         val source = AppleEditorialLoad.Success(
             releases = listOf(edition(101), edition(102, "HOT - Single")),
