@@ -5,9 +5,11 @@ import com.music.bitchord.data.catalog.metadata.AppleEditorialLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialReadState
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage
 import com.music.bitchord.ui.screens.AppleEditorialArtistDetailPage
 import com.music.bitchord.ui.screens.AppleEditorialSearchKind
+import com.music.bitchord.ui.screens.AppleEditorialReleaseCategory
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import com.music.bitchord.ui.screens.AppleEditorialTrackRow
 
@@ -30,6 +32,13 @@ private fun ItunesEditorialRelease.asNativeSearchRow(): AppleEditorialSearchRow?
         artistName = artistName,
         artworkUri = artworkUrl,
         releaseDate = releaseDate,
+        category = when (format) {
+            ItunesEditorialReleaseFormat.ALBUM -> AppleEditorialReleaseCategory.ALBUM
+            ItunesEditorialReleaseFormat.EP -> AppleEditorialReleaseCategory.EP
+            ItunesEditorialReleaseFormat.SINGLE -> AppleEditorialReleaseCategory.SINGLE
+            ItunesEditorialReleaseFormat.UNCLASSIFIED ->
+                AppleEditorialReleaseCategory.UNCLASSIFIED
+        },
     )
 }
 
