@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material3.HorizontalDivider
@@ -146,6 +147,9 @@ fun BrowseActionsSheet(
     onShuffle: (() -> Unit)? = null,
     /** Null where the sheet was opened from the page it would navigate to. */
     onOpen: (() -> Unit)? = null,
+    /** Only a verified canonical Recording → ReleaseGroup relationship may
+     * open an album from a track's Library context menu. */
+    onOpenAlbum: (() -> Unit)? = null,
     onDownloadAll: (() -> Unit)? = null,
     /**
      * Shares the release's own YouTube Music link — the album/playlist
@@ -303,6 +307,13 @@ fun BrowseActionsSheet(
                 ActionRow(
                     BitChordIcons.ChevronRight,
                     target.type.localizedOpenLabel(),
+                    onClick = it,
+                )
+            }
+            onOpenAlbum?.let {
+                ActionRow(
+                    Icons.Rounded.Album,
+                    "Abrir álbum",
                     onClick = it,
                 )
             }
