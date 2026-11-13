@@ -1,0 +1,48 @@
+# Gate the current PR #212 source after saved-filter test repair and native tint migration.
+# No APK, merge or release.
+name: REA 212 · Native menu and selection accent source tests
+
+on:
+  push:
+    branches: [validation/rea212-theme-3ed5e5da-20261113]
+    paths: [.github/workflows/rea212-theme-source-tests.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@v4
+        with:
+          ref: 3ed5e5da48034f29e71d4ec3c8299f00ffd4e27b
+      - name: Verify exact source
+        run: test "$(git rev-parse HEAD)" = "3ed5e5da48034f29e71d4ec3c8299f00ffd4e27b"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure build for tests
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared native UI tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-native-tint-failed-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
