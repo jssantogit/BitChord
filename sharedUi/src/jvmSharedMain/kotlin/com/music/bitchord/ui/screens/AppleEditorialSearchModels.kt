@@ -46,6 +46,9 @@ data class AppleEditorialAlbumDetailPage(
     val discogsAttributionText: String? = null,
     val discogsAttributionUrl: String? = null,
     val discogsNonAffiliationNotice: String? = null,
+    /** The storefront-owned link accompanying promotional album artwork. */
+    val appleStoreUrl: String? = null,
+    val appleStoreBadgeUrl: String? = null,
 )
 
 data class AppleEditorialArtistDetailPage(
