@@ -380,7 +380,10 @@ fun Modifier.hangIntoGutter(outset: Dp): Modifier = layout { measurable, constra
 }
 
 /** The accent a current song's title takes in lists that mark it with [SearchPlayingBars]. */
-val PlayingAccent = Color(0xFFFB4A62)
+// Kept as a binary/source compatibility alias for consumers not yet migrated.
+ // Visible native lists use theme-aware appleMusicKeyColor() instead.
+@Deprecated("Use the theme-aware appleMusicKeyColor() in composables")
+val PlayingAccent = com.music.bitchord.ui.theme.AppleMusicLightKey
 
 @Composable
 fun SearchPlayingBars(modifier: Modifier = Modifier) {
