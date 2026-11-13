@@ -7,6 +7,9 @@ package com.music.bitchord.ui.screens
  */
 enum class AppleEditorialSearchKind { ARTIST, ALBUM }
 
+/** Editorial label, not the API entity type or MusicBrainz identity. */
+enum class AppleEditorialReleaseCategory { ALBUM, EP, SINGLE, UNCLASSIFIED }
+
 data class AppleEditorialSearchRow(
     val browseId: String,
     val title: String,
@@ -14,6 +17,7 @@ data class AppleEditorialSearchRow(
     val artworkUri: String?,
     val releaseDate: String?,
     val kind: AppleEditorialSearchKind = AppleEditorialSearchKind.ALBUM,
+    val category: AppleEditorialReleaseCategory = AppleEditorialReleaseCategory.UNCLASSIFIED,
 )
 
 data class AppleEditorialTrackRow(
