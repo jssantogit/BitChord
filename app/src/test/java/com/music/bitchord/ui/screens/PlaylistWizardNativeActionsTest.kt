@@ -10,6 +10,7 @@ import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -183,6 +184,54 @@ class PlaylistWizardNativeActionsTest {
             listOf(null, "local"),
             playlistWizardSourceChoices(false, listOf("local-mediastore")).map { it.value },
         )
+    }
+
+    @Test fun sourceSelectionSummaryTracksExactNavidromeAccountAndDisconnectedSource() {
+        val connected = listOf(
+            "local-mediastore", "opensubsonic:alpha", "opensubsonic:beta",
+        )
+        val second = playlistWizardSelectedSourceChoice(
+            normalMode = true,
+            availableSourceKeys = connected,
+            selectedValue = "opensubsonic:beta",
+        )
+        assertEquals("Navidrome 2", second.title)
+        assertEquals(com.music.bitchord.ui.icons.PlaylistEditorIcons.Audio, second.icon)
+        val local = playlistWizardSelectedSourceChoice(true, connected, "local-mediastore")
+        assertEquals("Música local", local.title)
+        assertEquals(com.music.bitchord.ui.icons.PlaylistEditorIcons.Music, local.icon)
+        val missing = playlistWizardSelectedSourceChoice(
+            normalMode = true,
+            availableSourceKeys = connected,
+            selectedValue = "opensubsonic:removed",
+        )
+        assertEquals("Fonte desconectada", missing.title)
+        assertEquals(com.music.bitchord.ui.icons.PlaylistEditorIcons.Audio, missing.icon)
+        assertEquals("Todas as fontes",
+            playlistWizardSelectedSourceChoice(true, connected, null).title)
+    }
+
+    @Test fun sourceSummaryDisplaysProviderIdentityAndAccessibleChangeAction() {
+        var opened = 0
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardSourceSummary(
+                    choice = playlistWizardSelectedSourceChoice(
+                        normalMode = true,
+                        availableSourceKeys = listOf(
+                            "local-mediastore", "opensubsonic:alpha", "opensubsonic:beta",
+                        ),
+                        selectedValue = "opensubsonic:beta",
+                    ),
+                    onClick = { opened++ },
+                )
+            }
+        }
+        compose.onNodeWithText("Navidrome 2").assertExists()
+        compose.onNodeWithContentDescription("Fonte selecionada: Navidrome 2").assertExists()
+        compose.onNodeWithTag("playlist-source-selector").assertHasClickAction()
+        compose.onNodeWithText("Alterar").performClick()
+        compose.runOnIdle { assertEquals(1, opened) }
     }
 
     @Test fun sourceSelectionCardsHaveDescriptionAndNoLegacyRadioIndicators() {
