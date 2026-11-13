@@ -94,6 +94,7 @@ import com.music.bitchord.ui.components.HeldItem
 import com.music.bitchord.ui.components.LongPressOrigin
 import com.music.bitchord.ui.components.SongActionsPresentation
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
@@ -1005,11 +1006,14 @@ internal fun CanonicalRemoteLibraryScreen(
         reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current,
         forward = selectedEntity != null,
     )
+    val heldLibraryHaze = remember { HazeState() }
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
         Box(Modifier.fillMaxSize().then(nestedLibraryArrival)) {
+        // Capture page content separately from the lifted overlays.
+        Box(Modifier.fillMaxSize().hazeSource(heldLibraryHaze)) {
         if (unified) {
             // Selected albums/artists keep the exact native page chrome.
             // Only their revalidated RecordingId membership changes.
@@ -1325,6 +1329,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 }
             }
         }
+        } // The lifted overlay is the source's sibling, not its child.
         // The lifted menu must remain mounted through its 230ms return
         // animation; removing the parent let on dismiss clipped that motion.
         var exitLibraryMenu by remember { mutableStateOf<CanonicalLibraryMenuTarget?>(null) }
@@ -1334,7 +1339,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 exitLibraryMenu = libraryMenu
                 exitLibraryWasHeld = canonicalLibraryUsesHeldContextMenu(
                     hasCapturedHold = heldLibraryMenuOrigin != null,
-                    hasHazeBackdrop = hazeState != null,
+                    hasHazeBackdrop = true,
                 )
             } else {
                 kotlinx.coroutines.delay(300)
@@ -1374,7 +1379,7 @@ internal fun CanonicalRemoteLibraryScreen(
             }
             val useHeldMenu = canonicalLibraryUsesHeldContextMenu(
                 hasCapturedHold = heldLibraryMenuOrigin != null,
-                hasHazeBackdrop = hazeState != null,
+                hasHazeBackdrop = true,
             )
             val menuBody: @Composable () -> Unit = {
                 BrowseActionsSheet(
@@ -1451,11 +1456,11 @@ internal fun CanonicalRemoteLibraryScreen(
                     },
                 )
             }
-            if (hazeState != null) {
+            if (useHeldMenu || exitLibraryWasHeld) {
                 HeldContextMenu(
                     item = libraryMenu.takeIf { useHeldMenu },
                     held = heldLibraryMenuOrigin,
-                    hazeState = hazeState,
+                    hazeState = heldLibraryHaze,
                     onDismiss = {
                         libraryMenu = null
                         heldLibraryMenuOrigin = null
