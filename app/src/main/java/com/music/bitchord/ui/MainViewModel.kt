@@ -4473,12 +4473,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             AppleSearchSection.ALBUMS ->
                 _appleEditorialResults.value = UiState.Success(
-                    appleNativeSearchRows(AppleEditorialLoad.Success(
-                        ItunesEditorialCatalog.assemble("br", snapshot.visible),
-                        if (snapshot.coverageUncertain)
-                            AppleEditorialReadState.POSSIBLY_TRUNCATED
-                        else AppleEditorialReadState.COMPLETE,
-                    )),
+                    appleNativeAlbumSearchRowsInSourceOrder(
+                        snapshot.visible, storefront = "br",
+                    ),
                 )
         }
         _appleSearchPaging.update { current ->
