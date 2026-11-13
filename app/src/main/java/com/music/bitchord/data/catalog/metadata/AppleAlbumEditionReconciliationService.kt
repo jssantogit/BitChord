@@ -33,8 +33,10 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
         val barcode = album.upc?.takeIf { Regex("^[0-9]{8,14}$").matches(it) }
             ?: return null
         val searchResult = search.searchReleasesByBarcode(barcode, limit = 12)
-        val page = (searchResult as? MusicBrainzCatalogSearchResult.Success)
-            ?.page ?: return null
+        val page = when (searchResult) {
+            is MusicBrainzCatalogSearchResult.Success -> searchResult.page
+            is MusicBrainzCatalogSearchResult.Failure -> return null
+        }
         // A filtered, incomplete or capped page cannot establish uniqueness.
         if (page.offset != 0 || page.total !in 1..12 ||
             page.consumedCount != page.total || page.items.size != page.total
@@ -53,8 +55,10 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
         val editions = ArrayList<MusicBrainzCatalogReleaseDetail>(relevant.size)
         for (hit in relevant) {
             val lookup = graph.lookupRelease(hit.musicBrainzId)
-            val detail = (lookup as? MusicBrainzCatalogGraphResult.Success)?.value
-                ?: return null
+            val detail = when (lookup) {
+                is MusicBrainzCatalogGraphResult.Success -> lookup.value
+                is MusicBrainzCatalogGraphResult.Failure -> return null
+            }
             // The indexed candidate must be the exact edition that was read.
             if (detail.musicBrainzId != hit.musicBrainzId ||
                 detail.isVideoOnlyContent == true
