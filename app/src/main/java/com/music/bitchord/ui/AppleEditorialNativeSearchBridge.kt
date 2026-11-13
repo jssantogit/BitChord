@@ -120,6 +120,12 @@ internal fun appleNativeAlbumDetail(
         album = header,
         tracks = tracks,
         partialTracklist = !complete,
+        appleStoreBadgeUrl = com.music.bitchord.data.catalog.metadata
+            .appleApprovedBadgeForStoreUrl(album.storeUrl),
+        appleStoreUrl = album.storeUrl.takeIf {
+            com.music.bitchord.data.catalog.metadata
+                .appleApprovedBadgeForStoreUrl(it) != null
+        },
     )
 }
 
