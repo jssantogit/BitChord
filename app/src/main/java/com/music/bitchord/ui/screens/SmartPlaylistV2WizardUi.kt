@@ -187,10 +187,14 @@ private fun WizardCard(
 
 @Composable
 private fun WizardHeading(title: String, detail: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        modifier = Modifier.padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
         Text(
             title,
-            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.testTag("playlist-wizard-large-heading"),
+            style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )
         if (detail.isNotBlank()) {

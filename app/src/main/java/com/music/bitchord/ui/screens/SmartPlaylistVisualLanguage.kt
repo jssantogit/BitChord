@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
@@ -59,8 +60,9 @@ internal fun PlaylistManagerChrome(
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
-            .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = com.music.bitchord.ui.components.PAGE_GUTTER)
+            .padding(bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -77,7 +79,8 @@ internal fun PlaylistManagerChrome(
         }
         Text(
             "Seus filtros",
-            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.testTag("playlist-manager-large-title"),
+            style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground,
         )
     }
@@ -297,17 +300,26 @@ internal fun PlaylistWizardTextEntry(
             color = if (error) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        // Reuse the same field as Settings and dialogs. Only the label and
-        // validation text are specific to this wizard.
-        // The shared field already has a native boundary; avoid a second
-        // competing outline or a dark-on-dark inset panel.
+        // The native Search field supplies the visual language: a single
+        // 11dp rounded filled surface, subtle hairline and an Apple-key focus
+        // ring. No nested Material OutlinedTextField or double dark border.
+        var fieldFocused by androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(false)
+        }
+        val shape = RoundedCornerShape(11.dp)
         Box(
             modifier = Modifier.fillMaxWidth()
+                .onFocusChanged { fieldFocused = it.hasFocus }
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(
-                    1.dp,
-                    if (error) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
-                    RoundedCornerShape(14.dp),
+                    if (fieldFocused || error) 1.dp else 0.5.dp,
+                    when {
+                        error -> MaterialTheme.colorScheme.error
+                        fieldFocused -> appleMusicKeyColor()
+                        else -> MaterialTheme.colorScheme.outlineVariant
+                    },
+                    shape,
                 )
                 .testTag("playlist-wizard-field-boundary"),
         ) {
@@ -315,6 +327,7 @@ internal fun PlaylistWizardTextEntry(
                 value = value,
                 onValueChange = onValueChange,
                 placeholder = if (multiline) "Adicionar descrição" else "Digite aqui",
+                modifier = Modifier.heightIn(min = if (multiline) 96.dp else 48.dp),
                 container = MaterialTheme.colorScheme.surfaceVariant,
                 keyboardOptions = keyboardOptions,
                 accessibilityLabel = label,
@@ -588,7 +601,7 @@ private fun PlaylistWizardCategoryTile(
 ) {
     androidx.compose.material3.Surface(
         onClick = option.onClick,
-        modifier = modifier.heightIn(min = if (wide) 76.dp else 116.dp)
+        modifier = modifier.heightIn(min = if (wide) 92.dp else 132.dp)
             .testTag("playlist-category-tile"),
         shape = GroupShape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
@@ -639,7 +652,7 @@ private fun PlaylistWizardCategoryLabels(option: PlaylistWizardNavOption) {
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(
             option.title,
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
