@@ -140,6 +140,32 @@ class AppleExactEditionArtworkBridgeTest {
         ))
     }
 
+    @Test fun groupDetailRequiresTheExactEditionUsedForItsDisplayedTracklist() {
+        val proof = appleVerifiedEditionArtwork(mb, complete(), "br")!!
+        assertEquals(proof, verifiedAppleArtworkForDisplayedGroupEdition(
+            proof, requestedGroupMbid = group, selectedReleaseMbid = id,
+        ))
+        assertNull(verifiedAppleArtworkForDisplayedGroupEdition(
+            proof, requestedGroupMbid = group,
+            selectedReleaseMbid = "271b31f8-8ab6-483c-97d9-8f0fabb2d4f4",
+        ))
+        assertNull(verifiedAppleArtworkForDisplayedGroupEdition(
+            proof, requestedGroupMbid = "271b31f8-8ab6-483c-97d9-8f0fabb2d4f4",
+            selectedReleaseMbid = id,
+        ))
+        assertNull(verifiedAppleArtworkForDisplayedGroupEdition(
+            proof, requestedGroupMbid = group, selectedReleaseMbid = null,
+        ))
+        assertNull(verifiedAppleArtworkForDisplayedGroupEdition(
+            proof.copy(storeUrl = "https://music.apple.com.attacker.invalid/album/101"),
+            requestedGroupMbid = group, selectedReleaseMbid = id,
+        ))
+        assertNull(verifiedAppleArtworkForDisplayedGroupEdition(
+            proof.copy(artworkUrl = "https://attacker.invalid/art.jpg"),
+            requestedGroupMbid = group, selectedReleaseMbid = id,
+        ))
+    }
+
     @Test fun groupOrRecordingCannotSilentlyTakeAnotherEditionArt() {
         val proof = appleVerifiedEditionArtwork(mb, complete(), "br")!!
         assertEquals(art, canonicalAppleArtworkFor(
