@@ -316,4 +316,10 @@
     <string name="apple_singles">Singles</string>
     <string name="apple_other_releases">Other releases</string>
     <string name="apple_no_tracks">No songs found in the Apple catalog.</string>
+    <string name="apple_load_more">Load more releases</string>
+    <string name="apple_catalog_coverage_note">The public catalog does not guarantee a complete discography. Search for a specific release to discover more.</string>
+    <string name="apple_find_release">Find another release by title</string>
+    <string name="apple_search_more">Find release</string>
+    <string name="apple_discovery_failed">Could not load additional releases. Please try again.</string>
+    <string name="apple_no_additional_releases">No additional Apple releases found for this artist.</string>
 </resources>
