@@ -1,0 +1,25 @@
+name: REA 212 - Artwork backdrop red gate
+on:
+  push:
+    branches:
+      - validation/rea212-artwork-backdrop-red-20261113
+permissions:
+  contents: read
+jobs:
+  red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure Android
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: RED - run new regression before production fix
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.ArtworkBackdropThemePolicyTest
