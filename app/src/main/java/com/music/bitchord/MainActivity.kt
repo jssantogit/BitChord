@@ -3886,9 +3886,12 @@ private fun BitChordApp(
                             searchingCanonical = searchSource == SearchSource.CANONICAL,
                             canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
                             appleResults = viewModel.appleEditorialResults.collectAsStateWithLifecycle().value,
+                            appleArtistResults = viewModel.appleEditorialArtists.collectAsStateWithLifecycle().value,
                             appleDetail = viewModel.appleEditorialDetail.collectAsStateWithLifecycle().value,
-                            onAppleOpen = viewModel::openAppleEditorialAlbum,
+                            appleArtistDetail = viewModel.appleEditorialArtistDetail.collectAsStateWithLifecycle().value,
+                            onAppleOpen = viewModel::openAppleEditorialEntry,
                             onAppleBack = viewModel::backAppleEditorialAlbum,
+                            onAppleArtistBack = viewModel::backAppleEditorialArtist,
                             canonicalPublicPlaylists = com.music.bitchord.ui.rememberCanonicalPublicPlaylistSearchUi(
                                 viewModel = viewModel,
                                 query = query,
