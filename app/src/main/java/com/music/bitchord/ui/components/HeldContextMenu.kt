@@ -94,6 +94,8 @@ fun <T : Any> HeldContextMenu(
     bottomChromeClearance: Dp = 100.dp,
     /** Parent already blurs its REAL composed page, not a separate Haze plate. */
     hostProvidesBlur: Boolean = false,
+    /** The page's already contrast-corrected artwork elevation, when present. */
+    plateTint: Color? = null,
     actions: @Composable (T) -> Unit,
 ) {
     val requested = if (item != null && held != null) item to held else null
@@ -149,8 +151,9 @@ fun <T : Any> HeldContextMenu(
     // The copied card and its actions must NEVER show the old row underneath.
     // A translucent 0.50 plate was duplicating track text and album art across
     // the actual row and its lifted preview. Match the solid catalog source menu.
-    val plate = (if (dark) Color.Black else Color.White).copy(alpha = 0.96f)
-    val hairline = if (dark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+    val plate = heldContextPlateColor(MaterialTheme.colorScheme.background, plateTint)
+    val hairline = if (plate.luminance() < 0.5f)
+        Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.07f)
     // Do not put an opaque black plate above the already blurred content.
     // A gentle translucent lift keeps the real page legible behind the item
     // (and exposes the diffused artwork when one exists).
@@ -379,3 +382,13 @@ private suspend fun PointerInputScope.swallowAll() {
         }
     }
 }
+
+/**
+ * A lifted preview and its actions belong to the page they hover above, not
+ * always to the app-wide AMOLED surface. The caller hands the already readable
+ * artwork.elevated swatch: don't re-quantize or invent color from the thumbnail.
+ * A near-solid plate still prevents the duplicated text/artwork regression.
+ */
+internal fun heldContextPlateColor(themeBackground: Color, artworkElevation: Color?): Color =
+    (artworkElevation ?: if (themeBackground.luminance() < 0.5f) Color.Black else Color.White)
+        .copy(alpha = 0.97f)
