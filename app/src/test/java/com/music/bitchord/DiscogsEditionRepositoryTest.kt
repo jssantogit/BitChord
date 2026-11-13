@@ -1,0 +1,442 @@
+package com.music.bitchord
+
+import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
+import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
+import com.music.bitchord.data.catalog.metadata.discogs.*
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.*
+import org.junit.Test
+
+class DiscogsEditionRepositoryTest {
+    private val mbid = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
+    private val canonical = CanonicalEditionEvidence(
+        musicBrainzReleaseId = mbid, title = "앨범", creditedArtist = "아티스트",
+        status = "Official", barcodes = emptyList(), trackTitles = listOf("첫 곡"),
+    )
+
+    @Test fun disabledRepositoryDoesNotEvenAskMusicBrainzForExternalLinks() = runBlocking {
+        val links = DiscogsMusicBrainzLinks(MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String = error("Disabled provider must do no I/O")
+        }))
+        val result = DiscogsEditionRepository(links, enabled = false).observe(canonical)
+        assertEquals(DiscogsEditionEnrichment.Disabled, result)
+    }
+
+    @Test fun verifiedLinkedEditionHasSourceAttributionAndShortLivedEvidence() = runBlocking {
+        var mbCalls = 0
+        var discogsCalls = 0
+        val links = DiscogsMusicBrainzLinks(MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String {
+                mbCalls++
+                return """{"id":"$mbid","relations":[{
+                    "type":"discogs","type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                    "url":{"resource":"https://www.discogs.com/release/12-Album"}
+                 }]}"""
+            }
+        }))
+        val client = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                discogsCalls++
+                return DiscogsHttpResponse(200,
+                    """{"id":12,"title":"앨범","artists":[{"name":"아티스트"}],
+                      "tracklist":[{"position":"1","title":"첫 곡"}]}""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        var now = 1_000L
+        val repository = DiscogsEditionRepository(links, client,
+            enabled = true, nowMillis = { now })
+        val first = repository.observe(canonical)
+        assertTrue(first is DiscogsEditionEnrichment.Verified)
+        val verified = first as DiscogsEditionEnrichment.Verified
+        assertEquals("Data provided by Discogs.", verified.attributionText)
+        assertEquals("https://www.discogs.com/release/12", verified.attributionUrl)
+        assertFalse(verified.observation.canSupplyArtwork())
+        assertFalse(verified.observation.canSupplyAudio())
+        repository.observe(canonical)
+        assertEquals(2, mbCalls) // relation checks remain source-authoritative
+        assertEquals(1, discogsCalls) // edition data uses fresh cache
+        now += DiscogsObservation.TTL_MILLIS
+        repository.observe(canonical)
+        assertEquals(2, discogsCalls) // expired source metadata must be re-fetched
+    }
+
+    @Test fun releaseGroupMasterProvidesVerifiedUnlinkedCandidateWhenEditionReallyMatches() = runBlocking {
+        val group = "529f87a1-1081-48a4-8ee1-3c08de229858"
+        val paths = mutableListOf<String>()
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String {
+                paths += path
+                return when (path) {
+                    "release/$mbid" -> """{"id":"$mbid","relations":[]}"""
+                    "release-group/$group" -> """{"id":"$group","relations":[{
+                        "type":"discogs","type-id":"99e550f3-5ab4-3110-b5b9-fe01d970b126",
+                        "url":{"resource":"https://www.discogs.com/master/987"}}]}"""
+                    else -> error("Unexpected MB path: $path")
+                }
+            }
+        })
+        val discogsPaths = mutableListOf<String>()
+        val discogs = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                discogsPaths += path
+                return when (path) {
+                    "masters/987" -> DiscogsHttpResponse(200,
+                        """{"id":987,"title":"ILLIT - SUPER REAL ME",
+                        "artists":[{"name":"ILLIT"}],"main_release":101}""")
+                    "masters/987/versions?page=1&per_page=8" -> DiscogsHttpResponse(200,
+                        """{"pagination":{"page":1,"pages":1,"per_page":8,"items":1},
+                            "versions":[{"id":101}]}""")
+                    "releases/101" -> DiscogsHttpResponse(200,
+                        """{"id":101,"master_id":987,"title":"SUPER REAL ME",
+                         "artists":[{"name":"ILLIT"}],"country":"South Korea","year":2024,
+                         "labels":[{"name":"Belift Lab","catno":"CMDC12000"}],
+                         "identifiers":[{"type":"Barcode","value":"8809704427821"}],
+                         "formats":[{"name":"CD","descriptions":["EP"]}],
+                         "tracklist":[{"position":"1","title":"My World"},
+                                      {"position":"2","title":"Magnetic"}]}""")
+                    else -> error("Unexpected Discogs path: $path")
+                }
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = mbid,
+            musicBrainzReleaseGroupId = group,
+            title = "SUPER REAL ME",
+            creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"),
+            status = "Official",
+            barcodes = listOf("8809704427821"),
+            trackTitles = listOf("My World", "Magnetic"),
+            country = "KR",
+            releaseYear = 2024,
+        )
+        val repo = DiscogsEditionRepository(
+            links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
+            enabled = true, nowMillis = { 1_000L },
+        )
+        val evidence = repo.observe(canonical)
+        assertTrue(evidence is DiscogsEditionEnrichment.Verified)
+        assertEquals("https://www.discogs.com/release/101",
+            (evidence as DiscogsEditionEnrichment.Verified).attributionUrl)
+        assertEquals(listOf("release/$mbid", "release-group/$group"), paths)
+        assertEquals(listOf("masters/987",
+            "masters/987/versions?page=1&per_page=8", "releases/101"), discogsPaths)
+    }
+
+    @Test fun masterVersionsMustAllBeExaminedBeforeClaimingOneUnlinkedEdition() = runBlocking {
+        // A Discogs Master is a family of editions. Its main_release is not
+        // proof that a second color/format pressing cannot also match.
+        val group = "529f87a1-1081-48a4-8ee1-3c08de229858"
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = if (path.startsWith("release-group/"))
+                """{"id":"$group","relations":[{
+                    "type":"discogs","type-id":"99e550f3-5ab4-3110-b5b9-fe01d970b126",
+                    "url":{"resource":"https://www.discogs.com/master/987"}}]}"""
+            else """{"id":"$mbid","relations":[]}"""
+        })
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = mbid, musicBrainzReleaseGroupId = group,
+            title = "SUPER REAL ME", creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"), status = "Official",
+            barcodes = listOf("8809704427821"),
+            trackTitles = listOf("My World", "Magnetic"),
+            country = "KR", releaseYear = 2024, editionFormats = listOf("CD"),
+        )
+        for (mainIsExact in listOf(true, false)) {
+            val calls = mutableListOf<String>()
+            val discogs = DiscogsClient(
+                transport = object : DiscogsTransport {
+                    override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                        calls += path
+                        return when (path) {
+                            "masters/987" -> DiscogsHttpResponse(200,
+                                """{"id":987,"title":"ILLIT - SUPER REAL ME",
+                                    "artists":[{"name":"ILLIT"}],"main_release":101}""")
+                            "masters/987/versions?page=1&per_page=8" -> DiscogsHttpResponse(200,
+                                """{"pagination":{"page":1,"pages":1,"per_page":8,"items":2},
+                                    "versions":[{"id":101},{"id":102}]}""")
+                            "releases/101", "releases/102" -> {
+                                val id = path.substringAfter("/").toLong()
+                                val title = if (id == 101L && !mainIsExact)
+                                    "DIFFERENT EDITION" else "SUPER REAL ME"
+                                DiscogsHttpResponse(200, """{
+                                    "id":$id,"master_id":987,"title":"$title",
+                                    "artists":[{"name":"ILLIT"}],
+                                    "country":"South Korea","year":2024,
+                                    "identifiers":[{"type":"Barcode","value":"8809704427821"}],
+                                    "labels":[{"name":"BELIFT LAB","catno":"CMDC12000"}],
+                                    "formats":[{"name":"CD","descriptions":["EP"]}],
+                                    "tracklist":[{"position":"1","title":"My World"},
+                                                 {"position":"2","title":"Magnetic"}]}""")
+                            }
+                            else -> error("Unexpected Discogs endpoint $path")
+                        }
+                    }
+                }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+            )
+            var authenticatedSearchCalls = 0
+            val authenticated = DiscogsAuthenticatedDiscovery(
+                search = DiscogsDatabaseSearchClient(
+                    transport = object : DiscogsSearchTransport {
+                        override suspend fun search(
+                            query: DiscogsSearchRequest, token: String, userAgent: String,
+                        ): DiscogsHttpResponse {
+                            authenticatedSearchCalls++
+                            return DiscogsHttpResponse(200,
+                                """{"results":[{"id":101,"type":"release"}]}""")
+                        }
+                    },
+                    tokenProvider = { "A".repeat(40) },
+                    enabled = true,
+                    limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+                ),
+                editions = discogs,
+            )
+            val result = DiscogsEditionRepository(
+                links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
+                enabled = true, nowMillis = { 1_000L },
+                authenticatedDiscovery = authenticated,
+            ).observe(canonical)
+            assertEquals("A checked Master cannot be overridden by a partial auth index",
+                0, authenticatedSearchCalls)
+            if (mainIsExact) {
+                assertEquals("Two exact-color variants may share barcode and tracks",
+                    DiscogsEditionEnrichment.Ambiguous, result)
+            } else {
+                assertTrue("A matching alternate edition must be examinable",
+                    result is DiscogsEditionEnrichment.Verified)
+                assertEquals("https://www.discogs.com/release/102",
+                    (result as DiscogsEditionEnrichment.Verified).attributionUrl)
+            }
+            assertEquals(listOf("masters/987",
+                "masters/987/versions?page=1&per_page=8",
+                "releases/101", "releases/102"), calls)
+        }
+    }
+
+    @Test fun incompleteMasterVersionsCannotUseMainReleaseAsSoleProof() = runBlocking {
+        val group = "529f87a1-1081-48a4-8ee1-3c08de229858"
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String = if (path.startsWith("release-group/"))
+                """{"id":"$group","relations":[{
+                    "type":"discogs","type-id":"99e550f3-5ab4-3110-b5b9-fe01d970b126",
+                    "url":{"resource":"https://www.discogs.com/master/987"}}]}"""
+            else """{"id":"$mbid","relations":[]}"""
+        })
+        val calls = mutableListOf<String>()
+        val discogs = DiscogsClient(
+            transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                    calls += path
+                    return when (path) {
+                        "masters/987" -> DiscogsHttpResponse(200,
+                            """{"id":987,"title":"SUPER REAL ME",
+                                "artists":[{"name":"ILLIT"}],"main_release":101}""")
+                        "masters/987/versions?page=1&per_page=8" -> DiscogsHttpResponse(200,
+                            """{"pagination":{"page":1,"pages":2,"per_page":8,"items":9},
+                                "versions":[{"id":101}]}""")
+                        "releases/101" -> DiscogsHttpResponse(200,
+                            """{"id":101,"master_id":987,"title":"SUPER REAL ME",
+                                "artists":[{"name":"ILLIT"}],"year":2024,
+                                "country":"South Korea",
+                                "identifiers":[{"type":"Barcode","value":"8809704427821"}],
+                                "formats":[{"name":"CD","descriptions":["EP"]}],
+                                "tracklist":[{"position":"1","title":"My World"},
+                                             {"position":"2","title":"Magnetic"}]}""")
+                        else -> error("Unexpected endpoint $path")
+                    }
+                }
+            }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = mbid, musicBrainzReleaseGroupId = group,
+            title = "SUPER REAL ME", creditedArtist = "ILLIT",
+            creditedArtistNames = listOf("ILLIT"), status = "Official",
+            barcodes = listOf("8809704427821"), editionFormats = listOf("CD"),
+            trackTitles = listOf("My World", "Magnetic"),
+            country = "KR", releaseYear = 2024,
+        )
+        val result = DiscogsEditionRepository(
+            links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
+            enabled = true,
+        ).observe(canonical)
+        assertEquals(DiscogsEditionEnrichment.Candidate, result)
+        assertEquals(listOf("masters/987",
+            "masters/987/versions?page=1&per_page=8"), calls)
+    }
+
+    @Test fun masterGroupLinkAloneNeverVerifiesARelease() = runBlocking {
+        val group = "529f87a1-1081-48a4-8ee1-3c08de229858"
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String =
+                if (path.startsWith("release-group/")) """{"id":"$group","relations":[{
+                    "type":"discogs","type-id":"99e550f3-5ab4-3110-b5b9-fe01d970b126",
+                    "url":{"resource":"https://discogs.com/master/987"}}]}"""
+                else """{"id":"$mbid","relations":[]}"""
+        })
+        val client = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse =
+                if (path.startsWith("masters/"))
+                    DiscogsHttpResponse(200, """{"id":987,"title":"Album",
+                    "artists":[{"name":"Artist"}],"main_release":102}""")
+                else DiscogsHttpResponse(200, """{"id":102,"title":"Different Edition",
+                    "artists":[{"name":"Different"}],"country":"US","year":2002,
+                    "tracklist":[{"position":"1","title":"Unrelated"}]}""")
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = mbid, musicBrainzReleaseGroupId = group,
+            title = "Album", creditedArtist = "Artist",
+            creditedArtistNames = listOf("Artist"), status = "Official",
+            barcodes = listOf("8809704427821"), trackTitles = listOf("Track"),
+            country = "KR", releaseYear = 2024,
+        )
+        assertFalse(DiscogsEditionRepository(
+            DiscogsMusicBrainzLinks(mb), client, enabled = true,
+        ).observe(canonical) is DiscogsEditionEnrichment.Verified)
+    }
+
+    @Test fun authenticatedSearchRecoversReleaseWithNoDirectOrMasterLink() = runBlocking {
+        val token = "A".repeat(40)
+        var searches = 0
+        val search = DiscogsDatabaseSearchClient(
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse {
+                    searches++
+                    assertEquals("Artist", query.artist)
+                    if (query.barcode != null) {
+                        assertEquals("8809704427821", query.barcode)
+                    } else {
+                        assertEquals("Album", query.title)
+                    }
+                    // Both independent indexes resolve to the SAME edition,
+                    // so dedupe must hydrate only one verified Release ID.
+                    return DiscogsHttpResponse(200,
+                        """{"results":[{"type":"release","id":12345}]}""")
+                }
+            },
+            tokenProvider = { token }, enabled = true,
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String = """{"id":"$mbid","relations":[]}"""
+        })
+        val discogs = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/12345", path)
+                return DiscogsHttpResponse(200,
+                    """{"id":12345,"title":"Album","artists":[{"name":"Artist"}],
+                        "country":"South Korea","year":2024,
+                        "labels":[{"name":"Label","catno":"A-1"}],
+                        "identifiers":[{"type":"Barcode","value":"8809704427821"}],
+                        "formats":[{"name":"Digital Media","descriptions":["EP"]}],
+                        "tracklist":[{"position":"1","title":"Track"}]}""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = mbid, title = "Album", creditedArtist = "Artist",
+            creditedArtistNames = listOf("Artist"), status = "Official",
+            barcodes = listOf("8809704427821"), trackTitles = listOf("Track"),
+            country = "KR", releaseYear = 2024,
+        )
+        val repository = DiscogsEditionRepository(
+            links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
+            authenticatedDiscovery = DiscogsAuthenticatedDiscovery(search, discogs),
+            enabled = true, nowMillis = { System.currentTimeMillis() },
+        )
+        val result = repository.observe(canonical)
+        assertTrue(result is DiscogsEditionEnrichment.Verified)
+        assertEquals(2, searches)
+    }
+
+    @Test fun exactDirectLinkCanVerifyRealWorldCrossScriptTrackEvidence() = runBlocking {
+        val realReleaseMbid = "5f600fc6-5c84-4c84-838e-eb87bd7363c7"
+        val releaseId = 36297418L
+        val mb = MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(
+                path: String, parameters: Map<String, String>, userAgent: String,
+            ): String {
+                assertEquals("release/$realReleaseMbid", path)
+                return """{"id":"$realReleaseMbid","relations":[{
+                  "type":"discogs","type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                  "url":{"resource":"https://www.discogs.com/release/$releaseId"}
+                }]}"""
+            }
+        })
+        val discogs = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                assertEquals("releases/$releaseId", path)
+                return DiscogsHttpResponse(200, """{
+                  "id":$releaseId,"title":"THE SIN : VANISH",
+                  "artists":[{"name":"ENHYPEN"}],
+                  "country":"South Korea","year":2026,
+                  "labels":[{"name":"BELIFT LAB","catno":"YH-251116-01"}],
+                  "identifiers":[{"type":"Barcode","value":"198704835247"}],
+                  "formats":[{"name":"CD","descriptions":["EP"]}],
+                  "tracklist":[
+                    {"position":"1","title":"The Beginning"},
+                    {"position":"2","title":"No Way Back"},
+                    {"position":"3","title":"The Fugitives"},
+                    {"position":"4","title":"Knife"},
+                    {"position":"5","title":"Stealer"},
+                    {"position":"6","title":"The Voice"},
+                    {"position":"7","title":"Witnesses"},
+                    {"position":"8","title":"Big Girls Don't Cry"},
+                    {"position":"9","title":"Lost Island"},
+                    {"position":"10","title":"Sleep Tight"},
+                    {"position":"11","title":"The Beyond"}
+                  ]}""")
+            }
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        val canonical = CanonicalEditionEvidence(
+            musicBrainzReleaseId = realReleaseMbid,
+            title = "THE SIN : VANISH",
+            creditedArtist = "ENHYPEN",
+            creditedArtistNames = listOf("ENHYPEN"),
+            status = "Official",
+            barcodes = listOf("198704835247"),
+            country = "KR", releaseYear = 2026,
+            trackTitles = listOf(
+                "사건의 발단", "No Way Back", "도망자들", "Knife", "Stealer",
+                "우리가 찾던 목소리", "목격자", "Big Girls Don't Cry",
+                "Lost Island", "Sleep Tight", "사건의 너머",
+            ),
+        )
+        val repository = DiscogsEditionRepository(
+            links = DiscogsMusicBrainzLinks(mb), discogs = discogs,
+            enabled = true, nowMillis = { 1_000L },
+        )
+        val result = repository.observe(canonical)
+        assertTrue("Direct linked Release with five cross-script titles must verify",
+            result is DiscogsEditionEnrichment.Verified)
+        assertEquals("https://www.discogs.com/release/$releaseId",
+            (result as DiscogsEditionEnrichment.Verified).attributionUrl)
+    }
+
+    @Test fun mismatchedEditionDoesNotShowDiscogsAsVerified() = runBlocking {
+        val links = DiscogsMusicBrainzLinks(MusicBrainzClient(transport = object : MusicBrainzTransport {
+            override suspend fun get(path: String, parameters: Map<String, String>,
+                userAgent: String): String =
+                """{"id":"$mbid","relations":[{
+                    "type":"discogs","type-id":"4a78823c-1c53-4176-a5f3-58026c76f2bc",
+                    "url":{"resource":"https://www.discogs.com/release/12"}}]}"""
+        }))
+        val client = DiscogsClient(transport = object : DiscogsTransport {
+            override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse =
+                DiscogsHttpResponse(200, """{"id":12,"title":"Different remix",
+                    "artists":[{"name":"Another artist"}]}""")
+        }, enabled = true, limiter = DiscogsRateLimiter(minimumIntervalMs = 0L))
+        assertEquals(DiscogsEditionEnrichment.Conflict,
+            DiscogsEditionRepository(links, client, enabled = true).observe(canonical))
+    }
+}
