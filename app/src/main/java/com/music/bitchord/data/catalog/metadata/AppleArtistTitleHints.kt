@@ -31,7 +31,7 @@ internal object AppleArtistTitleHintPolicy {
         existingAppleTitles: List<String>,
     ): List<String> {
         val artistKey = normalized(artistName)
-        if (artistKey.length !in 2..120) return emptyList()
+        if (artistKey.length !in 1..120) return emptyList()
         val excluded = existingAppleTitles.mapTo(mutableSetOf(), ::normalized)
         val result = mutableListOf<String>()
         val seen = excluded.toMutableSet()
