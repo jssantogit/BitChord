@@ -725,18 +725,19 @@ fun DetailScreen(
                     // never on a Group, Recording, local album or unrelated page.
                     if (applePromotionBadge != null && appleStorePromotionUrl != null) {
                         Spacer(Modifier.height(10.dp))
-                        AsyncImage(
-                            model = applePromotionBadge,
-                            contentDescription = "Abrir este álbum na loja Apple",
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                                .width(154.dp).height(44.dp)
-                                .clickable {
-                                    runCatching {
-                                        externalStoreUriHandler.openUri(appleStorePromotionUrl)
-                                    }
-                                },
-                            contentScale = ContentScale.Fit,
-                        )
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            AsyncImage(
+                                model = applePromotionBadge,
+                                contentDescription = "Abrir este álbum na loja Apple",
+                                modifier = Modifier.width(154.dp).height(44.dp)
+                                    .clickable {
+                                        runCatching {
+                                            externalStoreUriHandler.openUri(appleStorePromotionUrl)
+                                        }
+                                    },
+                                contentScale = ContentScale.Fit,
+                            )
+                        }
                     }
                 }
             }
