@@ -204,6 +204,8 @@ internal fun CanonicalLocalRecentAdditions(
     sourceKey: String? = null,
     stars: Int? = null,
     onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val database = remember(context) { CanonicalCatalogDatabase.get(context) }
@@ -304,6 +306,7 @@ internal fun CanonicalLocalRecentAdditions(
                 ),
                 onPlayTrack = onPlayTrack,
                 onTrackAction = onTrackAction,
+                onTrackHold = onTrackHold,
                 contentPadding = contentPadding,
                 loading = recent == null && !loadFailed,
                 error = loadFailed,
@@ -317,7 +320,7 @@ internal fun CanonicalLocalRecentAdditions(
         }
     } else if (recent != null) {
         CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll,
-            onTrackAction = onTrackAction)
+            onTrackAction = onTrackAction, onTrackHold = onTrackHold)
     } else if (loadFailed) {
         Text(
             "Não foi possível consultar as adições locais.",
@@ -341,6 +344,8 @@ internal fun CanonicalRecentAdditionsShelf(
     onPlayTrack: (String) -> Unit,
     onSeeAll: () -> Unit = {},
     onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     if (recent.isEmpty()) return
     Column(
@@ -372,6 +377,7 @@ internal fun CanonicalRecentAdditionsShelf(
                     modifier = Modifier.width(SHELF_CARD_WIDTH),
                     onClick = { onPlayTrack(track.id) },
                     onTrackAction = onTrackAction,
+                    onTrackHold = onTrackHold,
                 )
             }
         }
@@ -385,6 +391,8 @@ private fun CanonicalRecentAdditionCard(
     modifier: Modifier,
     onClick: () -> Unit,
     onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     var actionsOpen by remember(track.id) { mutableStateOf(false) }
     Column(
@@ -392,7 +400,11 @@ private fun CanonicalRecentAdditionCard(
             .testTag("canonical-recent-card")
             .longPressMenuClickable(
                 onClick = onClick,
-                onLongClick = if (onTrackAction != null) ({ actionsOpen = true }) else null,
+                onLongClick = when {
+                    onTrackHold != null -> ({ onTrackHold(track) })
+                    onTrackAction != null -> ({ actionsOpen = true })
+                    else -> null
+                },
             ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -400,7 +412,7 @@ private fun CanonicalRecentAdditionCard(
             modifier = Modifier.fillMaxWidth().aspectRatio(1f),
         ) {
             SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
-            RecentTrackActionsPopup(
+            if (onTrackHold == null) RecentTrackActionsPopup(
                 expanded = actionsOpen,
                 onDismissRequest = { actionsOpen = false },
                 track = track,
@@ -442,6 +454,8 @@ internal fun CanonicalRecentAdditionsGrid(
     viewType: LibraryViewType = LibraryViewType.GRID,
     filterActive: Boolean = false,
     onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     if (loading && recent.isEmpty()) {
         // Initial MediaStore projection can be expensive. The same native
@@ -499,12 +513,15 @@ internal fun CanonicalRecentAdditionsGrid(
                         SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
                     },
                     onClick = { onPlayTrack(track.id) },
-                    onLongPress = if (onTrackAction != null)
-                        ({ actionsOpen = true }) else null,
+                    onLongPress = when {
+                        onTrackHold != null -> ({ onTrackHold(track) })
+                        onTrackAction != null -> ({ actionsOpen = true })
+                        else -> null
+                    },
                     horizontalPadding = PAGE_GUTTER,
                     artworkSize = 52.dp,
                 )
-                RecentTrackActionsPopup(
+                if (onTrackHold == null) RecentTrackActionsPopup(
                     expanded = actionsOpen,
                     onDismissRequest = { actionsOpen = false },
                     track = track,
@@ -518,6 +535,7 @@ internal fun CanonicalRecentAdditionsGrid(
                     track = track, modifier = Modifier.fillMaxWidth(),
                     onClick = { onPlayTrack(track.id) },
                     onTrackAction = onTrackAction,
+                    onTrackHold = onTrackHold,
                 )
             }
         }
