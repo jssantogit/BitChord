@@ -176,7 +176,11 @@ internal fun appleMiniPlayerContentKey(song: Song): String =
         ?: song.localUri?.takeIf { it.isNotBlank() }?.let { "local:$it" }
         ?: "unresolved:${song.title}:${song.artist}"
 
-/** Disabled Radio and reduced-motion tabs never scale on selection or press. */
+/**
+ * Switching root sections changes tint, not icon size. The old spring scale
+ * made each selection pop/bounce in tandem with the page motion. Keep only a
+ * restrained press affordance; reduced motion and disabled Radio stay at 1f.
+ */
 internal fun appleMusicTabScaleTarget(
     enabled: Boolean,
     selected: Boolean,
@@ -185,8 +189,7 @@ internal fun appleMusicTabScaleTarget(
 ): Float =
     when {
         !enabled || reducedMotion -> 1f
-        pressed -> 0.91f
-        selected -> 1.04f
+        pressed -> 0.96f
         else -> 1f
 }
 
@@ -315,8 +318,8 @@ fun AppleMusicBottomBar(
             val pressed by interaction.collectIsPressedAsState()
             val scale by animateFloatAsState(
                 targetValue = appleMusicTabScaleTarget(enabled, selected, pressed, reduceMotion),
-                animationSpec = if (reduceMotion) snap() else spring(
-                    dampingRatio = 0.82f, stiffness = 500f,
+                animationSpec = if (reduceMotion) snap() else tween(
+                    durationMillis = 130,
                 ),
                 label = "appleMusicTabScale",
             )
