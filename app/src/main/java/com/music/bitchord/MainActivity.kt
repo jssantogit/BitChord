@@ -4181,7 +4181,21 @@ private fun BitChordApp(
                                         )
                                     },
                                     localPlaylists = localPlaylistItems,
-                                    onOpenCatalog = { id -> viewModel.openCanonicalNativeShelfItem(id) },
+                                    onOpenCatalog = { pin ->
+                                        // A saved catalog pin can be opened
+                                        // from Library even if its MBID is not
+                                        // in the current Search/Discovery shelf.
+                                        com.music.bitchord.ui.screens.catalogMetadataPinNativeTarget(pin)
+                                            ?.let { target ->
+                                                viewModel.openDetail(
+                                                    browseId = pin.browseId,
+                                                    title = target.title,
+                                                    subtitle = target.subtitle,
+                                                    thumbnailUrl = target.thumbnailUrl,
+                                                    type = target.type,
+                                                )
+                                            }
+                                    },
                                     onOpenPlaylist = { playlistId ->
                                         // Public ListenBrainz playlists keep their own
                                         // identity and open the native online adapter.
