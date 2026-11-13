@@ -63,6 +63,7 @@ import com.music.bitchord.ui.components.LongPressOrigin
 import com.music.bitchord.ui.components.HeldItem
 import com.music.bitchord.ui.components.SongActionsPresentation
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
@@ -302,13 +303,14 @@ internal fun UnifiedPlaylistLibraryShelf(
     }
     val visible = visibleLibraryPlaylistCards(cards, query, filter, sort)
     val playlistScroll = listState ?: rememberLazyListState()
+    val playlistHeldHaze = remember { HazeState() }
 
     // The host owns status-bar and floating-player insets. Applying a second
     // statusBarsPadding() + 64dp here created an artificial gap and a second
     // page chrome inside Library. Use the same measured padding as LibraryScreen.
     if (selectedCard == null) LazyColumn(
         state = playlistScroll,
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().hazeSource(playlistHeldHaze),
         contentPadding = contentPadding,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -420,7 +422,7 @@ internal fun UnifiedPlaylistLibraryShelf(
         if (menuCard != null) {
             exitingMenuCard = menuCard
             exitingMenuWasHeld = libraryPlaylistUsesHeldContextMenu(
-                heldMenuOrigin != null, hazeState != null,
+                heldMenuOrigin != null, true,
             )
         } else {
             kotlinx.coroutines.delay(300)
@@ -440,7 +442,7 @@ internal fun UnifiedPlaylistLibraryShelf(
             BrowseActionsSheet(
                 presentation = if (libraryPlaylistHeldPresentation(
                     heldNow = libraryPlaylistUsesHeldContextMenu(
-                        heldMenuOrigin != null, hazeState != null,
+                        heldMenuOrigin != null, true,
                     ),
                     liveMenuVisible = menuCard != null,
                     heldBeforeExit = exitingMenuWasHeld,
@@ -527,13 +529,13 @@ internal fun UnifiedPlaylistLibraryShelf(
             )
         }
         val heldNow = libraryPlaylistUsesHeldContextMenu(
-            heldMenuOrigin != null, hazeState != null,
+            heldMenuOrigin != null, true,
         )
-        if (hazeState != null) {
+        if (heldNow || exitingMenuWasHeld) {
             HeldContextMenu(
                 item = menuCard.takeIf { heldNow },
                 held = heldMenuOrigin,
-                hazeState = hazeState,
+                hazeState = playlistHeldHaze,
                 onDismiss = {
                     optionsFor = null
                     heldMenuOrigin = null
