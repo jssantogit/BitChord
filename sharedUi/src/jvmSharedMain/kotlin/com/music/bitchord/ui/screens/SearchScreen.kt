@@ -278,6 +278,8 @@ fun SearchScreen(
     onAppleArtistBack: () -> Unit = {},
     onAppleArtistLoadMore: () -> Unit = {},
     onAppleArtistSearchMore: (String) -> Unit = {},
+    applePaging: Map<AppleSearchSection, AppleSearchPageStatus> = emptyMap(),
+    onAppleLoadMore: (AppleSearchSection) -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -412,11 +414,23 @@ fun SearchScreen(
                             canonicalPublicPlaylists, onCanonicalPlaylistOpen,
                         )
                     filter == SearchFilter.ARTISTS && canonicalDetail == null ->
-                        appleEditorialArtistRows(appleArtistResults, onAppleOpen)
+                        appleEditorialArtistRows(
+                            appleArtistResults, onAppleOpen,
+                            paging = applePaging[AppleSearchSection.ARTISTS],
+                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ARTISTS) },
+                        )
                     filter == SearchFilter.ALBUMS && canonicalDetail == null ->
-                        appleEditorialAlbumRows(appleResults, onAppleOpen)
+                        appleEditorialAlbumRows(
+                            appleResults, onAppleOpen,
+                            paging = applePaging[AppleSearchSection.ALBUMS],
+                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ALBUMS) },
+                        )
                     filter == SearchFilter.SONGS && canonicalDetail == null ->
-                        appleEditorialTrackRows(appleTrackResults, onAppleTrackOpen)
+                        appleEditorialTrackRows(
+                            appleTrackResults, onAppleTrackOpen,
+                            paging = applePaging[AppleSearchSection.TRACKS],
+                            onLoadMore = { onAppleLoadMore(AppleSearchSection.TRACKS) },
+                        )
                     filter == SearchFilter.ALL && canonicalDetail == null &&
                         query.isNotBlank() -> {
                         // Apple owns visible artist, song and album lists.
@@ -424,11 +438,19 @@ fun SearchScreen(
                         // they must not be used as a second editorial shelf.
                         appleEditorialArtistRows(
                             appleArtistResults, onAppleOpen, showHeading = true,
+                            paging = applePaging[AppleSearchSection.ARTISTS],
+                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ARTISTS) },
                         )
                         appleEditorialTrackRows(
                             appleTrackResults, onAppleTrackOpen, showHeading = true,
+                            paging = applePaging[AppleSearchSection.TRACKS],
+                            onLoadMore = { onAppleLoadMore(AppleSearchSection.TRACKS) },
                         )
-                        appleEditorialAlbumRows(appleResults, onAppleOpen, showHeading = true)
+                        appleEditorialAlbumRows(
+                            appleResults, onAppleOpen, showHeading = true,
+                            paging = applePaging[AppleSearchSection.ALBUMS],
+                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ALBUMS) },
+                        )
                     }
                     else -> canonicalMusicBrainzResults(
                         query, canonicalResults, canonicalDetail, filter,
@@ -633,10 +655,62 @@ fun SearchScreen(
  * A music track from the Apple catalog remains metadata-only. Opening it may
  * navigate to its exact Apple collection; no tap or swipe starts playback.
  */
+/**
+ * The official public Search API lacks remote offset. More here means either
+ * undisplayed Apple results already fetched or another bounded search with
+ * documented attributes. We never claim total result completeness.
+ */
+private fun LazyListScope.appleSearchPagingFooter(
+    section: AppleSearchSection,
+    state: AppleSearchPageStatus?,
+    onLoadMore: () -> Unit,
+) {
+    if (state == null) return
+    if (state.hasMore || state.retryableError) {
+        item(key = "apple:search:more:${section.name}") {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(
+                    horizontal = PAGE_GUTTER, vertical = 12.dp,
+                ),
+            ) {
+                OutlinedButton(
+                    onClick = onLoadMore,
+                    enabled = !state.loadingMore,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(Res.string.apple_load_more)) }
+                if (state.loadingMore) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+                if (state.retryableError) {
+                    Text(
+                        stringResource(Res.string.apple_discovery_failed),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+    if (state.coverageUncertain && !state.hasMore) {
+        item(key = "apple:search:incomplete:${section.name}") {
+            Text(
+                stringResource(Res.string.apple_search_coverage_note),
+                modifier = Modifier.padding(
+                    horizontal = PAGE_GUTTER, vertical = 12.dp,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 private fun LazyListScope.appleEditorialTrackRows(
     results: UiState<List<AppleEditorialTrackSearchRow>>?,
     onAlbumOpen: (AppleEditorialTrackSearchRow) -> Unit,
     showHeading: Boolean = false,
+    paging: AppleSearchPageStatus? = null,
+    onLoadMore: () -> Unit = {},
 ) {
     if (showHeading && (results as? UiState.Success)?.data?.isNotEmpty() == true) {
         item(key = "apple:tracks:heading") {
@@ -689,12 +763,17 @@ private fun LazyListScope.appleEditorialTrackRows(
             }
         }
     }
+    appleSearchPagingFooter(
+        AppleSearchSection.TRACKS, paging, onLoadMore,
+    )
 }
 
 private fun LazyListScope.appleEditorialArtistRows(
     results: UiState<List<AppleEditorialSearchRow>>?,
     onOpen: (AppleEditorialSearchRow) -> Unit,
     showHeading: Boolean = false,
+    paging: AppleSearchPageStatus? = null,
+    onLoadMore: () -> Unit = {},
 ) {
     if (showHeading && (results as? UiState.Success)?.data?.isNotEmpty() == true) {
         item(key = "apple:artists:heading") {
@@ -745,6 +824,9 @@ private fun LazyListScope.appleEditorialArtistRows(
             }
         }
     }
+    appleSearchPagingFooter(
+        AppleSearchSection.ARTISTS, paging, onLoadMore,
+    )
 }
 
 private fun LazyListScope.appleEditorialArtistDetail(
@@ -894,6 +976,8 @@ private fun LazyListScope.appleEditorialAlbumRows(
     results: UiState<List<AppleEditorialSearchRow>>?,
     onOpen: (AppleEditorialSearchRow) -> Unit,
     showHeading: Boolean = false,
+    paging: AppleSearchPageStatus? = null,
+    onLoadMore: () -> Unit = {},
 ) {
     if (showHeading && (results as? UiState.Success)?.data?.isNotEmpty() == true) {
         item(key = "apple:albums:heading") {
@@ -943,6 +1027,9 @@ private fun LazyListScope.appleEditorialAlbumRows(
             }
         }
     }
+    appleSearchPagingFooter(
+        AppleSearchSection.ALBUMS, paging, onLoadMore,
+    )
 }
 
 /** Pure editorial album detail: no player affordances for unlinked tracks. */
