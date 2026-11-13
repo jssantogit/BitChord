@@ -39,6 +39,10 @@ internal class AppleArtistDiscographyPager(
     private val country: String,
     private val pageSize: Int = 24,
     private val source: AppleArtistAlbumDiscoverySource,
+    /** Candidate discovery is lazy: never delay initial artist rendering. */
+    private val titleHintSource: AppleArtistTitleHintSource? = null,
+    /** Only an independently verified crosswalk may fill this MB artist ID. */
+    private val verifiedMbArtistId: String? = null,
 ) {
     init {
         require(artistId > 0 && Regex("[a-z]{2}").matches(country))
@@ -53,13 +57,16 @@ internal class AppleArtistDiscographyPager(
     private var initialLoaded = false
     private var originalCapped = false
     private var broadSearched = false
+    private var hintSearchCompleted = false
     private var unresolvedCoverage = false
 
     fun snapshot(): AppleArtistPageSnapshot = AppleArtistPageSnapshot(
         visible = products.values.take(visibleCount),
         discoveredCount = products.size,
         hasMore = products.size > visibleCount ||
-            (initialLoaded && originalCapped && !broadSearched) || hints.isNotEmpty(),
+            (initialLoaded && originalCapped &&
+                (!broadSearched || !hintSearchCompleted)) ||
+            hints.isNotEmpty(),
         coverageUncertain = unresolvedCoverage || disputed.isNotEmpty(),
         pendingHints = hints.size,
     )
@@ -133,6 +140,23 @@ internal class AppleArtistDiscographyPager(
                     added += accept(result)
                 }
             }
+        }
+        if (added == 0 && originalCapped && broadSearched &&
+            !hintSearchCompleted && hints.isEmpty()
+        ) {
+            // Query public metadata only when the Apple result actually hit
+            // its cap. MB/Discogs provide names, not commercial products.
+            // Failure is non-fatal: search-by-title remains usable.
+            hintSearchCompleted = true
+            val additional = try {
+                titleHintSource?.suggest(artistName, verifiedMbArtistId).orEmpty()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                hintSearchCompleted = false
+                throw cancelled
+            } catch (_: Exception) {
+                emptyList()
+            }
+            enqueueTitleHints(additional)
         }
         if (added == 0) {
             // Two bounded title probes max per turn; global iTunes limiter
