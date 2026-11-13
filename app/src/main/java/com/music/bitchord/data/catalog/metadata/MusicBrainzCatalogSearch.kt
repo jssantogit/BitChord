@@ -59,8 +59,11 @@ internal data class MusicBrainzReleaseGroupHit(
     /** Pipe-separated MusicBrainz types: null = absent/unknown, "" = explicitly no tags. */
     val secondaryTypes: String? = null,
     /** All credited artist MBIDs in source order; null if any ID is missing or invalid. */
-    @field:Ignore val artistCreditMbids: List<String>? = null,
 )
+{
+    /** Live search-only proof; Room never reads or stores this field. */
+    @Ignore var artistCreditMbids: List<String>? = null
+}
 
 internal data class MusicBrainzReleaseHit(
     val musicBrainzId: String,
@@ -82,8 +85,11 @@ internal data class MusicBrainzReleaseHit(
     /** Evidence from exact Release's Track/Recording graph, when cached. */
     val isVideoOnlyContent: Boolean? = null,
     /** Do not infer artist identity from display text or aliases. */
-    @field:Ignore val artistCreditMbids: List<String>? = null,
 )
+{
+    /** Live search-only proof; Room never reads or stores this field. */
+    @Ignore var artistCreditMbids: List<String>? = null
+}
 
 // A MusicBrainz cover-art-archive.front flag is a presence hint only.
 // Never synthesize direct /front-500 URLs from it: CAA may label the
