@@ -1018,6 +1018,9 @@ internal fun CanonicalRemoteLibraryScreen(
         forward = selectedEntity != null,
     )
     val heldLibraryHaze = remember { HazeState() }
+    // Native album/artist pages are tinted by their artwork, not AMOLED black.
+    // Use the same artwork seed as the native detail rather than a neutral plate.
+    val heldDetailPalette = rememberArtworkPalette(imageUrl = selectedEntity?.artworkUri)
     val reduceHeldBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
     val heldLibraryBlur by animateDpAsState(
         targetValue = if (shouldBlurHeldContextBackdrop(
@@ -1570,6 +1573,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     hazeState = heldLibraryHaze,
                     bottomChromeClearance = heldMenuBottomChromeClearance,
                     hostProvidesBlur = true,
+                    plateTint = selectedEntity?.let { heldDetailPalette.elevated },
                     onDismiss = {
                         libraryMenu = null
                         heldLibraryMenuOrigin = null
