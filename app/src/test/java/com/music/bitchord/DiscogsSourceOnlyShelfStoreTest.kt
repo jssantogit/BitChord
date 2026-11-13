@@ -25,29 +25,9 @@ class DiscogsSourceOnlyShelfStoreTest {
         assertTrue(store.active(1_000 + DiscogsObservation.TTL_MILLIS).isEmpty())
     }
 
-    @Test fun nativeHomeAndExploreShelvesRetainSourceKindAndNeverOfferPlayback() {
-        val releases = listOf(
-            release(101, "EP title"),
-            release(102, "Album title").copy(
-                kind = DiscogsEditorialKind.ALBUM,
-                shelf = DiscogsEditorialShelf.ALBUMS,
-            ),
-            release(103, "Single title").copy(
-                kind = DiscogsEditorialKind.SINGLE,
-                shelf = DiscogsEditorialShelf.SINGLES,
-            ),
-        )
-        val shelves = com.music.bitchord.ui.discogsSourceOnlyCatalogShelves(releases)
-        assertEquals(3, shelves.size)
-        assertEquals(3, shelves.flatMap { it.items }.size)
-        assertTrue(shelves.any { it.title == "Álbuns · Discogs" })
-        assertTrue(shelves.any { it.title == "EPs · Discogs" })
-        assertTrue(shelves.any { it.title == "Singles · Discogs" })
-        assertTrue(shelves.flatMap { it.items }.all {
-            it.videoId == null && it.browseId!!.startsWith("discogs:release:") &&
-                it.subtitle.contains("só metadados")
-        })
-    }
+    // Native Home/Explore shelf test remains in the source #211 UI suite.
+    // The Apple-first branch deliberately has no old Discogs shelves.
+    // Reintroduce presentation coverage with the new Apple-scoped route.
 
     @Test fun reuseUnexpiredArtistEvidenceWithoutCrossArtistLeaksOrExpiredResults() {
         val store = DiscogsSourceOnlyShelfStore()
