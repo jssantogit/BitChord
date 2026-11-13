@@ -215,3 +215,21 @@ internal fun appleFirstGenreShelves(
         publicPlaylists?.takeIf { it.items.isNotEmpty() }?.let(::add)
     }
 }
+
+
+/** Never decorate Explore categories from an unrelated MB release sleeve. */
+internal fun appleExploreGenreCoverMap(
+    appleAlbums: List<ItunesEditorialRelease>,
+    tags: List<String>,
+): Map<String, String> = tags.distinct().mapNotNull { tag ->
+    val cover = appleAlbums.firstOrNull { release ->
+        AppleExploreGenrePolicy.matches(tag, release.genre) &&
+            release.appleCollectionId > 0L &&
+            release.appleScopedId ==
+                "itunes:${release.storefront}:album:${release.appleCollectionId}" &&
+            AppleCatalogBrowseRoute.parse(release.appleScopedId)?.kind ==
+                ItunesCatalogItemType.ALBUM &&
+            !release.artworkUrl.isNullOrBlank()
+    }?.artworkUrl
+    if (cover == null) null else tag to cover
+}.toMap()
