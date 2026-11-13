@@ -7500,9 +7500,11 @@ private fun FrostedMenuPanel(
     anchorBounds: androidx.compose.ui.unit.IntRect? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
-    // The legacy frosted sort panel shares the compact menu's explicit
-    // 18dp radius instead of inheriting Material 3's extraLarge corner.
+    // Shared with the anchored catalog-source and compact ⋯ menus:
+    // consistent opaque-looking neutral plate; only the page behind is dimmed.
+    val darkPlate = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val solidPlate = (if (darkPlate) Color.Black else Color.White).copy(alpha = 0.94f)
+    // The sort/source panels use the same native 18dp geometry.
     val shape = RoundedCornerShape(18.dp)
     val entrance = com.music.bitchord.ui.components.rememberFrostedMenuEntranceModifier(
         reduceMotion = LocalReduceAnimations.current,
@@ -7539,24 +7541,15 @@ private fun FrostedMenuPanel(
             }
         }
         Surface(
-            color = Color.Transparent,
+            color = solidPlate,
             contentColor = MaterialTheme.colorScheme.onSurface,
             shape = shape,
+            shadowElevation = 20.dp,
             modifier = position
                 .width(IntrinsicSize.Max)
                 .onSizeChanged { popupSize = it }
                 .then(entrance)
                 .clip(shape)
-                .then(
-                    if (reduceDynamicBlur) {
-                        Modifier.background(MaterialTheme.colorScheme.surface)
-                    } else {
-                        Modifier.optimizedHazeEffect(
-                            state = hazeState,
-                            style = HazeMaterials.thin(MaterialTheme.colorScheme.surface),
-                        )
-                    },
-                )
                 .clickable(onClick = {}),
         ) {
             Column(Modifier.padding(vertical = 8.dp), content = content)
