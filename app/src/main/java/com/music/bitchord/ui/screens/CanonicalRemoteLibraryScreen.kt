@@ -1378,8 +1378,11 @@ internal fun CanonicalRemoteLibraryScreen(
             )
             val menuBody: @Composable () -> Unit = {
                 BrowseActionsSheet(
-                    presentation = if (useHeldMenu || (libraryMenu == null && exitLibraryWasHeld))
-                        SongActionsPresentation.Menu else SongActionsPresentation.Sheet,
+                    presentation = if (canonicalLibraryHeldPresentation(
+                        heldNow = useHeldMenu,
+                        liveMenuVisible = libraryMenu != null,
+                        heldBeforeExit = exitLibraryWasHeld,
+                    )) SongActionsPresentation.Menu else SongActionsPresentation.Sheet,
                     target = BrowseTarget(
                         browseId = null,
                         title = menu.title,
@@ -1671,6 +1674,13 @@ internal fun RemoteBrowseMessage(message: String) {
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
     )
 }
+
+/** The outgoing lifted row keeps its native compact actions until exit ends. */
+internal fun canonicalLibraryHeldPresentation(
+    heldNow: Boolean,
+    liveMenuVisible: Boolean,
+    heldBeforeExit: Boolean,
+): Boolean = heldNow || (!liveMenuVisible && heldBeforeExit)
 
 /** A real captured hold is required; toolbar overflow still opens the sheet. */
 internal fun canonicalLibraryUsesHeldContextMenu(
