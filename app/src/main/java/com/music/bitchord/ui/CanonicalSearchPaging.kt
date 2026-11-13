@@ -146,6 +146,16 @@ internal fun canonicalSearchRowsWithoutRedundantEditions(
     if (groups.isEmpty()) return rows
     fun normalizedTitle(value: String): String =
         value.trim().replace(Regex("""\s+"""), " ").lowercase(java.util.Locale.ROOT)
+    // The search subtitle is presentation text, not a typed credit: some
+    // release rows include only territory/date. Compare artist names only
+    // when both rows actually expose them; absent evidence is inconclusive.
+    fun visibleArtistCredit(subtitle: String?): String? {
+        val first = subtitle?.trim()?.substringBefore(" · ")?.trim()
+            ?.takeIf(String::isNotBlank) ?: return null
+        if (first.matches(Regex("""[A-Z]{2}""")) ||
+            first.matches(Regex("""\d{4}(-\d{2}){0,2}"""))) return null
+        return first
+    }
     // Consolidation must not throw away a cover already verified for the
     // exact Release. A group often arrives AFTER its release in progressive
     // search and may not have resolved its own CAA cover yet. Reuse only the
@@ -160,6 +170,15 @@ internal fun canonicalSearchRowsWithoutRedundantEditions(
             ?.trim()?.lowercase(java.util.Locale.ROOT) ?: return@forEachIndexed
         val group = groups[groupId] ?: return@forEachIndexed
         if (normalizedTitle(row.title) != normalizedTitle(group.title))
+            return@forEachIndexed
+        // Same work MBID and title do not make independently credited
+        // editions indistinguishable. If BOTH artist credits are visible,
+        // keep a differently credited edition and its sleeve separate.
+        val groupArtist = visibleArtistCredit(group.subtitle)
+            ?.takeUnless { it.equals(group.releaseKind, ignoreCase = true) }
+        val releaseArtist = visibleArtistCredit(row.subtitle)
+        if (groupArtist != null && releaseArtist != null &&
+            normalizedTitle(groupArtist) != normalizedTitle(releaseArtist))
             return@forEachIndexed
         suppressed += index
         row.artworkUri?.takeUnless(String::isBlank)?.let {
@@ -195,7 +214,31 @@ internal fun mergeCanonicalSearchRows(
 internal fun canonicalProgressiveSearchPreview(
     existing: List<CanonicalCatalogSearchRow>,
     fresh: List<CanonicalCatalogSearchRow>,
-): List<CanonicalCatalogSearchRow> =
-    canonicalSearchRowsWithoutRedundantEditions(
-        (fresh + existing).distinctBy { it.kind to it.musicBrainzId },
+): List<CanonicalCatalogSearchRow> {
+    val priorById = existing.associateBy {
+        it.kind to it.musicBrainzId.lowercase(java.util.Locale.ROOT)
+    }
+    val enriched = fresh.map { row ->
+        val old = priorById[row.kind to row.musicBrainzId.lowercase(java.util.Locale.ROOT)]
+        if (row.kind != CanonicalSearchKind.RELEASE_GROUP || old == null) row
+        else {
+            // A later partial page can repeat the raw Group after an
+            // Official edition has already supplied the exact Group's
+            // display title and sleeve. Never downgrade those two fields
+            // just because the later duplicate omits enrichment.
+            val leading = row.title.substringBefore(" & ").trim()
+            val retainsOfficialTitle = row.title.contains(" & ") &&
+                leading.equals(old.title.trim(), ignoreCase = true)
+            row.copy(
+                title = if (retainsOfficialTitle) old.title else row.title,
+                artworkUri = row.artworkUri?.takeIf(String::isNotBlank) ?: old.artworkUri,
+                releaseKind = row.releaseKind ?: old.releaseKind,
+            )
+        }
+    }
+    return canonicalSearchRowsWithoutRedundantEditions(
+        (enriched + existing).distinctBy {
+            it.kind to it.musicBrainzId.lowercase(java.util.Locale.ROOT)
+        },
     )
+}
