@@ -3090,6 +3090,11 @@ private fun BitChordApp(
                                 editingSmartPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
+                            onOpenCanonicalAlbum = { canonicalAlbumRoute ->
+                                openedCanonicalPlaylist = null
+                                showPlaylistLibrary = false
+                                viewModel.openCanonicalNativeShelfItem(canonicalAlbumRoute)
+                            },
                             onAddSongsToCanonicalNormalPlaylist = { id ->
                                 startNormalPlaylistSongPicker = true
                                 editingNormalPlaylistId = id
