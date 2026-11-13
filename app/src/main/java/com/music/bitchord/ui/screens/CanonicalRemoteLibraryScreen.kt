@@ -287,6 +287,8 @@ internal fun CanonicalRemoteLibraryScreen(
     onSourceKeysChanged: (List<String>) -> Unit = {},
     /** Actual canonical album route; null means the parent cannot navigate. */
     onOpenCatalogAlbum: ((String, String, String) -> Unit)? = null,
+    /** Proven ReleaseId with available source assets; bypass public MB lookup. */
+    onOpenNativeAlbum: ((String, String, String) -> Unit)? = null,
     heldMenuBottomChromeClearance: Dp = 100.dp,
     selectionBarBottomPadding: Dp = 140.dp,
     hazeState: HazeState? = null,
@@ -1392,6 +1394,46 @@ internal fun CanonicalRemoteLibraryScreen(
                     null
                 } else null
             }
+            // MusicBrainz may be offline even when this exact Release already
+            // has playable assets in MediaStore or Navidrome. Prefer the
+            // provider-scoped native detail (no external lookup) if and only if
+            // a single linked ReleaseId is present in the chosen source.
+            val sourceOwnedAlbum by produceState<ReleaseEntity?>(
+                initialValue = null,
+                key1 = menu.selection,
+                key2 = libraryMenu != null,
+                key3 = selectedSource to selectedEntity?.id,
+            ) {
+                value = if (libraryMenu != null &&
+                    menu.selection.type == CanonicalLibraryEntityType.TRACK &&
+                    isVerifiedCatalogRecordingId(menu.selection.entityId)
+                ) try {
+                    withContext(Dispatchers.IO) {
+                        val recordingId = menu.selection.entityId
+                        val linkedReleases =
+                            catalogDao.releaseIdsForVisibleRecordings(listOf(recordingId))
+                        val sourceKeys = if (unified) sources.filter {
+                            selectedSource == null || selectedSource == it
+                        } else listOf(providerKey)
+                        val releases = sourceKeys.flatMap { key ->
+                            catalogDao.providerScopedReleases(key)
+                        }.distinctBy { it.id }
+                        val preferred = selectedEntity?.id?.takeIf {
+                            selectedContext == CanonicalSmartFilterContext.ALBUMS
+                        }
+                        val chosen = uniqueSourceOwnedAlbumReleaseId(
+                            linkedReleaseIds = linkedReleases,
+                            sourceReleaseIds = releases.mapTo(HashSet()) { it.id },
+                            preferredReleaseId = preferred,
+                        )
+                        releases.firstOrNull { it.id == chosen }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                } else null
+            }
             val sourceForAction = if (unified) selectedSource else providerKey
             val art = when (menu.selection.type) {
                 CanonicalLibraryEntityType.TRACK -> library.tracks.firstOrNull {
@@ -1463,7 +1505,14 @@ internal fun CanonicalRemoteLibraryScreen(
                         playlistPickerSelection = listOf(menu.selection)
                         libraryMenu = null
                     },
-                    onOpenAlbum = linkedAlbum?.let { group ->
+                    onOpenAlbum = if (sourceOwnedAlbum != null && onOpenNativeAlbum != null) {
+                        {
+                            val album = sourceOwnedAlbum
+                            libraryMenu = null
+                            heldLibraryMenuOrigin = null
+                            onOpenNativeAlbum(album.id, album.title, album.artistDisplay.orEmpty())
+                        }
+                    } else linkedAlbum?.let { group ->
                         onOpenCatalogAlbum?.let { open ->
                             {
                                 libraryMenu = null
