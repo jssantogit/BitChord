@@ -1986,7 +1986,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             null
                         }
                         if (page != null) UiState.Success(page)
-                        else UiState.Error("Unable to load release tracks")
+                        else canonicalVerifiedLiveReleaseDetailPage(
+                            incoming = details,
+                            artworkUri = entry.artworkUri,
+                        )?.let { UiState.Success(it) }
+                            ?: UiState.Error("Não foi possível carregar as faixas desta edição.")
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> {
                         val cached = try {
@@ -2004,7 +2008,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             throw cancelled
                         } catch (_: Exception) { null to emptySet<String>() }
                         val details = cached.first
-                        if (details == null) UiState.Error("Unable to load release tracks")
+                        if (details == null) UiState.Error("Não foi possível carregar as faixas desta edição.")
                         else UiState.Success(CanonicalCatalogDetailPage(
                             title = details.title,
                             summary = "Saved release · offline catalog",
