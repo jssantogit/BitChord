@@ -146,5 +146,22 @@ internal fun canonicalAppleArtworkFor(
 ): String? = proof?.artworkUrl?.takeIf {
     proof.musicBrainzReleaseId.equals(requestedReleaseMbid, ignoreCase = true) &&
         proof.musicBrainzReleaseGroupId.equals(requestedGroupMbid, ignoreCase = true) &&
-        safeAppleStorePromotionUrl(proof.storeUrl)
+        safeAppleStorePromotionUrl(proof.storeUrl) &&
+        safeAppleArtwork(proof.artworkUrl) != null
+}
+
+/**
+ * A ReleaseGroup is not itself an Apple edition. Only its currently displayed
+ * exact MB Release (the source of the visible tracklist) can supply Apple art.
+ * A different edition in the same group MUST NOT loan its image or badge.
+ */
+internal fun verifiedAppleArtworkForDisplayedGroupEdition(
+    proof: AppleVerifiedEditionArtwork?,
+    requestedGroupMbid: String,
+    selectedReleaseMbid: String?,
+): AppleVerifiedEditionArtwork? {
+    if (selectedReleaseMbid.isNullOrBlank()) return null
+    return proof?.takeIf {
+        canonicalAppleArtworkFor(it, selectedReleaseMbid, requestedGroupMbid) != null
+    }
 }
