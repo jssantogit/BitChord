@@ -73,6 +73,9 @@ internal class AppleExploreGenreDiscovery(
                         matched.isEmpty() -> AppleEditorialReadState.NOT_IN_STOREFRONT
                         else -> AppleEditorialReadState.COMPLETE
                     },
+                    // Genre filtering can reject a perfectly valid Apple
+                    // album. Report actual API yield, not only visible tiles.
+                    probeReport = source.probeReport,
                 )
             }
         }
