@@ -28,11 +28,13 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.blur
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -292,6 +294,7 @@ import com.music.bitchord.sharedui.resources.search_hint
 import com.music.bitchord.sharedui.resources.search_addons_hint
 import com.music.bitchord.sharedui.resources.search_library_hint
 import com.music.bitchord.ui.components.TopBarDownloadButton
+import com.music.bitchord.ui.components.shouldBlurHeldContextBackdrop
 import com.music.bitchord.ui.components.optimizedHazeEffect
 import com.music.bitchord.ui.components.topBarContentPadding
 import com.music.bitchord.ui.components.AppLanguageDialog
@@ -2933,7 +2936,28 @@ private fun BitChordApp(
         // the feed, the frosted bars, the tab row — becomes the left half of
         // a row, and the player is the right. Off a tablet the row has the
         // one child it always had and changes nothing.
-        Row(Modifier.fillMaxSize()) {
+        // Capture the actual app page AND floating mini-player/navigation bar
+        // as one blur source while a long-press preview is raised. Haze alone
+        // cannot reliably sample pages nested inside AnimatedContent.
+        val heldOverlayVisible =
+            (songActions != null && songMenuOrigin != null) ||
+            (browseActions != null && browseMenuOrigin != null) ||
+            (recentHeldRecording != null && recentHeldOrigin != null) ||
+            (heldCatalogSearchRow != null && heldCatalogSearchOrigin != null) ||
+            (heldPublicPlaylistSearchRow != null && heldPublicPlaylistSearchOrigin != null)
+        val heldBackdropBlur by animateDpAsState(
+            targetValue = if (shouldBlurHeldContextBackdrop(
+                    heldVisible = heldOverlayVisible,
+                    reduceDynamicBlur = reduceDynamicBlur,
+                )) 20.dp else 0.dp,
+            animationSpec = tween(durationMillis = if (reducePlayerMotion) 0 else 180),
+            label = "held-context-backdrop-blur",
+        )
+        Row(
+            Modifier.fillMaxSize().then(
+                if (heldBackdropBlur > 0.dp) Modifier.blur(heldBackdropBlur) else Modifier,
+            ),
+        ) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 val playlistRoute = canonicalPlaylistRoute(
                     showBuilder = showSmartPlaylistBuilder,
@@ -5502,12 +5526,15 @@ private fun BitChordApp(
                     songMenuBody(song, SongActionsPresentation.Sheet)
                 }
             }
+            // Reserve the REAL floating chrome in all held-menu geometries.
+            val heldChromeClearance = if (player.song != null) 154.dp else 96.dp
             // Drawn over everything, tab bar and mini player included, and kept
             // composed through its own exit — so it is not gated on songActions.
             HeldContextMenu(
                 item = songActions,
                 held = songMenuOrigin,
                 hazeState = hazeState,
+                bottomChromeClearance = heldChromeClearance,
                 onDismiss = { songActions = null },
                 // A queue Song's albumId can be provider-local. Resolve its real
                 // Recording → Release/ReleaseGroup relationship before navigating;
@@ -5556,6 +5583,7 @@ private fun BitChordApp(
                 item = recentHeldRecording,
                 held = recentHeldOrigin,
                 hazeState = hazeState,
+                bottomChromeClearance = heldChromeClearance,
                 onDismiss = {
                     recentHeldRecording = null
                     recentHeldOrigin = null
@@ -5807,6 +5835,7 @@ private fun BitChordApp(
                 item = browseActions,
                 held = browseMenuOrigin,
                 hazeState = hazeState,
+                bottomChromeClearance = heldChromeClearance,
                 onDismiss = { browseActions = null },
                 // Tapping the lifted card opens it, as a tap on it in the list
                 // would have. Not for a Local Music grouping, which has no page.
@@ -5831,6 +5860,7 @@ private fun BitChordApp(
                 publicPlaylist = heldPublicPlaylistSearchRow,
                 publicPlaylistOrigin = heldPublicPlaylistSearchOrigin,
                 hazeState = hazeState,
+                bottomChromeClearance = heldChromeClearance,
                 onDismissCatalog = {
                     heldCatalogSearchRow = null
                     heldCatalogSearchOrigin = null
