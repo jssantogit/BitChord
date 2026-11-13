@@ -93,6 +93,43 @@ class AppleAlbumEditionReconciliationServiceTest {
         assertEquals(1, requested) // Incomplete and missing UPC fail before network.
     }
 
+    @Test fun missingAppleUpcOnlyBecomesLinkableWithSeparateAppleLookupProof() =
+        runBlocking {
+            val original = apple(upc = null)
+            val unavailable = AppleAlbumEditionReconciliationService(
+                source = AppleAlbumEditionEvidenceSource {
+                    AppleAlbumEditionEvidence(
+                        editions = listOf(mb()), groups = listOf(group()),
+                    )
+                },
+                discogs = AppleDiscogsEditionEvidenceSource {
+                    com.music.bitchord.data.catalog.metadata.discogs
+                        .DiscogsEditionEnrichment.Disabled
+                },
+            )
+            assertNull(unavailable.resolve(original))
+            val validated = AppleAlbumEditionReconciliationService(
+                source = AppleAlbumEditionEvidenceSource {
+                    AppleAlbumEditionEvidence(
+                        editions = listOf(mb()), groups = listOf(group()),
+                        verifiedAppleUpc = "8801234567890",
+                    )
+                },
+                discogs = AppleDiscogsEditionEvidenceSource {
+                    com.music.bitchord.data.catalog.metadata.discogs
+                        .DiscogsEditionEnrichment.Disabled
+                },
+            )
+            val proof = validated.resolve(original)
+            assertEquals(releaseId, proof?.release?.musicBrainzReleaseId)
+            assertEquals(groupId, proof?.release?.musicBrainzReleaseGroupId)
+            assertEquals(ItunesEditorialReleaseFormat.EP, proof?.classification?.format)
+            assertNull(proof?.release?.upc)
+            assertEquals(original.tracks, proof?.release?.tracks)
+            assertEquals(original.artworkUrl, proof?.release?.artworkUrl)
+            assertEquals(original.appleScopedId, proof?.release?.appleScopedId)
+        }
+
     @Test fun explicitAppleSingleRemainsSingleWhenMbGroupClaimsEp() = runBlocking {
         val service = AppleAlbumEditionReconciliationService(
             source = AppleAlbumEditionEvidenceSource {
