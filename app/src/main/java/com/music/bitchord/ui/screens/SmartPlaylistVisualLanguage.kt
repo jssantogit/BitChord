@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -282,6 +283,42 @@ internal fun PlaylistWizardPrimaryAction(
     }
 }
 
+/** Input contrast is shared by all wizard fields, including those nested
+ * inside SettingsGroupSurface. "emphasized" is a real visual contract, not
+ * a dormant flag: labels, resting border and fill must all gain hierarchy. */
+internal data class PlaylistWizardFieldVisuals(
+    val fill: Color,
+    val stroke: Color,
+    val label: Color,
+    val width: Dp,
+)
+
+internal fun playlistWizardFieldVisuals(
+    emphasized: Boolean,
+    focused: Boolean,
+    invalid: Boolean,
+    surface: Color,
+    onSurface: Color,
+    outline: Color,
+    key: Color,
+    error: Color,
+): PlaylistWizardFieldVisuals = PlaylistWizardFieldVisuals(
+    fill = if (emphasized) lerp(surface, onSurface, 0.075f) else surface,
+    stroke = when {
+        invalid -> error
+        focused -> key
+        emphasized -> onSurface.copy(alpha = 0.26f)
+        else -> outline
+    },
+    label = if (invalid) error else if (emphasized) onSurface
+        else onSurface.copy(alpha = 0.72f),
+    width = when {
+        focused || invalid -> 1.5.dp
+        emphasized -> 1.dp
+        else -> 0.5.dp
+    },
+)
+
 @Composable
 internal fun PlaylistWizardTextEntry(
     value: String,
@@ -294,37 +331,34 @@ internal fun PlaylistWizardTextEntry(
     multiline: Boolean = false,
     emphasized: Boolean = false,
 ) {
+    var fieldFocused by remember { mutableStateOf(false) }
+    val appearance = playlistWizardFieldVisuals(
+        emphasized = emphasized,
+        focused = fieldFocused,
+        invalid = error,
+        surface = MaterialTheme.colorScheme.surfaceVariant,
+        onSurface = MaterialTheme.colorScheme.onSurface,
+        outline = MaterialTheme.colorScheme.outlineVariant,
+        key = appleMusicKeyColor(),
+        error = MaterialTheme.colorScheme.error,
+    )
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (error) MaterialTheme.colorScheme.error
-                else MaterialTheme.colorScheme.onSurfaceVariant,
+            style = if (emphasized) MaterialTheme.typography.labelLarge
+                else MaterialTheme.typography.labelMedium,
+            color = appearance.label,
         )
-        // The native Search field supplies the visual language: a single
-        // 11dp rounded filled surface, subtle hairline and an Apple-key focus
-        // ring. No nested Material OutlinedTextField or double dark border.
-        var fieldFocused by androidx.compose.runtime.remember {
-            androidx.compose.runtime.mutableStateOf(false)
-        }
-        val shape = RoundedCornerShape(11.dp)
+        val shape = RoundedCornerShape(12.dp)
         Box(
             modifier = Modifier.fillMaxWidth()
                 .onFocusChanged { fieldFocused = it.hasFocus }
                 .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(
-                    if (fieldFocused || error) 1.dp else 0.5.dp,
-                    when {
-                        error -> MaterialTheme.colorScheme.error
-                        fieldFocused -> appleMusicKeyColor()
-                        else -> MaterialTheme.colorScheme.outlineVariant
-                    },
-                    shape,
-                )
+                .background(appearance.fill)
+                .border(appearance.width, appearance.stroke, shape)
                 .testTag("playlist-wizard-field-boundary"),
         ) {
             PillTextField(
@@ -332,7 +366,7 @@ internal fun PlaylistWizardTextEntry(
                 onValueChange = onValueChange,
                 placeholder = if (multiline) "Adicionar descrição" else "Digite aqui",
                 modifier = Modifier.heightIn(min = if (multiline) 96.dp else 48.dp),
-                container = MaterialTheme.colorScheme.surfaceVariant,
+                container = appearance.fill,
                 keyboardOptions = keyboardOptions,
                 accessibilityLabel = label,
                 multiline = multiline,
@@ -384,6 +418,99 @@ internal fun PlaylistWizardSegmented(
         selectedIndex = if (firstSelected) 0 else 1,
         onSelect = { if (it == 0) onSelectFirst() else onSelectSecond() },
     )
+}
+
+/** A playlist type is a real choice with a purpose, not a legacy two-stop
+ * slider. These native tiles share the catalog surface, Apple key and
+ * checked state used throughout the new Library. */
+@Composable
+internal fun PlaylistWizardKindCards(
+    normalSelected: Boolean,
+    onNormal: () -> Unit,
+    onSmart: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PlaylistWizardKindCard(
+            title = "Normal", detail = "Escolha suas músicas",
+            icon = PlaylistEditorIcons.Music,
+            selected = normalSelected,
+            onClick = onNormal,
+            tag = "playlist-kind-normal",
+            modifier = Modifier.weight(1f),
+        )
+        PlaylistWizardKindCard(
+            title = "Inteligente", detail = "Organize por regras",
+            icon = PlaylistEditorIcons.Filters,
+            selected = !normalSelected,
+            onClick = onSmart,
+            tag = "playlist-kind-smart",
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun PlaylistWizardKindCard(
+    title: String,
+    detail: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    tag: String,
+    modifier: Modifier = Modifier,
+) {
+    val key = appleMusicKeyColor()
+    val shape = RoundedCornerShape(18.dp)
+    val fill = if (selected)
+        lerp(MaterialTheme.colorScheme.surfaceVariant, key, 0.10f)
+        else MaterialTheme.colorScheme.surfaceVariant
+    Column(
+        modifier = modifier
+            .heightIn(min = 122.dp)
+            .clip(shape)
+            .background(fill)
+            .border(
+                width = if (selected) 1.5.dp else 0.75.dp,
+                color = if (selected) key
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
+                shape = shape,
+            )
+            .clickable(role = Role.RadioButton, onClick = onClick)
+            .semantics { this.selected = selected }
+            .testTag(tag)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon, contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(22.dp),
+            )
+            if (selected) Icon(
+                imageVector = PlaylistEditorIcons.Check, contentDescription = null,
+                tint = key, modifier = Modifier.size(19.dp),
+            )
+        }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+        )
+    }
 }
 
 /** Actions in rule groups are navigation commands, not large form buttons. */
