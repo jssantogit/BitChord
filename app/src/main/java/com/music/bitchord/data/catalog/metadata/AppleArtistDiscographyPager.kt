@@ -116,8 +116,8 @@ internal class AppleArtistDiscographyPager(
     /** Comparison only: Apple itself may append a display-level - EP / - Single. */
     private fun titleKey(text: String): String = java.text.Normalizer.normalize(
         text.trim(), java.text.Normalizer.Form.NFKC,
-    ).replace(Regex("""\\s[-–—]\\s(?:EP|Single)$""", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("""\\s+"""), " ")
+    ).replace(Regex("""\s[-–—]\s(?:EP|Single)$""", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("""\s+"""), " ")
         .lowercase(java.util.Locale.ROOT)
 
     /** Sources of candidate *names*, not authoritative Apple products. */
