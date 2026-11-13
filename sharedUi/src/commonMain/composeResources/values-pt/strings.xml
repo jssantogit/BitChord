@@ -315,4 +315,5 @@
     <string name="apple_search_more">Buscar lançamento</string>
     <string name="apple_discovery_failed">Não foi possível carregar mais lançamentos. Tente novamente.</string>
     <string name="apple_no_additional_releases">Nenhum lançamento adicional encontrado na Apple para este artista.</string>
+    <string name="apple_search_coverage_note">Alguns resultados podem não aparecer: a busca pública do iTunes não oferece uma última página garantida. Tente uma pesquisa mais específica.</string>
 </resources>
