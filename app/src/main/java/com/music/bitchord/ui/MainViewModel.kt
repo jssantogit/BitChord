@@ -1601,16 +1601,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // artwork. Never apply Apple art to a row/shelf unaccompanied
                 // by its exact Apple Store product link.
                 _canonicalAppleArtworkPromotion.value = route to proof
-                _canonicalDetail.value = UiState.Success(current.copy(
-                    artworkUri = proof.artworkUrl,
-                    rows = canonicalReleaseTracksWithArtwork(
-                        current.rows, proof.artworkUrl,
-                        previousInheritedArtwork = current.artworkUri,
-                    ),
-                ))
-                _detailStack.value = _detailStack.value.map { page ->
-                    if (page.browseId == route) page.copy(thumbnailUrl = proof.artworkUrl)
-                    else page
+                val chosenArtwork = com.music.bitchord.data.catalog.metadata
+                    .bestCertifiedAppleOrArchiveCover(
+                        proof.artworkUrl, current.artworkUri,
+                    )
+                if (chosenArtwork != null && chosenArtwork != current.artworkUri) {
+                    _canonicalDetail.value = UiState.Success(current.copy(
+                        artworkUri = chosenArtwork,
+                        rows = canonicalReleaseTracksWithArtwork(
+                            current.rows, chosenArtwork,
+                            previousInheritedArtwork = current.artworkUri,
+                        ),
+                    ))
+                    _detailStack.value = _detailStack.value.map { page ->
+                        if (page.browseId == route)
+                            page.copy(thumbnailUrl = chosenArtwork)
+                        else page
+                    }
                 }
             }
         }
@@ -1637,12 +1644,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 canonicalPath.lastOrNull() != entry) return@launch
             val current = (_canonicalDetail.value as? UiState.Success)?.data
                 ?: return@launch
-            // An older CAA response cannot steal back a newly certified
-            // Apple image or hide the store badge while the user stays here.
-            if (_canonicalAppleArtworkPromotion.value?.first ==
-                canonicalNativeBrowseId(entry)
-            ) return@launch
-            val accepted = if (entry.kind == CanonicalSearchKind.RELEASE_GROUP)
+            // A 500px CAA response may still replace a 100px Apple source;
+            // a slower low-resolution CAA response may NOT downgrade a
+            // larger, directly returned certified Apple image. Keep the Apple
+            // product badge, whichever source wins the quality comparison.
+            val promotion = _canonicalAppleArtworkPromotion.value
+                ?.takeIf { it.first == canonicalNativeBrowseId(entry) }?.second
+            val accepted = if (promotion != null) {
+                com.music.bitchord.data.catalog.metadata
+                    .bestCertifiedAppleOrArchiveCover(
+                        promotion.artworkUrl, artwork,
+                    ) == artwork && current.artworkUri != artwork
+            } else if (entry.kind == CanonicalSearchKind.RELEASE_GROUP)
                 canonicalShouldAcceptVerifiedGroupArtwork(current.artworkUri, artwork)
             else canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)
             if (!accepted) return@launch
