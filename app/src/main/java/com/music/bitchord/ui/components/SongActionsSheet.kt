@@ -129,6 +129,8 @@ fun SongActionsSheet(
     /** Canonical Release or ReleaseGroup route, only with verified links. */
     verifiedCanonicalAlbumRoute: String? = null,
     onOpenCanonicalAlbum: ((String) -> Unit)? = null,
+    /** Resolved MediaStore/Navidrome edition, before any public catalog lookup. */
+    onOpenSourceOwnedAlbum: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     onRemoveFromPlaylist: (() -> Unit)? = null,
     onShare: (() -> Unit)? = null,
@@ -245,13 +247,14 @@ fun SongActionsSheet(
             }
             // The Apple queue's six playback actions do not include discovery.
             // A verified release route is still an essential track action.
-            if (song.albumId != null || verifiedCanonicalAlbumRoute != null) {
+            if (onOpenSourceOwnedAlbum != null || song.albumId != null || verifiedCanonicalAlbumRoute != null) {
                 ActionRow(
                     icon = Icons.Rounded.Album,
                     label = stringResource(R.string.open_album),
                     accent = palette.accent,
                     onClick = {
-                        if (verifiedCanonicalAlbumRoute != null && onOpenCanonicalAlbum != null)
+                        if (onOpenSourceOwnedAlbum != null) onOpenSourceOwnedAlbum()
+                        else if (verifiedCanonicalAlbumRoute != null && onOpenCanonicalAlbum != null)
                             onOpenCanonicalAlbum(verifiedCanonicalAlbumRoute)
                         else song.albumId?.let(onOpenAlbum)
                     },
@@ -306,6 +309,12 @@ fun SongActionsSheet(
         val verifiedRelease = verifiedCanonicalAlbumRoute
             ?.takeIf { onOpenCanonicalAlbum != null }
         when {
+            onOpenSourceOwnedAlbum != null -> ActionRow(
+                Icons.Rounded.Album,
+                stringResource(R.string.open_album),
+                accent = palette.accent,
+                onClick = onOpenSourceOwnedAlbum,
+            )
             verifiedRelease != null -> ActionRow(
                 Icons.Rounded.Album,
                 stringResource(R.string.open_album),
