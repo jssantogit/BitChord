@@ -345,9 +345,12 @@ internal class MusicBrainzCatalogGraph(
                 // The stricter #209 parser's source-completeness gate is the
                 // authority here. Discogs may not verify a partial Track graph.
                 hasCompleteTracklist = tracks.isNotEmpty() &&
+                    // For read-only edition corroboration, a complete, offset-zero
+                    // source track array is ordered even when individual track
+                    // position fields are omitted; #209's stricter completeness
+                    // proof remains separately available for destructive uses.
                     jsonCompleteness.countsExplicitAndExact &&
                     jsonCompleteness.offsetsValid &&
-                    jsonCompleteness.positionsExplicitUnique &&
                     (data.integer("media-count") == null ||
                         data.integer("media-count") == media.size),
                 status = data.string("status"),

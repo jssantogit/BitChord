@@ -207,7 +207,7 @@ class MusicBrainzCatalogGraphTest {
         assertEquals("ILLIT feat. Guest", detail.value.tracks.first().artistDisplay)
         assertEquals("ILLIT", detail.value.tracks.first().recordingArtistDisplay)
         assertEquals(2, detail.value.tracks.map { it.trackMbid }.distinct().size)
-        assertEquals("recordings+artist-credits+release-groups", requests.last().second["inc"])
+        assertEquals("recordings+artist-credits+release-groups+labels", requests.last().second["inc"])
     }
 
     @Test fun browseMediaFormatsIdentifyOnlyExplicitlyVideoOnlyOfficialEditions() = runBlocking {
