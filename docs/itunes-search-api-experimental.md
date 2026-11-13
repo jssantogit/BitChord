@@ -1,6 +1,8 @@
 # iTunes Search API — catálogo de metadados (experimental)
 
-**Branch:** `catalog/itunes-search-metadata-20261113` · PR #214 · base: PR #209.
+**Branch:** `catalog/itunes-search-metadata-20261113` · PR #214 · **base de validação congelada:** `catalog/itunes-validation-base-744a438b` (snapshot exato da PR #209).
+
+A branch #209 recebe mudanças concorrentes com frequência. A primeira CI da PR #214 compilou o cliente iTunes e executou 3.272 testes: os testes do iTunes passaram, mas duas novas regressões do MusicBrainz **introduzidas depois do snapshot** falharam no merge sintético contra a base móvel. Para não atribuir defeitos do MusicBrainz a este adaptador, o alvo da PR #214 foi temporariamente fixado no snapshot `744a438b`. Ao integrar, retargetar para a PR #209 estabilizada e repetir todas as verificações.
 
 ## Objetivo e limites
 
