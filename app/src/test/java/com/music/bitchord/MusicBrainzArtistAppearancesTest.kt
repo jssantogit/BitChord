@@ -530,4 +530,62 @@ class MusicBrainzArtistAppearancesTest {
             ), target,
         ).isEmpty())
     }
+    @Test fun incompleteReleasePrimaryCreditCannotProveGuestOnAnotherArtistsWork() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[
+                {"artist":{"name":"Selected artist without MBID"}},
+                {"artist":{"id":"$other","name":"Host artist"}}
+            ],
+            "release-group":{"id":"$releaseGroup","title":"Possible collaboration",
+                "primary-type":"Single"},
+            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}],
+                "recording":{"id":"$recording","title":"Guest track"}}]}]
+        }]}"""
+        // The unidentifiable first release artist could be the requested
+        // artist. Keeping the remaining valid host credit is not enough to
+        // prove this belongs to another artist's editorial discography.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
+
+        val completeHost = body.replace(
+            """"artist":{"name":"Selected artist without MBID"}""",
+            """"artist":{"id":"33333333-3333-4333-8333-333333333334","name":"Other collaborator"}""",
+        )
+        assertEquals(listOf("Possible collaboration"),
+            parseMusicBrainzTrackArtistAppearances(completeHost, target).map { it.title })
+    }
+
+    @Test fun identicalRecordingInTwoDifferentReleaseGroupsIsTwoValidGuestAppearances() = runBlocking {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val firstGroup = "33333333-3333-4333-8333-333333333333"
+        val secondGroup = "44444444-4444-4444-8444-444444444444"
+        fun release(id: String, group: String, title: String) = """
+            {"id":"$id","status":"Official","barcode":"0196588123456",
+             "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+             "release-group":{"id":"$group","title":"$title",
+                "primary-type":"Album","first-release-date":"2025-06-01"},
+             "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}],
+                 "recording":{"id":"$recording","title":"Shared guest recording"}}]}]}"""
+        val first = release("55555555-5555-4555-8555-555555555555",
+            firstGroup, "Host studio album")
+        val alternateEdition = release("66666666-6666-4666-8666-666666666666",
+            firstGroup, "Host studio album")
+        val second = release("77777777-7777-4777-8777-777777777777",
+            secondGroup, "Host standalone single")
+        val body = """{"release-count":3,"releases":[$first,$alternateEdition,$second]}"""
+        val parsed = parseMusicBrainzTrackArtistAppearances(body, target)
+        assertEquals(setOf(firstGroup, secondGroup),
+            parsed.map { it.releaseGroupMbid }.toSet())
+        assertEquals(2, parsed.size)
+        // The public browse must preserve both WORKS, while collapsing
+        // alternate editions of the same Group+Recording.
+        val visible = MusicBrainzArtistAppearancesClient(fetch = { body }).browse(target)
+        assertEquals(setOf(firstGroup, secondGroup),
+            visible.map { it.releaseGroupMbid }.toSet())
+        assertEquals(2, visible.size)
+    }
+
+
 }
