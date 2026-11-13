@@ -34,7 +34,6 @@ import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeCompactOverflowMenu
 import com.music.bitchord.ui.components.NativeCompactMenuItem
 import com.music.bitchord.ui.components.contextClick
@@ -142,16 +141,10 @@ fun NativeSearchResultRow(
         }
         // Apple-style search places contextual actions here, never a duration.
         // An action only appears when the owning source supplies a real callback.
-        // Search is intentionally a clean, uninterrupted result list:
-        // every contextual operation remains on long press, never a ⋯ button.
-        if (false && onMoreActions.isNotEmpty()) {
+        // The anchor is invisible. Long press owns the contextual menu;
+        // no ⋯ consumes width or shifts titles in Search lists.
+        if (onMoreActions.isNotEmpty()) {
             Box {
-                RowMoreButton(
-                    onClick = { moreExpanded = true },
-                    modifier = Modifier.testTag("search-row-more-actions"),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    iconSize = 22.dp,
-                )
                 NativeCompactOverflowMenu(
                     expanded = moreExpanded,
                     onDismissRequest = { moreExpanded = false },
