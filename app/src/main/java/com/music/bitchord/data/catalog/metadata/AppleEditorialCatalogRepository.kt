@@ -13,10 +13,25 @@ internal enum class AppleEditorialReadState {
     NOT_IN_STOREFRONT,
 }
 
+/**
+ * Diagnostic coverage from actual Apple search probes, not a claim to know
+ * the number of products available in the store. Does not store query text.
+ */
+internal data class AppleEditorialProbeReport(
+    val eligibleSeeds: Int,
+    val probesMade: Int,
+    val matchingProducts: Int,
+    val withoutMatchingProducts: Int,
+    val failedRequests: Int,
+    val incompleteResponses: Int,
+    val budgetLimited: Boolean,
+)
+
 internal sealed interface AppleEditorialLoad {
     data class Success(
         val releases: List<ItunesEditorialRelease>,
         val state: AppleEditorialReadState,
+        val probeReport: AppleEditorialProbeReport? = null,
     ) : AppleEditorialLoad
 
     data class Failure(val reason: ItunesCatalogFailure) : AppleEditorialLoad
