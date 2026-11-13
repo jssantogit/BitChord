@@ -31,6 +31,15 @@ internal sealed interface AppleEditorialArtistLoad {
     data class Failure(val reason: ItunesCatalogFailure) : AppleEditorialArtistLoad
 }
 
+internal sealed interface AppleEditorialTrackLoad {
+    data class Success(
+        val tracks: List<ItunesCatalogItem>,
+        val possiblyTruncated: Boolean,
+    ) : AppleEditorialTrackLoad
+
+    data class Failure(val reason: ItunesCatalogFailure) : AppleEditorialTrackLoad
+}
+
 internal class AppleEditorialCatalogRepository(
     private val itunes: ItunesCatalogClient = ItunesCatalogClient(),
 ) {
@@ -48,6 +57,25 @@ internal class AppleEditorialCatalogRepository(
             AppleEditorialArtistLoad.Success(
                 artists = source.items.filter {
                     it.type == ItunesCatalogItemType.ARTIST && it.storefront == storefront
+                },
+                possiblyTruncated = source.possiblyTruncated,
+            )
+    }
+
+    /** Apple songs are editorial recordings, never Song/videoId/playable assets. */
+    suspend fun searchTracks(
+        query: String,
+        storefront: String = "br",
+        limit: Int = 100,
+    ): AppleEditorialTrackLoad = when (val source = itunes.search(
+        query, ItunesCatalogEntity.SONG, country = storefront, limit = limit,
+    )) {
+        is ItunesCatalogResult.Failure ->
+            AppleEditorialTrackLoad.Failure(source.reason)
+        is ItunesCatalogResult.Success ->
+            AppleEditorialTrackLoad.Success(
+                tracks = source.items.filter {
+                    it.type == ItunesCatalogItemType.TRACK && it.storefront == storefront
                 },
                 possiblyTruncated = source.possiblyTruncated,
             )
