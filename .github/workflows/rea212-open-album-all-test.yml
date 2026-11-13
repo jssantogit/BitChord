@@ -1,9 +1,9 @@
 # Smoke fixes + catalog identity navigation, exact source, test only.
-name: REA 212 · Verified held preview album
+name: REA 212 · Native and online album regression
 
 on:
   push:
-    branches: [validation/rea212-held-preview-album-d315e9c2-20261113]
+    branches: [validation/rea212-final-online-native-d9f1bc02-20261113]
     paths: [.github/workflows/rea212-open-album-all-test.yml]
 
 permissions:
@@ -17,9 +17,9 @@ jobs:
       - name: Checkout exact PR 212 source
         uses: actions/checkout@v4
         with:
-          ref: d315e9c2f7f5d009ff4cd72773c81113105c3fa2
+          ref: d9f1bc02acda5e9aa8f60fc68b98e5e4c92b3a10
       - name: Assert source revision
-        run: test "$(git rev-parse HEAD)" = "d315e9c2f7f5d009ff4cd72773c81113105c3fa2"
+        run: test "$(git rev-parse HEAD)" = "d9f1bc02acda5e9aa8f60fc68b98e5e4c92b3a10"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
