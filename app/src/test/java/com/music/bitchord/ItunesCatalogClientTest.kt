@@ -69,6 +69,28 @@ class ItunesCatalogClientTest {
         assertFalse(item.isPlayable)
     }
 
+    @Test fun conflictingSameIdInOneAppleResponseIsExcludedRatherThanFirstWins() =
+        runBlocking {
+            val transport = FakeTransport(
+                """{"resultCount":3,"results":[
+                    {"wrapperType":"collection","collectionType":"Album",
+                     "collectionId":401,"artistId":77,"artistName":"Artist",
+                     "collectionName":"Original"},
+                    {"wrapperType":"collection","collectionType":"Album",
+                     "collectionId":401,"artistId":77,"artistName":"Artist",
+                     "collectionName":"Conflicting"},
+                    {"wrapperType":"collection","collectionType":"Album",
+                     "collectionId":402,"artistId":77,"artistName":"Artist",
+                     "collectionName":"Unrelated"}
+                ]}"""
+            )
+            val result = ItunesCatalogClient(transport).search(
+                "Artist", ItunesCatalogEntity.ALBUM,
+            ) as ItunesCatalogResult.Success
+            assertEquals(listOf(402L), result.items.map { it.id })
+            assertTrue(result.possiblyTruncated)
+        }
+
     @Test fun exactAlbumLookupExcludesTracksBelongingToOtherCollections() = runBlocking {
         val transport = FakeTransport(
             """{"resultCount":4,"results":[
