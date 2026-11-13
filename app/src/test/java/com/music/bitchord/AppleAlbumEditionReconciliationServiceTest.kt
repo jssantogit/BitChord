@@ -103,6 +103,68 @@ class AppleAlbumEditionReconciliationServiceTest {
             result?.classification?.disputedExternalFormats)
     }
 
+    @Test fun discogsIsQueriedOnlyAfterMbEditionProofAndProvidesAttributedKind() =
+        runBlocking {
+            val record = com.music.bitchord.data.catalog.metadata.discogs.DiscogsRecord(
+                link = com.music.bitchord.data.catalog.metadata.discogs.DiscogsLink(
+                    com.music.bitchord.data.catalog.metadata.discogs.DiscogsKind.RELEASE, 25,
+                ),
+                title = "SUPER REAL ME", artistNames = listOf("ILLIT"),
+                country = "South Korea", year = 2024,
+                labels = listOf("BELIFT LAB" to "123"),
+                barcodes = listOf("8801234567890"),
+                formats = listOf("EP"), tracklist = listOf("1" to "Magnetic"),
+                unofficial = false,
+            )
+            var observedMbid: String? = null
+            val service = AppleAlbumEditionReconciliationService(
+                source = AppleAlbumEditionEvidenceSource {
+                    AppleAlbumEditionEvidence(listOf(mb()), listOf(group()))
+                },
+                discogs = AppleDiscogsEditionEvidenceSource { id ->
+                    observedMbid = id
+                    com.music.bitchord.data.catalog.metadata.discogs
+                        .DiscogsEditionEnrichment.Verified(
+                            com.music.bitchord.data.catalog.metadata.discogs
+                                .DiscogsObservation(
+                                    canonicalMbid = id,
+                                    kind = com.music.bitchord.data.catalog.metadata.discogs
+                                        .DiscogsKind.RELEASE,
+                                    record = record,
+                                    fetchedAtMillis = 1_000L,
+                                ),
+                        )
+                },
+                nowMillis = { 1_100L },
+            )
+            val proof = service.resolve(apple())
+            assertEquals(releaseId, observedMbid)
+            assertEquals(setOf(
+                AppleEditorialFormatSource.MUSICBRAINZ,
+                AppleEditorialFormatSource.DISCOGS,
+            ), proof?.classification?.sources)
+            assertEquals("https://www.discogs.com/release/25",
+                proof?.discogsEdition?.attributionUrl)
+            assertEquals(ItunesEditorialReleaseFormat.EP, proof?.classification?.format)
+        }
+
+    @Test fun unverifiedMbEditionNeverTriggersDiscogsNetworkWork() = runBlocking {
+        var discogsCalls = 0
+        val service = AppleAlbumEditionReconciliationService(
+            source = AppleAlbumEditionEvidenceSource {
+                AppleAlbumEditionEvidence(listOf(mb(barcode = "1111111111111")),
+                    listOf(group()))
+            },
+            discogs = AppleDiscogsEditionEvidenceSource {
+                discogsCalls++
+                com.music.bitchord.data.catalog.metadata.discogs
+                    .DiscogsEditionEnrichment.Candidate
+            },
+        )
+        assertNull(service.resolve(apple()))
+        assertEquals(0, discogsCalls)
+    }
+
     @Test fun foreignOrContradictoryAppleIdentityCannotBeReassembledAsValidEdition() = runBlocking {
         var called = false
         val service = AppleAlbumEditionReconciliationService(
