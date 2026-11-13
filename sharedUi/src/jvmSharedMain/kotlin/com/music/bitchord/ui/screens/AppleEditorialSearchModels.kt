@@ -42,6 +42,10 @@ data class AppleEditorialAlbumDetailPage(
     val album: AppleEditorialSearchRow,
     val tracks: List<AppleEditorialTrackRow>,
     val partialTracklist: Boolean,
+    /** Verified Discogs edition evidence must always carry its source link. */
+    val discogsAttributionText: String? = null,
+    val discogsAttributionUrl: String? = null,
+    val discogsNonAffiliationNotice: String? = null,
 )
 
 data class AppleEditorialArtistDetailPage(
