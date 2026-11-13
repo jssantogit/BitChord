@@ -89,6 +89,11 @@ import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.BrowseActionsSheet
+import com.music.bitchord.ui.components.HeldContextMenu
+import com.music.bitchord.ui.components.HeldItem
+import com.music.bitchord.ui.components.LongPressOrigin
+import com.music.bitchord.ui.components.SongActionsPresentation
+import dev.chrisbanes.haze.HazeState
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
@@ -274,6 +279,7 @@ internal fun CanonicalRemoteLibraryScreen(
     artistMenuToken: Int = 0,
     onSourceKeysChanged: (List<String>) -> Unit = {},
     selectionBarBottomPadding: Dp = 140.dp,
+    hazeState: HazeState? = null,
 ) {
     val context = LocalContext.current
     val controller = rememberMediaController()
@@ -359,6 +365,7 @@ internal fun CanonicalRemoteLibraryScreen(
     // Preserve native RecordingId-scoped rating edits from the main branch.
     var editingRecordingId by remember { mutableStateOf<String?>(null) }
     var libraryMenu by remember { mutableStateOf<CanonicalLibraryMenuTarget?>(null) }
+    var heldLibraryMenuOrigin by remember { mutableStateOf<HeldItem?>(null) }
     var playlistPickerSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
@@ -880,12 +887,14 @@ internal fun CanonicalRemoteLibraryScreen(
         ))
     }
     val openTrackMenu: (CanonicalBrowseTrack) -> Unit = { track ->
+        heldLibraryMenuOrigin = LongPressOrigin.consume()
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, track.recordingId),
             track.title, track.artistDisplay, track.artworkUri,
         )
     }
     val openAlbumMenu: (ReleaseEntity) -> Unit = { album ->
+        heldLibraryMenuOrigin = LongPressOrigin.consume()
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, album.id),
             album.title, album.artistDisplay.orEmpty(), album.artworkUri,
@@ -944,6 +953,7 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
     val openArtistMenu: (CanonicalSelectedEntity) -> Unit = { artist ->
+        heldLibraryMenuOrigin = LongPressOrigin.consume()
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, artist.id),
             artist.name, "Artista",
@@ -1345,13 +1355,14 @@ internal fun CanonicalRemoteLibraryScreen(
                     )
                 }
             }
-            ModalBottomSheet(
-                onDismissRequest = { libraryMenu = null },
-                shape = androidx.compose.ui.graphics.RectangleShape,
-                dragHandle = null,
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
+            val useHeldMenu = canonicalLibraryUsesHeldContextMenu(
+                hasCapturedHold = heldLibraryMenuOrigin != null,
+                hasHazeBackdrop = hazeState != null,
+            )
+            val menuBody: @Composable () -> Unit = {
                 BrowseActionsSheet(
+                    presentation = if (useHeldMenu)
+                        SongActionsPresentation.Menu else SongActionsPresentation.Sheet,
                     target = BrowseTarget(
                         browseId = null,
                         title = menu.title,
@@ -1419,6 +1430,47 @@ internal fun CanonicalRemoteLibraryScreen(
                         }
                     },
                 )
+            }
+            if (useHeldMenu) {
+                HeldContextMenu(
+                    item = menu,
+                    held = heldLibraryMenuOrigin,
+                    hazeState = requireNotNull(hazeState),
+                    onDismiss = {
+                        libraryMenu = null
+                        heldLibraryMenuOrigin = null
+                    },
+                    onPreviewClick = if (selectedEntity == null) {
+                        { target ->
+                            libraryMenu = null
+                            heldLibraryMenuOrigin = null
+                            when (target.selection.type) {
+                                CanonicalLibraryEntityType.TRACK ->
+                                    library.tracks.firstOrNull {
+                                        it.recordingId == target.selection.entityId
+                                    }?.let(playTrack)
+                                CanonicalLibraryEntityType.ALBUM, CanonicalLibraryEntityType.ARTIST ->
+                                    selectedEntity = CanonicalSelectedEntity(
+                                        target.selection.entityId, target.title, target.imageUrl,
+                                    )
+                            }
+                        }
+                    } else null,
+                ) {
+                    menuBody()
+                }
+            } else {
+                ModalBottomSheet(
+                    onDismissRequest = {
+                        libraryMenu = null
+                        heldLibraryMenuOrigin = null
+                    },
+                    shape = androidx.compose.ui.graphics.RectangleShape,
+                    dragHandle = null,
+                    containerColor = MaterialTheme.colorScheme.background,
+                ) {
+                    menuBody()
+                }
             }
         }
         playlistPickerSelection?.let { selected ->
@@ -1601,6 +1653,12 @@ internal fun RemoteBrowseMessage(message: String) {
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
     )
 }
+
+/** A real captured hold is required; toolbar overflow still opens the sheet. */
+internal fun canonicalLibraryUsesHeldContextMenu(
+    hasCapturedHold: Boolean,
+    hasHazeBackdrop: Boolean,
+): Boolean = hasCapturedHold && hasHazeBackdrop
 
 /** Selection is by canonical ID; text is presentation only. */
 @Composable
