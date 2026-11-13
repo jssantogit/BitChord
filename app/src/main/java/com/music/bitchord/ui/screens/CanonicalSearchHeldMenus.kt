@@ -1,22 +1,35 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.apple_search_view_details
-import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
 import com.music.bitchord.ui.components.HeldContextMenu
 import com.music.bitchord.ui.components.HeldItem
+import com.music.bitchord.ui.components.NativeCompactMenuDivider
 import com.music.bitchord.ui.components.NativeCompactMenuItem
+import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import dev.chrisbanes.haze.HazeState
 import org.jetbrains.compose.resources.stringResource
 
-/** A search MBID without an available audio asset must never offer queue commands. */
-internal fun canonicalSearchHeldQueueAllowed(row: CanonicalCatalogSearchRow): Boolean =
-    row.kind == CanonicalSearchKind.RECORDING && row.hasCatalogedAsset
+/** Public catalog metadata is not an audio source, regardless of a Room hit. */
+internal fun canonicalSearchHeldQueueAllowed(@Suppress("UNUSED_PARAMETER") row: CanonicalCatalogSearchRow): Boolean =
+    false
 
-/** Lift Search's captured native row; do not route its MBID into the legacy browse menu. */
+internal fun canonicalSearchHeldCanAddToPlaylist(kind: CanonicalSearchKind): Boolean =
+    kind == CanonicalSearchKind.RECORDING || kind == CanonicalSearchKind.RELEASE ||
+        kind == CanonicalSearchKind.RELEASE_GROUP
+
+internal fun canonicalSearchHeldShowsDownload(kind: CanonicalSearchKind): Boolean =
+    canonicalSearchHeldCanAddToPlaylist(kind)
+
+/** Search uses long press only: no trailing ⋯ and no playback/queue actions. */
 @Composable
 internal fun CanonicalSearchHeldMenus(
     catalogRow: CanonicalCatalogSearchRow?,
@@ -28,32 +41,58 @@ internal fun CanonicalSearchHeldMenus(
     onDismissCatalog: () -> Unit,
     onDismissPublicPlaylist: () -> Unit,
     onOpenCatalog: (CanonicalCatalogSearchRow) -> Unit,
-    onQueueCatalog: (String) -> Unit,
     onOpenPublicPlaylist: (CanonicalPublicPlaylistSearchRow) -> Unit,
+    onAddCatalogToPlaylist: (CanonicalCatalogSearchRow) -> Unit,
+    onAddPublicPlaylistToPlaylist: (CanonicalPublicPlaylistSearchRow) -> Unit,
+    onRateCatalog: (CanonicalCatalogSearchRow) -> Unit,
+    onRatePublicPlaylist: (CanonicalPublicPlaylistSearchRow) -> Unit,
+    onPinCatalog: (CanonicalCatalogSearchRow) -> Unit,
+    onPinPublicPlaylist: (CanonicalPublicPlaylistSearchRow) -> Unit,
+    onShareCatalog: (CanonicalCatalogSearchRow) -> Unit,
+    onSharePublicPlaylist: (CanonicalPublicPlaylistSearchRow) -> Unit,
+    onDownloadCatalog: (CanonicalCatalogSearchRow) -> Unit,
+    onDownloadPublicPlaylist: (CanonicalPublicPlaylistSearchRow) -> Unit,
 ) {
-    val detailsLabel = stringResource(Res.string.apple_search_view_details)
-    val queueLabel = stringResource(Res.string.smart_collection_batch_queue)
-
+    val details = stringResource(Res.string.apple_search_view_details)
     HeldContextMenu(
         item = catalogRow,
         held = catalogOrigin,
         hazeState = hazeState,
         bottomChromeClearance = bottomChromeClearance,
         onDismiss = onDismissCatalog,
-        onPreviewClick = { row ->
-            onDismissCatalog()
-            onOpenCatalog(row)
-        },
+        onPreviewClick = { row -> onDismissCatalog(); onOpenCatalog(row) },
     ) { row ->
-        NativeCompactMenuItem(label = detailsLabel, onClick = {
-            onDismissCatalog()
-            onOpenCatalog(row)
-        })
-        if (canonicalSearchHeldQueueAllowed(row)) {
-            NativeCompactMenuItem(label = queueLabel, onClick = {
-                onDismissCatalog()
-                onQueueCatalog(row.musicBrainzId)
-            })
+        NativeCompactMenuItem(
+            label = details, icon = PlaylistEditorIcons.Info,
+            onClick = { onDismissCatalog(); onOpenCatalog(row) },
+        )
+        if (canonicalSearchHeldCanAddToPlaylist(row.kind)) {
+            NativeCompactMenuItem(
+                label = "Adicionar à playlist",
+                icon = Icons.Rounded.PlaylistAdd,
+                onClick = { onDismissCatalog(); onAddCatalogToPlaylist(row) },
+            )
+        }
+        if (row.kind != CanonicalSearchKind.RECORDING) {
+            NativeCompactMenuItem(
+                label = "Editar avaliação", icon = PlaylistEditorIcons.RatingPlain,
+                onClick = { onDismissCatalog(); onRateCatalog(row) },
+            )
+            NativeCompactMenuItem(
+                label = "Fixar", icon = BitChordIcons.Pin,
+                onClick = { onDismissCatalog(); onPinCatalog(row) },
+            )
+        }
+        NativeCompactMenuItem(
+            label = "Compartilhar", icon = Icons.Rounded.Share,
+            onClick = { onDismissCatalog(); onShareCatalog(row) },
+        )
+        if (canonicalSearchHeldShowsDownload(row.kind)) {
+            NativeCompactMenuDivider()
+            NativeCompactMenuItem(
+                label = "Baixar", icon = Icons.Rounded.Download,
+                onClick = { onDismissCatalog(); onDownloadCatalog(row) },
+            )
         }
     }
     HeldContextMenu(
@@ -62,14 +101,32 @@ internal fun CanonicalSearchHeldMenus(
         hazeState = hazeState,
         bottomChromeClearance = bottomChromeClearance,
         onDismiss = onDismissPublicPlaylist,
-        onPreviewClick = { row ->
-            onDismissPublicPlaylist()
-            onOpenPublicPlaylist(row)
-        },
+        onPreviewClick = { row -> onDismissPublicPlaylist(); onOpenPublicPlaylist(row) },
     ) { row ->
-        NativeCompactMenuItem(label = detailsLabel, onClick = {
-            onDismissPublicPlaylist()
-            onOpenPublicPlaylist(row)
-        })
+        NativeCompactMenuItem(
+            label = details, icon = PlaylistEditorIcons.Info,
+            onClick = { onDismissPublicPlaylist(); onOpenPublicPlaylist(row) },
+        )
+        NativeCompactMenuItem(
+            label = "Adicionar à playlist", icon = Icons.Rounded.PlaylistAdd,
+            onClick = { onDismissPublicPlaylist(); onAddPublicPlaylistToPlaylist(row) },
+        )
+        NativeCompactMenuItem(
+            label = "Editar avaliação", icon = PlaylistEditorIcons.RatingPlain,
+            onClick = { onDismissPublicPlaylist(); onRatePublicPlaylist(row) },
+        )
+        NativeCompactMenuItem(
+            label = "Fixar", icon = BitChordIcons.Pin,
+            onClick = { onDismissPublicPlaylist(); onPinPublicPlaylist(row) },
+        )
+        NativeCompactMenuItem(
+            label = "Compartilhar", icon = Icons.Rounded.Share,
+            onClick = { onDismissPublicPlaylist(); onSharePublicPlaylist(row) },
+        )
+        NativeCompactMenuDivider()
+        NativeCompactMenuItem(
+            label = "Baixar", icon = Icons.Rounded.Download,
+            onClick = { onDismissPublicPlaylist(); onDownloadPublicPlaylist(row) },
+        )
     }
 }
