@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "scope": "PUBLIC_API_ONLY_NOT_ANDROID_OR_SMOKE",
+  "verification_date": "2026-11-13",
+  "source_first_pass": {
+    "run_id": 43425075506,
+    "head_sha": "08aa8adf1a4cc19ed0d2642e803f3a3eae7e145f",
+    "artifact_id": 14036152195,
+    "observed": {
+      "artists_pass": 20,
+      "release_groups_pass": 60,
+      "relationship_pass": 12,
+      "source_fail": 0,
+      "source_error": 9,
+      "source_inconclusive": 9,
+      "http_attempts": 132
+    },
+    "note": "All artist and Group checks passed. Later relations exhausted the 132-attempt cap; these are NOT contradictory IDs."
+  },
+  "source_relation_pass": {
+    "run_id": 43426212878,
+    "head_sha": "edd34f2df4c443bf4d7b9c17faab38c4e973bf69",
+    "artifact_id": 14036662483,
+    "observed": {
+      "artist_to_group_pass": 10,
+      "release_to_group_pass": 10,
+      "track_to_recording_artist_credit_pass": 10,
+      "source_fail": 0,
+      "source_error": 0,
+      "source_inconclusive": 0,
+      "http_attempts": 26
+    }
+  },
+  "final_unique_source_gates": {
+    "artists_pass": 20,
+    "release_groups_pass": 60,
+    "relationships_pass": 30,
+    "total_pass": 110,
+    "false_identity_assertions_observed": 0
+  },
+  "artists": [
+    {
+      "name": "NewJeans",
+      "artist_mbid": "49204a7a-ed85-407a-828f-6fd46f1d8126",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "1aff1c62-a48a-4f73-8063-c9e661bdee85",
+        "1bb441a0-6dd9-4b47-88b4-cf88db07ac96",
+        "23d1cd75-8dc5-436d-a0c6-cab894dd5f64"
+      ]
+    },
+    {
+      "name": "LE SSERAFIM",
+      "artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "00de157c-9acf-48a5-8a2d-37b6cae4652c",
+        "012c7329-f6eb-4eb4-a6ef-4a5273eaf06d",
+        "0883cb86-e61b-43a2-b991-4138079f55e4"
+      ]
+    },
+    {
+      "name": "IVE",
+      "artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "01ac39b1-0fd9-4878-9fdf-f5949bf11e2c",
+        "0708670e-6748-4316-85dc-184cf31d6e2d",
+        "07fb58fa-2007-4e40-aa57-88e69a9e19be"
+      ]
+    },
+    {
+      "name": "ILLIT",
+      "artist_mbid": "6b128dd7-e998-4edb-a4f5-400fef190445",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "001f0398-a6de-4fff-a3d3-401b5341ecf4",
+        "0d55edd8-cad4-4055-b4a7-308bcdcd43d5",
+        "12d376ca-f01a-4a25-8596-102e95ce5f13"
+      ]
+    },
+    {
+      "name": "ENHYPEN",
+      "artist_mbid": "95663592-1447-4579-90f7-c94733476667",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "05749bd7-a67c-4ce8-9394-92ab902d4dea",
+        "058ba7f6-ed5b-4e68-a67b-22cb0ad2d2c1",
+        "0627b156-6eeb-4c01-b7ba-df52f0bbf736"
+      ]
+    },
+    {
+      "name": "aespa",
+      "artist_mbid": "b51c672b-85e0-48fe-8648-470a2422229f",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "04a80d6b-3044-400b-b5da-d248724d3dbb",
+        "0d85829d-a7f0-4dab-b9b4-e7c57d923213",
+        "122f03b0-d039-40ee-a63f-d8f641bf47c6"
+      ]
+    },
+    {
+      "name": "BTS",
+      "artist_mbid": "0d79fe8e-ba27-4859-bb8c-2f255f346853",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "0150fd41-0851-4f95-9430-97cfe8d2e6c5",
+        "01f75e25-5401-4001-a90a-685d6e5a1516",
+        "026c4502-ae2b-4bec-9399-5218ec3c6936"
+      ]
+    },
+    {
+      "name": "TWICE",
+      "artist_mbid": "8da127cc-c432-418f-b356-ef36210d82ac",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "07d986cb-9c6d-4c3d-b1d4-99d0ddfe4611",
+        "0827c04a-63c0-498c-8f50-d859f04c73bf",
+        "09dd52d2-3220-4f67-965b-89f17928822f"
+      ]
+    },
+    {
+      "name": "BLACKPINK",
+      "artist_mbid": "48646387-1664-4c9a-9139-9bfd091b823c",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "00ffc132-f720-48bc-beea-adc0692bd1e3",
+        "0bdb926e-e5ea-4e04-beb9-6d589fd2fbec",
+        "141abc55-d843-4a0a-8ed6-fad3c7425afa"
+      ]
+    },
+    {
+      "name": "IU",
+      "artist_mbid": "b9545342-1e6d-4dae-84ac-013374ad8d7c",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "066225ff-a8bd-4183-bff5-08329f0a063a",
+        "08c5e3ea-a6b1-43d1-a4fa-4e9f27d6e4f3",
+        "1299e16d-133b-47b0-b991-36cf11eff7d7"
+      ]
+    },
+    {
+      "name": "Stray Kids",
+      "artist_mbid": "142b343d-bf5a-428c-a64f-6d1a7566bbe9",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "02793489-d6b4-465c-a6b4-bbf287d9c433",
+        "071c86de-cb7e-4d62-bc1f-c2061eadb3d6",
+        "080a71b0-6ffd-4ae3-86ca-f14135d3e967"
+      ]
+    },
+    {
+      "name": "SEVENTEEN",
+      "artist_mbid": "e04d239e-9fa8-49b3-b9b7-9e439c3cb1d1",
+      "artist_type": "Group",
+      "release_group_mbids": [
+        "0cea2a74-3fb6-4e79-87de-01542aa10563",
+        "17451423-b577-409c-a0b1-d3dee6c86d1e",
+        "24817946-6e93-44e7-af20-9822d556d093"
+      ]
+    },
+    {
+      "name": "ROSÉ",
+      "artist_mbid": "7f233cda-eacb-4235-b681-5f7be343a1a2",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "428a41c2-b5d6-4ab5-9e33-8071b46f8530",
+        "76741858-76b8-4e33-a5e0-f733df29b0d6",
+        "8082aa21-6600-4e80-859e-b17b54eca805"
+      ]
+    },
+    {
+      "name": "Jon Batiste",
+      "artist_mbid": "a2a72dba-3a08-43c4-859c-4c7f5fcc9599",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "01616d8c-0bb6-49c9-bcaf-f9c47d0e39f0",
+        "0a9ebb9a-6f93-405b-855b-c03bf54f9f80",
+        "0c48581a-294d-42c0-9331-2794a7bd0529"
+      ]
+    },
+    {
+      "name": "Taylor Swift",
+      "artist_mbid": "20244d07-534f-4eff-b4d4-930878889970",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "01b14120-0fcc-4a8a-8849-d960a7ec79cf",
+        "0441b1b2-de57-4a9a-b007-1f6e159921d5",
+        "08cdf7f4-3715-467b-b3d8-37a4dfa29224"
+      ]
+    },
+    {
+      "name": "Billie Eilish",
+      "artist_mbid": "f4abc0b5-3f7a-4eff-8f78-ac078dbce533",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "00d7053b-5079-44b1-8df5-3be318183943",
+        "02a544b3-0459-42c7-bd9c-047162e7b67a",
+        "06ed26bd-4a17-481c-8884-1f4d570e8402"
+      ]
+    },
+    {
+      "name": "Sabrina Carpenter",
+      "artist_mbid": "1882fe91-cdd9-49c9-9956-8e06a3810bd4",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "05ec519f-8099-4df0-9149-4302b980e0c9",
+        "098b431c-7e67-42ff-841a-ca79cac99a09",
+        "175e4dd3-579c-4423-b170-0742fe522cf5"
+      ]
+    },
+    {
+      "name": "The Weeknd",
+      "artist_mbid": "c8b03190-306c-4120-bb0b-6f2ebfc06ea9",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "045f6e37-4cab-4af4-be77-87f83fdd76d5",
+        "083bebaa-fcc1-43cb-8b93-463aac070cbe",
+        "08982d4d-49ae-4b8c-b0a7-692992781f8a"
+      ]
+    },
+    {
+      "name": "Beyoncé",
+      "artist_mbid": "859d0860-d480-4efd-970c-c05d5f1776b8",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "008f61c8-0e7f-3aa3-8675-5c4f20637d43",
+        "016e3419-59b7-4bc4-a77e-22a37c330816",
+        "03409c34-0628-4d08-9f6b-80e0b0f58fe5"
+      ]
+    },
+    {
+      "name": "Bad Bunny",
+      "artist_mbid": "89aa5ecb-59ad-46f5-b3eb-2d424e941f19",
+      "artist_type": "Person",
+      "release_group_mbids": [
+        "00447e1f-0b1c-44e6-9164-d500f2f0d1de",
+        "03ddafd5-9a04-4df9-ae74-d7f92db2384c",
+        "072aec78-2175-4d62-a3ff-fdc94e4110af"
+      ]
+    }
+  ],
+  "relationship_proofs": [
+    {
+      "name": "NewJeans",
+      "artist_mbid": "49204a7a-ed85-407a-828f-6fd46f1d8126",
+      "group_mbid": "1aff1c62-a48a-4f73-8063-c9e661bdee85",
+      "primary_type": "Single",
+      "release_mbid": "14dab18e-9d60-43b2-afc3-8225fa6af5e5",
+      "track_mbid": "e45fa6e7-4395-451b-ac2e-d53c04eaddd7",
+      "recording_mbid": "b4186387-2015-41b5-a811-f1d6a3042758",
+      "source_status": "PASS"
+    },
+    {
+      "name": "LE SSERAFIM",
+      "artist_mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "group_mbid": "00de157c-9acf-48a5-8a2d-37b6cae4652c",
+      "primary_type": "Single",
+      "release_mbid": "74196ddb-493d-4647-843e-f11f376c9930",
+      "track_mbid": "78a32cd4-c2fb-4e38-9aae-d65539eb67a5",
+      "recording_mbid": "6d39c10f-3576-4432-8273-bca8aa082def",
+      "source_status": "PASS"
+    },
+    {
+      "name": "IVE",
+      "artist_mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "group_mbid": "01ac39b1-0fd9-4878-9fdf-f5949bf11e2c",
+      "primary_type": "EP",
+      "release_mbid": "59a81c2e-3ad7-416d-862d-fe3ca9d570eb",
+      "track_mbid": "697a3f6c-f407-4af0-99c4-2772b828b8f9",
+      "recording_mbid": "fc0f02a0-06fa-470b-829c-7b1daa418c95",
+      "source_status": "PASS"
+    },
+    {
+      "name": "ILLIT",
+      "artist_mbid": "6b128dd7-e998-4edb-a4f5-400fef190445",
+      "group_mbid": "001f0398-a6de-4fff-a3d3-401b5341ecf4",
+      "primary_type": "Single",
+      "release_mbid": "72cd341e-247f-48a9-ade1-d75bab56fa17",
+      "track_mbid": "69634194-e051-443b-afa4-ab2efd2def1a",
+      "recording_mbid": "3586c99d-7f5a-465c-bab2-8d0744f9e3d8",
+      "source_status": "PASS"
+    },
+    {
+      "name": "ENHYPEN",
+      "artist_mbid": "95663592-1447-4579-90f7-c94733476667",
+      "group_mbid": "05749bd7-a67c-4ce8-9394-92ab902d4dea",
+      "primary_type": "Single",
+      "release_mbid": "76d49860-183a-4b99-b57d-b740c2246b60",
+      "track_mbid": "ab0fd5a0-8107-4069-9c3f-44c7b012dd49",
+      "recording_mbid": "a3e224e0-2797-4fd3-abfe-82aceb4eabeb",
+      "source_status": "PASS"
+    },
+    {
+      "name": "aespa",
+      "artist_mbid": "b51c672b-85e0-48fe-8648-470a2422229f",
+      "group_mbid": "04a80d6b-3044-400b-b5da-d248724d3dbb",
+      "primary_type": "Single",
+      "release_mbid": "667fe5de-022c-483a-876e-aa7fa3648bb1",
+      "track_mbid": "acfdf7ef-e6ce-48a1-a423-d299f40d5de9",
+      "recording_mbid": "b9438e6f-6118-4f92-947b-2204c85469d3",
+      "source_status": "PASS"
+    },
+    {
+      "name": "BTS",
+      "artist_mbid": "0d79fe8e-ba27-4859-bb8c-2f255f346853",
+      "group_mbid": "0150fd41-0851-4f95-9430-97cfe8d2e6c5",
+      "primary_type": "Single",
+      "release_mbid": "2ed4be9a-aeb7-43bb-a804-aad23c43fa3e",
+      "track_mbid": "07dfec67-fdda-4995-a55c-234b17b98c71",
+      "recording_mbid": "9ec6dbc0-b183-49c5-9b8b-d9dbc36b6747",
+      "source_status": "PASS"
+    },
+    {
+      "name": "TWICE",
+      "artist_mbid": "8da127cc-c432-418f-b356-ef36210d82ac",
+      "group_mbid": "07d986cb-9c6d-4c3d-b1d4-99d0ddfe4611",
+      "primary_type": "Single",
+      "release_mbid": "59f60cd3-0783-4a52-b7ff-9a732db65052",
+      "track_mbid": "daaf0c27-3735-4979-8c89-2825fbdf2a91",
+      "recording_mbid": "b91e1846-e3f5-4ee7-ab13-941cf30da09d",
+      "source_status": "PASS"
+    },
+    {
+      "name": "BLACKPINK",
+      "artist_mbid": "48646387-1664-4c9a-9139-9bfd091b823c",
+      "group_mbid": "00ffc132-f720-48bc-beea-adc0692bd1e3",
+      "primary_type": "Single",
+      "release_mbid": "307d4255-6ae7-46d2-9629-77015cf6a029",
+      "track_mbid": "c07bd7bf-b898-486a-8267-c7d8fc342580",
+      "recording_mbid": "12482e22-2534-443b-8462-629a0476b622",
+      "source_status": "PASS"
+    },
+    {
+      "name": "IU",
+      "artist_mbid": "b9545342-1e6d-4dae-84ac-013374ad8d7c",
+      "group_mbid": "066225ff-a8bd-4183-bff5-08329f0a063a",
+      "primary_type": "EP",
+      "release_mbid": "1b43c9e0-31d4-48ae-92bc-541a6aaf4eb3",
+      "track_mbid": "3bb8bb9b-1cca-4ceb-8b1a-4a42aeabacce",
+      "recording_mbid": "b3b96429-e8f0-467a-8df9-bd4ff1a6efd1",
+      "source_status": "PASS"
+    }
+  ],
+  "status": {
+    "source_gate": "PASS",
+    "kotlin_android_ci": "TO_VERIFY_FINAL_HEAD",
+    "physical_smoke": "DEFERRED_UNTIL_WORK_COMPLETE",
+    "merge": "NOT_AUTHORIZED"
+  },
+  "limitations": [
+    "Public MusicBrainz source audit only; does not run Kotlin catalog parser or Android UI",
+    "No current ownership or playback proof for any MediaAsset",
+    "The 60 group cases were selected deterministically from bounded raw browse, then independently verified by exact MBID and structured artist credit",
+    "30 relations were checked in a separate bounded pass on pinned Group, Release, Track and Recording MBIDs"
+  ]
+}

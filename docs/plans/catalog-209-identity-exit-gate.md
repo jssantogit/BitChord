@@ -6,8 +6,8 @@ ReleaseGroup. Discogs continua complementar. A #209 NÃO tem de aperfeiçoar os
 nomes, sleeves, rankings, tipos comerciais e completude da discografia Apple.
 Este documento define a conclusão de **#209**, não o cutover ou a conclusão de #214.
 
-**Status inicial: PROTOCOLO DEFINIDO; ACEITE FINAL AINDA NÃO EXECUTADO.**
-Nenhum caso abaixo é PASS só porque existe uma fixture ou compilação verde.
+**Estado em 13/11/2026: GATE DE IDENTIDADE NA API PÚBLICA APROVADO (20/60/30).**
+[Relatório durável com os 20 Artist MBIDs, 60 ReleaseGroup MBIDs e 30 relações](catalog-209-identity-exit-evidence.json) documenta 110 observações públicas PASS, zero contradições de identidade, nos workflows [primeiro lote #43425075506](https://github.com/jssantogit/BitChord/actions/runs/43425075506) e [relações complementares #43426212878](https://github.com/jssantogit/BitChord/actions/runs/43426212878). O primeiro lote tinha nove ERROR e nove INCONCLUSIVE por esgotar o limite HTTP; seus casos de relações foram **substituídos por 30 PASS da verificação complementar**, sem repetir os 80 casos já aprovados. **CI Android/Room no HEAD final e smoke físico seguem gates separados; não declarar o app aprovado somente pela API.**
 
 ## Amostra fechada (congelada para esta etapa)
 
