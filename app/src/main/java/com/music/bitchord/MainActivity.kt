@@ -1169,8 +1169,11 @@ private fun BitChordApp(
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
-        appleHomeReleases is UiState.Loading ||
-            canonicalWorldwideLoading -> UiState.Loading
+        com.music.bitchord.ui.appleFirstHomeEditorialIsPending(
+            appleStillLoading = appleHomeReleases is UiState.Loading,
+            musicBrainzStillLoading = canonicalWorldwideLoading,
+            hasCandidateSeeds = canonicalWorldwideReleases.isNotEmpty(),
+        ) -> UiState.Loading
         else -> UiState.Error(
             "Nenhum lançamento Apple confirmado no momento. Atualize para tentar novamente.",
         )
