@@ -67,6 +67,7 @@ import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CanonicalRecordingReleaseGroupLinkRow
+import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
@@ -437,7 +438,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onShuffle: () -> Unit,
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
-    onOpenAlbum: (String) -> Unit = {},
+    onOpenAlbum: (String, String, String) -> Unit = { _, _, _ -> },
     onLegacyPlay: (String, List<Song>, Int) -> Unit = { _, _, _ -> },
     onLegacyShuffle: (String, List<Song>) -> Unit = { _, _ -> },
     onLegacyQueue: (List<Song>) -> Unit = {},
@@ -567,7 +568,7 @@ internal fun CanonicalPlaylistDetailScreen(
     // Resolve in batches, once per playlist snapshot. Rendering lazy rows
     // never queries Room individually and never guesses album by track name.
     val albumByRecording by produceState(
-        initialValue = emptyMap<String, String>(),
+        initialValue = emptyMap<String, CatalogReleaseGroupEntity>(),
         key1 = card.id, key2 = rows,
     ) {
         val ids = rows.orEmpty().map { it.id }.distinct().filter(::isVerifiedCatalogRecordingId)
@@ -576,12 +577,18 @@ internal fun CanonicalPlaylistDetailScreen(
                 val dao = CanonicalCatalogDatabase.get(context).catalogDao()
                 val links = ids.chunked(300).flatMap { chunk ->
                     dao.recordingReleaseGroupLinksByIds(chunk)
-                }
-                    .groupBy { it.recordingId }
-                ids.mapNotNull { recordingId ->
+                }.groupBy { it.recordingId }
+                val uniqueLinks = ids.mapNotNull { recordingId ->
                     canonicalPlaylistAlbumForRecording(
                         recordingId, links[recordingId].orEmpty(),
                     )?.let { recordingId to it }
+                }.toMap()
+                val groups = uniqueLinks.values.distinct().chunked(300)
+                    .flatMap { groupIds -> dao.catalogReleaseGroupsByIds(groupIds) }
+                    .associateBy(CatalogReleaseGroupEntity::id)
+                uniqueLinks.mapNotNull { (recordingId, groupId) ->
+                    groups[groupId]?.takeIf { it.title.isNotBlank() }
+                        ?.let { recordingId to it }
                 }.toMap()
             }
         } catch (cancelled: CancellationException) {
@@ -850,8 +857,14 @@ internal fun CanonicalPlaylistDetailScreen(
                 track = track,
                 onPlay = onTrackClick,
                 onQueue = onTrackQueue,
-                onOpenAlbum = albumByRecording[track.id]?.let { groupId ->
-                    { onOpenAlbum("catalog:RELEASE_GROUP:$groupId") }
+                onOpenAlbum = albumByRecording[track.id]?.let { group ->
+                    {
+                        onOpenAlbum(
+                            "catalog:RELEASE_GROUP:${group.id}",
+                            group.title,
+                            group.artistDisplay.orEmpty(),
+                        )
+                    }
                 },
                 titleColor = palette.onBackground,
                 subtitleColor = palette.onBackgroundVariant,
