@@ -3,6 +3,7 @@ package com.music.bitchord.ui.screens
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import org.junit.Assert.assertTrue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.longClick
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import org.junit.Assert.assertEquals
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
+import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -78,4 +80,8 @@ class CanonicalRecentCardsComposeTest {
         compose.onNodeWithTag("canonical-recent-card", useUnmergedTree = true)
             .assertWidthIsEqualTo(SHELF_CARD_WIDTH)
     }
+    @Test fun expandedRecentSearchStartsBelowFloatingToolbar() {
+        assertTrue(recentAdditionsSearchTopClearance >= 80.dp)
+    }
+
 }
