@@ -194,6 +194,10 @@ internal fun NativeCanonicalArtistContent(
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
+                            onLongPress = if (selectedItems.isEmpty()) {
+                                ({ onTrackOptions(track) })
+                            } else null,
+                            showInlineOptions = false,
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.TRACK, track.recordingId,
