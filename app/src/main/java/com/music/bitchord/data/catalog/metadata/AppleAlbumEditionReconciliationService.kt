@@ -42,23 +42,20 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
         if (album.upc == null) return discoverByReverseUpc(album)
         val barcode = album.upc.takeIf { Regex("^[0-9]{8,14}$").matches(it) }
             ?: return null
-        val searchResult = search.searchReleasesByBarcode(barcode, limit = 12)
-        val page = when (searchResult) {
-            is MusicBrainzCatalogSearchResult.Success -> searchResult.page
-            is MusicBrainzCatalogSearchResult.Failure -> return null
-        }
-        // A filtered, incomplete or capped page cannot establish uniqueness.
-        if (page.offset != 0 || page.total !in 1..12 ||
-            page.consumedCount != page.total || page.items.size != page.total
-        ) return null
         val appleTitle = normalized(album.title.replace(suffix, ""))
         val appleArtist = normalized(album.artistName)
-        val relevant = page.items.filter { hit ->
-            isCuratedMusicBrainzRelease(hit) &&
-                normalized(hit.title) == appleTitle &&
-                normalized(hit.artistDisplay.orEmpty()) == appleArtist
-        }
-        if (relevant.isEmpty() || relevant.size > 8 ||
+        val relevant = collectCompleteMusicBrainzEditionCandidates(
+            maxRelevant = 8,
+            isRelevant = { hit ->
+                isCuratedMusicBrainzRelease(hit) &&
+                    normalized(hit.title) == appleTitle &&
+                    normalized(hit.artistDisplay.orEmpty()) == appleArtist
+            },
+            searchPage = { limit, offset ->
+                search.searchReleasesByBarcode(barcode, limit, offset)
+            },
+        ) ?: return null
+        if (relevant.isEmpty() ||
             relevant.any { it.artistCreditMbids.isNullOrEmpty() }
         ) return null
 
@@ -104,27 +101,24 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
         if (title.length !in 2..100 || artist.length !in 1..100 ||
             title.any(Char::isISOControl) || artist.any(Char::isISOControl)
         ) return null
-        val searchResult = search.searchOfficialReleasesForTitleArtist(
-            title, artist, limit = 12,
-        )
-        val page = when (searchResult) {
-            is MusicBrainzCatalogSearchResult.Success -> searchResult.page
-            is MusicBrainzCatalogSearchResult.Failure -> return null
-        }
-        // Never select the first matching album from an incomplete search.
-        if (page.offset != 0 || page.total !in 1..12 ||
-            page.consumedCount != page.total || page.items.size != page.total
-        ) return null
         val appleTitle = normalized(title)
         val appleArtist = normalized(artist)
-        val relevant = page.items.filter { hit ->
-            isCuratedMusicBrainzRelease(hit) &&
-                normalized(hit.title) == appleTitle &&
-                normalized(hit.artistDisplay.orEmpty()) == appleArtist
-        }
-        // A large edition cluster needs a richer evidence strategy; do not
-        // spend a dozen Apple calls or assert a unique choice from one page.
-        if (relevant.isEmpty() || relevant.size > 4 ||
+        val relevant = collectCompleteMusicBrainzEditionCandidates(
+            maxRelevant = 4,
+            isRelevant = { hit ->
+                isCuratedMusicBrainzRelease(hit) &&
+                    normalized(hit.title) == appleTitle &&
+                    normalized(hit.artistDisplay.orEmpty()) == appleArtist
+            },
+            searchPage = { limit, offset ->
+                search.searchOfficialReleasesForTitleArtist(
+                    title, artist, limit, offset,
+                )
+            },
+        ) ?: return null
+        // A 4-page / 48-row source ceiling protects the app from extremely
+        // large clusters. At most four relevant MB graphs reach Apple lookup.
+        if (relevant.isEmpty() ||
             relevant.any { it.artistCreditMbids.isNullOrEmpty() }
         ) return null
 
