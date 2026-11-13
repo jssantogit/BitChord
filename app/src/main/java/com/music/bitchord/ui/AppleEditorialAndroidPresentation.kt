@@ -230,3 +230,15 @@ internal fun appleExploreGenreCoverMap(
     }?.artworkUrl
     if (cover == null) null else tag to cover
 }.toMap()
+
+/**
+ * A failed/empty MusicBrainz seed fetch does not imply an Apple catalog
+ * request is pending. Avoid an endless spinner when there is no seed to
+ * search, while retaining the legitimate loading state during source fetch.
+ */
+internal fun appleFirstHomeEditorialIsPending(
+    appleStillLoading: Boolean,
+    musicBrainzStillLoading: Boolean,
+    hasCandidateSeeds: Boolean,
+): Boolean = musicBrainzStillLoading || (appleStillLoading && hasCandidateSeeds)
+
