@@ -236,6 +236,7 @@ import com.music.bitchord.ui.components.SongActionsPresentation
 import com.music.bitchord.ui.components.musicOnlyShareText
 import com.music.bitchord.ui.components.SongActionsSheet
 import com.music.bitchord.ui.components.HeldContextMenu
+import com.music.bitchord.ui.legacyBrowsePlaybackAllowed
 import com.music.bitchord.ui.components.HeldItem
 import androidx.media3.session.MediaController
 import com.music.bitchord.playback.QualityUpgrade
@@ -6261,17 +6262,27 @@ private fun LegacyBrowseActionsMenuBody(
         // Artist pages are collections of multiple releases, not an ordered
         // album or playlist. Holding an artist opens its safe context menu,
         // never a fabricated all-tracks playback or download operation.
-        onPlayNext = act(playSongsNext).takeIf { target.type != BrowseType.ARTIST },
-        onAddToQueue = act(addSongsToQueue).takeIf { target.type != BrowseType.ARTIST },
+        onPlayNext = act(playSongsNext).takeIf {
+            target.type != BrowseType.ARTIST && legacyBrowsePlaybackAllowed(target.browseId)
+        },
+        onAddToQueue = act(addSongsToQueue).takeIf {
+            target.type != BrowseType.ARTIST && legacyBrowsePlaybackAllowed(target.browseId)
+        },
         onPlay = act { songs -> play(songs, 0) }
-            .takeIf { target.fromCard && target.type != BrowseType.ARTIST },
+            .takeIf {
+                target.fromCard && target.type != BrowseType.ARTIST &&
+                    legacyBrowsePlaybackAllowed(target.browseId)
+            },
         onShuffle = act { songs ->
             // As on a release page: shuffle goes on before the queue
             // is built, so it is built shuffled rather than played
             // out of order.
             QueueShuffle.enableForNextQueue()
             play(songs, songs.indices.random())
-        }.takeIf { target.fromCard && target.type != BrowseType.ARTIST },
+        }.takeIf {
+            target.fromCard && target.type != BrowseType.ARTIST &&
+                legacyBrowsePlaybackAllowed(target.browseId)
+        },
         onOpen = target.browseId
             ?.takeIf { target.fromCard }
             ?.let { id ->
@@ -6308,7 +6319,10 @@ private fun LegacyBrowseActionsMenuBody(
                         )
                     },
             )
-        }.takeIf { remote && target.type != BrowseType.ARTIST },
+        }.takeIf {
+            remote && target.type != BrowseType.ARTIST &&
+                legacyBrowsePlaybackAllowed(target.browseId)
+        },
         // Share music metadata until canonical, provider-neutral links exist.
         onShare = if (target.type == BrowseType.ALBUM || target.type == BrowseType.PLAYLIST) {
             {

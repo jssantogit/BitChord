@@ -5255,6 +5255,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         thumbnailUrl: String? = null,
         type: BrowseType = BrowseType.OTHER,
     ) {
+        // MusicBrainz has no YouTube playlist/album browse ID. Opening a
+        // catalog card through an overflow menu must use the same native
+        // metadata route as tapping its tile; no retired backend request.
+        if (browseId.startsWith("catalog:")) {
+            val known = (
+                (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty() +
+                (_canonicalDiscoveryCatalog.value as? UiState.Success)?.data.orEmpty() +
+                (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+            ).firstOrNull { canonicalNativeBrowseId(it) == browseId }
+            val target = known ?: canonicalRowFromBrowseTarget(
+                browseId, title, subtitle, thumbnailUrl,
+            )
+            if (target != null) openCanonicalNativeDetail(target)
+            return
+        }
         // A fast double tap used to push two identical loading pages and launch
         // two identical browse requests. Besides wasting the connection, both
         // completions then raced to update every matching browse id in the
