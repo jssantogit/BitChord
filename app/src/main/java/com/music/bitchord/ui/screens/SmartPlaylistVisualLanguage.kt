@@ -2,6 +2,8 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -510,6 +512,153 @@ private fun PlaylistWizardKindCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
         )
+    }
+}
+
+/** Present the chosen audio scope as editable metadata, rather than a
+ * generic Settings navigation row. The exact provider contract lives in the
+ * wizard: this never claims MusicBrainz/iTunes metadata is playable. */
+@Composable
+internal fun PlaylistWizardSourceSummary(
+    source: String,
+    description: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Text(
+            "Fontes de origem",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        val shape = RoundedCornerShape(18.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth()
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    0.75.dp,
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
+                    shape,
+                )
+                .clickable(onClick = onClick)
+                .testTag("playlist-source-selector")
+                .padding(horizontal = 15.dp, vertical = 15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = PlaylistEditorIcons.Globe,
+                contentDescription = null,
+                modifier = Modifier.size(25.dp),
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text(
+                    text = source,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+            Text(
+                "Alterar",
+                style = MaterialTheme.typography.labelLarge,
+                color = appleMusicKeyColor(),
+            )
+        }
+    }
+}
+
+internal data class PlaylistWizardSourceChoice(
+    val value: String?,
+    val title: String,
+    val caption: String,
+    val icon: ImageVector,
+)
+
+/** Same editorial checked tiles as playlist-kind selection; preserves source
+ * IDs exactly and makes their scope explicit before the user picks one. */
+@Composable
+internal fun PlaylistWizardSourceChoices(
+    options: List<PlaylistWizardSourceChoice>,
+    selectedValue: String?,
+    onChoose: (String?) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth()
+            .heightIn(max = 428.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        options.forEach { option ->
+            val selected = option.value == selectedValue
+            val shape = RoundedCornerShape(16.dp)
+            val key = appleMusicKeyColor()
+            val fill = if (selected)
+                lerp(MaterialTheme.colorScheme.surfaceVariant, key, 0.075f)
+                else MaterialTheme.colorScheme.surfaceVariant
+            Row(
+                modifier = Modifier.fillMaxWidth()
+                    .clip(shape)
+                    .background(fill)
+                    .border(
+                        width = if (selected) 1.5.dp else 0.75.dp,
+                        color = if (selected) key
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
+                        shape = shape,
+                    )
+                    .clickable(role = Role.RadioButton) { onChoose(option.value) }
+                    .semantics { this.selected = selected }
+                    .testTag(
+                        "playlist-source-option-" +
+                            (option.value?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "all"),
+                    )
+                    .padding(horizontal = 15.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = option.icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(24.dp),
+                )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                ) {
+                    Text(
+                        text = option.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = option.caption,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 3,
+                    )
+                }
+                if (selected) Icon(
+                    imageVector = PlaylistEditorIcons.Check,
+                    contentDescription = null,
+                    tint = key,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+        }
     }
 }
 
