@@ -156,6 +156,21 @@ internal fun canonicalArtistCollapseLinkedTitleTrackSingles(
 }
 
 /**
+ * AnimatedContent must treat one artist+section as one navigation destination.
+ * The list of cards, cover URLs and their subtitles are asynchronously
+ * enriched and are NOT a screen identity. Keying by a whole HomeShelf caused
+ * repeated crossfades and recreated the LazyVerticalGrid state on long artist
+ * discographies, sending the user back to the top after each cover/page update.
+ *
+ * Keep the MB artist identity in the key so opening the same named section
+ * for a different artist cannot inherit the previous artist's grid position.
+ */
+internal fun canonicalArtistExpandedShelfContentKey(
+    artistBrowseId: String,
+    shelf: HomeShelf?,
+): Pair<String, String>? = shelf?.let { artistBrowseId to it.title }
+
+/**
  * An expanded artist grid has historically held a snapshot of the shelf
  * captured at tap time. Network pagination and editorial projections update
  * the artist carousel, but the expanded page continued showing its *stale*
