@@ -66,6 +66,16 @@ class AppleArtistTitleHintsTest {
         assertTrue(hints.all { it.startsWith("Album ") })
     }
 
+    @Test fun oneCharacterStageNameCanStillFindAppleVerifiedReleaseCandidates() {
+        val titles = AppleArtistTitleHintPolicy.select(
+            artistName = "V",
+            mbGroups = listOf(mb("Layover", artist = "V")),
+            discogsEditions = emptyList(),
+            existingAppleTitles = emptyList(),
+        )
+        assertEquals(listOf("Layover"), titles)
+    }
+
     @Test fun MBFallbackWhenNoVerifiedMBArtistLinkMustNotProduceDiscogsByName() {
         val selected = AppleArtistTitleHintPolicy.select(
             artistName = "ILLIT",
