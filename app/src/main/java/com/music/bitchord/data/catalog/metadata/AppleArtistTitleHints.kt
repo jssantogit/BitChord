@@ -33,10 +33,11 @@ internal object AppleArtistTitleHintPolicy {
         val artistKey = normalized(artistName)
         if (artistKey.length !in 1..120) return emptyList()
         val excluded = existingAppleTitles.mapTo(mutableSetOf(), ::normalized)
-        val result = mutableListOf<String>()
+        val musicBrainzHints = mutableListOf<String>()
+        val discogsHints = mutableListOf<String>()
         val seen = excluded.toMutableSet()
 
-        fun add(raw: String, credited: String) {
+        fun add(raw: String, credited: String, into: MutableList<String>) {
             val title = raw.trim()
             val key = normalized(title)
             if (normalized(credited) != artistKey ||
@@ -44,19 +45,24 @@ internal object AppleArtistTitleHintPolicy {
                 key in seen || !canonicalStreamingTitleIsSafe(title)
             ) return
             seen += key
-            result += title
+            into += title
         }
         mbGroups.asSequence()
             .filter { isCuratedMusicBrainzReleaseGroup(it) }
             .take(200)
-            .forEach { add(it.title, it.artistDisplay.orEmpty()) }
+            .forEach { add(it.title, it.artistDisplay.orEmpty(), musicBrainzHints) }
         discogsEditions.asSequence()
             .filter { it.discogsReleaseId > 0L &&
                 it.attributionUrl == "https://www.discogs.com/release/${it.discogsReleaseId}" &&
                 !it.canPlay && it.musicBrainzId == null }
             .take(32)
-            .forEach { add(it.title, it.artist) }
-        return result.take(MAX_SUGGESTIONS)
+            .forEach { add(it.title, it.artist, discogsHints) }
+        // A large MB catalogue must not permanently crowd out exact-artist
+        // Discogs cache hints. Both remain candidate names; only Apple can
+        // confirm a visible album. Fill unused space from either source.
+        return (musicBrainzHints.take(18) + discogsHints.take(6) +
+            musicBrainzHints.drop(18) + discogsHints.drop(6))
+            .take(MAX_SUGGESTIONS)
     }
 }
 
