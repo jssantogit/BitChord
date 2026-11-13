@@ -1217,6 +1217,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val canonicalPath = mutableListOf<CanonicalCatalogSearchRow>()
     private var canonicalDetailCoverJob: Job? = null
     private var canonicalAppleArtworkJob: Job? = null
+    // Serializes presentation only; network lookups remain concurrent.
+    private val canonicalArtworkPresentationMutex = Mutex()
     private val canonicalAppleArtworkResolver by lazy {
         com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtworkResolver()
     }
@@ -1609,12 +1611,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         )
                 } else resolved) ?: return@launch
                 val route = canonicalNativeBrowseId(entry)
+                canonicalArtworkPresentationMutex.withLock {
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     canonicalPath.lastOrNull() != entry ||
                     _detailStack.value.none { it.browseId == route }
-                ) return@launch
+                ) return@withLock
                 val current = (_canonicalDetail.value as? UiState.Success)?.data
-                    ?: return@launch
+                    ?: return@withLock
                 val chosenArtwork = com.music.bitchord.data.catalog.metadata
                     .bestCertifiedAppleOrArchiveCover(
                         proof.artworkUrl, current.artworkUri,
@@ -1629,7 +1632,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             proof, entry.musicBrainzId, displayedGroupReleaseMbid,
                             current.artworkUri,
                         ) == null
-                ) return@launch
+                ) return@withLock
                 _canonicalAppleArtworkPromotion.value = route to proof
                 if (chosenArtwork != null && chosenArtwork != current.artworkUri) {
                     _canonicalDetail.value = UiState.Success(current.copy(
@@ -1644,6 +1647,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             page.copy(thumbnailUrl = chosenArtwork)
                         else page
                     }
+                }
                 }
             }
         }
@@ -1666,10 +1670,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { null } ?: return@launch
+            canonicalArtworkPresentationMutex.withLock {
             if (_searchSource.value != SearchSource.CANONICAL ||
-                canonicalPath.lastOrNull() != entry) return@launch
+                canonicalPath.lastOrNull() != entry) return@withLock
             val current = (_canonicalDetail.value as? UiState.Success)?.data
-                ?: return@launch
+                ?: return@withLock
             // A 500px CAA response may still replace a 100px Apple source;
             // a slower low-resolution CAA response may NOT downgrade a
             // larger, directly returned certified Apple image. Keep the Apple
@@ -1684,7 +1689,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } else if (entry.kind == CanonicalSearchKind.RELEASE_GROUP)
                 canonicalShouldAcceptVerifiedGroupArtwork(current.artworkUri, artwork)
             else canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)
-            if (!accepted) return@launch
+            if (!accepted) return@withLock
             // A later CAA image can win on resolution. On ReleaseGroups
             // this may be another edition's sleeve: never keep the Apple
             // attribution badge attached to a different edition's cover.
@@ -1704,6 +1709,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (it.browseId == id) it.copy(thumbnailUrl = artwork) else it
             }
             refreshCanonicalSearchRecordingAlbumArtwork()
+            }
         }
     }
 
