@@ -34,7 +34,10 @@ internal sealed interface AppleEditorialLoad {
         val probeReport: AppleEditorialProbeReport? = null,
     ) : AppleEditorialLoad
 
-    data class Failure(val reason: ItunesCatalogFailure) : AppleEditorialLoad
+    data class Failure(
+        val reason: ItunesCatalogFailure,
+        val probeReport: AppleEditorialProbeReport? = null,
+    ) : AppleEditorialLoad
 }
 
 internal sealed interface AppleEditorialArtistLoad {
