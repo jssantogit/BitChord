@@ -80,7 +80,11 @@ internal enum class ItunesCatalogFailure {
 }
 
 internal sealed interface ItunesCatalogResult {
-    data class Success(val items: List<ItunesCatalogItem>) : ItunesCatalogResult
+    data class Success(
+        val items: List<ItunesCatalogItem>,
+        /** Returned rows filled the API's cap; completeness is unproven. */
+        val possiblyTruncated: Boolean = false,
+    ) : ItunesCatalogResult
     data class Failure(val reason: ItunesCatalogFailure) : ItunesCatalogResult
 }
 
@@ -200,7 +204,7 @@ internal class ItunesCatalogClient(
         val query = term.trim()
         val storefront = normalizedStorefront(country)
         if (query.isEmpty() || query.length > 120 || query.any(Char::isISOControl) ||
-            storefront == null || limit !in 1..30
+            storefront == null || limit !in 1..200
         ) return ItunesCatalogResult.Failure(ItunesCatalogFailure.INVALID_QUERY)
         return request("search", linkedMapOf(
             "term" to query, "country" to storefront, "media" to "music",
@@ -286,7 +290,12 @@ internal class ItunesCatalogClient(
                     (it.type == ItunesCatalogItemType.ALBUM && it.artistId == artistId)
                 }
                 .distinctBy { it.scopedId }
-            ItunesCatalogResult.Success(items)
+            val requestedLimit = params["limit"]?.toIntOrNull()
+            ItunesCatalogResult.Success(
+                items = items,
+                possiblyTruncated = (requestedLimit != null && rows.size >= requestedLimit) ||
+                    count > rows.size,
+            )
         } catch (_: Exception) {
             ItunesCatalogResult.Failure(ItunesCatalogFailure.MALFORMED_RESPONSE)
         }
