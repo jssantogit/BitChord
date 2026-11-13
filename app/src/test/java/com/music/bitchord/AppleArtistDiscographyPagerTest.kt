@@ -223,6 +223,26 @@ class AppleArtistDiscographyPagerTest {
                 pager.snapshot().visible.map { it.appleCollectionId })
         }
 
+    @Test fun alreadyProbedEditorialTitleVariantIsNotQueuedOrQueriedAgain() =
+        runBlocking {
+            val fake = Fake(
+                loaded(album(1), capped = true),
+                loaded(),
+                mutableMapOf("Absent - EP" to loaded()),
+            )
+            val pager = AppleArtistDiscographyPager(77, "Artist", "br", 1, fake)
+            pager.enqueueTitleHints(listOf("Absent - EP"))
+            pager.start()
+            pager.loadMore()
+            assertEquals(listOf("Absent - EP"), fake.searched)
+
+            // A commercial EP suffix is a comparison hint, not another query.
+            pager.enqueueTitleHints(listOf("Absent"))
+            assertEquals(0, pager.snapshot().pendingHints)
+            pager.loadMore()
+            assertEquals(listOf("Absent - EP"), fake.searched)
+        }
+
     @Test fun malformedHintIsRejectedWithoutNetworkCall() = runBlocking {
         val fake = Fake(loaded())
         val pager = AppleArtistDiscographyPager(77, "Artist", "br", 10, fake)
