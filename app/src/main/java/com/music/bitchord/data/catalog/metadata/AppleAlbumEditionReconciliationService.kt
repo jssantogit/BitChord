@@ -104,7 +104,9 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
         if (title.length !in 2..100 || artist.length !in 1..100 ||
             title.any(Char::isISOControl) || artist.any(Char::isISOControl)
         ) return null
-        val searchResult = search.searchReleases("$title $artist", limit = 12)
+        val searchResult = search.searchOfficialReleasesForTitleArtist(
+            title, artist, limit = 12,
+        )
         val page = when (searchResult) {
             is MusicBrainzCatalogSearchResult.Success -> searchResult.page
             is MusicBrainzCatalogSearchResult.Failure -> return null
