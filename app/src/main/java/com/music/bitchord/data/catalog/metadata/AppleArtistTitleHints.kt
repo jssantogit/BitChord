@@ -85,8 +85,10 @@ internal class MusicBrainzDiscogsAppleTitleHintSource(
         } catch (_: Exception) {
             return emptyList()
         }
-        val groups = (result as? MusicBrainzCatalogSearchResult.Success)
-            ?.page?.items.orEmpty()
+        val groups = when (result) {
+            is MusicBrainzCatalogSearchResult.Success -> result.page.items
+            is MusicBrainzCatalogSearchResult.Failure -> emptyList()
+        }
         val discogs = verifiedMbArtistId?.let { id ->
             DiscogsSourceOnlyDiscovery.store.activeForArtist(id, nowMillis())
         }.orEmpty()
