@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.components
 
 import android.app.Application
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -135,17 +137,22 @@ class GlobalAppleTopBarChromeTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             BitChordTheme {
-                ArtworkPageActions(
-                    hazeState = null,
-                    animateResize = false,
-                    modifier = Modifier.testTag("root-toolbar-actions"),
-                ) {
-                    IconButton(onClick = {}) {
-                        Icon(Icons.Rounded.Search, contentDescription = "First action")
-                    }
-                    if (showExtraAction.value) {
+                // A root ComposeView is measured with a tight full-screen
+                // width; wrap the toolbar in a Box so its child receives loose
+                // constraints and we can observe its *natural* measured width.
+                Box(Modifier.fillMaxWidth()) {
+                    ArtworkPageActions(
+                        hazeState = null,
+                        animateResize = false,
+                        modifier = Modifier.testTag("root-toolbar-actions"),
+                    ) {
                         IconButton(onClick = {}) {
-                            Icon(Icons.Rounded.Sort, contentDescription = "Second action")
+                            Icon(Icons.Rounded.Search, contentDescription = "First action")
+                        }
+                        if (showExtraAction.value) {
+                            IconButton(onClick = {}) {
+                                Icon(Icons.Rounded.Sort, contentDescription = "Second action")
+                            }
                         }
                     }
                 }
