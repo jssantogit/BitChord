@@ -5509,11 +5509,42 @@ private fun BitChordApp(
                 held = songMenuOrigin,
                 hazeState = hazeState,
                 onDismiss = { songActions = null },
-                // Tapping the lifted track opens its album, as Apple Music's does.
+                // A queue Song's albumId can be provider-local. Resolve its real
+                // Recording → Release/ReleaseGroup relationship before navigating;
+                // the same canonical route is used by the player overflow action.
                 onPreviewClick = { song ->
-                    song.albumId?.let { id ->
-                        songActions = null
-                        viewModel.openDetail(id, song.albumName ?: song.title, song.artist, song.thumbnailUrl, BrowseType.ALBUM)
+                    songActions = null
+                    scope.launch {
+                        val opened = try {
+                            openCanonicalHeldSongAlbum(
+                                song = song,
+                                resolveVerifiedRoute = { candidate ->
+                                    com.music.bitchord.ui.components.verifiedPlayerAlbumCatalogRoute(
+                                        context, candidate,
+                                    )
+                                },
+                                fallbackAlbumTitle = context.getString(R.string.album),
+                            ) { id, title, artist, type ->
+                                dismissPlayer()
+                                viewModel.openDetail(
+                                    browseId = id,
+                                    title = title,
+                                    subtitle = artist,
+                                    type = type,
+                                )
+                            }
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            false
+                        }
+                        if (!opened) {
+                            Toast.makeText(
+                                context,
+                                "Álbum sem vínculo canônico verificado",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
                     }
                 },
             ) { song ->
