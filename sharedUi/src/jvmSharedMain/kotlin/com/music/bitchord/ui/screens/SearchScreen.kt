@@ -236,8 +236,10 @@ fun SearchScreen(
     canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
     canonicalPublicPlaylists: UiState<List<CanonicalPublicPlaylistSearchRow>>? = null,
     onCanonicalPlaylistOpen: (CanonicalPublicPlaylistSearchRow) -> Unit = {},
+    onCanonicalPlaylistLongPress: ((CanonicalPublicPlaylistSearchRow) -> Unit)? = null,
     canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
     onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
+    onCanonicalLongPress: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     onCanonicalRecordingInfo: (CanonicalCatalogSearchRow) -> Unit = {},
     onCanonicalBack: () -> Unit = {},
     onCanonicalLoadMore: () -> Unit = {},
@@ -430,6 +432,7 @@ fun SearchScreen(
                             }
                             NativeSearchResultRow(
                                 row = canonicalNativeSearchRowUi(row, kind),
+                                onLongPress = onCanonicalLongPress?.let { held -> { held(row) } },
                                 onClick = when {
                                     row.kind != CanonicalSearchKind.RECORDING -> ({ onCanonicalOpen(row) })
                                     row.hasCatalogedAsset -> ({ onCanonicalPlay(row.musicBrainzId) })
@@ -441,7 +444,10 @@ fun SearchScreen(
                                             onCanonicalRecordingInfo(row)
                                         else onCanonicalOpen(row)
                                     },
-                                ),
+                                ) + if (row.kind == CanonicalSearchKind.RECORDING && row.hasCatalogedAsset)
+                                    listOf(NativeSearchRowAction(stringResource(Res.string.smart_collection_batch_queue)) {
+                                        onCanonicalAddToQueue(row.musicBrainzId)
+                                    }) else emptyList(),
                             )
                         }
                     }
@@ -473,9 +479,11 @@ fun SearchScreen(
                 } else if (filter == SearchFilter.PLAYLISTS && canonicalDetail == null) {
                     canonicalPublicPlaylistSearchResults(
                         canonicalPublicPlaylists, onCanonicalPlaylistOpen,
+                        onCanonicalPlaylistLongPress,
                     )
                 } else canonicalMusicBrainzResults(
-                    query, canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
+                    query, canonicalResults, canonicalDetail, filter, onCanonicalOpen,
+                    onCanonicalLongPress, onCanonicalBack,
                     onCanonicalLoadMore, canonicalLoadingMore,
                     onCanonicalSearchLoadMore, canonicalSearchHasMore,
                     canonicalSearchLoadingMore,
@@ -707,6 +715,7 @@ fun SearchScreen(
 private fun LazyListScope.canonicalPublicPlaylistSearchResults(
     results: UiState<List<CanonicalPublicPlaylistSearchRow>>?,
     onOpen: (CanonicalPublicPlaylistSearchRow) -> Unit,
+    onLongPress: ((CanonicalPublicPlaylistSearchRow) -> Unit)?,
 ) {
     when (results) {
         null -> item(key = "public-playlists:hint") {
@@ -728,6 +737,7 @@ private fun LazyListScope.canonicalPublicPlaylistSearchResults(
                     artistPortrait = false,
                 ),
                 onClick = { onOpen(playlist) },
+                onLongPress = onLongPress?.let { held -> { held(playlist) } },
                 onMoreActions = listOf(
                     NativeSearchRowAction(stringResource(Res.string.apple_search_view_details)) {
                         onOpen(playlist)
@@ -744,6 +754,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     detail: UiState<CanonicalCatalogDetailPage>?,
     filter: SearchFilter,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onLongPress: ((CanonicalCatalogSearchRow) -> Unit)?,
     onBack: () -> Unit,
     onLoadMore: () -> Unit,
     loadingMore: Boolean,
@@ -837,6 +848,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                 // presentation data, and playback stays evidence-gated.
                 NativeSearchResultRow(
                     row = canonicalNativeSearchRowUi(row, kind),
+                    onLongPress = onLongPress?.let { held -> { held(row) } },
                     onClick = when {
                         row.kind != CanonicalSearchKind.RECORDING -> ({ onOpen(row) })
                         row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })

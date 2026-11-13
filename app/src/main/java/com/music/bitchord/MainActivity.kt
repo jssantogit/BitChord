@@ -346,6 +346,8 @@ import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingDetailsScreen
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingContent
 import com.music.bitchord.ui.screens.CanonicalRediscoveryRecordingState
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
+import com.music.bitchord.ui.screens.CanonicalPublicPlaylistSearchRow
+import com.music.bitchord.ui.screens.CanonicalSearchHeldMenus
 import com.music.bitchord.ui.canonicalExistingHomeShelves
 import com.music.bitchord.ui.canonicalCuratedHomeShelves
 import com.music.bitchord.ui.canonicalExploreShelves
@@ -755,6 +757,11 @@ private fun BitChordApp(
     var browseActions by remember { mutableStateOf<BrowseTarget?>(null) }
     /** The card held to open [browseActions] — see [songMenuOrigin]. */
     var browseMenuOrigin by remember { mutableStateOf<HeldItem?>(null) }
+    // Search holds are native metadata rows, not synthetic YouTube browse targets.
+    var heldCatalogSearchRow by remember { mutableStateOf<CanonicalCatalogSearchRow?>(null) }
+    var heldCatalogSearchOrigin by remember { mutableStateOf<HeldItem?>(null) }
+    var heldPublicPlaylistSearchRow by remember { mutableStateOf<CanonicalPublicPlaylistSearchRow?>(null) }
+    var heldPublicPlaylistSearchOrigin by remember { mutableStateOf<HeldItem?>(null) }
     /** Rename asked for from the popup, which hands it on to the sheet's form. */
     var browseRenameInSheet by remember { mutableStateOf(false) }
     /** The playlist being rearranged, or null when the reorder sheet is shut. */
@@ -2087,6 +2094,13 @@ private fun BitChordApp(
     }
     var openedPublicPlaylist by remember {
         mutableStateOf<com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist?>(null)
+    }
+    val openPublicSearchPlaylist: (CanonicalPublicPlaylistSearchRow) -> Unit = { row ->
+        val playlist = com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylist(
+            row.mbid, row.title, row.creator, null,
+        )
+        openedPublicPlaylist = playlist
+        viewModel.loadCanonicalPublicPlaylistDetail(playlist)
     }
     var publicPlaylistSearching by remember { mutableStateOf(false) }
     var publicPlaylistQuery by rememberSaveable { mutableStateOf("") }
@@ -4008,16 +4022,21 @@ private fun BitChordApp(
                                 active = searchSource == SearchSource.CANONICAL &&
                                     filter == SearchFilter.PLAYLISTS,
                             ),
-                            onCanonicalPlaylistOpen = { row ->
-                                val playlist = com.music.bitchord.data.catalog.metadata
-                                    .ListenBrainzPublicPlaylist(
-                                        row.mbid, row.title, row.creator, null,
-                                    )
-                                openedPublicPlaylist = playlist
-                                viewModel.loadCanonicalPublicPlaylistDetail(playlist)
+                            onCanonicalPlaylistOpen = openPublicSearchPlaylist,
+                            onCanonicalPlaylistLongPress = { row ->
+                                heldCatalogSearchRow = null
+                                heldCatalogSearchOrigin = null
+                                heldPublicPlaylistSearchOrigin = LongPressOrigin.consume()
+                                heldPublicPlaylistSearchRow = row
                             },
                             canonicalDetail = viewModel.canonicalDetail.collectAsStateWithLifecycle().value,
                             onCanonicalOpen = viewModel::openCanonicalNativeDetail,
+                            onCanonicalLongPress = { row ->
+                                heldPublicPlaylistSearchRow = null
+                                heldPublicPlaylistSearchOrigin = null
+                                heldCatalogSearchOrigin = LongPressOrigin.consume()
+                                heldCatalogSearchRow = row
+                            },
                             onCanonicalRecordingInfo = { communityMetadataRecording = it },
                             onCanonicalBack = viewModel::backCanonicalCatalogEntry,
                             onCanonicalLoadMore = viewModel::loadMoreCanonicalDetail,
@@ -5648,6 +5667,30 @@ private fun BitChordApp(
             ) { target ->
                 browseMenuBody(target, SongActionsPresentation.Menu)
             }
+            CanonicalSearchHeldMenus(
+                catalogRow = heldCatalogSearchRow,
+                catalogOrigin = heldCatalogSearchOrigin,
+                publicPlaylist = heldPublicPlaylistSearchRow,
+                publicPlaylistOrigin = heldPublicPlaylistSearchOrigin,
+                hazeState = hazeState,
+                onDismissCatalog = {
+                    heldCatalogSearchRow = null
+                    heldCatalogSearchOrigin = null
+                },
+                onDismissPublicPlaylist = {
+                    heldPublicPlaylistSearchRow = null
+                    heldPublicPlaylistSearchOrigin = null
+                },
+                onOpenCatalog = { row ->
+                    if (row.kind == CanonicalSearchKind.RECORDING)
+                        communityMetadataRecording = row
+                    else viewModel.openCanonicalNativeDetail(row)
+                },
+                onQueueCatalog = { mbid ->
+                    executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                },
+                onOpenPublicPlaylist = openPublicSearchPlaylist,
+            )
             LaunchedEffect(browseActions == null) {
                 if (browseActions == null) {
                     browseMenuOrigin = null
