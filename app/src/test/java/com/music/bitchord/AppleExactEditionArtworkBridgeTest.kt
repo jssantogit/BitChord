@@ -166,6 +166,31 @@ class AppleExactEditionArtworkBridgeTest {
         ))
     }
 
+    @Test fun groupBadgeIsOnlyEligibleWhenTheSelectedAppleSleeveActuallyWins() {
+        val exact = appleVerifiedEditionArtwork(mb, complete(), "br")!!
+        val archive500 = "https://coverartarchive.org/release/$id/front-500"
+        val apple100 = exact.copy(artworkUrl =
+            "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg")
+        val apple600 = exact.copy(artworkUrl =
+            "https://is1-ssl.mzstatic.com/image/thumb/Music/a/600x600bb.jpg")
+        assertEquals(apple100, verifiedAppleArtworkForDisplayedGroupCover(
+            apple100, group, id, currentArtworkUrl = null,
+        ))
+        // A different edition's existing CAA sleeve must never be advertised
+        // as the Apple product represented by the badge.
+        assertNull(verifiedAppleArtworkForDisplayedGroupCover(
+            apple100, group, id, currentArtworkUrl = archive500,
+        ))
+        // A high-res URL directly RETURNED by Apple can win; no rewriting.
+        assertEquals(apple600, verifiedAppleArtworkForDisplayedGroupCover(
+            apple600, group, id, currentArtworkUrl = archive500,
+        ))
+        assertNull(verifiedAppleArtworkForDisplayedGroupCover(
+            apple600, group, "271b31f8-8ab6-483c-97d9-8f0fabb2d4f4",
+            currentArtworkUrl = null,
+        ))
+    }
+
     @Test fun groupOrRecordingCannotSilentlyTakeAnotherEditionArt() {
         val proof = appleVerifiedEditionArtwork(mb, complete(), "br")!!
         assertEquals(art, canonicalAppleArtworkFor(
