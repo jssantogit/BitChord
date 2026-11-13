@@ -243,14 +243,14 @@ internal fun CanonicalSearchMetadataPlaylistPicker(
                                             val added = withContext(Dispatchers.IO) {
                                                 val actual = repository.list()
                                                     .firstOrNull { it.id == candidate.id }
-                                                    ?: error("Playlist removida")
+                                                    ?: kotlin.error("Playlist removida")
                                                 val planned = planCatalogMetadataCollectionMembers(
                                                     actual.recordingIds, state.labels,
-                                                ) ?: error("Identidade inválida")
+                                                ) ?: kotlin.error("Identidade inválida")
                                                 val changed = planned.size - actual.recordingIds.size
                                                 if (changed > 0) {
                                                     repository.save(actual.copy(recordingIds = planned))
-                                                    state.labels.forEach(labelRepository::rememberLabel)
+                                                    labelRepository.rememberLabels(state.labels)
                                                 }
                                                 changed
                                             }
