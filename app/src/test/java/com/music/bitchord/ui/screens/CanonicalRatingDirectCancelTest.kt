@@ -5,6 +5,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -36,7 +38,7 @@ class CanonicalRatingDirectCancelTest {
             .assertExists()
         // A change is pending, but Cancel discards it without a second alert.
         compose.onNodeWithTag("rating-editor-star-4-empty", useUnmergedTree = true)
-            .performClick()
+            .performTouchInput { click() }
         compose.onNodeWithTag("rating-editor-cancel-action").performClick()
         compose.runOnIdle {
             assertEquals(1, dismissed)
