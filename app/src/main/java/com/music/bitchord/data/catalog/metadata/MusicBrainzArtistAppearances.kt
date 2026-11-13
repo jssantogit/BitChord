@@ -66,13 +66,19 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         if (!release.appearanceText("status").equals("Official", ignoreCase = true))
             return@mapNotNull null
         val credit = release["artist-credit"] as? JsonArray ?: return@mapNotNull null
-        val artists = credit.mapNotNull { component ->
+        // The release's artist credit must be COMPLETE before this can be
+        // classified as another artist's work. Silently dropping a malformed
+        // credit can erase the selected primary artist, creating a false
+        // guest appearance. Plain-string join phrases are not artist objects.
+        val artists = mutableListOf<Pair<String, String?>>()
+        for (component in credit) {
+            if (component is JsonPrimitive && component.isString) continue
             val item = component as? JsonObject ?: return@mapNotNull null
             val artist = item["artist"] as? JsonObject ?: return@mapNotNull null
             val id = artist.appearanceText("id")?.lowercase(Locale.ROOT)
+                ?.takeIf(ARTIST_APPEARANCE_MBID::matches)
                 ?: return@mapNotNull null
-            if (!ARTIST_APPEARANCE_MBID.matches(id)) return@mapNotNull null
-            id to (item.appearanceText("name") ?: artist.appearanceText("name"))
+            artists += id to (item.appearanceText("name") ?: artist.appearanceText("name"))
         }
         // A track_artist browse may include tribute, cover, remix or
         // miscellaneous credit links. Verify the exact MBID in a real
@@ -223,7 +229,10 @@ internal fun parseMusicBrainzTrackArtistAppearances(
             !it.conflictingTrackCredit
         }.thenByDescending { it.commerciallyVerified }
             .thenByDescending { it.releaseDate.orEmpty() })
-        .distinctBy { it.recordingMbid ?: it.releaseGroupMbid }
+        // The SAME Recording can legitimately occur on different published
+        // works (e.g. an artist's standalone single and later album).
+        // Collapse alternate editions within a work, never across groups.
+        .distinctBy { it.releaseGroupMbid to it.recordingMbid }
         .take(limit.coerceIn(0, 20))
         .toList()
 }
@@ -264,7 +273,8 @@ internal class MusicBrainzArtistAppearancesClient(
             // popular act. Browse up to three pages, only when a page is
             // complete and no verified guest release has been found yet.
             // Do not make title-based guesses or sweep the whole catalog.
-            val foundByRecording = linkedMapOf<String, MusicBrainzArtistAppearance>()
+            val foundByWorkAndRecording =
+                linkedMapOf<Pair<String, String>, MusicBrainzArtistAppearance>()
             var offset = 0
             var healthy = true
             for (page in 0 until 3) {
@@ -308,8 +318,9 @@ internal class MusicBrainzArtistAppearancesClient(
                             !it.trackTitle.isNullOrBlank()
                     }
                     .forEach { appearance ->
-                        foundByRecording.putIfAbsent(
-                            requireNotNull(appearance.recordingMbid), appearance,
+                        foundByWorkAndRecording.putIfAbsent(
+                            appearance.releaseGroupMbid to
+                                requireNotNull(appearance.recordingMbid), appearance,
                         )
                     }
                 val count = list.size
@@ -317,13 +328,13 @@ internal class MusicBrainzArtistAppearancesClient(
                 offset += count
                 // Captures use the old simple fetch callback and represent one
                 // page only. More pages require a real offset-aware transport.
-                if (foundByRecording.isNotEmpty() || count == 0 ||
+                if (foundByWorkAndRecording.isNotEmpty() || count == 0 ||
                     (total != null && offset >= total) ||
                     (total == null && count < 25) ||
                     (fetch != null && pagedFetch == null)
                 ) break
             }
-            val found = foundByRecording.values.take(12).toList()
+            val found = foundByWorkAndRecording.values.take(12).toList()
             if (cache.size >= 64) cache.remove(cache.keys.first())
             cache[id] = Cached(nowMillis(), found, healthy = healthy)
             return found
