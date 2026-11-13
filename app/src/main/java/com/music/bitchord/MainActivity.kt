@@ -107,6 +107,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -4654,13 +4659,23 @@ private fun BitChordApp(
                                 }
                             }
                             if (appleLibraryCategoryChrome) {
-                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(
+                                    hazeState = hazeState,
+                                    modifier = Modifier.onGloballyPositioned { coords ->
+                                        unifiedControls.sourceMenuAnchor = nativeMenuAnchorBounds(coords)
+                                    },
+                                ) {
                                     IconButton(onClick = { unifiedControls.sourceMenuOpen = true }) {
                                         Icon(Icons.Rounded.Layers, contentDescription = "Fonte do catálogo",
                                             tint = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
-                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(
+                                    hazeState = hazeState,
+                                    modifier = Modifier.onGloballyPositioned { coords ->
+                                        unifiedControls.sortMenuAnchor = nativeMenuAnchorBounds(coords)
+                                    },
+                                ) {
                                     IconButton(onClick = { unifiedControls.sortMenuOpen = true }) {
                                         Icon(PlaylistEditorIcons.Sort, contentDescription = "Filtros da biblioteca",
                                             tint = MaterialTheme.colorScheme.onSurface)
@@ -7054,6 +7069,8 @@ internal class UnifiedLibraryUiControls {
     var viewType by mutableStateOf(LibraryViewType.LIST)
     var sortMenuOpen by mutableStateOf(false)
     var sourceMenuOpen by mutableStateOf(false)
+    var sourceMenuAnchor by mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    var sortMenuAnchor by mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
     private var activeCategory: com.music.bitchord.data.listening.CanonicalSmartFilterContext? = null
     private val categoryViews = mutableMapOf<com.music.bitchord.data.listening.CanonicalSmartFilterContext, LibraryViewType>()
 
@@ -7125,6 +7142,16 @@ private fun UnifiedAlbumDetailSortMenu(
         onSelect = state::selectSort,
         onFlipDateDirection = state::flipDateDirection,
         onDismiss = state::dismissSort,
+    )
+}
+
+/** Capture a real circular control; fixed top-right menu guesses fail for left actions. */
+private fun nativeMenuAnchorBounds(
+    coords: androidx.compose.ui.layout.LayoutCoordinates,
+): androidx.compose.ui.unit.IntRect {
+    val b = coords.boundsInWindow()
+    return androidx.compose.ui.unit.IntRect(
+        b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt(),
     )
 }
 
@@ -7249,16 +7276,24 @@ private fun UnifiedLibraryToolbarActions(
             onClick = onArtistOptions,
         )
     } else if (showBrowseFilters) {
-        IconButton(onClick = { controls.sourceMenuOpen = true }) {
-            Icon(
-                Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
-                tint = MaterialTheme.colorScheme.onSurface,
+        Box(Modifier.onGloballyPositioned { coords ->
+            controls.sourceMenuAnchor = nativeMenuAnchorBounds(coords)
+        }) {
+            IconButton(onClick = { controls.sourceMenuOpen = true }) {
+                Icon(
+                    Icons.Rounded.Layers, contentDescription = "Fonte das músicas",
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        Box(Modifier.onGloballyPositioned { coords ->
+            controls.sortMenuAnchor = nativeMenuAnchorBounds(coords)
+        }) {
+            NativeCollectionSortAction(
+                contentDescription = "Ordenar e filtrar biblioteca",
+                onClick = { controls.sortMenuOpen = true },
             )
         }
-        NativeCollectionSortAction(
-            contentDescription = "Ordenar e filtrar biblioteca",
-            onClick = { controls.sortMenuOpen = true },
-        )
     }
 }
 
@@ -7279,6 +7314,7 @@ private fun UnifiedLibraryMenus(
         BackHandler { controls.sourceMenuOpen = false }
         FrostedUnifiedLibrarySourceMenu(
             hazeState = hazeState,
+            anchorBounds = controls.sourceMenuAnchor,
             sources = controls.sourceKeys,
             selected = controls.sourceKey,
             onSelect = {
@@ -7292,6 +7328,7 @@ private fun UnifiedLibraryMenus(
         BackHandler { controls.sortMenuOpen = false }
         FrostedUnifiedLibrarySortMenu(
             hazeState = hazeState,
+            anchorBounds = controls.sortMenuAnchor,
             sort = controls.sort,
             viewType = controls.viewType,
             stars = controls.stars,
@@ -7317,12 +7354,17 @@ private fun UnifiedLibraryMenus(
 @Composable
 private fun FrostedUnifiedLibrarySourceMenu(
     hazeState: HazeState,
+    anchorBounds: androidx.compose.ui.unit.IntRect?,
     sources: List<String>,
     selected: String?,
     onSelect: (String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss) {
+    FrostedMenuPanel(
+        hazeState = hazeState,
+        onDismiss = onDismiss,
+        anchorBounds = anchorBounds,
+    ) {
         FrostedMenuRow("Todas as fontes", selected == null, { onSelect(null) })
         sources.forEach { key ->
             val navidrome = sources.filter { it.startsWith("opensubsonic:") }
@@ -7341,6 +7383,7 @@ private fun FrostedUnifiedLibrarySourceMenu(
 @Composable
 private fun FrostedUnifiedLibrarySortMenu(
     hazeState: HazeState,
+    anchorBounds: androidx.compose.ui.unit.IntRect?,
     sort: LocalMusicSort,
     viewType: LibraryViewType,
     stars: Int?,
@@ -7349,7 +7392,11 @@ private fun FrostedUnifiedLibrarySortMenu(
     onStars: (Int?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss) {
+    FrostedMenuPanel(
+        hazeState = hazeState,
+        onDismiss = onDismiss,
+        anchorBounds = anchorBounds,
+    ) {
         val grid = viewType == LibraryViewType.GRID
         FrostedMenuRow(
             label = stringResource(if (grid) R.string.switch_to_list_view else R.string.switch_to_grid_view),
@@ -7405,6 +7452,7 @@ private fun FrostedUnifiedLibrarySortMenu(
 private fun FrostedMenuPanel(
     hazeState: HazeState,
     onDismiss: () -> Unit,
+    anchorBounds: androidx.compose.ui.unit.IntRect? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
@@ -7414,20 +7462,44 @@ private fun FrostedMenuPanel(
     val entrance = com.music.bitchord.ui.components.rememberFrostedMenuEntranceModifier(
         reduceMotion = LocalReduceAnimations.current,
     )
+    var rootSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var popupSize by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    var rootOrigin by remember { mutableStateOf(androidx.compose.ui.unit.IntOffset.Zero) }
+    val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.roundToPx() }
+    val margin = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.roundToPx() }
     Box(
         Modifier
             .fillMaxSize()
+            .onSizeChanged { rootSize = it }
+            .onGloballyPositioned { coords ->
+                val origin = coords.positionInWindow()
+                rootOrigin = androidx.compose.ui.unit.IntOffset(origin.x.toInt(), origin.y.toInt())
+            }
             .background(MaterialTheme.colorScheme.scrim.copy(alpha = .48f))
             .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.TopEnd,
+        contentAlignment = Alignment.TopStart,
     ) {
+        val position = if (anchorBounds == null) {
+            Modifier.align(Alignment.TopEnd).padding(top = 56.dp, end = 20.dp)
+        } else {
+            Modifier.align(Alignment.TopStart).offset {
+                com.music.bitchord.ui.components.anchoredFrostedMenuPosition(
+                    anchor = anchorBounds,
+                    popup = popupSize,
+                    overlay = rootSize,
+                    overlayOrigin = rootOrigin,
+                    gap = gap,
+                    margin = margin,
+                )
+            }
+        }
         Surface(
             color = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onSurface,
             shape = shape,
-            modifier = Modifier
-                .padding(top = 56.dp, end = 20.dp)
+            modifier = position
                 .width(IntrinsicSize.Max)
+                .onSizeChanged { popupSize = it }
                 .then(entrance)
                 .clip(shape)
                 .then(
