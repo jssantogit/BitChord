@@ -143,10 +143,12 @@ internal class DiscogsStandaloneArtistCatalog(
                         partial = true
                         continue
                     }
-                    master.record.mainReleaseId ?: run {
+                    val candidateId = master.record.mainReleaseId
+                    if (candidateId == null) {
                         partial = true
                         continue
                     }
+                    candidateId
                 }
             }
             if (!releaseIds.add(editionId)) continue
