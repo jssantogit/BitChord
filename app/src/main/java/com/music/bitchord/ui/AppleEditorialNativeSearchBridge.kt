@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.metadata.AppleEditorialTrackLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialReadState
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
+import com.music.bitchord.data.catalog.metadata.ItunesEditorialCatalog
+import com.music.bitchord.data.catalog.metadata.ItunesCatalogItem
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage
@@ -22,6 +24,25 @@ import com.music.bitchord.ui.screens.AppleEditorialTrackSearchRow
 internal fun appleNativeSearchRows(
     source: AppleEditorialLoad.Success,
 ): List<AppleEditorialSearchRow> = source.releases.mapNotNull { it.asNativeSearchRow() }
+
+/**
+ * iTunes Search returns ranked records, while assemble() sorts discographies
+ * chronologically. Search pagination must preserve source rank and previously
+ * visible rows when appending pages.
+ */
+internal fun appleNativeAlbumSearchRowsInSourceOrder(
+    appleRows: List<ItunesCatalogItem>,
+    storefront: String,
+): List<AppleEditorialSearchRow> {
+    val ranking = appleRows.asSequence()
+        .filter { it.type == ItunesCatalogItemType.ALBUM && it.storefront == storefront }
+        .distinctBy { it.id }
+        .mapIndexed { index, item -> item.id to index }
+        .toMap()
+    return ItunesEditorialCatalog.assemble(storefront, appleRows)
+        .sortedBy { ranking[it.appleCollectionId] ?: Int.MAX_VALUE }
+        .mapNotNull { it.asNativeSearchRow() }
+}
 
 private fun ItunesEditorialRelease.asNativeSearchRow(): AppleEditorialSearchRow? {
     val identity = AppleCatalogBrowseRoute.parse(appleScopedId)
