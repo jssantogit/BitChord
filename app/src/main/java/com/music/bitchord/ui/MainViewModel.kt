@@ -407,6 +407,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     internal val appleHomeReleases: StateFlow<UiState<List<
         com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
     >>> = _appleHomeReleases.asStateFlow()
+    private val _appleHomeProbeReport = MutableStateFlow<
+        com.music.bitchord.data.catalog.metadata.AppleEditorialProbeReport?
+    >(null)
+    internal val appleHomeProbeReport = _appleHomeProbeReport.asStateFlow()
     private val appleHomeEpoch = DiscoveryRequestEpoch()
     private var appleHomeJob: Job? = null
     private var appleHomeFingerprint: String? = null
@@ -431,6 +435,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var appleGenreActiveTag: String? = null
     private var appleGenreFingerprint: String? = null
     private var appleGenreFetchedAtMs = 0L
+    private val _appleGenreProbeReports = MutableStateFlow<Map<String,
+        com.music.bitchord.data.catalog.metadata.AppleEditorialProbeReport>>(emptyMap())
+    internal val appleGenreProbeReports = _appleGenreProbeReports.asStateFlow()
 
     private val _canonicalGenreResults =
         MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>>(UiState.Loading)
@@ -3415,7 +3422,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             .distinctBy { it.title.lowercase(Locale.ROOT) to
                 it.artist.lowercase(Locale.ROOT) }
-            .take(12).toList()
+.take(64).toList()
         if (seeds.isEmpty()) return
         val fingerprint = seeds.joinToString(separator = "|") {
             "${it.title.lowercase(Locale.ROOT)}:${it.artist.lowercase(Locale.ROOT)}"
@@ -3452,7 +3459,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 !isCanonicalDiscoverySelected()
             ) return@launch
             _appleHomeReleases.value = when (result) {
-                is AppleEditorialLoad.Success -> UiState.Success(result.releases)
+                is AppleEditorialLoad.Success -> {
+                    _appleHomeProbeReport.value = result.probeReport
+                    UiState.Success(result.releases)
+                }
                 is AppleEditorialLoad.Failure -> {
                     // Keep the last Apple-confirmed cards through a transient
                     // outage, but never fall back to MB-only ReleaseGroups.
@@ -3733,7 +3743,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             .distinctBy { it.title.lowercase(Locale.ROOT) to
                 it.artist.lowercase(Locale.ROOT) }
-            .take(12).toList()
+.take(48).toList()
         val fingerprint = tag + "|" + seeds.joinToString("|") {
             "${it.title.lowercase(Locale.ROOT)}:${it.artist.lowercase(Locale.ROOT)}"
         }
@@ -3775,7 +3785,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ) return@launch
             _appleGenreReleases.update { old ->
                 old + (tag to when (result) {
-                    is AppleEditorialLoad.Success -> UiState.Success(result.releases)
+                    is AppleEditorialLoad.Success -> {
+                        result.probeReport?.let { report ->
+                            _appleGenreProbeReports.update { it + (tag to report) }
+                        }
+                        UiState.Success(result.releases)
+                    }
                     is AppleEditorialLoad.Failure ->
                         (old[tag] as? UiState.Success)
                             ?: UiState.Error("Não foi possível consultar o gênero na Apple.")
