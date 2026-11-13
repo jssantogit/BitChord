@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -587,10 +588,16 @@ private fun AppleSettingsPopup(
                     transformOrigin = TransformOrigin(1f, 0f),
                 ),
         ) {
+            // One native solid catalog plate across Settings and all ⋯ menus.
+            // The system-owned Popup remains anchored to its launcher.
+            val plateShape = RoundedCornerShape(18.dp)
+            val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+            val plateColor = (if (isDark) Color.Black else Color.White).copy(alpha = 0.94f)
             Box(
-                Modifier.width(180.dp)
-                    .then(artworkPageSurface(shape = RoundedCornerShape(17.dp), hazeState = hazeState))
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = .18f))
+                Modifier.width(208.dp)
+                    .shadow(20.dp, plateShape)
+                    .clip(plateShape)
+                    .background(plateColor)
                     .testTag("apple-root-settings-popup"),
             ) {
                 Row(
