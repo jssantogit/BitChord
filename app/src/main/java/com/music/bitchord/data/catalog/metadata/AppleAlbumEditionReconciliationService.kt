@@ -3,6 +3,8 @@ package com.music.bitchord.data.catalog.metadata
 import java.text.Normalizer
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment
 
 /** Bounded candidates gathered from MusicBrainz; never products to display. */
 internal data class AppleAlbumEditionEvidence(
@@ -83,9 +85,19 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
  * collection and its exact tracks for the existing three-source reconciler.
  * No external source can insert products or replace artwork, names or tracks.
  */
+/** Discogs is invoked only AFTER exact Apple↔MB Release certification. */
+internal fun interface AppleDiscogsEditionEvidenceSource {
+    suspend fun observe(musicBrainzReleaseId: String): DiscogsEditionEnrichment
+}
+
 internal class AppleAlbumEditionReconciliationService(
     private val source: AppleAlbumEditionEvidenceSource =
         MusicBrainzBarcodeEditionEvidenceSource(),
+    private val discogs: AppleDiscogsEditionEvidenceSource =
+        AppleDiscogsEditionEvidenceSource { id ->
+            DiscogsEditionAccess.coordinator.observeRelease(id)
+        },
+    private val nowMillis: () -> Long = System::currentTimeMillis,
 ) {
     suspend fun resolve(album: ItunesEditorialRelease): AppleTriSourceEditorialEntry? {
         if (album.appleCollectionId <= 0L ||
@@ -126,18 +138,42 @@ internal class AppleAlbumEditionReconciliationService(
             artworkUrl = album.artworkUrl, upc = album.upc,
             trackCount = album.trackCount,
         )
-        val result = AppleTriSourceEditorialReconciler.reconcile(
-            storefront = album.storefront,
-            appleRows = listOf(rawAlbum) + album.tracks,
-            mbEditions = data.editions,
-            mbGroups = data.groups,
-        ).singleOrNull() ?: return null
-        if (result.match !is AppleMusicBrainzEditionMatch.Verified ||
-            result.release.appleScopedId != album.appleScopedId ||
-            result.release.title != album.title ||
-            result.release.artworkUrl != album.artworkUrl ||
-            result.release.tracks != album.tracks
+        fun reconcile(discogsObservations: List<DiscogsEditionEnrichment>) =
+            AppleTriSourceEditorialReconciler.reconcile(
+                storefront = album.storefront,
+                appleRows = listOf(rawAlbum) + album.tracks,
+                mbEditions = data.editions,
+                mbGroups = data.groups,
+                discogsObservations = discogsObservations,
+                nowMillis = nowMillis(),
+            ).singleOrNull()
+
+        val first = reconcile(emptyList()) ?: return null
+        val exactLink = first.match as? AppleMusicBrainzEditionMatch.Verified
+            ?: return null
+        if (first.release.appleScopedId != album.appleScopedId ||
+            first.release.title != album.title ||
+            first.release.artworkUrl != album.artworkUrl ||
+            first.release.tracks != album.tracks
         ) return null
-        return result
+
+        // The opt-in Discogs edition coordinator independently verifies
+        // canonical release graph, exact Discogs Release relation, tracklist
+        // and freshness. A failed/ambiguous observation leaves MB intact.
+        val observed = try {
+            discogs.observe(exactLink.musicBrainzReleaseId)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            DiscogsEditionEnrichment.Unavailable
+        }
+        if (observed !is DiscogsEditionEnrichment.Verified) return first
+        val enriched = reconcile(listOf(observed)) ?: return first
+        return if (enriched.match == first.match &&
+            enriched.release.appleScopedId == album.appleScopedId &&
+            enriched.release.title == album.title &&
+            enriched.release.artworkUrl == album.artworkUrl &&
+            enriched.release.tracks == album.tracks
+        ) enriched else first
     }
 }
