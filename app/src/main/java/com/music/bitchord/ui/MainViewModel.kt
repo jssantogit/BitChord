@@ -4620,14 +4620,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Only the Apple search record for THIS exact artist route can supply
         // a candidate store URL. A stage name, album title, or external page
         // cannot authorize an artist crosswalk.
-        val appleArtistUrl = applePublicPagers[AppleSearchSection.ARTISTS]
-            ?.snapshot()?.visible?.singleOrNull { item ->
-                item.type == com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType.ARTIST &&
-                    item.id == route.id &&
-                    item.storefront == route.storefront &&
-                    item.scopedId == row.browseId &&
-                    item.title == row.title
-            }?.storeUrl
+        val appleArtistUrl = appleExactArtistStoreUrl(
+            applePublicPagers[AppleSearchSection.ARTISTS]?.snapshot()?.visible.orEmpty(),
+            row,
+        )
         val pager = AppleArtistDiscographyPager(
             artistId = route.id,
             artistName = row.title,
