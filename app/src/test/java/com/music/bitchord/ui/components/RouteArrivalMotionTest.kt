@@ -41,6 +41,33 @@ class RouteArrivalMotionTest {
         assertEquals(settled, frostedMenuEntranceFrame(Float.NaN, reducedMotion = false))
     }
 
+    @Test fun rootTabsKeepTheirContentStationaryInEitherDirection() {
+        val initial = rootTabArrivalFrame(0f)
+        assertEquals(0f, initial.translationDp, 0.0001f)
+        assertEquals(0.975f, initial.alpha, 0.0001f)
+        val middle = rootTabArrivalFrame(0.5f)
+        assertEquals(0f, middle.translationDp, 0.0001f)
+        assertTrue(middle.alpha > initial.alpha)
+        val settled = rootTabArrivalFrame(1f)
+        assertEquals(1f, settled.alpha, 0.0001f)
+        assertEquals(0f, settled.translationDp, 0.0001f)
+        assertEquals(settled, rootTabArrivalFrame(Float.NaN))
+        assertEquals(settled, rootTabArrivalFrame(Float.POSITIVE_INFINITY))
+    }
+
+    @Test fun rootTabContentSwitchHasNoImplicitSpringSizeChange() {
+        val transform = rootTabContentTransform()
+        org.junit.Assert.assertNull(transform.sizeTransform)
+        assertEquals(
+            androidx.compose.animation.EnterTransition.None,
+            transform.targetContentEnter,
+        )
+        assertEquals(
+            androidx.compose.animation.ExitTransition.None,
+            transform.initialContentExit,
+        )
+    }
+
     @Test fun incomingPageUsesBoundedSubtleOffsetWithoutBlackCrossfade() {
         val entry = routeArrivalFrame(progress = 0f, forward = true)
         assertEquals(0.96f, entry.alpha, 0.0001f)
