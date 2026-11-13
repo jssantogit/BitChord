@@ -1,0 +1,70 @@
+name: REA 212 - Tab motion physical smoke APK
+on:
+  push:
+    branches:
+      - validation/rea212-tab-motion-smoke-3358099-20261113
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rea212-physical-smoke-apk-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-apk:
+    name: Android universal devDebug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout explicitly approved PR revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+
+      - name: Verify exact PR source code
+        run: |
+          set -euo pipefail
+          git diff --exit-code 33580999753f3e24a6ec5b96eca7db92cf0c5876 HEAD -- app sharedUi shared
+          echo "Building only exact PR #212 app source 33580999753f3e24a6ec5b96eca7db92cf0c5876"
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure local build properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+
+      - name: Build Android devDebug universal APK
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Select universal APK and SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p smoke-apk
+          find app/build/outputs/apk/dev/debug -maxdepth 1 -name '*.apk' -type f -printf '%f\n'
+          universal="$(find app/build/outputs/apk/dev/debug -maxdepth 1 -name '*universal*.apk' -type f -print -quit)"
+          if [[ -z "$universal" ]]; then
+            echo "::error::Universal APK was not produced"
+            exit 1
+          fi
+          cp "$universal" smoke-apk/BitChord-REA212-tab-motion-devDebug-universal.apk
+          (cd smoke-apk && sha256sum BitChord-REA212-tab-motion-devDebug-universal.apk > SHA256SUMS.txt)
+          printf 'PR: #212\nSource SHA: 33580999753f3e24a6ec5b96eca7db92cf0c5876\nBuild: Android devDebug universal\nRun: %s\n' "$GITHUB_RUN_ID" > smoke-apk/BUILD-INFO.txt
+
+      - name: Upload Android physical smoke APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: BitChord-REA212-tab-motion-smoke-33580999
+          path: smoke-apk/
+          if-no-files-found: error
+          retention-days: 7
