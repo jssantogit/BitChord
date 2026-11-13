@@ -1,9 +1,9 @@
 # Smoke fixes + catalog identity navigation, exact source, test only.
-name: REA 212 · Verified held preview album
+name: REA 212 · Playlist wizard native final regressions
 
 on:
   push:
-    branches: [validation/rea212-held-preview-album-d315e9c2-20261113]
+    branches: [validation/rea212-wizard-native-9913f03f-20261113]
     paths: [.github/workflows/rea212-open-album-all-test.yml]
 
 permissions:
@@ -17,9 +17,9 @@ jobs:
       - name: Checkout exact PR 212 source
         uses: actions/checkout@v4
         with:
-          ref: d315e9c2f7f5d009ff4cd72773c81113105c3fa2
+          ref: 9913f03fe8e461890676d7f9285e7b5da22005dd
       - name: Assert source revision
-        run: test "$(git rev-parse HEAD)" = "d315e9c2f7f5d009ff4cd72773c81113105c3fa2"
+        run: test "$(git rev-parse HEAD)" = "9913f03fe8e461890676d7f9285e7b5da22005dd"
       - name: Java 17
         uses: actions/setup-java@v4
         with:
