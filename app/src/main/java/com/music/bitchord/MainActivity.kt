@@ -3099,10 +3099,18 @@ private fun BitChordApp(
                                 editingSmartPlaylistId = null
                                 showSmartPlaylistBuilder = true
                             },
-                            onOpenCanonicalAlbum = { canonicalAlbumRoute ->
+                            onOpenCanonicalAlbum = { canonicalAlbumRoute, albumTitle, albumArtist ->
                                 openedCanonicalPlaylist = null
                                 showPlaylistLibrary = false
-                                viewModel.openCanonicalNativeShelfItem(canonicalAlbumRoute)
+                                // Shelf lookup only searches already-open MusicBrainz lists and
+                                // silently fails for a saved playlist. The canonical detail
+                                // route also builds a typed row from this verified MBID.
+                                viewModel.openDetail(
+                                    browseId = canonicalAlbumRoute,
+                                    title = albumTitle,
+                                    subtitle = albumArtist,
+                                    type = BrowseType.ALBUM,
+                                )
                             },
                             onAddSongsToCanonicalNormalPlaylist = { id ->
                                 startNormalPlaylistSongPicker = true
