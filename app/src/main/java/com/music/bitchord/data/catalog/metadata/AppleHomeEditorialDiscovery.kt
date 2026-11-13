@@ -23,16 +23,11 @@ internal class AppleHomeEditorialDiscovery(
             )
         },
 ) {
-    private val whitespace = Regex("""\s+""")
-    private val editorialSuffix = Regex(
-        """\s[-–—]\s(?:EP|Single)$""", RegexOption.IGNORE_CASE,
-    )
     private fun normalized(value: String): String =
-        Normalizer.normalize(value.trim(), Normalizer.Form.NFKC)
-            .replace(whitespace, " ").lowercase(Locale.ROOT)
+        AppleEditorialSeedPlanner.normalized(value)
 
     private fun titleKey(value: String): String =
-        normalized(value.replace(editorialSuffix, ""))
+        AppleEditorialSeedPlanner.titleKey(value)
 
     suspend fun discover(
         seeds: List<AppleHomeEditorialSeed>,
@@ -44,22 +39,21 @@ internal class AppleHomeEditorialDiscovery(
         if (!Regex("^[a-z]{2}$").matches(storefront) || maxProbes !in 1..12) {
             return AppleEditorialLoad.Failure(ItunesCatalogFailure.INVALID_QUERY)
         }
-        val safeSeeds = seeds.asSequence()
-            .map { it.copy(title = it.title.trim(), artist = it.artist.trim()) }
-            .filter { seed ->
-                seed.title.length in 2..120 && seed.artist.length in 1..120 &&
-                    seed.title.none(Char::isISOControl) &&
-                    seed.artist.none(Char::isISOControl) &&
-                    canonicalStreamingTitleIsSafe(seed.title)
-            }
-            .distinctBy { titleKey(it.title) to normalized(it.artist) }
-            .toList()
+        val safeSeeds = AppleEditorialSeedPlanner.eligible(seeds)
         if (safeSeeds.isEmpty()) return AppleEditorialLoad.Success(
             emptyList(), AppleEditorialReadState.NOT_IN_STOREFRONT,
+            AppleEditorialProbeReport(
+                eligibleSeeds = 0, probesMade = 0, matchingProducts = 0,
+                withoutMatchingProducts = 0, failedRequests = 0,
+                incompleteResponses = 0, budgetLimited = false,
+            ),
         )
-        val selected = safeSeeds.take(maxProbes)
+        val selected = AppleEditorialSeedPlanner.selectEligible(safeSeeds, maxProbes)
         var uncertain = selected.size < safeSeeds.size
         var succeeded = false
+        var requestsWithoutMatches = 0
+        var failedRequests = 0
+        var incompleteResponses = 0
         val verified = linkedMapOf<String, ItunesEditorialRelease>()
         val disputed = mutableSetOf<String>()
         var lastPublished: List<ItunesEditorialRelease>? = null
@@ -75,12 +69,19 @@ internal class AppleHomeEditorialDiscovery(
                 AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
             }
             when (response) {
-                is AppleEditorialLoad.Failure -> uncertain = true
+                is AppleEditorialLoad.Failure -> {
+                    uncertain = true
+                    failedRequests++
+                }
                 is AppleEditorialLoad.Success -> {
                     succeeded = true
                     if (response.state == AppleEditorialReadState.POSSIBLY_TRUNCATED ||
                         response.state == AppleEditorialReadState.PARTIAL_TRACKLIST
-                    ) uncertain = true
+                    ) {
+                        uncertain = true
+                        incompleteResponses++
+                    }
+                    var validMatches = 0
                     response.releases.forEach { album ->
                         // Matching an MB search *phrase* authorizes no MBID link:
                         // show only what the independent Apple endpoint says.
@@ -91,6 +92,7 @@ internal class AppleHomeEditorialDiscovery(
                             normalized(album.artistName) != normalized(seed.artist) ||
                             titleKey(album.title) != titleKey(seed.title)
                         ) return@forEach
+                        validMatches++
                         val clean = album.copy(
                             musicBrainzReleaseGroupId = null,
                             musicBrainzReleaseId = null,
@@ -106,6 +108,7 @@ internal class AppleHomeEditorialDiscovery(
                             uncertain = true
                         }
                     }
+                    if (validMatches == 0) requestsWithoutMatches++
                     val current = snapshot()
                     if (current != lastPublished &&
                         (current.isNotEmpty() || lastPublished != null)
@@ -124,6 +127,15 @@ internal class AppleHomeEditorialDiscovery(
                 verified.isEmpty() -> AppleEditorialReadState.NOT_IN_STOREFRONT
                 else -> AppleEditorialReadState.COMPLETE
             },
+            probeReport = AppleEditorialProbeReport(
+                eligibleSeeds = safeSeeds.size,
+                probesMade = selected.size,
+                matchingProducts = verified.size,
+                withoutMatchingProducts = requestsWithoutMatches,
+                failedRequests = failedRequests,
+                incompleteResponses = incompleteResponses,
+                budgetLimited = selected.size < safeSeeds.size,
+            ),
         )
     }
 }
