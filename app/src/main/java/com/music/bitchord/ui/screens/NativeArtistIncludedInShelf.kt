@@ -170,7 +170,12 @@ internal fun NativeArtistIncludedInShelf(
         palette = palette,
         horizontalPadding = PAGE_GUTTER,
         topPadding = 22.dp,
-        itemKey = { it.releaseGroupMbid to (it.recordingMbid ?: it.releaseMbid) },
+        // Android LazyRow item keys must be Bundle-saveable; Pair is not.
+        itemKey = {
+            it.releaseGroupMbid.lowercase(java.util.Locale.ROOT) + ":" +
+                (it.recordingMbid ?: it.releaseMbid.orEmpty())
+                    .lowercase(java.util.Locale.ROOT)
+        },
     ) { appearance ->
         val page = CanonicalCatalogSearchRow(
             musicBrainzId = appearance.releaseGroupMbid,

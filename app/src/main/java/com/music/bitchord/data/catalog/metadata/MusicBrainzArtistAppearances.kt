@@ -269,10 +269,12 @@ internal class MusicBrainzArtistAppearancesClient(
                     else -> 6L * 60L * 60L * 1_000L
                 }
             ) return prior.appearances
-            // One page can be filled entirely by alternate editions of a
-            // popular act. Browse up to three pages, only when a page is
-            // complete and no verified guest release has been found yet.
-            // Do not make title-based guesses or sweep the whole catalog.
+            // A full browse page can contain one verified work plus many
+            // alternate editions, hiding another genuine guest release in
+            // the next page. Inspect at most three pages until TWO distinct
+            // ReleaseGroups are verified, never counting duplicate editions
+            // or recordings as independent works. The first page is enough
+            // when two groups are already verified.
             val foundByWorkAndRecording =
                 linkedMapOf<Pair<String, String>, MusicBrainzArtistAppearance>()
             var offset = 0
@@ -326,15 +328,26 @@ internal class MusicBrainzArtistAppearancesClient(
                 val count = list.size
                 val total = (root?.get("release-count") as? JsonPrimitive)?.intOrNull
                 offset += count
-                // Captures use the old simple fetch callback and represent one
-                // page only. More pages require a real offset-aware transport.
-                if (foundByWorkAndRecording.isNotEmpty() || count == 0 ||
+                // Stop on a minimum of two different *works*, not the
+                // first valid Recording. Keep raw server row offsets and the
+                // existing three-page network bound unchanged.
+                val verifiedWorkCount = foundByWorkAndRecording.keys.asSequence()
+                    .map { it.first }.distinct().take(2).count()
+                // Legacy one-argument fixture transports cannot paginate.
+                if (verifiedWorkCount >= 2 || count == 0 ||
                     (total != null && offset >= total) ||
                     (total == null && count < 25) ||
                     (fetch != null && pagedFetch == null)
                 ) break
             }
-            val found = foundByWorkAndRecording.values.take(12).toList()
+            // An album can contain 12 verified guest Recordings and exhaust
+            // the public shelf before a second discovered Group is shown.
+            // Reserve one representative per distinct Group first, then fill
+            // remaining slots with the other verified tracks in source order.
+            val candidates = foundByWorkAndRecording.values.toList()
+            val groupRepresentatives = candidates.distinctBy { it.releaseGroupMbid }
+            val found = (groupRepresentatives +
+                candidates.filterNot { it in groupRepresentatives }).take(12)
             if (cache.size >= 64) cache.remove(cache.keys.first())
             cache[id] = Cached(nowMillis(), found, healthy = healthy)
             return found

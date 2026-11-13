@@ -76,4 +76,39 @@ class MusicBrainzArtistAppearancePaginationTest {
             client.browse(guest).map { it.releaseGroupMbid })
         assertEquals(listOf(0), seen)
     }
+    @Test fun secondWorkSurvivesTwelveSongsFromFirstGuestAlbum() = runBlocking {
+        val tracks = (1..12).joinToString(",") { i ->
+            val id = i.toString(16).padStart(8, '0')
+            """{"artist-credit":[{"artist":{"id":"$guest"}}],
+                "recording":{"id":"$id-1111-4111-8111-111111111112",
+                    "title":"Feature $i"}}"""
+        }
+        val firstAlbum = """{"id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$host","name":"Host"}}],
+            "release-group":{"id":"$groupA","title":"Long guest album",
+                "primary-type":"Album"},
+            "media":[{"tracks":[$tracks]}]}"""
+        val seen = mutableListOf<Int>()
+        val client = MusicBrainzArtistAppearancesClient(
+            pagedFetch = { _, offset ->
+                seen += offset
+                when (offset) {
+                    0 -> """{"release-count":50,"releases":[$firstAlbum,${bootlegs(24)}]}"""
+                    25 -> """{"release-count":50,"releases":[${official(26, groupB)},${bootlegs(24)}]}"""
+                    else -> error("Unexpected page")
+                }
+            },
+        )
+        val rows = client.browse(guest)
+        assertEquals(12, rows.size)
+        assertEquals(setOf(groupA, groupB), rows.map { it.releaseGroupMbid }.toSet())
+        // The visual editor must retain the same cross-work coverage.
+        assertEquals(setOf(groupA, groupB),
+            com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(rows)
+                .map { it.releaseGroupMbid }.toSet())
+        assertEquals(listOf(0, 25), seen)
+    }
+
+
 }
