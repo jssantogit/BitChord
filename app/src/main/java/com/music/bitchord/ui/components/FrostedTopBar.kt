@@ -398,7 +398,13 @@ fun FrostedTopBar(
                             if (separateActions) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) { actions() }
                             } else {
-                                ArtworkPageActions(hazeState = backButtonHazeState, content = actions)
+                                ArtworkPageActions(
+                                    hazeState = backButtonHazeState,
+                                    // Root tabs share this top bar while their action
+                                    // counts change. Do not spring its measured width.
+                                    animateResize = onBack != null,
+                                    content = actions,
+                                )
                             }
                         } else {
                             actions()
@@ -633,17 +639,21 @@ private fun AppleSettingsPopup(
 internal fun ArtworkPageActions(
     hazeState: HazeState?,
     modifier: Modifier = Modifier,
+    animateResize: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val circleSize = AppleFloatingControlMetrics.toolbarDiameter
     val gap = AppleFloatingControlMetrics.preferredGap
     val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     SubcomposeLayout(
-        modifier = modifier.animateContentSize(
-            animationSpec = if (reduceMotion) snap() else spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow,
-            ),
+        modifier = modifier.then(
+            if (!animateResize || reduceMotion) Modifier
+            else Modifier.animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+            )
         ),
     ) { constraints ->
         val childConstraints = constraints.copy(minWidth = 0, minHeight = 0)
