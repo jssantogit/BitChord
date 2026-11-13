@@ -5372,6 +5372,17 @@ private fun BitChordApp(
                         null
                     }
                 }
+                val sourceOwnedAlbum by produceState<
+                    com.music.bitchord.ui.screens.SourceOwnedAlbumEvidence?
+                >(initialValue = null, key1 = song) {
+                    value = try {
+                        com.music.bitchord.ui.components.verifiedPlayerSourceOwnedAlbum(context, song)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
                 val share: () -> Unit = {
                     val sendIntent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -5407,6 +5418,38 @@ private fun BitChordApp(
                     appleQueuePlayerMenu = fromAppleQueue,
                     verifiedAlbumTitle = verifiedMenuAlbum,
                     verifiedCanonicalAlbumRoute = verifiedAlbumRoute,
+                    onOpenSourceOwnedAlbum = sourceOwnedAlbum?.let { album ->
+                        {
+                            songActions = null
+                            dismissPlayer()
+                            // Preserve the proven source. A Navidrome release
+                            // must open using its own assets, not another server
+                            // or a public MusicBrainz edition with the same title.
+                            viewModel.clearDetail()
+                            openedPublicPlaylist = null
+                            showAllLocalRecentAdditions = false
+                            libraryShowAll = null
+                            showReplay = false
+                            settingsSubScreen = null
+                            showSettings = false
+                            selectedTab = TAB_LIBRARY
+                            unifiedControls.sourceKey = album.providerKey
+                            unifiedControls.stars = null
+                            pinnedLibraryRequest =
+                                com.music.bitchord.ui.screens.CanonicalLibraryPin(
+                                    com.music.bitchord.ui.screens.CanonicalLibrarySelection(
+                                        com.music.bitchord.ui.screens.CanonicalLibraryEntityType.ALBUM,
+                                        album.releaseId,
+                                    ),
+                                    album.title,
+                                    album.artist,
+                                )
+                            unifiedLibrarySearching = false
+                            unifiedLibraryBackToken = 0
+                            unifiedLibraryCategory =
+                                com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS
+                        }
+                    },
                     onOpenCanonicalAlbum = { route ->
                         // A verified album need not be visible in the current
                         // MusicBrainz search/discovery shelf. The old
