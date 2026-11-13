@@ -1216,6 +1216,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     private val canonicalPath = mutableListOf<CanonicalCatalogSearchRow>()
     private var canonicalDetailCoverJob: Job? = null
+    private var canonicalAppleArtworkJob: Job? = null
+    private val canonicalAppleArtworkResolver by lazy {
+        com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtworkResolver()
+    }
+    private val _canonicalAppleArtworkPromotion = MutableStateFlow<
+        Pair<String, com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtwork>?
+    >(null)
+    internal val canonicalAppleArtworkPromotion =
+        _canonicalAppleArtworkPromotion.asStateFlow()
 
     /**
      * Fill visible native artist shelves progressively. Group MBIDs are the
@@ -1541,6 +1550,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun backCanonicalCatalogEntry() {
         if (_searchSource.value != SearchSource.CANONICAL) return
+        canonicalAppleArtworkJob?.cancel()
+        _canonicalAppleArtworkPromotion.value = null
         canonicalBrowseJob?.cancel()
         if (canonicalPath.isNotEmpty()) canonicalPath.removeAt(canonicalPath.lastIndex)
         if (canonicalPath.isEmpty()) {
@@ -1551,6 +1562,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun clearCanonicalCatalogNavigation() {
+        canonicalAppleArtworkJob?.cancel()
+        _canonicalAppleArtworkPromotion.value = null
         canonicalDetailCoverJob?.cancel()
         canonicalBrowseJob?.cancel()
         canonicalPagingJob?.cancel()
@@ -1564,6 +1577,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Artwork updates only the still-open canonical page, never an old browse.
      */
     private fun enrichCanonicalNativeReleaseCover(entry: CanonicalCatalogSearchRow) {
+        canonicalAppleArtworkJob?.cancel()
+        _canonicalAppleArtworkPromotion.value = null
+        // Only native, exact MB Release pages may use a verified Apple promo
+        // sleeve. A group or a Recording has no unique Apple product here.
+        // Run this alongside the CAA fetch: offline/older artwork paints
+        // immediately, then the Apple result can replace it only with proof.
+        if (entry.kind == CanonicalSearchKind.RELEASE) {
+            canonicalAppleArtworkJob = viewModelScope.launch(Dispatchers.IO) {
+                val proof = try {
+                    canonicalAppleArtworkResolver.resolve(entry.musicBrainzId, "br")
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null } ?: return@launch
+                val route = canonicalNativeBrowseId(entry)
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    canonicalPath.lastOrNull() != entry ||
+                    _detailStack.value.none { it.browseId == route }
+                ) return@launch
+                val current = (_canonicalDetail.value as? UiState.Success)?.data
+                    ?: return@launch
+                // The badge must become visible along with the promotional
+                // artwork. Never apply Apple art to a row/shelf unaccompanied
+                // by its exact Apple Store product link.
+                _canonicalAppleArtworkPromotion.value = route to proof
+                _canonicalDetail.value = UiState.Success(current.copy(
+                    artworkUri = proof.artworkUrl,
+                    rows = canonicalReleaseTracksWithArtwork(
+                        current.rows, proof.artworkUrl,
+                        previousInheritedArtwork = current.artworkUri,
+                    ),
+                ))
+                _detailStack.value = _detailStack.value.map { page ->
+                    if (page.browseId == route) page.copy(thumbnailUrl = proof.artworkUrl)
+                    else page
+                }
+            }
+        }
         canonicalDetailCoverJob?.cancel()
         if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
             canonicalEditorialReleaseType(entry) == null
@@ -1587,6 +1637,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 canonicalPath.lastOrNull() != entry) return@launch
             val current = (_canonicalDetail.value as? UiState.Success)?.data
                 ?: return@launch
+            // An older CAA response cannot steal back a newly certified
+            // Apple image or hide the store badge while the user stays here.
+            if (_canonicalAppleArtworkPromotion.value?.first ==
+                canonicalNativeBrowseId(entry)
+            ) return@launch
             val accepted = if (entry.kind == CanonicalSearchKind.RELEASE_GROUP)
                 canonicalShouldAcceptVerifiedGroupArtwork(current.artworkUri, artwork)
             else canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)
@@ -1679,6 +1734,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
         val startedNanos = System.nanoTime()
+        canonicalAppleArtworkJob?.cancel()
+        _canonicalAppleArtworkPromotion.value = null
         canonicalDetailCoverJob?.cancel()
         canonicalBrowseJob?.cancel()
         canonicalPagingJob?.cancel()
