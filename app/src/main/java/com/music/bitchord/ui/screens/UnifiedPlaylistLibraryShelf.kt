@@ -413,7 +413,22 @@ internal fun UnifiedPlaylistLibraryShelf(
             )
         }
     }
-    menuCard?.let { selected ->
+    // Retain the selected row while its lifted bitmap animates back into the list.
+    var exitingMenuCard by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    var exitingMenuWasHeld by remember { mutableStateOf(false) }
+    LaunchedEffect(menuCard, heldMenuOrigin) {
+        if (menuCard != null) {
+            exitingMenuCard = menuCard
+            exitingMenuWasHeld = libraryPlaylistUsesHeldContextMenu(
+                heldMenuOrigin != null, hazeState != null,
+            )
+        } else {
+            kotlinx.coroutines.delay(300)
+            exitingMenuCard = null
+            exitingMenuWasHeld = false
+        }
+    }
+    (menuCard ?: exitingMenuCard)?.let { selected ->
         val historicalMenuSongs = (selected as? LibraryPlaylistCard.Normal)
             ?.shelfItem?.browseId?.let(LocalPlaylistStore::getPlaylist)
             ?.songs?.let { songs ->
@@ -423,8 +438,12 @@ internal fun UnifiedPlaylistLibraryShelf(
             }.orEmpty()
         val menuBody: @Composable () -> Unit = {
             BrowseActionsSheet(
-                presentation = if (libraryPlaylistUsesHeldContextMenu(
-                    heldMenuOrigin != null, hazeState != null,
+                presentation = if (libraryPlaylistHeldPresentation(
+                    heldNow = libraryPlaylistUsesHeldContextMenu(
+                        heldMenuOrigin != null, hazeState != null,
+                    ),
+                    liveMenuVisible = menuCard != null,
+                    heldBeforeExit = exitingMenuWasHeld,
                 )) SongActionsPresentation.Menu else SongActionsPresentation.Sheet,
                 target = BrowseTarget(
                     browseId = null,
@@ -507,11 +526,14 @@ internal fun UnifiedPlaylistLibraryShelf(
                 },
             )
         }
-        if (libraryPlaylistUsesHeldContextMenu(heldMenuOrigin != null, hazeState != null)) {
+        val heldNow = libraryPlaylistUsesHeldContextMenu(
+            heldMenuOrigin != null, hazeState != null,
+        )
+        if (hazeState != null) {
             HeldContextMenu(
-                item = selected,
+                item = menuCard.takeIf { heldNow },
                 held = heldMenuOrigin,
-                hazeState = requireNotNull(hazeState),
+                hazeState = hazeState,
                 onDismiss = {
                     optionsFor = null
                     heldMenuOrigin = null
@@ -524,7 +546,8 @@ internal fun UnifiedPlaylistLibraryShelf(
             ) {
                 menuBody()
             }
-        } else {
+        }
+        if (menuCard != null && !heldNow) {
             ModalBottomSheet(
                 onDismissRequest = {
                     optionsFor = null
@@ -728,6 +751,13 @@ internal fun libraryPlaylistUsesHeldContextMenu(
     hasCapturedHold: Boolean,
     hasHazeBackdrop: Boolean,
 ): Boolean = hasCapturedHold && hasHazeBackdrop
+
+/** Keep menu rows compact until the held preview has completed its exit. */
+internal fun libraryPlaylistHeldPresentation(
+    heldNow: Boolean,
+    liveMenuVisible: Boolean,
+    heldBeforeExit: Boolean,
+): Boolean = heldNow || (!liveMenuVisible && heldBeforeExit)
 
 /** Compact vertical Library presentation; the same actions work in the grid. */
 @Composable
