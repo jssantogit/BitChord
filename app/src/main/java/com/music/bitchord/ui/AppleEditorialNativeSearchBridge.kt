@@ -1,6 +1,7 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.AppleEditorialArtistLoad
+import com.music.bitchord.data.catalog.metadata.AppleEditorialTrackLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialReadState
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
@@ -12,6 +13,7 @@ import com.music.bitchord.ui.screens.AppleEditorialSearchKind
 import com.music.bitchord.ui.screens.AppleEditorialReleaseCategory
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import com.music.bitchord.ui.screens.AppleEditorialTrackRow
+import com.music.bitchord.ui.screens.AppleEditorialTrackSearchRow
 
 /**
  * Presentation boundary for the Android app. Do not turn an Apple product ID
@@ -119,5 +121,29 @@ internal fun appleNativeArtistDetail(
             .filter { it.artistId == route.id && it.storefront == route.storefront }
             .mapNotNull { it.asNativeSearchRow() },
         possiblyTruncated = source.state == AppleEditorialReadState.POSSIBLY_TRUNCATED,
+    )
+}
+
+/** Apple owns the visible song result, even when no MB Recording ID is known. */
+internal fun appleNativeTrackSearchRows(
+    source: AppleEditorialTrackLoad.Success,
+): List<AppleEditorialTrackSearchRow> = source.tracks.mapNotNull { track ->
+    val route = AppleCatalogBrowseRoute.parse(track.scopedId)
+        ?.takeIf { it.kind == ItunesCatalogItemType.TRACK &&
+            it.id == track.id && it.storefront == track.storefront }
+        ?: return@mapNotNull null
+    val artistName = track.artistName?.takeIf(String::isNotBlank)
+        ?: return@mapNotNull null
+    if (track.title.isBlank()) return@mapNotNull null
+    val albumRoute = track.collectionId?.let { id ->
+        AppleCatalogBrowseRoute.parse("itunes:${track.storefront}:album:$id")
+    }?.takeIf { it.kind == ItunesCatalogItemType.ALBUM }
+    AppleEditorialTrackSearchRow(
+        key = track.scopedId,
+        title = track.title,
+        artistName = artistName,
+        artworkUri = track.artworkUrl,
+        albumBrowseId = albumRoute?.let { "itunes:${it.storefront}:album:${it.id}" },
+        durationMs = track.durationMs,
     )
 }
