@@ -174,6 +174,71 @@ class MusicBrainzBarcodeEditionEvidenceSourceTest {
         assertEquals(listOf("release"), calls)
     }
 
+    @Test fun barcodeCandidateOnSecondPageIsReadOnlyAfterCompleteMbSearch() =
+        runBlocking {
+            val calls = mutableListOf<String>()
+            val client = MusicBrainzClient(
+                transport = object : MusicBrainzTransport {
+                    override suspend fun get(
+                        path: String, parameters: Map<String, String>, userAgent: String,
+                    ): String {
+                        calls += if (path == "release") {
+                            "$path:${parameters["offset"]}"
+                        } else path
+                        return when (path) {
+                            "release" -> {
+                                assertEquals("barcode:8801234567890", parameters["query"])
+                                assertEquals("12", parameters["limit"])
+                                assertEquals("false", parameters["dismax"])
+                                val offset = parameters["offset"]!!.toInt()
+                                if (offset == 0) {
+                                    val unrelated = (1..12).joinToString(",") { index ->
+                                        val id = "00000000-0000-4000-8000-" +
+                                            index.toString().padStart(12, '0')
+                                        """{"id":"$id","title":"Unrelated edition $index",
+                                           "status":"Official","artist-credit":[{
+                                           "name":"ILLIT","artist":{"id":"$artistMbid"}}]}"""
+                                    }
+                                    """{"count":13,"offset":0,"releases":[$unrelated]}"""
+                                } else {
+                                    assertEquals(12, offset)
+                                    """{"count":13,"offset":12,"releases":[{
+                                      "id":"$editionId","title":"SUPER REAL ME",
+                                      "status":"Official","artist-credit":[{"name":"ILLIT",
+                                      "artist":{"id":"$artistMbid"}}],
+                                      "release-group":{"id":"$groupId","primary-type":"EP"}}]}"""
+                                }
+                            }
+                            "release/$editionId" -> """{
+                              "id":"$editionId","title":"SUPER REAL ME",
+                              "date":"2024-03-25","status":"Official",
+                              "barcode":"8801234567890","release-group":{"id":"$groupId"},
+                              "artist-credit":[{"name":"ILLIT",
+                                "artist":{"id":"$artistMbid"}}],
+                              "media":[{"position":1,"track-count":1,"tracks":[{
+                                "id":"$trackMbid","position":1,"title":"Magnetic",
+                                "recording":{"id":"$recordingMbid","title":"Magnetic"}}]}]}"""
+                            "release-group/$groupId" -> """{
+                              "id":"$groupId","title":"SUPER REAL ME",
+                              "primary-type":"EP","artist-credit":[{"name":"ILLIT"}]}"""
+                            else -> error("Unexpected graph query: $path")
+                        }
+                    }
+                },
+                rateLimiter = MusicBrainzRateLimiter(delayMillis = {}),
+            )
+            val source = MusicBrainzBarcodeEditionEvidenceSource(
+                MusicBrainzCatalogSearch(client), MusicBrainzCatalogGraph(client),
+            )
+            val discovered = source.discover(album)
+            assertEquals(listOf(editionId), discovered?.editions?.map { it.musicBrainzId })
+            assertEquals(listOf("EP"), discovered?.groups?.map { it.primaryType })
+            assertEquals(listOf(
+                "release:0", "release:12", "release/$editionId",
+                "release-group/$groupId",
+            ), calls)
+        }
+
     @Test fun incompleteArtistCreditInBarcodeSearchFailsBeforeGraphLookup() =
         runBlocking {
             val calls = mutableListOf<String>()
