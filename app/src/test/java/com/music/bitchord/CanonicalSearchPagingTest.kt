@@ -433,6 +433,47 @@ class CanonicalSearchPagingTest {
         assertEquals(listOf("EP", "Single"), rows.map { it.releaseKind })
     }
 
+
+    @Test fun progressiveSearchCannotDowngradeAnAlreadyEnrichedGroup() {
+        // A later page can repeat the raw MusicBrainz Group after an Official
+        // edition already supplied a more useful title and a verified cover.
+        val id = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        val enriched = CanonicalCatalogSearchRow(
+            id, CanonicalSearchKind.RELEASE_GROUP, "How Sweet", "NewJeans",
+            releaseKind = "Single",
+            artworkUri = "https://images.example/how-sweet.jpg",
+        )
+        val rawRepeat = enriched.copy(
+            title = "How Sweet & Bubble Gum", artworkUri = null,
+        )
+
+        val result = canonicalProgressiveSearchPreview(listOf(enriched), listOf(rawRepeat))
+
+        assertEquals(listOf(enriched), result)
+    }
+
+    @Test fun sameGroupEditionWithDifferentArtistCreditRemainsDistinct() {
+        // Group membership alone does not make differing edition artist
+        // credits redundant. Never hide that edition or adopt its artwork.
+        val groupId = "50bcea80-692f-4e36-a7a5-825a3233cb13"
+        val group = CanonicalCatalogSearchRow(
+            groupId, CanonicalSearchKind.RELEASE_GROUP, "HOT", "LE SSERAFIM",
+            releaseKind = "EP",
+        )
+        val differentCredit = CanonicalCatalogSearchRow(
+            "11111111-1111-4111-8111-111111111111",
+            CanonicalSearchKind.RELEASE, "HOT", "Guest collaborators",
+            coverGroupMbid = groupId,
+            artworkUri = "https://images.example/credited-edition.jpg",
+        )
+
+        val result = canonicalSearchRowsWithoutRedundantEditions(
+            listOf(group, differentCredit),
+        )
+
+        assertEquals(listOf(group, differentCredit), result)
+    }
+
     private fun page(
         total: Int, offset: Int, raw: Int,
     ): MusicBrainzCatalogSearchResult.Success<String> =
