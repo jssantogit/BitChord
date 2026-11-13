@@ -4,9 +4,10 @@ import android.app.Application
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
-import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.SemanticsActions
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -34,12 +35,13 @@ class CanonicalRatingDirectCancelTest {
                 )
             }
         }
-        compose.onNodeWithTag("rating-editor-star-4-empty", useUnmergedTree = true)
-            .assertExists()
-        // A change is pending, but Cancel discards it without a second alert.
-        compose.onNodeWithTag("rating-editor-star-4-empty", useUnmergedTree = true)
-            .performTouchInput { click() }
-        compose.onNodeWithTag("rating-editor-cancel-action").performClick()
+        // Use the same accessible star/button actions as the existing Compose
+        // regression, rather than tapping a decorative child by coordinates.
+        compose.onNodeWithContentDescription("4 stars")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Cancel")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Discard changes?").assertDoesNotExist()
         compose.runOnIdle {
             assertEquals(1, dismissed)
             assertEquals(0, saves)
