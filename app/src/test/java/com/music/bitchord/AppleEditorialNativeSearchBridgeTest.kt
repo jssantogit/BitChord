@@ -8,6 +8,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.ui.appleNativeAlbumDetail
 import com.music.bitchord.ui.appleNativeSearchRows
+import com.music.bitchord.ui.screens.AppleEditorialReleaseCategory
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -66,6 +67,10 @@ class AppleEditorialNativeSearchBridgeTest {
         assertEquals(listOf("HOT - EP", "HOT - Single"), rows.map { it.title })
         assertEquals("https://is1-ssl.mzstatic.com/cover.jpg", rows[0].artworkUri)
         assertTrue(rows.all { it.artistName == "LE SSERAFIM" })
+        assertEquals(listOf(
+            AppleEditorialReleaseCategory.EP,
+            AppleEditorialReleaseCategory.EP,
+        ), rows.map { it.category })
     }
 
     @Test fun detailedAppleTracklistKeepsItsOwnIdentityAndNeverReturnsPlayableSong() {
