@@ -5606,6 +5606,7 @@ private fun BitChordApp(
                 held = songMenuOrigin,
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
+                hostProvidesBlur = true,
                 onDismiss = { songActions = null },
                 // A queue Song's albumId can be provider-local. Resolve its real
                 // Recording → Release/ReleaseGroup relationship before navigating;
@@ -5655,6 +5656,7 @@ private fun BitChordApp(
                 held = recentHeldOrigin,
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
+                hostProvidesBlur = true,
                 onDismiss = {
                     recentHeldRecording = null
                     recentHeldOrigin = null
@@ -5907,6 +5909,7 @@ private fun BitChordApp(
                 held = browseMenuOrigin,
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
+                hostProvidesBlur = true,
                 onDismiss = { browseActions = null },
                 // Tapping the lifted card opens it, as a tap on it in the list
                 // would have. Not for a Local Music grouping, which has no page.
@@ -5932,6 +5935,7 @@ private fun BitChordApp(
                 publicPlaylistOrigin = heldPublicPlaylistSearchOrigin,
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
+                hostProvidesBlur = true,
                 onDismissCatalog = {
                     heldCatalogSearchRow = null
                     heldCatalogSearchOrigin = null
