@@ -124,6 +124,24 @@ class ItunesCatalogClientTest {
         assertTrue(items.all { !it.isPlayable && it.previewUrl == null })
     }
 
+    @Test fun artistLookupSupportsTwoHundredAlbumsPlusTheArtistHeader() = runBlocking {
+        val rows = (1..200).joinToString(",") { id ->
+            """{"wrapperType":"collection","collectionType":"Album",
+                "collectionId":$id,"artistId":99,"collectionName":"Release $id",
+                "artistName":"Example Artist"}"""
+        }
+        val transport = FakeTransport(
+            """{"resultCount":201,"results":[
+                {"wrapperType":"artist","artistId":99,"artistName":"Example Artist"},$rows
+            ]}"""
+        )
+        val result = ItunesCatalogClient(transport).lookupArtistAlbums(99, limit = 200)
+        val items = (result as ItunesCatalogResult.Success).items
+        assertEquals(201, items.size)
+        assertEquals(200, items.count { it.type == ItunesCatalogItemType.ALBUM })
+        assertEquals("200", transport.parameters["limit"])
+    }
+
     @Test fun invalidInputsCannotReachTheAppleEndpoint() = runBlocking {
         val transport = FakeTransport("""{"resultCount":0,"results":[]}""")
         val client = ItunesCatalogClient(transport)
