@@ -138,8 +138,8 @@ fun NativeCompactOverflowMenu(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     maxContentHeight: Dp? = null,
-    /** A frosted-style compact plate for product-specific creator actions. */
-    homePlateStyle: Boolean = false,
+    /** All overflow menus use the same solid, native catalog-source plate. */
+    homePlateStyle: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val visible = remember { MutableTransitionState(false) }
@@ -197,13 +197,11 @@ fun NativeCompactOverflowMenu(
                     modifier = modifier.widthIn(min = 208.dp, max = 320.dp)
                         .testTag("native-compact-overflow"),
                     shape = RoundedCornerShape(nativeCompactMenuCornerRadiusDp(homePlateStyle).dp),
-                    color = if (homePlateStyle) plate else MaterialTheme.colorScheme.surface,
+                    color = plate,
                     contentColor = MaterialTheme.colorScheme.onSurface,
-                    shadowElevation = if (homePlateStyle) 20.dp else 10.dp,
-                    border = BorderStroke(
-                        0.5.dp,
-                        if (homePlateStyle) hairline else MaterialTheme.colorScheme.outlineVariant,
-                    ),
+                    shadowElevation = 20.dp,
+                    // A single solid plate, no Material3 outlined fallback.
+                    border = null,
                 ) {
                     CompositionLocalProvider(
                         LocalNativeCompactMenuActionsEnabled provides expanded,
