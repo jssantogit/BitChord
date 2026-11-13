@@ -98,6 +98,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -133,6 +134,7 @@ import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.components.SourceQualityBadge
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
+import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
 import com.music.bitchord.data.canvas.AppleArtistArt
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
@@ -346,7 +348,19 @@ fun DetailScreen(
     onCanonicalFeaturedReleaseOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** MBID, title, creator and description only: no internal DTO in public API. */
     onCanonicalArtistPlaylistOpen: ((String, String, String, String?) -> Unit)? = null,
+    /**
+     * Only set for an independently certified MB Release→Apple product.
+     * Apple-provided artwork is promotional, so its official store badge
+     * must be placed adjacent to the exact release's cover.
+     */
+    appleStorePromotionUrl: String? = null,
 ) {
+    val applePromotionBadge = remember(page.browseId, appleStorePromotionUrl) {
+        if (page.browseId.startsWith("catalog:RELEASE:"))
+            appleApprovedBadgeForStoreUrl(appleStorePromotionUrl)
+        else null
+    }
+    val externalStoreUriHandler = LocalUriHandler.current
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
     // than the per-page one a release takes.
@@ -706,6 +720,24 @@ fun DetailScreen(
                             ({ catalogPinRepo.toggle(catalogPin); Unit }) else null,
                         metaOverride = folderCategoryMeta,
                     )
+                    // Apple itself supplies these unmodified official badges.
+                    // Keep its product link alongside promotional cover art,
+                    // never on a Group, Recording, local album or unrelated page.
+                    if (applePromotionBadge != null && appleStorePromotionUrl != null) {
+                        Spacer(Modifier.height(10.dp))
+                        AsyncImage(
+                            model = applePromotionBadge,
+                            contentDescription = "Abrir este álbum na loja Apple",
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                                .width(154.dp).height(44.dp)
+                                .clickable {
+                                    runCatching {
+                                        externalStoreUriHandler.openUri(appleStorePromotionUrl)
+                                    }
+                                },
+                            contentScale = ContentScale.Fit,
+                        )
+                    }
                 }
             }
 
