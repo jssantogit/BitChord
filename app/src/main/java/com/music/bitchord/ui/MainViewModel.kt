@@ -3461,6 +3461,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _appleHomeReleases.value = when (result) {
                 is AppleEditorialLoad.Success -> {
                     _appleHomeProbeReport.value = result.probeReport
+                    com.music.bitchord.data.catalog.metadata
+                        .recordAppleEditorialProbeReport("home", result.probeReport)
                     UiState.Success(result.releases)
                 }
                 is AppleEditorialLoad.Failure -> {
@@ -3788,6 +3790,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     is AppleEditorialLoad.Success -> {
                         result.probeReport?.let { report ->
                             _appleGenreProbeReports.update { it + (tag to report) }
+                            com.music.bitchord.data.catalog.metadata
+                                .recordAppleEditorialProbeReport("genre", report)
                         }
                         UiState.Success(result.releases)
                     }
