@@ -1,0 +1,48 @@
+# Verify the exact held-menu exit-animation changes in the draft PR.
+# No APK, release or merge.
+name: REA 212 · Native held exit regression tests
+
+on:
+  push:
+    branches: [validation/rea212-held-exit-3554aaa8-20261113]
+    paths: [.github/workflows/rea212-held-exit-test-only.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact PR 212 source
+        uses: actions/checkout@v4
+        with:
+          ref: 3554aaa8435ebff5989187a1f50c20cb704d480f
+      - name: Confirm exact source
+        run: test "$(git rev-parse HEAD)" = "3554aaa8435ebff5989187a1f50c20cb704d480f"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Prepare unit-test environment
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Retain reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-held-exit-failures
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
