@@ -67,5 +67,6 @@ class PinnedArtworkOnlyComposeTest {
         )
         val indexed = pinnedLocalPlaylistItemsById(listOf(local))
         assertSame(local, indexed["local:playlist:xyz"])
+        assertSame(local, indexed["local:local:playlist:xyz"])
     }
 }
