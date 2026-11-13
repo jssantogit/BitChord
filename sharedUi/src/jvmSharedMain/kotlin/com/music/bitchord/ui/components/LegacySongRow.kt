@@ -181,6 +181,8 @@ fun SongRow(
     activeTint: Color = MaterialTheme.colorScheme.primary,
     /** Search results use artwork bars instead of the usual current-song icon. */
     searchPlayingStyle: Boolean = false,
+    /** Search hides the trailing ⋯ but still supports long-press actions. */
+    showMoreButton: Boolean = true,
     /** True while a Downloads row belongs to the current multi-selection. */
     selected: Boolean = false,
     /**
@@ -199,7 +201,7 @@ fun SongRow(
             song = song,
             onClick = onClick,
             onLongPress = onLongPress,
-            onMore = onMore ?: onLongPress,
+            onMore = if (showMoreButton) onMore ?: onLongPress else null,
             modifier = rowModifier,
             trackNumber = trackNumber,
             subtitleColor = subtitleColor,
