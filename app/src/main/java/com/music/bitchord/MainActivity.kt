@@ -2396,6 +2396,14 @@ private fun BitChordApp(
         mutableStateOf<com.music.bitchord.ui.screens.V2DisplayRow?>(null)
     }
     var recentHeldOrigin by remember { mutableStateOf<HeldItem?>(null) }
+    var recentPlaylistTarget by remember {
+        mutableStateOf<com.music.bitchord.ui.screens.V2DisplayRow?>(null)
+    }
+    var recentRatingTarget by remember { mutableStateOf<String?>(null) }
+    val recentPinRepository = remember(context) {
+        com.music.bitchord.ui.screens.CanonicalLibraryPinRepository.get(context)
+    }
+    val recentLibraryPins by recentPinRepository.pins.collectAsStateWithLifecycle()
     val onRecentTrackHold: (com.music.bitchord.ui.screens.V2DisplayRow) -> Unit = { row ->
         recentHeldOrigin = LongPressOrigin.consume()
         recentHeldRecording = row.takeIf { recentHeldOrigin != null }
@@ -5602,6 +5610,7 @@ private fun BitChordApp(
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
                 hostProvidesBlur = true,
+                plateTint = detail?.let { detailPalette.elevated },
                 onDismiss = { songActions = null },
                 // A queue Song's albumId can be provider-local. Resolve its real
                 // Recording → Release/ReleaseGroup relationship before navigating;
@@ -5652,6 +5661,7 @@ private fun BitChordApp(
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
                 hostProvidesBlur = true,
+                plateTint = detail?.let { detailPalette.elevated },
                 onDismiss = {
                     recentHeldRecording = null
                     recentHeldOrigin = null
@@ -5665,9 +5675,12 @@ private fun BitChordApp(
                     )
                 },
             ) { row ->
-                com.music.bitchord.ui.components.NativeCompactMenuItem(
-                    label = "Tocar a seguir",
-                    onClick = {
+                val selection = com.music.bitchord.ui.screens.CanonicalLibrarySelection(
+                    com.music.bitchord.ui.screens.CanonicalLibraryEntityType.TRACK, row.id,
+                )
+                com.music.bitchord.ui.screens.CanonicalRecentHeldActions(
+                    isPinned = recentLibraryPins.any { it.selection == selection },
+                    onPlayNext = {
                         recentHeldRecording = null
                         recentHeldOrigin = null
                         executeSmartCollection(
@@ -5675,10 +5688,7 @@ private fun BitChordApp(
                             CanonicalCollectionIntent.ADD_NEXT,
                         )
                     },
-                )
-                com.music.bitchord.ui.components.NativeCompactMenuItem(
-                    label = "Adicionar à fila",
-                    onClick = {
+                    onQueue = {
                         recentHeldRecording = null
                         recentHeldOrigin = null
                         executeSmartCollection(
@@ -5686,6 +5696,42 @@ private fun BitChordApp(
                             CanonicalCollectionIntent.ADD_TO_QUEUE,
                         )
                     },
+                    onAddToPlaylist = {
+                        recentHeldRecording = null
+                        recentHeldOrigin = null
+                        recentPlaylistTarget = row
+                    },
+                    onEditRating = {
+                        recentHeldRecording = null
+                        recentHeldOrigin = null
+                        recentRatingTarget = row.id
+                    },
+                    onTogglePin = {
+                        recentHeldRecording = null
+                        recentHeldOrigin = null
+                        recentPinRepository.toggle(
+                            com.music.bitchord.ui.screens.CanonicalLibraryPin(
+                                selection = selection, title = row.title, subtitle = row.artist,
+                            ),
+                        )
+                    },
+                )
+            }
+
+            recentPlaylistTarget?.let { row ->
+                com.music.bitchord.ui.screens.CanonicalLibraryPlaylistPicker(
+                    selection = listOf(com.music.bitchord.ui.screens.CanonicalLibrarySelection(
+                        com.music.bitchord.ui.screens.CanonicalLibraryEntityType.TRACK, row.id,
+                    )),
+                    selectedSource = com.music.bitchord.data.catalog.CanonicalLocalLibrary
+                        .LOCAL_MEDIASTORE_PROVIDER,
+                    onDismiss = { recentPlaylistTarget = null },
+                )
+            }
+            recentRatingTarget?.let { id ->
+                com.music.bitchord.ui.screens.CanonicalRecordingRatingDialog(
+                    recordingId = id,
+                    onDismiss = { recentRatingTarget = null },
                 )
             }
 
@@ -5905,6 +5951,7 @@ private fun BitChordApp(
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
                 hostProvidesBlur = true,
+                plateTint = detail?.let { detailPalette.elevated },
                 onDismiss = { browseActions = null },
                 // Tapping the lifted card opens it, as a tap on it in the list
                 // would have. Not for a Local Music grouping, which has no page.
