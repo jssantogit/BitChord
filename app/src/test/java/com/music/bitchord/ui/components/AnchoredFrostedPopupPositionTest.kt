@@ -40,6 +40,7 @@ class AnchoredFrostedPopupPositionTest {
             gap = 12,
             margin = 12,
         )
-        assertEquals(IntOffset(12, 80), pos)
+        // The button's right edge is 300px, so a 280px plate starts at 20px.
+        assertEquals(IntOffset(20, 80), pos)
     }
 }
