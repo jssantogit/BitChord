@@ -1,0 +1,39 @@
+name: REA212 Android Long-Press and Player Final Gate
+on:
+  push:
+    branches:
+      - validation/rea212-menu-gesture-fix-20261113
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact app code
+        run: git diff --exit-code 1477e85fe690d6afcc630a768415364d3faa797c HEAD -- app sharedUi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure Android
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused held, native artist, palette tests
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.HeldContextMenuPlateTest --tests com.music.bitchord.ui.screens.CanonicalRecentHeldActionsComposeTest --tests com.music.bitchord.ui.screens.CanonicalLibraryHeldContextMenuPolicyTest --tests com.music.bitchord.ui.screens.NativeArtistPublicTopSectionTest
+      - name: Print test failures
+        if: failure()
+        run: |
+          find app/build/test-results/testDevDebugUnitTest -maxdepth 1 -name 'TEST-*.xml' -exec grep -n -A6 -B2 '<failure' {} \; | head -n 70 || true
+      - name: Full Android unit tests
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI tests
+        run: ./gradlew -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Compile app
+        run: ./gradlew -Pbitchord.bundleWear=false :app:compileDevDebugKotlin
