@@ -50,6 +50,12 @@ import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.AppleArtistDiscographyPager
+import com.music.bitchord.data.catalog.metadata.ApplePublicSearchPager
+import com.music.bitchord.data.catalog.metadata.ApplePublicSearchPageLoad
+import com.music.bitchord.data.catalog.metadata.ApplePublicSearchSnapshot
+import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
+import com.music.bitchord.data.catalog.metadata.ItunesPublicSearchSource
+import com.music.bitchord.data.catalog.metadata.ItunesEditorialCatalog
 import com.music.bitchord.data.catalog.metadata.MusicBrainzDiscogsAppleTitleHintSource
 import com.music.bitchord.data.catalog.metadata.AppleArtistPageLoad
 import com.music.bitchord.data.catalog.metadata.ItunesArtistAlbumDiscoverySource
@@ -64,6 +70,8 @@ import com.music.bitchord.ui.screens.AppleEditorialArtistDetailPage
 import com.music.bitchord.ui.screens.AppleEditorialTrackSearchRow
 import com.music.bitchord.ui.screens.AppleEditorialSearchKind
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
+import com.music.bitchord.ui.screens.AppleSearchSection
+import com.music.bitchord.ui.screens.AppleSearchPageStatus
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalServerSearchRow
@@ -554,6 +562,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val appleEditorialTracks: StateFlow<UiState<List<AppleEditorialTrackSearchRow>>?> =
         _appleEditorialTracks.asStateFlow()
     private var appleTrackSearchJob: Job? = null
+    /** Independent page sessions per Apple entity; never share cursors across queries. */
+    private val applePublicPagers =
+        java.util.concurrent.ConcurrentHashMap<AppleSearchSection, ApplePublicSearchPager>()
+    private val applePublicPagingJobs = mutableMapOf<AppleSearchSection, Job>()
+    private val _appleSearchPaging =
+        MutableStateFlow<Map<AppleSearchSection, AppleSearchPageStatus>>(emptyMap())
+    val appleSearchPaging: StateFlow<Map<AppleSearchSection, AppleSearchPageStatus>> =
+        _appleSearchPaging.asStateFlow()
     private var canonicalTypeaheadJob: Job? = null
     private var canonicalSearchPagingJob: Job? = null
     private var canonicalSearchPageCursors: CanonicalSearchPageCursors? = null
@@ -1565,6 +1581,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleArtistPagingJob?.cancel()
         appleArtistPager = null
         appleTrackSearchJob?.cancel()
+        resetApplePublicSearchPaging()
         _appleEditorialTracks.value = null
         _appleEditorialResults.value = null
         _appleEditorialDetail.value = null
@@ -4260,6 +4277,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             appleEditorialSearchJob?.cancel()
             appleArtistSearchJob?.cancel()
             appleTrackSearchJob?.cancel()
+            resetApplePublicSearchPaging()
             backAppleEditorialAlbum()
             backAppleEditorialArtist()
             _appleEditorialResults.value = null
@@ -4288,6 +4306,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             appleEditorialSearchJob?.cancel()
             appleArtistSearchJob?.cancel()
             appleTrackSearchJob?.cancel()
+            resetApplePublicSearchPaging()
             backAppleEditorialAlbum()
             backAppleEditorialArtist()
             _appleEditorialResults.value = null
@@ -4423,77 +4442,148 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * A failed request must remain visibly unavailable: never replace Apple
      * albums with raw MusicBrainz releases behind the user's back.
      */
-    private fun runAppleEditorialAlbumSearch(query: String) {
-        appleEditorialSearchJob?.cancel()
-        backAppleEditorialAlbum()
-        _appleEditorialResults.value = UiState.Loading
-        appleEditorialSearchJob = viewModelScope.launch(Dispatchers.IO) {
+    /** Preserve already-displayed entities while loading distinct public search slices. */
+    private fun resetApplePublicSearchPaging() {
+        applePublicPagingJobs.values.forEach { it.cancel() }
+        applePublicPagingJobs.clear()
+        applePublicPagers.clear()
+        _appleSearchPaging.value = emptyMap()
+    }
+
+    private fun publishApplePublicSearch(
+        section: AppleSearchSection,
+        snapshot: ApplePublicSearchSnapshot,
+    ) {
+        when (section) {
+            AppleSearchSection.ARTISTS ->
+                _appleEditorialArtists.value = UiState.Success(
+                    appleNativeArtistSearchRows(
+                        AppleEditorialArtistLoad.Success(
+                            snapshot.visible, snapshot.coverageUncertain,
+                        ),
+                    ),
+                )
+            AppleSearchSection.TRACKS ->
+                _appleEditorialTracks.value = UiState.Success(
+                    appleNativeTrackSearchRows(
+                        AppleEditorialTrackLoad.Success(
+                            snapshot.visible, snapshot.coverageUncertain,
+                        ),
+                    ),
+                )
+            AppleSearchSection.ALBUMS ->
+                _appleEditorialResults.value = UiState.Success(
+                    appleNativeSearchRows(AppleEditorialLoad.Success(
+                        ItunesEditorialCatalog.assemble("br", snapshot.visible),
+                        if (snapshot.coverageUncertain)
+                            AppleEditorialReadState.POSSIBLY_TRUNCATED
+                        else AppleEditorialReadState.COMPLETE,
+                    )),
+                )
+        }
+        _appleSearchPaging.update { current ->
+            current + (section to AppleSearchPageStatus(
+                hasMore = snapshot.hasMore,
+                coverageUncertain = snapshot.coverageUncertain,
+            ))
+        }
+    }
+
+    private fun startApplePublicSearch(
+        query: String,
+        section: AppleSearchSection,
+    ): Job {
+        val entity = when (section) {
+            AppleSearchSection.ARTISTS -> ItunesCatalogEntity.ARTIST
+            AppleSearchSection.TRACKS -> ItunesCatalogEntity.SONG
+            AppleSearchSection.ALBUMS -> ItunesCatalogEntity.ALBUM
+        }
+        val pager = ApplePublicSearchPager(
+            query = query, entity = entity, country = "br", pageSize = 24,
+            source = ItunesPublicSearchSource(),
+        )
+        applePublicPagers[section] = pager
+        _appleSearchPaging.update { it - section }
+        return viewModelScope.launch(Dispatchers.IO) {
             val result = try {
-                appleEditorialRepository.searchAlbums(query, storefront = "br", limit = 100)
+                pager.start()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+                ApplePublicSearchPageLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
             }
             if (_searchSource.value != SearchSource.CANONICAL ||
-                _query.value.trim() != query ||
-                activeAppleAlbumId != null
+                _query.value.trim() != query || applePublicPagers[section] !== pager
             ) return@launch
-            _appleEditorialResults.value = when (result) {
-                is AppleEditorialLoad.Success ->
-                    UiState.Success(appleNativeSearchRows(result))
-                is AppleEditorialLoad.Failure ->
-                    UiState.Error("apple_catalog_unavailable")
+            when (result) {
+                is ApplePublicSearchPageLoad.Success ->
+                    publishApplePublicSearch(section, result.snapshot)
+                is ApplePublicSearchPageLoad.Failure -> when (section) {
+                    AppleSearchSection.ARTISTS ->
+                        _appleEditorialArtists.value = UiState.Error("apple_catalog_unavailable")
+                    AppleSearchSection.TRACKS ->
+                        _appleEditorialTracks.value = UiState.Error("apple_catalog_unavailable")
+                    AppleSearchSection.ALBUMS ->
+                        _appleEditorialResults.value = UiState.Error("apple_catalog_unavailable")
+                }
             }
         }
     }
 
-    /** Artist lookup is a separate commercial Apple identity query. */
+    /** Public iTunes has no offset; local pages then query alternate attributes. */
+    fun loadMoreApplePublicSearch(section: AppleSearchSection) {
+        val pager = applePublicPagers[section] ?: return
+        val status = _appleSearchPaging.value[section] ?: return
+        if (!status.hasMore || status.loadingMore ||
+            applePublicPagingJobs[section]?.isActive == true ||
+            _searchSource.value != SearchSource.CANONICAL
+        ) return
+        val query = _query.value.trim()
+        _appleSearchPaging.update {
+            it + (section to status.copy(loadingMore = true, retryableError = false))
+        }
+        applePublicPagingJobs[section] = viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                pager.loadMore()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                ApplePublicSearchPageLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (applePublicPagers[section] !== pager ||
+                _query.value.trim() != query ||
+                _searchSource.value != SearchSource.CANONICAL
+            ) return@launch
+            when (result) {
+                is ApplePublicSearchPageLoad.Success ->
+                    publishApplePublicSearch(section, result.snapshot)
+                is ApplePublicSearchPageLoad.Failure ->
+                    _appleSearchPaging.update { current ->
+                        current + (section to status.copy(retryableError = true))
+                    }
+            }
+        }
+    }
+
+    private fun runAppleEditorialAlbumSearch(query: String) {
+        appleEditorialSearchJob?.cancel()
+        backAppleEditorialAlbum()
+        _appleEditorialResults.value = UiState.Loading
+        appleEditorialSearchJob = startApplePublicSearch(query, AppleSearchSection.ALBUMS)
+    }
+
+    /** Artist names remain independently scoped in Apple's storefront. */
     private fun runAppleEditorialArtistSearch(query: String) {
         appleArtistSearchJob?.cancel()
         backAppleEditorialArtist()
         _appleEditorialArtists.value = UiState.Loading
-        appleArtistSearchJob = viewModelScope.launch(Dispatchers.IO) {
-            val response = try {
-                appleEditorialRepository.searchArtists(query, storefront = "br", limit = 50)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                AppleEditorialArtistLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
-            }
-            if (_searchSource.value != SearchSource.CANONICAL ||
-                _query.value.trim() != query || activeAppleArtistId != null
-            ) return@launch
-            _appleEditorialArtists.value = when (response) {
-                is AppleEditorialArtistLoad.Success ->
-                    UiState.Success(appleNativeArtistSearchRows(response))
-                is AppleEditorialArtistLoad.Failure ->
-                    UiState.Error("apple_catalog_unavailable")
-            }
-        }
+        appleArtistSearchJob = startApplePublicSearch(query, AppleSearchSection.ARTISTS)
     }
 
     private fun runAppleEditorialTrackSearch(query: String) {
         appleTrackSearchJob?.cancel()
         _appleEditorialTracks.value = UiState.Loading
-        appleTrackSearchJob = viewModelScope.launch(Dispatchers.IO) {
-            val response = try {
-                appleEditorialRepository.searchTracks(query, storefront = "br", limit = 100)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                AppleEditorialTrackLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
-            }
-            if (_searchSource.value != SearchSource.CANONICAL ||
-                _query.value.trim() != query || activeAppleAlbumId != null
-            ) return@launch
-            _appleEditorialTracks.value = when (response) {
-                is AppleEditorialTrackLoad.Success ->
-                    UiState.Success(appleNativeTrackSearchRows(response))
-                is AppleEditorialTrackLoad.Failure ->
-                    UiState.Error("apple_catalog_unavailable")
-            }
-        }
+        appleTrackSearchJob = startApplePublicSearch(query, AppleSearchSection.TRACKS)
     }
 
     /** A song tap may open its Apple album, never invent a playable Song. */
