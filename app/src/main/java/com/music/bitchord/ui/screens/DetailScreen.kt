@@ -350,8 +350,9 @@ fun DetailScreen(
     onCanonicalArtistPlaylistOpen: ((String, String, String, String?) -> Unit)? = null,
     /**
      * Only set for an independently certified MB Release→Apple product.
+     * ReleaseGroups require the same exact edition as the visible tracklist.
      * Apple-provided artwork is promotional, so its official store badge
-     * must be placed adjacent to the exact release's cover.
+     * must be placed adjacent to the certified cover.
      */
     appleStorePromotionUrl: String? = null,
 ) {
@@ -722,8 +723,9 @@ fun DetailScreen(
                         metaOverride = folderCategoryMeta,
                     )
                     // Apple itself supplies these unmodified official badges.
-                    // Keep its product link alongside promotional cover art,
-                    // never on a Group, Recording, local album or unrelated page.
+                    // Keep its exact product link alongside the promo cover:
+                    // Release or certified Group detail only, never Recording,
+                    // unrelated Group editions or local albums.
                     if (applePromotionBadge != null && appleStorePromotionUrl != null) {
                         Spacer(Modifier.height(10.dp))
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
