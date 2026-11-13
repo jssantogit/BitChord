@@ -198,9 +198,37 @@ internal class AppleArtistDiscographyPager(
             is AppleEditorialLoad.Failure -> AppleArtistPageLoad.Failure(result.reason)
             is AppleEditorialLoad.Success -> {
                 val added = accept(result)
-                // Display the requested discoveries immediately, without
-                // reordering any previously displayed Apple editions.
-                visibleCount = products.size
+                // Surface just the specifically requested Apple editions.
+                // Releasing the entire hidden tail here defeats local paging
+                // on artists with hundreds of already-discovered albums.
+                val alreadyVisible = products.keys.take(visibleCount).toSet()
+                val requested = result.releases.asSequence()
+                    .filter { release ->
+                        release.artistId == artistId &&
+                            release.storefront == country &&
+                            release.appleCollectionId > 0 &&
+                            release.appleScopedId ==
+                                "itunes:$country:album:${release.appleCollectionId}"
+                    }
+                    .map { it.appleCollectionId }
+                    .distinct()
+                    .filter { it in products && it !in alreadyVisible }
+                    .toList()
+                if (requested.isNotEmpty()) {
+                    val original = products.toList()
+                    val selected = requested.toSet()
+                    val leading = original.take(visibleCount)
+                    val promoted = requested.mapNotNull { id ->
+                        products[id]?.let { release -> id to release }
+                    }
+                    val remaining = original.drop(visibleCount)
+                        .filterNot { it.first in selected }
+                    products.clear()
+                    (leading + promoted + remaining).forEach { (id, release) ->
+                        products[id] = release
+                    }
+                    visibleCount += promoted.size
+                }
                 AppleArtistPageLoad.Success(snapshot(), added)
             }
         }
