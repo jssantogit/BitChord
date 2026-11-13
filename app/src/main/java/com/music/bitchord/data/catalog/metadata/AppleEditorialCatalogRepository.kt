@@ -99,6 +99,41 @@ internal class AppleEditorialCatalogRepository(
         )
     }
 
+    /**
+     * Extra PUBLIC iTunes discovery pass. We never use a MusicBrainz or
+     * Discogs title as a visible release; every result must carry the exact
+     * selected Apple artist ID and storefront. Can still hit the 200 cap.
+     */
+    suspend fun searchArtistAlbumCandidates(
+        query: String,
+        artistId: Long,
+        storefront: String,
+        attribute: ItunesCatalogSearchAttribute,
+    ): AppleEditorialLoad {
+        if (artistId <= 0) return AppleEditorialLoad.Failure(
+            ItunesCatalogFailure.INVALID_QUERY)
+        return when (val source = itunes.search(
+            query, ItunesCatalogEntity.ALBUM, storefront, 200, attribute,
+        )) {
+            is ItunesCatalogResult.Failure ->
+                AppleEditorialLoad.Failure(source.reason)
+            is ItunesCatalogResult.Success -> {
+                val matched = ItunesEditorialCatalog.assemble(storefront, source.items)
+                    .filter { it.artistId == artistId }
+                AppleEditorialLoad.Success(
+                    releases = matched,
+                    state = when {
+                        source.possiblyTruncated ->
+                            AppleEditorialReadState.POSSIBLY_TRUNCATED
+                        matched.isEmpty() ->
+                            AppleEditorialReadState.NOT_IN_STOREFRONT
+                        else -> AppleEditorialReadState.COMPLETE
+                    },
+                )
+            }
+        }
+    }
+
     suspend fun artistDiscography(
         artistId: Long,
         storefront: String = "br",
