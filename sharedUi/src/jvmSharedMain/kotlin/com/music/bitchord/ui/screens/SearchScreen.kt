@@ -60,6 +60,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
@@ -1069,6 +1070,41 @@ private fun LazyListScope.appleEditorialAlbumDetail(
                         album.artistName,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    val categoryLabel = when (album.category) {
+                        AppleEditorialReleaseCategory.ALBUM -> Res.string.albums
+                        AppleEditorialReleaseCategory.EP -> Res.string.apple_eps
+                        AppleEditorialReleaseCategory.SINGLE -> Res.string.apple_singles
+                        AppleEditorialReleaseCategory.UNCLASSIFIED ->
+                            Res.string.apple_other_releases
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(categoryLabel),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    val discogsLink = detail.data.discogsAttributionUrl
+                    val discogsLabel = detail.data.discogsAttributionText
+                    if (discogsLink != null && !discogsLabel.isNullOrBlank()) {
+                        val uriHandler = LocalUriHandler.current
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = discogsLabel,
+                            modifier = Modifier.clickable {
+                                uriHandler.openUri(discogsLink)
+                            },
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        detail.data.discogsNonAffiliationNotice?.let { notice ->
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = notice,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                     if (detail.data.partialTracklist) {
                         Spacer(Modifier.height(8.dp))
                         Text(
