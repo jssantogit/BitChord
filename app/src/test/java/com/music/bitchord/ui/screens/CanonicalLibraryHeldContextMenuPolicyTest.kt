@@ -22,4 +22,21 @@ class CanonicalLibraryHeldContextMenuPolicyTest {
             hasCapturedHold = true, hasHazeBackdrop = false,
         ))
     }
+    @Test fun dismissingLiftedRowPreservesCompactActionsDuringExit() {
+        assertTrue(canonicalLibraryHeldPresentation(
+            heldNow = true, liveMenuVisible = true, heldBeforeExit = false,
+        ))
+        assertTrue(canonicalLibraryHeldPresentation(
+            heldNow = false, liveMenuVisible = false, heldBeforeExit = true,
+        ))
+    }
+
+    @Test fun normalOverflowAndFreshMenuDoNotInheritStaleLiftStyle() {
+        assertFalse(canonicalLibraryHeldPresentation(
+            heldNow = false, liveMenuVisible = true, heldBeforeExit = true,
+        ))
+        assertFalse(canonicalLibraryHeldPresentation(
+            heldNow = false, liveMenuVisible = false, heldBeforeExit = false,
+        ))
+    }
 }
