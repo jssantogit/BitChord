@@ -1,0 +1,35 @@
+name: REA212 Android Unified Menus Code Gate
+on:
+  push:
+    branches:
+      - validation/rea212-all-menu-audit-20261113
+permissions:
+  contents: read
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pin exact code from PR212
+        run: git diff --exit-code f8752cf468eb638fa32cd6405096fd0f83b9b569 HEAD -- app sharedUi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure Android
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused Android menu regressions
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.HeldContextMenuPlateTest --tests com.music.bitchord.ui.screens.CanonicalRecentHeldActionsComposeTest --tests com.music.bitchord.ui.screens.CanonicalLibraryHeldContextMenuPolicyTest --tests com.music.bitchord.ui.screens.NativeArtistPublicTopSectionTest
+      - name: Complete Android unit tests
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Complete shared UI tests
+        run: ./gradlew -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Compile Android app
+        run: ./gradlew -Pbitchord.bundleWear=false :app:compileDevDebugKotlin
