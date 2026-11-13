@@ -4,6 +4,7 @@ import com.music.bitchord.data.catalog.MusicBrainzReleaseEnrichmentEntity
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import java.util.Locale
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -134,8 +135,20 @@ internal class DiscogsCanonicalEditionCoordinator(
 
     private suspend fun resolve(mbid: String): DiscogsEditionEnrichment {
         val graphResult = graph.lookupRelease(mbid)
-        val detail = (graphResult as? MusicBrainzCatalogGraphResult.Success<
-            MusicBrainzCatalogReleaseDetail>)?.value ?: return DiscogsEditionEnrichment.Unavailable
+        val detail = when (graphResult) {
+            is MusicBrainzCatalogGraphResult.Success -> graphResult.value
+            is MusicBrainzCatalogGraphResult.Failure -> return when (graphResult.reason) {
+                // A malformed/partial edition cannot be certified, but is not
+                // a network outage. Preserve the exact-graph fail-closed gate.
+                MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE ->
+                    DiscogsEditionEnrichment.Candidate
+                MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+                MusicBrainzCatalogSearchFailure.INVALID_PAGE ->
+                    DiscogsEditionEnrichment.Invalid
+                MusicBrainzCatalogSearchFailure.UNAVAILABLE ->
+                    DiscogsEditionEnrichment.Unavailable
+            }
+        }
         if (!detail.hasCompleteTracklist || detail.tracks.isEmpty() ||
             detail.artistDisplay.isNullOrBlank() ||
             // A missing or partially invalid structured credit can silently

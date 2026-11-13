@@ -16,6 +16,12 @@ internal data class ItunesVerifiedReleaseGroupLink(
     val musicBrainzReleaseGroupId: String,
 )
 
+/** Edition-specific MusicBrainz Release link, not a ReleaseGroup alias. */
+internal data class ItunesVerifiedReleaseLink(
+    val appleScopedId: String,
+    val musicBrainzReleaseId: String,
+)
+
 /** These links are *already independently verified* by the crosswalk layer. */
 internal data class ItunesVerifiedArtistLink(
     val appleScopedId: String,
@@ -44,6 +50,10 @@ internal data class ItunesEditorialRelease(
     val musicBrainzArtistId: String?,
     /** Only matching Apple track IDs with independently verified MB recording IDs. */
     val musicBrainzRecordingIds: Map<String, String>,
+    /** UPC from the exact Apple collection; not a unique identity proof by itself. */
+    val upc: String? = null,
+    /** Exact MusicBrainz Release MBID, distinct from the group annotation. */
+    val musicBrainzReleaseId: String? = null,
 )
 
 internal object ItunesEditorialCatalog {
@@ -101,6 +111,7 @@ internal object ItunesEditorialCatalog {
         verifiedLinks: List<ItunesVerifiedReleaseGroupLink> = emptyList(),
         verifiedArtistLinks: List<ItunesVerifiedArtistLink> = emptyList(),
         verifiedRecordingLinks: List<ItunesVerifiedRecordingLink> = emptyList(),
+        verifiedReleaseLinks: List<ItunesVerifiedReleaseLink> = emptyList(),
     ): List<ItunesEditorialRelease> {
         val country = storefront.trim().lowercase(Locale.ROOT)
         if (!Regex("[a-z]{2}").matches(country)) return emptyList()
@@ -112,6 +123,10 @@ internal object ItunesEditorialCatalog {
         val links = verifiedIdentityMap(
             country, ItunesCatalogItemType.ALBUM,
             verifiedLinks.map { it.appleScopedId to it.musicBrainzReleaseGroupId },
+        )
+        val editionLinks = verifiedIdentityMap(
+            country, ItunesCatalogItemType.ALBUM,
+            verifiedReleaseLinks.map { it.appleScopedId to it.musicBrainzReleaseId },
         )
         val artists = verifiedIdentityMap(
             country, ItunesCatalogItemType.ARTIST,
@@ -156,6 +171,8 @@ internal object ItunesEditorialCatalog {
                     musicBrainzRecordingIds = albumTracks.mapNotNull { row ->
                         recordings[row.scopedId]?.let { mbid -> row.scopedId to mbid }
                     }.toMap(),
+                    upc = album.upc,
+                    musicBrainzReleaseId = editionLinks[album.scopedId],
                 )
             }
             .sortedWith(compareByDescending<ItunesEditorialRelease> { it.releaseDate.orEmpty() }
