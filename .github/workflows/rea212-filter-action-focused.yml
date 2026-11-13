@@ -1,0 +1,50 @@
+# Critical safety regression: each selected saved-filter menu row must
+# dispatch its own action, never accidentally "Excluir filtro".
+name: REA 212 · Filter action dispatch safety
+
+on:
+  push:
+    branches: [validation/rea212-filter-action-efeb0cca-20261113]
+    paths: [.github/workflows/rea212-filter-action-focused.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@v4
+        with:
+          ref: efeb0cca15b973562da1312da2d13a1a2d6fa18c
+      - name: Verify exact SHA
+        run: test "$(git rev-parse HEAD)" = "efeb0cca15b973562da1312da2d13a1a2d6fa18c"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure unit tests
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Verify held filter routes including no mistaken delete
+        run: |
+          ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest \
+            --tests "com.music.bitchord.ui.screens.SmartPlaylistSavedFilterHeldMenuTest" \
+            --tests "com.music.bitchord.ui.screens.CanonicalLibraryHeldContextMenuPolicyTest" \
+            --tests "com.music.bitchord.LibraryPlaylistHeldMenuPolicyTest"
+      - name: Retain failed reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-action-dispatch-reports
+          path: app/build/reports/tests/
+          retention-days: 3
+          if-no-files-found: ignore
