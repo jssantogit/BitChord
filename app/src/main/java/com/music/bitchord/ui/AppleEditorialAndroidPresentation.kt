@@ -2,6 +2,8 @@ package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.AppleTriSourceEditorialEntry
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
+import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+import java.time.LocalDate
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
@@ -90,5 +92,83 @@ internal fun appleEditorialShelves(
                 )
             },
         )
+    }
+}
+
+
+/**
+ * Public Home release cards come exclusively from Apple storefront products.
+ * MusicBrainz recent groups may *suggest search terms* upstream, but their
+ * unverified metadata rows cannot be fallback cards in the Apple-first feed.
+ * Local playback picks remain independently verified and are not Apple titles.
+ */
+internal fun appleFirstHomeShelves(
+    appleAlbums: List<ItunesEditorialRelease>,
+    existingLocalShelves: List<HomeShelf>,
+    releasesHeading: String,
+    discoveryHeading: String,
+    todayIsoDate: String,
+): List<HomeShelf> {
+    val today = runCatching { LocalDate.parse(todayIsoDate) }.getOrNull()
+        ?: return emptyList()
+    val clean = appleAlbums.asSequence()
+        .filter { album ->
+            album.appleCollectionId > 0L && album.artistId?.let { it > 0L } == true &&
+                album.appleScopedId ==
+                    "itunes:${album.storefront}:album:${album.appleCollectionId}" &&
+                AppleCatalogBrowseRoute.parse(album.appleScopedId)?.kind ==
+                    ItunesCatalogItemType.ALBUM &&
+                album.title.isNotBlank() && album.artistName.isNotBlank()
+        }
+        .groupBy { it.appleScopedId }
+        .values.mapNotNull { rows ->
+            rows.firstOrNull()?.takeIf { first -> rows.all { it == first } }
+        }
+        .filter { album ->
+            val releaseDate = album.releaseDate?.takeIf(String::isNotBlank)
+                ?: return@filter true
+            val date = runCatching { LocalDate.parse(releaseDate.take(10)) }.getOrNull()
+            date != null && date <= today
+        }
+        .sortedWith(compareByDescending<ItunesEditorialRelease> {
+            it.releaseDate.orEmpty()
+        }.thenBy { it.appleScopedId })
+    fun cards(releases: List<ItunesEditorialRelease>): List<ShelfItem> =
+        releases.map { album ->
+            ShelfItem(
+                title = album.title,
+                subtitle = album.artistName,
+                thumbnailUrl = album.artworkUrl,
+                videoId = null,
+                browseId = album.appleScopedId,
+            )
+        }
+
+    val recentCutoff = today.minusDays(90)
+    val recent = clean.filter { album ->
+        album.releaseDate?.let { raw ->
+            runCatching { LocalDate.parse(raw.take(10)) }.getOrNull()
+                ?.let { it >= recentCutoff } == true
+        } == true
+    }
+    val assigned = recent.take(12).map { it.appleScopedId }.toSet()
+    val remaining = clean.filterNot { it.appleScopedId in assigned }.take(18)
+
+    val local = existingLocalShelves.mapNotNull { shelf ->
+        val items = shelf.items.filter { item ->
+            val id = item.browseId.orEmpty()
+            id.startsWith("local:") || id.startsWith("server:") ||
+                id.startsWith("downloads:")
+        }
+        if (items.isEmpty()) null else shelf.copy(items = items)
+    }
+    return buildList {
+        if (recent.isNotEmpty()) add(HomeShelf(
+            releasesHeading, cards(recent.take(12)),
+        ))
+        if (remaining.isNotEmpty()) add(HomeShelf(
+            discoveryHeading, cards(remaining),
+        ))
+        addAll(local)
     }
 }
