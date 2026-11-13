@@ -1,6 +1,8 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.music.bitchord.sharedui.resources.Res
 import com.music.bitchord.sharedui.resources.apple_search_view_details
 import com.music.bitchord.sharedui.resources.smart_collection_batch_queue
@@ -22,6 +24,7 @@ internal fun CanonicalSearchHeldMenus(
     publicPlaylist: CanonicalPublicPlaylistSearchRow?,
     publicPlaylistOrigin: HeldItem?,
     hazeState: HazeState,
+    bottomChromeClearance: Dp = 100.dp,
     onDismissCatalog: () -> Unit,
     onDismissPublicPlaylist: () -> Unit,
     onOpenCatalog: (CanonicalCatalogSearchRow) -> Unit,
@@ -35,6 +38,7 @@ internal fun CanonicalSearchHeldMenus(
         item = catalogRow,
         held = catalogOrigin,
         hazeState = hazeState,
+        bottomChromeClearance = bottomChromeClearance,
         onDismiss = onDismissCatalog,
         onPreviewClick = { row ->
             onDismissCatalog()
@@ -56,6 +60,7 @@ internal fun CanonicalSearchHeldMenus(
         item = publicPlaylist,
         held = publicPlaylistOrigin,
         hazeState = hazeState,
+        bottomChromeClearance = bottomChromeClearance,
         onDismiss = onDismissPublicPlaylist,
         onPreviewClick = { row ->
             onDismissPublicPlaylist()
