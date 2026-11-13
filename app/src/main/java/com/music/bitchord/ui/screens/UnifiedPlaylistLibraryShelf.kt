@@ -58,6 +58,11 @@ import com.music.bitchord.data.spotify.LocalPlaylistStore
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.ui.components.PillTextField
+import com.music.bitchord.ui.components.HeldContextMenu
+import com.music.bitchord.ui.components.LongPressOrigin
+import com.music.bitchord.ui.components.HeldItem
+import com.music.bitchord.ui.components.SongActionsPresentation
+import dev.chrisbanes.haze.HazeState
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
@@ -170,6 +175,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenSmartPlaylist: (String) -> Unit,
     onOpenCanonicalNormalPlaylist: (String) -> Unit,
     onAddSongsToCanonicalNormalPlaylist: (String) -> Unit = onOpenCanonicalNormalPlaylist,
+    hazeState: HazeState? = null,
     onLegacyPlay: (String, List<Song>, Int) -> Unit,
     onLegacyShuffle: (String, List<Song>) -> Unit,
     onLegacyQueue: (List<Song>) -> Unit,
@@ -211,6 +217,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     val pinnedPlaylists by playlistPinRepo.pins.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var optionsFor by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    var heldMenuOrigin by remember { mutableStateOf<HeldItem?>(null) }
     var historicalEditor by remember { mutableStateOf<LibraryPlaylistCard.Normal?>(null) }
     var historicalEditTitle by remember { mutableStateOf("") }
     var historicalEditError by remember { mutableStateOf(false) }
@@ -398,7 +405,10 @@ internal fun UnifiedPlaylistLibraryShelf(
             UnifiedPlaylistCompactRow(
                 card = card,
                 onClick = openCard,
-                onMore = { optionsFor = card },
+                onMore = {
+                    heldMenuOrigin = LongPressOrigin.consume()
+                    optionsFor = card
+                },
                 modifier = Modifier.padding(horizontal = PAGE_GUTTER),
             )
         }
@@ -411,11 +421,11 @@ internal fun UnifiedPlaylistLibraryShelf(
                     Downloads.verifiedSavedUri(it.videoId)
                 }
             }.orEmpty()
-        ModalBottomSheet(
-            onDismissRequest = { optionsFor = null },
-            containerColor = MaterialTheme.colorScheme.background,
-        ) {
+        val menuBody: @Composable () -> Unit = {
             BrowseActionsSheet(
+                presentation = if (libraryPlaylistUsesHeldContextMenu(
+                    heldMenuOrigin != null, hazeState != null,
+                )) SongActionsPresentation.Menu else SongActionsPresentation.Sheet,
                 target = BrowseTarget(
                     browseId = null,
                     title = selected.title,
@@ -496,6 +506,34 @@ internal fun UnifiedPlaylistLibraryShelf(
                     optionsFor = null
                 },
             )
+        }
+        if (libraryPlaylistUsesHeldContextMenu(heldMenuOrigin != null, hazeState != null)) {
+            HeldContextMenu(
+                item = selected,
+                held = heldMenuOrigin,
+                hazeState = requireNotNull(hazeState),
+                onDismiss = {
+                    optionsFor = null
+                    heldMenuOrigin = null
+                },
+                onPreviewClick = { card ->
+                    optionsFor = null
+                    heldMenuOrigin = null
+                    onSelectedCardChange(card)
+                },
+            ) {
+                menuBody()
+            }
+        } else {
+            ModalBottomSheet(
+                onDismissRequest = {
+                    optionsFor = null
+                    heldMenuOrigin = null
+                },
+                containerColor = MaterialTheme.colorScheme.background,
+            ) {
+                menuBody()
+            }
         }
     }
     historicalEditor?.let { editing ->
@@ -681,6 +719,15 @@ internal fun CanonicalStaticPlaylistCoverArt(
         customCoverUri = playlist.coverUri,
     )
 }
+
+/**
+ * A held row raises its captured bitmap into the Apple context menu.
+ * A three-dot click or a missing haze backdrop keeps the previous sheet.
+ */
+internal fun libraryPlaylistUsesHeldContextMenu(
+    hasCapturedHold: Boolean,
+    hasHazeBackdrop: Boolean,
+): Boolean = hasCapturedHold && hasHazeBackdrop
 
 /** Compact vertical Library presentation; the same actions work in the grid. */
 @Composable

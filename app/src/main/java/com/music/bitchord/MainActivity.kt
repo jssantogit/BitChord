@@ -3052,6 +3052,7 @@ private fun BitChordApp(
                         }
                         com.music.bitchord.ui.screens.UnifiedPlaylistLibraryShelf(
                             normalPlaylists = localPlaylistItems,
+                            hazeState = hazeState,
                             onNewSmartPlaylist = {
                                 com.music.bitchord.diagnostics.Diagnostics.event(
                                     category = com.music.bitchord.diagnostics.DiagnosticCategory.UI,
