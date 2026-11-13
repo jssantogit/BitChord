@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +43,8 @@ import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeCompactOverflowMenu
+import com.music.bitchord.ui.components.NativeCompactMenuItem
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /** Only a confirmed Release MBID can supply the front for a recording.
@@ -163,12 +163,13 @@ internal fun NativeArtistPublicTopSection(
                         modifier = Modifier.testTag("artist-top-more-${recording.musicBrainzId}"),
                         tint = palette.onBackgroundVariant,
                     )
-                    DropdownMenu(
+                    NativeCompactOverflowMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("Ver no MusicBrainz") },
+                        NativeCompactMenuItem(
+                            label = "Ver no MusicBrainz",
+                            icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Link,
                             onClick = {
                                 menuExpanded = false
                                 val intent = Intent(
