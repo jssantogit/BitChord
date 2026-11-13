@@ -1,5 +1,10 @@
 package com.music.bitchord.ui.components
 
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.using
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -60,6 +65,24 @@ internal fun routeArrivalFrame(progress: Float, forward: Boolean): RouteArrivalF
     )
 }
 
+/**
+ * Root tabs are peers, not a forward/back navigation stack. Never slide a
+ * full-screen Home/Search/Library feed from either side; the apparent rocking
+ * came from direction-dependent 12dp translation of AnimatedContent itself.
+ *
+ * A near-opaque, short arrival keeps the switch soft without exposing the
+ * transparent window below an overlapping crossfade. This is BitChord motion,
+ * not a measured Apple Music timing.
+ */
+internal fun rootTabArrivalFrame(progress: Float): RouteArrivalFrame {
+    val p = if (progress.isFinite()) progress.coerceIn(0f, 1f) else 1f
+    return RouteArrivalFrame(alpha = 0.975f + 0.025f * p, translationDp = 0f)
+}
+
+/** Disable AnimatedContent's implicit SizeTransform spring for root peers. */
+internal fun rootTabContentTransform(): ContentTransform =
+    (EnterTransition.None togetherWith ExitTransition.None).using(null)
+
 internal fun shouldAnimateRouteArrival(
     previous: String,
     next: String,
@@ -99,7 +122,10 @@ internal fun rememberRouteArrivalModifier(
             progress.snapTo(0f)
             progress.animateTo(
                 1f,
-                animationSpec = tween(durationMillis = 185, easing = FastOutSlowInEasing),
+                animationSpec = tween(
+                    durationMillis = if (rootTabPrefix != null) 160 else 185,
+                    easing = FastOutSlowInEasing,
+                ),
             )
         } else {
             progress.snapTo(1f)
@@ -107,7 +133,11 @@ internal fun rememberRouteArrivalModifier(
     }
 
     return Modifier.graphicsLayer {
-        val frame = routeArrivalFrame(progress.value, arrivingForward)
+        val frame = if (rootTabPrefix == null) {
+            routeArrivalFrame(progress.value, arrivingForward)
+        } else {
+            rootTabArrivalFrame(progress.value)
+        }
         alpha = frame.alpha
         translationX = frame.translationDp.dp.toPx()
     }
