@@ -133,6 +133,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -643,8 +644,24 @@ private fun SlidingPlayerDeck(
  */
 /** Original Apple 7.0 vector button for the queue overflow. */
 @Composable
-private fun AppleQueueHeaderAction(imageVector: androidx.compose.ui.graphics.vector.ImageVector, description: String, onClick: () -> Unit) {
-    Box(Modifier.size(40.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+private fun AppleQueueHeaderAction(
+    imageVector: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    onBoundsChanged: ((androidx.compose.ui.unit.IntRect) -> Unit)? = null,
+) {
+    Box(
+        Modifier.size(40.dp)
+            .then(if (onBoundsChanged == null) Modifier else Modifier.onGloballyPositioned { coords ->
+                val bounds = coords.boundsInWindow()
+                onBoundsChanged(androidx.compose.ui.unit.IntRect(
+                    bounds.left.toInt(), bounds.top.toInt(),
+                    bounds.right.toInt(), bounds.bottom.toInt(),
+                ))
+            })
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
         Icon(imageVector = imageVector, contentDescription = description, tint = Color.White, modifier = Modifier.size(34.dp))
     }
 }
@@ -725,6 +742,8 @@ fun NowPlayingScreen(
     onOpenMenu: (Any?) -> Unit,
     /** Only the dedicated queue's top ⋮ uses this menu variant. */
     onOpenQueueMenu: ((Any?) -> Unit)? = null,
+    /** Screen-space bounds of the overflow puck for native anchored actions. */
+    onOverflowAnchorChange: ((androidx.compose.ui.unit.IntRect) -> Unit)? = null,
     onOpenAlbum: (String) -> Unit,
     /**
      * Opens an artist's page. [browseId] is null for anyone but the lead credit:
@@ -2087,6 +2106,7 @@ fun NowPlayingScreen(
                                         imageVector = AppleQueueVectors.More,
                                         description = stringResource(Res.string.more),
                                         onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                        onBoundsChanged = onOverflowAnchorChange,
                                     )
                                 }
                             }
@@ -3340,6 +3360,7 @@ fun NowPlayingScreen(
                                     imageVector = AppleQueueVectors.More,
                                     description = stringResource(Res.string.more),
                                     onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                    onBoundsChanged = onOverflowAnchorChange,
                                 )
                             } else if (appleQueueStyle && !lyricsShareGlyphVisible) {
                                 // Same glyph, dimensions, and contextual sheet
@@ -3348,6 +3369,7 @@ fun NowPlayingScreen(
                                     imageVector = AppleQueueVectors.More,
                                     description = stringResource(Res.string.more),
                                     onClick = { (onOpenQueueMenu ?: onOpenMenu)(canonicalArtworkModel) },
+                                    onBoundsChanged = onOverflowAnchorChange,
                                 )
                             } else {
                             CircleGlyph(
