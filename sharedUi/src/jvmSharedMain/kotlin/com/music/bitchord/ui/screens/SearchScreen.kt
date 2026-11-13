@@ -268,9 +268,11 @@ fun SearchScreen(
     /** Apple commercial catalog; IDs are storefront-scoped, never MBIDs. */
     appleResults: UiState<List<AppleEditorialSearchRow>>? = null,
     appleArtistResults: UiState<List<AppleEditorialSearchRow>>? = null,
+    appleTrackResults: UiState<List<AppleEditorialTrackSearchRow>>? = null,
     appleDetail: UiState<AppleEditorialAlbumDetailPage>? = null,
     appleArtistDetail: UiState<AppleEditorialArtistDetailPage>? = null,
     onAppleOpen: (AppleEditorialSearchRow) -> Unit = {},
+    onAppleTrackOpen: (AppleEditorialTrackSearchRow) -> Unit = {},
     onAppleBack: () -> Unit = {},
     onAppleArtistBack: () -> Unit = {},
 ) {
@@ -355,7 +357,7 @@ fun SearchScreen(
                     appleArtistDetail == null)) &&
                 (results != null || (searchingCanonical &&
                     (canonicalResults != null || appleResults != null ||
-                        appleArtistResults != null)))
+                        appleArtistResults != null || appleTrackResults != null)))
             ) {
                 SearchFilterTabs(
                     filter = filter,
@@ -386,7 +388,7 @@ fun SearchScreen(
                     )
                     query.isBlank() && canonicalResults == null &&
                         canonicalDetail == null && appleResults == null &&
-                        appleArtistResults == null -> {
+                        appleArtistResults == null && appleTrackResults == null -> {
                         val recent = canonicalRecentSearchEntries(history)
                         if (recent.isEmpty()) {
                             item { MessageState(stringResource(Res.string.canonical_search_start)) }
@@ -409,29 +411,19 @@ fun SearchScreen(
                         appleEditorialArtistRows(appleArtistResults, onAppleOpen)
                     filter == SearchFilter.ALBUMS && canonicalDetail == null ->
                         appleEditorialAlbumRows(appleResults, onAppleOpen)
+                    filter == SearchFilter.SONGS && canonicalDetail == null ->
+                        appleEditorialTrackRows(appleTrackResults, onAppleTrackOpen)
                     filter == SearchFilter.ALL && canonicalDetail == null &&
                         query.isNotBlank() -> {
-                        // Apple owns the commercial artist and album lists.
-                        // MusicBrainz is still needed for recording identity
-                        // until Apple song routes mature.
+                        // Apple owns visible artist, song and album lists.
+                        // MusicBrainz identities are resolved separately;
+                        // they must not be used as a second editorial shelf.
                         appleEditorialArtistRows(
                             appleArtistResults, onAppleOpen, showHeading = true,
                         )
-                        val identityRows = when (canonicalResults) {
-                            is UiState.Success -> UiState.Success(canonicalResults.data.filter {
-                                it.kind == CanonicalSearchKind.RECORDING
-                            })
-                            else -> canonicalResults
-                        }
-                        if (identityRows !is UiState.Success || identityRows.data.isNotEmpty()) {
-                            canonicalMusicBrainzResults(
-                                query, identityRows, null, SearchFilter.ALL,
-                                onCanonicalOpen, onCanonicalBack,
-                                onCanonicalLoadMore, canonicalLoadingMore,
-                                onCanonicalSearchLoadMore, false, false,
-                                onCanonicalPlay, onCanonicalAddToQueue,
-                            )
-                        }
+                        appleEditorialTrackRows(
+                            appleTrackResults, onAppleTrackOpen, showHeading = true,
+                        )
                         appleEditorialAlbumRows(appleResults, onAppleOpen, showHeading = true)
                     }
                     else -> canonicalMusicBrainzResults(
@@ -633,6 +625,68 @@ fun SearchScreen(
  * results are never converted into Song, added to a queue or given overflow
  * actions that assume a playable MediaAsset.
  */
+/**
+ * A music track from the Apple catalog remains metadata-only. Opening it may
+ * navigate to its exact Apple collection; no tap or swipe starts playback.
+ */
+private fun LazyListScope.appleEditorialTrackRows(
+    results: UiState<List<AppleEditorialTrackSearchRow>>?,
+    onAlbumOpen: (AppleEditorialTrackSearchRow) -> Unit,
+    showHeading: Boolean = false,
+) {
+    if (showHeading && (results as? UiState.Success)?.data?.isNotEmpty() == true) {
+        item(key = "apple:tracks:heading") {
+            Text(
+                text = stringResource(Res.string.canonical_filter_songs),
+                modifier = Modifier.padding(
+                    start = PAGE_GUTTER, end = PAGE_GUTTER,
+                    top = 16.dp, bottom = 6.dp,
+                ),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+    when (results) {
+        null -> item(key = "apple:track:hint") {
+            MessageState(stringResource(Res.string.canonical_search_hint))
+        }
+        UiState.Loading -> songListSkeleton(keyPrefix = "apple:tracks")
+        is UiState.Error -> item(key = "apple:track:error") {
+            MessageState(stringResource(Res.string.apple_catalog_unavailable))
+        }
+        is UiState.Success -> if (results.data.isEmpty()) {
+            if (!showHeading) item(key = "apple:track:empty") {
+                MessageState(stringResource(Res.string.apple_no_tracks))
+            }
+        } else itemsIndexed(
+            items = results.data,
+            key = { _, track -> "apple:track:search:${track.key}" },
+        ) { index, track ->
+            NativeSearchResultRow(
+                row = NativeSearchRowUi(
+                    title = track.title,
+                    subtitle = track.artistName,
+                    artworkUri = track.artworkUri,
+                    artistPortrait = false,
+                    durationLabel = canonicalDurationLabel(track.durationMs),
+                ),
+                onClick = if (track.albumBrowseId != null) {
+                    { onAlbumOpen(track) }
+                } else null,
+                onLongPress = null,
+            )
+            if (index < results.data.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+    }
+}
+
 private fun LazyListScope.appleEditorialArtistRows(
     results: UiState<List<AppleEditorialSearchRow>>?,
     onOpen: (AppleEditorialSearchRow) -> Unit,
