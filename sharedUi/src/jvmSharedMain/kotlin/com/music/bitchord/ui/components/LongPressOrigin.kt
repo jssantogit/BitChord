@@ -2,6 +2,10 @@ package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -99,7 +103,7 @@ object LongPressOrigin {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Modifier.longPressMenuClickable(
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
     enabled: Boolean = true,
 ): Modifier {
@@ -119,9 +123,28 @@ fun Modifier.longPressMenuClickable(
             held()
         }
     }
+    // A metadata-only recording has actions on hold but no playable click.
+    // Calling combinedClickable with a fake onClick would make it look
+    // tappable to TalkBack and contradict the catalog capability boundary.
+    val gesture = when {
+        onClick != null -> Modifier.combinedClickable(
+            enabled = enabled, onClick = onClick, onLongClick = longClick,
+        )
+        longClick != null -> Modifier
+            .pointerInput(enabled, longClick) {
+                if (enabled) detectTapGestures(onLongPress = { longClick() })
+            }
+            .semantics {
+                if (enabled) onLongClick(label = "Abrir ações") {
+                    longClick()
+                    true
+                }
+            }
+        else -> Modifier
+    }
     return this
         .onPlaced { capture.coordinates = it }
-        .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = longClick)
+        .then(gesture)
         .drawWithContent {
             // When the bitmap copy is ready, suppress the originating paint.
             // The row retains its dimensions, gestures and scroll position.
