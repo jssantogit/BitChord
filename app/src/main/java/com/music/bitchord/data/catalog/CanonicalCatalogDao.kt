@@ -613,6 +613,11 @@ internal interface CanonicalCatalogDao {
     @Query("SELECT * FROM catalog_release_group WHERE id = :id LIMIT 1")
     suspend fun catalogReleaseGroup(id: String): CatalogReleaseGroupEntity?
 
+    /** Display metadata for a uniquely proven playlist track's ReleaseGroup.
+     * Read the group in one batch, never one Room query per visible row. */
+    @Query("SELECT * FROM catalog_release_group WHERE id IN (:ids)")
+    suspend fun catalogReleaseGroupsByIds(ids: List<String>): List<CatalogReleaseGroupEntity>
+
     /**
      * Materialize Official/Promotion/other edition evidence in one statement,
      * rather than one release + identity + enrichment Room read per edition.
