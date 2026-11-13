@@ -310,4 +310,6 @@
     <string name="apple_catalog_unavailable">Apple catalog unavailable. Try again.</string>
     <string name="apple_no_albums">No Apple catalog albums found.</string>
     <string name="apple_partial_tracklist">Some tracks are unavailable for this edition.</string>
+    <string name="apple_no_artists">No artists found in the Apple catalog.</string>
+    <string name="apple_partial_discography">Some releases may be missing from this artist's discography.</string>
 </resources>
