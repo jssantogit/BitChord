@@ -307,4 +307,34 @@ class DiscogsEditorialArtistShelvesTest {
         ))
         assertEquals(original, discogsEditorialArtistShelves(original, listOf(album), evidence))
     }
+
+    @Test fun expandedShelfTransitionKeyIsStableAcrossProgressiveCoverAndPaginationUpdates() {
+        // The real A54 shelf receives many updates while MusicBrainz and CAA
+        // deliver artist pages. AnimatedContent must NOT animate/reset the grid
+        // each time a new HomeShelf instance arrives for the same section.
+        val artistId = "catalog:ARTIST:00000000-0000-4000-8000-000000000777"
+        val first = HomeShelf("Álbuns", listOf(
+            ShelfItem("First", "Album", null, null,
+                "catalog:RELEASE_GROUP:00000000-0000-4000-8000-000000000701"),
+        ))
+        val withCover = first.copy(items = first.items.map {
+            it.copy(thumbnailUrl = "https://example.org/cover.jpg")
+        })
+        val paginated = withCover.copy(items = withCover.items + ShelfItem(
+            "Second", "Album", null, null,
+            "catalog:RELEASE_GROUP:00000000-0000-4000-8000-000000000702",
+        ))
+        val key = com.music.bitchord.ui.canonicalArtistExpandedShelfContentKey(artistId, first)
+        assertNotNull(key)
+        assertEquals(key,
+            com.music.bitchord.ui.canonicalArtistExpandedShelfContentKey(artistId, withCover))
+        assertEquals(key,
+            com.music.bitchord.ui.canonicalArtistExpandedShelfContentKey(artistId, paginated))
+        assertNotEquals(key, com.music.bitchord.ui.canonicalArtistExpandedShelfContentKey(
+            artistId, HomeShelf("Singles e EPs", paginated.items)))
+        assertNotEquals(key, com.music.bitchord.ui.canonicalArtistExpandedShelfContentKey(
+            "catalog:ARTIST:00000000-0000-4000-8000-000000000778", paginated))
+        assertNull(com.music.bitchord.ui.canonicalArtistExpandedShelfContentKey(artistId, null))
+    }
+
 }
