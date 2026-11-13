@@ -6622,7 +6622,7 @@ private fun CanonicalPlaylistToolbarActions(
     sortMenu: (@Composable () -> Unit)? = null,
     overflowMenu: (@Composable () -> Unit)? = null,
 ) {
-    if (!hasDetail && showCreate) {
+    if (!searching && !hasDetail && showCreate) {
         IconButton(onClick = onCreate, modifier = Modifier.size(40.dp)) {
             Icon(
                 PlaylistEditorIcons.Add,
@@ -6633,9 +6633,13 @@ private fun CanonicalPlaylistToolbarActions(
     }
     NativeCollectionSearchAction(
         searching = searching,
-        contentDescription = if (hasDetail) "Buscar na playlist" else "Pesquisar playlists",
+        contentDescription = if (searching) "Fechar pesquisa da playlist"
+            else if (hasDetail) "Buscar na playlist" else "Pesquisar playlists",
         onClick = onSearch,
     )
+    // A focused search must not fight three or four adjacent round actions.
+    // The Close control remains visible until the query view is dismissed.
+    if (searching) return
     if (hasDetail && ratingTarget != null) {
         CanonicalToolbarRatingAction(ratingTarget, "playlist")
     }
@@ -7222,6 +7226,7 @@ private fun UnifiedLibraryToolbarActions(
             onClick = onSearch,
         )
     }
+    if (searching && !searchInContent) return
     if (albumDetail) {
         // The same right-hand circle as playlist and catalog album routes.
         // Playlist addition stays in the existing verified ⋯ action sheet.
@@ -7694,6 +7699,7 @@ private fun NativeDetailAlbumTopBarActions(
             onClick = onToggleSearch,
         )
     }
+    if (searching) return
     if (ratingTarget != null) {
         CanonicalToolbarRatingAction(ratingTarget, "álbum")
     }
