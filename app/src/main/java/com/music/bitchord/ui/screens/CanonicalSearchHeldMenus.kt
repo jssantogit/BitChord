@@ -39,6 +39,7 @@ internal fun CanonicalSearchHeldMenus(
     publicPlaylistOrigin: HeldItem?,
     hazeState: HazeState,
     bottomChromeClearance: Dp = 100.dp,
+    hostProvidesBlur: Boolean = false,
     onDismissCatalog: () -> Unit,
     onDismissPublicPlaylist: () -> Unit,
     onOpenCatalog: (CanonicalCatalogSearchRow) -> Unit,
@@ -60,6 +61,7 @@ internal fun CanonicalSearchHeldMenus(
         held = catalogOrigin,
         hazeState = hazeState,
         bottomChromeClearance = bottomChromeClearance,
+        hostProvidesBlur = hostProvidesBlur,
         onDismiss = onDismissCatalog,
         onPreviewClick = { row -> onDismissCatalog(); onOpenCatalog(row) },
     ) { row ->
@@ -101,6 +103,7 @@ internal fun CanonicalSearchHeldMenus(
         held = publicPlaylistOrigin,
         hazeState = hazeState,
         bottomChromeClearance = bottomChromeClearance,
+        hostProvidesBlur = hostProvidesBlur,
         onDismiss = onDismissPublicPlaylist,
         onPreviewClick = { row -> onDismissPublicPlaylist(); onOpenPublicPlaylist(row) },
     ) { row ->
