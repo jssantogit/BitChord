@@ -465,13 +465,11 @@ private fun PlaylistWizardKindCard(
     modifier: Modifier = Modifier,
 ) {
     val key = appleMusicKeyColor()
-    val shape = RoundedCornerShape(18.dp)
-    val fill = if (selected)
-        lerp(MaterialTheme.colorScheme.surfaceVariant, key, 0.10f)
-        else MaterialTheme.colorScheme.surfaceVariant
+    val shape = RoundedCornerShape(16.dp)
+    val fill = MaterialTheme.colorScheme.surfaceVariant
     Column(
         modifier = modifier
-            .heightIn(min = 122.dp)
+            .heightIn(min = 110.dp)
             .clip(shape)
             .background(fill)
             .border(
@@ -520,10 +518,12 @@ private fun PlaylistWizardKindCard(
  * wizard: this never claims MusicBrainz/iTunes metadata is playable. */
 @Composable
 internal fun PlaylistWizardSourceSummary(
-    source: String,
-    description: String,
+    choice: PlaylistWizardSourceChoice,
     onClick: () -> Unit,
 ) {
+    // The creator is a new BitChord surface. It follows the AM-DECOMP
+    // grouped-list + labeled-form language, not a claimed Apple editor layout.
+    val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(9.dp),
@@ -533,26 +533,26 @@ internal fun PlaylistWizardSourceSummary(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
-        val shape = RoundedCornerShape(18.dp)
         Row(
             modifier = Modifier.fillMaxWidth()
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(
-                    0.75.dp,
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f),
+                    0.5.dp,
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
                     shape,
                 )
-                .clickable(onClick = onClick)
+                .clickable(role = Role.Button, onClick = onClick)
+                .semantics { contentDescription = "Fonte selecionada: ${choice.title}" }
                 .testTag("playlist-source-selector")
-                .padding(horizontal = 15.dp, vertical = 15.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(
-                imageVector = PlaylistEditorIcons.Globe,
+                imageVector = choice.icon,
                 contentDescription = null,
-                modifier = Modifier.size(25.dp),
+                modifier = Modifier.size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurface,
             )
             Column(
@@ -560,12 +560,12 @@ internal fun PlaylistWizardSourceSummary(
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Text(
-                    text = source,
+                    text = choice.title,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
-                    text = description,
+                    text = choice.caption,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -595,44 +595,35 @@ internal fun PlaylistWizardSourceChoices(
     selectedValue: String?,
     onChoose: (String?) -> Unit,
 ) {
+    // One continuous grouped selection list rather than individual stacked
+    // card plates. AM-DECOMP documents this general list hierarchy, not an
+    // exact source picker; measurements here belong to BitChord.
     Column(
         modifier = Modifier.fillMaxWidth()
             .heightIn(max = 428.dp)
             .verticalScroll(rememberScrollState())
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .testTag("playlist-source-choice-list"),
     ) {
-        options.forEach { option ->
+        options.forEachIndexed { index, option ->
             val selected = option.value == selectedValue
-            val shape = RoundedCornerShape(16.dp)
             val key = appleMusicKeyColor()
-            val fill = if (selected)
-                lerp(MaterialTheme.colorScheme.surfaceVariant, key, 0.075f)
-                else MaterialTheme.colorScheme.surfaceVariant
             Row(
                 modifier = Modifier.fillMaxWidth()
-                    .clip(shape)
-                    .background(fill)
-                    .border(
-                        width = if (selected) 1.5.dp else 0.75.dp,
-                        color = if (selected) key
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.14f),
-                        shape = shape,
-                    )
                     .clickable(role = Role.RadioButton) { onChoose(option.value) }
                     .semantics { this.selected = selected }
                     .testTag(
                         "playlist-source-option-" +
                             (option.value?.replace(Regex("[^A-Za-z0-9-]"), "-") ?: "all"),
                     )
-                    .padding(horizontal = 15.dp, vertical = 14.dp),
+                    .heightIn(min = 64.dp)
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Icon(
                     imageVector = option.icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = if (selected) key else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp),
                 )
                 Column(
@@ -656,6 +647,13 @@ internal fun PlaylistWizardSourceChoices(
                     contentDescription = null,
                     tint = key,
                     modifier = Modifier.size(20.dp),
+                )
+            }
+            if (index < options.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 56.dp, end = 18.dp),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline,
                 )
             }
         }
