@@ -141,8 +141,16 @@ internal class KtorItunesCatalogTransport(
     override suspend fun get(path: String, parameters: Map<String, String>): String {
         require(path == "search" || path == "lookup")
         return limiter.run {
-            val response = client.get("https://itunes.apple.com/$path") {
-                parameters.forEach { (name, value) -> parameter(name, value) }
+            // Measure the real HTTP exchange, not the 3.1s global-budget
+            // queue wait. Endpoint is strictly "search" or "lookup"; never
+            // emit a query, UPC, artist, album, URL or personal identifier.
+            val response = measureMetadataHttp<io.ktor.client.statement.HttpResponse>(
+                provider = "itunes", endpoint = path,
+                status = { it.status.value },
+            ) {
+                client.get("https://itunes.apple.com/$path") {
+                    parameters.forEach { (name, value) -> parameter(name, value) }
+                }
             }
             if (response.status.value != 200) {
                 response.bodyAsChannel().cancel(IOException("iTunes HTTP ${response.status.value}"))
