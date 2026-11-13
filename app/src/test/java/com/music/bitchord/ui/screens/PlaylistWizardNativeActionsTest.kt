@@ -160,4 +160,50 @@ class PlaylistWizardNativeActionsTest {
         compose.onNodeWithTag("playlist-kind-smart").performClick()
         compose.runOnIdle { assertEquals("smart", selected) }
     }
+
+    @Test fun sourceChoicesPreserveExactProvidersWithoutPretendingMetadataHasAudio() {
+        val normal = playlistWizardSourceChoices(
+            normalMode = true,
+            availableSourceKeys = listOf(
+                "local-mediastore", "opensubsonic:alpha", "opensubsonic:beta",
+            ),
+        )
+        assertEquals(
+            listOf(null, "local-mediastore", "opensubsonic:alpha", "opensubsonic:beta"),
+            normal.map { it.value },
+        )
+        assertTrue(normal.map { it.title }.distinct().size == normal.size)
+        assertTrue(normal.all { it.caption.isNotBlank() })
+        val smart = playlistWizardSourceChoices(
+            normalMode = false,
+            availableSourceKeys = listOf("local-mediastore", "opensubsonic:alpha"),
+        )
+        assertEquals(listOf(null, "local", "opensubsonic"), smart.map { it.value })
+        assertEquals(
+            listOf(null, "local"),
+            playlistWizardSourceChoices(false, listOf("local-mediastore")).map { it.value },
+        )
+    }
+
+    @Test fun sourceSelectionCardsHaveDescriptionAndNoLegacyRadioIndicators() {
+        var chosen = "not-chosen"
+        compose.setContent {
+            MaterialTheme {
+                PlaylistWizardSourceChoices(
+                    options = listOf(
+                        PlaylistWizardSourceChoice(null, "Todas as fontes", "Local e servidor",
+                            com.music.bitchord.ui.icons.PlaylistEditorIcons.Globe),
+                        PlaylistWizardSourceChoice("local", "Música local", "Dispositivo",
+                            com.music.bitchord.ui.icons.PlaylistEditorIcons.Music),
+                    ),
+                    selectedValue = null,
+                    onChoose = { chosen = it },
+                )
+            }
+        }
+        compose.onNodeWithTag("playlist-source-option-all").assertIsSelected()
+        compose.onNodeWithText("Dispositivo").assertExists()
+        compose.onNodeWithTag("playlist-source-option-local").performClick()
+        compose.runOnIdle { assertEquals("local", chosen) }
+    }
 }
