@@ -79,6 +79,74 @@ class MusicBrainzBarcodeEditionEvidenceSourceTest {
                 "release-group/$groupId"), calls)
         }
 
+    @Test fun absentAppleUpcIsRecoveredOnlyAfterExactPublicAppleBarcodeLookup() =
+        runBlocking {
+            val mbCalls = mutableListOf<String>()
+            val appleCalls = mutableListOf<Map<String, String>>()
+            val client = MusicBrainzClient(
+                transport = object : MusicBrainzTransport {
+                    override suspend fun get(path: String, parameters: Map<String, String>,
+                        userAgent: String): String {
+                        mbCalls += path
+                        return when (path) {
+                            "release" -> {
+                                assertEquals("true", parameters["dismax"])
+                                assertEquals("SUPER REAL ME ILLIT", parameters["query"])
+                                """{"count":1,"offset":0,"releases":[{
+                                  "id":"$editionId","title":"SUPER REAL ME","status":"Official",
+                                  "artist-credit":[{"name":"ILLIT",
+                                    "artist":{"id":"$artistMbid"}}],
+                                  "release-group":{"id":"$groupId","primary-type":"EP"}}]}"""
+                            }
+                            "release/$editionId" -> """{
+                               "id":"$editionId","title":"SUPER REAL ME",
+                               "date":"2024-03-25","barcode":"8801234567890",
+                               "status":"Official","release-group":{"id":"$groupId"},
+                               "artist-credit":[{"name":"ILLIT",
+                                   "artist":{"id":"$artistMbid"}}],
+                               "media":[{"position":1,"track-count":1,
+                                   "tracks":[{"id":"$trackMbid","title":"Magnetic",
+                                       "position":1,"recording":{"id":"$recordingMbid",
+                                           "title":"Magnetic"}}]}]}"""
+                            "release-group/$groupId" -> """{"id":"$groupId",
+                               "title":"SUPER REAL ME","primary-type":"EP",
+                               "artist-credit":[{"name":"ILLIT"}]}"""
+                            else -> error("Unexpected MusicBrainz request: $path")
+                        }
+                    }
+                },
+                rateLimiter = MusicBrainzRateLimiter(delayMillis = {}),
+            )
+            val appleClient = ItunesCatalogClient(object : ItunesCatalogTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>): String {
+                    assertEquals("lookup", path)
+                    appleCalls += parameters
+                    return """{"resultCount":2,"results":[
+                      {"wrapperType":"collection","collectionType":"Album",
+                       "collectionId":101,"collectionName":"SUPER REAL ME",
+                       "artistName":"ILLIT","artistId":99,"trackCount":1},
+                      {"wrapperType":"track","kind":"song","trackId":201,
+                       "collectionId":101,"trackName":"Magnetic",
+                       "artistName":"ILLIT","discNumber":1,"trackNumber":1}
+                    ]}"""
+                }
+            })
+            val source = MusicBrainzBarcodeEditionEvidenceSource(
+                MusicBrainzCatalogSearch(client), MusicBrainzCatalogGraph(client),
+                AppleUpcReverseLookupVerifier(appleClient),
+            )
+            val withoutUpc = album.copy(upc = null)
+            val discovered = source.discover(withoutUpc)
+            assertEquals("8801234567890", discovered?.verifiedAppleUpc)
+            assertEquals(listOf(editionId), discovered?.editions?.map { it.musicBrainzId })
+            assertEquals(listOf("EP"), discovered?.groups?.map { it.primaryType })
+            assertEquals(listOf("release", "release/$editionId",
+                "release-group/$groupId"), mbCalls)
+            assertEquals(1, appleCalls.size)
+            assertEquals("8801234567890", appleCalls.single()["upc"])
+            assertEquals("br", appleCalls.single()["country"])
+        }
+
     @Test fun cappedBarcodeSearchMustNotPickFirstMatchingEdition() = runBlocking {
         val calls = mutableListOf<String>()
         val sourceClient = MusicBrainzClient(
