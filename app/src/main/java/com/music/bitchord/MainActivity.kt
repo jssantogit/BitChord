@@ -3013,47 +3013,31 @@ private fun BitChordApp(
                         playlistRoute != null -> playlistRoute
                         else -> "$TAB_KEY$selectedTab"
                     }
-                val previousTabForMotion = remember { mutableIntStateOf(selectedTab) }
-                val tabMovesForward = selectedTab >= previousTabForMotion.intValue
-                LaunchedEffect(selectedTab) { previousTabForMotion.intValue = selectedTab }
+                // Root tabs are peers: the entire screen must not slide left
+                // or right on selection. Only the near-opaque arrival changes.
                 val tabArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
                     routeKey = pageRouteKey,
                     reduceMotion = reducePlayerMotion,
-                    forward = tabMovesForward,
                     rootTabPrefix = TAB_KEY,
                 )
                 AnimatedContent(
                     targetState = pageRouteKey,
-                    // The old tab is removed rather than crossfaded through
-                    // the transparent page background. A small arrival
-                    // transform below makes the *new* page move without
-                    // darkening or stacking two entire Home/Library feeds.
-                    // Pushed pages keep their pre-existing 180ms crossfade.
-                    //
-                    // A tab is not a place you travel to — the bar is the whole
-                    // navigation and it carries its own movement — so a fade
-                    // between two of them only ever reads as a stutter. And it
-                    // cannot read as anything else: neither page paints a
-                    // background, so a crossfade dissolves both through to the
-                    // window and the switch dips through a dimmer frame in the
-                    // middle. Pushing a page or raising Settings is a real
-                    // change of context and keeps the fade.
-                    //
-                    // "Show all" swapping with the Library tab underneath it is
-                    // the same case as a tab swap, not a pushed page: it's still
-                    // that tab, just laid out as a grid instead of a row, sharing
-                    // its background rather than painting its own — so this one
-                    // pair gets the tab's no-fade swap too, in both directions, or
-                    // the dip through a dim frame shows up on every hold of a
-                    // card there. A card opened *from* the grid is a real page
-                    // and keeps the fade, same as one opened from the row.
+                    // Peer tabs replace one another without moving the page
+                    // or blending two transparent full-screen feeds together.
+                    // Disable AnimatedContent's default size spring as well:
+                    // that implicit measurement animation caused a secondary
+                    // bounce when Home, Search and Library have different sizes.
+                    // The subtle 160ms near-opaque arrival is applied once to
+                    // the host by tabArrival. Pushed details keep their own
+                    // 180ms crossfade; Library's Show all remains an immediate
+                    // replacement of its underlying root.
                     transitionSpec = {
                         val tabSwap = initialState.startsWith(TAB_KEY) && targetState.startsWith(TAB_KEY)
                         val libraryTabKey = "$TAB_KEY$TAB_LIBRARY"
                         val libraryShowAllSwap = (initialState == "library_show_all" && targetState == libraryTabKey) ||
                             (targetState == "library_show_all" && initialState == libraryTabKey)
                         if (tabSwap || libraryShowAllSwap) {
-                            EnterTransition.None togetherWith ExitTransition.None
+                            com.music.bitchord.ui.components.rootTabContentTransform()
                         } else {
                             fadeIn(tween(180)) togetherWith fadeOut(tween(180))
                         }
