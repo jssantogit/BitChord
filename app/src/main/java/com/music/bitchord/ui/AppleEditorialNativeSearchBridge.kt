@@ -65,6 +65,27 @@ private fun ItunesEditorialRelease.asNativeSearchRow(): AppleEditorialSearchRow?
     )
 }
 
+/**
+ * The external store URL must come from the exact Apple artist search result
+ * the user opened. A matching title, MB artist name or album route never grants
+ * an artist-level crosswalk. Contradictory duplicate source rows fail closed.
+ */
+internal fun appleExactArtistStoreUrl(
+    source: List<ItunesCatalogItem>,
+    requested: AppleEditorialSearchRow,
+): String? {
+    if (requested.kind != AppleEditorialSearchKind.ARTIST) return null
+    val route = AppleCatalogBrowseRoute.parse(requested.browseId)
+        ?.takeIf { it.kind == ItunesCatalogItemType.ARTIST } ?: return null
+    return source.singleOrNull { item ->
+        item.type == ItunesCatalogItemType.ARTIST &&
+            item.id == route.id &&
+            item.storefront == route.storefront &&
+            item.scopedId == requested.browseId &&
+            item.title == requested.title
+    }?.storeUrl
+}
+
 /** An Apple album is browsable with or without a verified MusicBrainz MBID. */
 internal fun appleNativeAlbumDetail(
     source: AppleEditorialLoad.Success,
