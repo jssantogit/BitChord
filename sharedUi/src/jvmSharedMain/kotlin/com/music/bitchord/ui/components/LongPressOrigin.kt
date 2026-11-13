@@ -35,6 +35,22 @@ class HeldItem internal constructor(
 ) {
     var image: ImageBitmap? by mutableStateOf(null)
         internal set
+
+    /** The originating composable keeps its layout and semantics, but must
+     * not draw the same text/artwork underneath this lifted bitmap. */
+    var isLifted by mutableStateOf(false)
+        private set
+    private var released = false
+
+    internal fun markLifted() {
+        if (!released) isLifted = true
+    }
+
+    /** Restore source paint on exit, or on navigation that disposes the menu. */
+    fun releaseLift() {
+        released = true
+        isLifted = false
+    }
 }
 
 /**
@@ -93,8 +109,10 @@ fun Modifier.longPressMenuClickable(
     val longClick = onLongClick?.let { held ->
         {
             capture.coordinates?.takeIf { it.isAttached }?.let { coordinates ->
+                capture.active?.releaseLift()
                 val item = HeldItem(coordinates.boundsInWindow())
                 LongPressOrigin.record(item)
+                capture.active = item
                 capture.pending = item
                 capture.requests++
             }
@@ -105,7 +123,9 @@ fun Modifier.longPressMenuClickable(
         .onPlaced { capture.coordinates = it }
         .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = longClick)
         .drawWithContent {
-            drawContent()
+            // When the bitmap copy is ready, suppress the originating paint.
+            // The row retains its dimensions, gestures and scroll position.
+            if (capture.active?.isLifted != true) drawContent()
             // Reading the counter is what subscribes this draw to a hold;
             // nothing state-backed is written back from inside the draw.
             val request = capture.requests
@@ -118,6 +138,7 @@ fun Modifier.longPressMenuClickable(
             scope.launch {
                 try {
                     item.image = layer.toImageBitmap()
+                    item.markLifted()
                 } finally {
                     graphicsContext.releaseGraphicsLayer(layer)
                 }
@@ -127,6 +148,7 @@ fun Modifier.longPressMenuClickable(
 
 private class HoldCapture {
     var coordinates: LayoutCoordinates? = null
+    var active: HeldItem? = null
     var pending: HeldItem? = null
     /** Read while drawing, so bumping it is what asks for a frame to record. */
     var requests by mutableIntStateOf(0)
