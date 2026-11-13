@@ -14,6 +14,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MusicBrainzCatalogGraphTest {
+    @Test fun exactGroupLookupRejectsMismatchedMbidInsteadOfUsingAnotherType() = runBlocking {
+        val groupId = "529f87a1-1081-48a4-8ee1-3c08de229858"
+        val wrong = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        var json = """{"id":"$wrong","title":"SUPER REAL ME",
+            "primary-type":"Album","artist-credit":[{"name":"ILLIT"}]}"""
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String {
+                    assertEquals("release-group/$groupId", path)
+                    assertEquals("json", parameters["fmt"])
+                    return json
+                }
+            },
+        ))
+        assertTrue(graph.lookupReleaseGroup(groupId)
+            is MusicBrainzCatalogGraphResult.Failure)
+        json = """{"id":"$groupId","title":"SUPER REAL ME",
+            "primary-type":"EP","first-release-date":"2024-03-25",
+            "artist-credit":[{"name":"ILLIT"}]}"""
+        val group = graph.lookupReleaseGroup(groupId) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzReleaseGroupHit>
+        assertEquals("EP", group.value.primaryType)
+        assertEquals(groupId, group.value.musicBrainzId)
+    }
+
     @Test
     fun graphPaginationUsesRawRowsNotOnlyUsableHits() = runBlocking {
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
