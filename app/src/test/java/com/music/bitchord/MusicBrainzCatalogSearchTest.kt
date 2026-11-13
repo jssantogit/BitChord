@@ -13,6 +13,36 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MusicBrainzCatalogSearchTest {
+    @Test fun barcodeEditionSearchUsesExactFieldAndRejectsUnsafeQueries() = runBlocking {
+        val calls = mutableListOf<Pair<String, Map<String, String>>>()
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String {
+                    calls += path to parameters
+                    return """{"count":1,"offset":0,"releases":[
+                        {"id":"541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+                         "title":"SUPER REAL ME","status":"Official",
+                         "artist-credit":[{"name":"ILLIT",
+                             "artist":{"id":"11111111-1111-4111-8111-111111111111"}}],
+                         "release-group":{"id":"529f87a1-1081-48a4-8ee1-3c08de229858",
+                             "primary-type":"EP"}}]}"""
+                }
+            },
+        ))
+        assertTrue(search.searchReleasesByBarcode("8801234567890", limit = 12)
+            is MusicBrainzCatalogSearchResult.Success)
+        assertEquals("release", calls.single().first)
+        assertEquals("barcode:8801234567890", calls.single().second["query"])
+        assertEquals("false", calls.single().second["dismax"])
+        assertEquals("12", calls.single().second["limit"])
+        assertTrue(search.searchReleasesByBarcode("123 OR arid:*")
+            is MusicBrainzCatalogSearchResult.Failure)
+        assertTrue(search.searchReleasesByBarcode("000")
+            is MusicBrainzCatalogSearchResult.Failure)
+        assertEquals(1, calls.size)
+    }
+
     @Test fun groupAndEditionArtistIdentityMustSurviveSearchParsing() = runBlocking {
         val lead = "11111111-1111-4111-8111-111111111111"
         val guest = "22222222-2222-4222-8222-222222222222"
