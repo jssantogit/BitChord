@@ -165,3 +165,20 @@ internal fun verifiedAppleArtworkForDisplayedGroupEdition(
         canonicalAppleArtworkFor(it, selectedReleaseMbid, requestedGroupMbid) != null
     }
 }
+
+/**
+ * A ReleaseGroup may already show the CAA Front of a DIFFERENT edition.
+ * Only attach an Apple badge when the selected edition's Apple image actually
+ * replaces that sleeve; an archived image is never an Apple promotional image.
+ */
+internal fun verifiedAppleArtworkForDisplayedGroupCover(
+    proof: AppleVerifiedEditionArtwork?,
+    requestedGroupMbid: String,
+    selectedReleaseMbid: String?,
+    currentArtworkUrl: String?,
+): AppleVerifiedEditionArtwork? =
+    verifiedAppleArtworkForDisplayedGroupEdition(
+        proof, requestedGroupMbid, selectedReleaseMbid,
+    )?.takeIf {
+        bestCertifiedAppleOrArchiveCover(it.artworkUrl, currentArtworkUrl) == it.artworkUrl
+    }
