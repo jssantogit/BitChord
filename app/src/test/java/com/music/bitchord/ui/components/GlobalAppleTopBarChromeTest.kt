@@ -1,8 +1,6 @@
 package com.music.bitchord.ui.components
 
 import android.app.Application
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.CompositionLocalProvider
@@ -130,46 +128,21 @@ class GlobalAppleTopBarChromeTest {
         compose.onNodeWithTag("apple-root-settings-popup", useUnmergedTree = true).assertDoesNotExist()
     }
 
-    @Test fun rootTabToolbarActionsResizeWithoutSpringAfterSectionSwap() {
-        // Top bar is outside AnimatedContent: switching tabs reuses this host.
-        // A spring on its width moves the trailing controls back and forth.
-        val showExtraAction = mutableStateOf(false)
-        compose.mainClock.autoAdvance = false
-        compose.setContent {
-            BitChordTheme {
-                // A root ComposeView is measured with a tight full-screen
-                // width; wrap the toolbar in a Box so its child receives loose
-                // constraints and we can observe its *natural* measured width.
-                Box(Modifier.fillMaxWidth()) {
-                    ArtworkPageActions(
-                        hazeState = null,
-                        animateResize = false,
-                        modifier = Modifier.testTag("root-toolbar-actions"),
-                    ) {
-                        IconButton(onClick = {}) {
-                            Icon(Icons.Rounded.Search, contentDescription = "First action")
-                        }
-                        if (showExtraAction.value) {
-                            IconButton(onClick = {}) {
-                                Icon(Icons.Rounded.Sort, contentDescription = "Second action")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        compose.mainClock.advanceTimeByFrame()
-        val initialWidth = compose.onNodeWithTag("root-toolbar-actions", useUnmergedTree = true)
-            .fetchSemanticsNode().boundsInRoot.width
-        compose.runOnIdle { showExtraAction.value = true }
-        compose.mainClock.advanceTimeByFrame()
-        val resizedWidth = compose.onNodeWithTag("root-toolbar-actions", useUnmergedTree = true)
-            .fetchSemanticsNode().boundsInRoot.width
-        assertTrue(resizedWidth > initialWidth)
-        compose.mainClock.advanceTimeBy(350L)
-        val settledWidth = compose.onNodeWithTag("root-toolbar-actions", useUnmergedTree = true)
-            .fetchSemanticsNode().boundsInRoot.width
-        assertEquals(resizedWidth, settledWidth, 0.1f)
+    @Test fun topBarDisablesSizeSpringsForRootTabsAndReducedMotion() {
+        // The host owns the control count. Its policy is deterministic even
+        // when Robolectric gives a full-width parent to SubcomposeLayout.
+        org.junit.Assert.assertFalse(
+            shouldAnimateTopBarActionResize(hasBackButton = false, reducedMotion = false),
+        )
+        assertTrue(
+            shouldAnimateTopBarActionResize(hasBackButton = true, reducedMotion = false),
+        )
+        org.junit.Assert.assertFalse(
+            shouldAnimateTopBarActionResize(hasBackButton = false, reducedMotion = true),
+        )
+        org.junit.Assert.assertFalse(
+            shouldAnimateTopBarActionResize(hasBackButton = true, reducedMotion = true),
+        )
     }
 
     @Test fun globalTopBarActionsHaveIndependentCircleSurfaces() {
