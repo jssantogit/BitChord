@@ -108,6 +108,23 @@ class AppleExactEditionArtworkBridgeTest {
         assertNull(appleVerifiedEditionArtwork(mb, complete(), "us"))
     }
 
+    @Test fun applePromotionBadgeMustBeOfficialUnmodifiedAssetAndOnlyForStoreLink() {
+        assertEquals(
+            "https://www.apple.com/ca/itunes/link/images/link-badge-music.png",
+            appleApprovedBadgeForStoreUrl(store),
+        )
+        assertEquals(
+            "https://www.apple.com/ca/itunes/link/images/link-badge-itunes.png",
+            appleApprovedBadgeForStoreUrl("https://itunes.apple.com/br/album/id101"),
+        )
+        assertNull(appleApprovedBadgeForStoreUrl(
+            "https://music.apple.com.attacker.example/br/album/id101",
+        ))
+        assertNull(appleApprovedBadgeForStoreUrl(
+            "http://music.apple.com/br/album/id101",
+        ))
+    }
+
     @Test fun groupOrRecordingCannotSilentlyTakeAnotherEditionArt() {
         val proof = appleVerifiedEditionArtwork(mb, complete(), "br")!!
         assertEquals(art, canonicalAppleArtworkFor(
