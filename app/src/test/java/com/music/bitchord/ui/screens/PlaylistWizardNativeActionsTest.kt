@@ -234,7 +234,7 @@ class PlaylistWizardNativeActionsTest {
         compose.runOnIdle { assertEquals(1, opened) }
     }
 
-    @Test fun sourceSelectionCardsHaveDescriptionAndNoLegacyRadioIndicators() {
+    @Test fun sourceSelectionRowsKeepDescriptionsAndExplicitCheckStates() {
         var chosen: String? = "not-chosen"
         compose.setContent {
             MaterialTheme {
@@ -250,6 +250,7 @@ class PlaylistWizardNativeActionsTest {
                 )
             }
         }
+        compose.onNodeWithTag("playlist-source-choice-list").assertExists()
         compose.onNodeWithTag("playlist-source-option-all").assertIsSelected()
         compose.onNodeWithText("Dispositivo").assertExists()
         compose.onNodeWithTag("playlist-source-option-local").performClick()
