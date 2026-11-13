@@ -49,6 +49,9 @@ import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
+import com.music.bitchord.data.catalog.metadata.AppleArtistDiscographyPager
+import com.music.bitchord.data.catalog.metadata.AppleArtistPageLoad
+import com.music.bitchord.data.catalog.metadata.ItunesArtistAlbumDiscoverySource
 import com.music.bitchord.data.catalog.metadata.AppleEditorialCatalogRepository
 import com.music.bitchord.data.catalog.metadata.AppleEditorialArtistLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialTrackLoad
@@ -542,6 +545,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _appleEditorialArtistDetail.asStateFlow()
     private var appleArtistSearchJob: Job? = null
     private var appleArtistDetailJob: Job? = null
+    private var appleArtistPagingJob: Job? = null
+    private var appleArtistPager: AppleArtistDiscographyPager? = null
     private var activeAppleArtistId: String? = null
     private val _appleEditorialTracks =
         MutableStateFlow<UiState<List<AppleEditorialTrackSearchRow>>?>(null)
@@ -1556,6 +1561,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleEditorialDetailJob?.cancel()
         appleArtistSearchJob?.cancel()
         appleArtistDetailJob?.cancel()
+        appleArtistPagingJob?.cancel()
+        appleArtistPager = null
         appleTrackSearchJob?.cancel()
         _appleEditorialTracks.value = null
         _appleEditorialResults.value = null
@@ -4521,28 +4528,120 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         clearCanonicalCatalogNavigation()
         backAppleEditorialAlbum()
         appleArtistDetailJob?.cancel()
+        appleArtistPagingJob?.cancel()
+        val pager = AppleArtistDiscographyPager(
+            artistId = route.id,
+            artistName = row.title,
+            country = route.storefront,
+            pageSize = 24,
+            source = ItunesArtistAlbumDiscoverySource(appleEditorialRepository),
+        )
+        appleArtistPager = pager
         activeAppleArtistId = row.browseId
         _appleEditorialArtistDetail.value = UiState.Loading
         appleArtistDetailJob = viewModelScope.launch(Dispatchers.IO) {
-            val response = try {
-                appleEditorialRepository.artistDiscography(route.id, route.storefront)
+            val result = try {
+                pager.start()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+                AppleArtistPageLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
             }
             if (activeAppleArtistId != row.browseId ||
+                appleArtistPager !== pager ||
                 _searchSource.value != SearchSource.CANONICAL
             ) return@launch
-            _appleEditorialArtistDetail.value = when (response) {
-                is AppleEditorialLoad.Success -> {
-                    val detail = appleNativeArtistDetail(
-                        response, row.browseId, row.title,
-                    )
+            _appleEditorialArtistDetail.value = when (result) {
+                is AppleArtistPageLoad.Success -> {
+                    val detail = buildAppleArtistPage(pager, row.browseId, row.title)
                     if (detail != null) UiState.Success(detail)
                     else UiState.Error("apple_artist_not_in_storefront")
                 }
-                is AppleEditorialLoad.Failure -> UiState.Error("apple_catalog_unavailable")
+                is AppleArtistPageLoad.Failure, AppleArtistPageLoad.InvalidQuery ->
+                    UiState.Error("apple_catalog_unavailable")
+            }
+        }
+    }
+
+    /** Convert only Apple-confirmed products into the native artist page. */
+    private fun buildAppleArtistPage(
+        pager: AppleArtistDiscographyPager,
+        browseId: String,
+        artistName: String,
+        loading: Boolean = false,
+        error: Boolean = false,
+        noNew: Boolean = false,
+    ): AppleEditorialArtistDetailPage? {
+        val snapshot = pager.snapshot()
+        val readState = if (snapshot.coverageUncertain)
+            AppleEditorialReadState.POSSIBLY_TRUNCATED
+        else AppleEditorialReadState.COMPLETE
+        return appleNativeArtistDetail(
+            AppleEditorialLoad.Success(snapshot.visible, readState),
+            browseId, artistName,
+        )?.copy(
+            hasMore = snapshot.hasMore,
+            loadingMore = loading,
+            pageError = error,
+            noAdditionalResults = noNew,
+        )
+    }
+
+    /** Load local pages first, then bounded public iTunes discovery probes. */
+    fun loadMoreAppleEditorialArtist() {
+        val pager = appleArtistPager ?: return
+        val detail = (_appleEditorialArtistDetail.value as? UiState.Success)?.data ?: return
+        if (!detail.hasMore || detail.loadingMore || appleArtistPagingJob?.isActive == true)
+            return
+        val browseId = detail.artist.browseId
+        val artistName = detail.artist.title
+        _appleEditorialArtistDetail.value = UiState.Success(detail.copy(
+            loadingMore = true, pageError = false, noAdditionalResults = false))
+        appleArtistPagingJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                pager.loadMore()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleArtistPageLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (activeAppleArtistId != browseId || appleArtistPager !== pager)
+                return@launch
+            _appleEditorialArtistDetail.value = when (result) {
+                is AppleArtistPageLoad.Success -> buildAppleArtistPage(
+                    pager, browseId, artistName, noNew = false
+                )?.let { UiState.Success(it) } ?: UiState.Error("apple_catalog_unavailable")
+                is AppleArtistPageLoad.Failure, AppleArtistPageLoad.InvalidQuery ->
+                    UiState.Success(detail.copy(loadingMore = false, pageError = true))
+            }
+        }
+    }
+
+    /** Search an album title within the same Apple artist, even past the cap. */
+    fun searchMoreAppleEditorialArtist(title: String) {
+        val pager = appleArtistPager ?: return
+        val detail = (_appleEditorialArtistDetail.value as? UiState.Success)?.data ?: return
+        if (detail.loadingMore || appleArtistPagingJob?.isActive == true) return
+        val browseId = detail.artist.browseId
+        val artistName = detail.artist.title
+        _appleEditorialArtistDetail.value = UiState.Success(detail.copy(
+            loadingMore = true, pageError = false, noAdditionalResults = false))
+        appleArtistPagingJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                pager.searchMore(title)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleArtistPageLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (activeAppleArtistId != browseId || appleArtistPager !== pager)
+                return@launch
+            _appleEditorialArtistDetail.value = when (result) {
+                is AppleArtistPageLoad.Success -> buildAppleArtistPage(
+                    pager, browseId, artistName, noNew = result.added == 0,
+                )?.let { UiState.Success(it) } ?: UiState.Error("apple_catalog_unavailable")
+                is AppleArtistPageLoad.Failure, AppleArtistPageLoad.InvalidQuery ->
+                    UiState.Success(detail.copy(loadingMore = false, pageError = true))
             }
         }
     }
@@ -4550,6 +4649,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun backAppleEditorialArtist() {
         activeAppleArtistId = null
         appleArtistDetailJob?.cancel()
+        appleArtistPagingJob?.cancel()
+        appleArtistPager = null
         _appleEditorialArtistDetail.value = null
     }
 
