@@ -131,9 +131,8 @@ internal fun appleFirstHomeShelves(
             val date = runCatching { LocalDate.parse(releaseDate.take(10)) }.getOrNull()
             date != null && date <= today
         }
-        .sortedWith(compareByDescending<ItunesEditorialRelease> {
-            it.releaseDate.orEmpty()
-        }.thenBy { it.appleScopedId })
+        // Source-order is append-stable while public Apple probes complete.
+        // Do not re-sort whole shelves every time a newly found album arrives.
     fun cards(releases: List<ItunesEditorialRelease>): List<ShelfItem> =
         releases.map { album ->
             ShelfItem(
@@ -200,9 +199,7 @@ internal fun appleFirstGenreShelves(
         .values.mapNotNull { rows ->
             rows.firstOrNull()?.takeIf { first -> rows.all { it == first } }
         }
-        .sortedWith(compareByDescending<ItunesEditorialRelease> {
-            it.releaseDate.orEmpty()
-        }.thenBy { it.appleScopedId })
+        // Artist/title probes append; preserving order avoids scroll jumps.
         .take(24)
         .map { album ->
             ShelfItem(
