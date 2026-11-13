@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -51,7 +53,9 @@ class NativeArtistPublicTopSectionTest {
         compose.onNodeWithText("Canonical recording").assertExists()
         compose.onNodeWithText("Other identity").assertDoesNotExist()
         compose.onNodeWithText("Canonical recording").assertHasNoClickAction()
-        compose.onNodeWithTag("artist-top-more-${correct.musicBrainzId}").performClick()
+        compose.onNodeWithTag("artist-top-more-${correct.musicBrainzId}").assertDoesNotExist()
+        compose.onNodeWithTag("artist-top-row-${correct.musicBrainzId}")
+            .performTouchInput { longClick() }
         compose.onNodeWithText("Ver no MusicBrainz").assertExists()
         compose.runOnIdle { assertEquals(emptyList<String>(), opened) }
     }
