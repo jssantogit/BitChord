@@ -61,7 +61,10 @@ class PinnedArtworkOnlyComposeTest {
     }
 
     @Test fun localPinnedLookupReusesOriginalShelfIdentityRatherThanAddingLocalPrefixTwice() {
-        val local = ShelfItem(title = "Cover", browseId = "local:playlist:xyz")
+        val local = ShelfItem(
+            title = "Cover", subtitle = "Artist", thumbnailUrl = null,
+            videoId = null, browseId = "local:playlist:xyz",
+        )
         val indexed = pinnedLocalPlaylistItemsById(listOf(local))
         assertSame(local, indexed["local:playlist:xyz"])
     }
