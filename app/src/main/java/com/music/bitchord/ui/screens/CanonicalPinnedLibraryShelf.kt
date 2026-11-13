@@ -300,8 +300,11 @@ internal fun catalogMetadataPinNativeTarget(pin: CatalogMetadataPin): BrowseTarg
         title = pin.title,
         subtitle = pin.subtitle,
         thumbnailUrl = pin.artworkUrl,
-        type = if (pin.browseId.startsWith("catalog:ARTIST:"))
-            BrowseType.ARTIST else BrowseType.ALBUM,
+        type = when {
+            pin.browseId.startsWith("catalog:ARTIST:") -> BrowseType.ARTIST
+            pin.browseId.startsWith("catalog:RECORDING:") -> BrowseType.OTHER
+            else -> BrowseType.ALBUM
+        },
     )
 }
 
@@ -562,7 +565,12 @@ internal fun CanonicalPinnedLibraryShelf(
         }
     }
     ratingCatalogFor?.let { pin ->
-        canonicalCatalogEntityRatingTarget(pin.browseId)?.let { target ->
+        if (pin.browseId.startsWith("catalog:RECORDING:")) {
+            CanonicalMetadataRecordingRatingDialog(
+                recordingId = pin.browseId.removePrefix("catalog:RECORDING:"),
+                onDismiss = { ratingCatalogFor = null },
+            )
+        } else canonicalCatalogEntityRatingTarget(pin.browseId)?.let { target ->
             CanonicalCatalogEntityRatingDialog(
                 target = target,
                 title = if (target.entityType == "ARTIST") "Avaliar artista" else "Avaliar álbum",
