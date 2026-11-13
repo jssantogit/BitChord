@@ -3257,6 +3257,7 @@ private fun BitChordApp(
                         com.music.bitchord.ui.screens.CanonicalRemoteLibraryScreen(
                             providerKey = "library:unified",
                             hazeState = hazeState,
+                            heldMenuBottomChromeClearance = if (player.song != null) 154.dp else 96.dp,
                             title = when (unifiedLibraryCategory) {
                                 com.music.bitchord.data.listening.CanonicalSmartFilterContext.ALBUMS ->
                                     "Álbuns"
