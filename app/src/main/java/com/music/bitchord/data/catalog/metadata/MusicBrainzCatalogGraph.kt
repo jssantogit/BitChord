@@ -46,6 +46,15 @@ internal data class MusicBrainzCatalogReleaseDetail(
     /** Exact Release lookup only; not inferred from title or group type. */
     val isVideoOnlyContent: Boolean? = null,
     val completeness: MusicBrainzReleaseJsonCompleteness = MusicBrainzReleaseJsonCompleteness(),
+    /** Exact edition source facts for Discogs cross-verification, never display authority. */
+    val hasCompleteTracklist: Boolean = false,
+    val status: String? = null,
+    val barcode: String? = null,
+    val artistCreditNames: List<String> = emptyList(),
+    val editionLabels: List<String> = emptyList(),
+    val editionFormats: List<String> = emptyList(),
+    val editionLabelCatalogPairs: List<Pair<String, String>> = emptyList(),
+    val editionLabelCatalogComplete: Boolean = true,
 )
 
 /** Transient source proof; defaults deliberately deny destructive reconciliation. */
@@ -187,7 +196,7 @@ internal class MusicBrainzCatalogGraph(
             ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
         val raw = try {
             client.get("release/$normalized", mapOf(
-                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups",
+                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups+labels",
             ))
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -333,6 +342,42 @@ internal class MusicBrainzCatalogGraph(
                 country = data.string("country"),
                 releaseDate = data.string("date"),
                 tracks = tracks,
+                // The stricter #209 parser's source-completeness gate is the
+                // authority here. Discogs may not verify a partial Track graph.
+                hasCompleteTracklist = tracks.isNotEmpty() &&
+                    jsonCompleteness.countsExplicitAndExact &&
+                    jsonCompleteness.offsetsValid &&
+                    jsonCompleteness.positionsExplicitUnique &&
+                    (data.integer("media-count") == null ||
+                        data.integer("media-count") == media.size),
+                status = data.string("status"),
+                barcode = data.string("barcode"),
+                artistCreditNames = data.artistCreditNames(),
+                editionLabels = data.array("label-info").take(12).mapNotNull { entry ->
+                    val info = entry as? JsonObject ?: return@mapNotNull null
+                    val label = (info["label"] as? JsonObject)?.string("name")
+                        ?.takeIf { it.length <= 180 } ?: return@mapNotNull null
+                    val catalogNumber = info.string("catalog-number")
+                        ?.takeIf { it.length <= 80 }
+                    if (catalogNumber != null) "$label ($catalogNumber)" else label
+                }.distinct().take(6),
+                editionLabelCatalogComplete = data["label-info"]?.let { raw ->
+                    raw is JsonArray && raw.size <= 64 &&
+                        raw.all { it is JsonObject }
+                } ?: true,
+                editionLabelCatalogPairs = data.array("label-info").take(64)
+                    .mapNotNull { entry ->
+                        val info = entry as? JsonObject ?: return@mapNotNull null
+                        val label = (info["label"] as? JsonObject)?.string("name")
+                            ?.takeIf { it.length <= 180 } ?: return@mapNotNull null
+                        val catalog = info.string("catalog-number")
+                            ?.takeIf { it.length <= 80 } ?: return@mapNotNull null
+                        label to catalog
+                    }.distinct(),
+                editionFormats = media.mapNotNull { entry ->
+                    (entry as? JsonObject)?.string("format")
+                        ?.takeIf { it.length <= 80 }
+                }.distinct().take(4),
                 isVideoOnlyContent = when {
                     // Conflicting positive source fields are not proof of an
                     // audio-only or video-only edition. Keep it unknown.
@@ -476,6 +521,18 @@ internal class MusicBrainzCatalogGraph(
                 runCatching { credit["joinphrase"]?.jsonPrimitive?.contentOrNull }
                     .getOrNull().orEmpty()
         }.trim().takeIf(String::isNotEmpty)
+
+    /** Structured MB credit identities, never split a visible joined name. */
+    private fun JsonObject.artistCreditNames(): List<String> {
+        val credits = array("artist-credit")
+        if (credits.isEmpty()) return emptyList()
+        return credits.map { entry ->
+            val credit = entry as? JsonObject ?: return emptyList()
+            credit.string("name")
+                ?: (credit["artist"] as? JsonObject)?.string("name")
+                ?: return emptyList()
+        }
+    }
 
     private fun String?.validMbid(): String? =
         this?.trim()?.lowercase(Locale.ROOT)?.takeIf(MBID::matches)
