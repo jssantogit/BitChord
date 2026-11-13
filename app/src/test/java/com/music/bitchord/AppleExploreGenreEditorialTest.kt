@@ -77,6 +77,17 @@ class AppleExploreGenreEditorialTest {
             assertNull(result.releases.single().musicBrainzReleaseGroupId)
         }
 
+    @Test fun exploreCategoryCoversComeFromAppleGenreProductsNotMbSuggestions() {
+        val result = com.music.bitchord.ui.appleExploreGenreCoverMap(
+            appleAlbums = listOf(edition(1, "K-Pop"), edition(2, "Pop")),
+            tags = listOf("k-pop", "pop", "metal"),
+        )
+        assertEquals("https://is1-ssl.mzstatic.com/music.jpg", result["k-pop"])
+        assertEquals("https://is1-ssl.mzstatic.com/music.jpg", result["pop"])
+        assertNull(result["metal"])
+        assertEquals(2, result.size)
+    }
+
     @Test fun unsupportedTagFailsClosedWithoutAnyAppleQuery() = runBlocking {
         var called = false
         val collector = AppleExploreGenreDiscovery(
