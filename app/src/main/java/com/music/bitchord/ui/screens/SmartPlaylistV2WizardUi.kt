@@ -98,6 +98,47 @@ internal fun smartConditionCountLabel(count: Int, configured: Boolean = false): 
 
 private enum class WizardStep { IDENTITY, EDIT, SONGS, RULES, GROUP, CATEGORIES, FIELDS, EDITOR, REVIEW }
 
+/** Only known audio-source providers are selectable. iTunes/MusicBrainz
+ * metadata must never masquerade as playable catalog endpoints here. */
+internal fun playlistWizardSourceChoices(
+    normalMode: Boolean,
+    availableSourceKeys: List<String>,
+): List<PlaylistWizardSourceChoice> {
+    val sources = availableSourceKeys.distinct().filter {
+        it == "local-mediastore" || it.startsWith("opensubsonic:")
+    }
+    val servers = sources.filter { it.startsWith("opensubsonic:") }
+    val all = PlaylistWizardSourceChoice(
+        value = null, title = "Todas as fontes",
+        caption = "Músicas do dispositivo e de todos os servidores conectados.",
+        icon = PlaylistEditorIcons.Globe,
+    )
+    val local = PlaylistWizardSourceChoice(
+        value = if (normalMode) "local-mediastore" else "local",
+        title = "Música local",
+        caption = "Somente os arquivos da biblioteca do dispositivo.",
+        icon = PlaylistEditorIcons.Music,
+    )
+    return if (normalMode) listOf(all) + sources.map { source ->
+        if (source == "local-mediastore") local
+        else PlaylistWizardSourceChoice(
+            value = source,
+            title = if (servers.size > 1) "Navidrome ${servers.indexOf(source) + 1}"
+                else "Navidrome",
+            caption = "Músicas disponíveis neste servidor configurado.",
+            icon = PlaylistEditorIcons.Audio,
+        )
+    } else listOf(all, local) +
+        if (servers.isEmpty()) emptyList()
+        else listOf(PlaylistWizardSourceChoice(
+            value = "opensubsonic", title = "Navidrome",
+            caption = "Aplique as regras às músicas do servidor conectado.",
+            icon = PlaylistEditorIcons.Audio,
+        ))
+}
+
+
+
 private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when (operator) {
     SmartPlaylistRuleOperator.EQUAL -> "É igual a"
     SmartPlaylistRuleOperator.NOT_EQUAL -> "É diferente de"
@@ -806,9 +847,18 @@ internal fun SmartPlaylistV2WizardUi(
                                 "opensubsonic" -> "Navidrome"
                                 else -> "Todas as fontes disponíveis"
                             }
-                            WizardCard(
-                                title = "Fontes de origem",
-                                subtitle = label,
+                            PlaylistWizardSourceSummary(
+                                source = label,
+                                description = when {
+                                    selected == null -> "Biblioteca local e servidores conectados"
+                                    (normalMode && selected == "local-mediastore") ||
+                                        (!normalMode && selected == "local") ->
+                                            "Somente músicas do dispositivo"
+                                    selected == "opensubsonic" ||
+                                        selected?.startsWith("opensubsonic:") == true ->
+                                            "Somente músicas do servidor selecionado"
+                                    else -> "Revise a fonte antes de continuar"
+                                },
                                 onClick = { picker = "source" },
                             )
                             if (normalMode && selected != null && selected !in availableSourceKeys) {
@@ -834,18 +884,17 @@ internal fun SmartPlaylistV2WizardUi(
                             ) {
                                 Text(
                                     "Tipo de playlist",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                 )
                                 if (editingId != null || filterMode || editingNormalId != null) {
                                     Text(if (normalMode) "Normal" else "Inteligente",
                                         style = MaterialTheme.typography.bodyMedium)
                                 } else {
-                                    PlaylistWizardSegmented(
-                                        first = "Normal", second = "Inteligente",
-                                        firstSelected = normalMode,
-                                        onSelectFirst = { onNormalModeChange(true) },
-                                        onSelectSecond = { onNormalModeChange(false) },
+                                    PlaylistWizardKindCards(
+                                        normalSelected = normalMode,
+                                        onNormal = { onNormalModeChange(true) },
+                                        onSmart = { onNormalModeChange(false) },
                                     )
                                 }
                             }
@@ -1831,32 +1880,32 @@ internal fun SmartPlaylistV2WizardUi(
         )
     }
     if (picker == "source") {
-        val normalOptions: List<Pair<String?, String>> =
-            listOf(null to "Todas as fontes disponíveis") +
-                availableSourceKeys.distinct().mapIndexed { index, provider ->
-                    provider to if (provider == "local-mediastore") "Música local"
-                        else if (availableSourceKeys.count { it.startsWith("opensubsonic:") } > 1)
-                            "Navidrome ${index + 1}"
-                        else "Navidrome"
-                }
-        val smartOptions: List<Pair<String?, String>> =
-            listOf(null to "Todas as fontes disponíveis", "local" to "Música local") +
-                if (availableSourceKeys.any { it.startsWith("opensubsonic:") })
-                    listOf("opensubsonic" to "Navidrome") else emptyList()
-        WizardChoiceDialog(
+        PlaylistWizardSheetChrome(
             title = "Fontes de origem",
-            options = if (normalMode) normalOptions else smartOptions,
-            label = { it.second },
-            onChosen = { (source, _) ->
-                if (normalMode) onNormalSourceChange(source)
-                else onSmartSourceChange(source)
-            },
             onClose = { picker = null },
-            radioSelected = { (source, _) ->
-                source == (if (normalMode) normalSourceProviderKey
-                    else smartRuleGlobalSource(rule))
-            },
-        )
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Escolha de qual biblioteca vêm as músicas.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                )
+                PlaylistWizardSourceChoices(
+                    options = playlistWizardSourceChoices(
+                        normalMode = normalMode,
+                        availableSourceKeys = availableSourceKeys,
+                    ),
+                    selectedValue = if (normalMode) normalSourceProviderKey
+                        else smartRuleGlobalSource(rule),
+                    onChoose = { source ->
+                        if (normalMode) onNormalSourceChange(source)
+                        else onSmartSourceChange(source)
+                        picker = null
+                    },
+                )
+            }
+        }
     }
     if (picker == "sort") {
         WizardChoiceDialog("Ordenar músicas", SmartPlaylistV2Sort.entries, ::sortUiLabel,
