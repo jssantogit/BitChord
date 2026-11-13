@@ -119,7 +119,18 @@ internal class AppleHomeEditorialDiscovery(
                 }
             }
         }
-        if (!succeeded) return AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+        val report = AppleEditorialProbeReport(
+            eligibleSeeds = safeSeeds.size,
+            probesMade = selected.size,
+            matchingProducts = verified.size,
+            withoutMatchingProducts = requestsWithoutMatches,
+            failedRequests = failedRequests,
+            incompleteResponses = incompleteResponses,
+            budgetLimited = selected.size < safeSeeds.size,
+        )
+        if (!succeeded) return AppleEditorialLoad.Failure(
+            ItunesCatalogFailure.UNAVAILABLE, probeReport = report,
+        )
         return AppleEditorialLoad.Success(
             releases = snapshot(),
             state = when {
@@ -127,15 +138,7 @@ internal class AppleHomeEditorialDiscovery(
                 verified.isEmpty() -> AppleEditorialReadState.NOT_IN_STOREFRONT
                 else -> AppleEditorialReadState.COMPLETE
             },
-            probeReport = AppleEditorialProbeReport(
-                eligibleSeeds = safeSeeds.size,
-                probesMade = selected.size,
-                matchingProducts = verified.size,
-                withoutMatchingProducts = requestsWithoutMatches,
-                failedRequests = failedRequests,
-                incompleteResponses = incompleteResponses,
-                budgetLimited = selected.size < safeSeeds.size,
-            ),
+            probeReport = report,
         )
     }
 }
