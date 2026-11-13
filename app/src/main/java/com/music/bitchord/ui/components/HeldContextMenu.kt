@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -89,6 +90,8 @@ fun <T : Any> HeldContextMenu(
     onDismiss: () -> Unit,
     /** Tapping the lifted item — open what it stands for. Null leaves it inert. */
     onPreviewClick: ((T) -> Unit)?,
+    /** Actual app mini-player + tab chrome; never place actions behind them. */
+    bottomChromeClearance: Dp = 100.dp,
     actions: @Composable (T) -> Unit,
 ) {
     val requested = if (item != null && held != null) item to held else null
@@ -149,10 +152,10 @@ fun <T : Any> HeldContextMenu(
     // Strong enough to separate the selected item even when Android/Haze is
     // unable to capture a nested screen as a blur source.
     val scrimColor = when {
-        reduceDynamicBlur && dark -> Color.Black.copy(alpha = 0.84f)
+        reduceDynamicBlur && dark -> Color.Black.copy(alpha = 0.80f)
         reduceDynamicBlur -> Color.Black.copy(alpha = 0.60f)
-        dark -> Color.Black.copy(alpha = 0.62f)
-        else -> Color.Black.copy(alpha = 0.48f)
+        dark -> Color.Black.copy(alpha = 0.26f)
+        else -> Color.Black.copy(alpha = 0.20f)
     }
     val cardShape = RoundedCornerShape(20.dp)
     val menuShape = RoundedCornerShape(16.dp)
@@ -231,6 +234,7 @@ fun <T : Any> HeldContextMenu(
                     .pointerInput(Unit) {}
                     .clip(menuShape)
                     .background(plate)
+                    .border(0.5.dp, hairline, menuShape)
                     .verticalScroll(rememberScrollState())
                     .testTag("held-context-actions"),
             ) {
@@ -244,7 +248,11 @@ fun <T : Any> HeldContextMenu(
         val gap = 10.dp.roundToPx()
         val pad = platePadding.roundToPx()
         val top = insets.getTop(this) + 8.dp.roundToPx()
-        val bottom = height - insets.getBottom(this) - 8.dp.roundToPx()
+        val bottom = heldMenuVisibleBottom(
+            viewportHeight = height,
+            systemBottomInset = insets.getBottom(this) + 8.dp.roundToPx(),
+            chromeReserve = bottomChromeClearance.roundToPx(),
+        ).coerceAtLeast(top)
 
         val backdrop = measurables[0].measure(Constraints.fixed(width, height))
 
@@ -256,15 +264,29 @@ fun <T : Any> HeldContextMenu(
         val plateW = (itemBounds.width.roundToInt() + pad * 2).coerceAtLeast(1)
         val plateH = (itemBounds.height.roundToInt() + pad * 2).coerceAtLeast(1)
         val card = measurables[1].measure(Constraints.fixed(plateW, plateH))
-        val liftScale = ((width - margin * 2f) / plateW).coerceAtMost(1f)
-        val visualW = plateW * liftScale
-        val visualH = plateH * liftScale
-
         val menuWidth = (width - margin * 2).coerceAtMost(280.dp.roundToPx()).coerceAtLeast(0)
-        val menuMaxHeight = (bottom - top - visualH.roundToInt() - gap).coerceAtLeast(0)
+        val availableHeight = (bottom - top).coerceAtLeast(0)
+        // Measure a readable action viewport first. A tall artwork tile may
+        // shrink, but it must never steal the space needed for every command.
+        val menuMaxHeight = heldMenuMaxHeight(
+            availableHeight = availableHeight,
+            minPreview = 84.dp.roundToPx(),
+            gap = gap,
+        )
         val menu = measurables[2].measure(
             Constraints(minWidth = menuWidth, maxWidth = menuWidth, maxHeight = menuMaxHeight),
         )
+        val liftScale = heldMenuPreviewScale(
+            plateWidth = plateW,
+            plateHeight = plateH,
+            viewportWidth = width,
+            margin = margin,
+            availableHeight = availableHeight,
+            menuHeight = menu.height,
+            gap = gap,
+        )
+        val visualW = plateW * liftScale
+        val visualH = plateH * liftScale
 
         // Where the lifted item rests. It stays where it was held whenever the
         // menu fits beside it; the menu goes below by preference and above
