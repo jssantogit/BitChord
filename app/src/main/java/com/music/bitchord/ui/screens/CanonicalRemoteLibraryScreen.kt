@@ -1325,7 +1325,24 @@ internal fun CanonicalRemoteLibraryScreen(
                 }
             }
         }
-        libraryMenu?.let { menu ->
+        // The lifted menu must remain mounted through its 230ms return
+        // animation; removing the parent let on dismiss clipped that motion.
+        var exitLibraryMenu by remember { mutableStateOf<CanonicalLibraryMenuTarget?>(null) }
+        var exitLibraryWasHeld by remember { mutableStateOf(false) }
+        LaunchedEffect(libraryMenu, heldLibraryMenuOrigin) {
+            if (libraryMenu != null) {
+                exitLibraryMenu = libraryMenu
+                exitLibraryWasHeld = canonicalLibraryUsesHeldContextMenu(
+                    hasCapturedHold = heldLibraryMenuOrigin != null,
+                    hasHazeBackdrop = hazeState != null,
+                )
+            } else {
+                kotlinx.coroutines.delay(300)
+                exitLibraryMenu = null
+                exitLibraryWasHeld = false
+            }
+        }
+        (libraryMenu ?: exitLibraryMenu)?.let { menu ->
             val sourceForAction = if (unified) selectedSource else providerKey
             val art = when (menu.selection.type) {
                 CanonicalLibraryEntityType.TRACK -> library.tracks.firstOrNull {
@@ -1361,7 +1378,7 @@ internal fun CanonicalRemoteLibraryScreen(
             )
             val menuBody: @Composable () -> Unit = {
                 BrowseActionsSheet(
-                    presentation = if (useHeldMenu)
+                    presentation = if (useHeldMenu || (libraryMenu == null && exitLibraryWasHeld))
                         SongActionsPresentation.Menu else SongActionsPresentation.Sheet,
                     target = BrowseTarget(
                         browseId = null,
@@ -1431,11 +1448,11 @@ internal fun CanonicalRemoteLibraryScreen(
                     },
                 )
             }
-            if (useHeldMenu) {
+            if (hazeState != null) {
                 HeldContextMenu(
-                    item = menu,
+                    item = libraryMenu.takeIf { useHeldMenu },
                     held = heldLibraryMenuOrigin,
-                    hazeState = requireNotNull(hazeState),
+                    hazeState = hazeState,
                     onDismiss = {
                         libraryMenu = null
                         heldLibraryMenuOrigin = null
@@ -1459,7 +1476,8 @@ internal fun CanonicalRemoteLibraryScreen(
                 ) {
                     menuBody()
                 }
-            } else {
+            }
+            if (libraryMenu != null && !useHeldMenu) {
                 ModalBottomSheet(
                     onDismissRequest = {
                         libraryMenu = null
