@@ -196,11 +196,12 @@ internal fun CanonicalSearchMetadataPlaylistPicker(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(target.title, style = MaterialTheme.typography.titleMedium)
+            val loadedEditions = editions
             if (target.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                chosenEdition == null && editions != null && editions.size > 1) {
+                chosenEdition == null && loadedEditions != null && loadedEditions.size > 1) {
                 Text("Escolha a edição cujas faixas deseja adicionar.")
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 240.dp)) {
-                    items(editions, key = { it.musicBrainzId }) { edition ->
+                    items(loadedEditions, key = { it.musicBrainzId }) { edition ->
                         SettingsRow(
                             title = edition.title,
                             subtitle = listOfNotNull(edition.country, edition.releaseDate)
@@ -210,7 +211,7 @@ internal fun CanonicalSearchMetadataPlaylistPicker(
                     }
                 }
             } else if (target.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                editions != null && editions.isEmpty()) {
+                loadedEditions != null && loadedEditions.isEmpty()) {
                 Text("Nenhuma edição verificada encontrada para este álbum.")
             } else when (val state = resolved) {
                 MetadataCollectionLoad.Loading -> NativeLoadingSpinner()
