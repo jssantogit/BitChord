@@ -174,12 +174,24 @@ internal fun canonicalSearchRowsWithoutRedundantEditions(
         // Same work MBID and title do not make independently credited
         // editions indistinguishable. If BOTH artist credits are visible,
         // keep a differently credited edition and its sleeve separate.
-        val groupArtist = visibleArtistCredit(group.subtitle)
-            ?.takeUnless { it.equals(group.releaseKind, ignoreCase = true) }
-        val releaseArtist = visibleArtistCredit(row.subtitle)
-        if (groupArtist != null && releaseArtist != null &&
-            normalizedTitle(groupArtist) != normalizedTitle(releaseArtist))
-            return@forEachIndexed
+        val groupIds = group.artistCreditMbids?.takeIf { it.isNotEmpty() }
+        val editionIds = row.artistCreditMbids?.takeIf { it.isNotEmpty() }
+        if (groupIds != null || editionIds != null) {
+            // The same displayed credit can represent different artists.
+            // When only one side supplies complete IDs, keep the edition
+            // visible rather than guessing from missing evidence.
+            if (groupIds == null || editionIds == null || groupIds != editionIds)
+                return@forEachIndexed
+        } else {
+            // Legacy cached results have no structured credits. Keep the
+            // previous conservative text check only for that fallback.
+            val groupArtist = visibleArtistCredit(group.subtitle)
+                ?.takeUnless { it.equals(group.releaseKind, ignoreCase = true) }
+            val releaseArtist = visibleArtistCredit(row.subtitle)
+            if (groupArtist != null && releaseArtist != null &&
+                normalizedTitle(groupArtist) != normalizedTitle(releaseArtist))
+                return@forEachIndexed
+        }
         suppressed += index
         row.artworkUri?.takeUnless(String::isBlank)?.let {
             editionCoversByGroup.putIfAbsent(groupId, it)
@@ -233,6 +245,7 @@ internal fun canonicalProgressiveSearchPreview(
                 title = if (retainsOfficialTitle) old.title else row.title,
                 artworkUri = row.artworkUri?.takeIf(String::isNotBlank) ?: old.artworkUri,
                 releaseKind = row.releaseKind ?: old.releaseKind,
+                artistCreditMbids = row.artistCreditMbids ?: old.artistCreditMbids,
             )
         }
     }

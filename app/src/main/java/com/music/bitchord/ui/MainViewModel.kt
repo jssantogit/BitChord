@@ -4454,6 +4454,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     releaseDate = hit.firstReleaseDate,
                     releaseKind = hit.primaryType,
                     secondaryTypes = hit.secondaryTypes,
+                    artistCreditMbids = hit.artistCreditMbids,
                     artistScopeMbid = artistScopeMbid,
                 ) }
                 val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
@@ -4547,6 +4548,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             releaseDate = hit.firstReleaseDate,
                             releaseKind = hit.primaryType,
                             secondaryTypes = hit.secondaryTypes,
+                            artistCreditMbids = hit.artistCreditMbids,
                             artistScopeMbid = artistScopeMbid,
                         ))
                     }
@@ -4562,6 +4564,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             releaseDate = hit.releaseDate,
                             artistScopeMbid = artistScopeMbid,
                             coverGroupMbid = hit.releaseGroupMbid,
+                            artistCreditMbids = hit.artistCreditMbids,
                         ))
                     }
                 }
@@ -4759,6 +4762,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 hit.artistDisplay ?: hit.primaryType,
                                 releaseDate = hit.firstReleaseDate, releaseKind = hit.primaryType,
                                 secondaryTypes = hit.secondaryTypes,
+                                artistCreditMbids = hit.artistCreditMbids,
                                 artistScopeMbid = cursor.artistScopeMbid,
                             ))
                         }
@@ -4771,6 +4775,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     .joinToString(" · "),
                                 artistScopeMbid = cursor.artistScopeMbid,
                                 coverGroupMbid = hit.releaseGroupMbid,
+                                artistCreditMbids = hit.artistCreditMbids,
                             ))
                         }
                     }
