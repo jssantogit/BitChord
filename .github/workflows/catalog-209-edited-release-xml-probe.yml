@@ -1,0 +1,40 @@
+name: Catalog #209 — historical edited release source proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/208-canonical-discovery-cutover-20261104
+    paths:
+      - scripts/catalog_209_edited_release_xml_probe.py
+      - scripts/test_catalog_209_edited_release_xml_probe.py
+      - .github/workflows/catalog-209-edited-release-xml-probe.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-209-edited-release-xml-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-edit-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify offline XML/JSON proof regressions
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_209_edited_release_xml_probe.py' -v
+      - name: Verify current MusicBrainz release with two bounded source requests
+        run: python3 scripts/catalog_209_edited_release_xml_probe.py --output catalog-209-edited-release-proof.json
+      - name: Retain public-source-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-209-edited-release-proof
+          path: catalog-209-edited-release-proof.json
+          if-no-files-found: warn
+          retention-days: 7

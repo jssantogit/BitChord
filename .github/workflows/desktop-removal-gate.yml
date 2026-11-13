@@ -1,0 +1,29 @@
+name: Desktop Backend Removal Gate
+
+on:
+  pull_request:
+
+concurrency:
+  group: desktop-backend-removal-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Desktop · compile and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - run: chmod +x gradlew
+      - name: Compile desktop application
+        run: ./gradlew --build-cache :desktopApp:compileKotlin
+      - name: Run desktop unit tests
+        run: ./gradlew --build-cache :desktopApp:test

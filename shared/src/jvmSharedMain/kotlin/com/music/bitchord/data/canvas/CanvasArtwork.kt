@@ -13,6 +13,9 @@ import java.util.Locale
  */
 enum class CanvasSource { SPOTIFY, OTHER }
 
+/** Where a clip is displayed; a provider is not a display context. */
+enum class CanvasSurface { ARTIST, ALBUM, NOW_PLAYING }
+
 /**
  * A looping video that stands in for a track's cover art — what Spotify calls
  * a Canvas and Apple calls motion artwork.
@@ -30,6 +33,7 @@ data class CanvasArtwork(
     val artist: String? = null,
     val album: String? = null,
     val source: CanvasSource = CanvasSource.OTHER,
+    val surface: CanvasSurface = CanvasSurface.NOW_PLAYING,
 ) {
     /**
      * Whether this clip really belongs to the track we asked about.

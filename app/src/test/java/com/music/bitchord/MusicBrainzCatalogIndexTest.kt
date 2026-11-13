@@ -76,6 +76,57 @@ class MusicBrainzCatalogIndexTest {
     }
 
     @Test
+    fun laterMusicBrainzCorrectionUpdatesOnlyProviderMetadataAndOfflineSearch() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(
+            RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,
+        ).allowMainThreadQueries().build()
+        try {
+            val mbid = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
+            val index = MusicBrainzCatalogIndex(db)
+            val first = MusicBrainzRecordingHit(
+                mbid, "Temporary source title", "Old source credit", 160_000L,
+                hasOfficialAudioRelease = true, isVideo = false,
+            )
+            val localId = requireNotNull(index.persistRecordings(listOf(first))[mbid])
+            val corrected = first.copy(
+                title = "Corrected recording", artistDisplay = "ILLIT",
+                durationMs = 161_000L,
+            )
+            assertEquals(localId, index.persistRecordings(listOf(corrected))[mbid])
+            val evidence = requireNotNull(db.catalogDao().musicBrainzRecordingEnrichment(localId))
+            assertEquals("Corrected recording", evidence.title)
+            assertEquals("ILLIT", evidence.artistDisplay)
+            assertEquals(161_000L, evidence.durationMs)
+            // A metadata-only provider refresh must never edit user's/local
+            // canonical title or source assets, nor create a second Recording.
+            assertEquals("Temporary source title", db.catalogDao().recordingById(localId)?.title)
+            assertEquals(localId, db.catalogDao().entityIdForExternalIdentity(
+                "musicbrainz", "recording", mbid,
+            ))
+            val byTitle = db.catalogDao()
+                .searchKnownMusicBrainzRecordings("Corrected", 25).single()
+            assertEquals(mbid, byTitle.musicBrainzId)
+            assertEquals("Corrected recording", byTitle.title)
+            assertEquals("ILLIT", byTitle.artistDisplay)
+            assertEquals(161_000L, byTitle.durationMs)
+            assertEquals(mbid, db.catalogDao()
+                .searchKnownMusicBrainzRecordings("ILLIT", 25).single().musicBrainzId)
+            index.persistRecordings(listOf(
+                corrected.copy(artistDisplay = null, durationMs = null,
+                    hasOfficialAudioRelease = null, isVideo = null),
+            ))
+            val afterSparse = db.catalogDao()
+                .searchKnownMusicBrainzRecordings("Corrected", 25).single()
+            assertEquals("ILLIT", afterSparse.artistDisplay)
+            assertEquals(161_000L, afterSparse.durationMs)
+            assertEquals(true, afterSparse.hasOfficialAudioRelease)
+            assertEquals(false, afterSparse.isVideo)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun sameTitleAndArtistNeverMergeDistinctMusicBrainzRecordings() = runBlocking {
         val db = Room.inMemoryDatabaseBuilder(
             RuntimeEnvironment.getApplication(), CanonicalCatalogDatabase::class.java,

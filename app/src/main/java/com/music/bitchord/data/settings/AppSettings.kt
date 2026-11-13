@@ -10,6 +10,12 @@ import androidx.media3.common.Player
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.auth.AuthStore
 import com.music.bitchord.data.canvas.SpotifyToken
+import com.music.bitchord.data.canvas.VisualRetentionMode
+import com.music.bitchord.data.canvas.VisualSurface
+import com.music.bitchord.data.canvas.DEFAULT_SAVED_STILLS_BYTES
+import com.music.bitchord.data.canvas.DEFAULT_SAVED_MOTION_BYTES
+import com.music.bitchord.data.canvas.normalizedVisualStillCacheBytes
+import com.music.bitchord.data.canvas.normalizedVisualMotionCacheBytes
 import com.music.bitchord.data.lyrics.LyricsSource
 import com.music.bitchord.data.sources.SourceKind
 import com.music.bitchord.playback.EqLayout
@@ -18,31 +24,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 
 /**
- * Whether a stream started under this ceiling may be served by [kind].
+ * Whether an enabled source may receive the connection's quality request.
  *
- * Asked per stream rather than written into
- * [SourceConfig.enabled][com.music.bitchord.data.sources.SourceConfig.enabled],
- * which is what this used to do — an `applyQualityPreset` call flipped the
- * module and JioSaavn switches the moment a rung was picked. Two things
- * were wrong with that and both were reported together: picking a rung for
- * *mobile data* turned the sources off while sitting on Wi-Fi, and nothing
- * turned them back on when the connection changed, so a Wi-Fi ceiling of
- * Lossless still had no lossless source to reach. A ceiling is a property
- * of the connection in force; the switches on the Sources screen are the
- * user's standing choice. Storing the first in the second lost the second.
- *
- * [SourceKind.YOUTUBE] is permitted on every rung: it is what [maxKbps]
- * caps, and it is the only source that can answer at all when the ones
- * above it are skipped.
+ * Historical YouTube source settings never permit a stream. Addons and module
+ * indexes can receive a capped request; JioSaavn currently supplies its fixed
+ * high-bitrate rendition, so it cannot satisfy the lower bitrate ceilings.
+ * The resolver still passes the chosen request to each eligible provider.
  */
-fun AudioQuality.permits(kind: SourceKind): Boolean = when (this) {
-    AudioQuality.LOSSLESS -> true
-    // No lossless answer is wanted here, and a source that can serve one is
-    // the slow half of the list: an addon fronting several catalogues walks
-    // all of them before it answers, which is seconds spent to land on a
-    // transcode JioSaavn already has at 320.
-    AudioQuality.HIGH -> !kind.canServeLossless
-    AudioQuality.MEDIUM, AudioQuality.LOW -> kind == SourceKind.YOUTUBE
+fun AudioQuality.permits(kind: SourceKind): Boolean {
+    if (kind == SourceKind.YOUTUBE) return false
+    return when (this) {
+        AudioQuality.LOSSLESS -> true
+        AudioQuality.HIGH -> !kind.canServeLossless
+        AudioQuality.MEDIUM, AudioQuality.LOW ->
+            kind == SourceKind.ADDON || kind == SourceKind.CUSTOM_MODULE || kind == SourceKind.MODULE
+    }
 }
 
 /**
@@ -149,6 +145,7 @@ enum class SongSort {
 object AppSettings {
 
     private lateinit var prefs: SharedPreferences
+    private var settingsAppContext: Context? = null
 
     /** Only for the Discord, WebDAV and SMB secrets — everything else on here is plain prefs. */
     private lateinit var authStore: AuthStore
@@ -401,6 +398,28 @@ object AppSettings {
      * here and stays up regardless of this setting.
      */
     val canvasOverCellular = MutableStateFlow(false)
+
+    /**
+     * User-controlled retention of animated artist/album/player backgrounds.
+     * Existing CanvasCache stays LRU; saved clips are a separate offline store.
+     * Never download videos automatically by default, or over metered networks.
+     */
+    val visualRetentionMode = MutableStateFlow(VisualRetentionMode.STREAM_ONLY)
+    val visualMotionSurfaces = MutableStateFlow(VisualSurface.entries.toSet())
+    /** Keep bounded artist, album and now-playing stills when encountered. */
+    val saveVisualStillImages = MutableStateFlow(true)
+    val visualStillSurfaces = MutableStateFlow(VisualSurface.entries.toSet())
+    /** Limits for protected offline visuals, separate from audio/Coil LRU. */
+    val visualStillCacheLimitBytes = MutableStateFlow(DEFAULT_SAVED_STILLS_BYTES)
+    val visualMotionCacheLimitBytes = MutableStateFlow(DEFAULT_SAVED_MOTION_BYTES)
+
+    private const val KEY_VISUAL_RETENTION_V1 = "visual_retention_v1"
+    private const val KEY_VISUAL_SURFACES_V1 = "visual_motion_surfaces_v1"
+    private const val KEY_VISUAL_STILLS_V1 = "visual_stills_v1"
+    private const val KEY_VISUAL_STILL_SURFACES_V1 = "visual_still_surfaces_v1"
+    private const val KEY_VISUAL_STILL_LIMIT_V1 = "visual_still_limit_bytes_v1"
+    private const val KEY_VISUAL_MOTION_LIMIT_V1 = "visual_motion_limit_bytes_v1"
+
 
     /** Automatically collapses the lower controls after Spotify Canvas settles. */
     val spotifyCanvasAutoHide = MutableStateFlow(true)
@@ -737,6 +756,7 @@ object AppSettings {
      * one here was a measurable slice of cold start.
      */
     fun init(context: Context, authStore: AuthStore) {
+        settingsAppContext = context.applicationContext
         prefs = context.getSharedPreferences("bitchord_settings", Context.MODE_PRIVATE)
         this.authStore = authStore
         com.music.bitchord.data.spotify.LocalPlaylistStore.init(context)
@@ -846,6 +866,25 @@ object AppSettings {
         }
         animatedCanvas.value = prefs.getBoolean(KEY_ANIMATED_CANVAS, true)
         canvasOverCellular.value = prefs.getBoolean(KEY_CANVAS_OVER_CELLULAR, false)
+        visualRetentionMode.value = runCatching {
+            VisualRetentionMode.valueOf(prefs.getString(
+                KEY_VISUAL_RETENTION_V1, VisualRetentionMode.STREAM_ONLY.name
+            ) ?: VisualRetentionMode.STREAM_ONLY.name)
+        }.getOrDefault(VisualRetentionMode.STREAM_ONLY)
+        visualMotionSurfaces.value = prefs.getString(KEY_VISUAL_SURFACES_V1, null)
+            ?.split(",")?.mapNotNull { name ->
+                VisualSurface.entries.firstOrNull { it.name == name }
+            }?.toSet() ?: VisualSurface.entries.toSet()
+        saveVisualStillImages.value = prefs.getBoolean(KEY_VISUAL_STILLS_V1, true)
+        visualStillSurfaces.value = prefs.getString(KEY_VISUAL_STILL_SURFACES_V1, null)
+            ?.split(",")?.mapNotNull { value ->
+                VisualSurface.entries.firstOrNull { it.name == value }
+            }?.toSet() ?: VisualSurface.entries.toSet()
+        visualStillCacheLimitBytes.value = normalizedVisualStillCacheBytes(
+            prefs.getLong(KEY_VISUAL_STILL_LIMIT_V1, DEFAULT_SAVED_STILLS_BYTES))
+        visualMotionCacheLimitBytes.value = normalizedVisualMotionCacheBytes(
+            prefs.getLong(KEY_VISUAL_MOTION_LIMIT_V1, DEFAULT_SAVED_MOTION_BYTES))
+
         spotifyCanvasAutoHide.value = prefs.getBoolean(KEY_SPOTIFY_CANVAS_AUTO_HIDE, true)
         prioritizeSpotifyCanvas.value = prefs.getBoolean(KEY_PRIORITIZE_SPOTIFY_CANVAS, false)
         signatureApiEnabled.value = prefs.getBoolean(KEY_SIGNATURE_API_ENABLED, false)
@@ -1407,6 +1446,51 @@ object AppSettings {
         prefs.edit().putBoolean(KEY_ANIMATED_CANVAS, value).apply()
     }
 
+    fun setVisualStillCacheLimitBytes(bytes: Long) {
+        val limit = normalizedVisualStillCacheBytes(bytes)
+        visualStillCacheLimitBytes.value = limit
+        prefs.edit().putLong(KEY_VISUAL_STILL_LIMIT_V1, limit).apply()
+        // Already downloaded images are also brought below the new quota.
+        com.music.bitchord.data.canvas.VisualStillMedia.requestTrim()
+    }
+
+    fun setVisualMotionCacheLimitBytes(bytes: Long) {
+        val limit = normalizedVisualMotionCacheBytes(bytes)
+        visualMotionCacheLimitBytes.value = limit
+        prefs.edit().putLong(KEY_VISUAL_MOTION_LIMIT_V1, limit).apply()
+        // Existing complete clips remain valid. A smaller quota blocks new
+        // saves until the user frees space explicitly; never silently delete
+        // a video they chose to preserve offline.
+    }
+
+    fun setVisualRetentionMode(mode: VisualRetentionMode) {
+        visualRetentionMode.value = mode
+        prefs.edit().putString(KEY_VISUAL_RETENTION_V1, mode.name).apply()
+    }
+
+    fun setVisualMotionSurface(surface: VisualSurface, enabled: Boolean) {
+        val next = if (enabled) visualMotionSurfaces.value + surface
+            else visualMotionSurfaces.value - surface
+        visualMotionSurfaces.value = next
+        prefs.edit().putString(
+            KEY_VISUAL_SURFACES_V1, next.joinToString(",") { it.name }
+        ).apply()
+    }
+
+    fun setVisualStillSurface(surface: VisualSurface, enabled: Boolean) {
+        val next = if (enabled) visualStillSurfaces.value + surface
+            else visualStillSurfaces.value - surface
+        visualStillSurfaces.value = next
+        prefs.edit().putString(
+            KEY_VISUAL_STILL_SURFACES_V1, next.joinToString(",") { it.name }
+        ).apply()
+    }
+
+    fun setSaveVisualStillImages(value: Boolean) {
+        saveVisualStillImages.value = value
+        prefs.edit().putBoolean(KEY_VISUAL_STILLS_V1, value).apply()
+    }
+
     fun setCanvasOverCellular(value: Boolean) {
         canvasOverCellular.value = value
         prefs.edit().putBoolean(KEY_CANVAS_OVER_CELLULAR, value).apply()
@@ -1568,11 +1652,27 @@ object AppSettings {
     fun setListenBrainzEnabled(value: Boolean) {
         listenBrainzEnabled.value = value
         prefs.edit().putBoolean(KEY_LISTENBRAINZ_ENABLED, value).apply()
+        settingsAppContext?.let { context ->
+            // A disabled account must not replay old offline listens on a later
+            // opt-in; old playback is not renewed consent.
+            if (!value) {
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.forget(context)
+            } else {
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.recover(context)
+            }
+        }
     }
 
     fun setListenBrainzToken(value: String) {
+        val changed = listenBrainzToken.value != value
         listenBrainzToken.value = value
         prefs.edit().putString(KEY_LISTENBRAINZ_TOKEN, value).apply()
+        if (changed) {
+            settingsAppContext?.let {
+                // Never replay pending listens using a different account token.
+                com.music.bitchord.data.scrobbling.ListenBrainzOutbox.forget(it)
+            }
+        }
     }
 
     fun setListenBrainzPrimaryArtistOnly(value: Boolean) {

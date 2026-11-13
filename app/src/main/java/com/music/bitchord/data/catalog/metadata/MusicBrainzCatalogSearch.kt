@@ -1,5 +1,6 @@
 package com.music.bitchord.data.catalog.metadata
 
+import androidx.room.Ignore
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -55,9 +56,13 @@ internal data class MusicBrainzReleaseGroupHit(
     val firstReleaseDate: String?,
     val artistDisplay: String?,
     val artworkUri: String? = null,
-    /** Pipe-separated official MusicBrainz secondary types; unknown remains null. */
+    /** Pipe-separated MusicBrainz types: null = absent/unknown, "" = explicitly no tags. */
     val secondaryTypes: String? = null,
-)
+) {
+    /** All credited artist MBIDs in source order. Null means incomplete proof.
+     * Live search only: Room never reads or stores this field. */
+    @Ignore var artistCreditMbids: List<String>? = null
+}
 
 internal data class MusicBrainzReleaseHit(
     val musicBrainzId: String,
@@ -72,7 +77,17 @@ internal data class MusicBrainzReleaseHit(
     val releaseGroupMbid: String? = null,
     /** Positive CAA Front availability flag attached to this *specific* Release. */
     val hasFrontCover: Boolean? = null,
-)
+    /** Linked ReleaseGroup primary type, when present; not guessed from title. */
+    val releaseGroupPrimaryType: String? = null,
+    /** Positive source evidence: every declared medium is explicitly video-only. */
+    val isVideoOnlyMedia: Boolean? = null,
+    /** Evidence from exact Release's Track/Recording graph, when cached. */
+    val isVideoOnlyContent: Boolean? = null,
+) {
+    /** Source artist MBIDs, never inferred from display names or aliases.
+     * Live search only: Room never reads or stores this field. */
+    @Ignore var artistCreditMbids: List<String>? = null
+}
 
 // A MusicBrainz cover-art-archive.front flag is a presence hint only.
 // Never synthesize direct /front-500 URLs from it: CAA may label the
@@ -111,7 +126,27 @@ internal data class MusicBrainzRecordingHit(
 /** Explicit edition status is required for public streaming-style Release tiles. */
 internal fun isCuratedMusicBrainzRelease(hit: MusicBrainzReleaseHit): Boolean =
     hit.status.equals("Official", ignoreCase = true) &&
-        canonicalStreamingTitleIsSafe(hit.title)
+        // Official is a publication status, not proof of an audio edition.
+        hit.isVideoOnlyMedia != true && hit.isVideoOnlyContent != true &&
+        canonicalStreamingTitleIsSafe(hit.title) &&
+        // A legitimate Official edition may be a film/video or broadcast.
+        // Reject only an explicitly unsupported primary type; unknown stays
+        // browseable while a trusted group classification is unavailable.
+        (hit.releaseGroupPrimaryType == null ||
+            hit.releaseGroupPrimaryType.trim().lowercase(Locale.ROOT) in
+                setOf("album", "ep", "single"))
+
+/**
+ * General Search is a music album/EP/single shelf, not the entire editable
+ * MusicBrainz corpus. Retain all raw groups in the canonical index and their
+ * MBIDs; only published-looking, typed groups with an actual artist credit
+ * and a safe title become mainstream result cards. Secondary Live/Remix
+ * tags alone are not proof of a bogus release.
+ */
+internal fun isCuratedMusicBrainzReleaseGroup(hit: MusicBrainzReleaseGroupHit): Boolean =
+    (hit.primaryType?.trim()?.lowercase(Locale.ROOT) ?: "") in
+        setOf("album", "ep", "single") &&
+        !hit.artistDisplay.isNullOrBlank() && canonicalStreamingTitleIsSafe(hit.title)
 
 internal fun isCuratedMusicBrainzRecording(hit: MusicBrainzRecordingHit): Boolean =
     hit.hasOfficialAudioRelease == true && hit.isVideo != true &&
@@ -169,6 +204,108 @@ internal class MusicBrainzCatalogSearch(
         return searchReleaseGroupsInternal("arid:$id", limit, offset, fieldedQuery = true)
     }
 
+    /**
+     * Public editorial discovery does not require a populated local index.
+     * Fielded Lucene queries must use dismax=false; date/type are server
+     * evidence, not inferred from a title or the app install date.
+     */
+    suspend fun searchRecentReleaseGroups(
+        fromIsoDate: String,
+        throughIsoDate: String,
+        limit: Int = 100,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val date = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        if (!date.matches(fromIsoDate) || !date.matches(throughIsoDate) ||
+            fromIsoDate > throughIsoDate
+        ) return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        return searchReleaseGroupsInternal(
+            "firstreleasedate:[$fromIsoDate TO $throughIsoDate] AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
+    /** Genre is a known MusicBrainz release-group tag, never arbitrary UI text. */
+    suspend fun searchReleaseGroupsForTag(
+        tag: String,
+        limit: Int = 40,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized)) {
+            return MusicBrainzCatalogSearchResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
+        }
+        // Keep stable, URL-safe browse IDs separate from authoritative tag
+        // spelling in MusicBrainz's release-group search index.
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
+    /**
+     * Current genre releases need an independent date-scoped query. A plain
+     * tag search is relevance-ranked and can return sixty historical albums
+     * without a single genuinely recent record.
+     */
+    suspend fun searchRecentReleaseGroupsForTag(
+        tag: String,
+        fromIsoDate: String,
+        throughIsoDate: String,
+        limit: Int = 40,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        val date = Regex("^\\d{4}-\\d{2}-\\d{2}$")
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized) ||
+            !date.matches(fromIsoDate) || !date.matches(throughIsoDate) ||
+            fromIsoDate > throughIsoDate
+        ) return MusicBrainzCatalogSearchResult.Failure(
+            MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+        )
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND " +
+                "firstreleasedate:[$fromIsoDate TO $throughIsoDate] AND " +
+                "(primarytype:album OR primarytype:ep OR primarytype:single)",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
+    /**
+     * Preserve genre album shelves even when the top relevance-ranked and
+     * recent pages contain only EPs and singles. The server still establishes
+     * both the tag association and the primary Album type.
+     */
+    suspend fun searchAlbumReleaseGroupsForTag(
+        tag: String,
+        limit: Int = 24,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> {
+        val normalized = tag.lowercase(Locale.ROOT)
+        if (!Regex("^[a-z][a-z0-9-]{1,30}$").matches(normalized)) {
+            return MusicBrainzCatalogSearchResult.Failure(
+                MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+            )
+        }
+        val musicBrainzTag = when (normalized) {
+            "rnb" -> "r&b"
+            "hip-hop" -> "hip hop"
+            else -> normalized
+        }
+        return searchReleaseGroupsInternal(
+            "tag:\"$musicBrainzTag\" AND primarytype:album",
+            limit, 0, fieldedQuery = true,
+        )
+    }
+
     private suspend fun searchReleaseGroupsInternal(
         query: String, limit: Int, offset: Int, fieldedQuery: Boolean = false,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseGroupHit> =
@@ -181,9 +318,12 @@ internal class MusicBrainzCatalogSearch(
                     MusicBrainzReleaseGroupHit(
                         mbid, title, group.primaryType.nonEmpty(),
                         group.firstReleaseDate.nonEmpty(), group.artistCredit.displayArtistCredit(),
-                        secondaryTypes = group.secondaryTypes?.filter(String::isNotBlank)
-                            ?.joinToString("|")?.ifBlank { null },
-                    )
+                        // Explicit [] is a source correction: it means zero
+                        // secondary types. Missing field remains unknown/null.
+                        secondaryTypes = group.secondaryTypes
+                            ?.map(String::trim)?.filter(String::isNotBlank)
+                            ?.joinToString("|"),
+                    ).also { it.artistCreditMbids = group.artistCredit.completeArtistMbids() }
                 }
             }
         }
@@ -219,7 +359,8 @@ internal class MusicBrainzCatalogSearch(
                         release.date.nonEmpty(), release.artistCredit.displayArtistCredit(),
                         status = release.status.nonEmpty(),
                         releaseGroupMbid = release.releaseGroup?.id.validSearchMbidOrNull(),
-                    )
+                        releaseGroupPrimaryType = release.releaseGroup?.primaryType.nonEmpty(),
+                    ).also { it.artistCreditMbids = release.artistCredit.completeArtistMbids() }
                 }
             }
         }
@@ -275,8 +416,16 @@ internal class MusicBrainzCatalogSearch(
                         // edition is still not positive evidence of official
                         // audio. Match the *same* supported Album/EP/Single
                         // evidence required for trustworthy cover association.
-                        hasOfficialAudioRelease = audioReleases.isNotEmpty(),
-                        isVideo = recording.video == true,
+                        // Recording.video is tri-state in the search index.
+                        // An omitted boolean or omitted release list is NOT
+                        // a negative fact and must not clear Room proof from
+                        // a previous complete lookup for this exact MBID.
+                        hasOfficialAudioRelease = when {
+                            recording.video == true -> false
+                            recording.releases == null -> null
+                            else -> audioReleases.isNotEmpty()
+                        },
+                        isVideo = recording.video,
                     )
                 }
             }
@@ -329,6 +478,17 @@ internal class MusicBrainzCatalogSearch(
     private fun String?.validSearchMbidOrNull(): String? =
         nonEmpty()?.takeIf(MBID_PATTERN::matches)?.lowercase(java.util.Locale.ROOT)
 
+    /** Artist identity is valid only if EVERY credited artist has a real MBID.
+     * A partial response or an alias alone cannot establish equivalence. */
+    private fun List<SearchArtistCredit>?.completeArtistMbids(): List<String>? {
+        val credits = this?.takeIf { it.isNotEmpty() } ?: return null
+        val ids = mutableListOf<String>()
+        for (credit in credits) {
+            ids += credit.artist?.id.validSearchMbidOrNull() ?: return null
+        }
+        return ids
+    }
+
     private fun List<SearchArtistCredit>?.displayArtistCredit(): String? =
         this?.joinToString("") { credit ->
             (credit.name.nonEmpty() ?: credit.artist?.name.nonEmpty().orEmpty()) + credit.joinPhrase.orEmpty()
@@ -364,6 +524,7 @@ private interface SearchEnvelope {
 @Serializable
 private data class SearchArtistReference(
     val name: String? = null,
+    val id: String? = null,
 )
 
 @Serializable

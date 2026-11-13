@@ -203,10 +203,12 @@ internal suspend fun canonicalNormalPlaylistSelectedRows(
         .flatMap { dao.browseAssetsForRecordingIds(keys, it) }
         .mapTo(HashSet()) { it.recordingId }
     val indexed = canonicalNormalRows(dao, recordings, keys).associateBy { it.id }
+    val labels = CatalogMetadataRecordingLabelRepository.get(app).labels.value
+        .associateBy { it.recordingId }
     ids.map { id ->
-        if (id in available) indexed[id]
-            ?: V2DisplayRow(id, "Gravação indisponível", "Fonte não disponível")
-        else V2DisplayRow(id, "Gravação indisponível", "Fonte não disponível")
+        // Saved MusicBrainz metadata remains visible without claiming it is playable.
+        val unavailable = metadataOnlyUnavailablePlaylistRow(id, labels[id])
+        if (id in available) indexed[id] ?: unavailable else unavailable
     }
 }
 

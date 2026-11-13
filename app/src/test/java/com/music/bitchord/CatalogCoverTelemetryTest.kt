@@ -86,6 +86,28 @@ class CatalogCoverTelemetryTest {
     }
 
 
+    @Test fun coilImageObserverSelectsExactCaaHostAndExcludesOtherArtwork() {
+        val eligible = com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://coverartarchive.org/release/aaaa/front-250.jpg",
+        )
+        assertEquals(true, eligible)
+        assertEquals(true, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://ia800123.us.archive.org/12/items/album/front.jpg",
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://example.org/album/cover.jpg",
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            "https://coverartarchive.org.evil.example/release/image.jpg",
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            Any(),
+        ))
+        assertEquals(false, com.music.bitchord.data.catalog.metadata.shouldObserveCaaImageRequest(
+            null,
+        ))
+    }
+
     @Test fun cacheFirstBatchAndOwnerCancellationRetriesAreMeasuredWithoutIds() {
         val telemetry = CatalogCoverTelemetry()
         telemetry.recordVerifiedGroupCachedBatch(12)
@@ -99,6 +121,23 @@ class CatalogCoverTelemetryTest {
         assertEquals(0, telemetry.snapshot().verifiedGroupCachedBatchReads)
         assertEquals(0, telemetry.snapshot().verifiedGroupCachedRowsReused)
         assertEquals(0, telemetry.snapshot().recoveredCoalescedOwnerCancellations)
+    }
+
+    @Test fun coilRequestStartsAndOffscreenCancellationsAreDistinctFromErrors() {
+        val meter = CatalogCoverTelemetry()
+        meter.recordImageStart()
+        meter.recordImageStart()
+        meter.recordImageStart()
+        meter.recordImageCancellation()
+        meter.recordImageResult(true, 40L, "DISK")
+        val snapshot = meter.snapshot()
+        assertEquals(3, snapshot.imageLoadStarts)
+        assertEquals(1, snapshot.imageLoadCancels)
+        assertEquals(1, snapshot.imageRenderSuccesses)
+        assertEquals(0, snapshot.imageRenderFailures)
+        meter.reset()
+        assertEquals(0, meter.snapshot().imageLoadStarts)
+        assertEquals(0, meter.snapshot().imageLoadCancels)
     }
 
     @Test fun diskCacheBaselineSurvivesCaptureResetAndExplainsUpgradeEvictionRisk() {

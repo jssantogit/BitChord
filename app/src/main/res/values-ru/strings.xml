@@ -27,6 +27,7 @@
     <string name="home">Главная</string>
     <string name="play">Играть</string>
     <string name="explore">Обзор</string>
+    <string name="explore_genres">Жанры</string>
     <string name="listen_now">Слушать сейчас</string>
     <string name="downloads">Загрузки</string>
     <string name="downloaded_songs">Загруженные песни</string>
@@ -472,7 +473,7 @@
     <string name="signing_in">Выполняется вход…</string>
     <string name="sleep_timer">Таймер сна</string>
     <string name="sources_no_lossless">Ни один включённый источник не может предоставить аудио без потерь. Добавьте пользовательский модуль, чтобы воспроизводить доступные файлы без потерь без перекодирования.</string>
-    <string name="sources_order_footer">Если у источника нет трека или он недоступен, BitChord пробует следующий. Источники выше YouTube могут заменить его запись, если предоставляют более качественную версию.</string>
+    <string name="sources_order_footer">Если у источника нет трека или он недоступен, BitChord пробует следующий.</string>
     <string name="sources_order_header">Источники, пробуются в этом порядке</string>
     <string name="sources_quality_capped">Это соединение установлено ниже высокого качества, поэтому потоки перекодируются под это ограничение. На загрузки это не влияет.</string>
     <string name="jiosaavn_mismatch_warning">Может подобрать не ту версию песни. Включайте на свой страх и риск.</string>
@@ -1000,6 +1001,7 @@
     <string name="shelf_top_tunes_right_now">Главные треки прямо сейчас</string>
 
     <string name="shelf_trending">В тренде</string>
+    <string name="shelf_listenbrainz_community">Популярно в сообществе</string>
 
     <string name="shelf_trending_community_playlists">Популярные плейлисты сообщества</string>
 
@@ -1322,6 +1324,7 @@
     <string name="spotify_import_none">Ни один из этих треков не найден на YouTube Music.</string>
     <string name="spotify_import_title">Импорт плейлиста из Spotify</string>
     <string name="spotify_import_unmatched">%1$d треков не найдено на YouTube Music</string>
+    <string name="spotify_import_metadata_only">Плейлист сохранён: %1$d треков только в виде метаданных. Аудио без подтверждённого совпадения не привязано.</string>
     <string name="spotify_library_subtitle">Ваши плейлисты Spotify</string>
     <string name="spotify_sign_in">Войти через Spotify</string>
     <string name="spotify_use_spdc_token">Использовать токен sp_dc</string>
@@ -1420,4 +1423,32 @@
     <string name="search_origin_local">Локально</string>
     <string name="pause_resume_fade">Плавное затухание при паузе и возобновлении</string>
     <string name="pause_resume_fade_subtitle">Плавно уменьшает громкость при паузе и увеличивает при возобновлении</string>
+    <string name="home_global_discovery">Открытия со всего мира</string>
+
+    <string name="visual_offline_title">Изображения офлайн</string>
+    <string name="visual_offline_stream">Временный кэш без постоянного сохранения видео</string>
+    <string name="visual_offline_wifi">Сохранять анимации для офлайн-просмотра только по Wi-Fi</string>
+    <string name="visual_offline_still">Заменять анимации сохранёнными изображениями</string>
+    <string name="visual_offline_temporary">Временно</string>
+    <string name="visual_offline_save_wifi">Сохранять по Wi-Fi</string>
+    <string name="visual_offline_only_stills">Только изображения</string>
+    <string name="visual_offline_artist_motion">Анимации исполнителей</string>
+    <string name="visual_offline_album_motion">Анимации альбомов</string>
+    <string name="visual_offline_player_motion">Анимации проигрывателя</string>
+    <string name="visual_offline_save_stills">Сохранять изображения</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">Фото исполнителей</string>
+    <string name="visual_offline_album_stills">Обложки альбомов</string>
+    <string name="visual_offline_player_stills">Обложки проигрывателя</string>
+    <string name="visual_offline_images_group">Сохранённые фото и обложки</string>
+    <string name="visual_offline_motion_group">Сохранённые анимации</string>
+    <string name="visual_offline_still_limit">Лимит сохранённых изображений</string>
+    <string name="visual_offline_still_limit_subtitle">Максимальный объём для фото исполнителей и обложек альбомов и плеера</string>
+    <string name="visual_offline_motion_limit">Лимит сохранённых анимаций</string>
+    <string name="visual_offline_motion_limit_subtitle">Ограничивает новые ролики, не удаляя старые; для освобождения места очистите сохранённые изображения и видео</string>
+    <string name="visual_offline_clear_title">Очистить сохранённые изображения</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">Очистить офлайн-изображения?</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">Офлайн-изображения очищены</string>
 </resources>

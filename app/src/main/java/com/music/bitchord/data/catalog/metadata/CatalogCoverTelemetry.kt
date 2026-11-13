@@ -40,6 +40,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         val coilDiskPreservedOnVersionUpgrade: Boolean,
         val reconciledRecordingEditionCovers: Int,
         val rejectedGroupDowngrades: Int,
+        val imageLoadStarts: Int,
+        val imageLoadCancels: Int,
     )
 
     private var cached = 0
@@ -53,6 +55,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
     private val durations = ArrayDeque<Long>()
     private var loadedImages = 0
     private var failedImages = 0
+    private var imageStarts = 0
+    private var imageCancels = 0
     private val imageDurations = ArrayDeque<Long>()
     private var imageMemory = 0
     private var imageDisk = 0
@@ -82,6 +86,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         durations.clear()
         loadedImages = 0
         failedImages = 0
+        imageStarts = 0
+        imageCancels = 0
         imageDurations.clear()
         imageMemory = 0
         imageDisk = 0
@@ -137,6 +143,9 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
         durations.addLast(durationMs.coerceAtLeast(0))
     }
 
+    @Synchronized fun recordImageStart() { imageStarts++ }
+    @Synchronized fun recordImageCancellation() { imageCancels++ }
+
     /**
      * Coil finished loading a CAA bitmap (or reported an error). This is
      * measured at the actual Android image consumer, not inferred from the
@@ -178,7 +187,8 @@ internal class CatalogCoverTelemetry(private val maxSamples: Int = 256) {
             imageMemory, imageDisk, imageNetwork, imageOther,
             groupCacheBatchReads, groupCacheRows, recoveredSharedOwners,
             diskBytesAtInit, diskCapacity, preservedDiskOnAppUpdate,
-            reconciledEditionCovers, groupDowngradesRejected)
+            reconciledEditionCovers, groupDowngradesRejected,
+            imageStarts, imageCancels)
     }
 
     companion object {

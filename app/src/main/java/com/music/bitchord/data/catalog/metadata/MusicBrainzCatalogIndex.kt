@@ -27,11 +27,45 @@ import java.util.UUID
  * Search cannot infer local identity from title/artist. Only an already-claimed
  * strong MusicBrainz Recording MBID is reused.
  */
-internal class MusicBrainzCatalogIndex(
+internal class MusicBrainzCatalogIndex private constructor(
     private val database: CanonicalCatalogDatabase,
-    private val idFactory: () -> String = { UUID.randomUUID().toString() },
+    configuration: Configuration,
 ) {
-    suspend fun persistRecordings(hits: List<MusicBrainzRecordingHit>): Map<String, String> =
+    private val proofClient = configuration.proofClient
+    private val idFactory = configuration.idFactory
+
+    private data class Configuration(
+        val idFactory: () -> String,
+        val proofClient: MusicBrainzClient,
+    )
+
+    /** Original constructor shape: keep positional, named, and trailing-lambda callers source-compatible. */
+    constructor(
+        database: CanonicalCatalogDatabase,
+        idFactory: () -> String = { UUID.randomUUID().toString() },
+    ) : this(database, Configuration(idFactory, MusicBrainzClient()))
+
+    constructor(
+        database: CanonicalCatalogDatabase,
+        idFactory: () -> String,
+        injectedProofClient: MusicBrainzClient,
+    ) : this(database, Configuration(idFactory, injectedProofClient))
+
+    constructor(database: CanonicalCatalogDatabase, proofClient: MusicBrainzClient) :
+        this(database, Configuration({ UUID.randomUUID().toString() }, proofClient))
+
+    /** Supports proof-client injection together with an existing trailing id factory. */
+    constructor(
+        database: CanonicalCatalogDatabase,
+        proofClient: MusicBrainzClient,
+        idFactory: () -> String,
+    ) : this(database, Configuration(idFactory, proofClient))
+
+    suspend fun persistRecordings(
+        hits: List<MusicBrainzRecordingHit>,
+        /** A Release Track fallback lacks independent Recording display authority. */
+        acceptSourceCorrections: Boolean = true,
+    ): Map<String, String> =
         database.withTransaction {
             val dao = database.catalogDao()
             val indexed = linkedMapOf<String, String>()
@@ -70,15 +104,27 @@ internal class MusicBrainzCatalogIndex(
                 check(previousEvidence == null || previousEvidence.mbid.equals(mbid, true)) {
                     "MusicBrainz Recording enrichment conflicts with canonical MBID"
                 }
-                // Only recording search can positively verify audio/visual status.
-                // Sparse Track or ISRC lookups may not erase this evidence.
+                // Only exact Recording-MBID evidence may correct the provider
+                // display fields. A Release Track's title, duration or credit
+                // is an edition-specific fallback, never a correction to a
+                // previously verified Recording. The local canonical fields
+                // (and playback MediaAssets) remain completely untouched.
+                val incomingArtist = hit.artistDisplay?.trim()?.takeIf(String::isNotEmpty)
+                val incomingDuration = hit.durationMs?.takeIf { it >= 0L }
                 dao.upsertMusicBrainzRecordingEnrichment(
                     MusicBrainzRecordingEnrichmentEntity(
                         recordingId = recordingId, mbid = mbid,
-                        title = previousEvidence?.title ?: title,
-                        durationMs = previousEvidence?.durationMs ?: hit.durationMs,
-                        artistDisplay = previousEvidence?.artistDisplay ?: hit.artistDisplay,
+                        title = if (acceptSourceCorrections) title
+                            else previousEvidence?.title ?: title,
+                        durationMs = if (acceptSourceCorrections)
+                            incomingDuration ?: previousEvidence?.durationMs
+                            else previousEvidence?.durationMs ?: incomingDuration,
+                        artistDisplay = if (acceptSourceCorrections)
+                            incomingArtist ?: previousEvidence?.artistDisplay
+                            else previousEvidence?.artistDisplay ?: incomingArtist,
                         fetchedAtEpochMs = System.currentTimeMillis(),
+                        // Search may omit both fields. Never turn missing
+                        // evidence into a negative audio/video classification.
                         hasOfficialAudioRelease = hit.hasOfficialAudioRelease
                             ?: previousEvidence?.hasOfficialAudioRelease,
                         isVideo = hit.isVideo ?: previousEvidence?.isVideo,
@@ -116,7 +162,9 @@ internal class MusicBrainzCatalogIndex(
                 dao.upsertMusicBrainzArtistEnrichment(MusicBrainzArtistEnrichmentEntity(
                     artistId = artistId,
                     mbid = mbid,
-                    name = previous?.name ?: hit.name.trim(),
+                    // This row is MusicBrainz-owned, not the user's ArtistEntity.
+                    // A corrected official name for the same MBID supersedes the old one.
+                    name = hit.name.trim(),
                     sortName = previous?.sortName,
                     disambiguation = hit.disambiguation?.trim()?.takeIf(String::isNotEmpty)
                         ?: previous?.disambiguation,
@@ -145,12 +193,21 @@ internal class MusicBrainzCatalogIndex(
                         // Sparse MusicBrainz responses must not erase stronger,
                         // previously confirmed editorial classification.
                         val merged = previous.copy(
+                            // ReleaseGroups are created and claimed only by their
+                            // exact MusicBrainz MBID, never matched by display
+                            // text. Source corrections may update their label;
+                            // sparse optional values must not erase metadata.
+                            title = hit.title.trim(),
+                            artistDisplay = hit.artistDisplay?.trim()
+                                ?.takeIf(String::isNotEmpty) ?: previous.artistDisplay,
                             primaryType = hit.primaryType?.takeIf(String::isNotBlank)
                                 ?: previous.primaryType,
                             firstReleaseDate = hit.firstReleaseDate?.takeIf(String::isNotBlank)
                                 ?: previous.firstReleaseDate,
-                            secondaryTypes = hit.secondaryTypes?.takeIf(String::isNotBlank)
-                                ?: previous.secondaryTypes,
+                            // Null means omitted by this response; empty
+                            // string means an explicit [] and clears stale
+                            // Compilation/Live/Remix tags for this exact MBID.
+                            secondaryTypes = hit.secondaryTypes ?: previous.secondaryTypes,
                         )
                         if (merged != previous) dao.upsertCatalogReleaseGroup(merged)
                         indexed[mbid] = existing
@@ -185,6 +242,47 @@ internal class MusicBrainzCatalogIndex(
                     artistId, groupId, publicationEvidence = "website-default-v1",
                 ))
             }
+        }
+    }
+
+    /**
+     * Reconcile ONLY the artist-MBID's published website-default-v1 links.
+     * A full, contiguous source browse with a positive stable total and an
+     * exact unique MBID for every raw row is required before *any* pruning.
+     * ReleaseGroups, local albums, Track/Recording IDs, media assets and
+     * other artists' associations are not touched.
+     */
+    suspend fun reconcileVerifiedArtistGroups(
+        artistMbid: String,
+        snapshot: MusicBrainzArtistDiscographyPager.Outcome,
+    ): Boolean {
+        if (!snapshot.complete || !snapshot.reconciliationEligible ||
+            snapshot.nextOffset != null || snapshot.sourceTotal !in 1..900 ||
+            snapshot.items.size != snapshot.sourceTotal
+        ) return false
+        val normalized = artistMbid.trim().lowercase(Locale.ROOT)
+        if (!MBID.matches(normalized)) return false
+        val ids = snapshot.items.map { it.musicBrainzId.trim().lowercase(Locale.ROOT) }
+        if (ids.distinct().size != ids.size ||
+            ids.any { !MBID.matches(it) } ||
+            snapshot.items.any { it.title.isBlank() }
+        ) return false
+        return database.withTransaction {
+            val dao = database.catalogDao()
+            val artistId = dao.entityIdForExternalIdentity("musicbrainz", "artist", normalized)
+                ?: return@withTransaction false
+            if (dao.artistById(artistId) == null) return@withTransaction false
+            val resolved = persistReleaseGroups(snapshot.items)
+            if (resolved.size != ids.size || ids.any { it !in resolved })
+                return@withTransaction false
+            val localIds = ids.map { resolved.getValue(it) }
+            localIds.forEach { groupId ->
+                dao.upsertMusicBrainzArtistGroup(CatalogMusicBrainzArtistGroupEntity(
+                    artistId, groupId, publicationEvidence = "website-default-v1",
+                ))
+            }
+            dao.pruneObsoleteMusicBrainzArtistGroups(artistId, localIds)
+            true
         }
     }
 
@@ -247,6 +345,9 @@ internal class MusicBrainzCatalogIndex(
                     status = hit.status?.trim()?.takeIf(String::isNotEmpty)
                         ?: previous?.status,
                     fetchedAtEpochMs = System.currentTimeMillis(),
+                    // Sparse subsequent browse results never clear proof.
+                    isVideoOnlyMedia = hit.isVideoOnlyMedia ?: previous?.isVideoOnlyMedia,
+                    isVideoOnlyContent = hit.isVideoOnlyContent ?: previous?.isVideoOnlyContent,
                 ))
                 indexed[mbid] = releaseId
             }
@@ -262,7 +363,15 @@ internal class MusicBrainzCatalogIndex(
             val groupId = dao.entityIdForExternalIdentity("musicbrainz", "release-group", normalized)
                 ?: return@withTransaction
             check(dao.catalogReleaseGroup(groupId) != null) { "Orphaned release-group claim" }
-            persistReleases(hits).values.forEach { releaseId ->
+            // A scoped browse proves this relationship; an explicit
+            // contradictory Group MBID does not. Reject those claims before
+            // inserting a group edge. Legacy partial hits without a nested
+            // group remain usable only from this exact-group caller.
+            val linkedHits = hits.filter { hit ->
+                hit.releaseGroupMbid == null ||
+                    hit.releaseGroupMbid.trim().equals(normalized, ignoreCase = true)
+            }
+            persistReleases(linkedHits).values.forEach { releaseId ->
                 dao.upsertCatalogReleaseGroupEdition(CatalogReleaseGroupEditionEntity(groupId, releaseId))
             }
         }
@@ -283,6 +392,11 @@ internal class MusicBrainzCatalogIndex(
                     edition.musicBrainzId, edition.title,
                     edition.country, edition.releaseDate,
                     edition.artistDisplay, status = edition.status,
+                    // This Room relation is an exact cached Group -> Release
+                    // edge, even if the source Edition omitted nested Group.
+                    releaseGroupMbid = normalized,
+                    isVideoOnlyMedia = edition.isVideoOnlyMedia,
+                    isVideoOnlyContent = edition.isVideoOnlyContent,
                 )
             }
         }
@@ -301,8 +415,11 @@ internal class MusicBrainzCatalogIndex(
         if (tracks.map { it.trackMbid }.distinct().size != tracks.size) return@withTransaction null
         val info = dao.musicBrainzReleaseEnrichment(releaseId)
         MusicBrainzCatalogReleaseDetail(normalized,
-            dao.musicBrainzGroupMbidsForRelease(releaseId).singleOrNull(), release.title,
-            info?.artistDisplay ?: release.artistDisplay, info?.country, info?.releaseDate, tracks)
+            dao.musicBrainzGroupMbidsForRelease(releaseId).singleOrNull(),
+            info?.title?.takeIf(String::isNotBlank) ?: release.title,
+            info?.artistDisplay?.takeIf(String::isNotBlank) ?: release.artistDisplay,
+            info?.country, info?.releaseDate,
+            tracks, isVideoOnlyContent = info?.isVideoOnlyContent)
     }
 
     /**
@@ -314,18 +431,67 @@ internal class MusicBrainzCatalogIndex(
         val releaseMbid = detail.musicBrainzId.trim().lowercase(Locale.ROOT)
         if (!MBID.matches(releaseMbid) || detail.title.isBlank()) return null
         val groupMbid = detail.groupMbid?.trim()?.lowercase(Locale.ROOT)?.takeIf(MBID::matches)
-        // Recording identity claims are independently valid if the later release
-        // fails; they never attach artificial MediaAssets to the library.
-        val recordingIds = persistRecordings(detail.tracks.map { track ->
-            MusicBrainzRecordingHit(
-                musicBrainzId = track.recordingMbid,
-                title = track.recordingTitle?.takeIf(String::isNotBlank) ?: track.title,
-                artistDisplay = track.recordingArtistDisplay ?: detail.artistDisplay,
-                durationMs = track.recordingDurationMs ?: track.durationMs,
-            )
-        })
+        // Snapshot the entire release sidecar before any network request.
+        val snapshot = database.withTransaction {
+            val dao = database.catalogDao()
+            val releaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", releaseMbid)
+            releaseId?.let { id ->
+                val previousTracks = dao.catalogMusicBrainzTracks(id)
+                val byTrack = previousTracks.associateBy { it.trackMbid }
+                // Changing a Track's Recording changes catalog membership even
+                // when the Track MBID itself is unchanged. That is destructive
+                // and requires the same independent XML proof as removing Tracks.
+                var recordingReassigned = false
+                for (incoming in detail.tracks) {
+                    val old = byTrack[incoming.trackMbid.trim().lowercase(Locale.ROOT)]
+                        ?: continue
+                    val nextRecordingId = dao.entityIdForExternalIdentity(
+                        "musicbrainz", "recording", incoming.recordingMbid.trim().lowercase(Locale.ROOT),
+                    )
+                    if (old.recordingId != nextRecordingId) {
+                        recordingReassigned = true
+                        break
+                    }
+                }
+                Triple(id, previousTracks, recordingReassigned)
+            }
+        }
+        val incomingIds = detail.tracks.map { it.trackMbid.trim().lowercase(Locale.ROOT) }.toSet()
+        val obsolete = snapshot?.second.orEmpty().map { it.trackMbid }.filterNot(incomingIds::contains)
+        val previousRecordingIds = snapshot?.second.orEmpty().map { it.recordingId }.distinct()
+        val requiresXmlProof = obsolete.isNotEmpty() || snapshot?.third == true
+        val verifiedReconciliation = if (requiresXmlProof && detail.tracks.isNotEmpty() &&
+            detail.completeness.countsExplicitAndExact &&
+            detail.completeness.offsetsValid && detail.completeness.positionsExplicitUnique
+        ) {
+            val xml = try {
+                proofClient.getLimited(
+                    "release/$releaseMbid",
+                    mapOf("inc" to "recordings", "fmt" to "xml"),
+                    maxResponseBytes = MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES,
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null }
+            xml != null && MusicBrainzReleaseXmlProof.proves(xml, releaseMbid, detail)
+        } else false
         return database.withTransaction {
             val dao = database.catalogDao()
+            val currentReleaseId = dao.entityIdForExternalIdentity("musicbrainz", "release", releaseMbid)
+            if (snapshot?.first != currentReleaseId) return@withTransaction null
+            if (snapshot != null && dao.catalogMusicBrainzTracks(snapshot.first) != snapshot.second)
+                return@withTransaction null
+            if (requiresXmlProof && !verifiedReconciliation) return@withTransaction null
+            // Nested Room withTransaction joins the active coroutine transaction;
+            // thus identities and sidecars commit or roll back together.
+            val recordingIds = persistRecordings(detail.tracks.map { track ->
+                MusicBrainzRecordingHit(
+                    musicBrainzId = track.recordingMbid,
+                    title = track.recordingTitle?.takeIf(String::isNotBlank) ?: track.title,
+                    artistDisplay = track.recordingArtistDisplay ?: detail.artistDisplay,
+                    durationMs = track.recordingDurationMs ?: track.durationMs,
+                )
+            }, acceptSourceCorrections = false)
             val groupId = groupMbid?.let { mbid ->
                 val existing = dao.entityIdForExternalIdentity("musicbrainz", "release-group", mbid)
                 if (existing != null) {
@@ -361,8 +527,23 @@ internal class MusicBrainzCatalogIndex(
                 claim(dao, "release", releaseMbid, created)
                 created
             }
+            if (verifiedReconciliation && obsolete.isNotEmpty()) {
+                obsolete.chunked(500).forEach { chunk ->
+                    dao.deleteObsoleteCatalogMusicBrainzTracks(releaseId, chunk)
+                }
+            }
             persistReleases(listOf(MusicBrainzReleaseHit(releaseMbid, detail.title,
                 detail.country, detail.releaseDate, detail.artistDisplay)))
+            if (detail.isVideoOnlyContent != null) {
+                // Exact edition video evidence, not a canonical media claim.
+                val previous = dao.musicBrainzReleaseEnrichment(releaseId)
+                if (previous != null) {
+                    dao.upsertMusicBrainzReleaseEnrichment(previous.copy(
+                        isVideoOnlyContent = detail.isVideoOnlyContent,
+                        fetchedAtEpochMs = System.currentTimeMillis(),
+                    ))
+                }
+            }
             if (groupId != null) {
                 dao.upsertCatalogReleaseGroupEdition(CatalogReleaseGroupEditionEntity(
                     releaseGroupId = groupId, releaseId = releaseId,
@@ -373,7 +554,7 @@ internal class MusicBrainzCatalogIndex(
                 val trackMbid = track.trackMbid.trim().lowercase(Locale.ROOT)
                 val recordingId = recordingIds[track.recordingMbid.lowercase(Locale.ROOT)]
                 if (!MBID.matches(trackMbid) || recordingId == null ||
-                    track.mediumNumber <= 0 || track.trackNumber <= 0) return@forEach
+                    track.mediumNumber < 0 || track.trackNumber < 0) return@forEach
                 // An edition-specific Track title may differ from its nested
                 // Recording. Cache source-specific Recording facts without
                 // mutating the user's canonical local/Navidrome metadata.
@@ -399,8 +580,8 @@ internal class MusicBrainzCatalogIndex(
                 }
                 val existingTrack = dao.catalogMusicBrainzTrack(trackMbid)
                 check(existingTrack == null ||
-                    (existingTrack.releaseId == releaseId && existingTrack.recordingId == recordingId)) {
-                    "MusicBrainz Track MBID conflicts with a different recording or edition"
+                    existingTrack.releaseId == releaseId) {
+                    "MusicBrainz Track MBID conflicts with a different edition"
                 }
                 dao.upsertCatalogMusicBrainzTrack(CatalogMusicBrainzTrackEntity(
                     trackMbid, releaseId, recordingId, track.mediumNumber,
@@ -418,6 +599,20 @@ internal class MusicBrainzCatalogIndex(
                 dao.upsertCatalogReleaseTrackSource(CatalogReleaseTrackSourceEntity(
                     releaseId, recordingId, "musicbrainz",
                 ))
+            }
+            // Reconcile only after ALL incoming Track sidecars were applied.
+            // The same Recording can occur on multiple Tracks, and a Track
+            // can be corrected to another Recording in the same edition.
+            // Operations remain inside the same Room transaction.
+            previousRecordingIds.chunked(400).forEach { chunk ->
+                dao.deleteObsoleteMusicBrainzOnlyReleaseTracks(releaseId, chunk)
+                dao.deleteObsoleteMusicBrainzReleaseTrackSources(releaseId, chunk)
+                if (detail.completeness.countsExplicitAndExact &&
+                    detail.completeness.offsetsValid &&
+                    detail.completeness.positionsExplicitUnique
+                ) {
+                    dao.refreshMusicBrainzOnlyLegacyTrackPositions(releaseId, chunk)
+                }
             }
             releaseId
         }

@@ -2,12 +2,27 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import com.music.bitchord.ui.AppUi
+import com.music.bitchord.ui.AppUiHost
+import com.music.bitchord.data.settings.LibrarySort
+import com.music.bitchord.data.settings.LibraryViewType
+import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.rememberLazyListState
+import com.music.bitchord.data.model.UiState
+import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.ShelfItem
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.mutableStateOf
 import com.music.bitchord.ui.components.FrostedTopBar
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -39,6 +54,81 @@ class HomeHeaderTest {
         compose.onNodeWithText("Início").assertIsDisplayed()
         compose.onNodeWithText("Ouvir agora").assertDoesNotExist()
         compose.onNodeWithTag("home-overflow").assertIsDisplayed()
+    }
+
+    @Test fun genreDetailTitleProvidesAWorkingNativeBackAction() {
+        var backs = 0
+        compose.setContent {
+            MaterialTheme {
+                HomeTitle(title = "K-pop", onBack = { backs++ })
+            }
+        }
+        compose.onNodeWithText("K-pop").assertIsDisplayed()
+        compose.onNodeWithTag("home-back").assertIsDisplayed()
+        compose.onNodeWithTag("home-back").performClick()
+        compose.runOnIdle { assertEquals(1, backs) }
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun catalogCardKeepsTheNativeFallbackUnderAnUnresolvedArtUrl() {
+        AppUi.install(object : AppUiHost {
+            override val swipeToPlayNext = MutableStateFlow(false)
+            override val homeRecentsViewType = MutableStateFlow(LibraryViewType.GRID)
+            override fun setHomeRecentsViewType(value: LibraryViewType) {
+                homeRecentsViewType.value = value
+            }
+            override val pinnedPlaylists = MutableStateFlow(emptyList<String>())
+            override val librarySort = MutableStateFlow(LibrarySort.DEFAULT)
+            @Composable override fun downloadedIds(): Set<String> = emptySet()
+        })
+        compose.setContent {
+            MaterialTheme {
+                HomeScreen(
+                    state = UiState.Success(listOf(HomeShelf(
+                        title = "Álbuns",
+                        items = listOf(ShelfItem(
+                            title = "K-pop album",
+                            subtitle = "Artist",
+                            thumbnailUrl = "file:///nonexistent/album-front.jpg",
+                            videoId = null,
+                            browseId = "catalog:RELEASE_GROUP:11111111-1111-4111-8111-111111111111",
+                        )),
+                    ))),
+                    listState = rememberLazyListState(),
+                    onItemClick = { _, _ -> },
+                    onRetry = {},
+                    refreshing = false,
+                    onRefresh = {},
+                    pullState = rememberPullToRefreshState(),
+                    contentPadding = PaddingValues(),
+                    title = "Explorar",
+                    signedIn = true,
+                    leadHero = false,
+                )
+            }
+        }
+        // Exercise sharedUi via the public native screen boundary; do not
+        // access its internal ShelfCard from the app test module.
+        compose.onNodeWithTag(
+            "catalog-art-fallback", useUnmergedTree = true,
+        ).assertExists()
+    }
+
+    @Test fun genreTitleStartsOnSameHorizontalLineAsHome() {
+        compose.setContent {
+            MaterialTheme {
+                Column {
+                    HomeTitle(title = "Início")
+                    HomeTitle(title = "Rock", onBack = {})
+                }
+            }
+        }
+        compose.runOnIdle {
+            val lefts = compose.onAllNodesWithTag("home-title")
+                .fetchSemanticsNodes().map { it.boundsInRoot.left }
+            assertEquals(2, lefts.size)
+            assertEquals(lefts[0], lefts[1], 0.5f)
+        }
     }
 
     @Test fun profileActionRemainsVisibleBesideTheNativeHomeTitle() {
@@ -103,6 +193,94 @@ class HomeHeaderTest {
         compose.onNodeWithTag("home-compact-title").assertDoesNotExist()
         compose.runOnIdle { largeHeadingOffscreen.value = true }
         compose.onNodeWithTag("home-compact-title").assertExists()
+    }
+
+    /**
+     * The official Home/Explore surface is one native component. Both tabs
+     * retain their own heading even when the catalogue has no loaded shelves.
+     */
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun canonicalHomeAndExploreReuseNativeSurfaceWithoutLegacySignIn() {
+        AppUi.install(object : AppUiHost {
+            override val swipeToPlayNext = MutableStateFlow(false)
+            override val homeRecentsViewType = MutableStateFlow(LibraryViewType.GRID)
+            override fun setHomeRecentsViewType(value: LibraryViewType) {
+                homeRecentsViewType.value = value
+            }
+            override val pinnedPlaylists = MutableStateFlow(emptyList<String>())
+            override val librarySort = MutableStateFlow(LibrarySort.DEFAULT)
+            @Composable override fun downloadedIds(): Set<String> = emptySet()
+        })
+        val heading = mutableStateOf("Início")
+        compose.setContent {
+            MaterialTheme {
+                HomeScreen(
+                    state = UiState.Error("Nenhum lançamento disponível"),
+                    listState = rememberLazyListState(),
+                    onItemClick = { _, _ -> },
+                    onRetry = {},
+                    refreshing = false,
+                    onRefresh = {},
+                    pullState = rememberPullToRefreshState(),
+                    contentPadding = PaddingValues(),
+                    title = heading.value,
+                    signedIn = true,
+                    leadHero = heading.value == "Início",
+                )
+            }
+        }
+        compose.onNodeWithText("Início").assertExists()
+        compose.onNodeWithText("Nenhum lançamento disponível").assertExists()
+        compose.runOnIdle { heading.value = "Explorar" }
+        compose.onNodeWithText("Explorar").assertExists()
+        compose.onNodeWithText("Início").assertDoesNotExist()
+        compose.onNodeWithText("Nenhum lançamento disponível").assertExists()
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Test fun publicExploreShelfUsesTheSameNativeCardAndPreservesTypedRecordingNavigation() {
+        AppUi.install(object : AppUiHost {
+            override val swipeToPlayNext = MutableStateFlow(false)
+            override val homeRecentsViewType = MutableStateFlow(LibraryViewType.GRID)
+            override fun setHomeRecentsViewType(value: LibraryViewType) {
+                homeRecentsViewType.value = value
+            }
+            override val pinnedPlaylists = MutableStateFlow(emptyList<String>())
+            override val librarySort = MutableStateFlow(LibrarySort.DEFAULT)
+            @Composable override fun downloadedIds(): Set<String> = emptySet()
+        })
+        val id = "catalog:RECORDING:13dd61c7-ce73-4e97-9f0c-9f0e53144411"
+        var selectedId: String? = null
+        var selectedHeading: String? = null
+        compose.setContent {
+            MaterialTheme {
+                HomeScreen(
+                    state = UiState.Success(listOf(HomeShelf(
+                        title = "Popular na comunidade",
+                        items = listOf(ShelfItem("Magnetic", "ILLIT", null, null, id)),
+                    ))),
+                    listState = rememberLazyListState(),
+                    onItemClick = { item, heading ->
+                        selectedId = item.browseId
+                        selectedHeading = heading
+                    },
+                    onRetry = {},
+                    refreshing = false,
+                    onRefresh = {},
+                    pullState = rememberPullToRefreshState(),
+                    contentPadding = PaddingValues(),
+                    title = "Explorar",
+                    signedIn = true,
+                    leadHero = false,
+                )
+            }
+        }
+        compose.onNodeWithText("Popular na comunidade").assertExists()
+        compose.onNodeWithText("Magnetic").performClick()
+        compose.runOnIdle {
+            assertEquals(id, selectedId)
+            assertEquals("Popular na comunidade", selectedHeading)
+        }
     }
 
 }

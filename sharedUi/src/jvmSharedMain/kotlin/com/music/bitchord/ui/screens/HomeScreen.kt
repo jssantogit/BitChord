@@ -61,6 +61,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Cached
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -128,6 +129,7 @@ fun HomeScreen(
     contentPadding: PaddingValues,
     /** The page's heading, or null for none — the desktop's pages carry no heading. */
     title: String?,
+    onBack: (() -> Unit)? = null,
     headerActions: List<HomeHeaderAction> = emptyList(),
     signedIn: Boolean = true,
     onSignIn: (() -> Unit)? = null,
@@ -152,6 +154,8 @@ fun HomeScreen(
     isPlaying: Boolean = false,
     /** Native account access while the floating Home actions are hidden. */
     headerTrailing: (@Composable () -> Unit)? = null,
+    /** An honest empty/loading result, not a synthetic playlist card. */
+    publicPlaylistNotice: String? = null,
 ) {
     val recentsViewType by AppUi.host.homeRecentsViewType.collectAsStateWithLifecycle()
 
@@ -196,7 +200,9 @@ fun HomeScreen(
             },
         ) {
             if (title != null) {
-                item(key = "home-title") { HomeTitle(title, actions = headerActions, trailing = headerTrailing) }
+                item(key = "home-title") {
+                    HomeTitle(title, actions = headerActions, onBack = onBack, trailing = headerTrailing)
+                }
             }
             if (!signedIn && onSignIn != null) {
                 item {
@@ -225,8 +231,14 @@ fun HomeScreen(
                     // The loading skeleton already owns the hero slot. Until
                     // Recently Played lands, every real shelf must retain its
                     // compact-card layout instead of briefly becoming a hero.
+                    val displayShelves = if (publicPlaylistNotice != null &&
+                        state.data.none { it.title.startsWith("Playlists") }
+                    ) state.data.toMutableList().apply {
+                        add(minOf(2, size), HomeShelf("Playlists", emptyList()))
+                    } else state.data
                     itemsIndexedShelves(
-                        shelves = state.data,
+                        shelves = displayShelves,
+                        emptyPlaylistNotice = publicPlaylistNotice,
                         onItemClick = onItemClick,
                         onItemLongPress = onItemLongPress,
                         currentSong = currentSong,
@@ -282,11 +294,26 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
     firstIsHero: Boolean = true,
     recentsViewType: LibraryViewType,
     onRecentsViewTypeToggle: () -> Unit,
+    emptyPlaylistNotice: String? = null,
 ) {
     shelves.forEachIndexed { index, shelf ->
         item(key = shelf.title + index) {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
-            if (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true)) {
+            if (shelf.title == "Playlists" && shelf.items.isEmpty() &&
+                emptyPlaylistNotice != null
+            ) {
+                // The native shelf position remains stable even while the
+                // public search is pending. No phantom or clickable playlist.
+                Column(Modifier.padding(bottom = 26.dp)) {
+                    SectionHeader(shelf.title)
+                    Text(
+                        emptyPlaylistNotice,
+                        modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            } else if (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true)) {
                 RecentShelf(
                     shelf = shelf,
                     onItemClick = openItem,
@@ -532,6 +559,7 @@ fun HomeTitle(
     actions: List<HomeHeaderAction> = emptyList(),
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
+    onBack: (() -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(
@@ -548,6 +576,13 @@ fun HomeTitle(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+        // A genre page must line up with Home/Explore, not indent the title
+        // by the back button's width. Keep Back reachable at the right.
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.testTag("home-back")) {
+                Icon(Icons.Rounded.ArrowBack, contentDescription = "Voltar")
+            }
+        }
         trailing?.invoke()
         if (actions.isNotEmpty()) {
             Box {
@@ -837,6 +872,34 @@ private fun HeroShelf(
     }
 }
 
+/**
+ * Native background is always present underneath catalog artwork. Some CAA
+ * URLs resolve metadata successfully but the actual image fails or takes
+ * longer to decode; the old null-only branch left a completely black tile
+ * despite a real release title. A valid image simply paints over this glyph.
+ * This is a visual fallback only, never a substituted album cover.
+ */
+@Composable
+private fun CatalogArtworkFallback(hero: Boolean, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(
+                Brush.linearGradient(
+                    if (hero) listOf(Color(0xFF25304E), Color(0xFF485573))
+                    else listOf(Color(0xFF222433), Color(0xFF374153)),
+                ),
+            )
+            .testTag("catalog-art-fallback"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            Icons.Rounded.LibraryMusic, contentDescription = null,
+            tint = Color.White.copy(alpha = if (hero) 0.60f else 0.72f),
+            modifier = Modifier.size(if (hero) 68.dp else 46.dp),
+        )
+    }
+}
+
 /** Big card: artwork with the caption laid over a scrim, as on Listen Now. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -857,12 +920,18 @@ private fun HeroCard(
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
             .contextClick(onLongPress),
     ) {
-        AsyncImage(
-            model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
+        val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
+        if (hasCatalogIdentity) CatalogArtworkFallback(
+            hero = true, modifier = Modifier.fillMaxSize(),
         )
+        if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
+            AsyncImage(
+                model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
         Column(
             modifier = Modifier
@@ -1038,11 +1107,17 @@ internal fun ShelfCard(
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
 ) {
-    Column(
-        modifier = modifier
-            .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
-            .contextClick(onLongPress),
-    ) {
+    // The legacy source adapter retains custom folder artwork; Home and
+    // Explore share the original source-independent title/card composition.
+    NativeShelfCard(
+        title = item.title,
+        subtitle = localizeCardSubtitle(item.subtitle),
+        onClick = onClick,
+        onLongPress = onLongPress,
+        modifier = modifier,
+        isPinned = isPinned,
+        isCurrent = isCurrent,
+        artwork = {
         when (item.browseId) {
             "local:downloads" -> {
                 val palette = remember { MeshPalette(listOf(Color(0xFF1E3C72), Color(0xFF2A5298))) }
@@ -1088,7 +1163,33 @@ internal fun ShelfCard(
                 icon = Icons.Rounded.Storage,
             )
             else -> {
-                Box(
+                if (item.browseId?.startsWith("catalog:GENRE:") == true) {
+                    // Genre is a navigation category. Its typography is
+                    // intentional artwork, not a fabricated release sleeve.
+                    val palettes = listOf(
+                        listOf(Color(0xFF412A82), Color(0xFF7B3B8E)),
+                        listOf(Color(0xFF135960), Color(0xFF178A7C)),
+                        listOf(Color(0xFF803B33), Color(0xFFBB6C41)),
+                        listOf(Color(0xFF1C4279), Color(0xFF436CB6)),
+                    )
+                    val index = (item.browseId.orEmpty().hashCode() and Int.MAX_VALUE) % palettes.size
+                    Box(
+                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Brush.linearGradient(palettes[index]))
+                            .testTag("explore-genre-card"),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Text(
+                            text = item.title,
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color.White,
+                            modifier = Modifier.padding(18.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                } else Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
@@ -1096,46 +1197,22 @@ internal fun ShelfCard(
                         .thumbnailBorder(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
-                    AsyncImage(
-                        model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
-                        contentDescription = null,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
+                    val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
+                    if (hasCatalogIdentity) CatalogArtworkFallback(
+                        hero = false, modifier = Modifier.fillMaxSize(),
                     )
+                    if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
+                        AsyncImage(
+                            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                     if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
                 }
             }
         }
-        Spacer(Modifier.height(10.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (isPinned) {
-                Icon(
-                    imageVector = BitChordIcons.Pin,
-                    contentDescription = stringResource(Res.string.pinned),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-            }
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) PlayingAccent else MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-        }
-        val displaySubtitle = localizeCardSubtitle(item.subtitle)
-        Text(
-            text = displaySubtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+        },
+    )
 }

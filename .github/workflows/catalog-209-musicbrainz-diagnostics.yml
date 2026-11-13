@@ -1,0 +1,47 @@
+name: Catalog #209 — MusicBrainz live diagnostics
+
+# Only explicit diagnostic changes trigger public API calls. Do not add the
+# full app tree to paths: MusicBrainz asks clients not to poll routinely.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/208-canonical-discovery-cutover-20261104
+    paths:
+      - scripts/catalog_209_musicbrainz_diagnostics.py
+      - scripts/test_catalog_209_musicbrainz_diagnostics.py
+      - scripts/catalog_178_musicbrainz_live_probe.py
+      - docs/plans/catalog-209-musicbrainz-diagnostics-cases.json
+      - .github/workflows/catalog-209-musicbrainz-diagnostics.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-209-musicbrainz-diagnostics-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  public-api-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify offline identity, browse, group and recording contracts
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_209_musicbrainz_diagnostics.py' -v
+      - name: Probe bounded public MusicBrainz cases with source evidence
+        run: >-
+          python3 scripts/catalog_209_musicbrainz_diagnostics.py
+          --manifest docs/plans/catalog-209-musicbrainz-diagnostics-cases.json
+          --output catalog-209-musicbrainz-diagnostics.json
+      - name: Retain evidence for device-free investigation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-209-musicbrainz-diagnostics
+          path: catalog-209-musicbrainz-diagnostics.json
+          if-no-files-found: warn
+          retention-days: 7

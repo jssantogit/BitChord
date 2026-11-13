@@ -13,14 +13,23 @@ import org.json.JSONObject
 internal data class LibraryPlaylistPin(
     val id: String,
     val title: String,
+    /** Optional public playlist creator, persisted for offline navigation. */
+    val creator: String = "",
 )
+
+private val PUBLIC_PLAYLIST_PIN_ID =
+    Regex("""^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$""")
 
 internal fun validLibraryPlaylistPin(pin: LibraryPlaylistPin): Boolean =
     (pin.id.startsWith("normal:") || pin.id.startsWith("v2:") ||
-        pin.id.startsWith("local:local:playlist:")) &&
+        pin.id.startsWith("local:local:playlist:") ||
+        pin.id.removePrefix("public:").let { candidate ->
+            pin.id.startsWith("public:") && PUBLIC_PLAYLIST_PIN_ID.matches(candidate)
+        }) &&
         pin.id.substringAfter(':').isNotBlank() &&
         pin.id.length <= 512 && pin.id == pin.id.trim() &&
-        pin.title.isNotBlank() && pin.title.length <= 240
+        pin.title.isNotBlank() && pin.title.length <= 240 &&
+        pin.creator.length <= 240
 
 internal fun toggleLibraryPlaylistPin(
     current: List<LibraryPlaylistPin>,
@@ -32,6 +41,19 @@ internal fun toggleLibraryPlaylistPin(
     else if (distinct.size >= 100) distinct else distinct + target
 }
 
+/** A title changes presentation only; a playlist pin never receives a new ID. */
+internal fun renameLibraryPlaylistPin(
+    current: List<LibraryPlaylistPin>,
+    id: String,
+    title: String,
+): List<LibraryPlaylistPin> {
+    val clean = title.trim()
+    if (clean.isBlank() || clean.length > 240) return current
+    return current.map { existing ->
+        if (existing.id == id) existing.copy(title = clean) else existing
+    }
+}
+
 internal fun encodeLibraryPlaylistPins(pins: List<LibraryPlaylistPin>): String =
     JSONArray().apply {
         pins.asSequence().filter(::validLibraryPlaylistPin)
@@ -39,6 +61,7 @@ internal fun encodeLibraryPlaylistPins(pins: List<LibraryPlaylistPin>): String =
                 put(JSONObject().apply {
                     put("id", pin.id)
                     put("title", pin.title)
+                    if (pin.creator.isNotBlank()) put("creator", pin.creator)
                 })
             }
     }.toString()
@@ -49,7 +72,10 @@ internal fun decodeLibraryPlaylistPins(raw: String?): List<LibraryPlaylistPin> {
     val ids = HashSet<String>()
     for (i in 0 until minOf(list.length(), 300)) {
         val value = list.optJSONObject(i) ?: continue
-        val pin = LibraryPlaylistPin(value.optString("id"), value.optString("title"))
+        val pin = LibraryPlaylistPin(
+            value.optString("id"), value.optString("title"),
+            value.optString("creator"),
+        )
         if (validLibraryPlaylistPin(pin) && ids.add(pin.id)) output += pin
         if (output.size == 100) break
     }
@@ -66,6 +92,13 @@ internal class LibraryPlaylistPinRepository(private val preferences: SharedPrefe
         if (next != current && preferences.edit()
                 .putString(KEY, encodeLibraryPlaylistPins(next)).commit()) pins.value = next
         return pins.value.any { it.id == pin.id }
+    }
+
+    @Synchronized
+    fun rename(id: String, title: String) {
+        val next = renameLibraryPlaylistPin(pins.value, id, title)
+        if (next != pins.value && preferences.edit()
+                .putString(KEY, encodeLibraryPlaylistPins(next)).commit()) pins.value = next
     }
 
     @Synchronized

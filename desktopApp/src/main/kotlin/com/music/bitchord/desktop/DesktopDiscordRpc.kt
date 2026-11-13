@@ -353,7 +353,10 @@ internal object DesktopDiscordRpc {
 
     private fun superProperties(): String = superProperties
 
-    private fun watchUrl(song: Song) = "https://music.youtube.com/watch?v=${song.videoId}"
+    private fun watchUrl(song: Song): String {
+        val query = java.net.URLEncoder.encode("${song.title} ${song.artist}", "UTF-8")
+        return "https://musicbrainz.org/search?query=$query&type=recording"
+    }
 
     private const val KEY_TOKEN = "discord_token"
     private const val KEY_USERNAME = "discord_username"

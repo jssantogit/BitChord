@@ -1,0 +1,20 @@
+name: Retired YouTube Backend Audit
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  inventory:
+    name: Reference inventory
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect retired backend references
+        run: bash scripts/audit-retired-youtube.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: retired-youtube-backend-references
+          path: youtube-removal-references.txt
+          retention-days: 7

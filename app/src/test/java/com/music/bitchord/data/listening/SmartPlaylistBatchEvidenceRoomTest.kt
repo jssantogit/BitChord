@@ -577,6 +577,14 @@ class SmartPlaylistBatchEvidenceRoomTest {
             dao.upsertReleaseTrack(com.music.bitchord.data.catalog.ReleaseTrackEntity(
                 "rel:undated", "rec:linked", 1,
             ))
+            // The real MusicBrainz index records exact edge ownership alongside
+            // ReleaseTrack. A bare legacy link is intentionally insufficient to
+            // confer a positive MusicBrainz release date.
+            dao.upsertCatalogReleaseTrackSource(
+                com.music.bitchord.data.catalog.CatalogReleaseTrackSourceEntity(
+                    "rel:2026", "rec:linked", "musicbrainz",
+                ),
+            )
             dao.upsertMusicBrainzReleaseEnrichment(
                 com.music.bitchord.data.catalog.MusicBrainzReleaseEnrichmentEntity(
                     releaseId = "rel:2026", mbid = "123e4567-e89b-12d3-a456-426614174000", title = "Real EP",

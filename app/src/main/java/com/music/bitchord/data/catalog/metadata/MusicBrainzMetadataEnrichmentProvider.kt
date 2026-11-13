@@ -4,24 +4,49 @@ import com.music.bitchord.BuildConfig
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.client.plugins.RedirectResponseException
 import io.ktor.client.plugins.ResponseException
+import io.ktor.client.plugins.ServerResponseException
+import io.ktor.client.plugins.expectSuccess
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsChannel
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+
+internal const val MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES = 2_000_000L
 
 internal interface MusicBrainzTransport {
     suspend fun get(
         path: String,
         parameters: Map<String, String>,
         userAgent: String,
+    ): String
+}
+
+/** Opt-in bounded body contract; unbounded transports must never service proof requests. */
+internal interface BoundedMusicBrainzTransport {
+    suspend fun getLimited(
+        path: String,
+        parameters: Map<String, String>,
+        userAgent: String,
+        maxResponseBytes: Long,
     ): String
 }
 
@@ -35,15 +60,96 @@ internal class KtorMusicBrainzTransport(
             socketTimeoutMillis = 15_000L
         }
     },
-) : MusicBrainzTransport {
+) : MusicBrainzTransport, BoundedMusicBrainzTransport {
     override suspend fun get(
         path: String,
         parameters: Map<String, String>,
         userAgent: String,
-    ): String = client.get("${baseUrl.trimEnd('/')}/$path") {
+    ): String = measureMetadataHttp(
+        provider = "musicbrainz",
+        endpoint = metadataEndpointLabel(path),
+        status = { response: Pair<Int, String> -> response.first },
+    ) {
+        val response = request(path, parameters, userAgent)
+        response.status.value to response.bodyAsText()
+    }.second
+
+    override suspend fun getLimited(
+        path: String,
+        parameters: Map<String, String>,
+        userAgent: String,
+        maxResponseBytes: Long,
+    ): String = measureMetadataHttp(
+        provider = "musicbrainz",
+        endpoint = metadataEndpointLabel(path),
+        status = { response: Pair<Int, String> -> response.first },
+    ) {
+        require(maxResponseBytes > 0L && maxResponseBytes <= MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES)
+        val response = request(path, parameters, userAgent, automaticStatusValidation = false)
+        val status = response.status.value
+        if (status !in 200..299) {
+            val text = "HTTP $status response body skipped by bounded request"
+            val statusFailure = when (status) {
+                in 300..399 -> RedirectResponseException(response, text)
+                in 400..499 -> ClientRequestException(response, text)
+                in 500..599 -> ServerResponseException(response, text)
+                else -> ResponseException(response, text)
+            }
+            response.bodyAsChannel().cancel(IOException("Discarding non-success MusicBrainz response body"))
+            throw statusFailure
+        }
+        status to response.readBodyLimited(maxResponseBytes)
+    }.second
+
+    private suspend fun request(
+        path: String,
+        parameters: Map<String, String>,
+        userAgent: String,
+        automaticStatusValidation: Boolean = true,
+    ): HttpResponse = client.get("${baseUrl.trimEnd('/')}/$path") {
+        if (!automaticStatusValidation) expectSuccess = false
         header(HttpHeaders.UserAgent, userAgent)
         parameters.forEach { (name, value) -> parameter(name, value) }
-    }.bodyAsText()
+    }
+
+    private suspend fun HttpResponse.readBodyLimited(maxBytes: Long): String {
+        val declaredLength = headers[HttpHeaders.ContentLength]?.toLongOrNull()
+        if (declaredLength != null && declaredLength > maxBytes) {
+            val tooLarge = IOException("MusicBrainz XML response exceeds limit")
+            bodyAsChannel().cancel(tooLarge)
+            throw tooLarge
+        }
+        val channel: ByteReadChannel = bodyAsChannel()
+        val output = ByteArrayOutputStream(minOf(maxBytes, 8_192L).toInt())
+        val buffer = ByteArray(8_192)
+        var total = 0L
+        while (true) {
+            // Read at most one byte beyond the limit: this detects chunked or
+            // under-reported bodies without ever buffering their full contents.
+            val requested = minOf(buffer.size.toLong(), maxBytes - total + 1L).toInt()
+            val read = channel.readAvailable(buffer, 0, requested)
+            if (read == -1) break
+            if (read == 0) {
+                yield()
+                continue
+            }
+            if (total + read > maxBytes) {
+                val tooLarge = IOException("MusicBrainz XML response exceeds limit")
+                channel.cancel(tooLarge)
+                throw tooLarge
+            }
+            output.write(buffer, 0, read)
+            total += read
+        }
+        if (declaredLength != null && total != declaredLength) {
+            throw IOException("MusicBrainz XML Content-Length mismatch")
+        }
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        return decoder.decode(ByteBuffer.wrap(output.toByteArray())).toString()
+    }
+
 }
 
 /**
@@ -99,14 +205,27 @@ internal class MusicBrainzClient(
     suspend fun get(
         path: String,
         parameters: Map<String, String> = mapOf("fmt" to "json"),
+    ): String = request { transport.get(path, parameters, userAgent) }
+
+    suspend fun getLimited(
+        path: String,
+        parameters: Map<String, String>,
+        maxResponseBytes: Long,
     ): String {
+        require(maxResponseBytes > 0L && maxResponseBytes <= MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES)
+        val bounded = transport as? BoundedMusicBrainzTransport
+            ?: throw IOException("MusicBrainz transport does not support bounded responses")
+        return request { bounded.getLimited(path, parameters, userAgent, maxResponseBytes) }
+    }
+
+    private suspend fun request(call: suspend () -> String): String {
         var attempt = 1
         while (true) {
             try {
                 // A retry is a new request and must pass through the same shared
                 // budget as the first attempt and every other MusicBrainz endpoint.
                 return rateLimiter.runLimited {
-                    transport.get(path, parameters, userAgent)
+                    call()
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -176,18 +295,34 @@ internal class MusicBrainzMetadataEnrichmentProvider(
         )
     }
 
-    override suspend fun lookupRecording(externalId: String): MetadataLookupResult<RecordingMetadataEnrichment> {
+    override suspend fun lookupRecording(externalId: String): MetadataLookupResult<RecordingMetadataEnrichment> =
+        lookupRecordingInternal(externalId, requireOfficialAudio = false)
+
+    /** Chart-only lookup: do not infer Official from a recording title, artist
+     * credit or external popularity. Requires an exact linked audio edition. */
+    internal suspend fun lookupOfficialAudioRecording(
+        externalId: String,
+    ): MetadataLookupResult<RecordingMetadataEnrichment> =
+        lookupRecordingInternal(externalId, requireOfficialAudio = true)
+
+    private suspend fun lookupRecordingInternal(
+        externalId: String, requireOfficialAudio: Boolean,
+    ): MetadataLookupResult<RecordingMetadataEnrichment> {
         val mbid = externalId.validMbidOrNull()
             ?: return MetadataLookupResult.Failure(MetadataLookupFailure.INVALID_EXTERNAL_ID)
         val raw = request(
             path = "recording/$mbid",
-            parameters = mapOf("fmt" to "json", "inc" to "artist-credits"),
+            parameters = mapOf("fmt" to "json", "inc" to
+                if (requireOfficialAudio) "artist-credits+releases+release-groups"
+                else "artist-credits"),
         ) ?: return MetadataLookupResult.Failure(MetadataLookupFailure.UNAVAILABLE)
         val dto = decode<MusicBrainzRecordingDto>(raw)
             ?: return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
         if (!dto.id.equals(mbid, ignoreCase = true)) {
             return MetadataLookupResult.Failure(MetadataLookupFailure.MALFORMED_RESPONSE)
         }
+        val officialAudioEdition = if (requireOfficialAudio)
+            dto.verifiedOfficialAudioRelease() else null
         return MetadataLookupResult.Success(
             RecordingMetadataEnrichment(
                 musicBrainzId = mbid,
@@ -195,8 +330,38 @@ internal class MusicBrainzMetadataEnrichmentProvider(
                 durationMs = dto.length?.takeIf { it >= 0L },
                 artistDisplay = renderArtistCredit(dto.artistCredit),
                 artistCredits = dto.artistCredit?.toEvidence(),
+                officialAudioReleaseMbid = officialAudioEdition?.first,
+                officialAudioReleaseGroupMbid = officialAudioEdition?.second,
             ),
         )
+    }
+
+    /** No bootlegs, video recordings, fan compilations, live-only versions,
+     * DJ mixes or Other/video releases are eligible for the public chart. */
+    private fun MusicBrainzRecordingDto.verifiedOfficialAudioRelease(): Pair<String, String?>? {
+        if (video == true) return null
+        val disallowed = setOf(
+            "live", "compilation", "remix", "dj-mix", "mixtape/street",
+            "demo", "interview", "spokenword", "audiobook", "audio drama",
+        )
+        return releases.orEmpty()
+            .filter { release ->
+                release.status.equals("Official", ignoreCase = true) &&
+                    release.id.validMbidOrNull() != null &&
+                    release.group?.primaryType?.lowercase(java.util.Locale.ROOT) in
+                        setOf("album", "single", "ep") &&
+                    release.group?.secondaryTypes.orEmpty().none {
+                        it.lowercase(java.util.Locale.ROOT) in disallowed
+                    }
+            }
+            .sortedWith(compareBy<MusicBrainzRecordingReleaseDto> {
+                it.date.orEmpty().ifBlank { "9999-12-31" }
+            }.thenBy { it.id.orEmpty() })
+            .firstOrNull()?.let { release ->
+                release.id.validMbidOrNull()?.let { confirmedId ->
+                    confirmedId to release.group?.id.validMbidOrNull()
+                }
+            }
     }
 
     override suspend fun lookupRelease(externalId: String): MetadataLookupResult<ReleaseMetadataEnrichment> {
@@ -309,7 +474,24 @@ private data class MusicBrainzRecordingDto(
     val id: String? = null,
     val title: String? = null,
     val length: Long? = null,
+    val video: Boolean? = null,
+    val releases: List<MusicBrainzRecordingReleaseDto>? = null,
     @SerialName("artist-credit") val artistCredit: List<MusicBrainzArtistCreditDto>? = null,
+)
+
+@Serializable
+private data class MusicBrainzRecordingReleaseDto(
+    val id: String? = null,
+    val date: String? = null,
+    val status: String? = null,
+    @SerialName("release-group") val group: MusicBrainzRecordingGroupDto? = null,
+)
+
+@Serializable
+private data class MusicBrainzRecordingGroupDto(
+    val id: String? = null,
+    @SerialName("primary-type") val primaryType: String? = null,
+    @SerialName("secondary-types") val secondaryTypes: List<String>? = null,
 )
 
 @Serializable

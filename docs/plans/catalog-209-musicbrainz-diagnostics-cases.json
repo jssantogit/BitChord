@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "description": "Small, exact-MBID, public MusicBrainz diagnostic corpus. This does not certify Android UI behavior.",
+  "cases": [
+    {
+      "id": "ILLIT-SUPER-REAL-ME",
+      "artist_mbid": "6b128dd7-e998-4edb-a4f5-400fef190445",
+      "artist_name": "ILLIT",
+      "group_mbid": "529f87a1-1081-48a4-8ee1-3c08de229858",
+      "expected_primary_type": "EP",
+      "release_mbids": [
+        "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+        "271b31f8-8ab6-483c-97d9-8f0fabb2d4f4"
+      ],
+      "recording_mbid": "e614e432-ca77-41c1-82c1-4e3a24ebbb0c",
+      "recording_title_contains": "Magnetic"
+    },
+    {
+      "id": "AESPA-ARMAGEDDON-ALBUM",
+      "artist_mbid": "b51c672b-85e0-48fe-8648-470a2422229f",
+      "artist_name": "aespa",
+      "group_mbid": "3f5eba8d-4dc1-4599-a936-21f501787f8e",
+      "expected_primary_type": "Album",
+      "release_mbids": [
+        "a46ad810-85f6-4873-8b82-87d6a8006edb",
+        "aa3ced48-ed87-4bfa-bd1b-d198e084bc39"
+      ],
+      "recording_mbid": "3fb5e8d9-e9a3-43c8-a6be-1e7f6ea7406f",
+      "recording_title_contains": "Armageddon"
+    },
+    {
+      "id": "NEWJEANS-OMG-SINGLE",
+      "artist_mbid": "49204a7a-ed85-407a-828f-6fd46f1d8126",
+      "artist_name": "NewJeans",
+      "group_mbid": "23d1cd75-8dc5-436d-a0c6-cab894dd5f64",
+      "expected_primary_type": "Single",
+      "release_mbids": [
+        "5c9de548-68ef-424d-915d-a7973024d839",
+        "3e73bd0e-636e-46be-9abf-272373a605da"
+      ],
+      "recording_mbid": "1357cb76-0307-4e79-83f0-f3ba3a2d9e68",
+      "recording_title_contains": "OMG"
+    }
+  ]
+}

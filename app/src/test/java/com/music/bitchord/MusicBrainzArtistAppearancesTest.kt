@@ -1,0 +1,630 @@
+package com.music.bitchord
+
+import com.music.bitchord.data.catalog.metadata.parseMusicBrainzTrackArtistAppearances
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistAppearancesClient
+import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistAppearance
+import com.music.bitchord.ui.screens.nativeArtistIncludedInCoverTargets
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class MusicBrainzArtistAppearancesTest {
+    private val target = "11111111-1111-4111-8111-111111111111"
+    private val other = "22222222-2222-4222-8222-222222222222"
+    private val releaseGroup = "33333333-3333-4333-8333-333333333333"
+
+    @Test fun albumGuestAppearancePublishesOnlyTheCreditedRecordingNotWholeAlbum() {
+        val wantedRecording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val unrelatedRecording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Jon Batiste"}}],
+            "release-group":{"id":"$releaseGroup",
+                "title":"World Music Radio","primary-type":"Album"},
+            "media":[{"tracks":[
+                {"title":"Unrelated album track","recording":{
+                    "id":"$unrelatedRecording","title":"Unrelated album track",
+                    "artist-credit":[{"artist":{"id":"$other"}}]}},
+                {"title":"Guest-feature song","recording":{
+                    "id":"$wantedRecording","title":"Guest-feature song",
+                    "artist-credit":[{"artist":{"id":"$other"}},
+                        {"artist":{"id":"$target","name":"NewJeans"}}]}}
+            ]}
+        ]}]}"""
+        val appearances = parseMusicBrainzTrackArtistAppearances(body, target)
+        val visible = com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(appearances)
+        assertEquals(1, visible.size)
+        assertEquals("Guest-feature song", visible.single().trackTitle)
+        assertEquals(wantedRecording, visible.single().recordingMbid)
+        assertEquals("World Music Radio", visible.single().title)
+    }
+
+    /**
+     * A Recording is reusable across editions and can carry an older artist
+     * credit. When the actual edition Track explicitly credits the HOST
+     * instead of the viewed artist, that Recording credit must not override
+     * what is printed for this edition in the 'Incluído em' shelf.
+     */
+    @Test fun explicitHostOnlyTrackCreditCannotBorrowGuestFromLinkedRecording() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val json = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Host album","primary-type":"Album"},
+            "media":[{"tracks":[{
+                "title":"Host-only edition track",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+                "recording":{"id":"$recording","title":"Shared recording",
+                    "artist-credit":[{"artist":{"id":"$target","name":"NewJeans"}}]}
+            }]}]
+        }]}"""
+        val parsed = parseMusicBrainzTrackArtistAppearances(json, target)
+        // Preserve raw Recording guest provenance for rechecking; do not
+        // invent a published guest Track when edition credits disagree.
+        assertEquals(1, parsed.size)
+        assertTrue(parsed.single().conflictingTrackCredit)
+        assertTrue(com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            parsed,
+        ).isEmpty())
+    }
+
+    @Test fun malformedExplicitTrackCreditsDoNotFallbackToRecordingsGuestCredit() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val json = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Host album","primary-type":"Album"},
+            "media":[{"tracks":[{
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}],
+                "recording":{"id":"$recording","title":"Shared recording",
+                    "artist-credit":[{"artist":{"id":"$target","name":"NewJeans"}}]}
+            }]}]
+        }]}"""
+        assertTrue(parseMusicBrainzTrackArtistAppearances(json, target).isEmpty())
+    }
+
+    @Test fun explicitGuestTrackCreditStillCountsEvenIfRecordingHasOnlyHostCredit() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val json = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Host album","primary-type":"Album"},
+            "media":[{"tracks":[{
+                "title":"Featured single on this edition",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}},
+                                 {"artist":{"id":"$target","name":"NewJeans"}}],
+                "recording":{"id":"$recording","title":"Shared recording",
+                    "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]}
+            }]}]
+        }]}"""
+        val results = parseMusicBrainzTrackArtistAppearances(json, target)
+        assertEquals(listOf(recording), results.map { it.recordingMbid })
+        assertEquals(1, com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            results,
+        ).size)
+    }
+
+    @Test fun fakeOfficialStatusWithoutCommercialProofCannotEnterGuestShelf() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val raw = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "artist-credit":[{"artist":{"id":"$other","name":"2AT"}}],
+            "release-group":{"id":"$releaseGroup",
+                "title":"SUPER ARRUNSHAI","primary-type":"Single"},
+            "media":[{"tracks":[{"recording":{"id":"$recording",
+                "title":"SUPER ARRUNSHAI",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        assertTrue(com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            parseMusicBrainzTrackArtistAppearances(raw, target)).isEmpty())
+        assertEquals(1, com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+            parseMusicBrainzTrackArtistAppearances(
+                raw.replace("\"status\":\"Official\",",
+                    "\"status\":\"Official\",\"barcode\":\"1234567890123\","),
+                target,
+            )).size)
+    }
+
+    @Test fun genuineDigitalGuestCanBeCorroboratedByRecordingIsrcWithoutBarcode() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val raw = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "artist-credit":[{"artist":{"id":"$other","name":"Official artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Digital single","primary-type":"Single"},
+            "media":[{"tracks":[{"recording":{
+                "id":"$recording","title":"Featured recording",
+                "isrcs":["USAAA2600123"],
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        assertEquals(listOf(recording),
+            com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(
+                parseMusicBrainzTrackArtistAppearances(raw, target),
+            ).map { it.recordingMbid })
+    }
+
+    @Test fun onlyVerifiedOfficialGuestAppearancesInOtherArtistsReleases() {
+        val body = """{"release-count":4,"releases":[
+           {"id":"55555555-5555-4555-8555-555555555555","status":"Official",
+            "title":"Featured song edition","date":"2026-05-03",
+            "artist-credit":[{"artist":{"id":"$other","name":"Other artist"},"name":"Other artist"}],
+            "release-group":{"id":"$releaseGroup","title":"Featured collection","primary-type":"Album","first-release-date":"2026-05-01"},
+            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}]}]}]},
+           {"id":"66666666-6666-4666-8666-666666666666","status":"Official",
+            "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Featured collection","primary-type":"Album","first-release-date":"2026-05-01"},
+            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}]}]}]},
+           {"id":"77777777-7777-4777-8777-777777777777","status":"Official",
+            "artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}],
+            "release-group":{"id":"99999999-9999-4999-8999-999999999999","title":"Own album","primary-type":"Album"}},
+           {"id":"88888888-8888-4888-8888-888888888888","status":"Bootleg",
+            "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+            "release-group":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","title":"Bootleg"}}]}"""
+        val rows = parseMusicBrainzTrackArtistAppearances(body, target)
+        assertEquals(1, rows.size)
+        assertEquals(releaseGroup, rows.single().releaseGroupMbid)
+        assertEquals("55555555-5555-4555-8555-555555555555", rows.single().releaseMbid)
+        assertEquals("Featured collection", rows.single().title)
+        assertEquals("Other artist", rows.single().artistCredit)
+    }
+
+    @Test fun incompleteOrUnverifiedBrowseResponsesDoNotInventAppearances() {
+        assertTrue(parseMusicBrainzTrackArtistAppearances("""{"releases":[]}""", target).isEmpty())
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            """{"releases":[{"status":"Official","release-group":{"id":"$releaseGroup","title":"No credit"}}]}""",
+            target,
+        ).isEmpty())
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            """{"releases":[{"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+                "release-group":{"id":"../../invalid","title":"Wrong"}}]}""",
+            target,
+        ).isEmpty())
+    }
+
+    @Test fun doesNotConfuseOtherArtistsCoversWithRealTrackCredits() {
+        val body = """{"releases":[
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"$releaseGroup","title":"NewJeans Karaoke Remix","primary-type":"Single"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$other","name":"Other"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"44444444-4444-4444-8444-444444444444","title":"Verified featuring","primary-type":"Album"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target","name":"Selected"}}]}]}]}
+        ]}"""
+        val rows = parseMusicBrainzTrackArtistAppearances(body, target)
+        assertEquals(listOf("Verified featuring"), rows.map { it.title })
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+           body.replace("\"media\"", "\"unsupported-media\""), target,
+        ).isEmpty())
+    }
+    @Test fun officialStatusDoesNotAdmitRemixCompilationsOrMixtapes() {
+        val body = """{"releases":[
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"$releaseGroup","title":"User remixes","primary-type":"Album",
+             "secondary-types":["Compilation","Remix"]},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Other"}}],
+           "release-group":{"id":"44444444-4444-4444-8444-444444444444",
+             "title":"Genuine studio feature","primary-type":"Album"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]}
+        ]}"""
+        assertEquals(listOf("Genuine studio feature"),
+            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+    }
+
+    @Test fun conflictingCommercialCreditOnFirstPageDoesNotBlockLaterProvenGuest() = runBlocking {
+        val pageOffsets = mutableListOf<Int>()
+        val fake = (1..25).joinToString(",") { number ->
+            val groupId = number.toString(16).padStart(8, '0') +
+                "-3333-4333-8333-333333333333"
+            """{"id":"55555555-5555-4555-8555-555555555555","status":"Official",
+                "barcode":"0196588123456",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+                "release-group":{"id":"$groupId","title":"Host album $number",
+                    "primary-type":"Album"},
+                "media":[{"tracks":[{
+                    "artist-credit":[{"artist":{"id":"$other"}}],
+                    "recording":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                        "title":"Wrong guest credit",
+                        "artist-credit":[{"artist":{"id":"$target"}}]}
+                }]}]}"""
+        }
+        val verified = """{"id":"77777777-7777-4777-8777-777777777777",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+            "release-group":{"id":"$releaseGroup",
+                "title":"Verified collaboration","primary-type":"Single"},
+            "media":[{"tracks":[{
+                "artist-credit":[{"artist":{"id":"$target"}}],
+                "recording":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    "title":"Verified guest track",
+                    "artist-credit":[{"artist":{"id":"$target"}}]}
+            }]}]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            pagedFetch = { _, offset ->
+                pageOffsets += offset
+                if (offset == 0) """{"release-count":26,"releases":[$fake]}"""
+                else """{"release-count":26,"releases":[$verified]}"""
+            },
+        )
+        val visible = client.browse(target)
+        assertEquals(listOf("Verified guest track"), visible.map { it.trackTitle })
+        assertEquals(listOf(0, 25), pageOffsets)
+    }
+
+    @Test fun scrolledArtistAppearanceShelfUsesCachedProofAndExpires() = runBlocking {
+        var now = 1_000L
+        var requests = 0
+        val valid = """{"releases":[
+            {"id":"55555555-5555-4555-8555-555555555555","status":"Official","barcode":"0123456789012",
+             "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+             "release-group":{"id":"$releaseGroup","title":"Real guest credit","primary-type":"Album"},
+             "media":[{"tracks":[{"recording":{
+                 "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                 "title":"Featured song",
+                 "artist-credit":[{"artist":{"id":"$target","name":"Guest"}}]}}]}]}
+        ]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            nowMillis = { now },
+            fetch = { requests++; valid },
+        )
+        assertEquals(1, client.browse(target).size)
+        assertEquals(1, client.browse(target).size)
+        now += 60_000L
+        assertEquals(1, client.browse(target).size)
+        assertEquals(1, requests)
+        now += 6L * 60L * 60L * 1_000L + 1L
+        assertEquals(1, client.browse(target).size)
+        assertEquals(2, requests)
+    }
+
+    @Test fun failedGuestLookupIsThrottledButMayRecoverWithoutRestart() = runBlocking {
+        var now = 10_000L
+        var calls = 0
+        val client = MusicBrainzArtistAppearancesClient(
+            nowMillis = { now },
+            fetch = { calls++; if (calls == 1) throw java.io.IOException("offline") else
+                """{"releases":[]}"""
+            },
+        )
+        assertTrue(client.browse(target).isEmpty())
+        now += 30_000
+        assertTrue(client.browse(target).isEmpty())
+        assertEquals(1, calls)
+        now += 91_000
+        assertTrue(client.browse(target).isEmpty())
+        assertEquals(2, calls)
+    }
+
+    @Test fun userEditsAndAnonymousVariousArtistsMustNotBecomeEditorialGuestCredits() {
+        val body = """{"releases":[
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Remixer"}}],
+           "release-group":{"id":"$releaseGroup",
+             "title":"Magnetic (Judah UKG Edit)","primary-type":"Single"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Various Artists"}}],
+           "release-group":{"id":"44444444-4444-4444-8444-444444444444",
+             "title":"TV anime compilation","primary-type":"Album"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]},
+          {"status":"Official","artist-credit":[{"artist":{"id":"$other","name":"Label artist"}}],
+           "release-group":{"id":"66666666-6666-4666-8666-666666666666",
+             "title":"Verified original collaboration","primary-type":"Single"},
+           "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}]}]}]}
+        ]}"""
+        assertEquals(listOf("Verified original collaboration"),
+            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+    }
+
+
+    @Test fun includedInCoversCanUseExactVerifiedGroupWhenEditionMissing() {
+        val entries = (1..14).map { number ->
+            MusicBrainzArtistAppearance(
+                releaseGroupMbid = number.toString(16).padStart(8, '0') +
+                    "-3333-4333-8333-333333333333",
+                title = "Official feature $number",
+                artistCredit = "Other artist",
+                releaseDate = null,
+                primaryType = "Single",
+                releaseMbid = if (number == 1) null else
+                    number.toString(16).padStart(8, '0') + "-5555-4555-8555-555555555555",
+            )
+        }
+        val targets = nativeArtistIncludedInCoverTargets(entries)
+        assertEquals(10, targets.size)
+        assertEquals(null, targets.first().first)
+        assertEquals(entries.first().releaseGroupMbid, targets.first().second)
+        assertEquals(entries[1].releaseMbid, targets[1].first)
+    }
+
+
+    @Test fun weakFanReleaseOnFirstPageCannotPreventLaterCommercialFeature() = runBlocking {
+        val offsets = mutableListOf<Int>()
+        val fan = (1..25).joinToString(",") { i ->
+            val group = i.toString(16).padStart(8, '0') + "-3333-4333-8333-333333333333"
+            """{"status":"Official",
+                "artist-credit":[{"artist":{"id":"$other","name":"2AT"}}],
+                "release-group":{"id":"$group","title":"Fan song $i","primary-type":"Single"},
+                "media":[{"tracks":[{"recording":{
+                    "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "title":"Fan song $i",
+                    "artist-credit":[{"artist":{"id":"$target"}}]}}]}]}"""
+        }
+        val official = """{"id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Jon Batiste"}}],
+            "release-group":{"id":"$releaseGroup","title":"World Music Radio",
+                "primary-type":"Album"},
+            "media":[{"tracks":[{"recording":{
+                "id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "title":"Genuine Guest Track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            pagedFetch = { _, offset ->
+                offsets += offset
+                if (offset == 0) """{"release-count":26,"releases":[$fan]}"""
+                else """{"release-count":26,"releases":[$official]}"""
+            },
+        )
+        val found = client.browse(target)
+        assertEquals(listOf("Genuine Guest Track"), found.map { it.trackTitle })
+        assertEquals(listOf(0, 25), offsets)
+    }
+
+    @Test fun popularArtistsScanNextOfficialPageWhenFirstIsOnlyUnrelatedEditions() = runBlocking {
+        val requestedOffsets = mutableListOf<Int>()
+        val rejected = (1..25).joinToString(",") { n ->
+            """{"id":"${n.toString(16).padStart(8, '0')}-3333-4333-8333-333333333333",
+                "status":"Bootleg"}"""
+        }
+        val valid = """{"id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0123456789012",
+            "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Real guest track","primary-type":"Single"},
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Real guest track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]}"""
+        val client = MusicBrainzArtistAppearancesClient(
+            pagedFetch = { _, offset ->
+                requestedOffsets += offset
+                if (offset == 0) """{"release-count":26,"releases":[$rejected]}"""
+                else """{"release-count":26,"releases":[$valid]}"""
+            },
+        )
+        assertEquals(listOf("Real guest track"), client.browse(target).map { it.title })
+        assertEquals(listOf(0, 25), requestedOffsets)
+    }
+
+
+    @Test fun linkedRecordingArtistCreditCanProveGuestWhenTrackCreditIsAbsent() {
+        val body = """{"releases":[
+          {"id":"55555555-5555-4555-8555-555555555555",
+           "status":"Official",
+           "artist-credit":[{"artist":{"id":"$other","name":"Collaborator"}}],
+           "release-group":{"id":"$releaseGroup","title":"Official collaboration",
+               "primary-type":"Single"},
+           "media":[{"tracks":[{"recording":{
+             "id":"88888888-8888-4888-8888-888888888888",
+             "artist-credit":[{"artist":{"id":"$target","name":"BTS"}}]}}]}]}
+        ]}"""
+        assertEquals(listOf("Official collaboration"),
+            parseMusicBrainzTrackArtistAppearances(body, target).map { it.title })
+        // No Recording MBID means there is no proven ReleaseTrack ->
+        // Recording relationship; unscoped embedded credits cannot be used.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"id":"88888888-8888-4888-8888-888888888888",""",
+                """"id":"invalid",""",
+            ), target,
+        ).isEmpty())
+    }
+
+
+    @Test fun realGuestRecordingCreditSurvivesTrackCreditWithOnlyLeadArtist() {
+        val body = """{"releases":[{
+          "id":"55555555-5555-4555-8555-555555555555",
+          "status":"Official",
+          "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+          "release-group":{"id":"$releaseGroup","title":"Label collaboration",
+              "primary-type":"Single"},
+          "media":[{"tracks":[{
+             "artist-credit":[{"artist":{"id":"$other","name":"Other artist"}}],
+             "recording":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+               "artist-credit":[{"artist":{"id":"$other"}},
+                                 {"artist":{"id":"$target"}}]}
+          }]}]
+        }]}"""
+        val raw = parseMusicBrainzTrackArtistAppearances(body, target)
+        assertEquals(listOf("Label collaboration"), raw.map { it.title })
+        // A genuine Recording-level guest credit survives in raw metadata,
+        // but conflicting edition Track credits cannot promote it unaudited.
+        assertTrue(raw.single().conflictingTrackCredit)
+        assertTrue(com.music.bitchord.ui.screens.nativeArtistEditorialGuestTracks(raw).isEmpty())
+    }
+
+
+    @Test fun releaseGroupPrimaryArtistIsNeverMisclassifiedAsGuestOfAnotherEdition() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Edition artist"}}],
+            "release-group":{"id":"$releaseGroup","title":"Shared main discography",
+                "primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"$target","name":"Selected artist"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"$recording","title":"Album track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        // The group belongs to this artist's own discography, even when one
+        // edition has a different display credit. It is not a guest release.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
+
+        // A genuine appearance on another artist's group must still work.
+        val genuineGuest = body.replace(
+            "\"artist-credit\":[{\"artist\":{\"id\":\"$target\",\"name\":\"Selected artist\"}}]",
+            "\"artist-credit\":[{\"artist\":{\"id\":\"$other\",\"name\":\"Edition artist\"}}]",
+        )
+        assertEquals(listOf("Shared main discography"),
+            parseMusicBrainzTrackArtistAppearances(genuineGuest, target).map { it.title })
+    }
+
+    @Test fun malformedExplicitGroupCreditNeverConfirmsGuestMembership() {
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host"}}],
+            "release-group":{"id":"$releaseGroup","title":"Guest title",
+                "primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Legitimate audio track",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        // A present but invalid group credit is not proof that the group
+        // belongs to someone else, even if the edition is Official.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
+        val absentCredit = body.replace(
+            """"primary-type":"Album",
+                "artist-credit":[{"artist":{"id":"not-an-mbid","name":"Unknown"}}]""",
+            """"primary-type":"Album"""",
+        )
+        // Missing data is not negative evidence; existing track-scoped
+        // browsing still operates while exact group evidence is unavailable.
+        assertEquals(1, parseMusicBrainzTrackArtistAppearances(absentCredit, target).size)
+    }
+
+    @Test fun emptyOrPartiallyMalformedGroupCreditFailsClosedWithoutHidingRealGuest() {
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[{"artist":{"id":"$other","name":"Host"}}],
+            "release-group":{"id":"$releaseGroup","title":"Real collaboration",
+                "primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]},
+            "media":[{"tracks":[{"recording":{
+                "id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "title":"Verified guest recording",
+                "artist-credit":[{"artist":{"id":"$target"}}]}}]}]
+        }]}"""
+        assertEquals(1, parseMusicBrainzTrackArtistAppearances(body, target).size)
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]""",
+                """"primary-type":"Single",
+                "artist-credit":[]""",
+            ), target,
+        ).isEmpty())
+        assertTrue(parseMusicBrainzTrackArtistAppearances(
+            body.replace(
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}}]""",
+                """"primary-type":"Single",
+                "artist-credit":[{"artist":{"id":"$other","name":"Host"}},
+                    {"artist":{"id":"invalid"}}]""",
+            ), target,
+        ).isEmpty())
+    }
+    @Test fun incompleteReleasePrimaryCreditCannotProveGuestOnAnotherArtistsWork() {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val body = """{"releases":[{
+            "id":"55555555-5555-4555-8555-555555555555",
+            "status":"Official","barcode":"0196588123456",
+            "artist-credit":[
+                {"artist":{"name":"Selected artist without MBID"}},
+                {"artist":{"id":"$other","name":"Host artist"}}
+            ],
+            "release-group":{"id":"$releaseGroup","title":"Possible collaboration",
+                "primary-type":"Single"},
+            "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}],
+                "recording":{"id":"$recording","title":"Guest track"}}]}]
+        }]}"""
+        // The unidentifiable first release artist could be the requested
+        // artist. Keeping the remaining valid host credit is not enough to
+        // prove this belongs to another artist's editorial discography.
+        assertTrue(parseMusicBrainzTrackArtistAppearances(body, target).isEmpty())
+
+        val completeHost = body.replace(
+            """"artist":{"name":"Selected artist without MBID"}""",
+            """"artist":{"id":"33333333-3333-4333-8333-333333333334","name":"Other collaborator"}""",
+        )
+        assertEquals(listOf("Possible collaboration"),
+            parseMusicBrainzTrackArtistAppearances(completeHost, target).map { it.title })
+    }
+
+    @Test fun identicalRecordingInTwoDifferentReleaseGroupsIsTwoValidGuestAppearances() = runBlocking {
+        val recording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val firstGroup = "33333333-3333-4333-8333-333333333333"
+        val secondGroup = "44444444-4444-4444-8444-444444444444"
+        fun release(id: String, group: String, title: String) = """
+            {"id":"$id","status":"Official","barcode":"0196588123456",
+             "artist-credit":[{"artist":{"id":"$other","name":"Host artist"}}],
+             "release-group":{"id":"$group","title":"$title",
+                "primary-type":"Album","first-release-date":"2025-06-01"},
+             "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$target"}}],
+                 "recording":{"id":"$recording","title":"Shared guest recording"}}]}]}"""
+        val first = release("55555555-5555-4555-8555-555555555555",
+            firstGroup, "Host studio album")
+        val alternateEdition = release("66666666-6666-4666-8666-666666666666",
+            firstGroup, "Host studio album")
+        val second = release("77777777-7777-4777-8777-777777777777",
+            secondGroup, "Host standalone single")
+        val body = """{"release-count":3,"releases":[$first,$alternateEdition,$second]}"""
+        val parsed = parseMusicBrainzTrackArtistAppearances(body, target)
+        assertEquals(setOf(firstGroup, secondGroup),
+            parsed.map { it.releaseGroupMbid }.toSet())
+        assertEquals(2, parsed.size)
+        // The public browse must preserve both WORKS, while collapsing
+        // alternate editions of the same Group+Recording.
+        val visible = MusicBrainzArtistAppearancesClient(fetch = { body }).browse(target)
+        assertEquals(setOf(firstGroup, secondGroup),
+            visible.map { it.releaseGroupMbid }.toSet())
+        assertEquals(2, visible.size)
+    }
+
+
+    @Test fun realNewJeansWorldMusicRadioGuestDoesNotConflateJointSingleWithGuestAlbum() {
+        // MusicBrainz-verified artist/ReleaseGroup IDs (Nov 2026).
+        // Edition/Recording IDs below are controlled fixture IDs, not claims
+        // about live edition membership. This tests the credit boundary.
+        val newJeans = "49204a7a-ed85-407a-828f-6fd46f1d8126"
+        val jonBatiste = "a2a72dba-3a08-43c4-859c-4c7f5fcc9599"
+        val jointSingleGroup = "2817894d-e004-4de0-a575-da1fc3675dd0"
+        val hostAlbumGroup = "4c894acb-b0fd-49ce-93ad-7cea649d8ab8"
+        val body = """{"releases":[
+            {"id":"55555555-5555-4555-8555-555555555555",
+             "status":"Official","barcode":"00602455811936",
+             "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}},
+                 {"artist":{"id":"$newJeans","name":"NewJeans"}}],
+             "release-group":{"id":"$jointSingleGroup",
+                 "title":"Be Who You Are (Real Magic)","primary-type":"Single",
+                 "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}},
+                     {"artist":{"id":"$newJeans","name":"NewJeans"}}]},
+             "media":[{"tracks":[{"artist-credit":[{"artist":{"id":"$newJeans"}}],
+                 "recording":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                     "title":"Be Who You Are (Real Magic)"}}]}]},
+            {"id":"66666666-6666-4666-8666-666666666666",
+             "status":"Official","barcode":"602455882738",
+             "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}}],
+             "release-group":{"id":"$hostAlbumGroup","title":"World Music Radio",
+                 "primary-type":"Album",
+                 "artist-credit":[{"artist":{"id":"$jonBatiste","name":"Jon Batiste"}}]},
+             "media":[{"tracks":[{"artist-credit":[
+                 {"artist":{"id":"$jonBatiste"}},
+                 {"artist":{"id":"$newJeans"}}],
+                 "recording":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                     "title":"Be Who You Are"}}]}]}
+        ]}"""
+        val results = parseMusicBrainzTrackArtistAppearances(body, newJeans)
+        assertEquals(listOf(hostAlbumGroup), results.map { it.releaseGroupMbid })
+        assertEquals(listOf("Be Who You Are"), results.map { it.trackTitle })
+        assertEquals(listOf("World Music Radio"), results.map { it.title })
+    }
+
+
+}

@@ -1,0 +1,46 @@
+name: Catalog #209 - bounded identity exit audit
+
+# Dedicated source-only sweep, not an APK/smoke or provider cutover.
+# Trigger only when this acceptance harness/seed set changes.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/208-canonical-discovery-cutover-20261104
+    paths:
+      - docs/plans/catalog-209-identity-exit-artists.json
+      - scripts/catalog_209_identity_exit_audit.py
+      - scripts/test_catalog_209_identity_exit_audit.py
+      - .github/workflows/catalog-209-identity-exit-audit.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-209-identity-exit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-source-identities:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify offline bounded 20-60-30 audit contract
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_209_identity_exit_audit.py' -v
+      - name: Verify real public identities and relationships without app or APK
+        run: >-
+          python3 scripts/catalog_209_identity_exit_audit.py
+          --manifest docs/plans/catalog-209-identity-exit-artists.json
+          --output catalog-209-identity-exit-audit.json
+      - name: Retain exact source evidence and unanswered cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-209-identity-exit-audit
+          path: catalog-209-identity-exit-audit.json
+          if-no-files-found: warn
+          retention-days: 7

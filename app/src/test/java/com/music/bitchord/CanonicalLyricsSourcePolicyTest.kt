@@ -26,9 +26,9 @@ class CanonicalLyricsSourcePolicyTest {
         assertEquals(nonYoutube, allowedCanonicalLyricsSources(all, true, enabled))
     }
 
-    @Test fun defaultLegacyModeKeepsExistingLyricsChoice() {
-        assertEquals(all, allowedCanonicalLyricsSources(all, false, enabled))
-        assertEquals(all, allowedCanonicalLyricsSources(all, false, emptyList()))
+    @Test fun historicalPreferencesCannotReenableRetiredProviders() {
+        assertEquals(nonYoutube, allowedCanonicalLyricsSources(all, false, enabled))
+        assertEquals(nonYoutube, allowedCanonicalLyricsSources(all, false, emptyList()))
     }
 
     @Test fun nonYoutubeProvidersAndExplicitEmptySetRemainUnchanged() {

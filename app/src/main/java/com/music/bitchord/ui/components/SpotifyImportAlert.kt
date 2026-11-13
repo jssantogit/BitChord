@@ -1,11 +1,8 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -34,38 +31,32 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
-import com.music.bitchord.data.model.PlaylistPrivacy
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.spotify.SpotifyImportTrack
 import com.music.bitchord.data.spotify.SpotifyImporter
+import com.music.bitchord.data.spotify.spotifyImportMetadataSong
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Paste a Spotify playlist link, match its songs on YouTube Music, keep the result.
+ * Paste a public Spotify playlist link and preserve all track metadata locally.
  *
  * The same frosted card as the addon editor, rather than a Material dialog.
- * The "who can see it" row exists only for [signedIn]: it is a YouTube Music
- * setting, and a playlist kept on this device has no audience to choose.
- * Songs that matched nothing are listed once the playlist is made, instead of
- * being dropped without a word.
+ * Public embed metadata does not prove a playable MediaAsset; missing audio
+ * stays visible rather than being guessed or silently discarded.
  */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SpotifyImportAlert(
     hazeState: HazeState,
-    signedIn: Boolean,
-    allowYoutubeMatching: () -> Boolean = { true },
-    /** Called once the songs are matched; [privacy] is meaningful only when signed in. */
-    onImported: (title: String, privacy: PlaylistPrivacy, songs: List<Song>) -> Unit,
+    onImported: (title: String, songs: List<Song>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var link by remember { mutableStateOf("") }
-    var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
     var working by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var failed by remember { mutableStateOf(false) }
@@ -78,29 +69,21 @@ fun SpotifyImportAlert(
             failed = true
             return
         }
-        if (!allowYoutubeMatching()) {
-            status = context.getString(R.string.spotify_import_youtube_required)
-            failed = true
-            return
-        }
         working = true
         failed = false
         status = context.getString(R.string.spotify_import_fetching)
         scope.launch {
             try {
                 val (name, tracks) = SpotifyImporter.fetchPlaylistTracks(id)
-                if (!allowYoutubeMatching()) error(context.getString(R.string.spotify_import_youtube_required))
-                val (songs, missed) = SpotifyImporter.resolveToSongs(
-                    tracks = tracks,
-                    onProgress = { done, total ->
-                        status = context.getString(R.string.spotify_import_matching, done, total)
-                    },
-                    allowYoutubeMatching = allowYoutubeMatching,
-                )
-                if (!allowYoutubeMatching()) error(context.getString(R.string.spotify_import_youtube_required))
-                if (songs.isEmpty()) error(context.getString(R.string.spotify_import_none))
-                onImported(name, privacy, songs)
-                if (missed.isEmpty()) onDismiss() else unmatched = missed
+                if (tracks.isEmpty()) error(context.getString(R.string.spotify_import_none))
+                // No duration or provider-owned asset in the public embed.
+                // Preserve the entire playlist without fabricating a YouTube
+                // video or matching titles to unverified musical recordings.
+                val songs = tracks.mapIndexed { index, track ->
+                    spotifyImportMetadataSong(id, index, track)
+                }
+                onImported(name, songs)
+                unmatched = tracks
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -127,7 +110,7 @@ fun SpotifyImportAlert(
             val missed = unmatched
             if (missed != null) {
                 Text(
-                    text = stringResource(R.string.spotify_import_unmatched, missed.size),
+                    text = stringResource(R.string.spotify_import_metadata_only, missed.size),
                     modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -153,10 +136,7 @@ fun SpotifyImportAlert(
                 }
             } else {
                 Text(
-                    text = status ?: stringResource(
-                        if (signedIn) R.string.spotify_import_description
-                        else R.string.spotify_import_description_local,
-                    ),
+                    text = status ?: stringResource(R.string.spotify_import_description_local),
                     modifier = Modifier.padding(top = 4.dp, bottom = 14.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
                     color = when {
@@ -180,43 +160,6 @@ fun SpotifyImportAlert(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { if (link.isNotBlank() && !working) start() }),
                 )
-                if (signedIn) {
-                    Text(
-                        text = stringResource(R.string.who_can_see_it),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 14.dp, bottom = 6.dp),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        PlaylistPrivacy.entries.forEach { option ->
-                            val selected = option == privacy
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(percent = 50))
-                                    .background(
-                                        if (selected) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.surfaceVariant,
-                                    )
-                                    .clickable(enabled = !working) { privacy = option }
-                                    .padding(vertical = 7.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = option.label,
-                                    style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp),
-                                    color = if (selected) MaterialTheme.colorScheme.onPrimary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                }
             }
         }
         AlertRule()

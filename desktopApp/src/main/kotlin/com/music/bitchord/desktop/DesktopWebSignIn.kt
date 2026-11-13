@@ -4,6 +4,7 @@ import java.net.CookieHandler
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
 import javafx.application.Platform
 import javafx.concurrent.Worker
 import javafx.geometry.Insets
@@ -19,25 +20,10 @@ import javafx.stage.Stage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 
-/**
- * In-app sign-in, as Android does it: the provider's own web login in a WebView, and the session read
- * from that WebView's cookie jar. The WebView is JavaFX's, the one BotGuard already runs in, so this
- * needs no browser installed, decrypts nothing, and is the same on Windows, macOS and Linux.
- *
- * YouTube Music waits for "Use this profile", as the phone does, so a multi-channel account can pick
- * its identity on the page first. Spotify is taken the moment `sp_dc` is set: JavaFX's WebKit has no
- * DRM, so Spotify's web player fails to start, and closing before it shows is what the phone does
- * too.
- */
+/** In-app Spotify authentication; the retired YouTube Music WebView has been removed. */
 internal object DesktopWebSignIn {
 
     enum class Service(val title: String, val startUrl: String, val cookieUrl: String) {
-        YOUTUBE_MUSIC(
-            "Sign in to YouTube Music",
-            "https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&passive=true" +
-                "&continue=https%3A%2F%2Fmusic.youtube.com%2F",
-            "https://music.youtube.com/",
-        ),
         SPOTIFY(
             "Sign in to Spotify",
             "https://accounts.spotify.com/login?continue=https%3A%2F%2Fopen.spotify.com%2F",
@@ -46,10 +32,21 @@ internal object DesktopWebSignIn {
     }
 
     /** Whether a sign-in window can be shown at all: it needs the JavaFX toolkit. */
-    val available: Boolean get() = DesktopPoTokenWebView.available
-
-    /** The music.youtube.com `Cookie` header, once the listener confirms the profile. */
-    suspend fun captureYouTube(): String = capture(Service.YOUTUBE_MUSIC)
+    val available: Boolean by lazy {
+        // Spotify's JavaFX sign-in needs only the toolkit, not the retired
+        // BotGuard/PoToken player component that previously initialized it.
+        runCatching {
+            val started = CountDownLatch(1)
+            try {
+                Platform.startup { started.countDown() }
+            } catch (_: IllegalStateException) {
+                started.countDown()
+            }
+            Platform.setImplicitExit(false)
+            started.await()
+            true
+        }.getOrDefault(false)
+    }
 
     /** The `sp_dc` cookie's value, taken as soon as Spotify sets it. */
     suspend fun captureSpotify(): String = capture(Service.SPOTIFY)
@@ -74,9 +71,6 @@ internal object DesktopWebSignIn {
         CookieHandler.getDefault().get(URI(service.cookieUrl), emptyMap())["Cookie"].orEmpty().joinToString("; ")
     }.getOrDefault("")
 
-    private fun youtubeSession(): String? =
-        cookies(Service.YOUTUBE_MUSIC).takeIf(DesktopBrowserCookies::hasSigningSecret)
-
     private fun spotifySession(): String? = cookies(Service.SPOTIFY).split(';')
         .map(String::trim)
         .firstOrNull { it.substringBefore('=') == SPOTIFY_COOKIE }
@@ -90,7 +84,6 @@ internal object DesktopWebSignIn {
     ) {
         private val stage = Stage()
         private val root = BorderPane()
-        private val confirm = Button("Use this profile")
         // The page's host, since the window has no address bar to show it.
         private val where = Label().apply { style = "-fx-text-fill: #aaaaaa;" }
         private var view: WebView? = null
@@ -102,11 +95,6 @@ internal object DesktopWebSignIn {
             val startOver = Button("Start over").apply { setOnAction { load() } }
             val bar = HBox(8.0, startOver, Region().also { HBox.setHgrow(it, Priority.ALWAYS) }, where)
             bar.padding = Insets(8.0)
-            if (service == Service.YOUTUBE_MUSIC) {
-                confirm.isDefaultButton = true
-                confirm.setOnAction { youtubeSession()?.let { complete(Result.success(it)) } }
-                bar.children += confirm
-            }
             root.bottom = bar
             stage.scene = Scene(root, 480.0, 760.0)
             // Closing the window is the listener cancelling.
@@ -135,20 +123,13 @@ internal object DesktopWebSignIn {
             engine.loadWorker.stateProperty().addListener { _, _, state ->
                 if (state == Worker.State.SUCCEEDED && view === next) onPage(engine.location.orEmpty())
             }
-            confirm.isDisable = true
             root.center = next
             engine.load(service.startUrl)
         }
 
         private fun onPage(url: String) {
-            when (service) {
-                // Reaching YouTube Music only enables confirming: a multi-channel login may still be
-                // choosing its identity on this page.
-                Service.YOUTUBE_MUSIC ->
-                    confirm.isDisable = !url.startsWith("https://music.youtube.com") || youtubeSession() == null
-                Service.SPOTIFY -> if (url.startsWith("https://open.spotify.com")) {
-                    spotifySession()?.let { complete(Result.success(it)) }
-                }
+            if (url.startsWith("https://open.spotify.com")) {
+                spotifySession()?.let { complete(Result.success(it)) }
             }
         }
 

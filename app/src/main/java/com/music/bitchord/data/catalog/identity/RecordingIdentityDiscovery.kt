@@ -134,7 +134,23 @@ internal class CanonicalRecordingIdentityDiscoveryRepository(
     suspend fun resolveMusicBrainzRecordingIdentity(
         recordingId: String,
     ): RecordingIdentityResolutionResult {
-        val existing = musicBrainzIds(recordingId)
+        // External identities are persisted provider observations, not
+        // automatically valid MusicBrainz Recording MBIDs. Never report an
+        // arbitrary legacy/corrupted externalId as AlreadyResolved. Case
+        // differences do not create two distinct MBIDs.
+        val storedMbids = dao.externalIdentitiesForEntity(
+            provider = MUSICBRAINZ_PROVIDER,
+            entityType = RECORDING_ENTITY_TYPE,
+            entityId = recordingId,
+        ).map(ExternalIdentityEntity::externalId)
+        if (storedMbids.any { it.validMusicBrainzMbidOrNull() == null }) {
+            return RecordingIdentityResolutionResult.Failed(
+                RecordingIdentityDiscoveryFailure.INVALID_IDENTIFIER,
+            )
+        }
+        val existing = storedMbids.mapNotNull {
+            it.validMusicBrainzMbidOrNull()?.lowercase(java.util.Locale.ROOT)
+        }.distinct()
         when {
             existing.size == 1 -> return RecordingIdentityResolutionResult.AlreadyResolved(existing.single())
             existing.size > 1 -> return RecordingIdentityResolutionResult.AmbiguousExistingIdentity(existing)
@@ -223,15 +239,6 @@ internal class CanonicalRecordingIdentityDiscoveryRepository(
             else -> RecordingIdentityResolutionResult.IdentityConflict(candidate, owner)
         }
     }
-
-    private suspend fun musicBrainzIds(recordingId: String): List<String> =
-        dao.externalIdentitiesForEntity(
-            provider = MUSICBRAINZ_PROVIDER,
-            entityType = RECORDING_ENTITY_TYPE,
-            entityId = recordingId,
-        ).mapNotNull { identity ->
-            identity.externalId.trim().takeIf(String::isNotEmpty)
-        }.distinct()
 
     companion object {
         private const val ISRC_PROVIDER = "isrc"

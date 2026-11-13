@@ -32,7 +32,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MusicBrainzCoverArtCacheEntity::class,
         CatalogReleaseTrackSourceEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = false,
 )
 internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
@@ -448,6 +448,18 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
             }
         }
 
+        /** Editorial enrichment only: no canonical identities or tracks change. */
+        internal val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `musicbrainz_release_enrichment` ADD COLUMN `isVideoOnlyMedia` INTEGER",
+                )
+                db.execSQL(
+                    "ALTER TABLE `musicbrainz_release_enrichment` ADD COLUMN `isVideoOnlyContent` INTEGER",
+                )
+            }
+        }
+
         @Volatile
         private var instance: CanonicalCatalogDatabase? = null
 
@@ -460,7 +472,7 @@ internal abstract class CanonicalCatalogDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
-                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16,
+                        MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                     )
                     .build()
                     .also { instance = it }

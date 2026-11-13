@@ -28,6 +28,7 @@
     <string name="home">Główna</string>
     <string name="play">Odtwórz</string>
     <string name="explore">Odkrywaj</string>
+    <string name="explore_genres">Gatunki</string>
     <string name="listen_now">Posłuchaj teraz</string>
     <string name="downloads">Pobrane</string>
     <string name="downloaded_songs">Pobrane piosenki</string>
@@ -415,7 +416,7 @@
     <string name="signing_in">Logowanie…</string>
     <string name="sleep_timer">Wyłącznik czasowy</string>
     <string name="sources_no_lossless">Żadne włączone źródło nie może dostarczyć bezstratnego dźwięku. Dodaj moduł niestandardowy, aby odtwarzać dostępne pliki bezstratne bez transkodowania.</string>
-    <string name="sources_order_footer">Jeśli źródło nie ma utworu lub jest niedostępne, BitChord próbuje następne. Źródła przed YouTube mogą je zastąpić, gdy znajdą lepszą wersję.</string>
+    <string name="sources_order_footer">Jeśli źródło nie ma utworu lub jest niedostępne, BitChord próbuje następne.</string>
     <string name="sources_order_header">Źródła, sprawdzane w tej kolejności</string>
     <string name="sources_quality_capped">To połączenie jest ustawione poniżej Wysokiej jakości, więc strumienie są transkodowane. Pobierania pozostają nienaruszone.</string>
     <string name="jiosaavn_mismatch_warning">Może dopasować złą wersję utworu. Włączasz na własne ryzyko.</string>
@@ -1010,6 +1011,7 @@
     <string name="shelf_top_tunes_right_now">Najpopularniejsze teraz</string>
 
     <string name="shelf_trending">Trendy</string>
+    <string name="shelf_listenbrainz_community">Popularne w społeczności</string>
 
     <string name="shelf_trending_community_playlists">Popularne playlisty społeczności</string>
 
@@ -1330,6 +1332,7 @@
     <string name="spotify_import_none">Żaden z tych utworów nie został znaleziony w YouTube Music.</string>
     <string name="spotify_import_title">Importuj playlistę z Spotify</string>
     <string name="spotify_import_unmatched">%1$d utworów nie znaleziono w YouTube Music</string>
+    <string name="spotify_import_metadata_only">Zapisano playlistę z %1$d utworami tylko jako metadane. Nie powiązano dźwięku bez potwierdzonego dopasowania.</string>
     <string name="spotify_library_subtitle">Twoje playlisty Spotify</string>
     <string name="spotify_sign_in">Zaloguj się przez Spotify</string>
     <string name="spotify_use_spdc_token">Użyj tokena sp_dc</string>
@@ -1428,4 +1431,32 @@
     <string name="search_origin_local">Lokalne</string>
     <string name="pause_resume_fade">Wyciszanie przy pauzie i wznowieniu</string>
     <string name="pause_resume_fade_subtitle">Płynnie ścisza muzykę podczas pauzy i przywraca głośność po wznowieniu</string>
+    <string name="home_global_discovery">Odkrycia z całego świata</string>
+
+    <string name="visual_offline_title">Offline visuals</string>
+    <string name="visual_offline_stream">Stream normally with temporary cache; do not keep videos permanently</string>
+    <string name="visual_offline_wifi">Keep complete animations offline, over Wi-Fi only</string>
+    <string name="visual_offline_still">Replace animations with available still artwork and photos</string>
+    <string name="visual_offline_temporary">Temporary</string>
+    <string name="visual_offline_save_wifi">Save on Wi-Fi</string>
+    <string name="visual_offline_only_stills">Still images</string>
+    <string name="visual_offline_artist_motion">Artist animations</string>
+    <string name="visual_offline_album_motion">Album animations</string>
+    <string name="visual_offline_player_motion">Now Playing animations</string>
+    <string name="visual_offline_save_stills">Keep still images</string>
+    <string name="visual_offline_stills_subtitle">Artists, albums and Now Playing; bounded local storage and no backup</string>
+    <string name="visual_offline_artist_stills">Artist photos</string>
+    <string name="visual_offline_album_stills">Album covers</string>
+    <string name="visual_offline_player_stills">Now Playing covers</string>
+    <string name="visual_offline_images_group">Zapisane zdjęcia i okładki</string>
+    <string name="visual_offline_motion_group">Zapisane animacje</string>
+    <string name="visual_offline_still_limit">Limit zapisanych obrazów</string>
+    <string name="visual_offline_still_limit_subtitle">Maksymalne miejsce na zdjęcia artystów oraz okładki albumów i odtwarzacza</string>
+    <string name="visual_offline_motion_limit">Limit zapisanych animacji</string>
+    <string name="visual_offline_motion_limit_subtitle">Ogranicza nowe klipy bez usuwania zapisanych; wyczyść wizualizacje, aby zwolnić miejsce</string>
+    <string name="visual_offline_clear_title">Clear saved visuals</string>
+    <string name="visual_offline_clear_subtitle">Images and animations kept offline (music is not deleted)</string>
+    <string name="visual_offline_confirm_title">Clear offline visuals?</string>
+    <string name="visual_offline_confirm_description">Saved images and animations will be deleted. Music, playlists and ratings will remain. Visuals can be retrieved again when connected.</string>
+    <string name="visual_offline_cleared">Offline visuals cleared</string>
 </resources>

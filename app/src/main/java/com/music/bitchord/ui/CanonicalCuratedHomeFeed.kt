@@ -1,9 +1,15 @@
 package com.music.bitchord.ui
 
 import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.catalog.metadata.LISTENBRAINZ_PUBLIC_TTL_MS
+import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
+import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
+import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
+import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.model.PlaybackSourceType
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import com.music.bitchord.ui.screens.CanonicalServerSearchRow
@@ -407,3 +413,251 @@ internal fun canonicalCuratedHomeShelves(
     val chart = (localTrending + catalogTrending).distinctBy { it.browseId }.take(16)
     if (chart.isNotEmpty()) add(HomeShelf(trendingHeading, chart))
 }
+
+/**
+ * Explore is discovery-first, not a second copy of the user's Home.
+ *
+ * Keep the exact verified release shelf when available. If there is no known
+ * published release (offline or cold install), show only one evidence-backed
+ * shelf from the existing feed: personal trending, then playable picks. Never
+ * manufacture public releases, streams, or a community-wide chart.
+ *
+ * Home itself is unchanged and continues to include all three editorial rows.
+ */
+internal fun canonicalExploreShelves(
+    homeShelves: List<HomeShelf>,
+    releasesHeading: String,
+    trendingHeading: String,
+): List<HomeShelf> {
+    // Home may label saved/downloaded collections as "Lançamentos" when the
+    // public catalog is cold. These are real user items, not discovery evidence.
+    // Only MusicBrainz release identities can lead Explore's release shelf.
+    val releases = homeShelves.firstOrNull { it.title == releasesHeading }
+        ?.let { shelf ->
+            val verified = shelf.items.filter { item ->
+                val id = item.browseId.orEmpty()
+                id.startsWith("catalog:RELEASE_GROUP:") || id.startsWith("catalog:RELEASE:")
+            }
+            if (verified.isEmpty()) null else shelf.copy(items = verified)
+        }
+    if (releases != null) return listOf(releases)
+    val trending = homeShelves.firstOrNull { it.title == trendingHeading && it.items.isNotEmpty() }
+    if (trending != null) return listOf(trending)
+    return homeShelves.firstOrNull {
+        it.title != releasesHeading && it.items.isNotEmpty()
+    }?.let { listOf(it) } ?: emptyList()
+}
+
+/**
+ * Public popularity is optional discovery evidence over KNOWN MusicBrainz
+ * recordings. We never fetch by song title, never claim an audio asset, and
+ * never treat an all-time community count as a personal or recent chart.
+ * Restrict candidate IDs to one bounded batch from the existing catalog.
+ */
+internal fun canonicalPublicPopularityCandidates(
+    rows: List<CanonicalCatalogSearchRow>, limit: Int = 40,
+): List<String> = rows.asSequence()
+    .filter { it.kind == CanonicalSearchKind.RECORDING && canonicalStreamingTitleIsSafe(it.title) }
+    .map { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    .filter { CATALOG_RECORDING_MBID.matches(it) }
+    .distinct()
+    .take(limit.coerceIn(0, 100))
+    .toList()
+
+private val CATALOG_RECORDING_MBID =
+    Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+/**
+ * A public ListenBrainz observation is NOT a playable track or a release.
+ * Cards retain canonical Recording IDs and the existing native click gate,
+ * which opens metadata details if the user's library has no verified asset.
+ */
+internal fun canonicalPublicPopularityShelf(
+    rows: List<CanonicalCatalogSearchRow>,
+    evidence: List<ListenBrainzPopularityEvidence>,
+    heading: String,
+    limit: Int = 16,
+): HomeShelf? {
+    if (heading.isBlank() || limit <= 0) return null
+    val recordings = rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RECORDING &&
+            canonicalStreamingTitleIsSafe(it.title) &&
+            CATALOG_RECORDING_MBID.matches(it.musicBrainzId.lowercase(java.util.Locale.ROOT)) }
+        .distinctBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+        .associateBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    val cards = publicListenBrainzRecordingRanking(evidence)
+        .asSequence().filter { it.listeners > 0L && it.listens > 0L }
+        .distinctBy { it.recordingMbid }
+        .mapNotNull { known ->
+            val row = recordings[known.recordingMbid] ?: return@mapNotNull null
+            // The ordinary Home card helper intentionally suppresses recordings
+            // without audio; this is an Explore metadata-navigation card.
+            val browseId = "catalog:RECORDING:${row.musicBrainzId.lowercase(java.util.Locale.ROOT)}"
+            ShelfItem(
+                title = row.title,
+                subtitle = row.subtitle.orEmpty(),
+                thumbnailUrl = row.artworkUri,
+                videoId = null,
+                browseId = browseId,
+            )
+        }
+        .take(limit.coerceAtMost(16)).toList()
+    return cards.takeIf { it.isNotEmpty() }?.let { HomeShelf(heading, it) }
+}
+
+/**
+ * Public sitewide weekly charts are a different signal from cumulative
+ * popularity or the user's personal "Em alta". The upstream sitewide MBID
+ * ranks only *already verified catalog rows*; no title/artist guessing,
+ * fake playback asset, or album identity is introduced.
+ */
+internal fun canonicalSitewideCommunityShelf(
+    rows: List<CanonicalCatalogSearchRow>,
+    rankings: List<ListenBrainzSitewideRecording>,
+    heading: String,
+    limit: Int = 16,
+): HomeShelf? {
+    if (heading.isBlank() || limit <= 0) return null
+    val catalog = rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RECORDING &&
+            canonicalStreamingTitleIsSafe(it.title) &&
+            CATALOG_RECORDING_MBID.matches(it.musicBrainzId.lowercase(java.util.Locale.ROOT)) }
+        .distinctBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+        .associateBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    val cards = rankings.asSequence()
+        .filter { it.listenCount > 0L }
+        .sortedWith(compareByDescending<ListenBrainzSitewideRecording> { it.listenCount }
+            .thenBy { it.recordingMbid })
+        .distinctBy { it.recordingMbid.lowercase(java.util.Locale.ROOT) }
+        .mapNotNull { rank ->
+            val mbid = rank.recordingMbid.lowercase(java.util.Locale.ROOT)
+            val row = catalog[mbid] ?: return@mapNotNull null
+            ShelfItem(
+                title = row.title,
+                subtitle = row.subtitle.orEmpty(),
+                thumbnailUrl = row.artworkUri,
+                videoId = null,
+                browseId = "catalog:RECORDING:$mbid",
+            )
+        }.take(limit.coerceAtMost(16)).toList()
+    return cards.takeIf { it.isNotEmpty() }?.let { HomeShelf(heading, it) }
+}
+
+/**
+ * This is a PERSONAL ListenBrainz CF score, never a public listen count.
+ * The inputs must already have independently verified MusicBrainz identity,
+ * and cards are always metadata-only. No synthesized Song.videoId/MediaAsset.
+ */
+internal fun canonicalPersonalRecommendationShelf(
+    rows: List<CanonicalCatalogSearchRow>,
+    rankings: List<com.music.bitchord.data.catalog.metadata.ListenBrainzRecordingRecommendation>,
+    heading: String,
+    limit: Int = 12,
+): HomeShelf? {
+    if (heading.isBlank() || limit <= 0) return null
+    val validRows = rows.asSequence()
+        .filter {
+            it.kind == CanonicalSearchKind.RECORDING &&
+                canonicalStreamingTitleIsSafe(it.title) &&
+                CATALOG_RECORDING_MBID.matches(it.musicBrainzId.lowercase(java.util.Locale.ROOT))
+        }.associateBy { it.musicBrainzId.lowercase(java.util.Locale.ROOT) }
+    val cards = rankings.asSequence()
+        .filter { it.score.isFinite() && it.score > 0.0 }
+        .sortedWith(compareByDescending<com.music.bitchord.data.catalog.metadata.ListenBrainzRecordingRecommendation> { it.score }
+            .thenBy { it.recordingMbid })
+        .distinctBy { it.recordingMbid.lowercase(java.util.Locale.ROOT) }
+        .mapNotNull { rank ->
+            val id = rank.recordingMbid.lowercase(java.util.Locale.ROOT)
+            val row = validRows[id] ?: return@mapNotNull null
+            ShelfItem(
+                title = row.title,
+                subtitle = row.subtitle.orEmpty(),
+                thumbnailUrl = row.artworkUri,
+                videoId = null,
+                browseId = "catalog:RECORDING:$id",
+            )
+        }.take(limit.coerceAtMost(12)).toList()
+    return cards.takeIf(List<ShelfItem>::isNotEmpty)?.let { HomeShelf(heading, it) }
+}
+
+/**
+ * Public ListenBrainz discovery cards are navigation-only, even when the
+ * same Recording also happens to have a local/server MediaAsset. This keeps
+ * aggregate rankings distinct from the user's playback intent.
+ */
+internal fun canonicalCommunityCardIsMetadataOnly(
+    tabOrigin: PlaybackSourceType,
+    shelfTitle: String,
+    communityHeading: String,
+    browseId: String?,
+    allowHome: Boolean = false,
+): Boolean {
+    if ((tabOrigin != PlaybackSourceType.EXPLORE &&
+            !(allowHome && tabOrigin == PlaybackSourceType.HOME)) ||
+        shelfTitle != communityHeading || browseId == null
+    ) return false
+    val prefix = "catalog:RECORDING:"
+    return browseId.startsWith(prefix, ignoreCase = true) &&
+        CATALOG_RECORDING_MBID.matches(
+            browseId.substring(prefix.length).lowercase(java.util.Locale.ROOT),
+        )
+}
+
+/**
+ * Resolve an editorial card by an exact typed catalog identity. In Explore,
+ * metadata-only public Recording cards navigate to detail, not playback.
+ * Missing browse keys and inferred/title-only joins are never accepted.
+ */
+internal fun canonicalEditorialRowForCard(
+    rows: List<CanonicalCatalogSearchRow>,
+    browseId: String?,
+): CanonicalCatalogSearchRow? {
+    if (browseId.isNullOrBlank()) return null
+    return rows.firstOrNull { row ->
+        val exactId = when (row.kind) {
+            CanonicalSearchKind.RECORDING -> if (CATALOG_RECORDING_MBID.matches(row.musicBrainzId.lowercase(java.util.Locale.ROOT))) {
+                "catalog:RECORDING:${row.musicBrainzId.lowercase(java.util.Locale.ROOT)}"
+            } else null
+            CanonicalSearchKind.RELEASE, CanonicalSearchKind.RELEASE_GROUP ->
+                canonicalBrowseCardId(row)
+            CanonicalSearchKind.ARTIST -> null
+        }
+        exactId != null && exactId.equals(browseId, ignoreCase = true)
+    }
+}
+
+/**
+ * Home and Explore share rendering but never borrow one another's popularity
+ * claims. Verified releases lead; public all-time popularity is a distinct
+ * discovery section. If no public evidence exists, the existing personal
+ * fallback remains available offline.
+ */
+internal fun canonicalExploreWithCommunityShelves(
+    homeShelves: List<HomeShelf>,
+    releasesHeading: String,
+    trendingHeading: String,
+    community: HomeShelf?,
+): List<HomeShelf> {
+    val known = canonicalExploreShelves(homeShelves, releasesHeading, trendingHeading)
+    val public = community?.takeIf { it.items.isNotEmpty() && it.title.isNotBlank() }
+        ?: return known
+    return if (known.firstOrNull()?.title == releasesHeading) known + public else listOf(public)
+}
+
+/**
+ * View-state freshness follows the same six-hour budget as the public client.
+ * Re-entering Explore with an unchanged MBID batch should not flash an empty
+ * shelf or needlessly schedule a second request. Unknown rows are cached too.
+ */
+internal fun canonicalPublicPopularityCacheIsFresh(
+    requested: List<String>,
+    previous: List<String>?,
+    fetchedAtMs: Long?,
+    nowMs: Long,
+): Boolean = requested.isNotEmpty() && requested == previous &&
+    fetchedAtMs != null && nowMs >= fetchedAtMs &&
+    nowMs - fetchedAtMs < LISTENBRAINZ_PUBLIC_TTL_MS
+
+/** Feed sections share rendering, but listening events retain their actual tab provenance. */
+internal fun canonicalEditorialPlaybackSource(explore: Boolean): PlaybackSourceType =
+    if (explore) PlaybackSourceType.EXPLORE else PlaybackSourceType.HOME

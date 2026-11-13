@@ -6,11 +6,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class CatalogCoverDiagnosticsTest {
-    @Test fun exportNamesNetworkOnlyEvidenceAndShowsUnknownForNoSamples() {
+    @Test fun exportSeparatesCaaMetadataFromCoilImageEvidenceWithoutSamples() {
         val telemetry = CatalogCoverTelemetry()
         val lines = CatalogCoverDiagnostics.lines(telemetry.snapshot())
-        assertEquals("scope=caa_metadata_http_only", lines.first())
+        assertEquals("scope=caa_metadata_and_coil_image_loads", lines.first())
         assertEquals("percentiles=insufficient_samples", lines.last())
+        assertEquals(true, lines.contains("image_scope=coil_load_caa_urls_only"))
         assertFalse(lines.joinToString().contains("null"))
     }
 
@@ -42,6 +43,7 @@ class CatalogCoverDiagnosticsTest {
         ))
         assertEquals(true, lines.contains("direct_front_candidates=2"))
         assertEquals(true, lines.contains("coil_load_success=1 coil_load_errors=1"))
+        assertEquals(true, lines.contains("coil_load_started=0 coil_load_cancellations=0"))
         assertEquals(true, lines.contains("coil_sources memory=0 disk=1 network=0 other=0"))
         assertEquals(true, lines.contains(
             "coil_disk_bytes_on_loader_init=1024 coil_disk_capacity_bytes=104857600 app_update_disk_retained=true",

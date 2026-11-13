@@ -135,8 +135,6 @@ dependencies {
     implementation("com.github.hypfvieh:dbus-java-core:5.2.0")
     implementation("com.github.hypfvieh:dbus-java-transport-junixsocket:5.2.0")
 
-    // Same URL deobfuscation helper used by Android's StreamResolver.
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
 
     // JVM equivalent of Android's QuickJS module host.
     implementation("org.graalvm.polyglot:polyglot:24.1.2")

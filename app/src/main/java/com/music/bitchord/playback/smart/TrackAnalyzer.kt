@@ -29,20 +29,11 @@ import android.net.Uri
 import android.os.Process
 import android.util.Log
 import androidx.media3.common.util.UnstableApi
-import com.music.bitchord.data.YtMusicRepository
 import com.music.bitchord.data.listentogether.ListenTogether
-import com.music.bitchord.data.model.SearchFilter
-import com.music.bitchord.data.model.SearchResult
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.AutomixPerformanceMode
-import com.music.bitchord.data.sources.SourceResolver
-import com.music.bitchord.data.sources.TrackMatcher
 import com.music.bitchord.playback.AudioCache
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.abs
@@ -115,10 +106,6 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
 
     private val results = ConcurrentHashMap<String, TrackAnalysis>()
     private val running = ConcurrentHashMap.newKeySet<String>()
-    private val sourceAnalysisUris = ConcurrentHashMap<String, Uri>()
-    private val sourceResolutions = ConcurrentHashMap.newKeySet<String>()
-    private val sourceResolutionAttempted = ConcurrentHashMap.newKeySet<String>()
-    private val sourceResolutionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Tracks whose result came from [analyzeHead] and is waiting to be superseded. */
     private val provisional = ConcurrentHashMap.newKeySet<String>()
@@ -816,47 +803,16 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
      * identity once, then keep playback on its original URI while analysis
      * fills and reads the separately pinned YouTube Opus entry.
      */
-    private fun analysisUriFor(trackId: String, playbackUri: Uri): Uri? {
-        if (playbackUri.getQueryParameter("v") != null || playbackUri.authority != "source") return playbackUri
-        // Never for a row picked from the Addons search: that would put a
-        // YouTube search and its Opus on the network under a track whose whole
-        // point is not being YouTube. Left unmeasured, as a party leaves every
-        // track — see [SourceResolver.MIX_PARAM].
-        if (SourceResolver.isPickedAddonRow(playbackUri)) return null
-        sourceAnalysisUris[trackId]?.let { return it }
-        if (trackId in sourceResolutionAttempted) return null
-        if (!sourceResolutions.add(trackId)) return null
-        val target = SourceResolver.targetIn(playbackUri)
-        sourceResolutionScope.launch {
-            try {
-                val match = findYouTubeMatch(target)
-                if (match != null) {
-                    sourceAnalysisUris[trackId] = Uri.parse(AutomixAnalysisSource.opusUri(match.videoId))
-                    Log.d(TAG, "Automix analysis for $trackId will use YouTube Opus ${match.videoId}")
-                } else {
-                    Log.d(TAG, "No YouTube match for Automix analysis of $trackId")
-                }
-            } catch (error: Throwable) {
-                Log.d(TAG, "YouTube match failed for Automix analysis of $trackId: ${error.message}")
-            } finally {
-                sourceResolutionAttempted.add(trackId)
-                sourceResolutions.remove(trackId)
-            }
-        }
-        return null
-    }
-
-    private suspend fun findYouTubeMatch(target: TrackMatcher.Target): com.music.bitchord.data.model.Song? {
-        if (target.title.isBlank()) return null
-        for (query in TrackMatcher.queries(target)) {
-            val candidates = YtMusicRepository.search(query, SearchFilter.SONGS)
-                .getOrNull()
-                ?.filterIsInstance<SearchResult.Track>()
-                ?.map { it.song }
-                .orEmpty()
-            TrackMatcher.best(candidates, target)?.let { return it }
-        }
-        return null
+    /**
+     * Analyze only the actual playable URI. Source-backed tracks must not
+     * trigger a cross-provider search for retired YouTube Opus, and archival
+     * videoIds do not authorize a stream resolution.
+     */
+    private fun analysisUriFor(
+        @Suppress("UNUSED_PARAMETER") trackId: String,
+        playbackUri: Uri,
+    ): Uri? = playbackUri.takeUnless {
+        it.authority == "source" || it.getQueryParameter("v") != null
     }
 
     /**
@@ -1271,10 +1227,6 @@ class TrackAnalyzer(private val context: Context, private val cache: AudioCache)
 
     fun release() {
         executor.shutdownNow()
-        sourceResolutionScope.cancel()
-        sourceAnalysisUris.clear()
-        sourceResolutions.clear()
-        sourceResolutionAttempted.clear()
         headAttempts.clear()
         headSkipLogged.clear()
         provisional.clear()

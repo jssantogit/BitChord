@@ -119,9 +119,16 @@ internal fun canonicalEditionTitleIsSuitableForGroupArtwork(
 }
 
 internal fun canonicalArtworkEditionsForGroup(
-    editions: List<MusicBrainzReleaseHit>, groupTitle: String,
+    editions: List<MusicBrainzReleaseHit>,
+    groupTitle: String,
+    groupMbid: String,
 ): List<MusicBrainzReleaseHit> =
-    canonicalPreferredEditions(editions, groupTitle)
+    // A title is never proof of which work owns a sleeve. Search returns
+    // editions from unrelated ReleaseGroups; compare exact MBIDs BEFORE
+    // evaluating title suitability or CAA artwork hints.
+    canonicalPreferredEditions(editions.filter {
+        it.releaseGroupMbid?.equals(groupMbid, ignoreCase = true) == true
+    }, groupTitle)
         .filter { edition ->
             // A ReleaseGroup's conceptual title is not necessarily the official
             // Release title: “How Sweet & Bubble Gum” owns official “How Sweet”
@@ -169,7 +176,8 @@ internal suspend fun canonicalCachedOfficialGroupTracklist(
         val detail = readRelease(edition.musicBrainzId) ?: continue
         if (detail.musicBrainzId != edition.musicBrainzId ||
             detail.groupMbid != groupMbid ||
-            detail.tracks.isEmpty()
+            detail.tracks.isEmpty() ||
+            detail.isVideoOnlyContent == true
         ) continue
         return detail
     }
@@ -213,7 +221,12 @@ internal fun canonicalPreferredEditions(
     // Unknown status does not prove an official audio release, even if this is
     // the only edition in the local cache. It remains stored for verification,
     // but must never become the default "official" streaming tracklist.
-    val official = unique.filter { it.status.equals("Official", ignoreCase = true) }
+    val official = unique.filter {
+        it.status.equals("Official", ignoreCase = true) &&
+            // Video-only media may share an Official Single/EP ReleaseGroup.
+            // Do not select them as the canonical audio tracklist or cover.
+            it.isVideoOnlyMedia != true && it.isVideoOnlyContent != true
+    }
     return official.sortedWith(
         compareBy<MusicBrainzReleaseHit> {
             when (it.status?.lowercase(Locale.ROOT)) {

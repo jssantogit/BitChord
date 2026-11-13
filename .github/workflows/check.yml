@@ -59,6 +59,11 @@ jobs:
       - name: Run shared Automix planner tests
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
 
+      # Native Search lives in sharedUi/jvmSharedMain. Android's app unit
+      # tests compile it but do not execute its jvmTest presentation contracts.
+      - name: Run shared native UI presentation tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+
       - name: Publish smart playlist CI benchmark summary
         if: always() && ((github.event_name == 'pull_request' && startsWith(github.head_ref, 'listening/smart-playlists')) || (github.event_name == 'push' && github.ref == 'refs/heads/listening/smart-playlists-v2-192'))
         run: |

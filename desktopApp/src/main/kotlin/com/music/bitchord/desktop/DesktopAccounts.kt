@@ -79,151 +79,20 @@ internal object DesktopAccounts {
         )
     }
 
-    /** Puts the chosen account into force, renewing it first if it has gone flat. */
-    suspend fun activate(): DesktopYouTubeAuth.Session? {
-        val account = active() ?: run {
-            DesktopYouTubeAuth.adopt(null)
-            return null
-        }
-        val profile = activeProfile()
-        val stored = sessionFor(account, profile)
-        if (stored == null) {
-            DesktopTrackLog.log("account '${account.email.ifBlank { account.name }}' has no stored credential any more")
-            DesktopYouTubeAuth.adopt(null)
-            return null
-        }
-        DesktopYouTubeSession.adoptSessionScope(stored.cookie)?.let { live ->
-            val session = healedIdentity(account, profile, stored, live)
-            DesktopYouTubeAuth.adopt(session)
-            return session
-        }
-
-        DesktopTrackLog.log("the stored session has expired; looking for a fresh one in the browser it came from")
-        val renewed = renewFromBrowser(account)
-        if (renewed == null) {
-            // Anonymous rather than broken.
-            DesktopTrackLog.log("could not renew the session; browsing as a guest until it is signed in again")
-            DesktopYouTubeAuth.adopt(null)
-        }
-        return renewed
-    }
-
     /**
-     * The live shell's own answer about who this cookie acts as, unless the
-     * listener deliberately picked a brand channel.
-     *
-     * What activate() used to do was adopt [stored] — the identity captured
-     * when the login was saved — even though it had just gone and read [live],
-     * the same question answered by the shell *now*. Google rotates an
-     * account's `dataSyncId`, so a stored personal identity can silently go
-     * stale; sending it as `onBehalfOfUser` is answered 400 INVALID_ARGUMENT
-     * on every browse and next from then on, and this app's own log caught the
-     * mismatch and still kept the stale side ("server shell identity differs
-     * from selected profile; retaining override"). The feed 400s, radio and
-     * history die, and only luck (a run that installed no override) says the
-     * account is fine.
-     *
-     * For the account's own channel there is nothing to preserve: the shell's
-     * fresh pair *is* the identity, so it is adopted, written back over the
-     * stored profile, and used. A brand channel is different — there the
-     * stored pair is the whole point of the override (the shell offers the
-     * account's default, not the channel the listener chose), so it stands.
-     * Android's equivalent guard is `loadChannels`, which re-detects profiles
-     * and refreshes ids on every account load.
+     * Legacy Google account records remain readable for archival migration,
+     * but the retired YouTube provider must not renew browser cookies,
+     * inspect the music.youtube.com shell, or activate a network session.
      */
-    private fun healedIdentity(
-        account: DesktopGoogleAccount,
-        profile: DesktopYouTubeProfile?,
-        stored: DesktopYouTubeAuth.Session,
-        live: DesktopYouTubeAuth.Session,
-    ): DesktopYouTubeAuth.Session {
-        // No stored profile at all, or the listener did not pick a brand one:
-        // the shell's answer wins, and the stored record learns from it.
-        val brand = profile?.pageId?.takeIf { it.isNotBlank() }
-        if (brand == null) {
-            val changed = stored.dataSyncId != live.dataSyncId ||
-                stored.authUser != live.authUser
-            if (changed) {
-                val fresh = profile?.copy(
-                    dataSyncId = live.dataSyncId,
-                    authUser = live.authUser,
-                ) ?: DesktopYouTubeProfile(
-                    profileId = live.dataSyncId ?: account.accountId,
-                    name = account.name.ifBlank { "YouTube Music" },
-                    handle = account.email,
-                    avatar = account.avatar,
-                    pageId = null,
-                    dataSyncId = live.dataSyncId,
-                    authUser = live.authUser,
-                    isBrandAccount = false,
-                )
-                write(
-                    accounts().map {
-                        if (it.accountId == account.accountId) {
-                            it.copy(
-                                profiles = it.profiles.map { existing ->
-                                    if (existing.profileId == fresh.profileId) fresh else existing
-                                },
-                                activeProfileId = fresh.profileId,
-                            )
-                        } else {
-                            it
-                        }
-                    },
-                )
-                DesktopTrackLog.log(
-                    "adopted the shell's fresh channel identity" +
-                        if (stored.dataSyncId != live.dataSyncId) " (the stored one had gone stale)" else "",
-                )
-            }
-            return live
-        }
-        // Brand channel: keep what the listener picked, but take the live
-        // session's fresh cookie context for everything else.
-        return stored
-    }
-
-    /** Reads the source browser's cookies again and saves them if they are live. */
-    private suspend fun renewFromBrowser(account: DesktopGoogleAccount): DesktopYouTubeAuth.Session? {
-        val candidates = DesktopBrowserCookies.profiles()
-        // The one it came from first, then any other holding a live session for the *same account*
-        // — matched on the id the shell reports, not on the path.
-        val ordered = candidates.sortedByDescending { it.database.toString() == account.sourceProfile }
-        for (profile in ordered) {
-            val jar = (DesktopBrowserCookies.read(profile) as? DesktopBrowserCookies.Result.Session)?.cookie
-                ?: continue
-            val scope = DesktopYouTubeSession.adoptSessionScope(jar) ?: continue
-            val belongs = scope.dataSyncId == account.accountId ||
-                (account.sourceProfile != null && profile.database.toString() == account.sourceProfile)
-            if (!belongs) continue
-            DesktopYouTubeAuth.adopt(scope)
-            writeCookie(account.accountId, jar)
-            rememberSource(account, profile.database.toString())
-            DesktopTrackLog.log("renewed the session from ${profile.label}")
-            return scope
-        }
+    suspend fun activate(): DesktopYouTubeAuth.Session? {
+        DesktopYouTubeAuth.adopt(null)
         return null
     }
 
-    /** Notes where a renewal came from, so the next one starts there. */
-    private fun rememberSource(account: DesktopGoogleAccount, source: String) {
-        if (account.sourceProfile == source) return
-        write(accounts().map { if (it.accountId == account.accountId) it.copy(sourceProfile = source) else it })
-    }
-
-    /** Puts the chosen account and channel into force for this process. */
+    /** Archived account selection cannot re-enable the retired provider. */
     fun applyActive(): DesktopYouTubeAuth.Session? {
-        val account = active()
-        if (account == null) {
-            DesktopYouTubeAuth.adopt(null)
-            return null
-        }
-        val session = sessionFor(account, activeProfile())
-        DesktopYouTubeAuth.adopt(session)
-        if (session == null) {
-            DesktopTrackLog.log("account '${account.email.ifBlank { account.name }}' has no stored credential any more")
-        }
-        return session
+        DesktopYouTubeAuth.adopt(null)
+        return null
     }
 
     /** Saves a captured login and makes it the active one. */

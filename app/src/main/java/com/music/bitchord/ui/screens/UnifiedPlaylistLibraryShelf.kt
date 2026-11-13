@@ -48,7 +48,11 @@ import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
 import com.music.bitchord.data.listening.SmartPlaylistV2DefinitionRepository
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.data.model.Song
+import com.music.bitchord.data.spotify.LocalPlaylistStore
+import com.music.bitchord.download.Downloads
 import com.music.bitchord.data.model.BrowseType
+import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.BrowseActionsSheet
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
@@ -125,9 +129,8 @@ internal fun visibleLibraryPlaylistCards(
 internal fun canQueueLibraryPlaylist(card: LibraryPlaylistCard): Boolean =
     card is LibraryPlaylistCard.Smart || card is LibraryPlaylistCard.CanonicalNormal
 
-/** Delete is supported only by first-party saved playlist repositories here. */
-internal fun canDeleteLibraryPlaylist(card: LibraryPlaylistCard): Boolean =
-    card is LibraryPlaylistCard.Smart || card is LibraryPlaylistCard.CanonicalNormal
+/** All three first-party local playlist stores support non-destructive delete. */
+internal fun canDeleteLibraryPlaylist(card: LibraryPlaylistCard): Boolean = true
 
 /** Stable card IDs, fresh saved definitions; never keep a stale UI snapshot after editing. */
 internal fun latestLibraryPlaylistCard(
@@ -142,7 +145,7 @@ internal fun PlaylistLibrarySearchField(
     onQueryChange: (String) -> Unit,
     onClose: () -> Unit = {},
 ) {
-    DetailSearchField(
+    NativeDetailSearchField(
         query = query,
         onQueryChange = onQueryChange,
         onClose = onClose,
@@ -161,7 +164,12 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenSmartPlaylist: (String) -> Unit,
     onOpenCanonicalNormalPlaylist: (String) -> Unit,
     onAddSongsToCanonicalNormalPlaylist: (String) -> Unit = onOpenCanonicalNormalPlaylist,
-    onOpenNormalPlaylist: (ShelfItem) -> Unit,
+    onLegacyPlay: (String, List<Song>, Int) -> Unit,
+    onLegacyShuffle: (String, List<Song>) -> Unit,
+    onLegacyQueue: (List<Song>) -> Unit,
+    onLegacyNext: (List<Song>) -> Unit,
+    onLegacySongMenu: (Song) -> Unit,
+    onLegacySongSwipe: (Song) -> Unit,
     onSmartAction: (String, CanonicalCollectionIntent) -> Unit,
     onCanonicalNormalAction: (String, CanonicalCollectionIntent) -> Unit,
     onSmartShuffle: (String) -> Unit,
@@ -189,12 +197,19 @@ internal fun UnifiedPlaylistLibraryShelf(
     onDetailRowsReady: (List<V2DisplayRow>?) -> Unit = {},
     detailSort: PlaylistLibrarySort = PlaylistLibrarySort.DEFAULT,
     onPlaylistCountChange: (Int) -> Unit = {},
+    currentCanonicalRecordingId: String? = null,
+    isPlaying: Boolean = false,
 ) {
     val context = LocalContext.current.applicationContext
     val playlistPinRepo = remember(context) { LibraryPlaylistPinRepository.get(context) }
     val pinnedPlaylists by playlistPinRepo.pins.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     var optionsFor by remember { mutableStateOf<LibraryPlaylistCard?>(null) }
+    var historicalEditor by remember { mutableStateOf<LibraryPlaylistCard.Normal?>(null) }
+    var historicalEditTitle by remember { mutableStateOf("") }
+    var historicalEditError by remember { mutableStateOf(false) }
+    var historicalEditSaving by remember { mutableStateOf(false) }
+
     var deleteFailure by remember { mutableStateOf(false) }
     val repo = remember(context) {
         SmartPlaylistV2DefinitionRepository(
@@ -251,10 +266,7 @@ internal fun UnifiedPlaylistLibraryShelf(
         if (smartLoaded && normalLoaded) {
             val resolved = cards.firstOrNull { it.id == requested }
             if (resolved != null) {
-                when (resolved) {
-                    is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(resolved.shelfItem)
-                    else -> onSelectedCardChange(resolved)
-                }
+                onSelectedCardChange(resolved)
             }
             onPinnedPlaylistRequestConsumed()
         }
@@ -360,11 +372,7 @@ internal fun UnifiedPlaylistLibraryShelf(
         }
         items(visible, key = { it.id }) { card ->
             val openCard: () -> Unit = {
-                when (card) {
-                    is LibraryPlaylistCard.Smart,
-                    is LibraryPlaylistCard.CanonicalNormal -> onSelectedCardChange(card)
-                    is LibraryPlaylistCard.Normal -> onOpenNormalPlaylist(card.shelfItem)
-                }
+                onSelectedCardChange(card)
             }
             UnifiedPlaylistCompactRow(
                 card = card,
@@ -375,6 +383,13 @@ internal fun UnifiedPlaylistLibraryShelf(
         }
     }
     menuCard?.let { selected ->
+        val historicalMenuSongs = (selected as? LibraryPlaylistCard.Normal)
+            ?.shelfItem?.browseId?.let(LocalPlaylistStore::getPlaylist)
+            ?.songs?.let { songs ->
+                eligibleHistoricalPlaylistSongs(songs) {
+                    Downloads.verifiedSavedUri(it.videoId)
+                }
+            }.orEmpty()
         ModalBottomSheet(
             onDismissRequest = { optionsFor = null },
             containerColor = MaterialTheme.colorScheme.background,
@@ -395,23 +410,23 @@ internal fun UnifiedPlaylistLibraryShelf(
                     playlistPinRepo.toggle(LibraryPlaylistPin(selected.id, selected.title))
                     optionsFor = null
                 },
-                onPlayNext = if (canQueueLibraryPlaylist(selected)) ({
+                onPlayNext = if (canQueueLibraryPlaylist(selected) || historicalMenuSongs.isNotEmpty()) ({
                     when (selected) {
                         is LibraryPlaylistCard.Smart ->
                             onSmartAction(selected.definition.id, CanonicalCollectionIntent.ADD_NEXT)
                         is LibraryPlaylistCard.CanonicalNormal ->
                             onCanonicalNormalAction(selected.definition.id, CanonicalCollectionIntent.ADD_NEXT)
-                        is LibraryPlaylistCard.Normal -> Unit
+                        is LibraryPlaylistCard.Normal -> onLegacyNext(historicalMenuSongs)
                     }
                     optionsFor = null
                 }) else null,
-                onAddToQueue = if (canQueueLibraryPlaylist(selected)) ({
+                onAddToQueue = if (canQueueLibraryPlaylist(selected) || historicalMenuSongs.isNotEmpty()) ({
                     when (selected) {
                         is LibraryPlaylistCard.Smart ->
                             onSmartAction(selected.definition.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
                         is LibraryPlaylistCard.CanonicalNormal ->
                             onCanonicalNormalAction(selected.definition.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                        is LibraryPlaylistCard.Normal -> Unit
+                        is LibraryPlaylistCard.Normal -> onLegacyQueue(historicalMenuSongs)
                     }
                     optionsFor = null
                 }) else null,
@@ -424,7 +439,12 @@ internal fun UnifiedPlaylistLibraryShelf(
                         optionsFor = null
                         onOpenCanonicalNormalPlaylist(selected.definition.id)
                     })
-                    is LibraryPlaylistCard.Normal -> null
+                    is LibraryPlaylistCard.Normal -> ({
+                        historicalEditTitle = selected.title
+                        historicalEditError = false
+                        historicalEditor = selected
+                        optionsFor = null
+                    })
                 },
                 onDelete = if (canDeleteLibraryPlaylist(selected)) ({
                     scope.launch {
@@ -434,7 +454,8 @@ internal fun UnifiedPlaylistLibraryShelf(
                                     is LibraryPlaylistCard.Smart -> repo.remove(selected.definition.id)
                                     is LibraryPlaylistCard.CanonicalNormal ->
                                         normalRepo.remove(selected.definition.id)
-                                    is LibraryPlaylistCard.Normal -> Unit
+                                    is LibraryPlaylistCard.Normal ->
+                                        selected.shelfItem.browseId?.let(LocalPlaylistStore::deletePlaylist)
                                 }
                             }
                             playlistPinRepo.remove(selected.id)
@@ -449,11 +470,84 @@ internal fun UnifiedPlaylistLibraryShelf(
                         }
                     }
                 }) else null,
-                onOpen = if (selected is LibraryPlaylistCard.Normal) ({
-                    onOpenNormalPlaylist(selected.shelfItem)
+                onOpen = {
+                    onSelectedCardChange(selected)
                     optionsFor = null
-                }) else null,
+                },
             )
+        }
+    }
+    historicalEditor?.let { editing ->
+        ModalBottomSheet(
+            onDismissRequest = {
+                if (!historicalEditSaving) historicalEditor = null
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = PAGE_GUTTER, vertical = 18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    "Editar playlist",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                PillTextField(
+                    value = historicalEditTitle,
+                    onValueChange = {
+                        historicalEditTitle = it
+                        historicalEditError = false
+                    },
+                    placeholder = "Nome da playlist",
+                    enabled = !historicalEditSaving,
+                )
+                if (historicalEditError) {
+                    Text(
+                        "Informe um nome válido de até 240 caracteres.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        onClick = { historicalEditor = null },
+                        enabled = !historicalEditSaving,
+                    ) { Text("Cancelar") }
+                    TextButton(
+                        onClick = {
+                            val title = historicalEditTitle.trim()
+                            if (title.isEmpty() || title.length > 240) {
+                                historicalEditError = true
+                            } else {
+                                historicalEditSaving = true
+                                scope.launch {
+                                    try {
+                                        val browseId = editing.shelfItem.browseId
+                                            ?: error("Playlist sem identidade")
+                                        withContext(Dispatchers.IO) {
+                                            LocalPlaylistStore.renamePlaylist(browseId, title)
+                                        }
+                                        playlistPinRepo.rename(editing.id, title)
+                                        historicalEditor = null
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) {
+                                        historicalEditError = true
+                                    } finally {
+                                        historicalEditSaving = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !historicalEditSaving,
+                    ) { Text("Salvar") }
+                }
+            }
         }
     }
     openedCard?.let { selected ->
@@ -492,6 +586,11 @@ internal fun UnifiedPlaylistLibraryShelf(
                     is LibraryPlaylistCard.Normal -> Unit
                 }
             },
+            onLegacyPlay = onLegacyPlay,
+            onLegacyShuffle = onLegacyShuffle,
+            onLegacyQueue = onLegacyQueue,
+            onLegacySongMenu = onLegacySongMenu,
+            onLegacySongSwipe = onLegacySongSwipe,
             onTrackQueue = { recordingId, intent ->
                 when (selected) {
                     is LibraryPlaylistCard.Smart ->
@@ -521,6 +620,8 @@ internal fun UnifiedPlaylistLibraryShelf(
             onRowsReady = onDetailRowsReady,
             sort = detailSort,
             listState = detailListState,
+            currentCanonicalRecordingId = currentCanonicalRecordingId,
+            isPlaying = isPlaying,
         )
     }
 }

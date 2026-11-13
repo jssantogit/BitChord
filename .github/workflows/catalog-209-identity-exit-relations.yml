@@ -1,0 +1,46 @@
+name: Catalog #209 - frozen identity relation closure
+
+# Does not repeat the 100 PASS checks already observed in source run 43425075506.
+# Exact pinned Release IDs only; no APK, emulator, playback, or device smoke.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/208-canonical-discovery-cutover-20261104
+    paths:
+      - docs/plans/catalog-209-identity-exit-relationships.json
+      - scripts/catalog_209_identity_exit_relations.py
+      - scripts/test_catalog_209_identity_exit_relations.py
+      - .github/workflows/catalog-209-identity-exit-relations.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-209-identity-exit-relations-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-frozen-exact-relations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prove offline 10-10-10 relation contract
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_209_identity_exit_relations.py' -v
+      - name: Check exact release-group, release, track and artist IDs with the public API
+        run: >-
+          python3 scripts/catalog_209_identity_exit_relations.py
+          --manifest docs/plans/catalog-209-identity-exit-relationships.json
+          --output catalog-209-identity-exit-relations.json
+      - name: Retain exact source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-209-identity-exit-relations
+          path: catalog-209-identity-exit-relations.json
+          if-no-files-found: warn
+          retention-days: 7

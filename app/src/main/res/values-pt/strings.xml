@@ -27,6 +27,7 @@
     <string name="home">Início</string>
     <string name="play">Tocar</string>
     <string name="explore">Explorar</string>
+    <string name="explore_genres">Gêneros</string>
     <string name="listen_now">Ouvir agora</string>
     <string name="downloads">Downloads</string>
     <string name="downloaded_songs">Músicas baixadas</string>
@@ -421,7 +422,7 @@
     <string name="signing_in">Fazendo login…</string>
     <string name="sleep_timer">Temporizador de sono</string>
     <string name="sources_no_lossless">Nenhuma fonte habilitada pode fornecer áudio lossless. Adicione um módulo personalizado para tocar arquivos lossless sem transcodificação.</string>
-    <string name="sources_order_footer">Se uma fonte não tiver a faixa, o BitChord tenta a próxima. Fontes acima do YouTube podem substituí-lo quando encontram uma versão melhor.</string>
+    <string name="sources_order_footer">Se uma fonte não tiver a faixa, o BitChord tenta a próxima.</string>
     <string name="sources_order_header">Fontes, tentadas nesta ordem</string>
     <string name="sources_quality_capped">Esta conexão está definida abaixo de Alta qualidade, então os fluxos são transcodificados. Downloads não são afetados.</string>
     <string name="jiosaavn_mismatch_warning">Pode encontrar a versão errada de uma música. Ative por sua conta e risco.</string>
@@ -979,6 +980,7 @@
     <string name="shelf_top_tunes_right_now">Mais ouvidas do momento</string>
 
     <string name="shelf_trending">Em alta</string>
+    <string name="shelf_listenbrainz_community">Popular na comunidade</string>
 
     <string name="shelf_trending_community_playlists">Playlists em alta da comunidade</string>
 
@@ -1265,7 +1267,7 @@
     <string name="cached_songs_subtitle">Músicas do YouTube e JioSaavn no cache de músicas</string>
     <string name="cached_songs_empty">Ainda não há músicas em cache. As músicas que você tocar do YouTube ou JioSaavn aparecerão aqui.</string>
     <string name="show_cache_folder">Mostrar pasta de músicas em cache</string>
-    <string name="show_cache_folder_subtitle">Adiciona à Biblioteca uma pasta com as músicas do YouTube e JioSaavn guardadas no cache</string>
+    <string name="show_cache_folder_subtitle">Adiciona à Biblioteca uma pasta com as músicas mantidas no cache de reprodução</string>
     <string name="song_cache_unlimited">Ilimitado</string>
     <string name="song_cache_unlimited_subtitle">Sem limite. O áudio em cache pode crescer até encher o armazenamento.</string>
     <string name="clear_song_cache_title">Limpar cache de músicas?</string>
@@ -1297,6 +1299,7 @@
     <string name="spotify_import_none">Nenhuma dessas músicas foi encontrada no YouTube Music.</string>
     <string name="spotify_import_title">Importar playlist do Spotify</string>
     <string name="spotify_import_unmatched">%1$d músicas não foram encontradas no YouTube Music</string>
+    <string name="spotify_import_metadata_only">Playlist salva com %1$d faixas como metadados. Nenhum áudio foi associado sem correspondência verificada.</string>
     <string name="spotify_library_subtitle">Suas playlists do Spotify</string>
     <string name="spotify_sign_in">Entrar com Spotify</string>
     <string name="spotify_use_spdc_token">Usar token sp_dc</string>
@@ -1394,4 +1397,32 @@
     <string name="search_origin_general">Geral</string>
     <string name="search_origin_server">Servidor</string>
     <string name="search_origin_local">Local</string>
+    <string name="home_global_discovery">Descobertas do mundo</string>
+
+    <string name="visual_offline_title">Visuais offline</string>
+    <string name="visual_offline_stream">Transmissão normal com cache temporário; sem guardar vídeos permanentemente</string>
+    <string name="visual_offline_wifi">Guardar animações completas para funcionar sem Internet, apenas no Wi-Fi</string>
+    <string name="visual_offline_still">Substituir vídeos por capas e fotos estáticas já disponíveis</string>
+    <string name="visual_offline_temporary">Temporário</string>
+    <string name="visual_offline_save_wifi">Salvar Wi-Fi</string>
+    <string name="visual_offline_only_stills">Só imagens</string>
+    <string name="visual_offline_artist_motion">Animações de artistas</string>
+    <string name="visual_offline_album_motion">Animações de álbuns</string>
+    <string name="visual_offline_player_motion">Animações do Now Playing</string>
+    <string name="visual_offline_save_stills">Guardar imagens estáticas</string>
+    <string name="visual_offline_stills_subtitle">Artistas, álbuns e Now Playing; espaço limitado e sem backup</string>
+    <string name="visual_offline_artist_stills">Fotos de artistas</string>
+    <string name="visual_offline_album_stills">Capas de álbuns</string>
+    <string name="visual_offline_player_stills">Capas do Now Playing</string>
+    <string name="visual_offline_images_group">Fotos e capas salvas</string>
+    <string name="visual_offline_motion_group">Animações salvas</string>
+    <string name="visual_offline_still_limit">Limite de imagens salvas</string>
+    <string name="visual_offline_still_limit_subtitle">Espaço máximo para fotos de artistas, capas de álbuns e do Now Playing</string>
+    <string name="visual_offline_motion_limit">Limite de animações salvas</string>
+    <string name="visual_offline_motion_limit_subtitle">Limita novos vídeos offline. Vídeos já salvos são preservados ao reduzir o limite; limpe os visuais para liberar espaço</string>
+    <string name="visual_offline_clear_title">Limpar visuais salvos</string>
+    <string name="visual_offline_clear_subtitle">Imagens e animações mantidas offline (sem apagar músicas)</string>
+    <string name="visual_offline_confirm_title">Limpar visuais offline?</string>
+    <string name="visual_offline_confirm_description">As imagens e animações salvas serão apagadas. Músicas, playlists e avaliações serão preservadas. Os visuais poderão ser baixados novamente quando houver conexão.</string>
+    <string name="visual_offline_cleared">Visuais offline apagados</string>
 </resources>

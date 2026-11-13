@@ -1,0 +1,41 @@
+name: Catalog #209 — Positive video-only MusicBrainz evidence
+
+# One exact Release and one exact Recording lookup. No periodic retries.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - refactor/208-canonical-discovery-cutover-20261104
+    paths:
+      - scripts/catalog_209_video_evidence.py
+      - scripts/test_catalog_209_video_evidence.py
+      - .github/workflows/catalog-209-video-evidence.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-209-video-only-probe
+  cancel-in-progress: true
+
+jobs:
+  video-source-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Offline proof cases; no network
+        run: python3 -m unittest discover -s scripts -p 'test_catalog_209_video_evidence.py' -v
+      - name: Two exact public MusicBrainz lookups (max four HTTP attempts)
+        run: python3 scripts/catalog_209_video_evidence.py --output catalog-209-video-evidence.json
+      - name: Retain source result even if unavailable
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-209-video-only-evidence
+          path: catalog-209-video-evidence.json
+          if-no-files-found: warn
+          retention-days: 7
