@@ -420,6 +420,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var worldwideReleaseFetchedAtMs: Long = 0L
     private var worldwideReleaseRetryAtMs: Long = 0L
 
+    private val _appleGenreReleases = MutableStateFlow<Map<String, UiState<List<
+        com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+    >>>>(emptyMap())
+    val appleGenreReleases: StateFlow<Map<String, UiState<List<
+        com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+    >>>> = _appleGenreReleases.asStateFlow()
+    private val appleGenreEpoch = DiscoveryRequestEpoch()
+    private var appleGenreJob: Job? = null
+    private var appleGenreActiveTag: String? = null
+    private var appleGenreFingerprint: String? = null
+    private var appleGenreFetchedAtMs = 0L
+
     private val _canonicalGenreResults =
         MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>>(UiState.Loading)
     val canonicalGenreResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>> =
@@ -3690,9 +3702,77 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Explore release cards require both a returned Apple product and an
+     * independently matching Apple primaryGenreName. MusicBrainz tag results
+     * are candidate search terms, NOT a genre assertion about that product.
+     */
+    fun loadAppleGenreEditorial(
+        tag: String,
+        rows: List<CanonicalCatalogSearchRow>,
+        force: Boolean = false,
+    ) {
+        if (!com.music.bitchord.data.catalog.metadata.AppleExploreGenrePolicy.supports(tag)) {
+            return
+        }
+        val seeds = rows.asSequence()
+            .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+            .mapNotNull { row ->
+                val artist = row.subtitle?.trim().orEmpty()
+                if (row.title.isBlank() || artist.isBlank()) null else
+                    com.music.bitchord.data.catalog.metadata.AppleHomeEditorialSeed(
+                        row.title, artist,
+                    )
+            }
+            .distinctBy { it.title.lowercase(Locale.ROOT) to
+                it.artist.lowercase(Locale.ROOT) }
+            .take(12).toList()
+        val fingerprint = tag + "|" + seeds.joinToString("|") {
+            "${it.title.lowercase(Locale.ROOT)}:${it.artist.lowercase(Locale.ROOT)}"
+        }
+        val now = System.currentTimeMillis()
+        if (!force && appleGenreActiveTag == tag &&
+            appleGenreFingerprint == fingerprint &&
+            (appleGenreJob?.isActive == true ||
+                now - appleGenreFetchedAtMs < 6L * 60L * 60L * 1000L)
+        ) return
+        appleGenreJob?.cancel()
+        val generation = appleGenreEpoch.next()
+        appleGenreActiveTag = tag
+        appleGenreFingerprint = fingerprint
+        appleGenreFetchedAtMs = now
+        if (_appleGenreReleases.value[tag] !is UiState.Success) {
+            _appleGenreReleases.update { it + (tag to UiState.Loading) }
+        }
+        appleGenreJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                com.music.bitchord.data.catalog.metadata
+                    .AppleExploreGenreDiscovery().discover(tag, seeds, "br")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (!appleGenreEpoch.isCurrent(generation) ||
+                appleGenreActiveTag != tag
+            ) return@launch
+            _appleGenreReleases.update { old ->
+                old + (tag to when (result) {
+                    is AppleEditorialLoad.Success -> UiState.Success(result.releases)
+                    is AppleEditorialLoad.Failure ->
+                        (old[tag] as? UiState.Success)
+                            ?: UiState.Error("Não foi possível consultar o gênero na Apple.")
+                })
+            }
+        }
+    }
+
     /** Explore genre requests use actual MusicBrainz tags, not YouTube pages. */
     fun loadCanonicalGenre(tag: String) {
         val selected = canonicalExploreGenres.firstOrNull { it.tag == tag } ?: return
+        appleGenreJob?.cancel()
+        appleGenreEpoch.invalidateAndNext()
+        appleGenreActiveTag = tag
         val generation = canonicalGenreEpoch.next()
         canonicalGenreJob?.cancel()
         _canonicalGenreResults.value = UiState.Loading
