@@ -37,7 +37,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import com.music.bitchord.ui.components.ActionRow
-import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.NativeAlertHost
 import com.music.bitchord.ui.components.NativeStatusAlert
 import com.music.bitchord.ui.icons.PlaylistEditorIcons
@@ -284,7 +283,6 @@ internal fun CanonicalRecordingFeedbackPanel(
 ) {
     var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
     var touched by remember { mutableStateOf(false) }
-    var confirmDiscard by remember { mutableStateOf(false) }
     // Room may deliver the persisted rating after the dialog opens. Hydrate
     // untouched selections, but never erase the user's pending choice.
     LaunchedEffect(rating) {
@@ -299,15 +297,10 @@ internal fun CanonicalRecordingFeedbackPanel(
     val colorStops = ratingEditorGradientStops(selected, starStyle)
     val fractionalBrush = if (colorStops.map { it.second }.distinct().size > 1)
         Brush.linearGradient(*colorStops.toTypedArray()) else null
-    // Dismissing an edited value must not silently throw it away. A late Room
-    // emission cannot erase the pending selection, and saving stays modal.
+    // This editor never persists a draft until Save. Cancel and Back
+    // discard the pending selection immediately, including an edited rating.
     val original = rating?.takeIf { it.isFinite() && it in 1.0..5.0 } ?: 0.0
-    val requestDismiss: () -> Unit = {
-        if (!saving) {
-            if (touched && selected != original) confirmDiscard = true
-            else onDismiss()
-        }
-    }
+    val requestDismiss: () -> Unit = { if (!saving) onDismiss() }
     // The dialog previously appeared in one frame. Entrance affects only
     // its drawing, never star hit targets, the save path, or the dialog window.
     val dialogEntrance = remember { Animatable(0f) }
@@ -509,21 +502,6 @@ internal fun CanonicalRecordingFeedbackPanel(
             }
         }
             }
-        }
-        if (confirmDiscard) {
-        ConfirmationAlert(
-            hazeState = null,
-            title = androidx.compose.ui.res.stringResource(R.string.editor_discard_title),
-            description = androidx.compose.ui.res.stringResource(R.string.editor_discard_rating_body),
-            confirmLabel = androidx.compose.ui.res.stringResource(R.string.editor_discard_confirm),
-            dismissLabel = androidx.compose.ui.res.stringResource(R.string.editor_keep_editing),
-            destructive = true,
-            onConfirm = {
-                confirmDiscard = false
-                onDismiss()
-            },
-            onDismiss = { confirmDiscard = false },
-        )
         }
     }
 }
