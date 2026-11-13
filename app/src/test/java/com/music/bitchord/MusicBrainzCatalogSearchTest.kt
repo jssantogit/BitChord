@@ -59,7 +59,6 @@ class MusicBrainzCatalogSearchTest {
         assertEquals("IU", editions.single().artistDisplay)
     }
 
-class MusicBrainzCatalogSearchTest {
     @Test
     fun worldwideReleasesAndGenreUseFieldedQueriesNotLocalIndex() = runBlocking {
         val calls = mutableListOf<Pair<String, Map<String, String>>>()
