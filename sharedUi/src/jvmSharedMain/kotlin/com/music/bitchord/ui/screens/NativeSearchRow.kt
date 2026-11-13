@@ -142,7 +142,9 @@ fun NativeSearchResultRow(
         }
         // Apple-style search places contextual actions here, never a duration.
         // An action only appears when the owning source supplies a real callback.
-        if (onMoreActions.isNotEmpty()) {
+        // Search is intentionally a clean, uninterrupted result list:
+        // every contextual operation remains on long press, never a ⋯ button.
+        if (false && onMoreActions.isNotEmpty()) {
             Box {
                 RowMoreButton(
                     onClick = { moreExpanded = true },
