@@ -120,6 +120,10 @@ internal fun nativeCompactMenuRowHeightDp(homePlateStyle: Boolean): Int =
 internal fun nativeCompactMenuCornerRadiusDp(homePlateStyle: Boolean): Int =
     if (homePlateStyle) 16 else 18
 
+/** One source for the colored/neutral plate shared by top-bar overflow menus. */
+internal fun nativeCompactPlateColor(isDark: Boolean, artworkElevation: Color?): Color =
+    (artworkElevation ?: if (isDark) Color.Black else Color.White).copy(alpha = 0.96f)
+
 /**
  * One compact popup surface for Home/Explore and the playlist editor.
  *
@@ -143,6 +147,8 @@ fun NativeCompactOverflowMenu(
     maxMenuWidth: Dp = 320.dp,
     /** All overflow menus use the same solid, native catalog-source plate. */
     homePlateStyle: Boolean = true,
+    /** Color from ArtworkPalette.elevated for pages with dynamic cover washes. */
+    plateTint: Color? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val visible = remember { MutableTransitionState(false) }
@@ -155,7 +161,7 @@ fun NativeCompactOverflowMenu(
     }
     val reduceMotion = LocalReduceAnimations.current
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val plate = (if (isDark) Color.Black else Color.White).copy(alpha = 0.94f)
+    val plate = nativeCompactPlateColor(isDark, plateTint)
     val hairline = if (isDark) Color.White.copy(alpha = 0.10f)
         else Color.Black.copy(alpha = 0.06f)
     val duration = if (reduceMotion) 0 else 170
