@@ -335,6 +335,24 @@ internal class MusicBrainzCatalogSearch(
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> =
         searchReleasesInternal(query, limit, offset)
 
+    /**
+     * Barcode is an exact *candidate index* only. A UPC can identify multiple
+     * editions, so every returned MB Release still needs a complete, distinct
+     * Release graph and an exact Apple tracklist match before a crosswalk.
+     */
+    suspend fun searchReleasesByBarcode(
+        barcode: String, limit: Int = 12,
+    ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> {
+        if (!Regex("^[0-9]{8,14}$").matches(barcode) || limit !in 1..100) {
+            return MusicBrainzCatalogSearchResult.Failure(
+                MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+            )
+        }
+        return searchReleasesInternal(
+            "barcode:$barcode", limit, 0, fieldedQuery = true,
+        )
+    }
+
     suspend fun searchReleasesForArtistMbid(
         artistMbid: String,
         limit: Int = 25,
