@@ -16,6 +16,17 @@ internal data class ItunesVerifiedReleaseGroupLink(
     val musicBrainzReleaseGroupId: String,
 )
 
+/** These links are *already independently verified* by the crosswalk layer. */
+internal data class ItunesVerifiedArtistLink(
+    val appleScopedId: String,
+    val musicBrainzArtistId: String,
+)
+
+internal data class ItunesVerifiedRecordingLink(
+    val appleScopedId: String,
+    val musicBrainzRecordingId: String,
+)
+
 internal data class ItunesEditorialRelease(
     val appleScopedId: String,
     val appleCollectionId: Long,
@@ -30,10 +41,36 @@ internal data class ItunesEditorialRelease(
     val trackCount: Int?,
     val tracks: List<ItunesCatalogItem>,
     val musicBrainzReleaseGroupId: String?,
+    val musicBrainzArtistId: String?,
+    /** Only matching Apple track IDs with independently verified MB recording IDs. */
+    val musicBrainzRecordingIds: Map<String, String>,
 )
 
 internal object ItunesEditorialCatalog {
     private val mbid = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+    /**
+     * Do not trust a crosswalk that produces two distinct MBIDs for one Apple
+     * resource. Silence the annotation instead of arbitrarily picking one.
+     */
+    private fun verifiedIdentityMap(
+        country: String,
+        kind: ItunesCatalogItemType,
+        links: List<Pair<String, String>>,
+    ): Map<String, String> {
+        val prefix = "itunes:$country:${kind.key}:"
+        return links.asSequence()
+            .filter { (key, value) ->
+                key.startsWith(prefix) &&
+                    key.removePrefix(prefix).toLongOrNull()?.let { it > 0L } == true &&
+                    mbid.matches(value.lowercase(Locale.ROOT))
+            }
+            .groupBy({ it.first }, { it.second.lowercase(Locale.ROOT) })
+            .mapNotNull { (key, values) ->
+                values.distinct().singleOrNull()?.let { key to it }
+            }
+            .toMap()
+    }
 
     /**
      * The Search API returns collectionType=Album for EPs and singles as well.
@@ -62,6 +99,8 @@ internal object ItunesEditorialCatalog {
         storefront: String,
         appleRows: List<ItunesCatalogItem>,
         verifiedLinks: List<ItunesVerifiedReleaseGroupLink> = emptyList(),
+        verifiedArtistLinks: List<ItunesVerifiedArtistLink> = emptyList(),
+        verifiedRecordingLinks: List<ItunesVerifiedRecordingLink> = emptyList(),
     ): List<ItunesEditorialRelease> {
         val country = storefront.trim().lowercase(Locale.ROOT)
         if (!Regex("[a-z]{2}").matches(country)) return emptyList()
@@ -70,11 +109,18 @@ internal object ItunesEditorialCatalog {
             .distinctBy { it.scopedId }
             .toList()
 
-        val links = verifiedLinks.asSequence()
-            .filter { it.appleScopedId.startsWith("itunes:$country:album:") }
-            .filter { mbid.matches(it.musicBrainzReleaseGroupId.lowercase(Locale.ROOT)) }
-            .distinctBy { it.appleScopedId }
-            .associate { it.appleScopedId to it.musicBrainzReleaseGroupId.lowercase(Locale.ROOT) }
+        val links = verifiedIdentityMap(
+            country, ItunesCatalogItemType.ALBUM,
+            verifiedLinks.map { it.appleScopedId to it.musicBrainzReleaseGroupId },
+        )
+        val artists = verifiedIdentityMap(
+            country, ItunesCatalogItemType.ARTIST,
+            verifiedArtistLinks.map { it.appleScopedId to it.musicBrainzArtistId },
+        )
+        val recordings = verifiedIdentityMap(
+            country, ItunesCatalogItemType.TRACK,
+            verifiedRecordingLinks.map { it.appleScopedId to it.musicBrainzRecordingId },
+        )
 
         val tracksByCollection = rows.asSequence()
             .filter { it.type == ItunesCatalogItemType.TRACK && it.collectionId != null }
@@ -89,6 +135,7 @@ internal object ItunesEditorialCatalog {
             .filter { it.type == ItunesCatalogItemType.ALBUM && it.title.isNotBlank() &&
                 !it.artistName.isNullOrBlank() }
             .map { album ->
+                val albumTracks = tracksByCollection[album.id].orEmpty()
                 ItunesEditorialRelease(
                     appleScopedId = album.scopedId,
                     appleCollectionId = album.id,
@@ -101,8 +148,14 @@ internal object ItunesEditorialCatalog {
                     format = formatFromAppleTitle(album.title),
                     artworkUrl = album.artworkUrl,
                     trackCount = album.trackCount,
-                    tracks = tracksByCollection[album.id].orEmpty(),
+                    tracks = albumTracks,
                     musicBrainzReleaseGroupId = links[album.scopedId],
+                    musicBrainzArtistId = album.artistId?.let {
+                        artists["itunes:$country:artist:$it"]
+                    },
+                    musicBrainzRecordingIds = albumTracks.mapNotNull { row ->
+                        recordings[row.scopedId]?.let { mbid -> row.scopedId to mbid }
+                    }.toMap(),
                 )
             }
             .sortedWith(compareByDescending<ItunesEditorialRelease> { it.releaseDate.orEmpty() }
