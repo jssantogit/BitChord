@@ -356,7 +356,7 @@ private fun safeStoreLink(raw: String?): String? {
     } catch (_: Exception) { null }
 }
 
-private fun safeAppleArtwork(raw: String?): String? {
+internal fun safeAppleArtwork(raw: String?): String? {
     if (raw == null) return null
     return try {
         val uri = URI(raw)
