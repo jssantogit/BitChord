@@ -90,8 +90,11 @@ class MusicBrainzBarcodeEditionEvidenceSourceTest {
                         mbCalls += path
                         return when (path) {
                             "release" -> {
-                                assertEquals("true", parameters["dismax"])
-                                assertEquals("SUPER REAL ME ILLIT", parameters["query"])
+                                assertEquals("false", parameters["dismax"])
+                                assertEquals(
+                                    """release:"SUPER REAL ME" AND artist:"ILLIT" AND status:official""",
+                                    parameters["query"],
+                                )
                                 """{"count":1,"offset":0,"releases":[{
                                   "id":"$editionId","title":"SUPER REAL ME","status":"Official",
                                   "artist-credit":[{"name":"ILLIT",
