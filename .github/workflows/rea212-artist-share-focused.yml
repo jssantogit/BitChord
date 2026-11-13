@@ -1,0 +1,51 @@
+# Artist share retains the Android chooser and uses native toolbar dimensions.
+# Exact source pin; no APK, merge or release.
+name: REA 212 · Artist share toolbar focused tests
+
+on:
+  push:
+    branches: [validation/rea212-artist-share-50a9de16-20261113]
+    paths: [.github/workflows/rea212-artist-share-focused.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@v4
+        with:
+          ref: 50a9de16667349c6b538b23611b1aeb9a4ade52f
+      - name: Assert exact source
+        run: test "$(git rev-parse HEAD)" = "50a9de16667349c6b538b23611b1aeb9a4ade52f"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure tests
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused toolbar and held menus
+        run: |
+          ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest \
+            --tests "com.music.bitchord.ui.components.GlobalAppleTopBarChromeTest" \
+            --tests "com.music.bitchord.ui.screens.SmartPlaylistSavedFilterHeldMenuTest" \
+            --tests "com.music.bitchord.ui.screens.CanonicalLibraryHeldContextMenuPolicyTest" \
+            --tests "com.music.bitchord.LibraryPlaylistHeldMenuPolicyTest"
+      - name: Failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-artist-share-failure-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
