@@ -3903,9 +3903,11 @@ private fun BitChordApp(
                             canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
                             appleResults = viewModel.appleEditorialResults.collectAsStateWithLifecycle().value,
                             appleArtistResults = viewModel.appleEditorialArtists.collectAsStateWithLifecycle().value,
+                            appleTrackResults = viewModel.appleEditorialTracks.collectAsStateWithLifecycle().value,
                             appleDetail = appleAlbumDetail,
                             appleArtistDetail = appleArtistDetail,
                             onAppleOpen = viewModel::openAppleEditorialEntry,
+                            onAppleTrackOpen = viewModel::openAppleEditorialTrackAlbum,
                             onAppleBack = viewModel::backAppleEditorialAlbum,
                             onAppleArtistBack = viewModel::backAppleEditorialArtist,
                             canonicalPublicPlaylists = com.music.bitchord.ui.rememberCanonicalPublicPlaylistSearchUi(
