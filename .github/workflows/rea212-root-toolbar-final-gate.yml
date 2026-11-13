@@ -1,0 +1,37 @@
+name: REA 212 · Root toolbar final Android gate
+on:
+  push:
+    branches:
+      - validation/rea212-root-toolbar-final-20261113
+permissions:
+  contents: read
+jobs:
+  android-tests:
+    name: Root motion + Android + shared UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout fixed PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Verify exact app and shared code
+        run: git diff --exit-code 8214285a9741fbe09875d4f48a6391489d4156b6 HEAD -- app sharedUi
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure Android unit tests
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "" >> local.properties
+          chmod +x gradlew
+      - name: Focused motion regression tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.GlobalAppleTopBarChromeTest --tests com.music.bitchord.ui.components.RouteArrivalMotionTest
+      - name: Full Android unit tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI JVM tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
