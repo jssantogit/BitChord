@@ -39,6 +39,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -109,6 +111,15 @@ private class NativeCompactMenuActionGate {
 private val LocalNativeCompactMenuActionGate =
     compositionLocalOf<NativeCompactMenuActionGate?> { null }
 
+private val LocalNativeCompactHomePlateStyle = compositionLocalOf { false }
+
+/** Keep the familiar compact button menu unless the creator opts into the held plate. */
+internal fun nativeCompactMenuRowHeightDp(homePlateStyle: Boolean): Int =
+    if (homePlateStyle) 62 else 54
+
+internal fun nativeCompactMenuCornerRadiusDp(homePlateStyle: Boolean): Int =
+    if (homePlateStyle) 16 else 18
+
 /**
  * One compact popup surface for Home/Explore and the playlist editor.
  *
@@ -127,6 +138,8 @@ fun NativeCompactOverflowMenu(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     maxContentHeight: Dp? = null,
+    /** A frosted-style compact plate for product-specific creator actions. */
+    homePlateStyle: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val visible = remember { MutableTransitionState(false) }
@@ -138,6 +151,10 @@ fun NativeCompactOverflowMenu(
         visible.targetState = expanded
     }
     val reduceMotion = LocalReduceAnimations.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val plate = (if (isDark) Color.Black else Color.White).copy(alpha = 0.94f)
+    val hairline = if (isDark) Color.White.copy(alpha = 0.10f)
+        else Color.Black.copy(alpha = 0.06f)
     val duration = if (reduceMotion) 0 else 170
     val exitDuration = if (reduceMotion) 0 else 130
     val gap = with(LocalDensity.current) { 12.dp.roundToPx() }
@@ -179,15 +196,19 @@ fun NativeCompactOverflowMenu(
                 Surface(
                     modifier = modifier.widthIn(min = 208.dp, max = 320.dp)
                         .testTag("native-compact-overflow"),
-                    shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(nativeCompactMenuCornerRadiusDp(homePlateStyle).dp),
+                    color = if (homePlateStyle) plate else MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface,
-                    shadowElevation = 10.dp,
-                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+                    shadowElevation = if (homePlateStyle) 20.dp else 10.dp,
+                    border = BorderStroke(
+                        0.5.dp,
+                        if (homePlateStyle) hairline else MaterialTheme.colorScheme.outlineVariant,
+                    ),
                 ) {
                     CompositionLocalProvider(
                         LocalNativeCompactMenuActionsEnabled provides expanded,
                         LocalNativeCompactMenuActionGate provides actionGate,
+                        LocalNativeCompactHomePlateStyle provides homePlateStyle,
                     ) {
                         // Long lists (e.g. saved remote filters) scroll inside
                         // their bounded popup; short menus keep natural height.
@@ -238,8 +259,11 @@ fun NativeCompactMenuItem(
                 if (!actionEnabled || actionGate?.consumed == true) disabled()
                 if (selected != null) this.selected = selected
             }
-            .heightIn(min = 54.dp)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .heightIn(min = nativeCompactMenuRowHeightDp(LocalNativeCompactHomePlateStyle.current).dp)
+            .padding(
+                horizontal = if (LocalNativeCompactHomePlateStyle.current) 20.dp else 16.dp,
+                vertical = 10.dp,
+            ),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

@@ -618,6 +618,7 @@ internal fun SmartPlaylistV2WizardUi(
                         com.music.bitchord.ui.components.NativeCompactOverflowMenu(
                             expanded = creatorMoreOpen,
                             onDismissRequest = { creatorMoreOpen = false },
+                            homePlateStyle = true,
                         ) {
                             com.music.bitchord.ui.components.NativeCompactMenuItem(
                                 label = "Seus filtros",

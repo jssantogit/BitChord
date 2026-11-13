@@ -1207,6 +1207,7 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 com.music.bitchord.ui.components.NativeCompactOverflowMenu(
                                     expanded = more,
                                     onDismissRequest = { more = false },
+                                    homePlateStyle = true,
                                 ) {
                                     savedFilterActionsForDraft(normalMode, editingNormalId)
                                         .filterNot { it == "Editar filtro" }
