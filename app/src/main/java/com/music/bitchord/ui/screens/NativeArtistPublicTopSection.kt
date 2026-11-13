@@ -71,6 +71,7 @@ internal fun NativeArtistPublicTopSection(
     palette: ArtworkPalette,
     sampled: Boolean = false,
     onRecordingOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onRecordingHold: ((CanonicalCatalogSearchRow) -> Unit)? = null,
 ) {
     val exact = rows.filter {
         it.kind == CanonicalSearchKind.RECORDING &&
@@ -117,6 +118,12 @@ internal fun NativeArtistPublicTopSection(
             // the old metadata-only navigation there is no tap destination.
             onClick = if (recording.hasCatalogedAsset || recording.hasVerifiedLocalAsset)
                 ({ onRecordingOpen(recording) }) else null,
+            onLongPress = {
+                if (onRecordingHold != null) onRecordingHold(recording)
+                else menuExpanded = true
+            },
+            onMore = null,
+            modifier = Modifier.testTag("artist-top-row-${recording.musicBrainzId}"),
             horizontalInset = 0.dp,
             leading = {
                 val shape = RoundedCornerShape(8.dp)
@@ -158,14 +165,12 @@ internal fun NativeArtistPublicTopSection(
             showRatingSlot = false,
             actions = {
                 Box {
-                    RowMoreButton(
-                        onClick = { menuExpanded = true },
-                        modifier = Modifier.testTag("artist-top-more-${recording.musicBrainzId}"),
-                        tint = palette.onBackgroundVariant,
-                    )
-                    NativeCompactOverflowMenu(
+                    // Only clients without a global lifted-menu host keep
+                    // this legacy-compatible metadata fallback.
+                    if (onRecordingHold == null) NativeCompactOverflowMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
+                        plateTint = palette.elevated,
                     ) {
                         NativeCompactMenuItem(
                             label = "Ver no MusicBrainz",
