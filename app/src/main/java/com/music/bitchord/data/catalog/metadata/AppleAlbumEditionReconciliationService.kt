@@ -219,7 +219,7 @@ internal class AppleAlbumEditionReconciliationService(
             type = ItunesCatalogItemType.ALBUM, id = album.appleCollectionId,
             storefront = album.storefront, title = album.title,
             artistName = album.artistName, artistId = album.artistId,
-            collectionId = album.appleCollectionId, storeUrl = null,
+            collectionId = album.appleCollectionId, storeUrl = album.storeUrl,
             releaseDate = album.releaseDate, genre = album.genre,
             durationMs = null, trackNumber = null, discNumber = null,
             artworkUrl = album.artworkUrl, upc = candidateUpc,
