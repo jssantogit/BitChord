@@ -89,6 +89,38 @@ class AppleEditorialNativeSearchBridgeTest {
             "itunes:br:album:3"), rows.map { it.browseId })
     }
 
+    @Test fun artistProofUsesOnlyAnExactAppleSearchRowNotNamesOrAlbumLinks() {
+        fun artist(id: Long, country: String = "br", title: String = "Same Name") =
+            ItunesCatalogItem(
+                type = ItunesCatalogItemType.ARTIST, id = id, storefront = country,
+                title = title, artistName = title, artistId = id,
+                collectionId = null,
+                storeUrl = "https://music.apple.com/$country/artist/name/$id",
+                releaseDate = null, genre = null, durationMs = null,
+                trackNumber = null, discNumber = null,
+            )
+        val requested = com.music.bitchord.ui.screens.AppleEditorialSearchRow(
+            browseId = "itunes:br:artist:77",
+            title = "Same Name", artistName = "Same Name",
+            artworkUri = null, releaseDate = null,
+            kind = com.music.bitchord.ui.screens.AppleEditorialSearchKind.ARTIST,
+        )
+        val correct = artist(77)
+        assertEquals(correct.storeUrl,
+            com.music.bitchord.ui.appleExactArtistStoreUrl(listOf(
+                artist(88), artist(77, "us"), correct,
+            ), requested))
+        assertNull(com.music.bitchord.ui.appleExactArtistStoreUrl(
+            listOf(artist(88), artist(77, "us")), requested))
+        assertNull(com.music.bitchord.ui.appleExactArtistStoreUrl(
+            listOf(correct), requested.copy(title = "Unverified Name")))
+        assertNull(com.music.bitchord.ui.appleExactArtistStoreUrl(
+            listOf(correct, correct.copy(storeUrl = "https://music.apple.com/br/artist/other/77")),
+            requested))
+        assertNull(com.music.bitchord.ui.appleExactArtistStoreUrl(
+            listOf(correct), requested.copy(browseId = "itunes:br:album:77")))
+    }
+
     @Test fun detailedAppleTracklistKeepsItsOwnIdentityAndNeverReturnsPlayableSong() {
         val result = appleNativeAlbumDetail(
             AppleEditorialLoad.Success(listOf(edition()), AppleEditorialReadState.COMPLETE),
