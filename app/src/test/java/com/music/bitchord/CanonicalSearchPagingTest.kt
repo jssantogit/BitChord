@@ -4,6 +4,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchFailure
 import com.music.bitchord.ui.CanonicalSearchPageCursors
+import com.music.bitchord.ui.canonicalCuratedCachedMusicBrainzGroups
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import com.music.bitchord.ui.canonicalArtistContinuationRows
 import com.music.bitchord.ui.canonicalSearchRowsWithoutRedundantEditions
 import com.music.bitchord.ui.canonicalProgressiveSearchPreview
@@ -472,6 +474,35 @@ class CanonicalSearchPagingTest {
         )
 
         assertEquals(listOf(group, differentCredit), result)
+    }
+
+    @Test fun cachedTypeaheadAndFirstPaintRejectNonEditorialGroupsBeforeAnyLiveResponse() {
+        // A Room cache may contain MusicBrainz's entire editable corpus. Its
+        // first-paint/typeahead result must be as curated as live General Search.
+        val typed = MusicBrainzReleaseGroupHit(
+            "9750354e-78df-4058-8758-b5a7a2eccf66",
+            "How Sweet & Bubble Gum", "Single", "2024-05-24", "NewJeans",
+        )
+        val legitimateLive = typed.copy(
+            musicBrainzId = "11111111-1111-4111-8111-111111111111",
+            title = "Official live EP", primaryType = "EP", secondaryTypes = "Live",
+        )
+        val raw = listOf(
+            typed,
+            typed.copy(musicBrainzId = "22222222-2222-4222-8222-222222222222",
+                title = "Music video", primaryType = "Other"),
+            typed.copy(musicBrainzId = "33333333-3333-4333-8333-333333333333",
+                title = "Unclassified work", primaryType = null),
+            typed.copy(musicBrainzId = "44444444-4444-4444-8444-444444444444",
+                title = "No credited artist", artistDisplay = null),
+            typed.copy(musicBrainzId = "55555555-5555-4555-8555-555555555555",
+                title = "Dance practice version"),
+            legitimateLive,
+        )
+        assertEquals(
+            listOf(typed.musicBrainzId, legitimateLive.musicBrainzId),
+            canonicalCuratedCachedMusicBrainzGroups(raw).map { it.musicBrainzId },
+        )
     }
 
     private fun page(
