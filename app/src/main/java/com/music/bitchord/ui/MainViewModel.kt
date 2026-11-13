@@ -4617,13 +4617,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         backAppleEditorialAlbum()
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
+        // Only the Apple search record for THIS exact artist route can supply
+        // a candidate store URL. A stage name, album title, or external page
+        // cannot authorize an artist crosswalk.
+        val appleArtistUrl = applePublicPagers[AppleSearchSection.ARTISTS]
+            ?.snapshot()?.visible?.singleOrNull { item ->
+                item.type == com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType.ARTIST &&
+                    item.id == route.id &&
+                    item.storefront == route.storefront &&
+                    item.scopedId == row.browseId &&
+                    item.title == row.title
+            }?.storeUrl
         val pager = AppleArtistDiscographyPager(
             artistId = route.id,
             artistName = row.title,
             country = route.storefront,
             pageSize = 24,
             source = ItunesArtistAlbumDiscoverySource(appleEditorialRepository),
-            titleHintSource = MusicBrainzDiscogsAppleTitleHintSource(),
+            titleHintSource = com.music.bitchord.data.catalog.metadata
+                .VerifiedAppleArtistTitleHintSource(
+                    artistId = route.id,
+                    storefront = route.storefront,
+                    appleArtistUrl = appleArtistUrl,
+                ),
             // No MB artist ID is inferred from an Apple stage name.
             verifiedMbArtistId = null,
         )
