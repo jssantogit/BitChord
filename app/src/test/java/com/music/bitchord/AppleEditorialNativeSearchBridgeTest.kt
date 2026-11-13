@@ -121,6 +121,53 @@ class AppleEditorialNativeSearchBridgeTest {
             listOf(correct), requested.copy(browseId = "itunes:br:album:77")))
     }
 
+    @Test fun runtimeEditionProofUpdatesOnlyAlbumCategoryAndPreservesAppleDetail() {
+        val album = edition(title = "HOT")
+        val source = AppleEditorialLoad.Success(
+            listOf(album), AppleEditorialReadState.COMPLETE,
+        )
+        val before = appleNativeAlbumDetail(source, album.appleScopedId)!!
+        val matched = com.music.bitchord.data.catalog.metadata
+            .AppleMusicBrainzEditionMatch.Verified(
+                appleScopedId = album.appleScopedId,
+                musicBrainzReleaseId = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+                musicBrainzReleaseGroupId = "529f87a1-1081-48a4-8ee1-3c08de229858",
+                recordingLinks = emptyList(),
+            )
+        val proof = com.music.bitchord.data.catalog.metadata.AppleTriSourceEditorialEntry(
+            release = album,
+            match = matched,
+            classification = com.music.bitchord.data.catalog.metadata
+                .AppleEditorialFormatResolution(
+                    format = ItunesEditorialReleaseFormat.EP,
+                    status = com.music.bitchord.data.catalog.metadata
+                        .AppleEditorialFormatStatus.DECIDED,
+                    sources = setOf(com.music.bitchord.data.catalog.metadata
+                        .AppleEditorialFormatSource.MUSICBRAINZ),
+                    disputedExternalFormats = emptySet(),
+                ),
+            discogsEdition = null,
+        )
+        val after = com.music.bitchord.ui.appleNativeReconciledAlbumDetail(
+            source, album.appleScopedId, proof,
+        )!!
+        assertEquals(AppleEditorialReleaseCategory.UNCLASSIFIED, before.album.category)
+        assertEquals(AppleEditorialReleaseCategory.EP, after.album.category)
+        assertEquals(before.tracks, after.tracks)
+        assertEquals(before.album.artworkUri, after.album.artworkUri)
+        assertEquals(before.album.title, after.album.title)
+        assertEquals(before.partialTracklist, after.partialTracklist)
+        assertEquals(before, com.music.bitchord.ui.appleNativeReconciledAlbumDetail(
+            source, album.appleScopedId,
+            proof.copy(match = com.music.bitchord.data.catalog.metadata
+                .AppleMusicBrainzEditionMatch.NoMatch),
+        ))
+        assertEquals(before, com.music.bitchord.ui.appleNativeReconciledAlbumDetail(
+            source, album.appleScopedId,
+            proof.copy(release = album.copy(appleCollectionId = 102)),
+        ))
+    }
+
     @Test fun detailedAppleTracklistKeepsItsOwnIdentityAndNeverReturnsPlayableSong() {
         val result = appleNativeAlbumDetail(
             AppleEditorialLoad.Success(listOf(edition()), AppleEditorialReadState.COMPLETE),
