@@ -39,3 +39,13 @@ data class AppleEditorialArtistDetailPage(
     val albums: List<AppleEditorialSearchRow>,
     val possiblyTruncated: Boolean,
 )
+
+/** Apple song search is catalog metadata only, not a playable Song or MediaAsset. */
+data class AppleEditorialTrackSearchRow(
+    val key: String,
+    val title: String,
+    val artistName: String,
+    val artworkUri: String?,
+    val albumBrowseId: String?,
+    val durationMs: Long?,
+)
