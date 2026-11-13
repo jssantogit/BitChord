@@ -37,6 +37,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.music.bitchord.R
+import com.music.bitchord.NativeArtistShareTopBarButton
 import com.music.bitchord.ui.theme.BitChordTheme
 import com.music.bitchord.ui.screens.CircleIconButton
 import com.music.bitchord.ui.screens.ActionPill
@@ -359,4 +360,22 @@ class GlobalAppleTopBarChromeTest {
             .performClick()
         compose.runOnIdle { assertEquals(1, backs) }
     }
+    @Test fun artistShareMatchesNativeFortyDpToolbarAndCallsAction() {
+        var calls = 0
+        compose.setContent {
+            BitChordTheme {
+                NativeArtistShareTopBarButton(onClick = { calls++ })
+            }
+        }
+        compose.onNodeWithTag("native-artist-share-toolbar")
+            .assertWidthIsEqualTo(AppleFloatingControlMetrics.toolbarDiameter)
+            .assertHasClickAction()
+            .performClick()
+        compose.runOnIdle { assertEquals(1, calls) }
+        compose.onNodeWithContentDescription(
+            RuntimeEnvironment.getApplication().getString(R.string.share),
+        ).assertExists()
+    }
+
+
 }
