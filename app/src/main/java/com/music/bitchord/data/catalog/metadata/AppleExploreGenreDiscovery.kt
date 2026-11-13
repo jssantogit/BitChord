@@ -47,11 +47,19 @@ internal class AppleExploreGenreDiscovery(
         tag: String,
         seeds: List<AppleHomeEditorialSeed>,
         storefront: String = "br",
+        onProgress: suspend (List<ItunesEditorialRelease>) -> Unit = {},
     ): AppleEditorialLoad {
         if (!AppleExploreGenrePolicy.supports(tag)) {
             return AppleEditorialLoad.Failure(ItunesCatalogFailure.INVALID_QUERY)
         }
-        return when (val source = catalog.discover(seeds, storefront, maxProbes = 8)) {
+        return when (val source = catalog.discover(
+            seeds, storefront, maxProbes = 8,
+            onProgress = { rows ->
+                onProgress(rows.filter {
+                    AppleExploreGenrePolicy.matches(tag, it.genre)
+                })
+            },
+        )) {
             is AppleEditorialLoad.Failure -> source
             is AppleEditorialLoad.Success -> {
                 val matched = source.releases.filter {
