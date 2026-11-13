@@ -250,7 +250,7 @@ fun NativeDetailTrackRowFrame(
             .fillMaxWidth()
             .alpha(opacity)
             .background(background)
-            .then(if (onClick != null) {
+            .then(if (onClick != null || onLongPress != null) {
                 Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
                     .contextClick(onMore ?: onLongPress)
             } else Modifier)
