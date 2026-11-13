@@ -80,7 +80,9 @@ fun NativeSearchResultRow(
     // Metadata-only hits retain this menu without inventing a play action.
     val rowHold: (() -> Unit)? = onLongPress ?: if (onMoreActions.isNotEmpty())
         ({ moreExpanded = true }) else null
-    val rowClick: (() -> Unit)? = onClick ?: if (onMoreActions.isNotEmpty())
+    // A metadata result with its own lifted hold must not open an obsolete
+    // compact menu when tapped. Only rows without a hold use the fallback.
+    val rowClick: (() -> Unit)? = onClick ?: if (onLongPress == null && onMoreActions.isNotEmpty())
         ({ moreExpanded = true }) else null
     Row(
         modifier = Modifier
