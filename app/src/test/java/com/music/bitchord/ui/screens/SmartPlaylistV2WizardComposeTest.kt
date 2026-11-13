@@ -365,16 +365,14 @@ class SmartPlaylistV2WizardComposeTest {
                 currentPreviewQuery = null, onManage = {}, onBack = {},
             )
         }
-        // The LazyColumn virtualizes cards on compact phone windows; assert
-        // each group when it is visible rather than requiring both composed.
+        // Source and playlist-kind controls are now native editorial choices:
+        // neither must inherit Settings' old generic chevron/radio composition.
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Fontes de origem").assertExists()
-        assertEquals(true, compose.onAllNodesWithTag("native-settings-group-surface")
-            .fetchSemanticsNodes().isNotEmpty())
+        compose.onNodeWithTag("playlist-source-selector").assertExists()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Tipo de playlist").assertExists()
-        assertEquals(true, compose.onAllNodesWithTag("native-settings-group-surface")
-            .fetchSemanticsNodes().isNotEmpty())
+        compose.onNodeWithTag("playlist-kind-smart").assertIsSelected()
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Adicionar primeira condição").performClick()
@@ -910,8 +908,8 @@ class SmartPlaylistV2WizardComposeTest {
             )
         }
         compose.onNodeWithText("Nova playlist").assertExists()
-        // Identity now includes a 112dp neutral artwork preview; the sources
-        // card is below the fold on Robolectric's compact test window.
+        // Identity retains the real artwork; the editorial source summary
+        // remains below the fold on Robolectric's compact test window.
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Fontes de origem").assertExists()
         compose.onNodeWithText("Continuar").performClick()
