@@ -81,6 +81,17 @@ class ApplePublicSearchPagerTest {
         assertEquals(2, fake.calls.count { it == ItunesCatalogSearchAttribute.ALBUM_TERM })
     }
 
+    @Test fun invalidUserSearchQueryReturnsFailureInsteadOfCrashingConstructor() =
+        runBlocking {
+            val fake = Fake(ItunesCatalogResult.Success(emptyList()))
+            val pager = ApplePublicSearchPager(
+                query = "Invalid\\nName", entity = ItunesCatalogEntity.ALBUM,
+                country = "br", source = fake,
+            )
+            assertTrue(pager.start() is ApplePublicSearchPageLoad.Failure)
+            assertTrue(fake.calls.isEmpty())
+        }
+
     @Test fun contradictorySnapshotsForSameAppleIdAreExcludedNotPickedByFirstRow() =
         runBlocking {
             val fake = Fake(
