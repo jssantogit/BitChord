@@ -48,6 +48,33 @@ class AppleHomeEditorialDiscoveryTest {
         assertNull(result.releases.single().musicBrainzArtistId)
     }
 
+    @Test fun consecutiveAppleProbesCanPublishProgressiveVerifiedHomeCards() =
+        runBlocking {
+            val snapshots = mutableListOf<List<Long>>()
+            val collector = AppleHomeEditorialDiscovery(
+                source = AppleHomeAlbumSearchSource { title, _ ->
+                    found(
+                        if (title == "First") album(10, "First")
+                        else album(11, "Second"),
+                    )
+                },
+            )
+            val final = collector.discover(
+                listOf(
+                    AppleHomeEditorialSeed("First", "ILLIT"),
+                    AppleHomeEditorialSeed("Second", "ILLIT"),
+                ),
+                storefront = "br",
+                onProgress = { releases ->
+                    snapshots += releases.map { it.appleCollectionId }
+                },
+            ) as AppleEditorialLoad.Success
+            assertEquals(listOf(listOf(10L), listOf(10L, 11L)), snapshots)
+            assertEquals(listOf(10L, 11L), final.releases.map {
+                it.appleCollectionId
+            }.sorted())
+        }
+
     @Test fun duplicateAppleProductWithConflictingFieldsIsNeverChosenBySearchOrder() =
         runBlocking {
             val collector = AppleHomeEditorialDiscovery(
