@@ -1,0 +1,50 @@
+# Match the real column arrangement of NativeCompactOverflowMenu/HeldContextMenu.
+# Exact PR source, focused tests only; no APK or merge.
+name: REA 212 · Corrected native held-action regressions
+
+on:
+  push:
+    branches: [validation/rea212-held-corrected-e24efda6-20261113]
+    paths: [.github/workflows/rea212-held-corrected-test-only.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout pinned source SHA
+        uses: actions/checkout@v4
+        with:
+          ref: e24efda62024d4fb704058cfed130bc222cf612c
+      - name: Assert exact SHA
+        run: test "$(git rev-parse HEAD)" = "e24efda62024d4fb704058cfed130bc222cf612c"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure tests
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused held menu tests
+        run: |
+          ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest \
+            --tests "com.music.bitchord.ui.screens.SmartPlaylistSavedFilterHeldMenuTest" \
+            --tests "com.music.bitchord.ui.screens.CanonicalLibraryHeldContextMenuPolicyTest" \
+            --tests "com.music.bitchord.LibraryPlaylistHeldMenuPolicyTest"
+      - name: Failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-corrected-menu-failures
+          path: app/build/reports/tests/
+          retention-days: 3
+          if-no-files-found: ignore
