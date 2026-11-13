@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +99,11 @@ fun <T : Any> HeldContextMenu(
     val shown = requested ?: last ?: return
     val (menuItem, heldItem) = shown
     val open = requested != null
+    // Also restore the originating row if navigation tears down this overlay
+    // while its reverse animation has not completed.
+    DisposableEffect(heldItem) {
+        onDispose { heldItem.releaseLift() }
+    }
 
     val context = LocalContext.current
     val appReduceAnimation by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
@@ -127,6 +133,7 @@ fun <T : Any> HeldContextMenu(
                 0f,
                 tween(durationMillis = if (reduceMotion) 110 else 230, easing = FastOutSlowInEasing),
             )
+            heldItem.releaseLift()
             last = null
         }
     }
