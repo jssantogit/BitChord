@@ -42,6 +42,7 @@ internal enum class ItunesCatalogEntity(val apiValue: String) {
 internal enum class ItunesCatalogSearchAttribute(val apiValue: String) {
     ARTIST_TERM("artistTerm"),
     ALBUM_TERM("albumTerm"),
+    SONG_TERM("songTerm"),
 }
 
 internal enum class ItunesCatalogItemType(val key: String) {
