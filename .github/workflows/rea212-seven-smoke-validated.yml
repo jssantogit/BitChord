@@ -1,0 +1,48 @@
+# Full test-only validation of the seven user-supplied visual regressions.
+# Uses an immutable source checkout; no APK or merge.
+name: REA 212 · Seven screenshots fixes and lifted bitmap regression
+
+on:
+  push:
+    branches: [validation/rea212-seven-smoke-1f5fd2d7-20261113]
+    paths: [.github/workflows/rea212-seven-smoke-validated.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  android-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout reviewed PR 212 SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 1f5fd2d7a95677ae3a21bb150f43cad2e069cfd0
+      - name: Verify immutable source
+        run: test "$(git rev-parse HEAD)" = "1f5fd2d7a95677ae3a21bb150f43cad2e069cfd0"
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure app
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app all unit tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI tests for bitmap source visibility
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Failed reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-seven-fixes-failed-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
