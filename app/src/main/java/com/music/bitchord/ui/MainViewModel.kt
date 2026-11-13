@@ -1576,20 +1576,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Native release tracks must never be delayed by CAA/Archive redirects.
      * Artwork updates only the still-open canonical page, never an old browse.
      */
-    private fun enrichCanonicalNativeReleaseCover(entry: CanonicalCatalogSearchRow) {
+    private fun enrichCanonicalNativeReleaseCover(
+        entry: CanonicalCatalogSearchRow,
+        displayedGroupReleaseMbid: String? = null,
+    ) {
         canonicalAppleArtworkJob?.cancel()
         _canonicalAppleArtworkPromotion.value = null
-        // Only native, exact MB Release pages may use a verified Apple promo
-        // sleeve. A group or a Recording has no unique Apple product here.
-        // Run this alongside the CAA fetch: offline/older artwork paints
-        // immediately, then the Apple result can replace it only with proof.
-        if (entry.kind == CanonicalSearchKind.RELEASE) {
+        // Group art can use Apple ONLY for the MB Release chosen to supply
+        // this detail page's tracklist. A group name/ID alone is insufficient.
+        val appleEditionMbid = when (entry.kind) {
+            CanonicalSearchKind.RELEASE -> entry.musicBrainzId
+            CanonicalSearchKind.RELEASE_GROUP -> displayedGroupReleaseMbid
+            else -> null
+        }
+        // Run independently of CAA; never delay the native tracklist.
+        if (appleEditionMbid != null) {
             canonicalAppleArtworkJob = viewModelScope.launch(Dispatchers.IO) {
-                val proof = try {
-                    canonicalAppleArtworkResolver.resolve(entry.musicBrainzId, "br")
+                val resolved = try {
+                    canonicalAppleArtworkResolver.resolve(appleEditionMbid, "br")
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null } ?: return@launch
+                val proof = (if (entry.kind == CanonicalSearchKind.RELEASE_GROUP) {
+                    com.music.bitchord.data.catalog.metadata
+                        .verifiedAppleArtworkForDisplayedGroupEdition(
+                            resolved, entry.musicBrainzId, displayedGroupReleaseMbid,
+                        )
+                } else resolved) ?: return@launch
                 val route = canonicalNativeBrowseId(entry)
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     canonicalPath.lastOrNull() != entry ||
@@ -1597,14 +1610,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ) return@launch
                 val current = (_canonicalDetail.value as? UiState.Success)?.data
                     ?: return@launch
-                // The badge must become visible along with the promotional
-                // artwork. Never apply Apple art to a row/shelf unaccompanied
-                // by its exact Apple Store product link.
-                _canonicalAppleArtworkPromotion.value = route to proof
                 val chosenArtwork = com.music.bitchord.data.catalog.metadata
                     .bestCertifiedAppleOrArchiveCover(
                         proof.artworkUrl, current.artworkUri,
                     )
+                // The Group page can initially contain a CAA Front from
+                // another edition. Do not attach this Apple product badge
+                // to that different sleeve; only display it when Apple
+                // actually supplies the selected detail edition's cover.
+                if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                    chosenArtwork != proof.artworkUrl
+                ) return@launch
+                _canonicalAppleArtworkPromotion.value = route to proof
                 if (chosenArtwork != null && chosenArtwork != current.artworkUri) {
                     _canonicalDetail.value = UiState.Success(current.copy(
                         artworkUri = chosenArtwork,
@@ -1659,6 +1676,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 canonicalShouldAcceptVerifiedGroupArtwork(current.artworkUri, artwork)
             else canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)
             if (!accepted) return@launch
+            // A later CAA image can win on resolution. On ReleaseGroups
+            // this may be another edition's sleeve: never keep the Apple
+            // attribution badge attached to a different edition's cover.
+            if (entry.kind == CanonicalSearchKind.RELEASE_GROUP && promotion != null &&
+                artwork != promotion.artworkUrl
+            ) _canonicalAppleArtworkPromotion.value = null
             _canonicalDetail.value = UiState.Success(current.copy(
                 artworkUri = artwork,
                 rows = canonicalReleaseTracksWithArtwork(
@@ -1899,6 +1922,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             var artistFirstPage: MusicBrainzCatalogPage<MusicBrainzReleaseGroupHit>? = null
+            // Exact Release providing the Group page's displayed tracklist.
+            // Never reuse Apple artwork from a different Release of that group.
+            var displayedGroupReleaseMbid: String? = null
             val output: UiState<CanonicalCatalogDetailPage> = when (entry.kind) {
                 CanonicalSearchKind.ARTIST -> when (
                     val result = // Group-first discovery needs enough range for albums AND singles/EPs;
@@ -2126,8 +2152,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (_: Exception) { null }
                         // Publish tracks immediately; remote cover is a separate,
                         // cancellable decoration, never a tracklist prerequisite.
-                        if (page != null) UiState.Success(page)
-                        else UiState.Error(getApplication<Application>().getString(
+                        if (page != null) {
+                            displayedGroupReleaseMbid = detail.musicBrainzId
+                            UiState.Success(page)
+                        } else UiState.Error(getApplication<Application>().getString(
                             R.string.canonical_discovery_cache_empty,
                         ))
                     }
@@ -2238,7 +2266,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } else if (entry.kind == CanonicalSearchKind.RELEASE ||
                         entry.kind == CanonicalSearchKind.RELEASE_GROUP
                     ) {
-                        enrichCanonicalNativeReleaseCover(entry)
+                        enrichCanonicalNativeReleaseCover(entry, displayedGroupReleaseMbid)
                     }
                 }
             }
