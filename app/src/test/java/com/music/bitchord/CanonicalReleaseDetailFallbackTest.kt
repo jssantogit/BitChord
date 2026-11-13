@@ -12,9 +12,11 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseJsonCompleteness
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
 import com.music.bitchord.ui.canonicalPersistedReleaseDetailPage
+import com.music.bitchord.ui.canonicalVerifiedLiveReleaseDetailPage
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -103,6 +105,38 @@ class CanonicalReleaseDetailFallbackTest {
         } finally {
             db.close()
         }
+    }
+
+    @Test fun completeLiveMusicBrainzEditionStillDisplaysWithoutRoomPersistence() {
+        val releaseId = "74c530a8-9280-48bc-88f5-635c1cfb6173"
+        val good = MusicBrainzCatalogReleaseDetail(
+            releaseId, null, "&Our Vibe", "SAY MY NAME", null, "2025-12-29",
+            listOf(
+                MusicBrainzCatalogTrack(
+                    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    "Bad Idea", 1, 1, null,
+                ),
+                MusicBrainzCatalogTrack(
+                    "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                    "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                    "UFO (ATTENT!ON)", 1, 2, null,
+                ),
+            ),
+            completeness = MusicBrainzReleaseJsonCompleteness(true, true, true),
+        )
+        val page = canonicalVerifiedLiveReleaseDetailPage(good, null)
+        assertNotNull(page)
+        assertEquals(listOf("1.1  Bad Idea", "1.2  UFO (ATTENT!ON)"),
+            page!!.rows.map { it.title })
+        assertEquals(listOf(false, false), page.rows.map { it.hasCatalogedAsset })
+        assertNull(canonicalVerifiedLiveReleaseDetailPage(
+            good.copy(completeness = MusicBrainzReleaseJsonCompleteness(false, true, true)),
+            null,
+        ))
+        assertNull(canonicalVerifiedLiveReleaseDetailPage(
+            good.copy(tracks = emptyList()), null,
+        ))
     }
 
     @Test fun rejectedPartialRefreshDisplaysTrustedCachedRowsAndNeverPublishesPartialInput() = runBlocking {
