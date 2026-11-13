@@ -90,7 +90,9 @@ class AppleAlbumEditionReconciliationServiceTest {
         assertEquals(1, requested)
         assertNull(service.resolve(apple(trackCount = 3)))
         assertNull(service.resolve(apple(upc = null)))
-        assertEquals(1, requested) // Incomplete and missing UPC fail before network.
+        // Missing UPC now permits candidate discovery but NOT an identity link:
+        // the injected source supplied no independent Apple lookup proof.
+        assertEquals(2, requested)
     }
 
     @Test fun missingAppleUpcOnlyBecomesLinkableWithSeparateAppleLookupProof() =
