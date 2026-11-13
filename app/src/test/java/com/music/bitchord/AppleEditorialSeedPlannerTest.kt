@@ -47,6 +47,25 @@ class AppleEditorialSeedPlannerTest {
             selected.map { it.title })
     }
 
+    @Test fun allFailedAppleRequestsStillProduceDiagnosticCoverageReport() =
+        runBlocking {
+            val collector = AppleHomeEditorialDiscovery(
+                source = AppleHomeAlbumSearchSource { _, _ ->
+                    AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+                },
+            )
+            val result = collector.discover(
+                listOf(seed("SUPER REAL ME", "ILLIT"), seed("EASY", "LE SSERAFIM")),
+                "br", maxProbes = 2,
+            ) as AppleEditorialLoad.Failure
+            assertEquals(ItunesCatalogFailure.UNAVAILABLE, result.reason)
+            assertEquals(AppleEditorialProbeReport(
+                eligibleSeeds = 2, probesMade = 2, matchingProducts = 0,
+                withoutMatchingProducts = 0, failedRequests = 2,
+                incompleteResponses = 0, budgetLimited = false,
+            ), result.probeReport)
+        }
+
     @Test fun reportMeasuresActualCallsAndNoMatchInsteadOfInventingCoverage() =
         runBlocking {
             val asked = mutableListOf<String>()
