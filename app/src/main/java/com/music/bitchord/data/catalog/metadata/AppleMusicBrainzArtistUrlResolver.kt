@@ -30,16 +30,27 @@ internal class MusicBrainzAppleArtistUrlResolver(
         if (artistId <= 0L || appleArtistUrl == null ||
             !AppleArtistUrlIdentity.sameArtist(appleArtistUrl, artistId, storefront)
         ) return null
-        val json = try {
-            source.lookup(appleArtistUrl)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            return null
+        // Store links often include Apple tracking parameters (?uo=4).
+        // MusicBrainz relations may reference the same official artist path
+        // without them. Probe both exact official URL forms, never by name.
+        val candidates = AppleArtistUrlIdentity.lookupForms(appleArtistUrl)
+        val linkedArtists = mutableSetOf<String>()
+        candidates.forEach { candidate ->
+            val response = try {
+                source.lookup(candidate)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+            if (response != null) {
+                linkedArtists += AppleArtistUrlIdentity.linkedMusicBrainzArtists(
+                    response, artistId, storefront,
+                )
+                if (linkedArtists.size > 1) return null
+            }
         }
-        return AppleArtistUrlIdentity.verifiedMusicBrainzArtist(
-            json, artistId, storefront,
-        )
+        return linkedArtists.singleOrNull()
     }
 }
 
@@ -72,16 +83,25 @@ private object AppleArtistUrlIdentity {
             numeric.toLongOrNull() == artistId
     }
 
-    fun verifiedMusicBrainzArtist(response: String, artistId: Long, storefront: String): String? =
+    fun lookupForms(url: String): List<String> {
+        val uri = URI(url)
+        val withoutTracking = "https://${uri.host}${uri.rawPath}"
+        return listOf(withoutTracking, url).distinct()
+    }
+
+    fun linkedMusicBrainzArtists(
+        response: String, artistId: Long, storefront: String,
+    ): Set<String> =
         try {
-            val root = json.parseToJsonElement(response) as? JsonObject ?: return null
+            val root = json.parseToJsonElement(response) as? JsonObject
+                ?: return emptySet()
             val resource = (root["resource"] as? JsonPrimitive)?.contentOrNull
-                ?: return null
-            if (!sameArtist(resource, artistId, storefront)) return null
+                ?: return emptySet()
+            if (!sameArtist(resource, artistId, storefront)) return emptySet()
             val urlMbid = (root["id"] as? JsonPrimitive)?.contentOrNull
-                ?.lowercase(Locale.ROOT) ?: return null
-            if (!mbid.matches(urlMbid)) return null
-            val relations = root["relations"] as? JsonArray ?: return null
+                ?.lowercase(Locale.ROOT) ?: return emptySet()
+            if (!mbid.matches(urlMbid)) return emptySet()
+            val relations = root["relations"] as? JsonArray ?: return emptySet()
             val artists = relations.mapNotNull { relation ->
                 val row = relation as? JsonObject ?: return@mapNotNull null
                 if ((row["target-type"] as? JsonPrimitive)?.contentOrNull != "artist" ||
@@ -91,9 +111,9 @@ private object AppleArtistUrlIdentity {
                     ?.contentOrNull?.lowercase(Locale.ROOT)
                 id?.takeIf(mbid::matches)
             }.distinct()
-            artists.singleOrNull()
+            artists.toSet()
         } catch (_: Exception) {
-            null
+            emptySet()
         }
 }
 
