@@ -30,4 +30,26 @@ class CatalogMetadataPinsTest {
         assertFalse(validCatalogMetadataPin(release.copy(artworkUrl = "https://evil.example/a.png")))
         assertFalse(validCatalogMetadataPin(release.copy(artworkUrl = "https://coverartarchive.org@evil.example/a")))
     }
+    @Test fun pinnedReleaseCanOpenAlbumWithoutCurrentMusicBrainzSearchResults() {
+        val target = catalogMetadataPinNativeTarget(release)
+        assertEquals(release.browseId, target?.browseId)
+        assertEquals("STAY ALIVE", target?.title)
+        assertEquals("STAYC", target?.subtitle)
+        assertEquals(com.music.bitchord.data.model.BrowseType.ALBUM, target?.type)
+    }
+
+    @Test fun pinnedArtistOpensArtistDetailAndRejectsFakeIdentities() {
+        val artist = release.copy(
+            browseId = "catalog:ARTIST:$id",
+            title = "STAYC",
+            subtitle = "",
+            artworkUrl = null,
+        )
+        assertEquals(com.music.bitchord.data.model.BrowseType.ARTIST,
+            catalogMetadataPinNativeTarget(artist)?.type)
+        assertEquals(null, catalogMetadataPinNativeTarget(
+            release.copy(browseId = "catalog:RELEASE_GROUP:STAY ALIVE"),
+        ))
+    }
+
 }
