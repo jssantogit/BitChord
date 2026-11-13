@@ -5,6 +5,16 @@ package com.music.bitchord.ui.screens
  * MusicBrainz IDs, Song/videoId assets or a source of playable media.
  * Browse IDs remain storefront-scoped and must be routed by Apple handlers.
  */
+/** Only the three public iTunes Search entities displayed in General Search. */
+enum class AppleSearchSection { ARTISTS, TRACKS, ALBUMS }
+
+data class AppleSearchPageStatus(
+    val hasMore: Boolean = false,
+    val loadingMore: Boolean = false,
+    val retryableError: Boolean = false,
+    val coverageUncertain: Boolean = false,
+)
+
 enum class AppleEditorialSearchKind { ARTIST, ALBUM }
 
 /** Editorial label, not the API entity type or MusicBrainz identity. */
