@@ -1,0 +1,19 @@
+name: REA212 Android Menu Surface Inventory
+on:
+  push:
+    branches:
+      - validation/rea212-menu-inventory-20261113
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inventory old Material3 and native menu presentations
+        run: |
+          echo '=== Direct menu components under Android and shared UI ==='
+          grep -R -n -E '(DropdownMenu\(|ExposedDropdownMenu\(|Popup\(|ModalBottomSheet\(|NativeCompactOverflowMenu\(|FrostedMenuPanel\(|HeldContextMenu\()' \
+            app/src/main/java/com/music/bitchord/ui \
+            sharedUi/src/jvmSharedMain/kotlin/com/music/bitchord/ui \
+            | head -n 250 || true
