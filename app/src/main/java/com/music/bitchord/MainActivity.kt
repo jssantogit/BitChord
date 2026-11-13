@@ -836,6 +836,8 @@ private fun BitChordApp(
     val libraryState by viewModel.library.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val searchSource by viewModel.searchSource.collectAsStateWithLifecycle()
+    val canonicalAppleArtworkPromotion by
+        viewModel.canonicalAppleArtworkPromotion.collectAsStateWithLifecycle()
     val appleAlbumDetail by viewModel.appleEditorialDetail.collectAsStateWithLifecycle()
     val appleArtistDetail by viewModel.appleEditorialArtistDetail.collectAsStateWithLifecycle()
     val libraryResults by viewModel.libraryResults.collectAsStateWithLifecycle()
@@ -3607,6 +3609,9 @@ private fun BitChordApp(
                         )
                         DetailScreen(
                             page = page,
+                            appleStorePromotionUrl = canonicalAppleArtworkPromotion
+                                ?.takeIf { (pageId, _) -> pageId == page.browseId }
+                                ?.second?.storeUrl,
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
                             listState = pageDetailListState,
