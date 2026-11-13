@@ -1,0 +1,33 @@
+name: REA212 Android Menu Unification Final Gate
+on:
+  push:
+    branches:
+      - validation/rea212-menu-unification-final-20261113
+permissions:
+  contents: read
+jobs:
+  android-menus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pin verified source to PR #212
+        run: git diff --exit-code 567bed20164f24ba708f26291e569e588266c52a HEAD -- app sharedUi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure local build
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused held and compact menu tests
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.HeldContextMenuPlateTest --tests com.music.bitchord.ui.screens.CanonicalRecentHeldActionsComposeTest --tests com.music.bitchord.ui.screens.CanonicalLibraryHeldContextMenuPolicyTest :sharedUi:jvmTest --tests com.music.bitchord.ui.components.NativeCompactHomePlateStyleTest
+      - name: Android full unit suite
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared JVM full suite
+        run: ./gradlew -Pbitchord.bundleWear=false :sharedUi:jvmTest
