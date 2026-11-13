@@ -233,8 +233,29 @@ internal fun parseMusicBrainzTrackArtistAppearances(
         // works (e.g. an artist's standalone single and later album).
         // Collapse alternate editions within a work, never across groups.
         .distinctBy { it.releaseGroupMbid to it.recordingMbid }
-        .take(limit.coerceIn(0, 20))
         .toList()
+        .let { sorted ->
+            // A single album can own more than twelve credited recordings.
+            // Reserve a representative for EVERY commercially verified
+            // ReleaseGroup before applying the per-page cap; otherwise a
+            // later independent work is discarded before browse sees it.
+            // Incomplete/conflicting credit evidence cannot displace a
+            // genuine work merely by carrying a different Group MBID.
+            val verifiedGroups = sorted.asSequence()
+                .filter { row ->
+                    row.commerciallyVerified && !row.conflictingTrackCredit &&
+                        !row.recordingMbid.isNullOrBlank() &&
+                        row.trackTitle?.let(::canonicalStreamingTitleIsSafe) == true
+                }
+                .distinctBy { it.releaseGroupMbid }
+                .toList()
+            val reservedIds = verifiedGroups.map {
+                it.releaseGroupMbid to it.recordingMbid
+            }.toSet()
+            (verifiedGroups + sorted.filterNot {
+                (it.releaseGroupMbid to it.recordingMbid) in reservedIds
+            }).take(limit.coerceIn(0, 20))
+        }
 }
 
 internal class MusicBrainzArtistAppearancesClient(
