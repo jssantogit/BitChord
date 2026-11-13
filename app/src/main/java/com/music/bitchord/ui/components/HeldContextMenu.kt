@@ -92,6 +92,8 @@ fun <T : Any> HeldContextMenu(
     onPreviewClick: ((T) -> Unit)?,
     /** Actual app mini-player + tab chrome; never place actions behind them. */
     bottomChromeClearance: Dp = 100.dp,
+    /** Parent already blurs its REAL composed page, not a separate Haze plate. */
+    hostProvidesBlur: Boolean = false,
     actions: @Composable (T) -> Unit,
 ) {
     val requested = if (item != null && held != null) item to held else null
@@ -149,13 +151,14 @@ fun <T : Any> HeldContextMenu(
     // the actual row and its lifted preview. Match the solid catalog source menu.
     val plate = (if (dark) Color.Black else Color.White).copy(alpha = 0.96f)
     val hairline = if (dark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
-    // Strong enough to separate the selected item even when Android/Haze is
-    // unable to capture a nested screen as a blur source.
+    // Do not put an opaque black plate above the already blurred content.
+    // A gentle translucent lift keeps the real page legible behind the item
+    // (and exposes the diffused artwork when one exists).
     val scrimColor = when {
-        reduceDynamicBlur && dark -> Color.Black.copy(alpha = 0.80f)
-        reduceDynamicBlur -> Color.Black.copy(alpha = 0.60f)
-        dark -> Color.Black.copy(alpha = 0.26f)
-        else -> Color.Black.copy(alpha = 0.20f)
+        reduceDynamicBlur && dark -> Color.Black.copy(alpha = 0.78f)
+        reduceDynamicBlur -> Color.Black.copy(alpha = 0.58f)
+        dark -> Color.White.copy(alpha = 0.035f)
+        else -> Color.Black.copy(alpha = 0.09f)
     }
     val cardShape = RoundedCornerShape(20.dp)
     val menuShape = RoundedCornerShape(16.dp)
@@ -180,7 +183,7 @@ fun <T : Any> HeldContextMenu(
                     .fillMaxSize()
                     .testTag("held-context-backdrop")
                     .then(
-                        if (reduceDynamicBlur) {
+                        if (!heldMenuNeedsOwnHazeSource(hostProvidesBlur, reduceDynamicBlur)) {
                             Modifier
                         } else {
                             Modifier.optimizedHazeEffect(
