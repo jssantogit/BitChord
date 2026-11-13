@@ -4786,6 +4786,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 is AppleEditorialLoad.Failure -> UiState.Error("apple_catalog_unavailable")
             }
+            // First paint is strictly Apple. The extra MusicBrainz lookups
+            // happen only after the detail is already visible, and cannot
+            // replace its artwork, name, track order or commercial identity.
+            if (response is AppleEditorialLoad.Success &&
+                _appleEditorialDetail.value is UiState.Success
+            ) {
+                val album = response.releases.singleOrNull {
+                    it.appleScopedId == row.browseId &&
+                        it.storefront == route.storefront &&
+                        it.appleCollectionId == route.id
+                }
+                if (album != null) {
+                    val evidence = try {
+                        com.music.bitchord.data.catalog.metadata
+                            .AppleAlbumEditionReconciliationService().resolve(album)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        null
+                    }
+                    if (evidence != null && activeAppleAlbumId == row.browseId &&
+                        _searchSource.value == SearchSource.CANONICAL
+                    ) {
+                        val refined = appleNativeReconciledAlbumDetail(
+                            response, row.browseId, evidence,
+                        )
+                        val current = (_appleEditorialDetail.value as? UiState.Success)?.data
+                        if (refined != null && current != null && refined != current) {
+                            _appleEditorialDetail.value = UiState.Success(refined)
+                        }
+                    }
+                }
+            }
         }
     }
 
