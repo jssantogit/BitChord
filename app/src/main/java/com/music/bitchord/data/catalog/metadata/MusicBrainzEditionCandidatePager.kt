@@ -43,7 +43,9 @@ internal suspend fun collectCompleteMusicBrainzEditionCandidates(
         if (page.total != expectedTotal || page.total !in 1..maxTotal ||
             page.offset != next || page.consumedCount <= 0 ||
             page.consumedCount > pageSize ||
-            page.consumedCount > page.total - next ||
+            // A non-terminal short page cannot prove that no source rows were
+            // skipped (the MB search API normally fills each requested page).
+            page.consumedCount != minOf(pageSize, page.total - next) ||
             page.items.size != page.consumedCount
         ) return null
 
