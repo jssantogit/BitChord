@@ -4981,6 +4981,7 @@ private fun BitChordApp(
                                     title = detail.title,
                                     subtitle = detail.subtitle.orEmpty(),
                                     thumbnailUrl = detail.thumbnailUrl,
+                                    plateTint = detailPalette.elevated,
                                     songs = releaseSongs,
                                     searching = detailSearching,
                                     onToggleSearch = { detailSearching = !detailSearching },
@@ -8228,6 +8229,7 @@ private fun NativeDetailAlbumTopBarActions(
     title: String,
     subtitle: String,
     thumbnailUrl: String?,
+    plateTint: Color,
     songs: List<Song>,
     searching: Boolean,
     onToggleSearch: () -> Unit,
@@ -8278,6 +8280,7 @@ private fun NativeDetailAlbumTopBarActions(
                 title = title,
                 subtitle = subtitle,
                 cover = thumbnailUrl,
+                plateTint = plateTint,
                 expanded = catalogOverflowExpanded,
                 onDismiss = onDismissCatalogOverflow,
             )
