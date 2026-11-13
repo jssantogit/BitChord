@@ -574,7 +574,9 @@ internal fun CanonicalPlaylistDetailScreen(
         value = if (ids.isEmpty()) emptyMap() else try {
             withContext(Dispatchers.IO) {
                 val dao = CanonicalCatalogDatabase.get(context).catalogDao()
-                val links = ids.chunked(300).flatMap(dao::recordingReleaseGroupLinksByIds)
+                val links = ids.chunked(300).flatMap { chunk ->
+                    dao.recordingReleaseGroupLinksByIds(chunk)
+                }
                     .groupBy { it.recordingId }
                 ids.mapNotNull { recordingId ->
                     canonicalPlaylistAlbumForRecording(
