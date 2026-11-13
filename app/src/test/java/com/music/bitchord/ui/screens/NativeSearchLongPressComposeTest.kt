@@ -38,6 +38,7 @@ class NativeSearchLongPressComposeTest {
                 )
             }
         }
+        compose.onNodeWithTag("search-row-more-actions").assertDoesNotExist()
         compose.onNodeWithTag("native-search-result-row")
             .performTouchInput { longClick() }
         compose.onNodeWithTag("native-compact-overflow").assertExists()
