@@ -92,6 +92,23 @@ class MusicBrainzEditionCandidatePagerTest {
             (0..4).forEach { assertNull("fault $it", check(it)) }
         }
 
+    @Test fun incompleteNonterminalRawPageStopsInsteadOfSkippingPositions() =
+        runBlocking {
+            var calls = 0
+            val matches = collectCompleteMusicBrainzEditionCandidates(
+                maxRelevant = 4, isRelevant = { it.title == "SUPER REAL ME" },
+                searchPage = { _, offset ->
+                    calls++
+                    response(
+                        (0 until 3).map { hit(it, it == 0) },
+                        total = 15, offset = offset,
+                    )
+                },
+            )
+            assertNull(matches)
+            assertEquals(1, calls)
+        }
+
     @Test fun tooManyRelevantCandidatesAndUnavailableLaterPageFailClosed() =
         runBlocking {
             var calls = 0
