@@ -3,6 +3,8 @@ package com.music.bitchord.ui.screens
 import android.graphics.BitmapFactory
 import coil3.compose.AsyncImage
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +64,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -77,6 +80,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
+import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.components.shouldBlurHeldContextBackdrop
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
@@ -282,6 +287,7 @@ internal fun CanonicalRemoteLibraryScreen(
     onSourceKeysChanged: (List<String>) -> Unit = {},
     /** Actual canonical album route; null means the parent cannot navigate. */
     onOpenCatalogAlbum: ((String, String, String) -> Unit)? = null,
+    heldMenuBottomChromeClearance: Dp = 100.dp,
     selectionBarBottomPadding: Dp = 140.dp,
     hazeState: HazeState? = null,
 ) {
@@ -1010,13 +1016,25 @@ internal fun CanonicalRemoteLibraryScreen(
         forward = selectedEntity != null,
     )
     val heldLibraryHaze = remember { HazeState() }
+    val reduceHeldBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val heldLibraryBlur by animateDpAsState(
+        targetValue = if (shouldBlurHeldContextBackdrop(
+                heldVisible = libraryMenu != null && heldLibraryMenuOrigin != null,
+                reduceDynamicBlur = reduceHeldBlur,
+            )) 20.dp else 0.dp,
+        animationSpec = tween(180),
+        label = "held-library-page-blur",
+    )
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
         Box(Modifier.fillMaxSize().then(nestedLibraryArrival)) {
         // Capture page content separately from the lifted overlays.
-        Box(Modifier.fillMaxSize().hazeSource(heldLibraryHaze)) {
+        Box(Modifier.fillMaxSize()
+            .hazeSource(heldLibraryHaze)
+            .then(if (heldLibraryBlur > 0.dp) Modifier.blur(heldLibraryBlur) else Modifier)
+        ) {
         if (unified) {
             // Selected albums/artists keep the exact native page chrome.
             // Only their revalidated RecordingId membership changes.
@@ -1500,6 +1518,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     item = libraryMenu.takeIf { useHeldMenu },
                     held = heldLibraryMenuOrigin,
                     hazeState = heldLibraryHaze,
+                    bottomChromeClearance = heldMenuBottomChromeClearance,
                     onDismiss = {
                         libraryMenu = null
                         heldLibraryMenuOrigin = null
