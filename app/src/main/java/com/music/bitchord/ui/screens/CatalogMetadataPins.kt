@@ -30,7 +30,10 @@ internal fun trustedCatalogMetadataPinArtwork(url: String?): String? {
 }
 
 internal fun validCatalogMetadataPin(pin: CatalogMetadataPin): Boolean =
-    canonicalCatalogEntityRatingTarget(pin.browseId) != null &&
+    (canonicalCatalogEntityRatingTarget(pin.browseId) != null ||
+        pin.browseId.removePrefix("catalog:RECORDING:")
+            .takeIf { pin.browseId.startsWith("catalog:RECORDING:") }
+            ?.let(::isVerifiedCatalogRecordingId) == true) &&
         pin.title.isNotBlank() && pin.title == pin.title.trim() &&
         pin.title.length <= 240 && pin.subtitle.length <= 240 &&
         (pin.artworkUrl == null || trustedCatalogMetadataPinArtwork(pin.artworkUrl) != null)
