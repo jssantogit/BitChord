@@ -23,7 +23,21 @@ class CanonicalSearchHeldMenuPolicyTest {
         assertFalse(canonicalSearchHeldQueueAllowed(result(CanonicalSearchKind.RELEASE_GROUP, true)))
     }
 
-    @Test fun catalogedRecordingHasQueueAction() {
-        assertTrue(canonicalSearchHeldQueueAllowed(result(CanonicalSearchKind.RECORDING, true)))
+    @Test fun searchNeverOffersQueueEvenWhenAnAssetIsCataloged() {
+        assertFalse(canonicalSearchHeldQueueAllowed(result(CanonicalSearchKind.RECORDING, true)))
+    }
+
+    @Test fun searchOffersMetadataSaveForRecordingsAndReleasesButNotArtists() {
+        assertTrue(canonicalSearchHeldCanAddToPlaylist(CanonicalSearchKind.RECORDING))
+        assertTrue(canonicalSearchHeldCanAddToPlaylist(CanonicalSearchKind.RELEASE))
+        assertTrue(canonicalSearchHeldCanAddToPlaylist(CanonicalSearchKind.RELEASE_GROUP))
+        assertFalse(canonicalSearchHeldCanAddToPlaylist(CanonicalSearchKind.ARTIST))
+    }
+
+    @Test fun downloadActionNeverClaimsMusicBrainzMetadataIsAudio() {
+        assertTrue(canonicalSearchHeldShowsDownload(CanonicalSearchKind.RECORDING))
+        assertTrue(canonicalSearchHeldShowsDownload(CanonicalSearchKind.RELEASE))
+        assertTrue(canonicalSearchHeldShowsDownload(CanonicalSearchKind.RELEASE_GROUP))
+        assertFalse(canonicalSearchHeldShowsDownload(CanonicalSearchKind.ARTIST))
     }
 }
