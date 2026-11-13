@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -17,6 +18,7 @@ internal fun CanonicalCatalogReleaseOverflowMenu(
     title: String,
     subtitle: String,
     cover: String?,
+    plateTint: Color? = null,
     expanded: Boolean,
     onDismiss: () -> Unit,
 ) {
@@ -39,6 +41,7 @@ internal fun CanonicalCatalogReleaseOverflowMenu(
     com.music.bitchord.ui.components.NativeCompactOverflowMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
+        plateTint = plateTint,
     ) {
         if (target != null) {
             com.music.bitchord.ui.components.NativeCompactMenuItem(
