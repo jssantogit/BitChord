@@ -283,7 +283,7 @@
     <string name="canonical_search_hint">Pesquise no catálogo musical. Metadados não representam áudio disponível.</string>
     <string name="canonical_back">Voltar</string>
     <string name="canonical_cover_art">Capa do álbum</string>
-    <string name="canonical_search_start">Pesquise artistas, músicas, álbuns e mais no MusicBrainz.</string>
+    <string name="canonical_search_start">Pesquise artistas, músicas, álbuns e lançamentos no catálogo musical.</string>
     <string name="canonical_empty_search">Nenhum resultado encontrado no catálogo.</string>
     <string name="canonical_recording_kind">Gravação</string>
     <string name="canonical_artist_kind">Artista · discografia</string>
