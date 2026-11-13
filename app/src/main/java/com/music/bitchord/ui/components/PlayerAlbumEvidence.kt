@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.playback.androidCanonicalQueueResolver
+import com.music.bitchord.ui.screens.SourceOwnedAlbumEvidence
+import com.music.bitchord.ui.screens.verifiedSourceOwnedPlayerAlbum
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,6 +71,41 @@ internal fun sharedVerifiedReleaseGroupId(
         byRecording[id].orEmpty().map { it.second }.filter(String::isNotBlank).toSet()
     }.reduceOrNull { a, b -> a.intersect(b) }.orEmpty()
     return common.singleOrNull()
+}
+
+/**
+ * Preferred route for a playable local or OpenSubsonic/Navidrome Song.
+ * The asset identity is checked first; the Release must belong to that
+ * asset's provider. Avoids a second MusicBrainz network request for albums
+ * already in the native Library.
+ */
+internal suspend fun verifiedPlayerSourceOwnedAlbum(
+    context: Context,
+    song: Song,
+): SourceOwnedAlbumEvidence? = withContext(Dispatchers.IO) {
+    val resolver = androidCanonicalQueueResolver(context.applicationContext)
+    val identities = resolver.identifyAll(listOf(song))
+    val identity = identities.singleOrNull() ?: return@withContext null
+    val providerKey = identity.providerKey ?: return@withContext null
+    if (resolver.resolveAll(identities).singleOrNull()?.identity != identity)
+        return@withContext null
+    val dao = CanonicalCatalogDatabase.get(context.applicationContext).catalogDao()
+    val releases = dao.providerScopedReleases(providerKey)
+    val linkedIds = dao.releaseIdsForVisibleRecordings(listOf(identity.recordingId))
+    verifiedSourceOwnedPlayerAlbum(
+        recordingId = identity.recordingId,
+        providerKey = providerKey,
+        linkedReleaseIds = linkedIds,
+        providerReleases = releases.map { release ->
+            SourceOwnedAlbumEvidence(
+                releaseId = release.id,
+                title = release.title,
+                artist = release.artistDisplay.orEmpty(),
+                providerKey = providerKey,
+            )
+        },
+        preferredReleaseId = song.albumId,
+    )
 }
 
 internal suspend fun verifiedPlayerAlbumCatalogRoute(context: Context, song: Song): String? =
