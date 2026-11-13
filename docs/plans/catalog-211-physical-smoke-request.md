@@ -143,3 +143,31 @@ O gate focused [#43215915310](https://github.com/jssantogit/BitChord/actions/run
 - [ ] Checar HOT/BOOMPALA e busca conforme os critérios anteriores; nenhuma identidade deve ser removida.
 
 **Dependências:** #211 continua Draft; #215 iniciou **somente** a camada independente de Discogs e não integra este APK. Não fazer merge de #209 ou #215 como efeito colateral.
+
+## 13/11/2026 — congelamento funcional do Discogs como complemento
+
+**Decisão de produto:** não desenvolver novas capacidades Discogs na #211. A Apple/iTunes, na #214, assume a seleção/organização comercial do catálogo; MusicBrainz permanece como identidade/grafo; Discogs fica restrito à evidência complementar de edições, especialmente físicas. O catálogo Discogs independente da #215 fica preservado e despriorizado, sem remoção ou merge.
+
+**Auditoria estática de compatibilidade Apple-first (não equivale a teste de integração):**
+
+- `DiscogsEditionFacts.from()` somente produz `EDITION_LABEL`, `EDITION_CATALOG_NUMBER`, `EDITION_FORMAT`, `EDITION_COUNTRY` e `EDITION_YEAR` a partir de uma edição Discogs `Verified`, tipada, válida no TTL e não `unofficial`. O resultado não cria nomes Apple, capa, classificação Apple, ordenação, IDs musicais ou um novo lançamento.
+- `DetailScreen.kt` só chama `discogsEditorialArtistShelves()` quando a rota de artista tem `catalog:ARTIST:<MBID>`. Uma futura página `itunes:<storefront>:artist:<id>` não deve ser projetada por essa função nem sofrer override de seus produtos Apple.
+- A #214 `ItunesEditorialCatalog.assemble()` monta a vitrine exclusivamente de lançamentos Apple, mantendo MBIDs apenas como vínculos verificados opcionais. **Ainda não há integração viva com Home/Pesquisa/Artista**, portanto a ausência de regressão Apple/Discogs em tempo de execução **não foi testada**.
+- Associar edição Discogs a um lançamento Apple no futuro deve exigir prova de edição e referência explícita, não título, capa, UPC isolado nem Master → ReleaseGroup suposto. A ausência de correspondência não autoriza inventar MBIDs ou Playback.
+
+**Evidência já concluída:**
+
+- Corpus editorial 30/30, com A: 9 concordâncias e 1 divergência ainda disputada; B: 0/10 novas edições sem vínculo classificadas `Verified`; C: 0/10 obras comprovadamente ausentes do MusicBrainz; 0 correções automáticas de tipo e 0 resgates visualmente homologados. Não vender essas coortes como demonstração de melhora de cobertura.
+- Smoke anterior de dez cenários aprovado no A54 para release `1ccce1ad`, **mas não** comprova as correções de `HOT`, `BOOMPALA` e scroll após `345178a7`.
+- CI de [#215 Android #43411229160](https://github.com/jssantogit/BitChord/actions/runs/43411229160) **SUCCESS**, inclui como ancestral o código #211 com correção de scroll e passou testes Android completos, shared Automix e apresentação nativa; não é build/CI executada no SHA exato desta #211. Gate do smoke #211 [#43324349715](https://github.com/jssantogit/BitChord/actions/runs/43324349715) **SUCCESS** no SHA anterior `177d4f00` (antes do fix de scroll).
+- Diagnóstico A54 de 13/11 (SM-A546E, beta1): 376 eventos únicos, 20 `main_thread_stall` e 24 `discogs_api_http` (todas as observações de endpoint registradas como `ok`). O log não captura offset do grid e não permite afirmar correção do bug em aparelho.
+
+### Gate de aceite **final**, sem novas funcionalidades
+
+- [x] Corpus e limites de falso positivo documentados; IDs e metadados Discogs não substituem MusicBrainz ou Apple.
+- [x] CI Android verde em branch descendente da última alteração de produção #211; auditoria estática de Apple-first concluída.
+- [ ] CI do **SHA exato do APK smoke final #211** com full Android JUnit + shared + assemble e artefato válido.
+- [ ] A54: navegar LE SSERAFIM/HOT; BOOMPALA e os colaboradores; abrir "Ver tudo", rolar em artista com muitos álbuns, aguardar novos metadados sem reset para o topo; alternar artista/seção.
+- [ ] Conferir que o compositor Apple-first integrado futuramente preserva a organização Apple e que Discogs não cria versões/labels do catálogo Apple por conta própria. **Gate separado da PR #214**, não justificativa para continuar desenvolvendo #211.
+
+Após concluir as caixas do APK+A54, encerrar a frente funcional #211 e manter somente correções regressivas/compatibilidade sob evidência. **Não confundir fechamento de escopo com merger automático, aprovação de produto Apple-first ou smoke físico realizado.** Reconciliar conflitos da base #209 numa etapa de integração explícita, não nesta rodada de Discogs.
