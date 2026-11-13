@@ -396,6 +396,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         MutableStateFlow<List<CanonicalCatalogSearchRow>>(emptyList())
     val canonicalWorldwideReleases: StateFlow<List<CanonicalCatalogSearchRow>> =
         _canonicalWorldwideReleases.asStateFlow()
+    /**
+     * Home storefront proof: MB worldwide ReleaseGroups provide candidate
+     * text only, never a visible release or an Apple↔MB identity edge.
+     */
+    private val _appleHomeReleases =
+        MutableStateFlow<UiState<List<
+            com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+        >>>(UiState.Loading)
+    val appleHomeReleases: StateFlow<UiState<List<
+        com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+    >>> = _appleHomeReleases.asStateFlow()
+    private val appleHomeEpoch = DiscoveryRequestEpoch()
+    private var appleHomeJob: Job? = null
+    private var appleHomeFingerprint: String? = null
+    private var appleHomeLastAttemptAtMs: Long = 0L
+
     private val _canonicalWorldwideLoading = MutableStateFlow(false)
     val canonicalWorldwideLoading: StateFlow<Boolean> =
         _canonicalWorldwideLoading.asStateFlow()
@@ -3366,6 +3382,64 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         System.currentTimeMillis()
                     else success?.fetchedAtMs?.takeIf { rows.isNotEmpty() },
                 )
+            }
+        }
+    }
+
+    /** Only Apple-verified public albums enter the native Home editorial feed. */
+    fun loadAppleHomeEditorial(
+        candidates: List<CanonicalCatalogSearchRow>,
+        force: Boolean = false,
+    ) {
+        if (!isCanonicalDiscoverySelected()) return
+        val seeds = candidates.asSequence()
+            .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
+            .mapNotNull { row ->
+                val artist = row.subtitle?.trim().orEmpty()
+                if (artist.isBlank() || row.title.isBlank()) null
+                else com.music.bitchord.data.catalog.metadata.AppleHomeEditorialSeed(
+                    row.title, artist,
+                )
+            }
+            .distinctBy { it.title.lowercase(Locale.ROOT) to
+                it.artist.lowercase(Locale.ROOT) }
+            .take(12).toList()
+        if (seeds.isEmpty()) return
+        val fingerprint = seeds.joinToString(separator = "|") {
+            "${it.title.lowercase(Locale.ROOT)}:${it.artist.lowercase(Locale.ROOT)}"
+        }
+        val now = System.currentTimeMillis()
+        if (!force && fingerprint == appleHomeFingerprint &&
+            (appleHomeJob?.isActive == true ||
+                now - appleHomeLastAttemptAtMs < 6L * 60L * 60L * 1000L)
+        ) return
+        appleHomeJob?.cancel()
+        val generation = appleHomeEpoch.next()
+        appleHomeFingerprint = fingerprint
+        appleHomeLastAttemptAtMs = now
+        if (_appleHomeReleases.value !is UiState.Success) {
+            _appleHomeReleases.value = UiState.Loading
+        }
+        appleHomeJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                com.music.bitchord.data.catalog.metadata
+                    .AppleHomeEditorialDiscovery().discover(seeds, "br", maxProbes = 8)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (!appleHomeEpoch.isCurrent(generation) ||
+                !isCanonicalDiscoverySelected()
+            ) return@launch
+            _appleHomeReleases.value = when (result) {
+                is AppleEditorialLoad.Success -> UiState.Success(result.releases)
+                is AppleEditorialLoad.Failure -> {
+                    // Keep the last Apple-confirmed cards through a transient
+                    // outage, but never fall back to MB-only ReleaseGroups.
+                    (_appleHomeReleases.value as? UiState.Success)
+                        ?: UiState.Error("Não foi possível consultar o catálogo Apple.")
+                }
             }
         }
     }
