@@ -32,3 +32,25 @@ internal fun openVerifiedCanonicalPlayerAlbum(
     onOpenDetail(route, title, artist, BrowseType.ALBUM)
     return true
 }
+
+/**
+ * Long-press artwork comes from an arbitrary queue Song. Its albumId may be
+ * provider-local or a recording ID, so it is never a navigation destination.
+ * Reuse the same verified Recording → Release/ReleaseGroup resolver as the
+ * player's "Abrir álbum" action, then validate the returned canonical route.
+ */
+internal suspend fun openCanonicalHeldSongAlbum(
+    song: com.music.bitchord.data.model.Song,
+    resolveVerifiedRoute: suspend (com.music.bitchord.data.model.Song) -> String?,
+    fallbackAlbumTitle: String,
+    onOpenDetail: (String, String, String, BrowseType) -> Unit,
+): Boolean {
+    val route = resolveVerifiedRoute(song) ?: return false
+    return openVerifiedCanonicalPlayerAlbum(
+        route = route,
+        albumName = song.albumName,
+        artist = song.artist,
+        fallbackAlbumTitle = fallbackAlbumTitle,
+        onOpenDetail = onOpenDetail,
+    )
+}
