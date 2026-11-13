@@ -19,6 +19,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -2489,6 +2491,7 @@ internal fun lyricsSourcesCountValue(enabledCount: Int): String? =
  * to approximate with the nearest speaker outline. Exactly one of it and [icon]
  * is expected; the painter wins where both are given.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SettingsRow(
     icon: ImageVector? = null,
@@ -2500,6 +2503,8 @@ internal fun SettingsRow(
     enabled: Boolean = true,
     iconPainter: Painter? = null,
     onClick: (() -> Unit)? = null,
+    /** A held saved-filter row can reveal actions without selecting the editor. */
+    onLongPress: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     /** Opt-in native leading slot for larger artwork/glyph badges without a new row. */
     leading: (@Composable () -> Unit)? = null,
@@ -2513,7 +2518,17 @@ internal fun SettingsRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                when {
+                    onLongPress != null -> Modifier.combinedClickable(
+                        enabled = enabled,
+                        onClick = onClick ?: onLongPress,
+                        onLongClick = onLongPress,
+                    )
+                    onClick != null && enabled -> Modifier.clickable(onClick = onClick)
+                    else -> Modifier
+                }
+            )
             .alpha(if (enabled) 1f else 0.45f)
             .heightIn(min = minHeight)
             .padding(horizontal = ROW_INSET, vertical = 12.dp),

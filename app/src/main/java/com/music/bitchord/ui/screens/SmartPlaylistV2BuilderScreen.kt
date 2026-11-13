@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilterChip
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.components.ConfirmationAlert
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -19,6 +20,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -48,6 +50,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
@@ -1179,7 +1182,11 @@ internal fun SmartPlaylistV2BuilderScreen(
             }
             items(savedFilters, key = { "v2-filter-" + it.id }) { filter ->
                 var more by remember(filter.id) { mutableStateOf(false) }
-                SettingsGroupSurface {
+                SettingsGroupSurface(
+                    modifier = if (more) Modifier.border(
+                        1.dp, appleMusicKeyColor(), RoundedCornerShape(18.dp),
+                    ) else Modifier,
+                ) {
                     SettingsRow(
                         title = filter.name,
                         subtitle = "${smartConditionCountLabel(smartRuleLeafCount(filter.rules))} · Filtro reutilizável",
@@ -1189,6 +1196,8 @@ internal fun SmartPlaylistV2BuilderScreen(
                                 filter.id, EditorDestination.EDIT_FILTER,
                             ))
                         },
+                        onLongPress = { more = true },
+                        modifier = Modifier.testTag("playlist-saved-filter-row"),
                         trailing = {
                             Box {
                                 RowMoreButton(
