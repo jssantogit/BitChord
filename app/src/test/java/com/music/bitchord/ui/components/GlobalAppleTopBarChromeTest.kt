@@ -128,6 +128,43 @@ class GlobalAppleTopBarChromeTest {
         compose.onNodeWithTag("apple-root-settings-popup", useUnmergedTree = true).assertDoesNotExist()
     }
 
+    @Test fun rootTabToolbarActionsResizeWithoutSpringAfterSectionSwap() {
+        // Top bar is outside AnimatedContent: switching tabs reuses this host.
+        // A spring on its width moves the trailing controls back and forth.
+        val showExtraAction = mutableStateOf(false)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            BitChordTheme {
+                ArtworkPageActions(
+                    hazeState = null,
+                    animateResize = false,
+                    modifier = Modifier.testTag("root-toolbar-actions"),
+                ) {
+                    IconButton(onClick = {}) {
+                        Icon(Icons.Rounded.Search, contentDescription = "First action")
+                    }
+                    if (showExtraAction.value) {
+                        IconButton(onClick = {}) {
+                            Icon(Icons.Rounded.Sort, contentDescription = "Second action")
+                        }
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeByFrame()
+        val initialWidth = compose.onNodeWithTag("root-toolbar-actions", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot.width
+        compose.runOnIdle { showExtraAction.value = true }
+        compose.mainClock.advanceTimeByFrame()
+        val resizedWidth = compose.onNodeWithTag("root-toolbar-actions", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot.width
+        assertTrue(resizedWidth > initialWidth)
+        compose.mainClock.advanceTimeBy(350L)
+        val settledWidth = compose.onNodeWithTag("root-toolbar-actions", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot.width
+        assertEquals(resizedWidth, settledWidth, 0.1f)
+    }
+
     @Test fun globalTopBarActionsHaveIndependentCircleSurfaces() {
         compose.setContent {
             BitChordTheme {
