@@ -1,5 +1,11 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.foundation.clickable
@@ -436,9 +442,9 @@ private fun CanonicalRecentAdditionCard(
     }
 }
 
-/** The toolbar is drawn over this route. Opening inline search must reserve
- * its own space rather than asking the user to scroll away from the overlap. */
-internal val recentAdditionsSearchTopClearance = 88.dp
+/** The parent already uses topBarContentPadding(). Only a small animated
+ * breathing space belongs between that bar and the inline search field. */
+internal val recentAdditionsSearchTopClearance = 12.dp
 
 /** Reuses LocalFolder's canonical two-column grid layout and card. */
 @Composable
@@ -473,21 +479,30 @@ internal fun CanonicalRecentAdditionsGrid(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
     ) {
-        if (showSearch) item(key = "recent-search") {
-            Column {
-                // Native search lives in content, below the floating 40dp
-                // navigation/actions. It must clear the bar on the first frame.
-                Spacer(Modifier.height(recentAdditionsSearchTopClearance))
-                DetailSearchField(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    onClose = { onQueryChange("") },
-                    autoFocus = true,
-                    onFocused = {},
-                    palette = themeArtworkPalette(),
-                    placeholder = "Pesquisar em adições recentes",
-                    horizontalInset = PAGE_GUTTER,
-                )
+        item(key = "recent-search") {
+            // Keeping the item mounted lets the field expand the content
+            // gently downward. Its parent already reserves the floating top
+            // toolbar, so another 88dp spacer produced an enormous void.
+            AnimatedVisibility(
+                visible = showSearch,
+                enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(160)),
+                exit = shrinkVertically(animationSpec = tween(180)) + fadeOut(tween(140)),
+            ) {
+                Column(Modifier.padding(
+                    top = recentAdditionsSearchTopClearance,
+                    bottom = 12.dp,
+                )) {
+                    DetailSearchField(
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        onClose = { onQueryChange("") },
+                        autoFocus = true,
+                        onFocused = {},
+                        palette = themeArtworkPalette(),
+                        placeholder = "Pesquisar em adições recentes",
+                        horizontalInset = PAGE_GUTTER,
+                    )
+                }
             }
         }
         if (recent.isEmpty()) item {
