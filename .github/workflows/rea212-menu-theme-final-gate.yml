@@ -1,0 +1,36 @@
+name: REA 212 - Menu and artwork theme final Android gate
+on:
+  push:
+    branches:
+      - validation/rea212-menu-theme-final-3b8cf2da-20261113
+permissions:
+  contents: read
+concurrency:
+  group: rea212-menu-theme-final-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  android-menu-theme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Verify exact PR 212 production and test sources
+        run: git diff --exit-code 3b8cf2da3b9acb08432d29ad03cc6644af355e01 HEAD -- app sharedUi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure Android build
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused menu and artwork wash regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.ArtworkBackdropThemePolicyTest --tests com.music.bitchord.ui.screens.CanonicalRecentHeldActionsComposeTest --tests com.music.bitchord.ui.screens.NativeArtistPublicTopSectionTest
+      - name: Full Android unit suite
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI JVM regression suite
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
