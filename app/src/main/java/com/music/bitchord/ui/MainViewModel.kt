@@ -404,7 +404,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         MutableStateFlow<UiState<List<
             com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
         >>>(UiState.Loading)
-    val appleHomeReleases: StateFlow<UiState<List<
+    internal val appleHomeReleases: StateFlow<UiState<List<
         com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
     >>> = _appleHomeReleases.asStateFlow()
     private val appleHomeEpoch = DiscoveryRequestEpoch()
@@ -423,7 +423,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _appleGenreReleases = MutableStateFlow<Map<String, UiState<List<
         com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
     >>>>(emptyMap())
-    val appleGenreReleases: StateFlow<Map<String, UiState<List<
+    internal val appleGenreReleases: StateFlow<Map<String, UiState<List<
         com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
     >>>> = _appleGenreReleases.asStateFlow()
     private val appleGenreEpoch = DiscoveryRequestEpoch()
