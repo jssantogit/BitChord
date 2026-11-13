@@ -155,7 +155,12 @@ internal fun SavedFilterMenuActions(
     onChoose: (String) -> Unit,
 ) {
     options.forEach { option ->
-        val destructive = option == "Excluir filtro"
+        // A remembered click handler in a Compose loop must be scoped to this
+        // exact option. Without a stable group, every row dispatched the last
+        // ("Excluir filtro") action in the Robolectric regression.
+        androidx.compose.runtime.key(option) {
+        val selectedOption = option
+        val destructive = selectedOption == "Excluir filtro"
         if (destructive) NativeCompactMenuDivider()
         NativeCompactMenuItem(
             icon = when (option) {
@@ -178,8 +183,9 @@ internal fun SavedFilterMenuActions(
                 else -> option
             },
             destructive = destructive,
-            onClick = { onChoose(option) },
+            onClick = { onChoose(selectedOption) },
         )
+        }
     }
 }
 
