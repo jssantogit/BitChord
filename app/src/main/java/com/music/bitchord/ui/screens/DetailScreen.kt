@@ -941,6 +941,7 @@ fun DetailScreen(
                             palette = palette,
                             sampled = canonicalPublicTopSampled,
                             onRecordingOpen = onCanonicalPublicTopOpen,
+                            onRecordingHold = onCanonicalTrackHold,
                         )
                     }
                 } else if (isArtist && (
