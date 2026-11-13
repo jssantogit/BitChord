@@ -122,7 +122,11 @@ class AppleEditorialNativeSearchBridgeTest {
     }
 
     @Test fun runtimeEditionProofUpdatesOnlyAlbumCategoryAndPreservesAppleDetail() {
-        val album = edition(title = "HOT")
+        // The shared edition fixture defaults to EP. This case specifically
+        // verifies enrichment from an *unclassified* Apple display name.
+        val album = edition(title = "HOT").copy(
+            format = ItunesEditorialReleaseFormat.UNCLASSIFIED,
+        )
         val source = AppleEditorialLoad.Success(
             listOf(album), AppleEditorialReadState.COMPLETE,
         )
