@@ -108,6 +108,21 @@ class AppleExactEditionArtworkBridgeTest {
         assertNull(appleVerifiedEditionArtwork(mb, complete(), "us"))
     }
 
+    @Test fun sourceSelectionNeverDowngradesVerifiedCaaHeroToApple100Pixels() {
+        val apple100 = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
+        val apple600 = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/600x600bb.jpg"
+        val caa500 = "https://coverartarchive.org/release/$id/front-500"
+        assertEquals(apple100, bestCertifiedAppleOrArchiveCover(apple100, null))
+        assertEquals(caa500, bestCertifiedAppleOrArchiveCover(apple100, caa500))
+        assertEquals(apple600, bestCertifiedAppleOrArchiveCover(apple600, caa500))
+        assertEquals(caa500, bestCertifiedAppleOrArchiveCover(
+            "https://is1-ssl.mzstatic.com/image/thumb/Music/a.jpg", caa500,
+        ))
+        assertEquals(caa500, bestCertifiedAppleOrArchiveCover(
+            "https://attacker.example/artwork/600x600bb.jpg", caa500,
+        ))
+    }
+
     @Test fun applePromotionBadgeMustBeOfficialUnmodifiedAssetAndOnlyForStoreLink() {
         assertEquals(
             "https://www.apple.com/ca/itunes/link/images/link-badge-music.png",
