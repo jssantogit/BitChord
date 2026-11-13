@@ -4,6 +4,7 @@ import android.os.Build
 import com.music.bitchord.R
 import com.music.bitchord.ui.discogsEditorialArtistShelves
 import com.music.bitchord.ui.canonicalArtistCurrentExpandedShelf
+import com.music.bitchord.ui.canonicalArtistExpandedShelfContentKey
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsGroupEditorialEvidence
 
 import androidx.compose.animation.AnimatedContent
@@ -653,6 +654,11 @@ fun DetailScreen(
     else activeShelf
     AnimatedContent(
         targetState = displayedActiveShelf,
+        // A new page, title credit or CAA cover is content, not a new grid.
+        // Keep the same content slot and rememberLazyGridState while paging.
+        contentKey = { shelf ->
+            canonicalArtistExpandedShelfContentKey(page.browseId, shelf)
+        },
         transitionSpec = {
             fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
         },
