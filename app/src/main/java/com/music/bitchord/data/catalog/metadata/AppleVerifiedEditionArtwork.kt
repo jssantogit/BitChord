@@ -89,6 +89,34 @@ internal fun appleVerifiedEditionArtwork(
 }
 
 /**
+ * The public iTunes Search API documents 100px (sometimes 60/30px) assets.
+ * Do not expand a 100px bitmap over an already verified 500px CAA hero:
+ * upscaling a low-resolution file is not a high-resolution artwork source.
+ * A larger Apple asset is eligible only when its *returned URL* itself
+ * declares an unambiguous larger pixel size. No undocumented URL rewriting.
+ */
+internal fun bestCertifiedAppleOrArchiveCover(
+    certifiedAppleUrl: String?,
+    currentArchiveUrl: String?,
+): String? {
+    val officialApple = safeAppleArtwork(certifiedAppleUrl)
+        ?: return currentArchiveUrl
+    if (currentArchiveUrl.isNullOrBlank()) return officialApple
+    val applePath = runCatching { URI(officialApple).path }.getOrNull().orEmpty()
+    val dims = Regex(
+        """/([0-9]{2,4})x([0-9]{2,4})(?:bb|-[0-9]{2,3})\\.(?:jpg|jpeg|png|webp)$""",
+        RegexOption.IGNORE_CASE,
+    ).find(applePath)
+    val appleSize = dims?.groupValues?.get(1)?.toIntOrNull()
+        ?.takeIf { it == dims.groupValues[2].toIntOrNull() } ?: return currentArchiveUrl
+    val archiveSize = Regex("""/front-([0-9]{2,4})$""")
+        .find(currentArchiveUrl)?.groupValues?.get(1)?.toIntOrNull()
+        ?: return currentArchiveUrl
+    return if (appleSize >= 500 && appleSize > archiveSize)
+        officialApple else currentArchiveUrl
+}
+
+/**
  * Explicit Release AND ReleaseGroup identity required, not just an artist,
  * album title, UPC or Recording relationship. Group-only callers must choose
  * a verified exact edition, not borrow the first matching title.
