@@ -11,6 +11,7 @@ import org.junit.Test
 class AppleMusicBrainzArtistUrlResolverTest {
     private val artistId = 136975L
     private val storeUrl = "https://music.apple.com/br/artist/the-beatles/136975?uo=4"
+    private val canonicalUrl = "https://music.apple.com/br/artist/the-beatles/136975"
     private val mbid = "b10bbbfc-cf9e-42e0-be17-e2c3e1d2600d"
     private val other = "f2eaa98b-fef5-4327-9e7f-7d6500fdb973"
     private val appleMusicRelation = "64785d6c-2eeb-4f86-9418-b6c2d6c53c13"
@@ -25,9 +26,10 @@ class AppleMusicBrainzArtistUrlResolverTest {
 
     private class Fake(var raw: String) : MusicBrainzArtistUrlLookup {
         val calls = mutableListOf<String>()
+        val perUrl = mutableMapOf<String, String>()
         override suspend fun lookup(url: String): String {
             calls += url
-            return raw
+            return perUrl[url] ?: raw
         }
     }
 
@@ -35,8 +37,24 @@ class AppleMusicBrainzArtistUrlResolverTest {
         val fake = Fake(response(storeUrl, relation(mbid)))
         val result = MusicBrainzAppleArtistUrlResolver(fake).resolve(artistId, "br", storeUrl)
         assertEquals(mbid, result)
-        assertEquals(listOf(storeUrl), fake.calls)
+        assertEquals(listOf(canonicalUrl, storeUrl), fake.calls)
     }
+
+    @Test fun removesAppleTrackingParametersForMusicBrainzLinkLookup() = runBlocking {
+        val fake = Fake("not json")
+        fake.perUrl[canonicalUrl] = response(canonicalUrl, relation(mbid))
+        assertEquals(mbid, MusicBrainzAppleArtistUrlResolver(fake)
+            .resolve(artistId, "br", storeUrl))
+        assertEquals(listOf(canonicalUrl, storeUrl), fake.calls)
+    }
+
+    @Test fun contradictoryLinksAcrossTheTwoOfficialUrlFormsRemainUnverified() =
+        runBlocking {
+            val fake = Fake(response(storeUrl, relation(other)))
+            fake.perUrl[canonicalUrl] = response(canonicalUrl, relation(mbid))
+            assertNull(MusicBrainzAppleArtistUrlResolver(fake)
+                .resolve(artistId, "br", storeUrl))
+        }
 
     @Test fun wrongArtistIdOrStorefrontNeverQueriesMusicBrainz() = runBlocking {
         val fake = Fake(response(storeUrl, relation(mbid)))
