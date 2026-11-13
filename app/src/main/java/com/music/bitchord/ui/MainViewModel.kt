@@ -50,6 +50,7 @@ import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.AppleArtistDiscographyPager
+import com.music.bitchord.data.catalog.metadata.MusicBrainzDiscogsAppleTitleHintSource
 import com.music.bitchord.data.catalog.metadata.AppleArtistPageLoad
 import com.music.bitchord.data.catalog.metadata.ItunesArtistAlbumDiscoverySource
 import com.music.bitchord.data.catalog.metadata.AppleEditorialCatalogRepository
@@ -4535,6 +4536,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             country = route.storefront,
             pageSize = 24,
             source = ItunesArtistAlbumDiscoverySource(appleEditorialRepository),
+            titleHintSource = MusicBrainzDiscogsAppleTitleHintSource(),
+            // No MB artist ID is inferred from an Apple stage name.
+            verifiedMbArtistId = null,
         )
         appleArtistPager = pager
         activeAppleArtistId = row.browseId
