@@ -3466,6 +3466,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     UiState.Success(result.releases)
                 }
                 is AppleEditorialLoad.Failure -> {
+                    _appleHomeProbeReport.value = result.probeReport
+                    com.music.bitchord.data.catalog.metadata
+                        .recordAppleEditorialProbeReport("home", result.probeReport)
                     // Keep the last Apple-confirmed cards through a transient
                     // outage, but never fall back to MB-only ReleaseGroups.
                     (_appleHomeReleases.value as? UiState.Success)
@@ -3795,9 +3798,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         UiState.Success(result.releases)
                     }
-                    is AppleEditorialLoad.Failure ->
+                    is AppleEditorialLoad.Failure -> {
+                        result.probeReport?.let { report ->
+                            _appleGenreProbeReports.update { it + (tag to report) }
+                            com.music.bitchord.data.catalog.metadata
+                                .recordAppleEditorialProbeReport("genre", report)
+                        }
                         (old[tag] as? UiState.Success)
                             ?: UiState.Error("Não foi possível consultar o gênero na Apple.")
+                    }
                 })
             }
         }
