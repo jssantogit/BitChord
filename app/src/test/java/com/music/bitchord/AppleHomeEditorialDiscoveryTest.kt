@@ -75,6 +75,26 @@ class AppleHomeEditorialDiscoveryTest {
             }.sorted())
         }
 
+    @Test fun laterNewerEditionDoesNotReorderAnAlreadyVisibleAppleCard() =
+        runBlocking {
+            val snapshots = mutableListOf<List<Long>>()
+            val collector = AppleHomeEditorialDiscovery(
+                source = AppleHomeAlbumSearchSource { title, _ ->
+                    if (title == "First") found(
+                        album(10, "First", date = "2024-01-01"),
+                    ) else found(album(11, "Second", date = "2026-11-05"))
+                },
+            )
+            collector.discover(
+                listOf(AppleHomeEditorialSeed("First", "ILLIT"),
+                    AppleHomeEditorialSeed("Second", "ILLIT")),
+                "br", onProgress = { releases ->
+                    snapshots += releases.map { it.appleCollectionId }
+                },
+            )
+            assertEquals(listOf(listOf(10L), listOf(10L, 11L)), snapshots)
+        }
+
     @Test fun duplicateAppleProductWithConflictingFieldsIsNeverChosenBySearchOrder() =
         runBlocking {
             val collector = AppleHomeEditorialDiscovery(
