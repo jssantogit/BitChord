@@ -69,6 +69,50 @@ internal class MusicBrainzCatalogGraph(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Exact ReleaseGroup lookup: source-typed format evidence, no title inference. */
+    suspend fun lookupReleaseGroup(
+        mbid: String,
+    ): MusicBrainzCatalogGraphResult<MusicBrainzReleaseGroupHit> {
+        val id = mbid.validMbid() ?: return MusicBrainzCatalogGraphResult.Failure(
+            MusicBrainzCatalogSearchFailure.INVALID_QUERY,
+        )
+        val response = try {
+            client.get("release-group/$id", mapOf(
+                "fmt" to "json", "inc" to "artist-credits",
+            ))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            return MusicBrainzCatalogGraphResult.Failure(
+                MusicBrainzCatalogSearchFailure.UNAVAILABLE,
+            )
+        }
+        return try {
+            val root = json.parseToJsonElement(response).jsonObject
+            if (root.string("id").validMbid() != id) {
+                MusicBrainzCatalogGraphResult.Failure(
+                    MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                )
+            } else {
+                val title = root.string("title")?.takeIf(String::isNotBlank)
+                    ?: return MusicBrainzCatalogGraphResult.Failure(
+                        MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+                    )
+                MusicBrainzCatalogGraphResult.Success(MusicBrainzReleaseGroupHit(
+                    musicBrainzId = id,
+                    title = title,
+                    primaryType = root.string("primary-type"),
+                    firstReleaseDate = root.string("first-release-date"),
+                    artistDisplay = root.artistDisplay(),
+                ))
+            }
+        } catch (_: Exception) {
+            MusicBrainzCatalogGraphResult.Failure(
+                MusicBrainzCatalogSearchFailure.MALFORMED_RESPONSE,
+            )
+        }
+    }
+
     /**
      * Resolve genuine Recording -> Release relations when a search response
      * omitted its abbreviated release list. Never guess album art by title.
