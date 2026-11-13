@@ -5350,11 +5350,25 @@ private fun BitChordApp(
                     verifiedAlbumTitle = verifiedMenuAlbum,
                     verifiedCanonicalAlbumRoute = verifiedAlbumRoute,
                     onOpenCanonicalAlbum = { route ->
-                        songActions = null
-                        dismissPlayer()
-                        // Either a unique edition or the one verified group
-                        // shared by its editions; never a display title.
-                        viewModel.openCanonicalNativeShelfItem(route)
+                        // A verified album need not be visible in the current
+                        // MusicBrainz search/discovery shelf. The old
+                        // openCanonicalNativeShelfItem() returned false in
+                        // that case, making "Abrir álbum" silently do nothing.
+                        openVerifiedCanonicalPlayerAlbum(
+                            route = route,
+                            albumName = verifiedMenuAlbum ?: song.albumName,
+                            artist = song.artist,
+                            fallbackAlbumTitle = context.getString(R.string.album),
+                        ) { id, title, artist, type ->
+                            songActions = null
+                            dismissPlayer()
+                            viewModel.openDetail(
+                                browseId = id,
+                                title = title,
+                                subtitle = artist,
+                                type = type,
+                            )
+                        }
                     },
                     // The player-wide star now owns rating edits.
                     // Other track-list menus retain the existing first-rating entry.
