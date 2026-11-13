@@ -126,3 +126,20 @@ O gate focused [#43215915310](https://github.com/jssantogit/BitChord/actions/run
 - [ ] Se ficar sem capa, registrar como problema visual separado; não associar capa vazia a prova de identidade Discogs.
 
 **Não fazer merge automático.** Manter PR #211 Draft e #209/main intactos; esse APK é novo e ainda exige validação física posterior.
+
+
+## 13/11/2026 — reteste de rolagem contínua na discografia expandida
+
+**Relato físico A54:** em artista com muitos álbuns, "Ver tudo" atualiza/recomeça repetidas vezes e a posição volta ao topo durante a hidratação de capas/páginas. O diagnóstico de 13/11 registra 20 pausas recuperadas da UI, mas não contém offsets do LazyGrid; o mecanismo compatível foi localizado no `AnimatedContent(targetState = displayedActiveShelf)`, que mudava sua identidade toda vez que `HomeShelf` mudava.
+
+**Correção de código:** [`345178a7`](https://github.com/jssantogit/BitChord/commit/345178a7f8fe90b3d30d71a9213164d468b53c18) define `contentKey` por `(artistBrowseId, sectionTitle)` e mantém o `rememberLazyGridState()` do mesmo destino através de atualizações de título/crédito/capa/paginação. A regressão `expandedShelfTransitionKeyIsStableAcrossProgressiveCoverAndPaginationUpdates` exige mesma chave com mudanças de cards, e chave distinta entre artistas/seções.
+
+**Este update solicita novo APK smoke** via workflow existente após gate Android completo + shared playback + assemble, no SHA final produzido pelo commit deste documento. Não declarar aceite do problema sem testar no Galaxy A54.
+
+### Roteiro do reteste
+- [ ] Artista com muitos álbuns → Álbuns → Ver tudo; deslizar para a metade/fim e aguardar 30–60 segundos enquanto novas capas e grupos chegam; **o offset deve permanecer**.
+- [ ] Repetir em Singles e EPs e em outro artista; capas podem ser preenchidas sem crossfade do grid inteiro nem salto ao topo.
+- [ ] Voltar e reabrir Ver tudo; a navegação deve abrir na seção correta, sem herdar a rolagem de outro artista.
+- [ ] Checar HOT/BOOMPALA e busca conforme os critérios anteriores; nenhuma identidade deve ser removida.
+
+**Dependências:** #211 continua Draft; #215 iniciou **somente** a camada independente de Discogs e não integra este APK. Não fazer merge de #209 ou #215 como efeito colateral.
