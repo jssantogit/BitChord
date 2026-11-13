@@ -1,6 +1,11 @@
 name: Apple Music Bottom Bar · Smoke APK
 
 on:
+  push:
+    branches:
+      - validation/rea212-android-smoke-d315e9c2-20261113
+    paths:
+      - .github/workflows/apple-music-bar-smoke-apk.yml
   # No APK on every PR update. Explicitly apply the 'apple-music-smoke' label
   # to this experiment's PR when a new smoke build is requested.
   pull_request:
@@ -17,11 +22,15 @@ concurrency:
 
 jobs:
   dev-debug-apk:
-    if: github.event.pull_request.number == 212 && github.head_ref == 'experiment/apple-music-bottom-bar-pr209-20261108' && github.event.label.name == 'apple-music-smoke'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/validation/rea212-android-smoke-d315e9c2-20261113') || (github.event_name == 'pull_request' && github.event.pull_request.number == 212 && github.head_ref == 'experiment/apple-music-bottom-bar-pr209-20261108' && github.event.label.name == 'apple-music-smoke')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: d315e9c2f7f5d009ff4cd72773c81113105c3fa2
+      - name: Assert exact tested PR source
+        run: test "$(git rev-parse HEAD)" = "d315e9c2f7f5d009ff4cd72773c81113105c3fa2"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -50,7 +59,7 @@ jobs:
       - name: Upload experiment APK
         uses: actions/upload-artifact@v4
         with:
-          name: apple-music-bar-devDebug-${{ github.event.pull_request.head.sha }}
+          name: apple-music-bar-devDebug-d315e9c2f7f5d009ff4cd72773c81113105c3fa2
           path: smoke-apk/
           retention-days: 7
           if-no-files-found: error
