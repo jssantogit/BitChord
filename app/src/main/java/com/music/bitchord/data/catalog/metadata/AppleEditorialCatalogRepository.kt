@@ -22,9 +22,37 @@ internal sealed interface AppleEditorialLoad {
     data class Failure(val reason: ItunesCatalogFailure) : AppleEditorialLoad
 }
 
+internal sealed interface AppleEditorialArtistLoad {
+    data class Success(
+        val artists: List<ItunesCatalogItem>,
+        val possiblyTruncated: Boolean,
+    ) : AppleEditorialArtistLoad
+
+    data class Failure(val reason: ItunesCatalogFailure) : AppleEditorialArtistLoad
+}
+
 internal class AppleEditorialCatalogRepository(
     private val itunes: ItunesCatalogClient = ItunesCatalogClient(),
 ) {
+    /** Artist presence and attribution come from Apple, not name-matched MBIDs. */
+    suspend fun searchArtists(
+        query: String,
+        storefront: String = "br",
+        limit: Int = 50,
+    ): AppleEditorialArtistLoad = when (val source = itunes.search(
+        query, ItunesCatalogEntity.ARTIST, country = storefront, limit = limit,
+    )) {
+        is ItunesCatalogResult.Failure ->
+            AppleEditorialArtistLoad.Failure(source.reason)
+        is ItunesCatalogResult.Success ->
+            AppleEditorialArtistLoad.Success(
+                artists = source.items.filter {
+                    it.type == ItunesCatalogItemType.ARTIST && it.storefront == storefront
+                },
+                possiblyTruncated = source.possiblyTruncated,
+            )
+    }
+
     suspend fun searchAlbums(
         query: String,
         storefront: String = "br",
