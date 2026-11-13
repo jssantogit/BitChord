@@ -6,6 +6,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.sharedui.resources.Res
@@ -40,6 +41,8 @@ internal fun CanonicalSearchHeldMenus(
     hazeState: HazeState,
     bottomChromeClearance: Dp = 100.dp,
     hostProvidesBlur: Boolean = false,
+    /** Inherit page art when this same menu is opened inside a detail page. */
+    plateTint: Color? = null,
     onDismissCatalog: () -> Unit,
     onDismissPublicPlaylist: () -> Unit,
     onOpenCatalog: (CanonicalCatalogSearchRow) -> Unit,
@@ -62,6 +65,7 @@ internal fun CanonicalSearchHeldMenus(
         hazeState = hazeState,
         bottomChromeClearance = bottomChromeClearance,
         hostProvidesBlur = hostProvidesBlur,
+        plateTint = plateTint,
         onDismiss = onDismissCatalog,
         onPreviewClick = { row -> onDismissCatalog(); onOpenCatalog(row) },
     ) { row ->
@@ -102,6 +106,7 @@ internal fun CanonicalSearchHeldMenus(
         hazeState = hazeState,
         bottomChromeClearance = bottomChromeClearance,
         hostProvidesBlur = hostProvidesBlur,
+        plateTint = plateTint,
         onDismiss = onDismissPublicPlaylist,
         onPreviewClick = { row -> onDismissPublicPlaylist(); onOpenPublicPlaylist(row) },
     ) { row ->
