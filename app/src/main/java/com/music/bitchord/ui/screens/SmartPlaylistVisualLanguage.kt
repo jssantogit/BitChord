@@ -566,11 +566,16 @@ internal fun PlaylistWizardNavigationList(options: List<PlaylistWizardNavOption>
  * These proportions are a BitChord adaptation, not measured Apple Music tokens.
  */
 @Composable
-internal fun PlaylistWizardCategoryGrid(options: List<PlaylistWizardNavOption>) {
+internal fun PlaylistWizardCategoryGrid(
+    options: List<PlaylistWizardNavOption>,
+    modifier: Modifier = Modifier,
+    distributeRows: Boolean = false,
+) {
     if (options.isEmpty()) return
     Column(
-        modifier = Modifier.fillMaxWidth().testTag("playlist-category-grid"),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = modifier.fillMaxWidth().testTag("playlist-category-grid"),
+        verticalArrangement = if (distributeRows) Arrangement.SpaceEvenly
+            else Arrangement.spacedBy(10.dp),
     ) {
         options.chunked(2).forEach { pair ->
             if (pair.size == 1) {

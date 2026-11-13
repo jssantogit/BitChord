@@ -1355,7 +1355,7 @@ internal fun SmartPlaylistV2WizardUi(
                             }
                         } else {
                             item {
-                                PlaylistWizardCategoryGrid(smartConditionCategories.map { category ->
+                                PlaylistWizardCategoryGrid(options = smartConditionCategories.map { category ->
                                     PlaylistWizardNavOption(
                                         title = category.title,
                                         description = category.description,
@@ -1370,7 +1370,7 @@ internal fun SmartPlaylistV2WizardUi(
                                             page = WizardStep.FIELDS
                                         },
                                     )
-                                })
+                                }, modifier = Modifier.fillParentMaxHeight(0.78f), distributeRows = true)
                             }
                         }
                     }
