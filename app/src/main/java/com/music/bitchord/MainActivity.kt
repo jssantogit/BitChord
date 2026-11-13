@@ -962,6 +962,9 @@ private fun BitChordApp(
     val detailSongSorts by AppSettings.detailSongSorts.collectAsStateWithLifecycle()
     val songSort = detail?.browseId?.let { detailSongSorts[it] } ?: SongSort.DEFAULT
     var songSortMenuOpen by remember { mutableStateOf(false) }
+    var detailSortMenuAnchor by remember {
+        mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    }
     var catalogAlbumOverflowOpen by remember(detail?.browseId) { mutableStateOf(false) }
     // A device folder's equivalents — its sort and whether it is a grid —
     // kept apart for Downloads and shared by every other folder, as they
@@ -978,6 +981,9 @@ private fun BitChordApp(
         if (id == "local:downloads") downloadedMusicViewType else localMusicViewType
     }
     var folderMenuOpen by remember { mutableStateOf(false) }
+    var folderMenuAnchor by remember {
+        mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    }
     // Whether the open release page's filter box is up. Held out here with the
     // sort control because the button that opens it sits in the top bar beside
     // it, and reset with the page so a filter never follows you to the next one.
@@ -4742,7 +4748,12 @@ private fun BitChordApp(
                                 }
                             }
                             if (appleDownloadsChrome) {
-                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(hazeState) {
+                                com.music.bitchord.ui.components.FloatingLibraryTopBarCircle(
+                                    hazeState = hazeState,
+                                    modifier = Modifier.onGloballyPositioned { coords ->
+                                        folderMenuAnchor = nativeMenuAnchorBounds(coords)
+                                    },
+                                ) {
                                     IconButton(onClick = { folderMenuOpen = true }) {
                                         Icon(
                                             PlaylistEditorIcons.Sort,
@@ -4899,6 +4910,10 @@ private fun BitChordApp(
                                     onSort = {
                                         if (isLocalDetail) folderMenuOpen = true
                                         else songSortMenuOpen = true
+                                    },
+                                    onSortAnchor = { bounds ->
+                                        detailSortMenuAnchor = bounds
+                                        if (isLocalDetail) folderMenuAnchor = bounds
                                     },
                                     catalogOverflowExpanded = catalogAlbumOverflowOpen,
                                     onOpenCatalogOverflow = { catalogAlbumOverflowOpen = true },
@@ -5916,6 +5931,7 @@ private fun BitChordApp(
             BackHandler { songSortMenuOpen = false }
             FrostedSortMenu(
                 hazeState = hazeState,
+                anchorBounds = detailSortMenuAnchor,
                 selected = songSort,
                 onSelect = { option ->
                     detail?.browseId?.let { AppSettings.setDetailSongSort(it, option) }
@@ -5968,6 +5984,7 @@ private fun BitChordApp(
             val viewType = folderState.viewTypeFor(selectedFolderTab, folderViewTypeOf(menuFolder))
             FrostedFolderMenu(
                 hazeState = hazeState,
+                anchorBounds = folderMenuAnchor,
                 sort = folderSortOf(menuFolder),
                 viewType = viewType,
                 onSort = { option ->
@@ -7101,12 +7118,14 @@ private fun LibrarySort.localizedLabel(): String = when (this) {
 @Composable
 private fun FrostedSortMenu(
     hazeState: HazeState,
+    anchorBounds: androidx.compose.ui.unit.IntRect? = null,
     selected: SongSort,
     onSelect: (SongSort) -> Unit,
     onFlipDateDirection: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss) {
+    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss,
+        anchorBounds = anchorBounds) {
         // Date added is one row, Spotify-style: the arrow on it shows
         // the direction — up for newest first, down for oldest — and
         // tapping flips it, the rotation animating the flip. Up is
@@ -7160,13 +7179,15 @@ private fun FrostedSortMenu(
 @Composable
 private fun FrostedFolderMenu(
     hazeState: HazeState,
+    anchorBounds: androidx.compose.ui.unit.IntRect? = null,
     sort: LocalMusicSort,
     viewType: LibraryViewType,
     onSort: (LocalMusicSort) -> Unit,
     onToggleViewType: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss) {
+    FrostedMenuPanel(hazeState = hazeState, onDismiss = onDismiss,
+        anchorBounds = anchorBounds) {
         val grid = viewType == LibraryViewType.GRID
         FrostedMenuRow(
             label = stringResource(if (grid) R.string.switch_to_list_view else R.string.switch_to_grid_view),
@@ -7238,6 +7259,7 @@ internal class UnifiedLibraryUiControls {
 private class UnifiedAlbumDetailUiState {
     var songSort by mutableStateOf(SongSort.DEFAULT)
     var sortMenuOpen by mutableStateOf(false)
+    var sortMenuAnchor by mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
     var optionsToken by mutableIntStateOf(0)
     var playlistToken by mutableIntStateOf(0)
     var artistOptionsToken by mutableIntStateOf(0)
@@ -7245,6 +7267,7 @@ private class UnifiedAlbumDetailUiState {
     fun resetDetail() {
         songSort = SongSort.DEFAULT
         sortMenuOpen = false
+        sortMenuAnchor = null
         // These are one-shot action tokens, not persistent screen preferences.
         // Reopening a pinned album/artist must never replay an old ⋮ or
         // PlaylistAdd tap from the previous detail destination.
@@ -7281,6 +7304,7 @@ private fun UnifiedAlbumDetailSortMenu(
     BackHandler(onBack = state::dismissSort)
     FrostedSortMenu(
         hazeState = hazeState,
+        anchorBounds = state.sortMenuAnchor,
         selected = state.songSort,
         onSelect = state::selectSort,
         onFlipDateDirection = state::flipDateDirection,
@@ -7362,6 +7386,7 @@ private fun UnifiedLibraryRouteToolbar(
                 category, detailOpen, nestedAlbumOpen,
             ),
             onAlbumSort = albumUi::openSort,
+            onAlbumSortAnchor = { albumUi.sortMenuAnchor = it },
             onAlbumOptions = albumUi::requestOptions,
             albumRatingSelection = albumRatingSelection,
             artistDetail = shouldUseUnifiedArtistDetailToolbar(
@@ -7381,6 +7406,7 @@ private fun UnifiedLibraryToolbarActions(
     searchInContent: Boolean = false,
     albumDetail: Boolean = false,
     onAlbumSort: () -> Unit = {},
+    onAlbumSortAnchor: (androidx.compose.ui.unit.IntRect) -> Unit = {},
     onAlbumOptions: () -> Unit = {},
     albumRatingSelection: com.music.bitchord.ui.screens.CanonicalLibrarySelection? = null,
     artistDetail: Boolean = false,
@@ -7405,10 +7431,14 @@ private fun UnifiedLibraryToolbarActions(
                 albumRatingSelection, controls.sourceKey,
             )
         }
-        NativeCollectionSortAction(
-            contentDescription = "Ordenar faixas do álbum",
-            onClick = onAlbumSort,
-        )
+        Box(Modifier.onGloballyPositioned { coords ->
+            onAlbumSortAnchor(nativeMenuAnchorBounds(coords))
+        }) {
+            NativeCollectionSortAction(
+                contentDescription = "Ordenar faixas do álbum",
+                onClick = onAlbumSort,
+            )
+        }
         NativeCollectionOverflowAction(
             contentDescription = "Opções do álbum",
             onClick = onAlbumOptions,
@@ -7887,6 +7917,7 @@ private fun NativeDetailAlbumTopBarActions(
     searching: Boolean,
     onToggleSearch: () -> Unit,
     onSort: () -> Unit,
+    onSortAnchor: (androidx.compose.ui.unit.IntRect) -> Unit = {},
     catalogOverflowExpanded: Boolean,
     onOpenCatalogOverflow: () -> Unit,
     onDismissCatalogOverflow: () -> Unit,
@@ -7911,12 +7942,16 @@ private fun NativeDetailAlbumTopBarActions(
     if (ratingTarget != null) {
         CanonicalToolbarRatingAction(ratingTarget, "álbum")
     }
-    NativeCollectionSortAction(
-        contentDescription = stringResource(
-            if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
-        ),
-        onClick = onSort,
-    )
+    Box(Modifier.onGloballyPositioned { coords ->
+        onSortAnchor(nativeMenuAnchorBounds(coords))
+    }) {
+        NativeCollectionSortAction(
+            contentDescription = stringResource(
+                if (isLocalDetail) R.string.sort_music else R.string.sort_songs,
+            ),
+            onClick = onSort,
+        )
+    }
     if (isReleaseDetail && onlineMetadata) {
         Box {
             NativeCollectionOverflowAction(
