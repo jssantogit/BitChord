@@ -2,9 +2,21 @@ package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
+import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
+
+/**
+ * The cached first-paint and typeahead path must obey the SAME editorial
+ * gate as live General Search. Raw Room MusicBrainz data stays intact; only
+ * the public search projection is curated.
+ */
+internal fun canonicalCuratedCachedMusicBrainzGroups(
+    groups: List<MusicBrainzReleaseGroupHit>,
+): List<MusicBrainzReleaseGroupHit> =
+    groups.filter(::isCuratedMusicBrainzReleaseGroup)
 
 /**
  * Cursor ownership is per upstream entity type, never based on the number of
