@@ -3809,6 +3809,13 @@ private fun BitChordApp(
                             onCanonicalTrackPlay = { mbid ->
                                 executeMusicBrainzCatalog(mbid, CanonicalCollectionIntent.PLAY_NOW)
                             },
+                            onCanonicalTrackHold = { recording ->
+                                val origin = LongPressOrigin.consume()
+                                if (origin != null) {
+                                    heldCatalogSearchOrigin = origin
+                                    heldCatalogSearchRow = recording
+                                }
+                            },
                             canonicalPublicTopTracks = if (publicArtistMbid != null &&
                                 artistPublicTop.artistMbid?.equals(publicArtistMbid, ignoreCase = true) == true
                             ) artistPublicTop.rows else emptyList(),
@@ -5979,6 +5986,7 @@ private fun BitChordApp(
                 hazeState = hazeState,
                 bottomChromeClearance = heldChromeClearance,
                 hostProvidesBlur = true,
+                plateTint = detail?.let { detailPalette.elevated },
                 onDismissCatalog = {
                     heldCatalogSearchRow = null
                     heldCatalogSearchOrigin = null
