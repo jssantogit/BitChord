@@ -356,8 +356,9 @@ fun DetailScreen(
     appleStorePromotionUrl: String? = null,
 ) {
     val applePromotionBadge = remember(page.browseId, appleStorePromotionUrl) {
-        if (page.browseId.startsWith("catalog:RELEASE:"))
-            appleApprovedBadgeForStoreUrl(appleStorePromotionUrl)
+        if (page.browseId.startsWith("catalog:RELEASE:") ||
+            page.browseId.startsWith("catalog:RELEASE_GROUP:")
+        ) appleApprovedBadgeForStoreUrl(appleStorePromotionUrl)
         else null
     }
     val externalStoreUriHandler = LocalUriHandler.current
