@@ -1,0 +1,48 @@
+# Exact source validation for REA #212 while parent #209 keeps moving.
+# No APK, no merge, no release.
+name: REA 212 · Search held menus (test only)
+
+on:
+  push:
+    branches: [validation/rea212-held-search-f439d8c8-20261113]
+    paths: [.github/workflows/rea212-held-search-test-only.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  test-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact PR 212 SHA
+        uses: actions/checkout@v4
+        with:
+          ref: f439d8c806cf2a98fe1a57363ae277bb2c57eaa5
+      - name: Assert exact source under test
+        run: test "$(git rev-parse HEAD)" = "f439d8c806cf2a98fe1a57363ae277bb2c57eaa5"
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure unit-test environment
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app unit tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared native UI regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Retain failure reports only
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-held-search-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
