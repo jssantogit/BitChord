@@ -83,8 +83,10 @@ def audit_relations(targets, get):
         else:
             # A missing edition in an otherwise valid Group is NOT proof it
             # belongs somewhere else. Partial nested Releases stay unknown.
-            status = 'FAIL' if group_result['status'] == 'FAIL' else (
-                'ERROR' if group_result['status'] == 'ERROR' else 'INCONCLUSIVE')
+            # Only the Artist→Group edge is contradicted by a wrong group
+            # credit. Release→Group was not independently queried, so it
+            # remains inconclusive rather than counting the same failure twice.
+            status = 'INCONCLUSIVE'
             reason = 'group_credit_unverified' if group_result['status'] != 'PASS' else (
                 'official_edition_not_present_in_group_lookup')
             release_edges.append(item(
