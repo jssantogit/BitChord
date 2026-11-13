@@ -105,4 +105,27 @@ class NativeArtistIncludedInArtworkTest {
         assertEquals(1, requests)
         assertEquals(mapOf(firstGroup to firstEdition), resolved)
     }
+    @Test fun sameHostAndRecordingAcrossTwoGroupsRemainsTwoVisibleCards() {
+        val sharedRecording = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val album = MusicBrainzArtistAppearance(
+            releaseGroupMbid = firstGroup, title = "Host album",
+            artistCredit = "Host artist", releaseDate = "2025-01-01",
+            primaryType = "Album", recordingMbid = sharedRecording,
+            trackTitle = "Shared guest recording", commerciallyVerified = true,
+        )
+        val single = album.copy(
+            releaseGroupMbid = secondGroup, title = "Host single",
+            primaryType = "Single", releaseDate = "2024-12-01",
+        )
+        val visible = nativeArtistEditorialGuestTracks(listOf(album, single))
+        assertEquals(listOf(firstGroup, secondGroup),
+            visible.map { it.releaseGroupMbid })
+        assertEquals(2, visible.size)
+        // Same work, two editions must still produce just one card.
+        assertEquals(1, nativeArtistEditorialGuestTracks(listOf(
+            album, album.copy(releaseMbid = secondEdition),
+        )).size)
+    }
+
+
 }
