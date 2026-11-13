@@ -15,10 +15,11 @@ class AppleMusicChromeMotionPolicyTest {
     }
 
     @Test
-    fun enabledTabsReactToSelectionAndPressAndReturnToRest() {
+    fun switchingTabsDoesNotEnlargeSelectedIconOrSpringItBack() {
         assertEquals(1f, appleMusicTabScaleTarget(enabled = true, selected = false, pressed = false), 0.0001f)
-        assertEquals(1.04f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = false), 0.0001f)
-        assertEquals(0.91f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = true), 0.0001f)
+        assertEquals(1f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = false), 0.0001f)
+        assertEquals(0.96f, appleMusicTabScaleTarget(enabled = true, selected = true, pressed = true), 0.0001f)
+        assertEquals(1f, appleMusicTabScaleTarget(enabled = true, selected = false, pressed = false), 0.0001f)
     }
 
     @Test
