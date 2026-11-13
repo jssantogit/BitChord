@@ -4280,7 +4280,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 fromOfflineCache = true,
                             ))
                         }
-                        dao.searchKnownMusicBrainzGroups(query, 6).forEach { group ->
+                        canonicalCuratedCachedMusicBrainzGroups(
+                            dao.searchKnownMusicBrainzGroups(query, 6),
+                        ).forEach { group ->
                             add(CanonicalCatalogSearchRow(
                                 group.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
                                 group.title, group.artistDisplay ?: group.primaryType,
