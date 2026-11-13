@@ -1,10 +1,10 @@
 package com.music.bitchord.ui.screens
 
 import android.app.Application
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -24,6 +24,9 @@ class CanonicalRecentHeldActionsComposeTest {
         val invoked = mutableListOf<String>()
         compose.setContent {
             MaterialTheme {
+                // Production places action rows in the held menu's Column.
+                // Without this parent all five top-level test nodes overlap.
+                Column {
                 CanonicalRecentHeldActions(
                     isPinned = false,
                     onPlayNext = { invoked += "next" },
@@ -32,6 +35,7 @@ class CanonicalRecentHeldActionsComposeTest {
                     onEditRating = { invoked += "rating" },
                     onTogglePin = { invoked += "pin" },
                 )
+                }
             }
         }
         listOf("Tocar a seguir", "Adicionar à fila", "Adicionar à playlist",
@@ -39,17 +43,19 @@ class CanonicalRecentHeldActionsComposeTest {
             compose.onNodeWithText(it).assertExists()
         }
         // A real contextual menu closes after one action, not three in succession.
-        compose.onAllNodesWithTag("native-compact-menu-item")[2].performClick()
+        compose.onNodeWithText("Adicionar à playlist").performClick()
         compose.runOnIdle { assertEquals(listOf("playlist"), invoked) }
     }
 
     @Test fun pinnedRecordingShowsUnpinWithoutRemovingItsOtherActions() {
         compose.setContent {
             MaterialTheme {
+                Column {
                 CanonicalRecentHeldActions(
                     isPinned = true, onPlayNext = {}, onQueue = {},
                     onAddToPlaylist = {}, onEditRating = {}, onTogglePin = {},
                 )
+                }
             }
         }
         compose.onNodeWithText("Desafixar da Biblioteca").assertExists()
