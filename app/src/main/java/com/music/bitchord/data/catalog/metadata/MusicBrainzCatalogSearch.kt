@@ -1,5 +1,6 @@
 package com.music.bitchord.data.catalog.metadata
 
+import androidx.room.Ignore
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -58,7 +59,7 @@ internal data class MusicBrainzReleaseGroupHit(
     /** Pipe-separated MusicBrainz types: null = absent/unknown, "" = explicitly no tags. */
     val secondaryTypes: String? = null,
     /** All credited artist MBIDs in source order; null if any ID is missing or invalid. */
-    val artistCreditMbids: List<String>? = null,
+    @field:Ignore val artistCreditMbids: List<String>? = null,
 )
 
 internal data class MusicBrainzReleaseHit(
@@ -81,7 +82,7 @@ internal data class MusicBrainzReleaseHit(
     /** Evidence from exact Release's Track/Recording graph, when cached. */
     val isVideoOnlyContent: Boolean? = null,
     /** Do not infer artist identity from display text or aliases. */
-    val artistCreditMbids: List<String>? = null,
+    @field:Ignore val artistCreditMbids: List<String>? = null,
 )
 
 // A MusicBrainz cover-art-archive.front flag is a presence hint only.
