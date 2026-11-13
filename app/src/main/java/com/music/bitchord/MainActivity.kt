@@ -2374,6 +2374,14 @@ private fun BitChordApp(
         }
     }
     var recentSearching by remember { mutableStateOf(false) }
+    var recentHeldRecording by remember {
+        mutableStateOf<com.music.bitchord.ui.screens.V2DisplayRow?>(null)
+    }
+    var recentHeldOrigin by remember { mutableStateOf<HeldItem?>(null) }
+    val onRecentTrackHold: (com.music.bitchord.ui.screens.V2DisplayRow) -> Unit = { row ->
+        recentHeldOrigin = LongPressOrigin.consume()
+        recentHeldRecording = row.takeIf { recentHeldOrigin != null }
+    }
     var unifiedLibrarySearching by remember { mutableStateOf(false) }
     var unifiedLibraryDetailOpen by remember { mutableStateOf(false) }
     var unifiedLibraryNestedAlbumOpen by remember { mutableStateOf(false) }
@@ -3345,6 +3353,7 @@ private fun BitChordApp(
                                     intent,
                                 )
                             },
+                            onTrackHold = onRecentTrackHold,
                         )
                     } else if (key == "library_show_all") {
                         libraryShowAll?.let { shelf ->
@@ -4203,6 +4212,7 @@ private fun BitChordApp(
                                             intent,
                                         )
                                     },
+                                    onTrackHold = onRecentTrackHold,
                                 )
                             },
                             links = com.music.bitchord.ui.screens.libraryNavigationLinks(
@@ -5441,6 +5451,49 @@ private fun BitChordApp(
             ) { song ->
                 songMenuBody(song, SongActionsPresentation.Menu)
             }
+            // The shelf itself is nested in a scrolling Library. Host its
+            // selected item above the whole window, not inside the shelf.
+            HeldContextMenu(
+                item = recentHeldRecording,
+                held = recentHeldOrigin,
+                hazeState = hazeState,
+                onDismiss = {
+                    recentHeldRecording = null
+                    recentHeldOrigin = null
+                },
+                onPreviewClick = { row ->
+                    recentHeldRecording = null
+                    recentHeldOrigin = null
+                    executeSmartCollection(
+                        SmartCollectionActionSource.RecentLocalTrack(row.id),
+                        CanonicalCollectionIntent.PLAY_NOW,
+                    )
+                },
+            ) { row ->
+                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                    label = "Tocar a seguir",
+                    onClick = {
+                        recentHeldRecording = null
+                        recentHeldOrigin = null
+                        executeSmartCollection(
+                            SmartCollectionActionSource.RecentLocalTrack(row.id),
+                            CanonicalCollectionIntent.ADD_NEXT,
+                        )
+                    },
+                )
+                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                    label = "Adicionar à fila",
+                    onClick = {
+                        recentHeldRecording = null
+                        recentHeldOrigin = null
+                        executeSmartCollection(
+                            SmartCollectionActionSource.RecentLocalTrack(row.id),
+                            CanonicalCollectionIntent.ADD_TO_QUEUE,
+                        )
+                    },
+                )
+            }
+
             // A closed menu forgets where it was held, so whatever opens it next
             // — the ⋮, the player — starts from the sheet.
             LaunchedEffect(songActions == null) {
