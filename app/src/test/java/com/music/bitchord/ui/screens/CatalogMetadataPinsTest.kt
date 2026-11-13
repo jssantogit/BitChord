@@ -38,6 +38,17 @@ class CatalogMetadataPinsTest {
         assertEquals(com.music.bitchord.data.model.BrowseType.ALBUM, target?.type)
     }
 
+    @Test fun pinnedRecordingUsesItsOwnTypedMetadataRouteRatherThanFakeAlbum() {
+        val pin = CatalogMetadataPin(
+            browseId = "catalog:RECORDING:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            title = "Hype Boy", subtitle = "NewJeans",
+        )
+        org.junit.Assert.assertTrue(validCatalogMetadataPin(pin))
+        val target = catalogMetadataPinNativeTarget(pin)
+        assertEquals(com.music.bitchord.data.model.BrowseType.OTHER, target?.type)
+        assertEquals(pin.browseId, target?.browseId)
+    }
+
     @Test fun pinnedArtistOpensArtistDetailAndRejectsFakeIdentities() {
         val artist = release.copy(
             browseId = "catalog:ARTIST:$id",
