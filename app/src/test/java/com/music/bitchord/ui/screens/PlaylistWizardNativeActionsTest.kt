@@ -186,7 +186,7 @@ class PlaylistWizardNativeActionsTest {
     }
 
     @Test fun sourceSelectionCardsHaveDescriptionAndNoLegacyRadioIndicators() {
-        var chosen = "not-chosen"
+        var chosen: String? = "not-chosen"
         compose.setContent {
             MaterialTheme {
                 PlaylistWizardSourceChoices(
