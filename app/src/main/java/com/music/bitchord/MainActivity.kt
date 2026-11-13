@@ -728,6 +728,9 @@ private fun BitChordApp(
     // Only the queue menu receives the Apple-specific Favorite/playlist action set.
     // Other Now Playing views keep their existing ⋮ behavior untouched.
     var menuFromAppleQueue by remember { mutableStateOf(false) }
+    var playerMenuAnchor by remember {
+        mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    }
     var playerShareLyricsRequestToken by remember { mutableIntStateOf(0) }
     /**
      * The row or card that was held to open the track menu, or null when it
@@ -2685,6 +2688,9 @@ private fun BitChordApp(
             // ids have been resolved.
             onOpenMenu = { loadedArtworkModel -> openMenuFromPlayer(loadedArtworkModel, true) },
             onOpenQueueMenu = { loadedArtworkModel -> openMenuFromPlayer(loadedArtworkModel, true) },
+            onOverflowAnchorChange = { bounds -> playerMenuAnchor = bounds },
+            modifier = if (menuFromPlayer && menuFromAppleQueue && songActions != null &&
+                !reduceDynamicBlur) Modifier.blur(18.dp) else Modifier,
             onOpenAlbum = { id ->
                 dismissPlayer()
                 showReplay = false
@@ -5594,18 +5600,28 @@ private fun BitChordApp(
             }
             songActions?.takeIf { songMenuOrigin == null }?.let { song ->
                 val applePlayerMenu = shouldUseAppleQueueSongActions(menuFromPlayer, menuFromAppleQueue)
-                ModalBottomSheet(
-                    onDismissRequest = { songActions = null },
-                    // Apple player actions must open fully: the Material3 partial
-                    // state previously clipped the six commands below the fold.
-                    sheetState = rememberModalBottomSheetState(
-                        skipPartiallyExpanded = applePlayerMenu,
-                    ),
-                    containerColor = Color.Transparent,
-                    scrimColor = BottomSheetDefaults.ScrimColor,
-                    dragHandle = null,
-                ) {
-                    songMenuBody(song, SongActionsPresentation.Sheet)
+                if (applePlayerMenu) {
+                    // Unlike an ordinary track sheet, the player's menu must
+                    // bloom beside the actual overflow puck in Now Playing.
+                    // Its parent player is an M3 dialog: another dialog is used
+                    // here so the popup always stays above that window.
+                    com.music.bitchord.ui.components.PlayerAnchoredActionsMenu(
+                        anchorBounds = playerMenuAnchor,
+                        artworkUrl = song.thumbnailUrl,
+                        onDismiss = { songActions = null },
+                    ) {
+                        songMenuBody(song, SongActionsPresentation.Menu)
+                    }
+                } else {
+                    ModalBottomSheet(
+                        onDismissRequest = { songActions = null },
+                        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+                        containerColor = Color.Transparent,
+                        scrimColor = BottomSheetDefaults.ScrimColor,
+                        dragHandle = null,
+                    ) {
+                        songMenuBody(song, SongActionsPresentation.Sheet)
+                    }
                 }
             }
             // Reserve the REAL floating chrome in all held-menu geometries.
