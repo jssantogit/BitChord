@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -56,10 +57,15 @@ class SmartPlaylistSavedFilterHeldMenuTest {
         val chosen = mutableListOf<String>()
         compose.setContent {
             MaterialTheme {
-                SavedFilterMenuActions(
-                    options = savedFilterActionsForDraft(false, null),
-                    onChoose = { chosen += it },
-                )
+                // Production popups and HeldContextMenu both stack action rows
+                // in a Column; without it, the test's siblings overlap and
+                // the topmost Delete row receives every coordinate tap.
+                Column {
+                    SavedFilterMenuActions(
+                        options = savedFilterActionsForDraft(false, null),
+                        onChoose = { chosen += it },
+                    )
+                }
             }
         }
         compose.onNodeWithText("Editar filtro").performClick()
