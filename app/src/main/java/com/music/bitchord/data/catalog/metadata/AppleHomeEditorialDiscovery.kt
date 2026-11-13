@@ -63,11 +63,9 @@ internal class AppleHomeEditorialDiscovery(
         val verified = linkedMapOf<String, ItunesEditorialRelease>()
         val disputed = mutableSetOf<String>()
         var lastPublished: List<ItunesEditorialRelease>? = null
-        fun snapshot(): List<ItunesEditorialRelease> =
-            verified.values.sortedWith(
-                compareByDescending<ItunesEditorialRelease> { it.releaseDate.orEmpty() }
-                    .thenBy { it.appleCollectionId },
-            )
+        // Append-only product order prevents later, independently queried
+        // albums from sending the visible Home list back to the top.
+        fun snapshot(): List<ItunesEditorialRelease> = verified.values.toList()
         for (seed in selected) {
             val response = try {
                 source.search(seed.title, storefront)
