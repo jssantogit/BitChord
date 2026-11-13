@@ -32,6 +32,39 @@ import org.robolectric.annotation.ConscryptMode
 class NativeAlbumPlaylistToolbarTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun expandedPlaylistSearchShowsOnlyCloseAndHidesOverflowRatingAndSort() {
+        val playlist = ListenBrainzPublicPlaylist(
+            mbid = "66dd7663-76a4-4e31-93ae-730ccd49d7d8",
+            title = "Public Playlist", creator = "Author", description = null,
+        )
+        var taps = 0
+        compose.setContent {
+            MaterialTheme {
+                Row {
+                    NativePublicPlaylistTopBarActions(
+                        playlist = playlist,
+                        searching = true,
+                        onToggleSearch = { taps++ },
+                        sort = PlaylistLibrarySort.DEFAULT,
+                        onSort = {},
+                        sortOpen = false,
+                        optionsOpen = false,
+                        onShowSort = {},
+                        onShowOptions = {},
+                        onSortDismiss = {},
+                        onOptionsDismiss = {},
+                    )
+                }
+            }
+        }
+        compose.onNodeWithContentDescription("Fechar pesquisa da playlist").performClick()
+        compose.runOnIdle { assertEquals(1, taps) }
+        compose.onNodeWithTag("native-toolbar-sort-anchor").assertDoesNotExist()
+        compose.onNodeWithTag("native-toolbar-overflow-anchor").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Avaliar playlist", substring = true).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Opções da playlist").assertDoesNotExist()
+    }
+
     @Test fun collectionOverflowReusesTheSamePlainVectorAsTheOtherThreeDotMenus() {
         assertSame(
             com.music.bitchord.ui.icons.PlaylistEditorIcons.More,
