@@ -365,14 +365,14 @@ class SmartPlaylistV2WizardComposeTest {
                 currentPreviewQuery = null, onManage = {}, onBack = {},
             )
         }
-        // Source and playlist-kind controls are now native editorial choices:
-        // neither must inherit Settings' old generic chevron/radio composition.
+        // Choose the playlist type before selecting its playable sources.
+        // The source options depend on whether the playlist is normal or smart.
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
-        compose.onNodeWithText("Fontes de origem").assertExists()
-        compose.onNodeWithTag("playlist-source-selector").assertExists()
-        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
         compose.onNodeWithText("Tipo de playlist").assertExists()
         compose.onNodeWithTag("playlist-kind-smart").assertIsSelected()
+        compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(4)
+        compose.onNodeWithText("Fontes de origem").assertExists()
+        compose.onNodeWithTag("playlist-source-selector").assertExists()
         compose.onNodeWithText("Continuar").performClick()
         compose.onNodeWithTag("smart-playlist-wizard-list").performScrollToIndex(3)
         compose.onNodeWithText("Adicionar primeira condição").performClick()
