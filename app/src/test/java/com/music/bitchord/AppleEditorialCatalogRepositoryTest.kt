@@ -8,6 +8,8 @@ import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogResult
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogTransport
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogSearchAttribute
+import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
+import com.music.bitchord.data.catalog.metadata.ItunesPublicSearchSource
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -116,6 +118,21 @@ class AppleEditorialCatalogRepositoryTest {
             )
             assertEquals("albumTerm", source.parameters["attribute"])
         }
+
+    @Test fun searchPaginationUsesDocumentedSongTermNotUndocumentedOffset() = runBlocking {
+        val source = Source("""{"resultCount":0,"results":[]}""")
+        val response = ItunesPublicSearchSource(ItunesCatalogClient(source)).search(
+            query = "Ditto",
+            entity = ItunesCatalogEntity.SONG,
+            country = "br",
+            attribute = ItunesCatalogSearchAttribute.SONG_TERM,
+        )
+        assertTrue(response is ItunesCatalogResult.Success)
+        assertEquals("song", source.parameters["entity"])
+        assertEquals("songTerm", source.parameters["attribute"])
+        assertEquals("200", source.parameters["limit"])
+        assertFalse(source.parameters.containsKey("offset"))
+    }
 
     @Test fun sameArtistHomonymsAndForeignAlbumIdsNeverEnterSelectedArtistShelf() =
         runBlocking {
