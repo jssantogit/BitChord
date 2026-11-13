@@ -1569,6 +1569,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     held = heldLibraryMenuOrigin,
                     hazeState = heldLibraryHaze,
                     bottomChromeClearance = heldMenuBottomChromeClearance,
+                    hostProvidesBlur = true,
                     onDismiss = {
                         libraryMenu = null
                         heldLibraryMenuOrigin = null
