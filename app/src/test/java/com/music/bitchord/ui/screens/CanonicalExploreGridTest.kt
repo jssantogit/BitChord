@@ -16,6 +16,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.MoodGenreSection
 import com.music.bitchord.data.model.ShelfItem
@@ -37,7 +39,7 @@ import org.robolectric.annotation.ConscryptMode
 class CanonicalExploreGridTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun searchResultsUseMoreMenuRatherThanDurationText() {
+    @Test fun searchResultsKeepHoldActionsButNoMoreButtonOrDurationText() {
         compose.setContent {
             MaterialTheme {
                 NativeSearchResultRow(
@@ -55,7 +57,9 @@ class CanonicalExploreGridTest {
         }
         compose.onNodeWithText("How Sweet").assertExists()
         compose.onNodeWithText("3:20").assertDoesNotExist()
-        compose.onNodeWithTag("search-row-more-actions").assertExists().performClick()
+        compose.onNodeWithTag("search-row-more-actions").assertDoesNotExist()
+        compose.onNodeWithTag("native-search-result-row")
+            .performTouchInput { longClick() }
         compose.onNodeWithText("Ver detalhes").assertExists()
     }
 
