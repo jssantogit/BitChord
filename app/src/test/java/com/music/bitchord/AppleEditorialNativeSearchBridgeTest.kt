@@ -166,6 +166,27 @@ class AppleEditorialNativeSearchBridgeTest {
             source, album.appleScopedId,
             proof.copy(release = album.copy(appleCollectionId = 102)),
         ))
+        val discogs = com.music.bitchord.data.catalog.metadata.discogs
+            .DiscogsEditionPresentation(
+                country = "South Korea", editionYear = 2024,
+                labelLines = listOf("BELIFT LAB"), formats = listOf("EP"),
+                attributionText = "Data provided by Discogs.",
+                attributionUrl = "https://www.discogs.com/release/25",
+            )
+        val attributed = com.music.bitchord.ui.appleNativeReconciledAlbumDetail(
+            source, album.appleScopedId, proof.copy(discogsEdition = discogs),
+        )!!
+        assertEquals("https://www.discogs.com/release/25",
+            attributed.discogsAttributionUrl)
+        assertEquals("Data provided by Discogs.", attributed.discogsAttributionText)
+        assertTrue(attributed.discogsNonAffiliationNotice.orEmpty()
+            .contains("not affiliated"))
+        val unsafe = com.music.bitchord.ui.appleNativeReconciledAlbumDetail(
+            source, album.appleScopedId, proof.copy(discogsEdition = discogs.copy(
+                attributionUrl = "https://evil.example/release/25",
+            )),
+        )!!
+        assertNull(unsafe.discogsAttributionUrl)
     }
 
     @Test fun detailedAppleTracklistKeepsItsOwnIdentityAndNeverReturnsPlayableSong() {
