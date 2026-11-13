@@ -38,6 +38,12 @@ internal enum class ItunesCatalogEntity(val apiValue: String) {
     SONG("song"),
 }
 
+/** Documented PUBLIC Search API attributes, not invented offset pagination. */
+internal enum class ItunesCatalogSearchAttribute(val apiValue: String) {
+    ARTIST_TERM("artistTerm"),
+    ALBUM_TERM("albumTerm"),
+}
+
 internal enum class ItunesCatalogItemType(val key: String) {
     ARTIST("artist"),
     ALBUM("album"),
@@ -200,16 +206,19 @@ internal class ItunesCatalogClient(
         entity: ItunesCatalogEntity,
         country: String = "br",
         limit: Int = 20,
+        attribute: ItunesCatalogSearchAttribute? = null,
     ): ItunesCatalogResult {
         val query = term.trim()
         val storefront = normalizedStorefront(country)
         if (query.isEmpty() || query.length > 120 || query.any(Char::isISOControl) ||
             storefront == null || limit !in 1..200
         ) return ItunesCatalogResult.Failure(ItunesCatalogFailure.INVALID_QUERY)
-        return request("search", linkedMapOf(
+        val params = linkedMapOf(
             "term" to query, "country" to storefront, "media" to "music",
             "entity" to entity.apiValue, "limit" to limit.toString(),
-        ), storefront, expectedType = when (entity) {
+        )
+        if (attribute != null) params["attribute"] = attribute.apiValue
+        return request("search", params, storefront, expectedType = when (entity) {
             ItunesCatalogEntity.ARTIST -> ItunesCatalogItemType.ARTIST
             ItunesCatalogEntity.ALBUM -> ItunesCatalogItemType.ALBUM
             ItunesCatalogEntity.SONG -> ItunesCatalogItemType.TRACK
