@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
@@ -64,6 +65,8 @@ import com.music.bitchord.data.spotify.LocalPlaylistStore
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalRecordingReleaseGroupLinkRow
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
@@ -227,6 +230,18 @@ internal fun V2DisplayRow.isAvailablePlaylistMember(): Boolean =
         // Metadata-only labels are useful offline but NEVER a playback proof.
         !artist.endsWith(CATALOG_METADATA_NO_AUDIO_SUFFIX)
 
+/** Only an exact, uniquely proven Recording → ReleaseGroup relationship
+ * enables album navigation. No artist/title inference or arbitrary edition. */
+internal fun canonicalPlaylistAlbumForRecording(
+    recordingId: String,
+    links: List<CanonicalRecordingReleaseGroupLinkRow>,
+): String? = links.asSequence()
+    .filter { it.recordingId == recordingId }
+    .map { it.releaseGroupId }
+    .distinct()
+    .singleOrNull()
+    ?.takeIf(::isVerifiedCatalogRecordingId)
+
 /** The same native Library row used everywhere, wired to canonical playback. */
 /** Native SongRow's proven dimensions and controls, but canonical RecordingIds. */
 /** Match the chosen remote rendition first; only fall back to a proven
@@ -249,6 +264,7 @@ internal fun CanonicalPlaylistTrackRow(
     track: V2DisplayRow,
     onPlay: (String) -> Unit,
     onQueue: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    onOpenAlbum: (() -> Unit)? = null,
     titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
     subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
     rowBackground: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.background,
@@ -328,6 +344,7 @@ internal fun CanonicalPlaylistTrackRow(
                                 onAddToQueue = onQueue?.let { queue ->
                                     { queue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE) }
                                 },
+                                onOpenAlbum = onOpenAlbum,
                             )
                         }
                     }
@@ -360,6 +377,7 @@ private fun CanonicalTrackActionSheet(
     onPlay: () -> Unit,
     onPlayNext: (() -> Unit)?,
     onAddToQueue: (() -> Unit)?,
+    onOpenAlbum: (() -> Unit)?,
 ) {
     androidx.compose.material3.ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -397,6 +415,16 @@ private fun CanonicalTrackActionSheet(
                     onDismiss()
                 }
             }
+            onOpenAlbum?.let { openAlbum ->
+                ActionRow(
+                    Icons.Rounded.Album,
+                    "Abrir álbum",
+                    modifier = Modifier.testTag("canonical-track-open-album-action"),
+                ) {
+                    onDismiss()
+                    openAlbum()
+                }
+            }
         }
         }
     }
@@ -414,6 +442,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onShuffle: () -> Unit,
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
+    onOpenAlbum: (String) -> Unit = {},
     onLegacyPlay: (String, List<Song>, Int) -> Unit = { _, _, _ -> },
     onLegacyShuffle: (String, List<Song>) -> Unit = { _, _ -> },
     onLegacyQueue: (List<Song>) -> Unit = {},
@@ -539,6 +568,30 @@ internal fun CanonicalPlaylistDetailScreen(
     }
     LaunchedEffect(card.id, rows) {
         onRowsReady(rows)
+    }
+    // Resolve in batches, once per playlist snapshot. Rendering lazy rows
+    // never queries Room individually and never guesses album by track name.
+    val albumByRecording by produceState(
+        initialValue = emptyMap<String, String>(),
+        key1 = card.id, key2 = rows,
+    ) {
+        val ids = rows.orEmpty().map { it.id }.distinct().filter(::isVerifiedCatalogRecordingId)
+        value = if (ids.isEmpty()) emptyMap() else try {
+            withContext(Dispatchers.IO) {
+                val dao = CanonicalCatalogDatabase.get(context).catalogDao()
+                val links = ids.chunked(300).flatMap(dao::recordingReleaseGroupLinksByIds)
+                    .groupBy { it.recordingId }
+                ids.mapNotNull { recordingId ->
+                    canonicalPlaylistAlbumForRecording(
+                        recordingId, links[recordingId].orEmpty(),
+                    )?.let { recordingId to it }
+                }.toMap()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyMap()
+        }
     }
     val visibleRows = remember(rows, query, sort) {
         val filtered = rows.orEmpty().filter {
@@ -800,6 +853,9 @@ internal fun CanonicalPlaylistDetailScreen(
                 track = track,
                 onPlay = onTrackClick,
                 onQueue = onTrackQueue,
+                onOpenAlbum = albumByRecording[track.id]?.let { groupId ->
+                    { onOpenAlbum("catalog:RELEASE_GROUP:$groupId") }
+                },
                 titleColor = palette.onBackground,
                 subtitleColor = palette.onBackgroundVariant,
                 rowBackground = palette.background,
