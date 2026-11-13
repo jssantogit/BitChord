@@ -176,7 +176,7 @@ internal fun UnifiedPlaylistLibraryShelf(
     onOpenSmartPlaylist: (String) -> Unit,
     onOpenCanonicalNormalPlaylist: (String) -> Unit,
     onAddSongsToCanonicalNormalPlaylist: (String) -> Unit = onOpenCanonicalNormalPlaylist,
-    onOpenCanonicalAlbum: (String) -> Unit = {},
+    onOpenCanonicalAlbum: (String, String, String) -> Unit = { _, _, _ -> },
     hazeState: HazeState? = null,
     onLegacyPlay: (String, List<Song>, Int) -> Unit,
     onLegacyShuffle: (String, List<Song>) -> Unit,
