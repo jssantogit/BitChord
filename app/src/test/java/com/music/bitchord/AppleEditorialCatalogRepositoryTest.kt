@@ -7,6 +7,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesCatalogClient
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogResult
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogTransport
+import com.music.bitchord.data.catalog.metadata.ItunesCatalogSearchAttribute
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -88,6 +89,33 @@ class AppleEditorialCatalogRepositoryTest {
             (result as AppleEditorialLoad.Success).state)
         assertTrue(result.releases.isEmpty())
     }
+
+    @Test fun supplementalDiscoveryUsesDocumentedSearchAttributesAndExactArtistId() =
+        runBlocking {
+            val source = Source("""{"resultCount":3,"results":[
+                ${album(501)},
+                {"wrapperType":"collection","collectionType":"Album",
+                 "collectionId":999,"artistId":88,"artistName":"Artist",
+                 "collectionName":"Wrong artist"},
+                {"wrapperType":"track","kind":"song","trackId":12,
+                 "trackName":"Not album","artistId":77}
+            ]}""")
+            val catalog = AppleEditorialCatalogRepository(ItunesCatalogClient(source))
+            val result = catalog.searchArtistAlbumCandidates(
+                query = "Artist", artistId = 77, storefront = "br",
+                attribute = ItunesCatalogSearchAttribute.ARTIST_TERM,
+            ) as AppleEditorialLoad.Success
+            assertEquals(listOf(501L), result.releases.map { it.appleCollectionId })
+            assertEquals("artistTerm", source.parameters["attribute"])
+            assertEquals("album", source.parameters["entity"])
+            assertEquals("200", source.parameters["limit"])
+            assertFalse(source.parameters.containsKey("offset"))
+            catalog.searchArtistAlbumCandidates(
+                query = "Release 501", artistId = 77, storefront = "br",
+                attribute = ItunesCatalogSearchAttribute.ALBUM_TERM,
+            )
+            assertEquals("albumTerm", source.parameters["attribute"])
+        }
 
     @Test fun sameArtistHomonymsAndForeignAlbumIdsNeverEnterSelectedArtistShelf() =
         runBlocking {
