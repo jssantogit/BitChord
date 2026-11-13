@@ -309,4 +309,10 @@
     <string name="apple_singles">Singles</string>
     <string name="apple_other_releases">Outros lançamentos</string>
     <string name="apple_no_tracks">Nenhuma música encontrada no catálogo da Apple.</string>
+    <string name="apple_load_more">Carregar mais lançamentos</string>
+    <string name="apple_catalog_coverage_note">O catálogo público pode não mostrar toda a discografia. Busque um lançamento específico para descobrir mais.</string>
+    <string name="apple_find_release">Buscar outro lançamento pelo título</string>
+    <string name="apple_search_more">Buscar lançamento</string>
+    <string name="apple_discovery_failed">Não foi possível carregar mais lançamentos. Tente novamente.</string>
+    <string name="apple_no_additional_releases">Nenhum lançamento adicional encontrado na Apple para este artista.</string>
 </resources>
