@@ -10,6 +10,11 @@ import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment
 internal data class AppleAlbumEditionEvidence(
     val editions: List<MusicBrainzCatalogReleaseDetail>,
     val groups: List<MusicBrainzReleaseGroupHit>,
+    /**
+     * Comes ONLY from a separate, exact iTunes public UPC reverse lookup.
+     * Not filled from MusicBrainz barcode alone or a title-based search.
+     */
+    val verifiedAppleUpc: String? = null,
 )
 
 internal fun interface AppleAlbumEditionEvidenceSource {
@@ -24,6 +29,8 @@ internal fun interface AppleAlbumEditionEvidenceSource {
 internal class MusicBrainzBarcodeEditionEvidenceSource(
     private val search: MusicBrainzCatalogSearch = MusicBrainzCatalogSearch(),
     private val graph: MusicBrainzCatalogGraph = MusicBrainzCatalogGraph(),
+    private val upcVerifier: AppleUpcReverseLookupVerifier =
+        AppleUpcReverseLookupVerifier(),
 ) : AppleAlbumEditionEvidenceSource {
     private val suffix = Regex("""\s[-–—]\s(?:EP|Single)$""", RegexOption.IGNORE_CASE)
     private val space = Regex("""\s+""")
@@ -32,7 +39,8 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
             .replace(space, " ").lowercase(Locale.ROOT)
 
     override suspend fun discover(album: ItunesEditorialRelease): AppleAlbumEditionEvidence? {
-        val barcode = album.upc?.takeIf { Regex("^[0-9]{8,14}$").matches(it) }
+        if (album.upc == null) return discoverByReverseUpc(album)
+        val barcode = album.upc.takeIf { Regex("^[0-9]{8,14}$").matches(it) }
             ?: return null
         val searchResult = search.searchReleasesByBarcode(barcode, limit = 12)
         val page = when (searchResult) {
@@ -77,6 +85,84 @@ internal class MusicBrainzBarcodeEditionEvidenceSource(
             is MusicBrainzCatalogGraphResult.Failure -> emptyList()
         }
         return AppleAlbumEditionEvidence(editions, group)
+    }
+
+    /**
+     * Missing UPC in Apple's ID lookup is not a reason to invent one from MB.
+     * Discover a *complete* small candidate set by text, find a single
+     * independently matchable official MB edition, and ask Apple itself:
+     * lookup?upc=<MB barcode>&entity=song&country=<same storefront>.
+     * Only the same Apple album ID, artist and entire ordered tracklist can
+     * turn this candidate into a barcode proof; that proof is internal and
+     * never replaces the originally returned Apple UPC field.
+     */
+    private suspend fun discoverByReverseUpc(
+        album: ItunesEditorialRelease,
+    ): AppleAlbumEditionEvidence? {
+        val title = album.title.replace(suffix, "").trim()
+        val artist = album.artistName.trim()
+        if (title.length !in 2..100 || artist.length !in 1..100 ||
+            title.any(Char::isISOControl) || artist.any(Char::isISOControl)
+        ) return null
+        val searchResult = search.searchReleases("$title $artist", limit = 12)
+        val page = when (searchResult) {
+            is MusicBrainzCatalogSearchResult.Success -> searchResult.page
+            is MusicBrainzCatalogSearchResult.Failure -> return null
+        }
+        // Never select the first matching album from an incomplete search.
+        if (page.offset != 0 || page.total !in 1..12 ||
+            page.consumedCount != page.total || page.items.size != page.total
+        ) return null
+        val appleTitle = normalized(title)
+        val appleArtist = normalized(artist)
+        val relevant = page.items.filter { hit ->
+            isCuratedMusicBrainzRelease(hit) &&
+                normalized(hit.title) == appleTitle &&
+                normalized(hit.artistDisplay.orEmpty()) == appleArtist
+        }
+        // A large edition cluster needs a richer evidence strategy; do not
+        // spend a dozen Apple calls or assert a unique choice from one page.
+        if (relevant.isEmpty() || relevant.size > 4 ||
+            relevant.any { it.artistCreditMbids.isNullOrEmpty() }
+        ) return null
+
+        val editions = ArrayList<MusicBrainzCatalogReleaseDetail>(relevant.size)
+        for (hit in relevant) {
+            val lookup = graph.lookupRelease(hit.musicBrainzId)
+            val detail = when (lookup) {
+                is MusicBrainzCatalogGraphResult.Success -> lookup.value
+                is MusicBrainzCatalogGraphResult.Failure -> return null
+            }
+            if (detail.musicBrainzId != hit.musicBrainzId ||
+                detail.isVideoOnlyContent == true
+            ) return null
+            editions += detail
+        }
+        // Keep the full candidate set in the matcher, even when a different
+        // MB edition has missing barcode evidence (which can veto uniqueness).
+        val compatibleUpcs = editions.mapNotNull { edition ->
+            val code = edition.barcode?.trim()
+                ?.takeIf { Regex("^[0-9]{8,14}$").matches(it) }
+                ?: return@mapNotNull null
+            val result = AppleMusicBrainzEditionMatcher.match(
+                album.copy(upc = code), editions,
+            ) as? AppleMusicBrainzEditionMatch.Verified
+            if (result?.musicBrainzReleaseId == edition.musicBrainzId) code else null
+        }.distinct()
+        val barcode = compatibleUpcs.singleOrNull() ?: return null
+        if (!upcVerifier.verifies(album, barcode)) return null
+        val exactLink = AppleMusicBrainzEditionMatcher.match(
+            album.copy(upc = barcode), editions,
+        ) as? AppleMusicBrainzEditionMatch.Verified ?: return null
+        val groups = when (val result = graph.lookupReleaseGroup(
+            exactLink.musicBrainzReleaseGroupId,
+        )) {
+            is MusicBrainzCatalogGraphResult.Success -> listOf(result.value)
+            is MusicBrainzCatalogGraphResult.Failure -> emptyList()
+        }
+        return AppleAlbumEditionEvidence(
+            editions = editions, groups = groups, verifiedAppleUpc = barcode,
+        )
     }
 }
 
