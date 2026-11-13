@@ -185,6 +185,44 @@ class AppleArtistDiscographyPagerTest {
             assertEquals(listOf(1L, 2L), pager.snapshot().visible.map { it.appleCollectionId })
         }
 
+    @Test fun targetedSearchRevealsOnlyRequestedAlbumWithoutUnpagingEntireDiscography() =
+        runBlocking {
+            val fake = Fake(
+                loaded(*(1L..50L).map { album(it) }.toTypedArray()),
+                titles = mutableMapOf("New release" to loaded(album(51))),
+            )
+            val pager = AppleArtistDiscographyPager(77, "Artist", "br", 10, fake)
+            pager.start()
+            assertEquals((1L..10L).toList(), pager.snapshot().visible.map { it.appleCollectionId })
+
+            val result = pager.searchMore("New release") as AppleArtistPageLoad.Success
+            assertEquals(1, result.added)
+            assertEquals((1L..10L).toList() + 51L,
+                result.snapshot.visible.map { it.appleCollectionId })
+            assertTrue(result.snapshot.hasMore)
+
+            pager.loadMore()
+            assertEquals((1L..10L).toList() + 51L + (11L..20L).toList(),
+                pager.snapshot().visible.map { it.appleCollectionId })
+        }
+
+    @Test fun targetedSearchCanRevealAnAlreadyDiscoveredButNotYetVisibleAlbum() =
+        runBlocking {
+            val fake = Fake(
+                loaded(*(1L..30L).map { album(it) }.toTypedArray()),
+                titles = mutableMapOf("Hidden release" to loaded(album(29))),
+            )
+            val pager = AppleArtistDiscographyPager(77, "Artist", "br", 10, fake)
+            pager.start()
+            val result = pager.searchMore("Hidden release") as AppleArtistPageLoad.Success
+            assertEquals(0, result.added)
+            assertEquals((1L..10L).toList() + 29L,
+                result.snapshot.visible.map { it.appleCollectionId })
+            pager.loadMore()
+            assertEquals((1L..10L).toList() + 29L + (11L..20L).toList(),
+                pager.snapshot().visible.map { it.appleCollectionId })
+        }
+
     @Test fun malformedHintIsRejectedWithoutNetworkCall() = runBlocking {
         val fake = Fake(loaded())
         val pager = AppleArtistDiscographyPager(77, "Artist", "br", 10, fake)
