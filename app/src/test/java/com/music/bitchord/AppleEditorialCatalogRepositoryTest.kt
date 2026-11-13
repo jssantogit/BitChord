@@ -8,7 +8,6 @@ import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogResult
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogTransport
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogSearchAttribute
-import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
 import com.music.bitchord.data.catalog.metadata.ItunesPublicSearchSource
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
