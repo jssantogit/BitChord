@@ -56,6 +56,10 @@ class AppleAlbumEditionReconciliationServiceTest {
             source = AppleAlbumEditionEvidenceSource { AppleAlbumEditionEvidence(
                 editions = listOf(mb()), groups = listOf(group()),
             ) },
+            discogs = AppleDiscogsEditionEvidenceSource {
+                com.music.bitchord.data.catalog.metadata.discogs
+                    .DiscogsEditionEnrichment.Disabled
+            },
         )
         val proof = service.resolve(initial)
         assertNotNull(proof)
@@ -95,6 +99,10 @@ class AppleAlbumEditionReconciliationServiceTest {
                 AppleAlbumEditionEvidence(
                     editions = listOf(mb()), groups = listOf(group("EP")),
                 )
+            },
+            discogs = AppleDiscogsEditionEvidenceSource {
+                com.music.bitchord.data.catalog.metadata.discogs
+                    .DiscogsEditionEnrichment.Disabled
             },
         )
         val result = service.resolve(apple(title = "SUPER REAL ME - Single"))
