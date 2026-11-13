@@ -54,6 +54,8 @@ internal data class ItunesEditorialRelease(
     val upc: String? = null,
     /** Exact MusicBrainz Release MBID, distinct from the group annotation. */
     val musicBrainzReleaseId: String? = null,
+    /** The exact Apple-supplied product URL, not a title-based guess. */
+    val storeUrl: String? = null,
 )
 
 internal object ItunesEditorialCatalog {
@@ -180,6 +182,7 @@ internal object ItunesEditorialCatalog {
                     }.toMap(),
                     upc = album.upc,
                     musicBrainzReleaseId = editionLinks[album.scopedId],
+                    storeUrl = album.storeUrl,
                 )
             }
             .sortedWith(compareByDescending<ItunesEditorialRelease> { it.releaseDate.orEmpty() }
