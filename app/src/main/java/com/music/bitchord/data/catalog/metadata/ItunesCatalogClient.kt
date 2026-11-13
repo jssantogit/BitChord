@@ -58,6 +58,10 @@ internal data class ItunesCatalogItem(
     val durationMs: Long?,
     val trackNumber: Int?,
     val discNumber: Int?,
+    /** Edition-scoped remote artwork URL, for private experimental presentation. */
+    val artworkUrl: String? = null,
+    val upc: String? = null,
+    val trackCount: Int? = null,
 ) {
     val scopedId: String get() = "itunes:$storefront:${type.key}:$id"
 
@@ -65,9 +69,7 @@ internal data class ItunesCatalogItem(
     val musicBrainzId: String? get() = null
     val isPlayable: Boolean get() = false
 
-    // iTunes Search API artwork and previews are licensed as promotional media;
-    // no image/preview URL may flow to Coil, Media3 or canonical artwork from here.
-    val artworkUrl: String? get() = null
+    // No audio asset or preview is ever created from storefront metadata.
     val previewUrl: String? get() = null
 }
 
@@ -313,6 +315,24 @@ private fun safeStoreLink(raw: String?): String? {
     } catch (_: Exception) { null }
 }
 
+private fun safeAppleArtwork(raw: String?): String? {
+    if (raw == null) return null
+    return try {
+        val uri = URI(raw)
+        val host = uri.host?.lowercase(Locale.ROOT)
+        if (uri.scheme == "https" && uri.userInfo == null &&
+            (uri.port == -1 || uri.port == 443) &&
+            host != null && host.endsWith(".mzstatic.com") &&
+            host.length > ".mzstatic.com".length &&
+            uri.path?.let { path ->
+                listOf(".jpg", ".jpeg", ".png", ".webp").any {
+                    path.lowercase(Locale.ROOT).endsWith(it)
+                }
+            } == true
+        ) raw else null
+    } catch (_: Exception) { null }
+}
+
 private fun JsonObject.toCatalogItem(storefront: String): ItunesCatalogItem? {
     val wrapper = text("wrapperType")
     val kind = when (wrapper) {
@@ -350,5 +370,10 @@ private fun JsonObject.toCatalogItem(storefront: String): ItunesCatalogItem? {
             positiveId("trackTimeMillis") else null,
         trackNumber = positiveNumber("trackNumber"),
         discNumber = positiveNumber("discNumber"),
+        artworkUrl = safeAppleArtwork(text("artworkUrl100"))
+            ?: safeAppleArtwork(text("artworkUrl60"))
+            ?: safeAppleArtwork(text("artworkUrl30")),
+        upc = text("upc")?.takeIf { Regex("[0-9]{8,14}").matches(it) },
+        trackCount = positiveNumber("trackCount"),
     )
 }
