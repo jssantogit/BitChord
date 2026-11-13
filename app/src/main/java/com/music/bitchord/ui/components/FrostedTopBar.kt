@@ -402,7 +402,10 @@ fun FrostedTopBar(
                                     hazeState = backButtonHazeState,
                                     // Root tabs share this top bar while their action
                                     // counts change. Do not spring its measured width.
-                                    animateResize = onBack != null,
+                                    animateResize = shouldAnimateTopBarActionResize(
+                                        hasBackButton = onBack != null,
+                                        reducedMotion = reduceMotion,
+                                    ),
                                     content = actions,
                                 )
                             }
@@ -635,6 +638,17 @@ private fun AppleSettingsPopup(
  * subcomposed behind it. Text badges keep their existing width and do not
  * become fake circular buttons. Menus, callbacks and content remain untouched.
  */
+/**
+ * Root section tabs share one persistent top bar while their controls change.
+ * A measured-width spring would animate the toolbar independently from the
+ * stationary content transition, producing apparent sideways wobble.
+ * Pushed pages can retain their own resize effect. Reduced Motion is instant.
+ */
+internal fun shouldAnimateTopBarActionResize(
+    hasBackButton: Boolean,
+    reducedMotion: Boolean,
+): Boolean = hasBackButton && !reducedMotion
+
 @Composable
 internal fun ArtworkPageActions(
     hazeState: HazeState?,
