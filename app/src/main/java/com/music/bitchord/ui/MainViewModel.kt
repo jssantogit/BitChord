@@ -49,6 +49,12 @@ import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
+import com.music.bitchord.data.catalog.metadata.AppleEditorialCatalogRepository
+import com.music.bitchord.data.catalog.metadata.AppleEditorialLoad
+import com.music.bitchord.data.catalog.metadata.AppleEditorialReadState
+import com.music.bitchord.data.catalog.metadata.ItunesCatalogFailure
+import com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage
+import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalServerSearchRow
@@ -508,6 +514,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalResults = MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>?>(null)
     val canonicalResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>?> = _canonicalResults.asStateFlow()
     private var canonicalSearchJob: Job? = null
+    /** The Apple commercial shelf is independent of MB artist/recording search. */
+    private val appleEditorialRepository by lazy { AppleEditorialCatalogRepository() }
+    private val _appleEditorialResults =
+        MutableStateFlow<UiState<List<AppleEditorialSearchRow>>?>(null)
+    val appleEditorialResults: StateFlow<UiState<List<AppleEditorialSearchRow>>?> =
+        _appleEditorialResults.asStateFlow()
+    private val _appleEditorialDetail =
+        MutableStateFlow<UiState<AppleEditorialAlbumDetailPage>?>(null)
+    val appleEditorialDetail: StateFlow<UiState<AppleEditorialAlbumDetailPage>?> =
+        _appleEditorialDetail.asStateFlow()
+    private var appleEditorialSearchJob: Job? = null
+    private var appleEditorialDetailJob: Job? = null
+    private var activeAppleAlbumId: String? = null
     private var canonicalTypeaheadJob: Job? = null
     private var canonicalSearchPagingJob: Job? = null
     private var canonicalSearchPageCursors: CanonicalSearchPageCursors? = null
@@ -1395,6 +1414,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * BitChord. A public MBID remains a browse key, NEVER a Song.videoId.
      */
     fun openCanonicalNativeDetail(row: CanonicalCatalogSearchRow) {
+        backAppleEditorialAlbum()
         val nativeType = canonicalNativePageType(row.kind) ?: return
         val browseId = canonicalNativeBrowseId(row)
         if (_detailStack.value.lastOrNull()?.browseId == browseId) return
@@ -1510,6 +1530,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Cancel the old namespace before the new source starts answering the same query. */
     private fun cancelSearchSourceRequests() {
+        appleEditorialSearchJob?.cancel()
+        appleEditorialDetailJob?.cancel()
+        _appleEditorialResults.value = null
+        _appleEditorialDetail.value = null
+        activeAppleAlbumId = null
         newestRequestId.incrementAndGet()
         searchSession = null
         searchPagingJob?.cancel()
@@ -4195,6 +4220,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _serverResults.value = null
             canonicalSearchJob?.cancel()
             canonicalTypeaheadJob?.cancel()
+            appleEditorialSearchJob?.cancel()
+            backAppleEditorialAlbum()
+            _appleEditorialResults.value = null
             resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
@@ -4215,6 +4243,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // A stale metadata result must not appear under a new query.
             canonicalSearchJob?.cancel()
             canonicalTypeaheadJob?.cancel()
+            appleEditorialSearchJob?.cancel()
+            backAppleEditorialAlbum()
+            _appleEditorialResults.value = null
             resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
@@ -4340,6 +4371,75 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Apple owns editorial Album/EP/Single existence in the General catalog.
+     * This request does not create MBIDs, local tracks or playable audio.
+     * A failed request must remain visibly unavailable: never replace Apple
+     * albums with raw MusicBrainz releases behind the user's back.
+     */
+    private fun runAppleEditorialAlbumSearch(query: String) {
+        appleEditorialSearchJob?.cancel()
+        backAppleEditorialAlbum()
+        _appleEditorialResults.value = UiState.Loading
+        appleEditorialSearchJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = try {
+                appleEditorialRepository.searchAlbums(query, storefront = "br", limit = 100)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (_searchSource.value != SearchSource.CANONICAL ||
+                _query.value.trim() != query ||
+                activeAppleAlbumId != null
+            ) return@launch
+            _appleEditorialResults.value = when (result) {
+                is AppleEditorialLoad.Success ->
+                    UiState.Success(appleNativeSearchRows(result))
+                is AppleEditorialLoad.Failure ->
+                    UiState.Error("apple_catalog_unavailable")
+            }
+        }
+    }
+
+    /** Apple storefront IDs are not MBIDs and bypass the old canonical stack. */
+    fun openAppleEditorialAlbum(row: AppleEditorialSearchRow) {
+        val route = AppleCatalogBrowseRoute.parse(row.browseId)
+            ?.takeIf { it.kind == com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType.ALBUM }
+            ?: return
+        if (_searchSource.value != SearchSource.CANONICAL) return
+        clearCanonicalCatalogNavigation()
+        appleEditorialDetailJob?.cancel()
+        activeAppleAlbumId = row.browseId
+        _appleEditorialDetail.value = UiState.Loading
+        appleEditorialDetailJob = viewModelScope.launch(Dispatchers.IO) {
+            val response = try {
+                appleEditorialRepository.albumDetail(route.id, route.storefront)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (activeAppleAlbumId != row.browseId ||
+                _searchSource.value != SearchSource.CANONICAL
+            ) return@launch
+            _appleEditorialDetail.value = when (response) {
+                is AppleEditorialLoad.Success -> {
+                    val detail = appleNativeAlbumDetail(response, row.browseId)
+                    if (detail != null) UiState.Success(detail)
+                    else UiState.Error("apple_album_not_in_storefront")
+                }
+                is AppleEditorialLoad.Failure -> UiState.Error("apple_catalog_unavailable")
+            }
+        }
+    }
+
+    fun backAppleEditorialAlbum() {
+        activeAppleAlbumId = null
+        appleEditorialDetailJob?.cancel()
+        _appleEditorialDetail.value = null
+    }
+
+    /**
      * Independent MusicBrainz search. Each page is metadata-only: never map an
      * MBID into Song.videoId (that would route it through YouTube playback).
      * A provider-owned MediaAsset lookup must be wired before enabling play.
@@ -4358,6 +4458,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         clearCanonicalCatalogNavigation()
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
+        runAppleEditorialAlbumSearch(query)
         canonicalSearchJob = viewModelScope.launch {
             // Do not wait for the first public HTTP response to paint a previously
             // indexed catalog. A sibling IO task also avoids putting Room work
