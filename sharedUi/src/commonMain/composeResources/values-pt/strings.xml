@@ -305,4 +305,7 @@
     <string name="apple_partial_tracklist">Algumas faixas desta edição estão indisponíveis.</string>
     <string name="apple_no_artists">Nenhum artista encontrado no catálogo da Apple.</string>
     <string name="apple_partial_discography">Alguns lançamentos podem estar ausentes desta discografia.</string>
+    <string name="apple_eps">EPs</string>
+    <string name="apple_singles">Singles</string>
+    <string name="apple_other_releases">Outros lançamentos</string>
 </resources>
