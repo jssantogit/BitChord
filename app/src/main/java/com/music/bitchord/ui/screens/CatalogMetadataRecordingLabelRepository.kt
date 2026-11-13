@@ -65,6 +65,20 @@ internal class CatalogMetadataRecordingLabelRepository(private val preferences: 
         decodeCatalogMetadataRecordingLabels(preferences.getString(KEY, null)),
     )
 
+    /** One atomic preference write for an album/public playlist, not N disk commits. */
+    @Synchronized fun rememberLabels(incoming: List<CatalogMetadataRecordingLabel>): Boolean {
+        if (incoming.isEmpty() || incoming.any { !validCatalogMetadataRecordingLabel(it) })
+            return false
+        val selected = incoming.distinctBy(CatalogMetadataRecordingLabel::recordingId)
+        val incomingIds = selected.mapTo(HashSet()) { it.recordingId }
+        val merged = (labels.value.filterNot { it.recordingId in incomingIds } + selected)
+            .takeLast(1200)
+        if (!preferences.edit().putString(KEY, encodeCatalogMetadataRecordingLabels(merged))
+                .commit()) return false
+        labels.value = merged
+        return true
+    }
+
     @Synchronized fun rememberLabel(label: CatalogMetadataRecordingLabel): Boolean {
         if (!validCatalogMetadataRecordingLabel(label)) return false
         val updated = (labels.value.filterNot { it.recordingId == label.recordingId } + label)
