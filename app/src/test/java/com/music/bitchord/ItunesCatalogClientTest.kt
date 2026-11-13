@@ -99,6 +99,31 @@ class ItunesCatalogClientTest {
         assertFalse(item.isPlayable)
     }
 
+    @Test fun editorialArtworkIsAcceptedOnlyFromAppleCdnAndUpcIsReadWithoutCreatingPlayback() = runBlocking {
+        val transport = FakeTransport(
+            """{"resultCount":2,"results":[
+                {"wrapperType":"collection","collectionType":"Album","collectionId":71,
+                 "collectionName":"HOT - EP","artistName":"LE SSERAFIM",
+                 "artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/Music121/valid/100x100bb.jpg",
+                 "upc":"8801234567890","trackCount":5},
+                {"wrapperType":"collection","collectionType":"Album","collectionId":72,
+                 "collectionName":"HOT - Single","artistName":"LE SSERAFIM",
+                 "artworkUrl100":"https://is1-ssl.mzstatic.com.evil.example/picture.jpg",
+                 "upc":"hacked","trackCount":1}
+            ]}"""
+        )
+        val items = (ItunesCatalogClient(transport).search(
+            "HOT", ItunesCatalogEntity.ALBUM,
+        ) as ItunesCatalogResult.Success).items
+        assertEquals("https://is1-ssl.mzstatic.com/image/thumb/Music121/valid/100x100bb.jpg",
+            items[0].artworkUrl)
+        assertEquals("8801234567890", items[0].upc)
+        assertEquals(5, items[0].trackCount)
+        assertNull(items[1].artworkUrl)
+        assertNull(items[1].upc)
+        assertTrue(items.all { !it.isPlayable && it.previewUrl == null })
+    }
+
     @Test fun invalidInputsCannotReachTheAppleEndpoint() = runBlocking {
         val transport = FakeTransport("""{"resultCount":0,"results":[]}""")
         val client = ItunesCatalogClient(transport)
