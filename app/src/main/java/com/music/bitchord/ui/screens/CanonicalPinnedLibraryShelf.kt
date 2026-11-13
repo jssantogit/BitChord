@@ -269,7 +269,7 @@ internal fun CanonicalPinnedLibraryHomeSection(
         com.music.bitchord.data.listening.CanonicalSmartFilterContext,
     ) -> Unit,
     onOpenPlaylist: (String) -> Unit = {},
-    onOpenCatalog: (String) -> Unit = {},
+    onOpenCatalog: (CatalogMetadataPin) -> Unit = {},
     localPlaylists: List<ShelfItem> = emptyList(),
 ) {
     CanonicalPinnedLibraryShelf(
@@ -288,6 +288,23 @@ internal fun CanonicalPinnedLibraryHomeSection(
     )
 }
 
+/**
+ * Catalog pins already persist a trusted, typed MusicBrainz ID plus their
+ * own title/artwork. Opening one must not depend on the current discovery
+ * screen's cached search result (which is normally empty in the Library).
+ */
+internal fun catalogMetadataPinNativeTarget(pin: CatalogMetadataPin): BrowseTarget? {
+    if (!validCatalogMetadataPin(pin)) return null
+    return BrowseTarget(
+        browseId = pin.browseId,
+        title = pin.title,
+        subtitle = pin.subtitle,
+        thumbnailUrl = pin.artworkUrl,
+        type = if (pin.browseId.startsWith("catalog:ARTIST:"))
+            BrowseType.ARTIST else BrowseType.ALBUM,
+    )
+}
+
 /** The native Library landing shelf mirrors the reference's 3-column covers
  * BEFORE category links. Nothing is shown when the user has no pins. Six covers
  * are initially visible; the rest expand in-place without a parallel route. */
@@ -297,7 +314,7 @@ internal fun CanonicalPinnedLibraryShelf(
     onOpen: (CanonicalLibraryPin) -> Unit,
     refreshRequested: Boolean = false,
     onOpenPlaylist: (String) -> Unit = {},
-    onOpenCatalog: (String) -> Unit = {},
+    onOpenCatalog: (CatalogMetadataPin) -> Unit = {},
     localPlaylists: List<ShelfItem> = emptyList(),
 ) {
     val context = LocalContext.current.applicationContext
@@ -490,7 +507,7 @@ internal fun CanonicalPinnedLibraryShelf(
                         } else if (catalog != null) {
                             PinnedLibraryArtworkTile(
                                 title = catalog.title,
-                                onClick = { onOpenCatalog(catalog.browseId) },
+                                onClick = { onOpenCatalog(catalog) },
                                 onLongPress = { catalogOptionsFor = catalog },
                             ) {
                                 if (catalog.artworkUrl != null) AsyncImage(
