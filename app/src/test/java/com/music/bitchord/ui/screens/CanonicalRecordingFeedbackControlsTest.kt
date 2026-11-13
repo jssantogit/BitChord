@@ -248,7 +248,7 @@ class CanonicalRecordingFeedbackControlsTest {
         compose.runOnIdle { assertEquals(listOf(4.0), values) }
     }
 
-    @Test fun changedRatingAsksBeforeDiscardingAndNeverWritesOnCancellation() {
+    @Test fun changedRatingDiscardsImmediatelyOnCancellationWithoutWriting() {
         val values = mutableListOf<Double>()
         var dismissals = 0
         compose.setContent {
@@ -260,17 +260,12 @@ class CanonicalRecordingFeedbackControlsTest {
                 )
             }
         }
-        compose.onNodeWithContentDescription("4 stars").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithText("Cancel").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithText("Discard changes?").assertIsDisplayed()
-        compose.runOnIdle {
-            assertEquals(0, dismissals)
-            assertEquals(emptyList<Double>(), values)
-        }
-        compose.onNodeWithText("Keep editing").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithContentDescription("4.0 stars selected").assertIsDisplayed()
-        compose.onNodeWithText("Cancel").performSemanticsAction(SemanticsActions.OnClick)
-        compose.onNodeWithText("Discard").performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithContentDescription("4 stars")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Cancel")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        // No second Alert, no duplicate editor UI, and no database write.
+        compose.onNodeWithText("Discard changes?").assertDoesNotExist()
         compose.runOnIdle {
             assertEquals(1, dismissals)
             assertEquals(emptyList<Double>(), values)
