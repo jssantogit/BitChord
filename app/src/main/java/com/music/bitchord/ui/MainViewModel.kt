@@ -1586,7 +1586,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // this detail page's tracklist. A group name/ID alone is insufficient.
         val appleEditionMbid = when (entry.kind) {
             CanonicalSearchKind.RELEASE -> entry.musicBrainzId
-            CanonicalSearchKind.RELEASE_GROUP -> displayedGroupReleaseMbid
+            // Preserve the existing MusicBrainz editorial exclusion for
+            // non-audio / unclassified groups; Apple cannot bypass it.
+            CanonicalSearchKind.RELEASE_GROUP ->
+                displayedGroupReleaseMbid?.takeIf {
+                    canonicalEditorialReleaseType(entry) != null
+                }
             else -> null
         }
         // Run independently of CAA; never delay the native tracklist.
