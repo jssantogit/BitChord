@@ -791,6 +791,7 @@ private fun BitChordApp(
     val appleHomeReleases by viewModel.appleHomeReleases.collectAsStateWithLifecycle()
     val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
+    val appleGenreReleases by viewModel.appleGenreReleases.collectAsStateWithLifecycle()
     val canonicalExploreGenreCovers by viewModel.canonicalExploreGenreCovers.collectAsStateWithLifecycle()
     var activeCanonicalGenre by remember {
         mutableStateOf<com.music.bitchord.ui.CanonicalExploreGenre?>(null)
@@ -1036,6 +1037,15 @@ private fun BitChordApp(
         }
     }
 
+    // Explore's MusicBrainz-tagged results only suggest candidate search
+    // terms. Apple independently verifies every displayed album and genre.
+    LaunchedEffect(activeCanonicalGenre?.tag, canonicalGenreResults) {
+        val tag = activeCanonicalGenre?.tag ?: return@LaunchedEffect
+        val rows = (canonicalGenreResults as? UiState.Success)?.data
+            ?: return@LaunchedEffect
+        viewModel.loadAppleGenreEditorial(tag, rows)
+    }
+
     // Rendering Now Playing and the mini-player must not rehash and sort hundreds
     // of media URIs. Recompute the native Home shelves only when their input
     // snapshot, date, or the user's locale actually changes.
@@ -1172,11 +1182,32 @@ private fun BitChordApp(
     val activeGenrePlaylists = activeCanonicalGenre?.tag?.let { tag ->
         canonicalPublicPlaylists[tag].orEmpty()
     }.orEmpty()
-    val canonicalGenreState: UiState<List<HomeShelf>> =
-        com.music.bitchord.ui.canonicalGenreDisplayState(
-            activeCanonicalGenre, canonicalGenreResults, activeGenrePlaylists,
-            canonicalFeedDate,
+    val canonicalGenreState: UiState<List<HomeShelf>> = run {
+        val tag = activeCanonicalGenre?.tag
+        val appleGenre = tag?.let { appleGenreReleases[it] }
+        val playlistShelf = com.music.bitchord.ui.canonicalPublicPlaylistShelf(
+            stringResource(R.string.playlists), activeGenrePlaylists,
         )
+        when {
+            tag == null -> UiState.Success(emptyList())
+            appleGenre is UiState.Success -> {
+                val shelves = com.music.bitchord.ui.appleFirstGenreShelves(
+                    tag = tag, appleAlbums = appleGenre.data,
+                    publicPlaylists = playlistShelf,
+                    releaseHeading = canonicalReleasesHeading,
+                )
+                if (shelves.isNotEmpty()) UiState.Success(shelves)
+                else UiState.Error(
+                    "Nenhum lançamento confirmado pela Apple neste gênero.",
+                )
+            }
+            playlistShelf != null -> UiState.Success(listOf(playlistShelf))
+            appleGenre is UiState.Error -> appleGenre
+            canonicalGenreResults is UiState.Error ->
+                UiState.Error("Não foi possível obter candidatos para este gênero.")
+            else -> UiState.Loading
+        }
+    }
     // What a browse id is recorded under in Downloads.collections, when it names
     // a release downloaded whole — see BrowseTarget.downloadId. A downloaded
     // playlist's own page and its card both carry the id under the
@@ -3731,10 +3762,18 @@ private fun BitChordApp(
                             },
                             onRetry = { activeCanonicalGenre?.let {
                                 viewModel.loadCanonicalGenre(it.tag)
+                                viewModel.loadAppleGenreEditorial(
+                                    it.tag, (canonicalGenreResults as? UiState.Success)
+                                        ?.data.orEmpty(), force = true,
+                                )
                             } },
                             refreshing = MainViewModel.Feed.EXPLORE in refreshing,
                             onRefresh = { activeCanonicalGenre?.let {
                                 viewModel.loadCanonicalGenre(it.tag)
+                                viewModel.loadAppleGenreEditorial(
+                                    it.tag, (canonicalGenreResults as? UiState.Success)
+                                        ?.data.orEmpty(), force = true,
+                                )
                             } },
                             pullState = explorePull,
                             contentPadding = listPadding,
