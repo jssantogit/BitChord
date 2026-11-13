@@ -113,13 +113,22 @@ internal class AppleArtistDiscographyPager(
         return AppleArtistPageLoad.Success(snapshot(), added)
     }
 
+    /** Comparison only: Apple itself may append a display-level - EP / - Single. */
+    private fun titleKey(text: String): String = java.text.Normalizer.normalize(
+        text.trim(), java.text.Normalizer.Form.NFKC,
+    ).replace(Regex("""\\s[-–—]\\s(?:EP|Single)$""", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("""\\s+"""), " ")
+        .lowercase(java.util.Locale.ROOT)
+
     /** Sources of candidate *names*, not authoritative Apple products. */
     fun enqueueTitleHints(names: List<String>) {
+        val alreadyShown = products.values.mapTo(mutableSetOf()) { titleKey(it.title) }
         names.take(256).forEach { raw ->
             val name = raw.trim()
-            val key = name.lowercase(java.util.Locale.ROOT)
+            val key = titleKey(name)
             if (name.length in 2..120 && name.none(Char::isISOControl) &&
-                key !in triedHints && hints.none { it.lowercase(java.util.Locale.ROOT) == key }
+                key !in alreadyShown && key !in triedHints &&
+                hints.none { titleKey(it) == key }
             ) hints.addLast(name)
         }
     }
