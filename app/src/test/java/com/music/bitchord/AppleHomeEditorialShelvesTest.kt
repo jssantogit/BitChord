@@ -21,6 +21,31 @@ class AppleHomeEditorialShelvesTest {
             musicBrainzArtistId = null, musicBrainzRecordingIds = emptyMap(),
         )
 
+    @Test fun missingMusicBrainzHintsDoNotLeaveAppleHomeInInfiniteLoading() {
+        // When the MB seed fetch finishes empty, there is no Apple request
+        // pending and no claim that a storefront has zero products.
+        assertFalse(com.music.bitchord.ui.appleFirstHomeEditorialIsPending(
+            appleStillLoading = true,
+            musicBrainzStillLoading = false,
+            hasCandidateSeeds = false,
+        ))
+        assertTrue(com.music.bitchord.ui.appleFirstHomeEditorialIsPending(
+            appleStillLoading = true,
+            musicBrainzStillLoading = true,
+            hasCandidateSeeds = false,
+        ))
+        assertTrue(com.music.bitchord.ui.appleFirstHomeEditorialIsPending(
+            appleStillLoading = true,
+            musicBrainzStillLoading = false,
+            hasCandidateSeeds = true,
+        ))
+        assertFalse(com.music.bitchord.ui.appleFirstHomeEditorialIsPending(
+            appleStillLoading = false,
+            musicBrainzStillLoading = false,
+            hasCandidateSeeds = true,
+        ))
+    }
+
     @Test fun homeUsesOnlyAppleProductsForPublicReleaseAndDiscoveryShelves() {
         val old = HomeShelf("Lançamentos", listOf(ShelfItem(
             "MusicBrainz Only", "Someone", "https://mb.org/cover.jpg",
