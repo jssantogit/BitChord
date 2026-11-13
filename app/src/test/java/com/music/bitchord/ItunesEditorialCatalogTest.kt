@@ -5,6 +5,8 @@ import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialCatalog
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.data.catalog.metadata.ItunesVerifiedReleaseGroupLink
+import com.music.bitchord.data.catalog.metadata.ItunesVerifiedArtistLink
+import com.music.bitchord.data.catalog.metadata.ItunesVerifiedRecordingLink
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -95,6 +97,39 @@ class ItunesEditorialCatalogTest {
         )
         val result = ItunesEditorialCatalog.assemble("br", items)
         assertEquals(listOf(101L, 102L), result.single().tracks.map { it.id })
+    }
+
+    @Test fun exactAppleTrackAndArtistIdsCanCarryVerifiedMusicBrainzIdentity() {
+        val a = "f2eaa98b-fef5-4327-9e7f-7d6500fdb973"
+        val b = "dc1f9d00-24cf-43f6-8b4e-4e01c1792dba"
+        val result = ItunesEditorialCatalog.assemble(
+            storefront = "br",
+            appleRows = listOf(album(10, "EASY - EP"), track(101, 10, 1), track(102, 10, 2)),
+            verifiedArtistLinks = listOf(
+                ItunesVerifiedArtistLink("itunes:br:artist:99", a)
+            ),
+            verifiedRecordingLinks = listOf(
+                ItunesVerifiedRecordingLink("itunes:br:track:101", b),
+                ItunesVerifiedRecordingLink("itunes:us:track:102", a),
+            ),
+        )
+        val release = result.single()
+        assertEquals(a, release.musicBrainzArtistId)
+        assertEquals(b, release.musicBrainzRecordingIds["itunes:br:track:101"])
+        assertNull(release.musicBrainzRecordingIds["itunes:br:track:102"])
+    }
+
+    @Test fun conflictingVerifiedLinkAnnotationsAreRejectedRatherThanPickingArbitrarily() {
+        val a = "f2eaa98b-fef5-4327-9e7f-7d6500fdb973"
+        val b = "dc1f9d00-24cf-43f6-8b4e-4e01c1792dba"
+        val release = ItunesEditorialCatalog.assemble(
+            "br", listOf(album(10, "EASY")),
+            verifiedLinks = listOf(
+                ItunesVerifiedReleaseGroupLink("itunes:br:album:10", a),
+                ItunesVerifiedReleaseGroupLink("itunes:br:album:10", b),
+            ),
+        ).single()
+        assertNull(release.musicBrainzReleaseGroupId)
     }
 
     @Test fun invalidOrForeignIdentityLinksNeverBecomeCanonical() {
