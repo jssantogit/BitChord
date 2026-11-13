@@ -191,7 +191,7 @@ internal class AppleAlbumEditionReconciliationService(
             album.appleScopedId != "itunes:${album.storefront}:album:${album.appleCollectionId}" ||
             !Regex("^[a-z]{2}$").matches(album.storefront) ||
             album.artistName.isBlank() || album.title.isBlank() ||
-            album.upc?.matches(Regex("^[0-9]{8,14}$")) != true ||
+            album.upc?.matches(Regex("^[0-9]{8,14}$")) == false ||
             album.trackCount == null || album.trackCount <= 0 ||
             album.tracks.size != album.trackCount
         ) return null
@@ -214,6 +214,11 @@ internal class AppleAlbumEditionReconciliationService(
         } catch (_: Exception) {
             null
         } ?: return null
+        val candidateUpc = album.upc ?: data.verifiedAppleUpc
+            ?.takeIf { Regex("^[0-9]{8,14}$").matches(it) }
+        // A candidate MB barcode must NEVER substitute for proof from the
+        // Apple UPC endpoint when the original Apple album omitted the field.
+        if (candidateUpc == null) return null
         val rawAlbum = ItunesCatalogItem(
             type = ItunesCatalogItemType.ALBUM, id = album.appleCollectionId,
             storefront = album.storefront, title = album.title,
@@ -221,7 +226,7 @@ internal class AppleAlbumEditionReconciliationService(
             collectionId = album.appleCollectionId, storeUrl = null,
             releaseDate = album.releaseDate, genre = album.genre,
             durationMs = null, trackNumber = null, discNumber = null,
-            artworkUrl = album.artworkUrl, upc = album.upc,
+            artworkUrl = album.artworkUrl, upc = candidateUpc,
             trackCount = album.trackCount,
         )
         fun reconcile(discogsObservations: List<DiscogsEditionEnrichment>) =
@@ -234,7 +239,14 @@ internal class AppleAlbumEditionReconciliationService(
                 nowMillis = nowMillis(),
             ).singleOrNull()
 
-        val first = reconcile(emptyList()) ?: return null
+        // The internal, separately verified barcode is a matching hint.
+        // It is not a missing field that can be fabricated on Apple products.
+        fun keepOriginalAppleFields(row: AppleTriSourceEditorialEntry) =
+            if (row.release.upc == album.upc) row else
+                row.copy(release = row.release.copy(upc = album.upc))
+        val first = keepOriginalAppleFields(
+            reconcile(emptyList()) ?: return null,
+        )
         val exactLink = first.match as? AppleMusicBrainzEditionMatch.Verified
             ?: return null
         if (first.release.appleScopedId != album.appleScopedId ||
@@ -254,7 +266,9 @@ internal class AppleAlbumEditionReconciliationService(
             DiscogsEditionEnrichment.Unavailable
         }
         if (observed !is DiscogsEditionEnrichment.Verified) return first
-        val enriched = reconcile(listOf(observed)) ?: return first
+        val enriched = keepOriginalAppleFields(
+            reconcile(listOf(observed)) ?: return first,
+        )
         return if (enriched.match == first.match &&
             enriched.release.appleScopedId == album.appleScopedId &&
             enriched.release.title == album.title &&
