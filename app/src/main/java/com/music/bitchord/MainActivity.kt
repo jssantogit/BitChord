@@ -788,6 +788,7 @@ private fun BitChordApp(
     val canonicalExplorePublicPopularity by viewModel.canonicalExplorePublicPopularity.collectAsStateWithLifecycle()
     val canonicalExploreSitewide by viewModel.canonicalExploreSitewide.collectAsStateWithLifecycle()
     val canonicalWorldwideReleases by viewModel.canonicalWorldwideReleases.collectAsStateWithLifecycle()
+    val appleHomeReleases by viewModel.appleHomeReleases.collectAsStateWithLifecycle()
     val canonicalWorldwideLoading by viewModel.canonicalWorldwideLoading.collectAsStateWithLifecycle()
     val canonicalGenreResults by viewModel.canonicalGenreResults.collectAsStateWithLifecycle()
     val canonicalExploreGenreCovers by viewModel.canonicalExploreGenreCovers.collectAsStateWithLifecycle()
@@ -1027,6 +1028,14 @@ private fun BitChordApp(
         java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT)
             .format(java.util.Date())
     }
+    // MusicBrainz ReleaseGroups are search *seeds* only; all displayed public
+    // album IDs are returned independently by Apple's exact storefront.
+    LaunchedEffect(selectedTab, canonicalWorldwideReleases) {
+        if (selectedTab == TAB_HOME && canonicalWorldwideReleases.isNotEmpty()) {
+            viewModel.loadAppleHomeEditorial(canonicalWorldwideReleases)
+        }
+    }
+
     // Rendering Now Playing and the mini-player must not rehash and sort hundreds
     // of media URIs. Recompute the native Home shelves only when their input
     // snapshot, date, or the user's locale actually changes.
@@ -1129,34 +1138,33 @@ private fun BitChordApp(
     }
     val canonicalHomePublicPlaylists = publicPlaylistUi.homeShelf
     val canonicalHomePlaylistNotice = publicPlaylistUi.homeNotice
+    // Never substitute a MusicBrainz public release for an Apple storefront
+    // product on Home. Preserve local verified assets and independently linked
+    // public playlists; all editorial album tiles must be Apple IDs.
     val canonicalHomeDisplayShelves = remember(
-        canonicalHomeShelves, canonicalWorldwideReleases,
-        canonicalReleasesHeading, canonicalPicksHeading, canonicalTrendingHeading,
-        canonicalPublicAlbumsHeading, canonicalPublicSinglesHeading, canonicalPublicMoreHeading,
-        worldwideTrendingShelf, canonicalCommunityShelf, canonicalPersonalShelf,
-        canonicalHomePublicPlaylists, canonicalHomeGlobalDiscoveryHeading, canonicalFeedDate,
+        canonicalHomeShelves, appleHomeReleases,
+        canonicalReleasesHeading, canonicalHomeGlobalDiscoveryHeading,
+        canonicalHomePublicPlaylists, canonicalFeedDate,
     ) {
-        com.music.bitchord.ui.canonicalHomeWithWorldwideEditorial(
-            localShelves = canonicalHomeShelves,
-            worldwideReleases = canonicalWorldwideReleases,
+        val apple = (appleHomeReleases as? UiState.Success)?.data.orEmpty()
+        val editorialAndLocal = com.music.bitchord.ui.appleFirstHomeShelves(
+            appleAlbums = apple,
+            existingLocalShelves = canonicalHomeShelves,
             releasesHeading = canonicalReleasesHeading,
-            picksHeading = canonicalPicksHeading,
-            trendingHeading = canonicalTrendingHeading,
-            worldwideTrending = worldwideTrendingShelf,
+            discoveryHeading = canonicalHomeGlobalDiscoveryHeading,
             todayIsoDate = canonicalFeedDate,
-            albumsHeading = canonicalPublicAlbumsHeading,
-            singlesHeading = canonicalPublicSinglesHeading,
-            moreHeading = canonicalPublicMoreHeading,
-            community = canonicalCommunityShelf,
-            personal = canonicalPersonalShelf,
-            publicPlaylists = canonicalHomePublicPlaylists,
-            globalDiscoveryHeading = canonicalHomeGlobalDiscoveryHeading,
+        )
+        editorialAndLocal + listOfNotNull(
+            canonicalHomePublicPlaylists?.takeIf { it.items.isNotEmpty() },
         )
     }
     val canonicalHomeState: UiState<List<HomeShelf>> = when {
         canonicalHomeDisplayShelves.isNotEmpty() -> UiState.Success(canonicalHomeDisplayShelves)
-        canonicalDiscoveryCatalog is UiState.Loading || canonicalWorldwideLoading -> UiState.Loading
-        else -> UiState.Error("Não foi possível carregar lançamentos públicos. Verifique a conexão e tente novamente.")
+        appleHomeReleases is UiState.Loading ||
+            canonicalWorldwideLoading -> UiState.Loading
+        else -> UiState.Error(
+            "Nenhum lançamento Apple confirmado no momento. Atualize para tentar novamente.",
+        )
     }
     val canonicalGenrePlaylistNotice = publicPlaylistUi.genreNotice
     // The genre's public playlists are an independent ListenBrainz feed.
