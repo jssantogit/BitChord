@@ -1,0 +1,39 @@
+name: REA212 Android Menu Final Verified Gate
+on:
+  push:
+    branches:
+      - validation/rea212-menu-final-corrected-20261113
+permissions:
+  contents: read
+jobs:
+  android-menu-final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact PR source
+        run: git diff --exit-code f344ec2ddfc51eca8c19a852af4851a8e8da11d7 HEAD -- app sharedUi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure Gradle
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Run focused Android regressions
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests com.music.bitchord.ui.components.HeldContextMenuPlateTest --tests com.music.bitchord.ui.screens.CanonicalRecentHeldActionsComposeTest --tests com.music.bitchord.ui.screens.CanonicalLibraryHeldContextMenuPolicyTest --tests com.music.bitchord.ui.screens.NativeArtistPublicTopSectionTest
+      - name: Dump focused tests failures if needed
+        if: failure()
+        run: |
+          find app/build/test-results/testDevDebugUnitTest -name 'TEST-*.xml' -type f -maxdepth 1 -exec grep -n -A8 -B2 '<failure' {} \; | head -n 90 || true
+      - name: Complete Android unit suite
+        run: ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Complete shared UI JVM suite
+        run: ./gradlew -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Android compilation
+        run: ./gradlew -Pbitchord.bundleWear=false :app:compileDevDebugKotlin
