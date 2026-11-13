@@ -13,6 +13,53 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MusicBrainzCatalogSearchTest {
+    @Test fun groupAndEditionArtistIdentityMustSurviveSearchParsing() = runBlocking {
+        val lead = "11111111-1111-4111-8111-111111111111"
+        val guest = "22222222-2222-4222-8222-222222222222"
+        val search = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String = when (path) {
+                    "release-group" -> """{"count":2,"offset":0,"release-groups":[
+                        {"id":"33333333-3333-4333-8333-333333333333",
+                         "title":"Short artist alias","primary-type":"Single",
+                         "artist-credit":[{"name":"IU","artist":{"id":"$lead","name":"IU"}},
+                             {"name":"Guest","joinphrase":" feat. ",
+                              "artist":{"id":"$guest","name":"Guest"}}]},
+                        {"id":"44444444-4444-4444-8444-444444444444",
+                         "title":"Incomplete guest","primary-type":"EP",
+                         "artist-credit":[{"name":"IU","artist":{"id":"$lead"}},
+                             {"name":"Other artist","artist":{"name":"Other artist"}}]}
+                    ]}"""
+                    "release" -> """{"count":1,"offset":0,"releases":[
+                        {"id":"55555555-5555-4555-8555-555555555555",
+                         "title":"Short artist alias","status":"Official",
+                         "release-group":{"id":"33333333-3333-4333-8333-333333333333",
+                             "primary-type":"Single"},
+                         "artist-credit":[{"name":"IU",
+                             "artist":{"id":"$guest","name":"IU"}}]}
+                    ]}"""
+                    else -> error("Unexpected endpoint: $path")
+                }
+            },
+        ))
+        val groups = (search.searchReleaseGroups("alias") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
+            >).page.items
+        val editions = (search.searchReleases("alias") as
+            MusicBrainzCatalogSearchResult.Success<
+                com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
+            >).page.items
+        assertEquals(listOf(lead, guest), groups[0].artistCreditMbids)
+        // One incomplete artist-credit makes the whole identity uncertain.
+        assertEquals(null, groups[1].artistCreditMbids)
+        assertEquals(listOf(guest), editions.single().artistCreditMbids)
+        assertEquals("IU", editions.single().artistDisplay)
+    }
+
+class MusicBrainzCatalogSearchTest {
     @Test
     fun worldwideReleasesAndGenreUseFieldedQueriesNotLocalIndex() = runBlocking {
         val calls = mutableListOf<Pair<String, Map<String, String>>>()

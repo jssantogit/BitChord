@@ -505,6 +505,45 @@ class CanonicalSearchPagingTest {
         )
     }
 
+    @Test fun shortAliasCannotHideEditionWithDifferentArtistMbids() {
+        val groupId = "33333333-3333-4333-8333-333333333333"
+        val group = CanonicalCatalogSearchRow(
+            groupId, CanonicalSearchKind.RELEASE_GROUP, "My Song", "IU",
+            releaseKind = "Single",
+            artistCreditMbids = listOf("11111111-1111-4111-8111-111111111111"),
+        )
+        // Both display IU, but they refer to DIFFERENT artist identities.
+        // A two-letter artist name is not a country code.
+        val edition = CanonicalCatalogSearchRow(
+            "55555555-5555-4555-8555-555555555555",
+            CanonicalSearchKind.RELEASE, "My Song", "IU · KR · 2025-07-01",
+            coverGroupMbid = groupId,
+            artistCreditMbids = listOf("22222222-2222-4222-8222-222222222222"),
+            artworkUri = "https://images.example/different-credit.jpg",
+        )
+        assertEquals(listOf(group, edition),
+            canonicalSearchRowsWithoutRedundantEditions(listOf(group, edition)))
+    }
+
+    @Test fun matchingStructuredArtistMbidsConsolidateEvenWhenAliasesDiffer() {
+        val groupId = "33333333-3333-4333-8333-333333333333"
+        val artist = listOf("11111111-1111-4111-8111-111111111111")
+        val group = CanonicalCatalogSearchRow(
+            groupId, CanonicalSearchKind.RELEASE_GROUP, "My Song", "IU",
+            releaseKind = "Single", artistCreditMbids = artist,
+        )
+        val edition = CanonicalCatalogSearchRow(
+            "55555555-5555-4555-8555-555555555555",
+            CanonicalSearchKind.RELEASE, "My Song", "Lee Ji-eun · KR",
+            coverGroupMbid = groupId, artistCreditMbids = artist,
+            artworkUri = "https://images.example/official.jpg",
+        )
+        val visible = canonicalSearchRowsWithoutRedundantEditions(
+            listOf(group, edition))
+        assertEquals(listOf(groupId), visible.map { it.musicBrainzId })
+        assertEquals(edition.artworkUri, visible.single().artworkUri)
+    }
+
     private fun page(
         total: Int, offset: Int, raw: Int,
     ): MusicBrainzCatalogSearchResult.Success<String> =
