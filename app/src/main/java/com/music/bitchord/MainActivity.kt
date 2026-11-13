@@ -835,6 +835,8 @@ private fun BitChordApp(
     val libraryState by viewModel.library.collectAsStateWithLifecycle()
     val filter by viewModel.filter.collectAsStateWithLifecycle()
     val searchSource by viewModel.searchSource.collectAsStateWithLifecycle()
+    val appleAlbumDetail by viewModel.appleEditorialDetail.collectAsStateWithLifecycle()
+    val appleArtistDetail by viewModel.appleEditorialArtistDetail.collectAsStateWithLifecycle()
     val libraryResults by viewModel.libraryResults.collectAsStateWithLifecycle()
     val addonResults by viewModel.addonResults.collectAsStateWithLifecycle()
     val signedIn by viewModel.signedIn.collectAsStateWithLifecycle()
@@ -2796,6 +2798,20 @@ private fun BitChordApp(
                 else showPlaylistLibrary = false
             }
             BackHandler(enabled = showSmartPlaylistBuilder) { showSmartPlaylistBuilder = false }
+            // Exact Apple storefront routes belong to the Search tab, not
+            // the legacy MusicBrainz/native detail stack. Nested album back
+            // returns to its Apple artist before Search, never to Home.
+            BackHandler(
+                enabled = selectedTab == TAB_SEARCH && detail == null &&
+                    !showSettings && !showReplay && !showSources &&
+                    !showSmartPlaylistBuilder && appleAlbumDetail != null,
+            ) { viewModel.backAppleEditorialAlbum() }
+            BackHandler(
+                enabled = selectedTab == TAB_SEARCH && detail == null &&
+                    !showSettings && !showReplay && !showSources &&
+                    !showSmartPlaylistBuilder && appleAlbumDetail == null &&
+                    appleArtistDetail != null,
+            ) { viewModel.backAppleEditorialArtist() }
 
         }
         routeBackHandlers()
@@ -3887,8 +3903,8 @@ private fun BitChordApp(
                             canonicalResults = viewModel.canonicalResults.collectAsStateWithLifecycle().value,
                             appleResults = viewModel.appleEditorialResults.collectAsStateWithLifecycle().value,
                             appleArtistResults = viewModel.appleEditorialArtists.collectAsStateWithLifecycle().value,
-                            appleDetail = viewModel.appleEditorialDetail.collectAsStateWithLifecycle().value,
-                            appleArtistDetail = viewModel.appleEditorialArtistDetail.collectAsStateWithLifecycle().value,
+                            appleDetail = appleAlbumDetail,
+                            appleArtistDetail = appleArtistDetail,
                             onAppleOpen = viewModel::openAppleEditorialEntry,
                             onAppleBack = viewModel::backAppleEditorialAlbum,
                             onAppleArtistBack = viewModel::backAppleEditorialArtist,
