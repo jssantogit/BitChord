@@ -93,6 +93,22 @@ internal fun appleVerifiedEditionArtwork(
  * album title, UPC or Recording relationship. Group-only callers must choose
  * a verified exact edition, not borrow the first matching title.
  */
+/**
+ * Apple-published, unmodified store badges. They must be placed immediately
+ * beside the promotional cover and link directly to its exact store product.
+ * Do not redraw the brand logo or synthesize store links from an MBID.
+ */
+internal fun appleApprovedBadgeForStoreUrl(storeUrl: String?): String? {
+    if (!safeAppleStorePromotionUrl(storeUrl)) return null
+    return when (URI(storeUrl).host.lowercase(Locale.ROOT)) {
+        "music.apple.com" ->
+            "https://www.apple.com/ca/itunes/link/images/link-badge-music.png"
+        "itunes.apple.com" ->
+            "https://www.apple.com/ca/itunes/link/images/link-badge-itunes.png"
+        else -> null
+    }
+}
+
 internal fun canonicalAppleArtworkFor(
     proof: AppleVerifiedEditionArtwork?,
     requestedReleaseMbid: String,
