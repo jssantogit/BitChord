@@ -1505,14 +1505,15 @@ internal fun CanonicalRemoteLibraryScreen(
                         playlistPickerSelection = listOf(menu.selection)
                         libraryMenu = null
                     },
-                    onOpenAlbum = if (sourceOwnedAlbum != null && onOpenNativeAlbum != null) {
-                        {
-                            val album = sourceOwnedAlbum
-                            libraryMenu = null
-                            heldLibraryMenuOrigin = null
-                            onOpenNativeAlbum(album.id, album.title, album.artistDisplay.orEmpty())
+                    onOpenAlbum = sourceOwnedAlbum?.let { album ->
+                        onOpenNativeAlbum?.let { open ->
+                            {
+                                libraryMenu = null
+                                heldLibraryMenuOrigin = null
+                                open(album.id, album.title, album.artistDisplay.orEmpty())
+                            }
                         }
-                    } else linkedAlbum?.let { group ->
+                    } ?: linkedAlbum?.let { group ->
                         onOpenCatalogAlbum?.let { open ->
                             {
                                 libraryMenu = null
