@@ -644,6 +644,7 @@ fun SearchScreen(
                                     isCurrent = isCurrentRow(row.song),
                                     isPlaying = isPlaying && isCurrentRow(row.song),
                                     searchPlayingStyle = true,
+                                    showMoreButton = false,
                                     activeTint = appleMusicKeyColor(),
                                 )
                                 is SearchResult.Browse -> BrowseRow(
@@ -1184,6 +1185,7 @@ private fun LazyListScope.librarySearchResults(
                     isCurrent = isCurrentRow(song),
                     isPlaying = isPlaying && isCurrentRow(song),
                     searchPlayingStyle = true,
+                    showMoreButton = false,
                     activeTint = appleMusicKeyColor(),
                     showSourceQuality = addons,
                 )
@@ -1245,11 +1247,7 @@ private fun TopResultCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            RowMoreButton(
-                onClick = onLongPress,
-                tint = MaterialTheme.colorScheme.onSurface,
-                iconSize = 24.dp,
-            )
+            // Top-result context is exclusively the card's long press.
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
