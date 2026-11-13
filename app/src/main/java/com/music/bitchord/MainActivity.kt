@@ -3912,6 +3912,8 @@ private fun BitChordApp(
                             onAppleArtistBack = viewModel::backAppleEditorialArtist,
                             onAppleArtistLoadMore = viewModel::loadMoreAppleEditorialArtist,
                             onAppleArtistSearchMore = viewModel::searchMoreAppleEditorialArtist,
+                            applePaging = viewModel.appleSearchPaging.collectAsStateWithLifecycle().value,
+                            onAppleLoadMore = viewModel::loadMoreApplePublicSearch,
                             canonicalPublicPlaylists = com.music.bitchord.ui.rememberCanonicalPublicPlaylistSearchUi(
                                 viewModel = viewModel,
                                 query = query,
