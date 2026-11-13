@@ -57,6 +57,8 @@ internal data class MusicBrainzReleaseGroupHit(
     val artworkUri: String? = null,
     /** Pipe-separated MusicBrainz types: null = absent/unknown, "" = explicitly no tags. */
     val secondaryTypes: String? = null,
+    /** All credited artist MBIDs in source order; null if any ID is missing or invalid. */
+    val artistCreditMbids: List<String>? = null,
 )
 
 internal data class MusicBrainzReleaseHit(
@@ -78,6 +80,8 @@ internal data class MusicBrainzReleaseHit(
     val isVideoOnlyMedia: Boolean? = null,
     /** Evidence from exact Release's Track/Recording graph, when cached. */
     val isVideoOnlyContent: Boolean? = null,
+    /** Do not infer artist identity from display text or aliases. */
+    val artistCreditMbids: List<String>? = null,
 )
 
 // A MusicBrainz cover-art-archive.front flag is a presence hint only.

@@ -133,6 +133,8 @@ data class CanonicalCatalogSearchRow(
     val secondaryTypes: String? = null,
     /** Only set on Recording art adopted from a known MusicBrainz edition or group. */
     val artworkProvenance: CanonicalArtworkProvenance? = null,
+    /** Complete MusicBrainz release/group artist credit IDs; not persisted in Room. */
+    val artistCreditMbids: List<String>? = null,
 )
 
 /**
