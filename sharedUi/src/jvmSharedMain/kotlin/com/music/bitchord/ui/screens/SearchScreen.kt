@@ -265,6 +265,11 @@ fun SearchScreen(
      * about the results, and the switcher would just push them down.
      */
     sourceSwitcher: (@Composable () -> Unit)? = null,
+    /** Apple commercial catalog; IDs are storefront-scoped, never MBIDs. */
+    appleResults: UiState<List<AppleEditorialSearchRow>>? = null,
+    appleDetail: UiState<AppleEditorialAlbumDetailPage>? = null,
+    onAppleOpen: (AppleEditorialSearchRow) -> Unit = {},
+    onAppleBack: () -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -343,8 +348,9 @@ fun SearchScreen(
             // underlying source is metadata, not a separate user-facing tab.
             // YouTube-only video/playlist filters are never offered there.
             if (!suggesting && !searchingLibrary && !searchingAddons &&
-                (!searchingCanonical || canonicalDetail == null) &&
-                (results != null || (searchingCanonical && canonicalResults != null))
+                (!searchingCanonical || (canonicalDetail == null && appleDetail == null)) &&
+                (results != null || (searchingCanonical &&
+                    (canonicalResults != null || appleResults != null)))
             ) {
                 SearchFilterTabs(
                     filter = filter,
@@ -364,38 +370,66 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
-                searchingCanonical -> if (query.isBlank() &&
-                    canonicalResults == null && canonicalDetail == null
-                ) {
-                    // Same recent-search row, clear/remove actions, and persisted
-                    // list as the original Search; never route legacy video IDs
-                    // through a MusicBrainz-only history entry.
-                    val recent = canonicalRecentSearchEntries(history)
-                    if (recent.isEmpty()) {
-                        item {
-                            MessageState(stringResource(Res.string.canonical_search_start))
-                        }
-                    } else {
-                        recentSearches(
-                            history = recent,
-                            currentSong = currentSong,
-                            isPlaying = isPlaying,
-                            onClick = onHistoryClick,
-                            onRemove = onHistoryRemove,
-                            onClear = onHistoryClear,
-                        )
-                    }
-                } else if (filter == SearchFilter.PLAYLISTS && canonicalDetail == null) {
-                    canonicalPublicPlaylistSearchResults(
-                        canonicalPublicPlaylists, onCanonicalPlaylistOpen,
+                searchingCanonical -> when {
+                    // Apple album details are never rendered as MB ReleaseGroup
+                    // pages: that would transfer a storefront ID into MB routes.
+                    appleDetail != null -> appleEditorialAlbumDetail(
+                        appleDetail, onAppleBack,
                     )
-                } else canonicalMusicBrainzResults(
-                    query, canonicalResults, canonicalDetail, filter, onCanonicalOpen, onCanonicalBack,
-                    onCanonicalLoadMore, canonicalLoadingMore,
-                    onCanonicalSearchLoadMore, canonicalSearchHasMore,
-                    canonicalSearchLoadingMore,
-                    onCanonicalPlay, onCanonicalAddToQueue,
-                )
+                    query.isBlank() && canonicalResults == null &&
+                        canonicalDetail == null && appleResults == null -> {
+                        val recent = canonicalRecentSearchEntries(history)
+                        if (recent.isEmpty()) {
+                            item { MessageState(stringResource(Res.string.canonical_search_start)) }
+                        } else {
+                            recentSearches(
+                                history = recent,
+                                currentSong = currentSong,
+                                isPlaying = isPlaying,
+                                onClick = onHistoryClick,
+                                onRemove = onHistoryRemove,
+                                onClear = onHistoryClear,
+                            )
+                        }
+                    }
+                    filter == SearchFilter.PLAYLISTS && canonicalDetail == null ->
+                        canonicalPublicPlaylistSearchResults(
+                            canonicalPublicPlaylists, onCanonicalPlaylistOpen,
+                        )
+                    filter == SearchFilter.ALBUMS && canonicalDetail == null ->
+                        appleEditorialAlbumRows(appleResults, onAppleOpen)
+                    filter == SearchFilter.ALL && canonicalDetail == null &&
+                        query.isNotBlank() -> {
+                        // Artist/Recording identity remains MB while those
+                        // Apple routes mature. MB album shelves are deliberately
+                        // excluded: Apple is the editorial album authority.
+                        val identityRows = when (canonicalResults) {
+                            is UiState.Success -> UiState.Success(canonicalResults.data.filter {
+                                it.kind == CanonicalSearchKind.ARTIST ||
+                                    it.kind == CanonicalSearchKind.RECORDING
+                            })
+                            else -> canonicalResults
+                        }
+                        if (identityRows !is UiState.Success || identityRows.data.isNotEmpty()) {
+                            canonicalMusicBrainzResults(
+                                query, identityRows, null, SearchFilter.ALL,
+                                onCanonicalOpen, onCanonicalBack,
+                                onCanonicalLoadMore, canonicalLoadingMore,
+                                onCanonicalSearchLoadMore, false, false,
+                                onCanonicalPlay, onCanonicalAddToQueue,
+                            )
+                        }
+                        appleEditorialAlbumRows(appleResults, onAppleOpen, showHeading = true)
+                    }
+                    else -> canonicalMusicBrainzResults(
+                        query, canonicalResults, canonicalDetail, filter,
+                        onCanonicalOpen, onCanonicalBack,
+                        onCanonicalLoadMore, canonicalLoadingMore,
+                        onCanonicalSearchLoadMore, canonicalSearchHasMore,
+                        canonicalSearchLoadingMore,
+                        onCanonicalPlay, onCanonicalAddToQueue,
+                    )
+                }
                 searchingLibrary || searchingAddons -> if (
                     searchingLibrary ||
                     serverResults !is UiState.Success || serverResults.data.isEmpty() ||
@@ -551,7 +585,7 @@ fun SearchScreen(
             if (searchingAddons && query.isNotBlank()) {
                 canonicalServerSearchRows(serverResults, onServerPlay)
             }
-            if (searchingCanonical && canonicalDetail == null &&
+            if (searchingCanonical && canonicalDetail == null && appleDetail == null &&
                 (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
                 (addonResults as? UiState.Success)?.data?.isNotEmpty() == true
             ) {
@@ -579,6 +613,158 @@ fun SearchScreen(
  * not that the user owns an audio rendition. Keep the UI strictly non-playable
  * until canonical availability resolution is wired for each Recording MBID.
  */
+/**
+ * This Android-facing catalog surface reuses the native 52dp composition, but
+ * the album's browsing action remains its own typed Apple route. Metadata
+ * results are never converted into Song, added to a queue or given overflow
+ * actions that assume a playable MediaAsset.
+ */
+private fun LazyListScope.appleEditorialAlbumRows(
+    results: UiState<List<AppleEditorialSearchRow>>?,
+    onOpen: (AppleEditorialSearchRow) -> Unit,
+    showHeading: Boolean = false,
+) {
+    if (showHeading && (results as? UiState.Success)?.data?.isNotEmpty() == true) {
+        item(key = "apple:albums:heading") {
+            Text(
+                text = stringResource(Res.string.albums),
+                modifier = Modifier.padding(
+                    start = PAGE_GUTTER, end = PAGE_GUTTER,
+                    top = 16.dp, bottom = 6.dp,
+                ),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
+    }
+    when (results) {
+        null -> item(key = "apple:album:hint") {
+            MessageState(stringResource(Res.string.canonical_search_hint))
+        }
+        UiState.Loading -> songListSkeleton(keyPrefix = "apple:albums")
+        is UiState.Error -> item(key = "apple:album:error") {
+            MessageState(stringResource(Res.string.apple_catalog_unavailable))
+        }
+        is UiState.Success -> if (results.data.isEmpty()) {
+            if (!showHeading) item(key = "apple:album:empty") {
+                MessageState(stringResource(Res.string.apple_no_albums))
+            }
+        } else itemsIndexed(
+            items = results.data,
+            key = { _, row -> "apple:search:${row.browseId}" },
+        ) { index, album ->
+            NativeSearchResultRow(
+                row = NativeSearchRowUi(
+                    title = album.title,
+                    subtitle = album.artistName,
+                    artworkUri = album.artworkUri,
+                    artistPortrait = false,
+                ),
+                onClick = { onOpen(album) },
+                onLongPress = null,
+            )
+            if (index < results.data.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        }
+    }
+}
+
+/** Pure editorial album detail: no player affordances for unlinked tracks. */
+private fun LazyListScope.appleEditorialAlbumDetail(
+    detail: UiState<AppleEditorialAlbumDetailPage>,
+    onBack: () -> Unit,
+) {
+    item(key = "apple:detail:back") {
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+        ) { Text(stringResource(Res.string.canonical_back)) }
+    }
+    when (detail) {
+        UiState.Loading -> songListSkeleton(keyPrefix = "apple:detail")
+        is UiState.Error -> item(key = "apple:detail:error") {
+            MessageState(stringResource(Res.string.apple_catalog_unavailable))
+        }
+        is UiState.Success -> {
+            val album = detail.data.album
+            item(key = "apple:detail:header") {
+                Column(
+                    Modifier.fillMaxWidth().padding(
+                        horizontal = PAGE_GUTTER, vertical = 12.dp,
+                    ),
+                ) {
+                    album.artworkUri?.let { art ->
+                        AsyncImage(
+                            model = art,
+                            contentDescription = stringResource(Res.string.canonical_cover_art),
+                            modifier = Modifier.size(156.dp).clip(RoundedCornerShape(10.dp)),
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(album.title, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        album.artistName,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (detail.data.partialTracklist) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            stringResource(Res.string.apple_partial_tracklist),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+            itemsIndexed(
+                detail.data.tracks,
+                key = { _, track -> "apple:detail:track:${track.key}" },
+            ) { index, track ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(
+                        horizontal = PAGE_GUTTER, vertical = 12.dp,
+                    ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        (track.trackNumber ?: index + 1).toString(),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(32.dp),
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            track.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        track.artistName?.let { credit ->
+                            Text(
+                                credit,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+                if (index < detail.data.tracks.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                }
+            }
+        }
+    }
+}
+
 private fun LazyListScope.canonicalPublicPlaylistSearchResults(
     results: UiState<List<CanonicalPublicPlaylistSearchRow>>?,
     onOpen: (CanonicalPublicPlaylistSearchRow) -> Unit,
