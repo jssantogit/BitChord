@@ -4239,7 +4239,18 @@ private fun BitChordApp(
                                         // in the current Search/Discovery shelf.
                                         com.music.bitchord.ui.screens.catalogMetadataPinNativeTarget(pin)
                                             ?.let { target ->
-                                                viewModel.openDetail(
+                                                if (pin.browseId.startsWith("catalog:RECORDING:")) {
+                                                    val mbid = pin.browseId.removePrefix("catalog:RECORDING:")
+                                                    if (com.music.bitchord.ui.screens.isVerifiedCatalogRecordingId(mbid)) {
+                                                        communityMetadataRecording = CanonicalCatalogSearchRow(
+                                                            musicBrainzId = mbid,
+                                                            kind = CanonicalSearchKind.RECORDING,
+                                                            title = pin.title,
+                                                            subtitle = pin.subtitle,
+                                                            artworkUri = pin.artworkUrl,
+                                                        )
+                                                    }
+                                                } else viewModel.openDetail(
                                                     browseId = pin.browseId,
                                                     title = target.title,
                                                     subtitle = target.subtitle,
