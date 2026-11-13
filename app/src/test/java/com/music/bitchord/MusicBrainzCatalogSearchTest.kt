@@ -13,6 +13,42 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MusicBrainzCatalogSearchTest {
+    @Test fun titleArtistEditionSearchUsesDocumentedLuceneFieldsSafely() = runBlocking {
+        val calls = mutableListOf<Map<String, String>>()
+        val source = MusicBrainzCatalogSearch(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String {
+                    assertEquals("release", path)
+                    calls += parameters
+                    return """{"count":0,"offset":0,"releases":[]}"""
+                }
+            },
+        ))
+        assertTrue(source.searchOfficialReleasesForTitleArtist(
+            "SUPER REAL ME", "ILLIT", limit = 12,
+        ) is MusicBrainzCatalogSearchResult.Success)
+        assertEquals(
+            """release:"SUPER REAL ME" AND artist:"ILLIT" AND status:official""",
+            calls.single()["query"],
+        )
+        assertEquals("false", calls.single()["dismax"])
+        assertEquals("12", calls.single()["limit"])
+        assertTrue(source.searchOfficialReleasesForTitleArtist(
+            "Album", "Test\" OR arid:*", limit = 12,
+        ) is MusicBrainzCatalogSearchResult.Success)
+        assertTrue(calls.last()["query"].orEmpty().contains(
+            """artist:"Test\" OR arid:*" AND status:official""",
+        ))
+        assertTrue(source.searchOfficialReleasesForTitleArtist(
+            "Album\nAnother", "ILLIT",
+        ) is MusicBrainzCatalogSearchResult.Failure)
+        assertTrue(source.searchOfficialReleasesForTitleArtist(
+            "Album", "ILLIT", limit = 500,
+        ) is MusicBrainzCatalogSearchResult.Failure)
+        assertEquals(2, calls.size)
+    }
+
     @Test fun barcodeEditionSearchUsesExactFieldAndRejectsUnsafeQueries() = runBlocking {
         val calls = mutableListOf<Pair<String, Map<String, String>>>()
         val search = MusicBrainzCatalogSearch(MusicBrainzClient(
