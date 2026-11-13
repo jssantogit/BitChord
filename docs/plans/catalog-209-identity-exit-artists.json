@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "purpose": "PR #209 frozen artist identity exit audit. Exact MBIDs selected from individual public MusicBrainz artist pages; this is not a release/editorial or Android acceptance claim.",
+  "artists": [
+    {
+      "name": "NewJeans",
+      "mbid": "49204a7a-ed85-407a-828f-6fd46f1d8126",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/49204a7a-ed85-407a-828f-6fd46f1d8126"
+    },
+    {
+      "name": "LE SSERAFIM",
+      "mbid": "1ee37742-1e3d-4e61-84d2-bc85f4c1459a",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/1ee37742-1e3d-4e61-84d2-bc85f4c1459a"
+    },
+    {
+      "name": "IVE",
+      "mbid": "b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/b2f2216a-d7a9-4ce0-8b8f-f494d9a8c196"
+    },
+    {
+      "name": "ILLIT",
+      "mbid": "6b128dd7-e998-4edb-a4f5-400fef190445",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/6b128dd7-e998-4edb-a4f5-400fef190445"
+    },
+    {
+      "name": "ENHYPEN",
+      "mbid": "95663592-1447-4579-90f7-c94733476667",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/95663592-1447-4579-90f7-c94733476667"
+    },
+    {
+      "name": "aespa",
+      "mbid": "b51c672b-85e0-48fe-8648-470a2422229f",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/b51c672b-85e0-48fe-8648-470a2422229f"
+    },
+    {
+      "name": "BTS",
+      "mbid": "0d79fe8e-ba27-4859-bb8c-2f255f346853",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/0d79fe8e-ba27-4859-bb8c-2f255f346853"
+    },
+    {
+      "name": "TWICE",
+      "mbid": "8da127cc-c432-418f-b356-ef36210d82ac",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/8da127cc-c432-418f-b356-ef36210d82ac"
+    },
+    {
+      "name": "BLACKPINK",
+      "mbid": "48646387-1664-4c9a-9139-9bfd091b823c",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/48646387-1664-4c9a-9139-9bfd091b823c"
+    },
+    {
+      "name": "IU",
+      "mbid": "b9545342-1e6d-4dae-84ac-013374ad8d7c",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/b9545342-1e6d-4dae-84ac-013374ad8d7c"
+    },
+    {
+      "name": "Stray Kids",
+      "mbid": "142b343d-bf5a-428c-a64f-6d1a7566bbe9",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/142b343d-bf5a-428c-a64f-6d1a7566bbe9"
+    },
+    {
+      "name": "SEVENTEEN",
+      "mbid": "e04d239e-9fa8-49b3-b9b7-9e439c3cb1d1",
+      "type": "Group",
+      "source": "https://musicbrainz.org/artist/e04d239e-9fa8-49b3-b9b7-9e439c3cb1d1"
+    },
+    {
+      "name": "ROSÉ",
+      "mbid": "7f233cda-eacb-4235-b681-5f7be343a1a2",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/7f233cda-eacb-4235-b681-5f7be343a1a2"
+    },
+    {
+      "name": "Jon Batiste",
+      "mbid": "a2a72dba-3a08-43c4-859c-4c7f5fcc9599",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/a2a72dba-3a08-43c4-859c-4c7f5fcc9599"
+    },
+    {
+      "name": "Taylor Swift",
+      "mbid": "20244d07-534f-4eff-b4d4-930878889970",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/20244d07-534f-4eff-b4d4-930878889970"
+    },
+    {
+      "name": "Billie Eilish",
+      "mbid": "f4abc0b5-3f7a-4eff-8f78-ac078dbce533",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/f4abc0b5-3f7a-4eff-8f78-ac078dbce533"
+    },
+    {
+      "name": "Sabrina Carpenter",
+      "mbid": "1882fe91-cdd9-49c9-9956-8e06a3810bd4",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/1882fe91-cdd9-49c9-9956-8e06a3810bd4"
+    },
+    {
+      "name": "The Weeknd",
+      "mbid": "c8b03190-306c-4120-bb0b-6f2ebfc06ea9",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/c8b03190-306c-4120-bb0b-6f2ebfc06ea9"
+    },
+    {
+      "name": "Beyoncé",
+      "mbid": "859d0860-d480-4efd-970c-c05d5f1776b8",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/859d0860-d480-4efd-970c-c05d5f1776b8"
+    },
+    {
+      "name": "Bad Bunny",
+      "mbid": "89aa5ecb-59ad-46f5-b3eb-2d424e941f19",
+      "type": "Person",
+      "source": "https://musicbrainz.org/artist/89aa5ecb-59ad-46f5-b3eb-2d424e941f19"
+    }
+  ]
+}
