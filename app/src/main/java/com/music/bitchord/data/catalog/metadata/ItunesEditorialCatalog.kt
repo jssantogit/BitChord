@@ -115,10 +115,17 @@ internal object ItunesEditorialCatalog {
     ): List<ItunesEditorialRelease> {
         val country = storefront.trim().lowercase(Locale.ROOT)
         if (!Regex("[a-z]{2}").matches(country)) return emptyList()
+        // A source returning two contradictory snapshots under the same
+        // Apple collection/track ID must not be collapsed by "first wins".
+        // Drop disputed IDs; keep identical repeats without duplication.
         val rows = appleRows.asSequence()
             .filter { it.storefront == country }
-            .distinctBy { it.scopedId }
-            .toList()
+            .groupBy { it.scopedId }
+            .values.mapNotNull { observations ->
+                observations.firstOrNull()?.takeIf { first ->
+                    observations.all { it == first }
+                }
+            }
 
         val links = verifiedIdentityMap(
             country, ItunesCatalogItemType.ALBUM,

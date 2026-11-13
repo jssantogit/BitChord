@@ -132,6 +132,25 @@ class ItunesEditorialCatalogTest {
         assertNull(release.musicBrainzReleaseGroupId)
     }
 
+    @Test fun contradictoryAppleProductSnapshotsNeverSelectFirstVersion() {
+        val products = listOf(
+            album(10, "EASY"),
+            album(10, "HOT"),
+        )
+        assertTrue(ItunesEditorialCatalog.assemble("br", products).isEmpty())
+    }
+
+    @Test fun conflictingTrackSnapshotsCannotPolluteAppleAlbumTracklist() {
+        val products = listOf(
+            album(10, "EASY", cover = "https://is1-ssl.mzstatic.com/sleeve.jpg"),
+            track(101, 10, 1),
+            track(101, 10, 1).copy(title = "Other track"),
+        )
+        val album = ItunesEditorialCatalog.assemble("br", products).single()
+        assertTrue(album.tracks.isEmpty())
+        assertEquals("EASY", album.title)
+    }
+
     @Test fun invalidOrForeignIdentityLinksNeverBecomeCanonical() {
         val item = album(10, "Release")
         val result = ItunesEditorialCatalog.assemble(

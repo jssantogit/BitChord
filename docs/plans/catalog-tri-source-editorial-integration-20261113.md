@@ -89,7 +89,7 @@ precisam de conclusão paginada; ratings e biblioteca mantêm identidade
 própria. Integração com #212 somente depois de reconciliar o HEAD atual.
 
 **Fase E — rankings e aceitação.** Testar RSS/Charts separadamente,
-sem popularidade inventada; CI Android/shared/desktop/TV/Wear, testes de
+sem popularidade inventada; CI Android e módulos compartilhados necessários ao Android, testes de
 retorno sem rede, internacionalização e smoke físico consolidado apenas ao
 fim, conforme orientação do proprietário. Nenhum APK de smoke antecipado.
 
@@ -101,3 +101,9 @@ errado, nenhuma edição é fundida só por título, categorias fortes não são
 adivinhadas e não se perde reprodução, biblioteca, avaliação ou navegação.
 Toda CI aplicável fica verde no HEAD integrado exato. Até lá, PR permanece
 draft e não é mesclada.
+
+## Diretriz de execução — Android exclusivamente (2026-11-13)
+
+O proprietário confirmou que **somente Android** é alvo de trabalho, manutenção e validação. Desktop, TV e Wear não são critérios de aceite desta integração. Os workflows dessas plataformas podem ser disparados automaticamente, mas não exigem esforço, correção nem CI verde para esta entrega. Garantir CI Android (incluindo testes dos módulos compartilhados usados pelo app) e um único smoke físico final após o desenvolvimento, sem APK antecipado.
+
+A PR #216 recebeu `AppleMusicBrainzEditionMatcher`, `AppleTriSourceEditorialReconciler` e `AppleEditorialCatalogRepository` antes do cutover; nenhum deles deve ser descrito como fonte ativa das telas até que os viewmodels e a navegação Android sejam realmente migrados.

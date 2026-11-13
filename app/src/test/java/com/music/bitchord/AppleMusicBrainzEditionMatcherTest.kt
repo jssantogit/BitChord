@@ -138,6 +138,18 @@ class AppleMusicBrainzEditionMatcherTest {
         assertFalse(resolution is AppleMusicBrainzEditionMatch.Verified)
     }
 
+    @Test fun unrelatedContradictoryMbEditionDoesNotBlockUniqueVerifiedAppleEdition() {
+        val unrelated = candidate(release = secondId, title = "Different unrelated release",
+            barcode = "1111111111111")
+        val result = AppleMusicBrainzEditionMatcher.match(apple(), listOf(
+            candidate(),
+            unrelated,
+            unrelated.copy(title = "Another unrelated release"),
+        ))
+        assertTrue(result is AppleMusicBrainzEditionMatch.Verified)
+        assertEquals(releaseId, (result as AppleMusicBrainzEditionMatch.Verified).musicBrainzReleaseId)
+    }
+
     @Test fun sameTitleAppleEditsNeedSameExactStorefrontAndCollectionIdentity() {
         val other = apple(appleId = 102L, tracks = listOf(
             song(201, "My World", 1), song(202, "Magnetic", 2),

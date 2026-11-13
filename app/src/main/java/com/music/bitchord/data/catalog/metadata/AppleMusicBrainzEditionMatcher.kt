@@ -124,17 +124,22 @@ internal object AppleMusicBrainzEditionMatcher {
         val groups = candidates.groupBy { validMbid(it.musicBrainzId) ?: it.musicBrainzId }
         val contested = groups.filterValues { snapshots ->
             snapshots.any { it != snapshots.first() }
+        }
+        // A malformed unrelated MB edition must not poison the entire Apple
+        // result. A disagreement touching this Apple edition, however, must
+        // veto certification, even when one snapshot matched perfectly.
+        val relevantContested = contested.filterValues { snapshots ->
+            snapshots.any { check(apple, it) != Grade.NO_MATCH }
         }.keys
-        val unique = groups.values.map { it.first() }
+        val unique = groups.filterKeys { it !in contested.keys }
+            .values.map { it.first() }
         val assessed = unique.map { it to check(apple, it) }
         val verified = assessed.filter { it.second == Grade.VERIFIED }
             .map { it.first }
         val pending = assessed.filter { it.second == Grade.CANDIDATE }
             .map { it.first.musicBrainzId }
-        if (contested.isNotEmpty() && (verified.isNotEmpty() || pending.isNotEmpty() ||
-                contested.any { it in groups.keys })
-        ) return AppleMusicBrainzEditionMatch.Ambiguous(
-            (verified.map { it.musicBrainzId } + pending + contested).distinct().sorted()
+        if (relevantContested.isNotEmpty()) return AppleMusicBrainzEditionMatch.Ambiguous(
+            (verified.map { it.musicBrainzId } + pending + relevantContested).distinct().sorted()
         )
         if (verified.size > 1 || (verified.isNotEmpty() && pending.isNotEmpty())) {
             return AppleMusicBrainzEditionMatch.Ambiguous(
