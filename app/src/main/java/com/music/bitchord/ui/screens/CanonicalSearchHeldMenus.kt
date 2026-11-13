@@ -76,16 +76,14 @@ internal fun CanonicalSearchHeldMenus(
                 onClick = { onDismissCatalog(); onAddCatalogToPlaylist(row) },
             )
         }
-        if (row.kind != CanonicalSearchKind.RECORDING) {
-            NativeCompactMenuItem(
-                label = "Editar avaliação", icon = PlaylistEditorIcons.RatingPlain,
-                onClick = { onDismissCatalog(); onRateCatalog(row) },
-            )
-            NativeCompactMenuItem(
-                label = "Fixar", icon = BitChordIcons.Pin,
-                onClick = { onDismissCatalog(); onPinCatalog(row) },
-            )
-        }
+        NativeCompactMenuItem(
+            label = "Editar avaliação", icon = PlaylistEditorIcons.RatingPlain,
+            onClick = { onDismissCatalog(); onRateCatalog(row) },
+        )
+        NativeCompactMenuItem(
+            label = "Fixar", icon = BitChordIcons.Pin,
+            onClick = { onDismissCatalog(); onPinCatalog(row) },
+        )
         NativeCompactMenuItem(
             label = "Compartilhar", icon = Icons.Rounded.Share,
             onClick = { onDismissCatalog(); onShareCatalog(row) },
