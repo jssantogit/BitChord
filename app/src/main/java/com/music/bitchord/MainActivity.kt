@@ -6046,17 +6046,24 @@ private fun BitChordApp(
                 )
             }
             searchMetadataRatingTarget?.let { (id, title) ->
-                val rating = if (id.startsWith("public:")) {
-                    com.music.bitchord.ui.screens.canonicalPublicPlaylistRatingTarget(
-                        id.removePrefix("public:"),
-                    )
-                } else com.music.bitchord.ui.screens.canonicalCatalogEntityRatingTarget(id)
-                if (rating != null) {
-                    com.music.bitchord.ui.screens.CanonicalCatalogEntityRatingDialog(
-                        target = rating,
-                        title = title,
+                if (id.startsWith("catalog:RECORDING:")) {
+                    com.music.bitchord.ui.screens.CanonicalMetadataRecordingRatingDialog(
+                        recordingId = id.removePrefix("catalog:RECORDING:"),
                         onDismiss = { searchMetadataRatingTarget = null },
                     )
+                } else {
+                    val rating = if (id.startsWith("public:")) {
+                        com.music.bitchord.ui.screens.canonicalPublicPlaylistRatingTarget(
+                            id.removePrefix("public:"),
+                        )
+                    } else com.music.bitchord.ui.screens.canonicalCatalogEntityRatingTarget(id)
+                    if (rating != null) {
+                        com.music.bitchord.ui.screens.CanonicalCatalogEntityRatingDialog(
+                            target = rating,
+                            title = title,
+                            onDismiss = { searchMetadataRatingTarget = null },
+                        )
+                    }
                 }
             }
             LaunchedEffect(browseActions == null) {
