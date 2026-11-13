@@ -97,7 +97,9 @@ internal fun pinnedLocalPlaylistItemsById(
     items.forEach { item ->
         val id = item.browseId?.takeIf(String::isNotBlank) ?: return@forEach
         put(id, item)
-        if (!id.startsWith("local:")) put("local:$id", item)
+        // Existing LibraryPlaylistCard.Normal prepends "local:" even when
+        // its underlying browseId already carries that namespace.
+        put("local:$id", item)
     }
 }
 
