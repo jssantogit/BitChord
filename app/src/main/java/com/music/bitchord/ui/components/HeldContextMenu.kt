@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -44,6 +46,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.lerp
@@ -131,19 +134,18 @@ fun <T : Any> HeldContextMenu(
     BackHandler(enabled = open, onBack = onDismiss)
 
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    // Plain white or black at half strength, so the blur shows through as
-    // frost rather than the surface greys reading as a flat slab over it. With
-    // no blur behind there is nothing for that to frost, so the plate firms up
-    // to stay legible over the bare scrim.
-    val plate = (if (dark) Color.Black else Color.White).copy(alpha = if (reduceDynamicBlur) 0.85f else 0.5f)
-    val hairline = if (dark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.06f)
-    // The scrim does less work when the blur is there to push the page back,
-    // and more when it is the only thing doing it.
+    // The copied card and its actions must NEVER show the old row underneath.
+    // A translucent 0.50 plate was duplicating track text and album art across
+    // the actual row and its lifted preview. Match the solid catalog source menu.
+    val plate = (if (dark) Color.Black else Color.White).copy(alpha = 0.96f)
+    val hairline = if (dark) Color.White.copy(alpha = 0.08f) else Color.Black.copy(alpha = 0.05f)
+    // Strong enough to separate the selected item even when Android/Haze is
+    // unable to capture a nested screen as a blur source.
     val scrimColor = when {
-        reduceDynamicBlur && dark -> Color.Black.copy(alpha = 0.62f)
-        reduceDynamicBlur -> Color.Black.copy(alpha = 0.36f)
-        dark -> Color.Black.copy(alpha = 0.30f)
-        else -> Color.Black.copy(alpha = 0.10f)
+        reduceDynamicBlur && dark -> Color.Black.copy(alpha = 0.84f)
+        reduceDynamicBlur -> Color.Black.copy(alpha = 0.60f)
+        dark -> Color.Black.copy(alpha = 0.62f)
+        else -> Color.Black.copy(alpha = 0.48f)
     }
     val cardShape = RoundedCornerShape(20.dp)
     val menuShape = RoundedCornerShape(16.dp)
@@ -166,13 +168,14 @@ fun <T : Any> HeldContextMenu(
             Spacer(
                 Modifier
                     .fillMaxSize()
+                    .testTag("held-context-backdrop")
                     .then(
                         if (reduceDynamicBlur) {
                             Modifier
                         } else {
                             Modifier.optimizedHazeEffect(
                                 state = hazeState,
-                                style = HazeMaterials.ultraThin(MaterialTheme.colorScheme.background),
+                                style = HazeMaterials.thick(MaterialTheme.colorScheme.background),
                             ) {
                                 alpha = backdropAlpha()
                             }
@@ -203,7 +206,8 @@ fun <T : Any> HeldContextMenu(
                             Modifier
                         },
                     )
-                    .padding(platePadding),
+                    .padding(platePadding)
+                    .testTag("held-context-preview"),
             ) {
                 heldItem.image?.let { image ->
                     Image(
@@ -220,7 +224,8 @@ fun <T : Any> HeldContextMenu(
                     .pointerInput(Unit) {}
                     .clip(menuShape)
                     .background(plate)
-                    .border(0.5.dp, hairline, menuShape),
+                    .verticalScroll(rememberScrollState())
+                    .testTag("held-context-actions"),
             ) {
                 actions(menuItem)
             }
