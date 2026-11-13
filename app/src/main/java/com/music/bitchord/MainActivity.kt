@@ -3910,6 +3910,8 @@ private fun BitChordApp(
                             onAppleTrackOpen = viewModel::openAppleEditorialTrackAlbum,
                             onAppleBack = viewModel::backAppleEditorialAlbum,
                             onAppleArtistBack = viewModel::backAppleEditorialArtist,
+                            onAppleArtistLoadMore = viewModel::loadMoreAppleEditorialArtist,
+                            onAppleArtistSearchMore = viewModel::searchMoreAppleEditorialArtist,
                             canonicalPublicPlaylists = com.music.bitchord.ui.rememberCanonicalPublicPlaylistSearchUi(
                                 viewModel = viewModel,
                                 query = query,
