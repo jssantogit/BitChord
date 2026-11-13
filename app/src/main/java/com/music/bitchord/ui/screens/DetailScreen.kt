@@ -337,6 +337,8 @@ fun DetailScreen(
     /** Public tracklist metadata; never manufactured as a playable Song. */
     canonicalTracks: List<CanonicalCatalogSearchRow> = emptyList(),
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
+    /** Full-screen lifted metadata menu owned by the root, not an M3 dropdown. */
+    onCanonicalTrackHold: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
     canonicalPublicTopSampled: Boolean = false,
@@ -869,8 +871,11 @@ fun DetailScreen(
                             onClick = if (canPlay) ({
                                 onCanonicalTrackPlay?.invoke(row.musicBrainzId)
                             }) else null,
-                            onLongPress = if (hasMetadataActions) ({ menuExpanded = true }) else null,
-                            onMore = if (hasMetadataActions) ({ menuExpanded = true }) else null,
+                            onLongPress = if (hasMetadataActions) ({
+                                if (onCanonicalTrackHold != null) onCanonicalTrackHold(row)
+                                else menuExpanded = true
+                            }) else null,
+                            onMore = null,
                             textGap = PAGE_GUTTER,
                             leading = {
                                 NativeDetailTrackNumber(
@@ -914,6 +919,7 @@ fun DetailScreen(
                                         addingMetadataRecording = Triple(id, title, artist)
                                     },
                                     tag = "canonical-album-track-more-$originalIndex",
+                                    showButton = false,
                                 )
                             },
                         )
@@ -992,6 +998,7 @@ fun DetailScreen(
                                 onSongClick(queue, position)
                             },
                             onLongPress = { onSongLongPress(song) },
+                            showMoreButton = false,
                             onSwipeToQueue = { onSongSwipe(song) },
                             rowBackground = Color.Transparent,
                             // The track's place on the release, not its place in
@@ -1510,7 +1517,8 @@ private fun CompactSongRow(
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }
-        RowMoreButton(onClick = onLongPress, tint = palette.onBackgroundVariant)
+        // Artist detail tracks open their lifted menu by holding the row.
+        // The old trailing three-dot icon is intentionally retired here.
     }
 }
 
