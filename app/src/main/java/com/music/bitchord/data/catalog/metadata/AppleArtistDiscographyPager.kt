@@ -178,7 +178,7 @@ internal class AppleArtistDiscographyPager(
                         return AppleArtistPageLoad.Failure(result.reason)
                     is AppleEditorialLoad.Success -> {
                         hints.removeFirst()
-                        triedHints.add(title.lowercase(java.util.Locale.ROOT))
+                        triedHints.add(titleKey(title))
                         added += accept(result)
                     }
                 }
