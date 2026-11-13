@@ -1,0 +1,35 @@
+name: REA 212 · Root tab motion corrected gate
+on:
+  push:
+    branches:
+      - validation/rea212-root-tab-motion-fix-20261113
+permissions:
+  contents: read
+jobs:
+  android-tests:
+    name: Android + shared UI regressions
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout exact PR source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Verify app and sharedUi match tested PR revision
+        run: git diff --exit-code 90cecfbad0ae47dded5c22cb153f6b0cf49b38b2 HEAD -- app sharedUi
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - name: Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure unit tests
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "" >> local.properties
+          chmod +x gradlew
+      - name: Android app regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
