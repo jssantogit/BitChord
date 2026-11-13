@@ -1,10 +1,13 @@
 package com.music.bitchord.ui
 
+import com.music.bitchord.data.catalog.metadata.AppleEditorialArtistLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialReadState
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
 import com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage
+import com.music.bitchord.ui.screens.AppleEditorialArtistDetailPage
+import com.music.bitchord.ui.screens.AppleEditorialSearchKind
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import com.music.bitchord.ui.screens.AppleEditorialTrackRow
 
@@ -64,5 +67,48 @@ internal fun appleNativeAlbumDetail(
         album = header,
         tracks = tracks,
         partialTracklist = !complete,
+    )
+}
+
+/** Apple artist IDs remain distinct even for identical stage names. */
+internal fun appleNativeArtistSearchRows(
+    source: AppleEditorialArtistLoad.Success,
+): List<AppleEditorialSearchRow> = source.artists.mapNotNull { artist ->
+    val route = AppleCatalogBrowseRoute.parse(artist.scopedId)
+        ?.takeIf { it.kind == ItunesCatalogItemType.ARTIST &&
+            it.storefront == artist.storefront && it.id == artist.id }
+        ?: return@mapNotNull null
+    AppleEditorialSearchRow(
+        browseId = artist.scopedId,
+        title = artist.title,
+        artistName = artist.title,
+        artworkUri = artist.artworkUrl,
+        releaseDate = null,
+        kind = AppleEditorialSearchKind.ARTIST,
+    )
+}
+
+/** An artist's shelf is built from Apple artist-scoped products, not MB groups. */
+internal fun appleNativeArtistDetail(
+    source: AppleEditorialLoad.Success,
+    artistBrowseId: String,
+    artistName: String,
+): AppleEditorialArtistDetailPage? {
+    val route = AppleCatalogBrowseRoute.parse(artistBrowseId)
+        ?.takeIf { it.kind == ItunesCatalogItemType.ARTIST } ?: return null
+    if (artistName.isBlank()) return null
+    return AppleEditorialArtistDetailPage(
+        artist = AppleEditorialSearchRow(
+            browseId = artistBrowseId,
+            title = artistName,
+            artistName = artistName,
+            artworkUri = null,
+            releaseDate = null,
+            kind = AppleEditorialSearchKind.ARTIST,
+        ),
+        albums = source.releases
+            .filter { it.artistId == route.id && it.storefront == route.storefront }
+            .mapNotNull { it.asNativeSearchRow() },
+        possiblyTruncated = source.state == AppleEditorialReadState.POSSIBLY_TRUNCATED,
     )
 }
