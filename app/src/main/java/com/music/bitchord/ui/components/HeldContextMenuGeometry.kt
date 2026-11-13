@@ -41,3 +41,10 @@ internal fun shouldBlurHeldContextBackdrop(
     heldVisible: Boolean,
     reduceDynamicBlur: Boolean,
 ): Boolean = heldVisible && !reduceDynamicBlur
+
+/** A parent that already blurs the actual composed page must not Haze-sample
+ * it again; that second pass can capture only the black page plate. */
+internal fun heldMenuNeedsOwnHazeSource(
+    hostProvidesBlur: Boolean,
+    reduceDynamicBlur: Boolean,
+): Boolean = !hostProvidesBlur && !reduceDynamicBlur
