@@ -110,7 +110,11 @@ internal fun playlistWizardSourceChoices(
     val servers = sources.filter { it.startsWith("opensubsonic:") }
     val all = PlaylistWizardSourceChoice(
         value = null, title = "Todas as fontes",
-        caption = "Músicas do dispositivo e de todos os servidores conectados.",
+        caption = when {
+            sources.isEmpty() -> "Nenhuma fonte de áudio conectada no momento."
+            servers.isEmpty() -> "Músicas da biblioteca local."
+            else -> "Músicas do dispositivo e dos servidores conectados."
+        },
         icon = PlaylistEditorIcons.Globe,
     )
     val local = PlaylistWizardSourceChoice(
@@ -138,6 +142,34 @@ internal fun playlistWizardSourceChoices(
 }
 
 
+
+/**
+ * The selector and its summary must resolve from the same canonical source
+ * choices. Never collapse multiple Navidrome accounts into a generic title,
+ * or turn an offline saved provider into an apparently connected server.
+ */
+internal fun playlistWizardSelectedSourceChoice(
+    normalMode: Boolean,
+    availableSourceKeys: List<String>,
+    selectedValue: String?,
+): PlaylistWizardSourceChoice {
+    playlistWizardSourceChoices(normalMode, availableSourceKeys)
+        .firstOrNull { it.value == selectedValue }
+        ?.let { return it }
+    if (!normalMode && selectedValue == "opensubsonic") {
+        return PlaylistWizardSourceChoice(
+            value = selectedValue, title = "Navidrome",
+            caption = "Nenhum servidor Navidrome está conectado.",
+            icon = PlaylistEditorIcons.Audio,
+        )
+    }
+    return PlaylistWizardSourceChoice(
+        value = selectedValue, title = "Fonte desconectada",
+        caption = "A fonte salva não está disponível. As músicas adicionadas são preservadas.",
+        icon = if (selectedValue?.startsWith("opensubsonic:") == true)
+            PlaylistEditorIcons.Audio else PlaylistEditorIcons.Music,
+    )
+}
 
 private fun operatorUiLabel(operator: SmartPlaylistRuleOperator): String = when (operator) {
     SmartPlaylistRuleOperator.EQUAL -> "É igual a"
@@ -333,6 +365,7 @@ internal fun PlaylistWizardSheetChrome(
     title: String,
     onClose: () -> Unit,
     canClose: Boolean = true,
+    groupContent: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     androidx.compose.material3.ModalBottomSheet(
@@ -364,9 +397,11 @@ internal fun PlaylistWizardSheetChrome(
                     icon = PlaylistEditorIcons.Close,
                 )
             }
-            SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
-                content()
-            }
+            if (groupContent) {
+                SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
+                    content()
+                }
+            } else content()
         }
     }
 }
@@ -833,50 +868,6 @@ internal fun SmartPlaylistV2WizardUi(
                                 }
                             }
                         }
-                        item {
-                            val selected = if (normalMode) normalSourceProviderKey
-                                else if (hasConfiguredRules) smartRuleGlobalSource(rule)
-                                else null
-                            val label = if (normalMode) when {
-                                selected == null -> "Todas as fontes disponíveis"
-                                selected == "local-mediastore" -> "Música local"
-                                selected in availableSourceKeys -> "Navidrome"
-                                else -> "Fonte desconectada"
-                            } else when (selected) {
-                                "local" -> "Música local"
-                                "opensubsonic" -> "Navidrome"
-                                else -> "Todas as fontes disponíveis"
-                            }
-                            PlaylistWizardSourceSummary(
-                                source = label,
-                                description = when {
-                                    selected == null -> "Biblioteca local e servidores conectados"
-                                    (normalMode && selected == "local-mediastore") ||
-                                        (!normalMode && selected == "local") ->
-                                            "Somente músicas do dispositivo"
-                                    selected == "opensubsonic" ||
-                                        selected?.startsWith("opensubsonic:") == true ->
-                                            "Somente músicas do servidor selecionado"
-                                    else -> "Revise a fonte antes de continuar"
-                                },
-                                onClick = { picker = "source" },
-                            )
-                            if (normalMode && selected != null && selected !in availableSourceKeys) {
-                                Text(
-                                    "A fonte salva está desconectada; as músicas continuam na playlist.",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            if (!normalMode && selected == "opensubsonic" &&
-                                availableSourceKeys.none { it.startsWith("opensubsonic:") }) {
-                                Text(
-                                    "Nenhum servidor Navidrome está conectado.",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
                         if (page == WizardStep.IDENTITY) item {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
@@ -897,6 +888,34 @@ internal fun SmartPlaylistV2WizardUi(
                                         onSmart = { onNormalModeChange(false) },
                                     )
                                 }
+                            }
+                        }
+                        item {
+                            val selected = if (normalMode) normalSourceProviderKey
+                                else if (hasConfiguredRules) smartRuleGlobalSource(rule)
+                                else null
+                            PlaylistWizardSourceSummary(
+                                choice = playlistWizardSelectedSourceChoice(
+                                    normalMode = normalMode,
+                                    availableSourceKeys = availableSourceKeys,
+                                    selectedValue = selected,
+                                ),
+                                onClick = { picker = "source" },
+                            )
+                            if (normalMode && selected != null && selected !in availableSourceKeys) {
+                                Text(
+                                    "A fonte salva está desconectada; as músicas continuam na playlist.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            if (!normalMode && selected == "opensubsonic" &&
+                                availableSourceKeys.none { it.startsWith("opensubsonic:") }) {
+                                Text(
+                                    "Nenhum servidor Navidrome está conectado.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
                         }
                     }
@@ -1883,27 +1902,30 @@ internal fun SmartPlaylistV2WizardUi(
         PlaylistWizardSheetChrome(
             title = "Fontes de origem",
             onClose = { picker = null },
+            groupContent = false,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "Escolha de qual biblioteca vêm as músicas.",
+                    "Escolha as bibliotecas de áudio usadas nesta playlist.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 4.dp),
                 )
-                PlaylistWizardSourceChoices(
-                    options = playlistWizardSourceChoices(
-                        normalMode = normalMode,
-                        availableSourceKeys = availableSourceKeys,
-                    ),
-                    selectedValue = if (normalMode) normalSourceProviderKey
-                        else smartRuleGlobalSource(rule),
-                    onChoose = { source ->
-                        if (normalMode) onNormalSourceChange(source)
-                        else onSmartSourceChange(source)
-                        picker = null
-                    },
-                )
+                SettingsGroupSurface(modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
+                    PlaylistWizardSourceChoices(
+                        options = playlistWizardSourceChoices(
+                            normalMode = normalMode,
+                            availableSourceKeys = availableSourceKeys,
+                        ),
+                        selectedValue = if (normalMode) normalSourceProviderKey
+                            else smartRuleGlobalSource(rule),
+                        onChoose = { source ->
+                            if (normalMode) onNormalSourceChange(source)
+                            else onSmartSourceChange(source)
+                            picker = null
+                        },
+                    )
+                }
             }
         }
     }
