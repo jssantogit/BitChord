@@ -138,6 +138,9 @@ fun NativeCompactOverflowMenu(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     maxContentHeight: Dp? = null,
+    /** Narrow launcher menus should match the top-bar Settings plate. */
+    minMenuWidth: Dp = 208.dp,
+    maxMenuWidth: Dp = 320.dp,
     /** All overflow menus use the same solid, native catalog-source plate. */
     homePlateStyle: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
@@ -194,7 +197,7 @@ fun NativeCompactOverflowMenu(
                 ),
             ) {
                 Surface(
-                    modifier = modifier.widthIn(min = 208.dp, max = 320.dp)
+                    modifier = modifier.widthIn(min = minMenuWidth, max = maxMenuWidth)
                         .testTag("native-compact-overflow"),
                     shape = RoundedCornerShape(nativeCompactMenuCornerRadiusDp(homePlateStyle).dp),
                     color = plate,
