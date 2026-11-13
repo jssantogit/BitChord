@@ -289,7 +289,7 @@ internal class ItunesCatalogClient(
             if (count == null || count < 0 || rows == null || rows.size > 201 ||
                 count < rows.size
             ) return ItunesCatalogResult.Failure(ItunesCatalogFailure.MALFORMED_RESPONSE)
-            val items = rows.mapNotNull { (it as? JsonObject)?.toCatalogItem(storefront) }
+            val filtered = rows.mapNotNull { (it as? JsonObject)?.toCatalogItem(storefront) }
                 .filter { expectedType == null || it.type == expectedType }
                 .filter { collectionId == null ||
                     (it.type == ItunesCatalogItemType.ALBUM && it.id == collectionId) ||
@@ -299,11 +299,25 @@ internal class ItunesCatalogClient(
                     (it.type == ItunesCatalogItemType.ARTIST && it.id == artistId) ||
                     (it.type == ItunesCatalogItemType.ALBUM && it.artistId == artistId)
                 }
+            // First-wins dedup must never hide conflicting commercial identity
+            // from a single Apple response. Optional enrichment differences
+            // are not identity disputes (e.g. one row lacks a duration).
+            val disputed = filtered.groupBy { it.scopedId }
+                .filterValues { snapshots ->
+                    val first = snapshots.first()
+                    snapshots.any { row ->
+                        row.title != first.title || row.artistId != first.artistId ||
+                            row.collectionId != first.collectionId ||
+                            row.artistName != first.artistName
+                    }
+                }.keys
+            val items = filtered.filterNot { it.scopedId in disputed }
                 .distinctBy { it.scopedId }
             val requestedLimit = params["limit"]?.toIntOrNull()
             ItunesCatalogResult.Success(
                 items = items,
-                possiblyTruncated = (requestedLimit != null && rows.size >= requestedLimit) ||
+                possiblyTruncated = disputed.isNotEmpty() ||
+                    (requestedLimit != null && rows.size >= requestedLimit) ||
                     count > rows.size,
             )
         } catch (_: Exception) {
