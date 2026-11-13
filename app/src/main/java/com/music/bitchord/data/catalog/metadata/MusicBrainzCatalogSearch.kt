@@ -341,15 +341,17 @@ internal class MusicBrainzCatalogSearch(
      * Release graph and an exact Apple tracklist match before a crosswalk.
      */
     suspend fun searchReleasesByBarcode(
-        barcode: String, limit: Int = 12,
+        barcode: String, limit: Int = 12, offset: Int = 0,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> {
-        if (!Regex("^[0-9]{8,14}$").matches(barcode) || limit !in 1..100) {
+        if (!Regex("^[0-9]{8,14}$").matches(barcode) || limit !in 1..100 ||
+            offset < 0
+        ) {
             return MusicBrainzCatalogSearchResult.Failure(
                 MusicBrainzCatalogSearchFailure.INVALID_QUERY,
             )
         }
         return searchReleasesInternal(
-            "barcode:$barcode", limit, 0, fieldedQuery = true,
+            "barcode:$barcode", limit, offset, fieldedQuery = true,
         )
     }
 
@@ -364,9 +366,10 @@ internal class MusicBrainzCatalogSearch(
         title: String,
         artist: String,
         limit: Int = 12,
+        offset: Int = 0,
     ): MusicBrainzCatalogSearchResult<MusicBrainzReleaseHit> {
         if (title.length !in 2..100 || artist.length !in 1..100 ||
-            title.isBlank() || artist.isBlank() || limit !in 1..12 ||
+            title.isBlank() || artist.isBlank() || limit !in 1..12 || offset < 0 ||
             title.any(Char::isISOControl) || artist.any(Char::isISOControl)
         ) return MusicBrainzCatalogSearchResult.Failure(
             MusicBrainzCatalogSearchFailure.INVALID_QUERY,
@@ -376,7 +379,7 @@ internal class MusicBrainzCatalogSearch(
                 .replace("\"", "\\\"") + "\""
         return searchReleasesInternal(
             "release:${quote(title)} AND artist:${quote(artist)} AND status:official",
-            limit, 0, fieldedQuery = true,
+            limit, offset, fieldedQuery = true,
         )
     }
 
