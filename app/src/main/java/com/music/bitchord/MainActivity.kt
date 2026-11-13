@@ -3253,6 +3253,14 @@ private fun BitChordApp(
                             onAlbumRatingTargetChanged = { unifiedAlbumRatingSelection = it },
                             initialPinnedSelection = pinnedLibraryRequest,
                             onSourceKeysChanged = unifiedControls::updateAvailableSources,
+                            onOpenCatalogAlbum = { route, albumTitle, albumArtist ->
+                                viewModel.openDetail(
+                                    browseId = route,
+                                    title = albumTitle,
+                                    subtitle = albumArtist,
+                                    type = BrowseType.ALBUM,
+                                )
+                            },
                             searchVisible = unifiedLibrarySearching,
                             detailBackToken = unifiedLibraryBackToken,
                             onDetailChanged = { unifiedLibraryDetailOpen = it },
