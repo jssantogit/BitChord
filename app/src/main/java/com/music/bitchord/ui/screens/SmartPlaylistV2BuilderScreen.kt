@@ -155,9 +155,8 @@ internal fun SavedFilterMenuActions(
     onChoose: (String) -> Unit,
 ) {
     options.forEach { option ->
-        // A remembered click handler in a Compose loop must be scoped to this
-        // exact option. Without a stable group, every row dispatched the last
-        // ("Excluir filtro") action in the Robolectric regression.
+        // Keep each action's composition identity stable if the available
+        // commands change between smart and normal draft modes.
         androidx.compose.runtime.key(option) {
         val selectedOption = option
         val destructive = selectedOption == "Excluir filtro"
