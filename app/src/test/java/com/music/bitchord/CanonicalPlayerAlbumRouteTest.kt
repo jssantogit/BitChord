@@ -37,6 +37,61 @@ class CanonicalPlayerAlbumRouteTest {
         assertEquals("Álbum", observedTitle)
     }
 
+    @Test fun liftedTrackPreviewRequiresAResolvedCanonicalAlbumNotRawProviderId() = kotlinx.coroutines.runBlocking {
+        val song = com.music.bitchord.data.model.Song(
+            videoId = "audio-1",
+            title = "Track",
+            artist = "Artist",
+            thumbnailUrl = null,
+            albumId = "provider:album-123",
+            albumName = "Album",
+        )
+        val destinations = mutableListOf<String>()
+        val opened = openCanonicalHeldSongAlbum(
+            song = song,
+            resolveVerifiedRoute = { null },
+            fallbackAlbumTitle = "Álbum",
+        ) { id, _, _, _ -> destinations += id }
+        assertFalse(opened)
+        assertTrue(destinations.isEmpty())
+    }
+
+    @Test fun liftedTrackPreviewNavigatesOnlyAfterCanonicalResolution() = kotlinx.coroutines.runBlocking {
+        val song = com.music.bitchord.data.model.Song(
+            videoId = "audio-2",
+            title = "Track",
+            artist = "Artist",
+            thumbnailUrl = null,
+            albumId = "provider:album-123",
+            albumName = "Album",
+        )
+        val destinations = mutableListOf<List<Any>>()
+        val opened = openCanonicalHeldSongAlbum(
+            song = song,
+            resolveVerifiedRoute = { "catalog:RELEASE_GROUP:$group" },
+            fallbackAlbumTitle = "Álbum",
+        ) { id, title, artist, type -> destinations += listOf(id, title, artist, type) }
+        assertTrue(opened)
+        assertEquals(
+            listOf(listOf("catalog:RELEASE_GROUP:$group", "Album", "Artist", BrowseType.ALBUM)),
+            destinations,
+        )
+    }
+
+    @Test fun liftedTrackPreviewRejectsRecordingRouteEvenWhenResolved() = kotlinx.coroutines.runBlocking {
+        val song = com.music.bitchord.data.model.Song(
+            videoId = "audio-3", title = "Track", artist = "Artist",
+            thumbnailUrl = null, albumId = group,
+        )
+        var opened = false
+        assertFalse(openCanonicalHeldSongAlbum(
+            song = song,
+            resolveVerifiedRoute = { "catalog:RECORDING:$group" },
+            fallbackAlbumTitle = "Álbum",
+        ) { _, _, _, _ -> opened = true })
+        assertFalse(opened)
+    }
+
     @Test fun fakeOrWrongNamespaceCannotTriggerCatalogAlbumNavigation() {
         val observed = mutableListOf<String>()
         listOf(
