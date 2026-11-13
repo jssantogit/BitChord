@@ -1,0 +1,48 @@
+# Verify seven physical smoke findings on the exact draft PR 212 source.
+# Test-only, never assembles or publishes an APK and never merges.
+name: REA 212 · Seven-point physical smoke regressions
+
+on:
+  push:
+    branches: [validation/rea212-ui-regression-6e5042e8-20261113]
+    paths: [.github/workflows/rea212-ui-regression-test-only.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  android-and-shared:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout pinned source
+        uses: actions/checkout@v4
+        with:
+          ref: 6e5042e8f422d900e62585f9007bf6b51e3c810b
+      - name: Assert exact source
+        run: test "$(git rev-parse HEAD)" = "6e5042e8f422d900e62585f9007bf6b51e3c810b"
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure environment
+        shell: bash
+        run: |
+          printf 'LASTFM_API_KEY=%s\n' "${{ secrets.LASTFM_API_KEY }}" > local.properties
+          printf 'LASTFM_SECRET=%s\n' "${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android app unit suite
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Native shared UI suite
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Retain failed test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-seven-point-failed-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
