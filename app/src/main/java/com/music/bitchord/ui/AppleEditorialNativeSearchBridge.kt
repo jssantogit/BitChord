@@ -123,6 +123,46 @@ internal fun appleNativeAlbumDetail(
     )
 }
 
+/**
+ * Only an independently verified edition may update the Album/EP/Single chip.
+ * Apple still owns the album title, artwork, tracks, identity and storefront.
+ * Conflicting or unclassified evidence leaves the initial Apple page intact.
+ */
+internal fun appleNativeReconciledAlbumDetail(
+    source: AppleEditorialLoad.Success,
+    browseId: String,
+    evidence: com.music.bitchord.data.catalog.metadata.AppleTriSourceEditorialEntry?,
+): AppleEditorialAlbumDetailPage? {
+    val original = appleNativeAlbumDetail(source, browseId) ?: return null
+    val apple = source.releases.singleOrNull { it.appleScopedId == browseId }
+        ?: return original
+    val proof = evidence ?: return original
+    val match = proof.match as?
+        com.music.bitchord.data.catalog.metadata.AppleMusicBrainzEditionMatch.Verified
+        ?: return original
+    val classification = proof.classification
+    if (classification.status !=
+            com.music.bitchord.data.catalog.metadata.AppleEditorialFormatStatus.DECIDED ||
+        classification.format == ItunesEditorialReleaseFormat.UNCLASSIFIED ||
+        match.appleScopedId != browseId ||
+        proof.release.appleScopedId != browseId ||
+        proof.release.appleCollectionId != apple.appleCollectionId ||
+        proof.release.storefront != apple.storefront ||
+        proof.release.artistId != apple.artistId ||
+        proof.release.title != apple.title ||
+        proof.release.artistName != apple.artistName ||
+        proof.release.artworkUrl != apple.artworkUrl ||
+        proof.release.releaseDate != apple.releaseDate ||
+        proof.release.upc != apple.upc ||
+        proof.release.trackCount != apple.trackCount ||
+        proof.release.tracks != apple.tracks
+    ) return original
+    return appleNativeAlbumDetail(
+        source.copy(releases = listOf(apple.copy(format = classification.format))),
+        browseId,
+    ) ?: original
+}
+
 /** Apple artist IDs remain distinct even for identical stage names. */
 internal fun appleNativeArtistSearchRows(
     source: AppleEditorialArtistLoad.Success,
