@@ -50,10 +50,13 @@ import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzReleaseGroup
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearchResult
 import com.music.bitchord.data.catalog.metadata.AppleEditorialCatalogRepository
+import com.music.bitchord.data.catalog.metadata.AppleEditorialArtistLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialLoad
 import com.music.bitchord.data.catalog.metadata.AppleEditorialReadState
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogFailure
 import com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage
+import com.music.bitchord.ui.screens.AppleEditorialArtistDetailPage
+import com.music.bitchord.ui.screens.AppleEditorialSearchKind
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import com.music.bitchord.ui.screens.CanonicalCatalogDetailPage
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
@@ -527,6 +530,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var appleEditorialSearchJob: Job? = null
     private var appleEditorialDetailJob: Job? = null
     private var activeAppleAlbumId: String? = null
+    private val _appleEditorialArtists =
+        MutableStateFlow<UiState<List<AppleEditorialSearchRow>>?>(null)
+    val appleEditorialArtists: StateFlow<UiState<List<AppleEditorialSearchRow>>?> =
+        _appleEditorialArtists.asStateFlow()
+    private val _appleEditorialArtistDetail =
+        MutableStateFlow<UiState<AppleEditorialArtistDetailPage>?>(null)
+    val appleEditorialArtistDetail: StateFlow<UiState<AppleEditorialArtistDetailPage>?> =
+        _appleEditorialArtistDetail.asStateFlow()
+    private var appleArtistSearchJob: Job? = null
+    private var appleArtistDetailJob: Job? = null
+    private var activeAppleArtistId: String? = null
     private var canonicalTypeaheadJob: Job? = null
     private var canonicalSearchPagingJob: Job? = null
     private var canonicalSearchPageCursors: CanonicalSearchPageCursors? = null
@@ -1415,6 +1429,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun openCanonicalNativeDetail(row: CanonicalCatalogSearchRow) {
         backAppleEditorialAlbum()
+        backAppleEditorialArtist()
         val nativeType = canonicalNativePageType(row.kind) ?: return
         val browseId = canonicalNativeBrowseId(row)
         if (_detailStack.value.lastOrNull()?.browseId == browseId) return
@@ -1532,9 +1547,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun cancelSearchSourceRequests() {
         appleEditorialSearchJob?.cancel()
         appleEditorialDetailJob?.cancel()
+        appleArtistSearchJob?.cancel()
+        appleArtistDetailJob?.cancel()
         _appleEditorialResults.value = null
         _appleEditorialDetail.value = null
+        _appleEditorialArtists.value = null
+        _appleEditorialArtistDetail.value = null
         activeAppleAlbumId = null
+        activeAppleArtistId = null
         newestRequestId.incrementAndGet()
         searchSession = null
         searchPagingJob?.cancel()
@@ -4221,8 +4241,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             canonicalSearchJob?.cancel()
             canonicalTypeaheadJob?.cancel()
             appleEditorialSearchJob?.cancel()
+            appleArtistSearchJob?.cancel()
             backAppleEditorialAlbum()
+            backAppleEditorialArtist()
             _appleEditorialResults.value = null
+            _appleEditorialArtists.value = null
             resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
@@ -4244,8 +4267,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             canonicalSearchJob?.cancel()
             canonicalTypeaheadJob?.cancel()
             appleEditorialSearchJob?.cancel()
+            appleArtistSearchJob?.cancel()
             backAppleEditorialAlbum()
+            backAppleEditorialArtist()
             _appleEditorialResults.value = null
+            _appleEditorialArtists.value = null
             resetCanonicalSearchPagination()
             _canonicalResults.value = null
             clearCanonicalCatalogNavigation()
@@ -4401,6 +4427,80 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Artist lookup is a separate commercial Apple identity query. */
+    private fun runAppleEditorialArtistSearch(query: String) {
+        appleArtistSearchJob?.cancel()
+        backAppleEditorialArtist()
+        _appleEditorialArtists.value = UiState.Loading
+        appleArtistSearchJob = viewModelScope.launch(Dispatchers.IO) {
+            val response = try {
+                appleEditorialRepository.searchArtists(query, storefront = "br", limit = 50)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleEditorialArtistLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (_searchSource.value != SearchSource.CANONICAL ||
+                _query.value.trim() != query || activeAppleArtistId != null
+            ) return@launch
+            _appleEditorialArtists.value = when (response) {
+                is AppleEditorialArtistLoad.Success ->
+                    UiState.Success(appleNativeArtistSearchRows(response))
+                is AppleEditorialArtistLoad.Failure ->
+                    UiState.Error("apple_catalog_unavailable")
+            }
+        }
+    }
+
+    /** Search and artist-shelf routes retain their exact storefront namespace. */
+    fun openAppleEditorialEntry(row: AppleEditorialSearchRow) {
+        when (row.kind) {
+            AppleEditorialSearchKind.ARTIST -> openAppleEditorialArtist(row)
+            AppleEditorialSearchKind.ALBUM -> openAppleEditorialAlbum(row)
+        }
+    }
+
+    private fun openAppleEditorialArtist(row: AppleEditorialSearchRow) {
+        val route = AppleCatalogBrowseRoute.parse(row.browseId)
+            ?.takeIf { it.kind ==
+                com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType.ARTIST }
+            ?: return
+        if (_searchSource.value != SearchSource.CANONICAL) return
+        clearCanonicalCatalogNavigation()
+        backAppleEditorialAlbum()
+        appleArtistDetailJob?.cancel()
+        activeAppleArtistId = row.browseId
+        _appleEditorialArtistDetail.value = UiState.Loading
+        appleArtistDetailJob = viewModelScope.launch(Dispatchers.IO) {
+            val response = try {
+                appleEditorialRepository.artistDiscography(route.id, route.storefront)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            }
+            if (activeAppleArtistId != row.browseId ||
+                _searchSource.value != SearchSource.CANONICAL
+            ) return@launch
+            _appleEditorialArtistDetail.value = when (response) {
+                is AppleEditorialLoad.Success -> {
+                    val detail = appleNativeArtistDetail(
+                        response, row.browseId, row.title,
+                    )
+                    if (detail != null) UiState.Success(detail)
+                    else UiState.Error("apple_artist_not_in_storefront")
+                }
+                is AppleEditorialLoad.Failure -> UiState.Error("apple_catalog_unavailable")
+            }
+        }
+    }
+
+    fun backAppleEditorialArtist() {
+        activeAppleArtistId = null
+        appleArtistDetailJob?.cancel()
+        _appleEditorialArtistDetail.value = null
+    }
+
     /** Apple storefront IDs are not MBIDs and bypass the old canonical stack. */
     fun openAppleEditorialAlbum(row: AppleEditorialSearchRow) {
         val route = AppleCatalogBrowseRoute.parse(row.browseId)
@@ -4458,6 +4558,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         clearCanonicalCatalogNavigation()
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
+        runAppleEditorialArtistSearch(query)
         runAppleEditorialAlbumSearch(query)
         canonicalSearchJob = viewModelScope.launch {
             // Do not wait for the first public HTTP response to paint a previously
