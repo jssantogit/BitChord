@@ -232,7 +232,7 @@ internal class ItunesCatalogClient(
         limit: Int = 30,
     ): ItunesCatalogResult {
         val storefront = normalizedStorefront(country)
-        if (artistId <= 0L || storefront == null || limit !in 1..30) {
+        if (artistId <= 0L || storefront == null || limit !in 1..200) {
             return ItunesCatalogResult.Failure(ItunesCatalogFailure.INVALID_QUERY)
         }
         return request("lookup", linkedMapOf(
@@ -272,7 +272,7 @@ internal class ItunesCatalogClient(
                 ?: return ItunesCatalogResult.Failure(ItunesCatalogFailure.MALFORMED_RESPONSE)
             val count = (root["resultCount"] as? JsonPrimitive)?.intOrNull
             val rows = root["results"] as? JsonArray
-            if (count == null || count < 0 || rows == null || rows.size > 200 ||
+            if (count == null || count < 0 || rows == null || rows.size > 201 ||
                 count < rows.size
             ) return ItunesCatalogResult.Failure(ItunesCatalogFailure.MALFORMED_RESPONSE)
             val items = rows.mapNotNull { (it as? JsonObject)?.toCatalogItem(storefront) }
