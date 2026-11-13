@@ -4802,6 +4802,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalSearchJob?.cancel()
         canonicalTypeaheadJob?.cancel()
         resetCanonicalSearchPagination()
+        resetApplePublicSearchPaging()
         clearCanonicalCatalogNavigation()
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
