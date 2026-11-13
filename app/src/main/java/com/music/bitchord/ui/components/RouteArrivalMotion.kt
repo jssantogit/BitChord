@@ -3,8 +3,6 @@ package com.music.bitchord.ui.components
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.using
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -80,8 +78,11 @@ internal fun rootTabArrivalFrame(progress: Float): RouteArrivalFrame {
 }
 
 /** Disable AnimatedContent's implicit SizeTransform spring for root peers. */
-internal fun rootTabContentTransform(): ContentTransform =
-    (EnterTransition.None togetherWith ExitTransition.None).using(null)
+internal fun rootTabContentTransform(): ContentTransform = ContentTransform(
+    targetContentEnter = EnterTransition.None,
+    initialContentExit = ExitTransition.None,
+    sizeTransform = null,
+)
 
 internal fun shouldAnimateRouteArrival(
     previous: String,
