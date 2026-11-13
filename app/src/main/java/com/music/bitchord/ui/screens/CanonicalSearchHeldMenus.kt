@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.runtime.Composable
@@ -63,7 +64,7 @@ internal fun CanonicalSearchHeldMenus(
         onPreviewClick = { row -> onDismissCatalog(); onOpenCatalog(row) },
     ) { row ->
         NativeCompactMenuItem(
-            label = details, icon = PlaylistEditorIcons.Info,
+            label = details, icon = Icons.Rounded.Info,
             onClick = { onDismissCatalog(); onOpenCatalog(row) },
         )
         if (canonicalSearchHeldCanAddToPlaylist(row.kind)) {
@@ -104,7 +105,7 @@ internal fun CanonicalSearchHeldMenus(
         onPreviewClick = { row -> onDismissPublicPlaylist(); onOpenPublicPlaylist(row) },
     ) { row ->
         NativeCompactMenuItem(
-            label = details, icon = PlaylistEditorIcons.Info,
+            label = details, icon = Icons.Rounded.Info,
             onClick = { onDismissPublicPlaylist(); onOpenPublicPlaylist(row) },
         )
         NativeCompactMenuItem(
