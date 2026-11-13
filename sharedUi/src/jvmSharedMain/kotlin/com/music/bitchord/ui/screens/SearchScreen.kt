@@ -54,6 +54,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -275,6 +276,8 @@ fun SearchScreen(
     onAppleTrackOpen: (AppleEditorialTrackSearchRow) -> Unit = {},
     onAppleBack: () -> Unit = {},
     onAppleArtistBack: () -> Unit = {},
+    onAppleArtistLoadMore: () -> Unit = {},
+    onAppleArtistSearchMore: (String) -> Unit = {},
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -385,6 +388,7 @@ fun SearchScreen(
                     )
                     appleArtistDetail != null -> appleEditorialArtistDetail(
                         appleArtistDetail, onAppleArtistBack, onAppleOpen,
+                        onAppleArtistLoadMore, onAppleArtistSearchMore,
                     )
                     query.isBlank() && canonicalResults == null &&
                         canonicalDetail == null && appleResults == null &&
@@ -747,6 +751,8 @@ private fun LazyListScope.appleEditorialArtistDetail(
     detail: UiState<AppleEditorialArtistDetailPage>,
     onBack: () -> Unit,
     onAlbumOpen: (AppleEditorialSearchRow) -> Unit,
+    onLoadMore: () -> Unit,
+    onSearchMore: (String) -> Unit,
 ) {
     item(key = "apple:artist:detail:back") {
         OutlinedButton(
@@ -812,6 +818,69 @@ private fun LazyListScope.appleEditorialArtistDetail(
                             UiState.Success(matching),
                             onAlbumOpen,
                             showHeading = false,
+                        )
+                    }
+                }
+            }
+            if (detail.data.hasMore) {
+                item(key = "apple:artist:load:more") {
+                    OutlinedButton(
+                        onClick = onLoadMore,
+                        enabled = !detail.data.loadingMore,
+                        modifier = Modifier.fillMaxWidth().padding(
+                            horizontal = PAGE_GUTTER, vertical = 12.dp),
+                    ) {
+                        Text(stringResource(Res.string.apple_load_more))
+                    }
+                }
+            }
+            if (detail.data.possiblyTruncated || detail.data.hasMore) {
+                item(key = "apple:artist:coverage:note") {
+                    Text(
+                        stringResource(Res.string.apple_catalog_coverage_note),
+                        modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            item(key = "apple:artist:search:more") {
+                val artistSearch = remember(detail.data.artist.browseId) { mutableStateOf("") }
+                val artistSearchFocus = remember { FocusRequester() }
+                Column(Modifier.fillMaxWidth().padding(
+                    horizontal = PAGE_GUTTER, vertical = 12.dp,
+                )) {
+                    SearchField(
+                        query = artistSearch.value,
+                        onQueryChange = { artistSearch.value = it },
+                        onSubmit = {
+                            if (artistSearch.value.trim().length >= 2 &&
+                                !detail.data.loadingMore
+                            ) onSearchMore(artistSearch.value)
+                        },
+                        focusRequester = artistSearchFocus,
+                        placeholder = stringResource(Res.string.apple_find_release),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { onSearchMore(artistSearch.value) },
+                        enabled = artistSearch.value.trim().length >= 2 &&
+                            !detail.data.loadingMore,
+                    ) { Text(stringResource(Res.string.apple_search_more)) }
+                    if (detail.data.loadingMore) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                    }
+                    if (detail.data.pageError) {
+                        Text(
+                            stringResource(Res.string.apple_discovery_failed),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else if (detail.data.noAdditionalResults) {
+                        Text(
+                            stringResource(Res.string.apple_no_additional_releases),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
                 }
