@@ -88,3 +88,17 @@ Fonte de referência permanece [R3/R5 do handoff final](https://github.com/jssan
 - R5: falta prova dos limiares e curvas de animação do hero e título do artista, particularmente se a arte chega depois do conteúdo; não inventar easing ou duração.
 
 Critério de parada: documentar `unknown/requires_runtime` quando a evidência for insuficiente; não reabrir decompilação ampla ou distribuir mídia proprietária.
+
+## Corte R3 — capas de álbum e continuidade de rolagem (14/11/2026)
+
+**Origem e evidência:** [handoff final R3/R5 am-descomp](https://github.com/jssantogit/am-descomp/blob/fase-3-investigacao-visual/docs/rea212-final-visual-handoff.md). O registro R3/S07 confirma uma página de álbum com hero/artwork sobre fundo teal, mas a captura reescalada não fornece dp, mecanismo de cor ou transição precisa. O caso corrigido abaixo é uma inconsistência interna da UI BitChord, **não** uma alegação do algoritmo Apple.
+
+| Corte | Implementação / proteção | Limitação a preservar para futura issue am-descomp |
+| --- | --- | --- |
+| Capa de álbum da Biblioteca | `NativeCanonicalAlbumArtwork` compartilhado seleciona URI local `content://`/`file://`; caso haja `CanonicalBrowseTrack`, mantém `CanonicalUnifiedArtwork` com o carregador de provider; na ausência da faixa, mostra HTTP(S) da release canônica já aceita nos cards da Biblioteca. Outras schemes não viram URL. O placeholder fica sob a imagem durante carregamento. | A URI HTTP(S) só é usada como arte, **não** é entregue ao decodificador de paleta quando o contexto é autenticado: a página pode manter fundo temático neutro. Não concluir que todo endpoint remoto público estará acessível sem credenciais; confirmação física deve contemplar HTTP local/Navidrome, HTTPS, erro e capa ausente. Não inferir edição/capa pela semelhança de título. |
+| Álbum dentro de artista | Reutiliza o mesmo compositor de artwork, preservando autenticação da capa da faixa e aceitando o fallback legítimo da própria release quando nenhuma faixa fornecer arte. Não há nova tela de detalhes. | R3 não prova layout pixel-perfect nem a regra técnica usada pelo Apple para variantes, imagens dinâmicas ou fundos artísticos. Estabilidade de identificação/cobertura do catálogo fica separada na PR #216. |
+| Rolagem entre álbuns | `rememberNativeAlbumDetailListState(releaseIdentity)` mantém o estado durante atualização de faixa/arte/paleta do **mesmo ID**, mas inicia estado separado ao abrir outro ReleaseId; rotas raiz e aninhada passam o ID canônico. | R5/V02 mostra loading escuro e placeholder antes da capa definitiva, sem provar transformações ou curvas de easing; comparar visualmente no aparelho se o header não desloca ao chegar a capa. Estado do scroll é correção BitChord, não API Apple. |
+
+**Regressões:** `NativeCanonicalAlbumArtworkTest` protege quatro grupos de origem/precedência/segurança; `NativeAlbumDetailScrollStateTest` protege a identidade do scroll entre refresh e abertura de outra release. Gate Android+JVM: [#43632637675](https://github.com/jssantogit/BitChord/actions/runs/43632637675), fonte exata do commit `acd6c7b`, em execução ao registrar. Nenhum APK nem merge.
+
+**Pendências finitas para a futura issue do am-descomp (ainda não abrir):** mostrar a sequência de capa não carregada → carregada em uma página de álbum, comportamento do fundo com arte remota real, geometria do primeiro bloco após hero, rolagem/retorno ao detalhe, tema claro/escuro e redução de movimento. Se a referência continuar inconclusiva, marcar `unknown/requires_runtime` e validar somente a adaptação BitChord.
