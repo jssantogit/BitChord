@@ -356,6 +356,57 @@ private fun safeStoreLink(raw: String?): String? {
     } catch (_: Exception) { null }
 }
 
+/**
+ * Store badges must open the very Apple product whose cover they accompany.
+ * Apple URLs can be /br/album/name/123, /br/album/id123, and for songs
+ * /br/album/name/123?i=456. A trusted host alone is insufficient: another
+ * album on that host would still make a misleading attribution.
+ *
+ * No URL is ever synthesized from a title or MusicBrainz ID. Unknown route
+ * conventions fail closed (artwork can still be displayed without a badge).
+ */
+internal fun appleStoreLinkForExactProduct(
+    raw: String?,
+    kind: ItunesCatalogItemType,
+    id: Long,
+    storefront: String,
+): String? {
+    if (raw.isNullOrBlank() || raw.length > 2048 ||
+        id <= 0L || !Regex("^[a-z]{2}$").matches(storefront)
+    ) return null
+    val uri = try { URI(raw) } catch (_: Exception) { return null }
+    if (uri.scheme != "https" || uri.userInfo != null ||
+        (uri.port != -1 && uri.port != 443) ||
+        uri.host?.lowercase(Locale.ROOT) !in setOf(
+            "itunes.apple.com", "music.apple.com",
+        ) || uri.rawFragment != null
+    ) return null
+    val parts = uri.path.orEmpty().split('/').filter(String::isNotEmpty)
+    if (parts.size < 3 || !parts[0].equals(storefront, ignoreCase = true))
+        return null
+    val routeKind = parts[1].lowercase(Locale.ROOT)
+    val numeric = parts.last().removePrefix("id").toLongOrNull()
+    val trackQueries = uri.rawQuery.orEmpty().split('&')
+        .filter { it.startsWith("i=") }
+    if (trackQueries.size > 1) return null
+    val linkedTrack = trackQueries.singleOrNull()?.removePrefix("i=")
+        ?.toLongOrNull()
+    return when (kind) {
+        ItunesCatalogItemType.ALBUM ->
+            raw.takeIf { routeKind == "album" && numeric == id &&
+                linkedTrack == null && trackQueries.isEmpty()
+            }
+        ItunesCatalogItemType.ARTIST ->
+            raw.takeIf { routeKind == "artist" && numeric == id &&
+                linkedTrack == null && trackQueries.isEmpty()
+            }
+        ItunesCatalogItemType.TRACK ->
+            raw.takeIf { (routeKind == "album" && linkedTrack == id) ||
+                (routeKind == "song" && numeric == id && trackQueries.isEmpty())
+            }
+    }
+}
+
 internal fun safeAppleArtwork(raw: String?): String? {
     if (raw == null) return null
     return try {
@@ -400,11 +451,14 @@ private fun JsonObject.toCatalogItem(storefront: String): ItunesCatalogItem? {
         type = kind, id = id, storefront = storefront, title = title,
         artistName = artist, artistId = positiveId("artistId"),
         collectionId = positiveId("collectionId"),
-        storeUrl = safeStoreLink(when (kind) {
-            ItunesCatalogItemType.ARTIST -> text("artistLinkUrl") ?: text("artistViewUrl")
-            ItunesCatalogItemType.ALBUM -> text("collectionViewUrl")
-            ItunesCatalogItemType.TRACK -> text("trackViewUrl")
-        }),
+        storeUrl = appleStoreLinkForExactProduct(
+            safeStoreLink(when (kind) {
+                ItunesCatalogItemType.ARTIST -> text("artistLinkUrl") ?: text("artistViewUrl")
+                ItunesCatalogItemType.ALBUM -> text("collectionViewUrl")
+                ItunesCatalogItemType.TRACK -> text("trackViewUrl")
+            }),
+            kind, id, storefront,
+        ),
         releaseDate = text("releaseDate")?.takeIf { it.length <= 40 },
         genre = text("primaryGenreName")?.takeIf { it.length <= 100 },
         durationMs = if (kind == ItunesCatalogItemType.TRACK)
