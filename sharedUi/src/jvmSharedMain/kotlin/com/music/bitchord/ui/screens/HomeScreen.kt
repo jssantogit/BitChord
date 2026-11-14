@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import com.music.bitchord.ui.components.ShelfRow
+import com.music.bitchord.ui.components.ResilientAppleCover
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -965,7 +966,7 @@ private fun HeroCard(
             hero = true, modifier = Modifier.fillMaxSize(),
         )
         if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
-            AsyncImage(
+            ResilientAppleCover(
                 model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
@@ -1243,7 +1244,7 @@ internal fun ShelfCard(
                         hero = false, modifier = Modifier.fillMaxSize(),
                     )
                     if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
-                        AsyncImage(
+                        ResilientAppleCover(
                             model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
                             contentDescription = null,
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
