@@ -127,6 +127,14 @@ class AppleMusicBrainzEditionMatcherTest {
             apple(upc = null), linked.copy(hasCompleteTracklist = false),
         ) is AppleMusicBrainzEditionMatch.Verified)
         assertFalse(AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
+            apple(upc = null), linked.copy(isVideoOnlyContent = true),
+        ) is AppleMusicBrainzEditionMatch.Verified)
+        assertFalse(AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
+            apple(upc = null), linked.copy(
+                completeness = linked.completeness.copy(positionsExplicitUnique = false),
+            ),
+        ) is AppleMusicBrainzEditionMatch.Verified)
+        assertFalse(AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
             apple(upc = "9999999999999"),
             linked.copy(barcode = "8801234567890"),
         ) is AppleMusicBrainzEditionMatch.Verified)
