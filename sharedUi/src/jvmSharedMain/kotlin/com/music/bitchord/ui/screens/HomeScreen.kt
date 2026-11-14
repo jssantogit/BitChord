@@ -100,45 +100,6 @@ import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
 import com.music.bitchord.ui.player.MeshGradientBackground
 import com.music.bitchord.ui.player.MeshPalette
 
-/**
- * Apple-supplied official badge over the exact Apple product's promotional
- * card. The tap links to Apple's real source URL; the card tap remains the
- * BitChord album-detail route. Non-Apple/ambiguous cards draw no badge.
- */
-@Composable
-private fun AppleShelfStoreBadge(
-    item: ShelfItem,
-    modifier: Modifier = Modifier,
-) {
-    val route = item.browseId.orEmpty()
-    val url = item.appleStoreUrl ?: return
-    val badge = item.appleStoreBadgeUrl ?: return
-    if (!route.startsWith("itunes:") ||
-        badge !in setOf(
-            "https://www.apple.com/ca/itunes/link/images/link-badge-music.png",
-            "https://www.apple.com/ca/itunes/link/images/link-badge-itunes.png",
-        )
-    ) return
-    val safe = try {
-        val uri = java.net.URI(url)
-        uri.scheme == "https" && uri.userInfo == null &&
-            (uri.port == -1 || uri.port == 443) &&
-            uri.host?.lowercase(java.util.Locale.ROOT) in
-                setOf("music.apple.com", "itunes.apple.com")
-    } catch (_: Exception) { false }
-    if (!safe) return
-    val uriHandler = LocalUriHandler.current
-    AsyncImage(
-        model = badge,
-        contentDescription = "Abrir lançamento na loja Apple",
-        modifier = modifier.width(112.dp).height(32.dp)
-            .clip(RoundedCornerShape(5.dp))
-            .background(Color.Black.copy(alpha = 0.70f))
-            .clickable { runCatching { uriHandler.openUri(url) } },
-        contentScale = ContentScale.Fit,
-    )
-}
-
 /** How far the Listen now heading and feed sit above the shared top inset. */
 private val HOME_TITLE_LIFT = 28.dp
 
@@ -974,7 +935,6 @@ private fun HeroCard(
             )
         }
         if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
-        AppleShelfStoreBadge(item, Modifier.align(Alignment.TopEnd).padding(7.dp))
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1252,7 +1212,6 @@ internal fun ShelfCard(
                         )
                     }
                     if (isCurrent && isPlaying) SearchPlayingBars(Modifier.align(Alignment.Center))
-                    AppleShelfStoreBadge(item, Modifier.align(Alignment.BottomCenter).padding(5.dp))
                 }
             }
         }
