@@ -3611,9 +3611,6 @@ private fun BitChordApp(
                         )
                         DetailScreen(
                             page = page,
-                            appleStorePromotionUrl = canonicalAppleArtworkPromotion
-                                ?.takeIf { (pageId, _) -> pageId == page.browseId }
-                                ?.second?.storeUrl,
                             appleGroupCardPromotions =
                                 if (page.browseId.startsWith("catalog:ARTIST:"))
                                     canonicalGroupCardApplePromotions else emptyMap(),
