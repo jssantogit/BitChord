@@ -4382,9 +4382,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
-            if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
-                isCanonicalDiscoverySelected()
-            ) enrichCanonicalHomeCovers(generation)
+            // These MusicBrainz discovery rows only supply identity and
+            // title hints; native canonical Home renders Apple-confirmed
+            // album cards exclusively. Do not prefetch CAA covers for a
+            // hidden metadata feed. Exact MB detail still has its own
+            // guarded artwork transition until CAA retirement is complete.
         }
     }
 
