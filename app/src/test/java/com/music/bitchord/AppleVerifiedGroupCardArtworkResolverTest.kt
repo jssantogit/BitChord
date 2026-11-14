@@ -72,6 +72,21 @@ class AppleVerifiedGroupCardArtworkResolverTest {
         )))
     }
 
+    @Test fun nonCuratedOfficialReleaseStillCountsAsCompetingEdition() {
+        val unsafe = edition(alternate).copy(title = "Different Canonical Album (Dance Practice)")
+        assertNull(uniqueAppleGroupCardEdition(
+            group, page(edition(), unsafe), "SUPER REAL ME",
+        ))
+        assertNull(uniqueAppleGroupCardEdition(group, page(edition(), unsafe)))
+        // An explicitly labelled Sped Up variant may coexist with one
+        // exact-title standard album, but cannot claim the standard sleeve.
+        assertEquals(releaseId, uniqueAppleGroupCardEdition(
+            group, page(
+                edition(), edition(alternate).copy(title = "SUPER REAL ME (Sped Up Version)"),
+            ), "SUPER REAL ME",
+        ))
+    }
+
     @Test fun oneExactTitleOfficialAmidExplicitAlternateOfficialPackagingIsEligible() {
         val deluxe = edition(alternate).copy(title = "SUPER REAL ME (Deluxe Version)")
         assertNull(uniqueAppleGroupCardEdition(group, page(edition(), deluxe)))
