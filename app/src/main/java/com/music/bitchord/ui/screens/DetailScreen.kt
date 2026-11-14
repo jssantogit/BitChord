@@ -1223,7 +1223,7 @@ fun DetailScreen(
     }
 } else {
     ArtistShelfGridPage(
-        shelf = targetShelf,
+        shelf = nativeLiveArtistShelf(targetShelf, page.sections),
         palette = palette,
         onItemClick = onSectionItemClick,
         onItemLongPress = onSectionItemLongPress,
