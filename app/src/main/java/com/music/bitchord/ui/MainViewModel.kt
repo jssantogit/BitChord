@@ -4272,9 +4272,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     /** Preserve already-displayed entities while loading distinct public search slices. */
     private var appleSearchArtworkJob: Job? = null
+    private var appleArtistPortraitsJob: Job? = null
+    private var appleArtistHeroJob: Job? = null
+    private var activeAppleArtistHeroArt: String? = null
 
     private fun resetApplePublicSearchPaging() {
         appleSearchArtworkJob?.cancel()
+        appleArtistPortraitsJob?.cancel()
         appleSearchArtworkJob = null
         applePublicPagingJobs.values.forEach { it.cancel() }
         applePublicPagingJobs.clear()
@@ -4287,14 +4291,55 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         snapshot: ApplePublicSearchSnapshot,
     ) {
         when (section) {
-            AppleSearchSection.ARTISTS ->
-                _appleEditorialArtists.value = UiState.Success(
-                    appleNativeArtistSearchRows(
-                        AppleEditorialArtistLoad.Success(
-                            snapshot.visible, snapshot.coverageUncertain,
-                        ),
+            AppleSearchSection.ARTISTS -> {
+                val prior = (_appleEditorialArtists.value as? UiState.Success)?.data.orEmpty()
+                val rows = appleNativeArtistSearchRows(
+                    AppleEditorialArtistLoad.Success(
+                        snapshot.visible, snapshot.coverageUncertain,
                     ),
-                )
+                ).map { fresh ->
+                    // Do not erase a previously verified portrait on paging.
+                    val old = prior.singleOrNull {
+                        it.browseId == fresh.browseId &&
+                            it.appleStoreUrl == fresh.appleStoreUrl
+                    }
+                    if (old?.artworkUri != null) fresh.copy(artworkUri = old.artworkUri)
+                    else fresh
+                }
+                _appleEditorialArtists.value = UiState.Success(rows)
+                val pager = applePublicPagers[section]
+                val query = _query.value.trim()
+                appleArtistPortraitsJob?.cancel()
+                appleArtistPortraitsJob = viewModelScope.launch(Dispatchers.IO) {
+                    // The iTunes artist search doesn't provide portraits.
+                    // Reuse the existing Apple artist photo reader, gated to
+                    // each exact storefront artist ID instead of namesakes.
+                    val permits = Semaphore(2)
+                    rows.take(8).filter { it.artworkUri.isNullOrBlank() }.forEach { artist ->
+                        launch {
+                            permits.withPermit {
+                                val portrait = AppleArtistArtRepository.artForExactStoreArtist(
+                                    artist.browseId, artist.appleStoreUrl,
+                                )?.heroUrl ?: return@withPermit
+                                if (_searchSource.value != SearchSource.CANONICAL ||
+                                    _query.value.trim() != query ||
+                                    applePublicPagers[section] !== pager
+                                ) return@withPermit
+                                _appleEditorialArtists.update { state ->
+                                    if (state !is UiState.Success) state else UiState.Success(
+                                        state.data.map { current ->
+                                            if (current.browseId == artist.browseId &&
+                                                current.appleStoreUrl == artist.appleStoreUrl
+                                            ) current.copy(artworkUri = portrait)
+                                            else current
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             AppleSearchSection.TRACKS ->
                 _appleEditorialTracks.value = UiState.Success(
                     appleNativeTrackSearchRows(
@@ -4484,6 +4529,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
         appleArtistArtworkJob?.cancel()
+        appleArtistHeroJob?.cancel()
+        activeAppleArtistHeroArt = row.artworkUri
         // Only the Apple search record for THIS exact artist route can supply
         // a candidate store URL. A stage name, album title, or external page
         // cannot authorize an artist crosswalk.
@@ -4509,6 +4556,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleArtistPager = pager
         activeAppleArtistId = row.browseId
         _appleEditorialArtistDetail.value = UiState.Loading
+        appleArtistHeroJob = viewModelScope.launch(Dispatchers.IO) {
+            val portrait = AppleArtistArtRepository.artForExactStoreArtist(
+                row.browseId, row.appleStoreUrl,
+            )?.heroUrl ?: return@launch
+            if (activeAppleArtistId != row.browseId ||
+                _searchSource.value != SearchSource.CANONICAL
+            ) return@launch
+            activeAppleArtistHeroArt = portrait
+            _appleEditorialArtistDetail.update { state ->
+                if (state !is UiState.Success ||
+                    state.data.artist.browseId != row.browseId
+                ) state else UiState.Success(state.data.copy(
+                    artist = state.data.artist.copy(artworkUri = portrait),
+                ))
+            }
+        }
         appleArtistDetailJob = viewModelScope.launch(Dispatchers.IO) {
             val result = try {
                 pager.start()
@@ -4609,6 +4672,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     album.copy(artworkUri = displayedArtwork) else album
             }
             fresh.copy(
+                artist = fresh.artist.copy(artworkUri = activeAppleArtistHeroArt),
                 albums = restored,
                 hasMore = snapshot.hasMore,
                 loadingMore = loading,
@@ -4695,6 +4759,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun backAppleEditorialArtist() {
         activeAppleArtistId = null
+        activeAppleArtistHeroArt = null
+        appleArtistHeroJob?.cancel()
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
         appleArtistArtworkJob?.cancel()
