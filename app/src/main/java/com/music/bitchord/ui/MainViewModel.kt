@@ -4320,7 +4320,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     // Reuse the existing Apple artist photo reader, gated to
                     // each exact storefront artist ID instead of namesakes.
                     val permits = Semaphore(2)
-                    rows.take(8).filter { it.artworkUri.isNullOrBlank() }.forEach { artist ->
+                    // All fetched artist rows are eligible, not only the first
+                    // eight. Earlier successful portraits remain in state;
+                    // the existing reader caches both success and known misses.
+                    rows.filter { it.artworkUri.isNullOrBlank() }.forEach { artist ->
                         launch {
                             permits.withPermit {
                                 val portrait = AppleArtistArtRepository.artForExactStoreArtist(
