@@ -85,3 +85,24 @@ internal fun canonicalPublicWithoutLegacyArchiveArtwork(url: String?): String? {
     ) null else url
 }
 
+
+/**
+ * Artist pages may contain hundreds of ReleaseGroups. The first visible wave
+ * needs priority, but every later fetched group must enter the same bounded
+ * Apple verifier queue rather than silently falling back to CAA after card 48.
+ * Workers are capped separately; this partitions candidate work only.
+ */
+internal fun canonicalAppleGroupCardArtworkBatches(
+    rows: List<CanonicalCatalogSearchRow>,
+    batchSize: Int = 24,
+    maxCandidates: Int = 300,
+): List<List<CanonicalCatalogSearchRow>> {
+    if (batchSize <= 0 || maxCandidates <= 0) return emptyList()
+    return rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null }
+        .distinctBy { it.musicBrainzId }
+        .take(maxCandidates.coerceAtMost(300))
+        .chunked(batchSize.coerceIn(1, 48))
+        .toList()
+}
