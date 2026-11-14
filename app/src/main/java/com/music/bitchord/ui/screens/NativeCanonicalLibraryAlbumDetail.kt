@@ -1,15 +1,8 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import coil3.compose.AsyncImage
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
-import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 
@@ -20,6 +13,7 @@ import com.music.bitchord.ui.theme.rememberArtworkPalette
  */
 @Composable
 internal fun NativeCanonicalLibraryAlbumDetail(
+    releaseIdentity: String,
     title: String,
     tracks: List<CanonicalBrowseTrack>,
     artworkLoader: OpenSubsonicArtworkLoader,
@@ -49,6 +43,7 @@ internal fun NativeCanonicalLibraryAlbumDetail(
         ),
     )
     NativeCanonicalAlbumContent(
+        releaseIdentity = releaseIdentity,
         title = title,
         credit = albumCredit,
         visibleTracks = tracks,
@@ -75,20 +70,11 @@ internal fun NativeCanonicalLibraryAlbumDetail(
         onTrackOptions = onTrackOptions,
         onPlayAll = onPlayAll,
         artwork = {
-            when {
-                !heroArtworkUri.isNullOrBlank() &&
-                    (heroArtworkUri.startsWith("content://") ||
-                        heroArtworkUri.startsWith("file://")) -> AsyncImage(
-                    model = heroArtworkUri,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-                heroArtworkTrack != null -> CanonicalUnifiedArtwork(
-                    heroArtworkTrack, artworkLoader, Modifier.fillMaxSize(),
-                )
-                else -> CoverPlaceholder(Icons.Rounded.Folder, Modifier.fillMaxSize())
-            }
+            NativeCanonicalAlbumArtwork(
+                releaseArtworkUri = heroArtworkUri,
+                artworkTrack = heroArtworkTrack,
+                artworkLoader = artworkLoader,
+            )
         },
     )
 }
