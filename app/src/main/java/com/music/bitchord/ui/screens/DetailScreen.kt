@@ -135,7 +135,6 @@ import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.components.SourceQualityBadge
 import com.music.bitchord.ui.components.RatingDisplay
 import com.music.bitchord.data.catalog.metadata.isCoverArchiveImageHost
-import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
 import com.music.bitchord.data.canvas.AppleArtistArt
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
@@ -349,23 +348,9 @@ fun DetailScreen(
     onCanonicalFeaturedReleaseOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** MBID, title, creator and description only: no internal DTO in public API. */
     onCanonicalArtistPlaylistOpen: ((String, String, String, String?) -> Unit)? = null,
-    /**
-     * Only set for an independently certified MB Release→Apple product.
-     * ReleaseGroups require the same exact edition as the visible tracklist.
-     * Apple-provided artwork is promotional, so its official store badge
-     * must be placed adjacent to the certified cover.
-     */
-    appleStorePromotionUrl: String? = null,
     /** Artist cards only: Group MBID -> exact promotional artwork and store URL. */
     appleGroupCardPromotions: Map<String, Pair<String, String>> = emptyMap(),
 ) {
-    val applePromotionBadge = remember(page.browseId, appleStorePromotionUrl) {
-        if (page.browseId.startsWith("catalog:RELEASE:") ||
-            page.browseId.startsWith("catalog:RELEASE_GROUP:")
-        ) appleApprovedBadgeForStoreUrl(appleStorePromotionUrl)
-        else null
-    }
-    val externalStoreUriHandler = LocalUriHandler.current
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
     // than the per-page one a release takes.
@@ -725,26 +710,6 @@ fun DetailScreen(
                             ({ catalogPinRepo.toggle(catalogPin); Unit }) else null,
                         metaOverride = folderCategoryMeta,
                     )
-                    // Apple itself supplies these unmodified official badges.
-                    // Keep its exact product link alongside the promo cover:
-                    // Release or certified Group detail only, never Recording,
-                    // unrelated Group editions or local albums.
-                    if (applePromotionBadge != null && appleStorePromotionUrl != null) {
-                        Spacer(Modifier.height(10.dp))
-                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            AsyncImage(
-                                model = applePromotionBadge,
-                                contentDescription = "Abrir este álbum na loja Apple",
-                                modifier = Modifier.width(154.dp).height(44.dp)
-                                    .clickable {
-                                        runCatching {
-                                            externalStoreUriHandler.openUri(appleStorePromotionUrl)
-                                        }
-                                    },
-                                contentScale = ContentScale.Fit,
-                            )
-                        }
-                    }
                 }
             }
 
@@ -1857,43 +1822,22 @@ private fun SectionCard(
     )
 }
 
-/** Promo badges are their original Apple assets, clickable independently of the card. */
+/** Only album artwork is rendered, with verified Apple provenance kept internal. */
 @Composable
 private fun ArtistCardArtwork(
     item: ShelfItem,
     applePromotion: AppleGroupCardBadge?,
 ) {
     val observer = rememberCaaCoverLoadObserver(item.thumbnailUrl)
-    val uriHandler = LocalUriHandler.current
-    Box(Modifier.fillMaxSize()) {
-        ResilientAppleCover(
-            // Never rewrite a returned 100px Apple CDN URL to an unverified size.
-            model = if (applePromotion != null) item.thumbnailUrl
-                else item.thumbnailUrl.artworkAt(CARD_ART_PX),
-            contentDescription = null,
-            onState = observer,
-            modifier = Modifier.fillMaxSize(),
-        )
-        if (applePromotion != null) {
-            Box(
-                modifier = Modifier.align(Alignment.BottomCenter)
-                    .padding(bottom = 5.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .background(Color.Black.copy(alpha = 0.68f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                AsyncImage(
-                    model = applePromotion.badgeUrl,
-                    contentDescription = "Abrir lançamento na Apple Music",
-                    modifier = Modifier.width(112.dp).height(32.dp)
-                        .clickable {
-                            runCatching { uriHandler.openUri(applePromotion.storeUrl) }
-                        },
-                    contentScale = ContentScale.Fit,
-                )
-            }
-        }
-    }
+    ResilientAppleCover(
+        // Proof is retained solely to avoid rewriting an Apple CDN image
+        // into an unverified resolution. No store emblem is rendered.
+        model = if (applePromotion != null) item.thumbnailUrl
+            else item.thumbnailUrl.artworkAt(CARD_ART_PX),
+        contentDescription = null,
+        onState = observer,
+        modifier = Modifier.fillMaxSize(),
+    )
 }
 
 @Composable
