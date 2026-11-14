@@ -4872,7 +4872,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // retained only as fallback metadata: the native hero waits for a
             // dimension-verified CDN cover, independent of any store badge.
             val initialAlbum = (_appleEditorialDetail.value as? UiState.Success)?.data
-            if (appleNativeAlbumMayProbeLargeCover(initialAlbum)) {
+            if (initialAlbum != null && appleNativeAlbumMayProbeLargeCover(initialAlbum)) {
                 launch {
                     val originalUrl = initialAlbum.album.artworkUri
                     val upgraded = appleHighResolutionArtwork.upgrade(originalUrl, 1024)
