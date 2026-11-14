@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import com.music.bitchord.ui.components.ShelfRow
+import com.music.bitchord.ui.components.ResilientAppleCover
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -53,6 +54,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -97,6 +99,28 @@ import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
 import com.music.bitchord.ui.player.MeshGradientBackground
 import com.music.bitchord.ui.player.MeshPalette
+
+/**
+ * A 100px Search API thumbnail is fine for a 52dp list row, but never for a
+ * full-bleed editorial hero or album-sized square. The Apple CDN's larger
+ * URL is produced only after Android verified its actual dimensions; do not
+ * upscale the original to hide a pending/failing probe.
+ *
+ * This is presentation only. It does not grant identity to any artwork URL.
+ */
+fun appleProminentArtworkOrNull(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    val uri = try { java.net.URI(url) } catch (_: Exception) { return null }
+    val host = uri.host?.lowercase(java.util.Locale.ROOT) ?: return url
+    if (host != "mzstatic.com" && !host.endsWith(".mzstatic.com")) return url
+    val match = Regex(
+        """/(\d{2,4})x(\d{2,4})(?:bb|-[0-9]{2,3})\.(?:jpe?g|png|webp)$""",
+        RegexOption.IGNORE_CASE,
+    ).find(uri.path.orEmpty()) ?: return null
+    val width = match.groupValues[1].toIntOrNull() ?: return null
+    val height = match.groupValues[2].toIntOrNull() ?: return null
+    return url.takeIf { width >= 600 && height >= 600 }
+}
 
 /** How far the Listen now heading and feed sit above the shared top inset. */
 private val HOME_TITLE_LIFT = 28.dp
@@ -921,12 +945,14 @@ private fun HeroCard(
             .contextClick(onLongPress),
     ) {
         val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
-        if (hasCatalogIdentity) CatalogArtworkFallback(
+        val isAppleCard = item.browseId?.startsWith("itunes:") == true
+        val prominent = appleProminentArtworkOrNull(item.thumbnailUrl)
+        if (hasCatalogIdentity || (isAppleCard && prominent == null)) CatalogArtworkFallback(
             hero = true, modifier = Modifier.fillMaxSize(),
         )
-        if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
-            AsyncImage(
-                model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
+        if (prominent != null || !(hasCatalogIdentity || isAppleCard)) {
+            ResilientAppleCover(
+                model = prominent.artworkAt(HEADER_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -1198,12 +1224,14 @@ internal fun ShelfCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
-                    if (hasCatalogIdentity) CatalogArtworkFallback(
+                    val isAppleCard = item.browseId?.startsWith("itunes:") == true
+                    val prominent = appleProminentArtworkOrNull(item.thumbnailUrl)
+                    if (hasCatalogIdentity || (isAppleCard && prominent == null)) CatalogArtworkFallback(
                         hero = false, modifier = Modifier.fillMaxSize(),
                     )
-                    if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
-                        AsyncImage(
-                            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
+                    if (prominent != null || !(hasCatalogIdentity || isAppleCard)) {
+                        ResilientAppleCover(
+                            model = prominent.artworkAt(CARD_ART_PX),
                             contentDescription = null,
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),

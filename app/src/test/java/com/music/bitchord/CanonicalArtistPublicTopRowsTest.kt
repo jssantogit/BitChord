@@ -126,23 +126,41 @@ class CanonicalArtistPublicTopRowsTest {
             listOf(ListenBrainzPopularityEvidence.Unknown(sample[0]))).isEmpty())
     }
 
-    @Test fun verifiedRankedRecordingRetainsUpstreamCaaCoverWithoutPlayableAsset() {
-        val artwork = "https://coverartarchive.org/release/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/123-250.jpg"
+    @Test fun rankedRecordingRejectsLegacyCaaAndRequiresExactAppleStoreBadge() {
+        val caa = "https://coverartarchive.org/release/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/123-250.jpg"
+        val apple = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/600x600bb.jpg"
+        val store = "https://music.apple.com/br/album/hot/101"
         val verified = RecordingMetadataEnrichment(
             musicBrainzId = first,
             title = "Verified track",
             artistDisplay = "Artist", officialAudioReleaseMbid = officialRelease,
             artistCredits = listOf(MusicBrainzArtistCredit(artist, "Artist")),
         )
-        val rows = canonicalVerifiedArtistTopRows(
-            artist,
-            listOf(ListenBrainzArtistTopRecording(first, 120, 15, artworkUri = artwork)),
-            mapOf(first to verified),
-        )
-        assertEquals(artwork, rows.single().artworkUri)
-        assertFalse(rows.single().hasCatalogedAsset)
+        val ranking = listOf(ListenBrainzArtistTopRecording(
+            first, 120, 15, artworkUri = caa,
+        ))
+        val unresolved = canonicalVerifiedArtistTopRows(
+            artist, ranking, mapOf(first to verified),
+        ).single()
+        assertEquals(null, unresolved.artworkUri)
+        val withApple = canonicalVerifiedArtistTopRows(
+            artist, ranking, mapOf(first to verified.copy(
+                officialAudioArtworkUri = apple,
+                officialAudioAppleStoreUrl = store,
+            )),
+        ).single()
+        assertEquals(apple, withApple.artworkUri)
+        assertEquals(store, withApple.appleStoreUrl)
+        assertEquals("https://www.apple.com/ca/itunes/link/images/link-badge-music.png",
+            withApple.appleStoreBadgeUrl)
+        assertFalse(withApple.hasCatalogedAsset)
+        val noStore = canonicalVerifiedArtistTopRows(
+            artist, ranking, mapOf(first to verified.copy(
+                officialAudioArtworkUri = apple,
+            )),
+        ).single()
+        assertEquals(null, noStore.artworkUri)
     }
-
 
     @Test fun chartCannotDisplayUnknownEditionOrLiveVersionEvenWithRealListenerCounts() {
         val ranked = listOf(

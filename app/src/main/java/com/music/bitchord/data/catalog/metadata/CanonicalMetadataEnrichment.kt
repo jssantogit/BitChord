@@ -49,6 +49,8 @@ internal data class RecordingMetadataEnrichment(
     val officialAudioReleaseGroupMbid: String? = null,
     /** Resolved CoverArtArchive image of that exact edition, if available. */
     val officialAudioArtworkUri: String? = null,
+    /** Provided only by exact Apple UPC + release-tracklist certification. */
+    val officialAudioAppleStoreUrl: String? = null,
 )
 
 internal data class ReleaseMetadataEnrichment(

@@ -6,6 +6,7 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.ListenBrainzSitewideRecording
 import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
+import com.music.bitchord.data.catalog.metadata.safeAppleArtwork
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.Song
@@ -134,6 +135,9 @@ internal fun canonicalShouldAcceptVerifiedGroupArtwork(
     old: String?, verified: String?,
 ): Boolean {
     if (verified.isNullOrBlank() || old == verified) return false
+    // An independently verified iTunes source is authoritative. Do not let
+    // a late Room or CAA Front update overwrite the exact Apple edition.
+    if (safeAppleArtwork(old) != null) return false
     return canonicalShouldAcceptArtworkUpdate(old, verified) ||
         !canonicalNeedsCoverRefresh(verified)
 }

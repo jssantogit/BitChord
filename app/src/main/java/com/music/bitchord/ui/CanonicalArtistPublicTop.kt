@@ -6,6 +6,8 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzPopularityEvidence
 import com.music.bitchord.data.catalog.metadata.publicListenBrainzRecordingRanking
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.data.catalog.metadata.canonicalStreamingTitleIsSafe
+import com.music.bitchord.data.catalog.metadata.safeAppleArtwork
+import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import java.util.Locale
@@ -152,14 +154,14 @@ internal fun canonicalVerifiedArtistTopRows(
                 ?.takeIf { canonicalStreamingTitleIsSafe(it) &&
                     !PUBLIC_ARTIST_CHART_NON_STUDIO.containsMatchIn(it) }
                 ?: return@mapNotNull null
-            // A ListenBrainz CAA hint may refer to another edition of the
-            // same recording. Prefer our independently proved Official sleeve;
-            // otherwise accept the hint only for the EXACT proved release.
-            val officialEdition = verified.officialAudioReleaseMbid
-            val cover = verified.officialAudioArtworkUri
-                ?: rankedRecording.artworkUri?.takeIf {
-                    it.startsWith("https://coverartarchive.org/release/$officialEdition/")
-                }
+            // ListenBrainz CAA hints do not certify a storefront edition.
+            // Only our separate Apple UPC + complete tracklist proof can add
+            // promotional artwork, paired with its official product badge.
+            val store = verified.officialAudioAppleStoreUrl
+            val badge = appleApprovedBadgeForStoreUrl(store)
+            val cover = verified.officialAudioArtworkUri?.takeIf {
+                badge != null && safeAppleArtwork(it) != null
+            }
             CanonicalCatalogSearchRow(
                 musicBrainzId = id,
                 kind = CanonicalSearchKind.RECORDING,
@@ -167,6 +169,8 @@ internal fun canonicalVerifiedArtistTopRows(
                 subtitle = verified.artistDisplay.orEmpty(),
                 artistScopeMbid = artist,
                 artworkUri = cover,
+                appleStoreUrl = store?.takeIf { cover != null },
+                appleStoreBadgeUrl = badge?.takeIf { cover != null },
                 durationMs = verified.durationMs?.takeIf { it > 0L },
             )
         }

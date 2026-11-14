@@ -1,6 +1,7 @@
 package com.music.bitchord.diagnostics
 
 import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
+import com.music.bitchord.data.catalog.metadata.AppleArtworkProbeTelemetry
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -13,6 +14,42 @@ class CatalogCoverDiagnosticsTest {
         assertEquals("percentiles=insufficient_samples", lines.last())
         assertEquals(true, lines.contains("image_scope=coil_load_caa_urls_only"))
         assertFalse(lines.joinToString().contains("null"))
+    }
+
+    @Test fun exportDifferentiatesApple1024VerificationFromCaaAndCoilSuccess() {
+        val apple = AppleArtworkProbeTelemetry()
+        apple.recordNetwork(1024, true, 120)
+        apple.recordNetwork(1024, false, 270)
+        apple.recordNetwork(600, true, 80)
+        apple.recordCacheHit(valid = true)
+        apple.recordCoilImageResult(true, 180, "DISK")
+        apple.recordCoilImageResult(false, 920, null)
+        val lines = CatalogCoverDiagnostics.lines(
+            CatalogCoverTelemetry().snapshot(), apple.snapshot(),
+        ).joinToString("\n")
+        assertEquals(true, lines.contains(
+            "apple_cdn_1024 attempts=2 dimension_verified=1",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_cdn_600 attempts=1 dimension_verified=1",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_cdn_cache_positive_hits=1",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_cdn_network_p95_ms=270",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_cdn_evidence_is_not_coil_render_success=true",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_coil_load_success=1 errors=1",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_coil_sources memory=0 disk=1 network=0",
+        ))
+        assertFalse(lines.contains("mzstatic.com"))
+        assertFalse(lines.contains("itunes:br"))
     }
 
     @Test fun exportCountsNoIdentityAndNewCaptureResetsItsCounters() {

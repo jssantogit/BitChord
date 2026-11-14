@@ -21,6 +21,14 @@ internal fun shouldObserveCaaImageRequest(data: Any?): Boolean =
         else -> null
     })
 
+/** Apple CDN covers count separately from CAA. Store badge images are excluded. */
+internal fun shouldObserveAppleImageRequest(data: Any?): Boolean =
+    safeAppleArtwork(when (data) {
+        is String -> data
+        is URI -> data.toString()
+        else -> null
+    }) != null
+
 /**
  * Per-request Coil observer. A successful JSON metadata lookup cannot mark a
  * bitmap successful; only the Coil result callback can. Cancelled offscreen
@@ -31,21 +39,25 @@ internal fun shouldObserveCaaImageRequest(data: Any?): Boolean =
 internal class CatalogCoverCoilEventListenerFactory(
     private val telemetry: CatalogCoverTelemetry = CatalogCoverTelemetry.process,
     private val elapsedMs: () -> Long = SystemClock::elapsedRealtime,
+    private val appleTelemetry: AppleArtworkProbeTelemetry = AppleArtworkProbeTelemetry.process,
 ) : EventListener.Factory {
     override fun create(request: ImageRequest): EventListener {
-        if (!shouldObserveCaaImageRequest(request.data)) return EventListener.NONE
+        val archive = shouldObserveCaaImageRequest(request.data)
+        val apple = shouldObserveAppleImageRequest(request.data)
+        if (!archive && !apple) return EventListener.NONE
         return object : EventListener() {
             private var startedAt: Long? = null
 
             override fun onStart(request: ImageRequest) {
                 startedAt = elapsedMs()
-                telemetry.recordImageStart()
+                if (archive) telemetry.recordImageStart()
             }
 
             override fun onCancel(request: ImageRequest) {
                 if (startedAt != null) {
                     startedAt = null
-                    telemetry.recordImageCancellation()
+                    if (archive) telemetry.recordImageCancellation()
+                    if (apple) appleTelemetry.recordCoilImageCancellation()
                 }
             }
 
@@ -60,10 +72,12 @@ internal class CatalogCoverCoilEventListenerFactory(
             private fun record(success: Boolean, source: String? = null) {
                 val start = startedAt ?: return
                 startedAt = null
-                telemetry.recordImageResult(
-                    success = success,
-                    durationMs = (elapsedMs() - start).coerceAtLeast(0L),
-                    source = source,
+                val duration = (elapsedMs() - start).coerceAtLeast(0L)
+                if (archive) telemetry.recordImageResult(
+                    success = success, durationMs = duration, source = source,
+                )
+                if (apple) appleTelemetry.recordCoilImageResult(
+                    success = success, durationMs = duration, source = source,
                 )
             }
         }

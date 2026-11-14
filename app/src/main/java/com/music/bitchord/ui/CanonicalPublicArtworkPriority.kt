@@ -47,3 +47,62 @@ internal fun canonicalGenreArtworkPriority(
         .distinctBy { it.musicBrainzId }
         .take(limit.coerceIn(0, 48))
 }
+
+
+/**
+ * iTunes is the desired catalog-cover authority. Unlike CAA refresh queues,
+ * this list includes already-covered groups: an older CAA bitmap is not
+ * evidence that an exact Apple product has been checked. Keep the first
+ * visible editorial cards responsive and let later batches be paged.
+ */
+internal fun canonicalAppleGroupCardArtworkCandidates(
+    rows: List<CanonicalCatalogSearchRow>,
+    limit: Int,
+): List<CanonicalCatalogSearchRow> = rows.asSequence()
+    .filter {
+        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null
+    }
+    .distinctBy { it.musicBrainzId }
+    .take(limit.coerceIn(0, 48))
+    .toList()
+
+/**
+ * MusicBrainz is still the identity/edition graph, but CAA is retired as
+ * artwork for PUBLIC catalog UI. A persisted pre-migration Front-v5 must not
+ * sneak back into newly rendered artist/release cards or album headers.
+ *
+ * Preserve unrelated local/remote artwork; this helper is scoped strictly to
+ * public catalog rows, never the user's library or server album covers.
+ */
+internal fun canonicalPublicWithoutLegacyArchiveArtwork(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    val host = try {
+        java.net.URI(url).host?.lowercase(java.util.Locale.ROOT)
+    } catch (_: Exception) { null }
+    return if (host == "coverartarchive.org" || host == "www.coverartarchive.org" ||
+        host == "archive.org" || host?.endsWith(".archive.org") == true
+    ) null else url
+}
+
+
+/**
+ * Artist pages may contain hundreds of ReleaseGroups. The first visible wave
+ * needs priority, but every later fetched group must enter the same bounded
+ * Apple verifier queue rather than silently falling back to CAA after card 48.
+ * Workers are capped separately; this partitions candidate work only.
+ */
+internal fun canonicalAppleGroupCardArtworkBatches(
+    rows: List<CanonicalCatalogSearchRow>,
+    batchSize: Int = 24,
+    maxCandidates: Int = 300,
+): List<List<CanonicalCatalogSearchRow>> {
+    if (batchSize <= 0 || maxCandidates <= 0) return emptyList()
+    return rows.asSequence()
+        .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null }
+        .distinctBy { it.musicBrainzId }
+        .take(maxCandidates.coerceAtMost(300))
+        .chunked(batchSize.coerceIn(1, 48))
+        .toList()
+}

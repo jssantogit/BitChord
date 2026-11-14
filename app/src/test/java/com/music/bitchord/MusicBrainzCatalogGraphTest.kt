@@ -14,6 +14,32 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MusicBrainzCatalogGraphTest {
+    @Test fun exactGroupLookupRejectsMismatchedMbidInsteadOfUsingAnotherType() = runBlocking {
+        val groupId = "529f87a1-1081-48a4-8ee1-3c08de229858"
+        val wrong = "9750354e-78df-4058-8758-b5a7a2eccf66"
+        var json = """{"id":"$wrong","title":"SUPER REAL ME",
+            "primary-type":"Album","artist-credit":[{"name":"ILLIT"}]}"""
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String {
+                    assertEquals("release-group/$groupId", path)
+                    assertEquals("json", parameters["fmt"])
+                    return json
+                }
+            },
+        ))
+        assertTrue(graph.lookupReleaseGroup(groupId)
+            is MusicBrainzCatalogGraphResult.Failure)
+        json = """{"id":"$groupId","title":"SUPER REAL ME",
+            "primary-type":"EP","first-release-date":"2024-03-25",
+            "artist-credit":[{"name":"ILLIT"}]}"""
+        val group = graph.lookupReleaseGroup(groupId) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzReleaseGroupHit>
+        assertEquals("EP", group.value.primaryType)
+        assertEquals(groupId, group.value.musicBrainzId)
+    }
+
     @Test
     fun graphPaginationUsesRawRowsNotOnlyUsableHits() = runBlocking {
         val graph = MusicBrainzCatalogGraph(MusicBrainzClient(transport = object : MusicBrainzTransport {
@@ -67,6 +93,43 @@ class MusicBrainzCatalogGraphTest {
     private val worldwide = "541adf5a-48d4-4f7b-a7bb-afd3cea5af27"
     private val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
     private val sped = "3e619ba2-34f0-4649-83d8-05483e2fabe5"
+
+    @Test fun exactReleaseGraphReadsOnlyDirectAppleAlbumUrlRelations() = runBlocking {
+        val trackId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recordingId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    assertEquals("release/$worldwide", path)
+                    assertTrue(parameters["inc"]?.contains("url-rels") == true)
+                    return """{"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                        "release-group":{"id":"$group"},
+                        "artist-credit":[{"name":"ILLIT"}],
+                        "media":[{"position":1,"track-count":1,"tracks":[{
+                            "id":"$trackId","title":"Magnetic","position":1,
+                            "recording":{"id":"$recordingId","title":"Magnetic"}
+                        }]}],
+                        "relations":[
+                            {"type":"streaming","target-type":"url","url":{
+                                "resource":"https://music.apple.com/us/album/super-real-me/101"
+                            }},
+                            {"type":"official homepage","target-type":"url","url":{
+                                "resource":"https://music.apple.com/us/album/other/102"
+                            }}
+                        ]}"""
+                }
+            },
+            rateLimiter = com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter(
+                delayMillis = {},
+            ),
+        ))
+        val result = graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
+        assertEquals(listOf(101L), result.value.linkedAppleAlbumIds)
+        assertEquals(group, result.value.groupMbid)
+    }
 
     @Test fun releaseGraphPreservesExplicitZeroPositionsAsCompleteEvidence() = runBlocking {
         val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -207,7 +270,7 @@ class MusicBrainzCatalogGraphTest {
         assertEquals("ILLIT feat. Guest", detail.value.tracks.first().artistDisplay)
         assertEquals("ILLIT", detail.value.tracks.first().recordingArtistDisplay)
         assertEquals(2, detail.value.tracks.map { it.trackMbid }.distinct().size)
-        assertEquals("recordings+artist-credits+release-groups", requests.last().second["inc"])
+        assertEquals("recordings+artist-credits+release-groups+labels+url-rels", requests.last().second["inc"])
     }
 
     @Test fun browseMediaFormatsIdentifyOnlyExplicitlyVideoOnlyOfficialEditions() = runBlocking {

@@ -50,6 +50,31 @@ data class AppleArtistArt(
 fun AppleArtistArt.keyColors() = ArtworkKeyColors(Color(background), Color(accent))
 
 /**
+ * Rejects namesake Apple artist portraits: the storefront link must belong
+ * to the *exact* artist ID rendered by Search, not just a matching stage name.
+ * Tracking parameters are not sent to the page reader.
+ */
+internal fun exactAppleArtistPageUrl(browseId: String, storeUrl: String?): String? {
+    val route = Regex("""itunes:([a-z]{2}):artist:([1-9][0-9]{0,17})""")
+        .matchEntire(browseId) ?: return null
+    if (storeUrl.isNullOrBlank()) return null
+    val uri = try { java.net.URI(storeUrl) } catch (_: Exception) { return null }
+    if (uri.scheme != "https" || uri.host?.lowercase(Locale.ROOT) !in
+        setOf("music.apple.com", "itunes.apple.com") ||
+        uri.userInfo != null || uri.port != -1 || uri.rawFragment != null
+    ) return null
+    val path = uri.rawPath?.trimEnd('/') ?: return null
+    val prefix = "/${route.groupValues[1]}/artist/"
+    if (!path.startsWith(prefix) ||
+        path.removePrefix(prefix).isBlank() ||
+        path.substringAfterLast('/') != route.groupValues[2] ||
+        path.contains('%') || path.contains("//") ||
+        path.split('/').size !in 4..5
+    ) return null
+    return "https://music.apple.com$path"
+}
+
+/**
  * Finds [AppleArtistArt] from nothing but an artist's name.
  *
  * Two public, unauthenticated requests: the iTunes search API turns the name
@@ -195,6 +220,37 @@ object AppleArtistArtRepository {
         return entry.art?.let { offlineStills(key, it) }
     }
 
+    /**
+     * Exact storefront-scoped portrait for catalog Search and artist detail.
+     * Reuses our existing Apple header parser and still cache, but NEVER
+     * selects the first result by name (which confuses duplicate stage names).
+     * Apple's public page hydration JSON is undocumented, so failure is null.
+     */
+    suspend fun artForExactStoreArtist(browseId: String, storeUrl: String?): AppleArtistArt? {
+        val page = exactAppleArtistPageUrl(browseId, storeUrl) ?: return null
+        val key = "exact|$browseId"
+        synchronized(cache) { cache[key] }?.let { entry ->
+            entry.art?.let { warmStills(key, it) }
+            return entry.art?.let { offlineStills(key, it) }
+        }
+        fromDisk(key)?.let { persisted ->
+            synchronized(cache) { cache[key] = Entry(persisted) }
+            warmStills(key, persisted)
+            return offlineStills(key, persisted)
+        }
+        val entry = withContext(Dispatchers.IO) {
+            runCatching {
+                val html = get(page) ?: return@runCatching null
+                Entry(parse(html))
+            }.onFailure { Log.d(TAG, "exact artist portrait unavailable: $it") }
+                .getOrNull()
+        } ?: return null
+        synchronized(cache) { cache[key] = entry }
+        entry.art?.let { keepOffline(key, it) }
+        _updates.value++
+        return entry.art?.let { offlineStills(key, it) }
+    }
+
     private fun lookup(artistName: String, key: String): Entry? {
         val search = get(
             "https://itunes.apple.com/search?term=${URLEncoder.encode(artistName, "UTF-8")}" +
@@ -251,8 +307,11 @@ object AppleArtistArtRepository {
         // The clip is a different picture from the still, with its own colours
         // — the page has to match whichever one is on screen.
         val colours = clip?.optJSONObject("previewFrame")?.takeIf { video != null } ?: hero
+        // A missing optional palette is not evidence that the photograph is
+        // invalid. Use a neutral native wash rather than discard a verified
+        // artist page's image and leave another empty portrait.
         val background = colours.optString("bgColor").toArgb()
-            ?: hero.optString("bgColor").toArgb() ?: return null
+            ?: hero.optString("bgColor").toArgb() ?: 0xFF161616.toInt()
         val accent = colours.optString("textColor1").toArgb() ?: background
         return AppleArtistArt(
             heroUrl = heroUrl,

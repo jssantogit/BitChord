@@ -9,7 +9,7 @@ private val EXTERNAL_CANONICAL_MBID = Regex("^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4
  * These are *not* canonical IDs, playable MediaAssets, or assertions that the
  * provider permits artwork redistribution. No external API is called here.
  */
-internal enum class CatalogExternalProvider { LAST_FM, LISTENBRAINZ, APPLE_MUSIC }
+internal enum class CatalogExternalProvider { LAST_FM, LISTENBRAINZ, APPLE_MUSIC, DISCOGS }
 internal enum class CatalogTargetKind { ARTIST, RELEASE_GROUP, RELEASE, RECORDING }
 internal enum class CatalogEvidenceBasis {
     /** Confirmed upstream MBID or an independently verified crosswalk. */
@@ -51,6 +51,12 @@ internal data class ExternalEditorialEvidence(
             (storefront == null || !Regex("[a-z]{2}").matches(
                 storefront.lowercase(Locale.ROOT)))
         ) return CatalogEvidenceDecision.REJECTED
+        // Discogs numeric IDs identify a Release or Master. This evidence
+        // contract is edition-only: a Master is not a MusicBrainz Release.
+        if (provider == CatalogExternalProvider.DISCOGS &&
+            (targetKind != CatalogTargetKind.RELEASE ||
+                normalizedId()?.toLongOrNull()?.let { it in 1..999_999_999_999L } != true)
+        ) return CatalogEvidenceDecision.REJECTED
         return when (basis) {
             CatalogEvidenceBasis.TITLE_ONLY -> CatalogEvidenceDecision.REJECTED
             CatalogEvidenceBasis.UPC_AND_ARTIST ->
@@ -74,7 +80,8 @@ internal data class ExternalEditorialEvidence(
     }
 
     fun canSupplyArtwork(): Boolean =
-        assess() == CatalogEvidenceDecision.VERIFIED &&
+        provider != CatalogExternalProvider.DISCOGS &&
+            assess() == CatalogEvidenceDecision.VERIFIED &&
             artworkRight == CatalogArtworkRight.ALLOWED &&
             targetKind in setOf(CatalogTargetKind.RELEASE, CatalogTargetKind.ARTIST)
 
