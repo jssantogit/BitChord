@@ -9,6 +9,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.ui.AppleCatalogBrowseRoute
 import com.music.bitchord.ui.AppleEditorialShelfHeadings
 import com.music.bitchord.ui.appleEditorialShelves
+import com.music.bitchord.ui.appleEditorialReleasesWithProbedArtwork
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -41,6 +42,30 @@ class AppleEditorialAndroidPresentationTest {
         classification = AppleEditorialClassification.resolve(release, emptyList()),
         discogsEdition = null,
     )
+
+    @Test fun verifiedLargeAppleImageOnlyPatchesTheExactProduct() {
+        val tiny = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
+        val large = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/600x600bb.jpg"
+        val other = "https://is1-ssl.mzstatic.com/image/thumb/Music/b/100x100bb.jpg"
+        val albums = listOf(
+            release(101, "HOT", ItunesEditorialReleaseFormat.EP).copy(artworkUrl = tiny),
+            release(102, "HOT", ItunesEditorialReleaseFormat.SINGLE).copy(artworkUrl = other),
+        )
+        val updated = appleEditorialReleasesWithProbedArtwork(
+            albums, "itunes:br:album:101", tiny, large,
+        )
+        assertEquals(large, updated[0].artworkUrl)
+        assertSame(albums[1], updated[1])
+        assertEquals(albums, appleEditorialReleasesWithProbedArtwork(
+            albums, "itunes:br:album:102", tiny, large,
+        ))
+        assertEquals(albums, appleEditorialReleasesWithProbedArtwork(
+            albums, "itunes:br:album:101", tiny, "https://untrusted.test/art.jpg",
+        ))
+        assertEquals(albums, appleEditorialReleasesWithProbedArtwork(
+            albums, "catalog:RELEASE_GROUP:101", tiny, large,
+        ))
+    }
 
     @Test fun typedItunesRoutesNeverMasqueradeAsMusicBrainzBrowseIds() {
         val route = AppleCatalogBrowseRoute.parse("itunes:br:album:123")
