@@ -1,0 +1,74 @@
+name: REA212 Approved Android Physical Smoke APK
+on:
+  push:
+    branches:
+      - delivery/rea212-physical-smoke-ec112349-20261114
+permissions:
+  contents: read
+
+jobs:
+  universal-dev-debug:
+    name: REA212 · Android phone universal devDebug
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout validated PR snapshot
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Verify APK sources are exactly PR 212 validated HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor ff238d9e2a4c9e1ff99c2fedc03e12cc15e96adc HEAD
+          git diff --exit-code ec112349df01f86d2632d91c257f37d38e6765f3 HEAD -- app shared sharedUi
+      - name: Configure JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@v4
+      - name: Configure local properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Assemble Android devDebug universal
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+      - name: Stage universal APK and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=app/build/outputs/apk/dev/debug
+          mkdir -p smoke-apk
+          find "$output" -maxdepth 1 -type f -name '*.apk' -print
+          universal="$(find "$output" -maxdepth 1 -type f -name '*universal*.apk' -print -quit)"
+          if [[ -z "$universal" ]]; then
+            echo "::error::Universal APK missing" >&2
+            exit 1
+          fi
+          cp "$universal" smoke-apk/BitChord-REA212-devDebug-universal.apk
+          (cd smoke-apk && sha256sum *.apk > SHA256SUMS.txt)
+          printf '%s\n' \
+            'BitChord PR #212 · Android physical visual smoke' \
+            'Source: ec112349df01f86d2632d91c257f37d38e6765f3' \
+            'Android and JVM gates: #43636213627 and #43636440514 SUCCESS' \
+            'Scope: Library, album/artist/playlist headers, artwork, blur, scroll and long press.' \
+            'DevDebug only: not a signed production release.' \
+            > smoke-apk/SMOKE-NOTES.txt
+      - name: Upload physical smoke APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-rea212-devdebug-universal-ec112349
+          path: smoke-apk/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload failed build reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-smoke-build-failure-${{ github.sha }}
+          path: app/build/reports/
+          if-no-files-found: ignore
+          retention-days: 3
