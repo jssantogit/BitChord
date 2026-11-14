@@ -753,8 +753,6 @@ private fun LazyListScope.appleEditorialTrackRows(
                     artworkUri = track.artworkUri,
                     artistPortrait = false,
                     durationLabel = canonicalDurationLabel(track.durationMs),
-                    appleStoreUrl = track.appleStoreUrl,
-                    appleStoreBadgeUrl = track.appleStoreBadgeUrl,
                 ),
                 onClick = if (track.albumBrowseId != null) {
                     { onAlbumOpen(track) }
@@ -818,8 +816,6 @@ private fun LazyListScope.appleEditorialArtistRows(
                         .substringBefore('·').trim(),
                     artworkUri = artist.artworkUri,
                     artistPortrait = true,
-                    appleStoreUrl = artist.appleStoreUrl,
-                    appleStoreBadgeUrl = artist.appleStoreBadgeUrl,
                 ),
                 onClick = { onOpen(artist) },
                 onLongPress = null,
@@ -1023,8 +1019,6 @@ private fun LazyListScope.appleEditorialAlbumRows(
                     subtitle = album.artistName,
                     artworkUri = album.artworkUri,
                     artistPortrait = false,
-                    appleStoreUrl = album.appleStoreUrl,
-                    appleStoreBadgeUrl = album.appleStoreBadgeUrl,
                 ),
                 onClick = { onOpen(album) },
                 onLongPress = null,
@@ -1072,22 +1066,6 @@ private fun LazyListScope.appleEditorialAlbumDetail(
                             model = art,
                             contentDescription = stringResource(Res.string.canonical_cover_art),
                             modifier = Modifier.size(156.dp).clip(RoundedCornerShape(10.dp)),
-                        )
-                    }
-                    // Unmodified official Apple badge, linked to THIS exact
-                    // storefront product. No app-generated store URL, and no
-                    // unverified MusicBrainz/Discogs artwork substitution.
-                    val storeUrl = detail.data.appleStoreUrl
-                    val badgeUrl = detail.data.appleStoreBadgeUrl
-                    if (storeUrl != null && badgeUrl != null) {
-                        val openStore = LocalUriHandler.current
-                        Spacer(Modifier.height(8.dp))
-                        AsyncImage(
-                            model = badgeUrl,
-                            contentDescription = "Abrir este álbum no catálogo Apple",
-                            modifier = Modifier.width(154.dp).height(44.dp).clickable {
-                                runCatching { openStore.openUri(storeUrl) }
-                            },
                         )
                     }
                     Spacer(Modifier.height(12.dp))
