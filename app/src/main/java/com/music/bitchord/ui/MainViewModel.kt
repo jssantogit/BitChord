@@ -1550,7 +1550,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ) return@withPermit
                         val proof = try {
                             canonicalGroupCardArtworkResolver.resolve(
-                                candidate.musicBrainzId, "br",
+                                candidate.musicBrainzId, "br", candidate.title,
                             )
                         } catch (cancelled: CancellationException) {
                             throw cancelled
