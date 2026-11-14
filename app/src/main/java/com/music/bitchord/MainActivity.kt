@@ -271,6 +271,7 @@ import com.music.bitchord.ui.components.FloatingBottomBar
 import com.music.bitchord.ui.components.GlassNavBar
 import com.music.bitchord.ui.components.floatingtabbar.rememberFloatingTabBarScrollConnection
 import com.music.bitchord.ui.components.FrostedTopBar
+import com.music.bitchord.ui.components.nativeCompactMenuLiftShadow
 import com.music.bitchord.ui.components.LastfmLoginAlert
 import com.music.bitchord.ui.components.LocalAppBackdrop
 import com.music.bitchord.ui.components.LocalLiquidGlassEnabled
