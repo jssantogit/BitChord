@@ -578,6 +578,26 @@ class CanonicalCuratedHomeFeedTest {
         assertEquals(official500, painted.single().items.single().thumbnailUrl)
     }
 
+    @Test fun appleAlbumArtworkCanNeverBeReplacedByLateArchiveCoverUpdates() {
+        val apple = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
+        val archive = "https://coverartarchive.org/release/release/front-500"
+        val withApple = release.copy(artworkUri = apple)
+        val archivePatch = mapOf(release.musicBrainzId to (archive to release.title))
+        assertFalse(com.music.bitchord.ui.canonicalShouldAcceptVerifiedGroupArtwork(
+            apple, archive,
+        ))
+        assertEquals(listOf(withApple),
+            com.music.bitchord.ui.canonicalArtistRowsWithOfficialCoverUpdates(
+                listOf(withApple), archivePatch,
+            ))
+        val shelves = com.music.bitchord.ui.canonicalNativeSections(
+            CanonicalSearchKind.ARTIST, listOf(withApple), heading = "EPs",
+        )
+        assertEquals(shelves, com.music.bitchord.ui.canonicalArtistShelvesWithCoverUpdates(
+            shelves, archivePatch,
+        ))
+    }
+
     @Test fun verifiedArtistNetworkCoverAlsoCorrectsCanonicalRowsAtEqualResolution() {
         val old500 = "https://archive.org/previous-official-front-500.jpg"
         val new500 = "https://archive.org/current-official-front-500.jpg"
