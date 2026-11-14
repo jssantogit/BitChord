@@ -92,15 +92,17 @@ internal class AppleVerifiedEditionArtworkResolver(
             !mb.status.equals("Official", ignoreCase = true) ||
             mb.groupMbid.isNullOrBlank() || !mb.hasCompleteTracklist
         ) return null
-        // UPC remains the strict, independent primary route. For editions
-        // without a usable barcode (or without an unambiguous UPC result),
-        // only an explicit exact MB Release→Apple album URL may seed a direct
-        // lookup. A title, artist or ReleaseGroup URL alone is never enough.
-        val barcode = mb.barcode?.trim()?.takeIf(upcPattern::matches)
-        val upcProof = if (barcode != null)
-            resolveByBarcode(mb, id, storefront, barcode)
+        // An explicit MB Release→Apple album URL gives us the exact Apple ID
+        // without a broad UPC search. Check that product's complete identity
+        // first; if it fails, the independent UPC + competing-editions route
+        // remains available. Neither route may infer identity from title.
+        val linkedProof = if (mb.linkedAppleAlbumIds.distinct().size == 1)
+            resolveByExactReleaseLink(mb, id, storefront)
         else null
-        return upcProof ?: resolveByExactReleaseLink(mb, id, storefront)
+        if (linkedProof != null) return linkedProof
+        val barcode = mb.barcode?.trim()?.takeIf(upcPattern::matches)
+            ?: return null
+        return resolveByBarcode(mb, id, storefront, barcode)
     }
 
     private suspend fun resolveByBarcode(
