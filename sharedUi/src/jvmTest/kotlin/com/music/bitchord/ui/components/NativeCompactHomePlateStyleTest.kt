@@ -1,7 +1,9 @@
 package com.music.bitchord.ui.components
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NativeCompactHomePlateStyleTest {
@@ -10,14 +12,33 @@ class NativeCompactHomePlateStyleTest {
         assertEquals(54, nativeCompactMenuRowHeightDp(homePlateStyle = false))
     }
 
-    @Test fun artworkPageMenusUseTheirOwnElevatedColorInsteadOfAmoledBlack() {
+    @Test fun darkMenuIsLiftedOutOfAnAmoledBlackPageWithoutWhiteBorder() {
+        val plate = nativeCompactPlateColor(isDark = true, artworkElevation = null)
+        assertEquals(Color(0xFF29292D), plate)
+        assertEquals(1f, plate.alpha)
+        assertTrue(plate.luminance() > Color.Black.luminance())
+    }
+
+    @Test fun lightMenuRemainsSubtlySeparatedFromWhitePages() {
+        val plate = nativeCompactPlateColor(isDark = false, artworkElevation = null)
+        assertEquals(Color(0xFFF5F5F7), plate)
+        assertEquals(1f, plate.alpha)
+        assertTrue(plate.luminance() < Color.White.luminance())
+    }
+
+    @Test fun artworkMenusKeepTheirTintButReceiveTonalElevation() {
         val albumElevation = Color(0xFF244C52)
-        assertEquals(albumElevation.copy(alpha = 0.96f),
-            nativeCompactPlateColor(isDark = true, artworkElevation = albumElevation))
-        assertEquals(Color.Black.copy(alpha = 0.96f),
-            nativeCompactPlateColor(isDark = true, artworkElevation = null))
-        assertEquals(Color.White.copy(alpha = 0.96f),
-            nativeCompactPlateColor(isDark = false, artworkElevation = null))
+        val plate = nativeCompactPlateColor(isDark = true, artworkElevation = albumElevation)
+        assertEquals(1f, plate.alpha)
+        assertTrue(plate.luminance() > albumElevation.luminance())
+        assertTrue(plate.blue > plate.red)
+    }
+
+    @Test fun libraryFilterScrimDoesNotHideItsContext() {
+        val dark = nativeCompactMenuScrimAlpha(isDark = true)
+        val light = nativeCompactMenuScrimAlpha(isDark = false)
+        assertTrue(dark in 0.2f..0.35f)
+        assertTrue(light in 0.15f..0.3f)
     }
 
     @Test fun compactPlateVariantHasTheSameNarrowRoundnessAsTheHeldContextMenu() {
