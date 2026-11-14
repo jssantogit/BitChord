@@ -32,6 +32,16 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /**
+ * A verified release keeps its exact ReleaseId when the artist card is held.
+ * Batch-selection mode owns the gesture; no contextual sheet is opened then.
+ */
+internal fun nativeArtistReleaseHoldAction(
+    selectionActive: Boolean,
+    release: ReleaseEntity,
+    onReleaseOptions: (ReleaseEntity) -> Unit,
+): (() -> Unit)? = if (selectionActive) null else ({ onReleaseOptions(release) })
+
+/**
  * Native artist content built exclusively from typed Library assets,
  * evidenced releases and caller-supplied capabilities. No repository
  * lifecycle, fake media IDs or provider-specific navigation.
@@ -148,6 +158,11 @@ internal fun NativeCanonicalArtistContent(
                                 onToggleSelection(target)
                             } else onOpenRelease(release)
                         },
+                        onLongPress = nativeArtistReleaseHoldAction(
+                            selectionActive = selectedItems.isNotEmpty(),
+                            release = release,
+                            onReleaseOptions = onReleaseOptions,
+                        ),
                         artwork = {
                             val track = nativeReleases.artwork[release.id]
                             if (track != null) CanonicalUnifiedArtwork(
@@ -237,8 +252,13 @@ internal fun NativeCanonicalArtistContent(
                                     )
                                 ) else onOpenRelease(release)
                             },
-                            // Artist shelf cards navigate directly. Their
-                            // contextual controls belong on the release page.
+                            // Reuse the lifted menu already available in this
+                            // Library host. No inline Material 3 overflow button.
+                            onLongPress = nativeArtistReleaseHoldAction(
+                                selectionActive = selectedItems.isNotEmpty(),
+                                release = release,
+                                onReleaseOptions = onReleaseOptions,
+                            ),
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.ALBUM, release.id,
