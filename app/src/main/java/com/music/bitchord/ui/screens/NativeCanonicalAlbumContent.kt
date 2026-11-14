@@ -64,18 +64,15 @@ internal fun NativeCanonicalAlbumContent(
                     sleeveSize = sleeve,
                     artwork = artwork,
                     actions = {
-                        if (playbackTracks.isNotEmpty()) {
-                            Spacer(Modifier.height(18.dp))
-                            NativeReleaseActionRow(
-                                onPlay = { onPlayAll(playbackTracks, false) },
-                                onShuffle = { onPlayAll(playbackTracks, true) },
-                                isLocal = false,
-                                canShuffle = playbackTracks.isNotEmpty(),
-                                reservePinAction = true,
-                                isPinnedInLibrary = pinned,
-                                onTogglePin = onTogglePin,
-                            )
-                        }
+                        // Loading or metadata-only releases retain an authentic
+                        // pin action, without manufacturing playable RecordingIds.
+                        NativeAlbumHeroActions(
+                            canPlay = playbackTracks.isNotEmpty(),
+                            isPinned = pinned,
+                            onTogglePin = onTogglePin,
+                            onPlay = { onPlayAll(playbackTracks, false) },
+                            onShuffle = { onPlayAll(playbackTracks, true) },
+                        )
                     },
                 )
             }
