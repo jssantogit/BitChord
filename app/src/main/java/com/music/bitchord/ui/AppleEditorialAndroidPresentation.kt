@@ -327,3 +327,29 @@ internal fun appleKeepVerifiedArtworkAcrossPaging(
                 previouslyDisplayed
     }) previouslyDisplayed else currentFromApple
 }
+
+
+/**
+ * Network refreshes carry Apple's original 100px links. Preserve a previously
+ * probed high-resolution URL for the same Apple store product AND the same
+ * underlying CDN image asset. A newly changed sleeve is always allowed to
+ * replace the old high-resolution image.
+ */
+internal fun appleReleasesPreservingVerifiedArtwork(
+    fresh: List<ItunesEditorialRelease>,
+    previous: List<ItunesEditorialRelease>,
+): List<ItunesEditorialRelease> {
+    if (fresh.isEmpty() || previous.isEmpty()) return fresh
+    val indexed = previous.groupBy { it.appleScopedId }
+    return fresh.map { album ->
+        val old = indexed[album.appleScopedId]?.singleOrNull()?.takeIf {
+            it.storefront == album.storefront &&
+                it.appleCollectionId == album.appleCollectionId
+        }
+        val artwork = appleKeepVerifiedArtworkAcrossPaging(
+            album.artworkUrl, old?.artworkUrl,
+        )
+        if (artwork != album.artworkUrl) album.copy(artworkUrl = artwork)
+        else album
+    }
+}
