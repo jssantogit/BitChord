@@ -128,6 +128,35 @@ class AppleHighResolutionArtworkTest {
         assertEquals(hero1024, appleHighResolutionArtworkCandidate(large, 1024))
     }
 
+    @Test fun fixedHeroCapRejectsOversizedOrUnnecessaryRequests() {
+        assertNull(appleHighResolutionArtworkCandidate(thumb, 1200))
+        assertNull(appleHighResolutionArtworkCandidate(thumb, 1080))
+        assertEquals(thumb.replace("100x100bb.jpg", "1024x1024bb.jpg"),
+            appleHighResolutionArtworkCandidate(thumb, 1024))
+    }
+
+    @Test fun negativeProbeCacheRetriesAfterExpiryWithoutForgettingValid600Px() = runBlocking {
+        var now = 0L
+        val attempts = mutableListOf<String>()
+        val thumb600 = thumb.replace("100x100bb.jpg", "600x600bb.jpg")
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource { candidate ->
+                attempts += candidate
+                if (candidate == thumb600) 600 to 600 else null
+            },
+            clockMs = { now },
+        )
+        assertEquals(thumb600, service.upgrade(thumb, 1024))
+        assertEquals(3, attempts.size)
+        assertEquals(thumb600, service.upgrade(thumb, 1024))
+        assertEquals(3, attempts.size)
+        now = 31 * 60_000L
+        assertEquals(thumb600, service.upgrade(thumb, 1024))
+        // The failed higher rungs can be retried on a later visit; the
+        // verified 600px variant is still cached.
+        assertEquals(5, attempts.size)
+    }
+
     @Test fun concurrentRequestsForSameArtworkShareOneNetworkProbe() = runBlocking {
         var called = 0
         val service = AppleHighResolutionArtwork(
