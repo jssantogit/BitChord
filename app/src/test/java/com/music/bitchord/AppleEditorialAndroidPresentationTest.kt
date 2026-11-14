@@ -14,6 +14,7 @@ import com.music.bitchord.ui.appleArtistAlbumRowsWithProbedArtwork
 import com.music.bitchord.ui.appleArtworkTargetPxForShelf
 import com.music.bitchord.ui.appleKeepVerifiedArtworkAcrossPaging
 import com.music.bitchord.ui.appleReleasesPreservingVerifiedArtwork
+import com.music.bitchord.ui.appleSearchRowsPreservingVerifiedArtwork
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import org.junit.Assert.*
 import org.junit.Test
@@ -47,6 +48,35 @@ class AppleEditorialAndroidPresentationTest {
         classification = AppleEditorialClassification.resolve(release, emptyList()),
         discogsEdition = null,
     )
+
+    @Test fun publicSearchPaginationKeepsVerifiedArtOnlyForExactUnchangedAppleAlbum() {
+        val original = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
+        val enhanced = original.replace("100x100bb.jpg", "600x600bb.jpg")
+        val earlier = AppleEditorialSearchRow(
+            browseId = "itunes:br:album:101", title = "HOT",
+            artistName = "LE SSERAFIM", artworkUri = enhanced,
+            releaseDate = "2024-01-01",
+        )
+        val updated = earlier.copy(artworkUri = original, releaseDate = "2024-01-02")
+        val next = earlier.copy(
+            browseId = "itunes:br:album:102",
+            artworkUri = "https://is1-ssl.mzstatic.com/image/thumb/Music/b/100x100bb.jpg",
+        )
+        val merged = appleSearchRowsPreservingVerifiedArtwork(
+            listOf(updated, next), listOf(earlier),
+        )
+        assertEquals(enhanced, merged[0].artworkUri)
+        assertEquals(updated.releaseDate, merged[0].releaseDate)
+        assertEquals(next, merged[1])
+        assertEquals(listOf(updated.copy(artworkUri =
+            "https://is1-ssl.mzstatic.com/image/thumb/Music/reissue/100x100bb.jpg")),
+            appleSearchRowsPreservingVerifiedArtwork(
+                listOf(updated.copy(artworkUri =
+                    "https://is1-ssl.mzstatic.com/image/thumb/Music/reissue/100x100bb.jpg")),
+                listOf(earlier),
+            ),
+        )
+    }
 
     @Test fun homeRefreshKeepsVerified1024ButDropsOutdatedCoverIdentity() {
         val thumb = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
