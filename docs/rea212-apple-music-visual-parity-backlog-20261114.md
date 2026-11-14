@@ -47,3 +47,24 @@
 6. **Condições:** claro/escuro, redução de blur, redução de movimento, fonte maior e TalkBack; mini player/barra inferior sem colisões.
 
 **Critério de aceite:** gates Android + shared JVM do HEAD final, e comparação física documentada. PR #212 permanece draft e sem merge automático.
+
+## Cortes R3/R4 — Biblioteca e detalhes (14/11/2026)
+
+Este registro acompanha os cortes sem transformar aproximações em afirmações sobre o runtime do Apple Music. A fonte é o [handoff final R1–R6 do am-descomp](https://github.com/jssantogit/am-descomp/blob/fase-3-investigacao-visual/docs/rea212-final-visual-handoff.md); não foi feita coleta nova.
+
+| Corte / situação | Mudança ou auditoria BitChord | Limitações e evidência ainda necessária |
+| --- | --- | --- |
+| **Biblioteca canônica — implementado, CI física pendente** | Nas categorias Músicas/Álbuns/Artistas em modo lista, o divisor de 0,5dp com inset de 84dp aparece **somente entre as linhas**, sem hairline final. Grid e seleção permanecem intactos. Regressão `CanonicalLibraryRowDividerTest`. | R4/S01–S02 confirmam lista de artistas e grade de álbuns, mas não fornecem dp exatos de título, busca, espaçamento, avatar, baseline, touch targets nem estado de tema claro/RTL. A estrela amarela de S02 **não deve** ser interpretada automaticamente como rating BitChord. Exigir confronto no aparelho. |
+| **Álbum — auditado, sem novos dados inventados** | Mantido `NativeReleaseHeaderLayout` com capa, título, crédito, qualidade e metadados reais, faixa numerada e ações próprias; não copiar seções relacionadas sem vínculos verificados. | R3/S07 é visão longa de 289px reescalada. Não prova proporção 76% usada atualmente na capa BitChord, gradiente exato, tipografia/baseline, limiar da toolbar ou seções relacionadas. A identidade de edições/capas 1024px depende da PR #216. |
+| **Artista — auditado, composição existente preservada** | `NativeCanonicalArtistContent` já possui hero, fundo `palette.wash`, top release e seções somente com lançamentos verificados; não introduzir catálogo/Playlists inventados. | R3/S06/S04 e V03 mostram hero e rolagem, mas não provam implementação de imagem dinâmica, altura do hero, callback de scroll, fades ou threshold do título. Seções Apple como Videoclipes/Artistas semelhantes não estão autorizadas sem dados equivalentes. |
+| **Playlist — implementado, CI física pendente** | `NativePlaylistHeroActions`: quando há ativos reproduzíveis, mantém Play/Shuffle e fixar/desafixar; em playlist vazia, carregando ou metadata-only, **esconde Play/Shuffle** e mantém um controle circular de fixação de 50dp. Regressão `NativePlaylistHeroActionsTest`. | R3/S03/S05 mostram playlist editorial com arte e bloco final de artistas destacados, mas não definem geometria/gradiente em dp ou contrato universal. Não acrescentar artistas em destaque, data de atualização, fonte editorial ou duração sem dados reais. Conferir estados normal/smart, título longo, capa própria, tema e clique físico. |
+
+### Lacunas a acumular para **uma futura issue** de am-descomp (ainda não aberta)
+
+1. **R4:** medir, se houver evidência legítima de runtime, hierarquia título → busca → ações → primeira linha, inset das divisórias, raio/corte dos avatares, estados vazios, fonte grande e variações de largura. Nunca converter pixels de S01/S02 diretamente para dp.
+2. **R3 álbum:** confirmar apenas observáveis do layout sob capa clara/escura, placeholder durante loading, collapse da toolbar e relações entre título, capa, botões e primeira faixa. S07 sozinha é insuficiente.
+3. **R3 artista:** esclarecer com observação de runtime o comportamento da foto no scroll e o desaparecimento/retorno do título; separar mídia animada efetiva de troca de quadros no vídeo.
+4. **R3 playlist:** distinguir seções editoriais específicas de contratos genéricos, e documentar estados de capa manual/mosaico/vazio, descrição longa, ações e rodapé.
+5. **Critério de STOP:** registrar `unknown/requires_runtime` quando fonte não sustentar medida; evitar nova exploração ampla do APK ou promessas de pixel-perfect. Esta lista é backlog, **não** autorização para criar a issue agora.
+
+**Gate de aceite destes cortes:** compilar/testar Android e shared UI no HEAD exato e realizar smoke visual no aparelho antes de fechar/mesclar a #212. Nenhum APK novo solicitado por este corte.
