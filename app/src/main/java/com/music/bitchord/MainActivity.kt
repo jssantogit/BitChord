@@ -838,6 +838,8 @@ private fun BitChordApp(
     val searchSource by viewModel.searchSource.collectAsStateWithLifecycle()
     val canonicalAppleArtworkPromotion by
         viewModel.canonicalAppleArtworkPromotion.collectAsStateWithLifecycle()
+    val canonicalGroupCardApplePromotions by
+        viewModel.canonicalGroupCardApplePromotions.collectAsStateWithLifecycle()
     val appleAlbumDetail by viewModel.appleEditorialDetail.collectAsStateWithLifecycle()
     val appleArtistDetail by viewModel.appleEditorialArtistDetail.collectAsStateWithLifecycle()
     val libraryResults by viewModel.libraryResults.collectAsStateWithLifecycle()
@@ -3612,6 +3614,9 @@ private fun BitChordApp(
                             appleStorePromotionUrl = canonicalAppleArtworkPromotion
                                 ?.takeIf { (pageId, _) -> pageId == page.browseId }
                                 ?.second?.storeUrl,
+                            appleGroupCardPromotions =
+                                if (page.browseId.startsWith("catalog:ARTIST:"))
+                                    canonicalGroupCardApplePromotions else emptyMap(),
                             currentSong = player.song,
                             isPlaying = player.isPlaying,
                             listState = pageDetailListState,
