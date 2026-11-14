@@ -1794,66 +1794,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     publishSelectedAppleCover(large)
             }
         }
+        // No archive worker on public Release / ReleaseGroup details. Apple
+        // proof above owns all cover upgrades, including the selected exact
+        // edition and its store attribution. On ambiguous identity, preserve
+        // the empty sleeve rather than borrowing a CAA cover from a different
+        // physical package. Native tracks remain independent of artwork IO.
         canonicalDetailCoverJob?.cancel()
-        if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
-            canonicalEditorialReleaseType(entry) == null
-        ) return
-        // The artist shelf already owns a verified 500px bitmap key. Keep
-        // that exact URL on the header instead of replacing it with the 1200px
-        // variant and making Coil fetch the same sleeve a second time.
-        // Detail tracks also inherit this URL in the initial state.
-        // A filled 500px album detail can still show an older edition Front.
-        // Official group verification runs off-main; a Release's full-sized
-        // exact-edition image can keep its existing fast path.
-        if (entry.kind != CanonicalSearchKind.RELEASE_GROUP &&
-            !canonicalNeedsCoverRefresh(entry.artworkUri)) return
-        canonicalDetailCoverJob = viewModelScope.launch(Dispatchers.IO) {
-            val artwork = try {
-                canonicalArtworkForRow(entry, canonicalNativeDetailArtworkSize(entry.kind))
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) { null } ?: return@launch
-            canonicalArtworkPresentationMutex.withLock {
-            if (_searchSource.value != SearchSource.CANONICAL ||
-                canonicalPath.lastOrNull() != entry) return@withLock
-            val current = (_canonicalDetail.value as? UiState.Success)?.data
-                ?: return@withLock
-            // A 500px CAA response may still replace a 100px Apple source;
-            // a slower low-resolution CAA response may NOT downgrade a
-            // larger, directly returned certified Apple image. Keep the Apple
-            // product badge, whichever source wins the quality comparison.
-            val promotion = _canonicalAppleArtworkPromotion.value
-                ?.takeIf { it.first == canonicalNativeBrowseId(entry) }?.second
-            val accepted = if (promotion != null) {
-                com.music.bitchord.data.catalog.metadata
-                    .bestCertifiedAppleOrArchiveCover(
-                        promotion.artworkUrl, artwork,
-                    ) == artwork && current.artworkUri != artwork
-            } else if (entry.kind == CanonicalSearchKind.RELEASE_GROUP)
-                canonicalShouldAcceptVerifiedGroupArtwork(current.artworkUri, artwork)
-            else canonicalShouldAcceptArtworkUpdate(current.artworkUri, artwork)
-            if (!accepted) return@withLock
-            // A later CAA image can win on resolution. On ReleaseGroups
-            // this may be another edition's sleeve: never keep the Apple
-            // attribution badge attached to a different edition's cover.
-            if (entry.kind == CanonicalSearchKind.RELEASE_GROUP && promotion != null &&
-                artwork != promotion.artworkUrl
-            ) _canonicalAppleArtworkPromotion.value = null
-            _canonicalDetail.value = UiState.Success(current.copy(
-                artworkUri = artwork,
-                rows = canonicalReleaseTracksWithArtwork(
-                    current.rows, artwork,
-                    previousInheritedArtwork = current.artworkUri,
-                    inheritedFromGroup = entry.kind == CanonicalSearchKind.RELEASE_GROUP,
-                ),
-            ))
-            val id = canonicalNativeBrowseId(entry)
-            _detailStack.value = _detailStack.value.map {
-                if (it.browseId == id) it.copy(thumbnailUrl = artwork) else it
-            }
-            refreshCanonicalSearchRecordingAlbumArtwork()
-            }
-        }
     }
 
     /** Cancel the old namespace before the new source starts answering the same query. */
