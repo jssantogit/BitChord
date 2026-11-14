@@ -4,6 +4,7 @@ import com.music.bitchord.ui.CanonicalExploreGenre
 import com.music.bitchord.ui.canonicalGenreArtworkPriority
 import com.music.bitchord.ui.canonicalWorldwideArtworkPriority
 import com.music.bitchord.ui.canonicalAppleGroupCardArtworkCandidates
+import com.music.bitchord.ui.canonicalPublicWithoutLegacyArchiveArtwork
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
@@ -20,6 +21,20 @@ class CanonicalPublicArtworkPriorityTest {
             releaseDate = "2026-11-01",
             releaseKind = if (number % 2 == 0) "Album" else "Single",
         )
+
+    @Test fun publicMusicBrainzRowsNeverResurrectArchivedCaaCovers() {
+        val caa = "https://coverartarchive.org/release/abc/front-500"
+        val archived = "https://ia903102.us.archive.org/12/items/mbid-abc/front.jpg"
+        val apple = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/600x600bb.jpg"
+        val ordinary = "https://cdn.example.com/user-owned-cover.jpg"
+        assertEquals(null, canonicalPublicWithoutLegacyArchiveArtwork(caa))
+        assertEquals(null, canonicalPublicWithoutLegacyArchiveArtwork(archived))
+        assertEquals(apple, canonicalPublicWithoutLegacyArchiveArtwork(apple))
+        assertEquals(ordinary, canonicalPublicWithoutLegacyArchiveArtwork(ordinary))
+        assertEquals(caa, canonicalPublicWithoutLegacyArchiveArtwork(
+            "https://coverartarchive.org.attacker.example/release/abc/front-500"))
+        assertEquals(null, canonicalPublicWithoutLegacyArchiveArtwork(null))
+    }
 
     @Test fun worldwideArtworkPrioritizesMoreThanTheOldFirstEighteen() {
         val rows = (1..40).map(::row)
