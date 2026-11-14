@@ -3717,11 +3717,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // two probes at a time, without blocking Home or the iTunes API.
             if (result is AppleEditorialLoad.Success) {
                 val permits = Semaphore(2)
-                result.releases.take(12).forEach { album ->
+                result.releases.take(12).forEachIndexed { index, album ->
                     launch {
                         permits.withPermit {
+                            // Only the first four featured Home cards use
+                            // 1024px; the remaining compact tiles use 600px.
+                            val target = if (index < 4) 1024 else 600
                             val upgraded = appleHighResolutionArtwork.upgrade(
-                                album.artworkUrl, 600,
+                                album.artworkUrl, target,
                             )
                             if (upgraded != null && upgraded != album.artworkUrl &&
                                 appleHomeEpoch.isCurrent(generation) &&
@@ -4074,11 +4077,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             if (result is AppleEditorialLoad.Success) {
                 val permits = Semaphore(2)
-                result.releases.take(12).forEach { album ->
+                result.releases.take(12).forEachIndexed { index, album ->
                     launch {
                         permits.withPermit {
+                            // Only the first four featured Explore cards use
+                            // 1024px; the remaining compact tiles use 600px.
+                            val target = if (index < 4) 1024 else 600
                             val upgraded = appleHighResolutionArtwork.upgrade(
-                                album.artworkUrl, 600,
+                                album.artworkUrl, target,
                             )
                             if (upgraded != null && upgraded != album.artworkUrl &&
                                 appleGenreEpoch.isCurrent(generation) &&
