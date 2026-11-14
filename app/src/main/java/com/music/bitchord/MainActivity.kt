@@ -4586,9 +4586,10 @@ private fun BitChordApp(
                         openedPublicPlaylist != null -> ({ openedPublicPlaylist = null })
                         detailActiveShelf != null -> ({ detailActiveShelf = null })
                         detail != null -> ({ viewModel.closeDetail(); Unit })
-                        appleNativeKind == AppleNativeDetailKind.ALBUM -> backAppleAlbum
+                        appleNativeKind == AppleNativeDetailKind.ALBUM ->
+                            ({ backAppleAlbum(); Unit })
                         appleNativeKind == AppleNativeDetailKind.ARTIST ->
-                            ({ viewModel.backAppleEditorialArtist() })
+                            ({ viewModel.backAppleEditorialArtist(); Unit })
 
                         else -> null
                     },
