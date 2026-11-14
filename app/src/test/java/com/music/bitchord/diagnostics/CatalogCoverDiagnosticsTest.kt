@@ -22,6 +22,8 @@ class CatalogCoverDiagnosticsTest {
         apple.recordNetwork(1024, false, 270)
         apple.recordNetwork(600, true, 80)
         apple.recordCacheHit(valid = true)
+        apple.recordCoilImageResult(true, 180, "DISK")
+        apple.recordCoilImageResult(false, 920, null)
         val lines = CatalogCoverDiagnostics.lines(
             CatalogCoverTelemetry().snapshot(), apple.snapshot(),
         ).joinToString("\n")
@@ -39,6 +41,12 @@ class CatalogCoverDiagnosticsTest {
         ))
         assertEquals(true, lines.contains(
             "apple_cdn_evidence_is_not_coil_render_success=true",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_coil_load_success=1 errors=1",
+        ))
+        assertEquals(true, lines.contains(
+            "apple_coil_sources memory=0 disk=1 network=0",
         ))
         assertFalse(lines.contains("mzstatic.com"))
         assertFalse(lines.contains("itunes:br"))
