@@ -1,16 +1,11 @@
 package com.music.bitchord.ui.screens
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Album
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.data.settings.SongSort
-import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 
 /**
@@ -66,6 +61,7 @@ internal fun NativeCanonicalNestedAlbumDetail(
     )
 
     NativeCanonicalAlbumContent(
+        releaseIdentity = release.id,
         title = canonicalAlbumDisplayTitle(release.title, evidence?.primaryType),
         credit = release.artistDisplay.orEmpty(),
         visibleTracks = visibleAlbumTracks,
@@ -92,13 +88,11 @@ internal fun NativeCanonicalNestedAlbumDetail(
         onTrackOptions = onTrackOptions,
         onPlayAll = onPlayAll,
         artwork = {
-            if (artworkTrack != null) {
-                CanonicalUnifiedArtwork(
-                    artworkTrack, artworkLoader, Modifier.fillMaxSize(),
-                )
-            } else {
-                CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())
-            }
+            NativeCanonicalAlbumArtwork(
+                releaseArtworkUri = release.artworkUri,
+                artworkTrack = artworkTrack,
+                artworkLoader = artworkLoader,
+            )
         },
     )
 }
