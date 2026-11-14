@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,6 +17,21 @@ import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.ui.theme.rememberArtworkPalette
+
+/**
+ * Artist navigation changes the verified identity without necessarily removing
+ * this route's composition. Keep the scroll through art/catalog refreshes and
+ * nested albums, but never inherit a different artist's previous offset.
+ */
+@Composable
+internal fun rememberNativeCanonicalArtistScrollState(
+    artistId: String?,
+    artistName: String,
+): LazyListState {
+    val key = artistId?.takeIf(String::isNotBlank)?.let { "artist-id:$it" }
+        ?: "display-artist:$artistName"
+    return rememberSaveable(key, saver = LazyListState.Saver) { LazyListState() }
+}
 
 /**
  * This typed route feeds the shared native artist compositor with the
@@ -93,7 +110,7 @@ internal fun CanonicalArtistDetailRoute(
     // It keeps DISPLAY_ARTIST separate from a verified canonical ArtistId.
     val artistRatingState by rememberCanonicalArtistRating(artistId)
     // Keep scrolling position across nested album navigation.
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listState = rememberNativeCanonicalArtistScrollState(artistId, artistName)
     val nestedNavigation = rememberCanonicalArtistNestedNavigation(
         artistId = artistId,
         artistName = artistName,
