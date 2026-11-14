@@ -100,6 +100,12 @@ class AppleExactEditionArtworkBridgeTest {
             album = release(link = "https://lookalike.music.apple.com/br/album/1"),
         ), "br"))
         assertNull(appleVerifiedEditionArtwork(mb, complete(
+            album = release(link = "https://music.apple.com/br/album/unrelated/999"),
+        ), "br"))
+        assertNull(appleVerifiedEditionArtwork(mb, complete(
+            album = release(link = "https://music.apple.com/us/album/super-real-me/101"),
+        ), "br"))
+        assertNull(appleVerifiedEditionArtwork(mb, complete(
             album = release(artwork = "https://attacker.example/cover.jpg"),
         ), "br"))
         assertNull(appleVerifiedEditionArtwork(mb.copy(
