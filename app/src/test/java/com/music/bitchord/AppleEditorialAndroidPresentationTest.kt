@@ -13,6 +13,7 @@ import com.music.bitchord.ui.appleEditorialReleasesWithProbedArtwork
 import com.music.bitchord.ui.appleArtistAlbumRowsWithProbedArtwork
 import com.music.bitchord.ui.appleArtworkTargetPxForShelf
 import com.music.bitchord.ui.appleKeepVerifiedArtworkAcrossPaging
+import com.music.bitchord.ui.appleReleasesPreservingVerifiedArtwork
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import org.junit.Assert.*
 import org.junit.Test
@@ -46,6 +47,33 @@ class AppleEditorialAndroidPresentationTest {
         classification = AppleEditorialClassification.resolve(release, emptyList()),
         discogsEdition = null,
     )
+
+    @Test fun homeRefreshKeepsVerified1024ButDropsOutdatedCoverIdentity() {
+        val thumb = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
+        val hero = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        val old = release(101, "HOT", ItunesEditorialReleaseFormat.EP)
+            .copy(artworkUrl = hero)
+        val updated = release(101, "HOT", ItunesEditorialReleaseFormat.EP)
+            .copy(artworkUrl = thumb, genre = "K-Pop")
+        val sameNameDifferentProduct =
+            release(102, "HOT", ItunesEditorialReleaseFormat.EP).copy(
+                artworkUrl = "https://is1-ssl.mzstatic.com/image/thumb/Music/b/100x100bb.jpg",
+            )
+        val patch = appleReleasesPreservingVerifiedArtwork(
+            listOf(updated, sameNameDifferentProduct), listOf(old),
+        )
+        assertEquals(hero, patch[0].artworkUrl)
+        assertEquals(updated.genre, patch[0].genre)
+        assertEquals(sameNameDifferentProduct, patch[1])
+        assertEquals(listOf(updated.copy(artworkUrl =
+            "https://is1-ssl.mzstatic.com/image/thumb/Music/new/100x100bb.jpg")),
+            appleReleasesPreservingVerifiedArtwork(
+                listOf(updated.copy(artworkUrl =
+                    "https://is1-ssl.mzstatic.com/image/thumb/Music/new/100x100bb.jpg")),
+                listOf(old),
+            ),
+        )
+    }
 
     @Test fun artistPaginationRetains1024ArtworkButRejectsForeignEditionSleeve() {
         val original = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
