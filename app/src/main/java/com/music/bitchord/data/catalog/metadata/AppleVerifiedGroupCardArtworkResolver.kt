@@ -45,12 +45,12 @@ internal fun uniqueAppleGroupCardEdition(
     val primary = eligible.filter { it.title.trim().equals(title, ignoreCase = true) }
         .singleOrNull() ?: return null
     val alternate = Regex(
-        """(?i)\\b(?:deluxe|version|ver\\.?|limited|collector|reissue|remaster|remix|instrumental|karaoke|live|vinyl|photobook|jewel\\s*case|photocard|digipack|nemo|poca|platform|kit\\s+album|sped\\s+up|slowed|signed)\\b""",
+        """(?i)\b(?:deluxe|version|ver\.?|limited|collector|reissue|remaster|remix|instrumental|karaoke|live|vinyl|photobook|jewel\s*case|photocard|digipack|nemo|poca|platform|kit\s+album|sped\s+up|slowed|signed)\b""",
     )
     if (eligible.any { edition ->
         edition.musicBrainzId != primary.musicBrainzId &&
             (!edition.title.startsWith(title, ignoreCase = true) ||
-                !alternate.containsMatchIn(edition.title.removePrefix(title)))
+                !alternate.containsMatchIn(edition.title.substring(title.length)))
     }) return null
     return primary.musicBrainzId
 }
