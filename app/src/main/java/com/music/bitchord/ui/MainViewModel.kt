@@ -3404,23 +3404,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         _detailStack.value.lastOrNull()?.browseId
                             ?.equals("catalog:ARTIST:$id", ignoreCase = true) == true
                     ) {
-                        val art = try {
+                        // The MusicBrainz recording -> Official Release
+                        // link is not cover authorization by itself. Verify the
+                        // exact Apple edition's UPC and full tracklist; only
+                        // then attach its sleeve and product attribution.
+                        val proof = try {
                             withTimeoutOrNull(8_000L) {
-                                coverArtArchive.findCover(
-                                    releaseId, record?.officialAudioReleaseGroupMbid,
-                                    CoverArtSize.THUMBNAIL,
-                                )
+                                canonicalAppleArtworkResolver.resolve(releaseId, "br")
                             }
                         } catch (cancelled: CancellationException) { throw cancelled }
                           catch (_: Exception) { null }
-                        if (!art.isNullOrBlank() && artistPublicTopEpoch.isCurrent(generation)) {
+                        val exactArt = record.officialAudioReleaseGroupMbid?.let { group ->
+                            com.music.bitchord.data.catalog.metadata
+                                .canonicalAppleArtworkFor(proof, releaseId, group)
+                        }
+                        if (exactArt != null && proof != null &&
+                            artistPublicTopEpoch.isCurrent(generation)
+                        ) {
                             verifiedMutex.withLock {
                                 val current = verified[mbid]
-                                if (current?.officialAudioReleaseMbid == releaseId) {
-                                    val enriched = current.copy(officialAudioArtworkUri = art)
+                                if (current?.officialAudioReleaseMbid == releaseId &&
+                                    current.officialAudioReleaseGroupMbid ==
+                                        proof.musicBrainzReleaseGroupId
+                                ) {
+                                    val enriched = current.copy(
+                                        officialAudioArtworkUri = exactArt,
+                                        officialAudioAppleStoreUrl = proof.storeUrl,
+                                    )
                                     verified[mbid] = enriched
                                     artistTopMetadataCache[mbid] = enriched
-                                    // Publish each cover immediately on arrival.
                                     publishVerified()
                                 }
                             }
