@@ -54,7 +54,10 @@ internal class AppleVerifiedGroupCardArtworkResolver(
             !Regex("^[a-z]{2}$").matches(storefront)
         ) return null
         val page = try {
-            (groups.browse(groupMbid) as? MusicBrainzCatalogGraphResult.Success)?.value
+            when (val result = groups.browse(groupMbid)) {
+                is MusicBrainzCatalogGraphResult.Success -> result.value
+                is MusicBrainzCatalogGraphResult.Failure -> null
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) { null } ?: return null
