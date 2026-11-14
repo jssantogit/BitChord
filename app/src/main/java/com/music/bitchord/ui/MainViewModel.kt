@@ -1555,62 +1555,73 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { null } ?: return@withPermit
+                        val route = canonicalNativeBrowseId(artist)
+                        suspend fun publishGroupCard(
+                            verified: com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtwork,
+                        ) {
+                            val artwork = verified.artworkUrl
+                            canonicalArtworkPresentationMutex.withLock {
+                                if (_searchSource.value != SearchSource.CANONICAL ||
+                                    canonicalPath.lastOrNull() != artist
+                                ) return@withLock
+                                val rows = (_canonicalDetail.value as? UiState.Success)
+                                    ?.data?.rows ?: return@withLock
+                                val row = rows.singleOrNull {
+                                    it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                                        it.musicBrainzId == candidate.musicBrainzId
+                                } ?: return@withLock
+                                if (canonicalEditorialReleaseType(row) == null ||
+                                    com.music.bitchord.data.catalog.metadata
+                                        .verifiedAppleArtworkForDisplayedGroupCover(
+                                            verified, candidate.musicBrainzId,
+                                            verified.musicBrainzReleaseId, row.artworkUri,
+                                        ) == null
+                                ) return@withLock
+                                // The official product badge and its cover always
+                                // update together. Nothing enters the CAA cache.
+                                _canonicalGroupCardApplePromotions.update {
+                                    it + (candidate.musicBrainzId to
+                                        (artwork to verified.storeUrl))
+                                }
+                                _canonicalDetail.update { state ->
+                                    if (state !is UiState.Success) state else UiState.Success(
+                                        state.data.copy(rows = state.data.rows.map { item ->
+                                            if (item.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                                                item.musicBrainzId == candidate.musicBrainzId &&
+                                                item.artworkUri != artwork
+                                            ) item.copy(artworkUri = artwork) else item
+                                        }),
+                                    )
+                                }
+                                _detailStack.update { pages ->
+                                    pages.map { page ->
+                                        if (page.browseId != route ||
+                                            page.sections.none { shelf ->
+                                                shelf.items.any {
+                                                    it.browseId ==
+                                                        "catalog:RELEASE_GROUP:${candidate.musicBrainzId}" &&
+                                                        it.thumbnailUrl != artwork
+                                                }
+                                            }
+                                        ) page else page.copy(
+                                            sections = canonicalArtistShelvesWithCoverUpdates(
+                                                page.sections,
+                                                mapOf(candidate.musicBrainzId to
+                                                    (artwork to row.title)),
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        // Never hold the certified first paint behind a
+                        // slower, optional 1024px CDN bounds verification.
+                        publishGroupCard(proof)
                         val promoted = appleHighResolutionArtwork.upgrade(
                             proof, appleArtworkTargetPxForShelf(index, 2),
                         )
-                        val artwork = promoted.artworkUrl
-                        val route = canonicalNativeBrowseId(artist)
-                        canonicalArtworkPresentationMutex.withLock {
-                    if (_searchSource.value != SearchSource.CANONICAL ||
-                        canonicalPath.lastOrNull() != artist
-                    ) return@withLock
-                    val rows = (_canonicalDetail.value as? UiState.Success)?.data?.rows
-                        ?: return@withLock
-                    val row = rows.singleOrNull {
-                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                            it.musicBrainzId == candidate.musicBrainzId
-                    } ?: return@withLock
-                    if (canonicalEditorialReleaseType(row) == null ||
-                        com.music.bitchord.data.catalog.metadata
-                            .verifiedAppleArtworkForDisplayedGroupCover(
-                                promoted, candidate.musicBrainzId,
-                                promoted.musicBrainzReleaseId, row.artworkUri,
-                            ) == null
-                    ) return@withLock
-                    // Artist card artwork and badge are both ephemeral UI
-                    // state. Do not persist the Apple promo in the CAA cache,
-                    // which has different rights and provenance.
-                    _canonicalGroupCardApplePromotions.update {
-                        it + (candidate.musicBrainzId to (artwork to promoted.storeUrl))
-                    }
-                    _canonicalDetail.update { state ->
-                        if (state !is UiState.Success) state else UiState.Success(
-                            state.data.copy(rows = state.data.rows.map { item ->
-                                if (item.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                                    item.musicBrainzId == candidate.musicBrainzId &&
-                                    item.artworkUri != artwork
-                                ) item.copy(artworkUri = artwork) else item
-                            }),
-                        )
-                    }
-                    _detailStack.update { pages ->
-                        pages.map { page ->
-                            if (page.browseId != route ||
-                                page.sections.none { shelf ->
-                                    shelf.items.any {
-                                        it.browseId == "catalog:RELEASE_GROUP:${candidate.musicBrainzId}" &&
-                                            it.thumbnailUrl != artwork
-                                    }
-                                }
-                            ) page else page.copy(
-                                sections = canonicalArtistShelvesWithCoverUpdates(
-                                    page.sections,
-                                    mapOf(candidate.musicBrainzId to (artwork to row.title)),
-                                ),
-                            )
-                        }
-                    }
-                        }
+                        if (promoted.artworkUrl != proof.artworkUrl)
+                            publishGroupCard(promoted)
                     }
                 }
             }
