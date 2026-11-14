@@ -4181,28 +4181,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
-            val permits = Semaphore(2)
-            canonicalGenreArtworkPriority(selected, rows, todayIso).forEach { row ->
-                launch {
-                    permits.withPermit {
-                        val artwork = try { canonicalArtworkForRow(row) }
-                            catch (cancelled: CancellationException) { throw cancelled }
-                            catch (_: Exception) { null }
-                        if (artwork != null && canonicalGenreEpoch.isCurrent(generation)) {
-                            _canonicalExploreGenreCovers.update { covers ->
-                                if (selected.tag in covers) covers else covers + (selected.tag to artwork)
-                            }
-                            _canonicalGenreResults.update { state ->
-                                if (state !is UiState.Success) state
-                                else UiState.Success(state.data.map {
-                                    if (it.musicBrainzId == row.musicBrainzId)
-                                        it.copy(artworkUri = artwork) else it
-                                })
-                            }
-                        }
-                    }
-                }
-            }
+            // These MB tag results are editorial search seeds only.
+            // The user-facing Explore genre tiles and album shelves are
+            // populated from Apple products and their primaryGenreName.
+            // Their artwork does not come from MusicBrainz/CAA. Avoid a
+            // duplicate, unused archive-image enrichment pass here.
         }
     }
 
