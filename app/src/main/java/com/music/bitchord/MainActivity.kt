@@ -7226,6 +7226,7 @@ internal fun NativeCollectionRatingToolbarAction(
     rating: Double?,
     subject: String,
     onClick: () -> Unit,
+    onBoundsChanged: (androidx.compose.ui.unit.IntRect) -> Unit = {},
 ) {
     val label = "Avaliar $subject · " +
         com.music.bitchord.ui.components.compactRatingAccessibility(rating)
@@ -7234,9 +7235,13 @@ internal fun NativeCollectionRatingToolbarAction(
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
         IconButton(
             onClick = onClick,
-            modifier = Modifier.size(40.dp).semantics(mergeDescendants = true) {
-                this.contentDescription = label
-            },
+            modifier = Modifier.size(40.dp)
+                .onGloballyPositioned { coords ->
+                    onBoundsChanged(nativeMenuAnchorBounds(coords))
+                }
+                .semantics(mergeDescendants = true) {
+                    this.contentDescription = label
+                },
         ) {
             com.music.bitchord.ui.components.CompactRatingIndicator(
                 value = rating,
@@ -7257,12 +7262,21 @@ private fun CanonicalToolbarRatingAction(
 ) {
     val score by com.music.bitchord.ui.screens.rememberCanonicalCatalogEntityRating(target)
     var editing by remember(target) { mutableStateOf(false) }
+    var ratingAnchor by remember(target) {
+        mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    }
     if (editing) {
         com.music.bitchord.ui.screens.CanonicalCatalogEntityRatingDialog(
-            target = target, title = "Avaliar $subject", onDismiss = { editing = false },
+            target = target,
+            title = "Avaliar $subject",
+            onDismiss = { editing = false },
+            anchorBounds = ratingAnchor,
         )
     }
-    NativeCollectionRatingToolbarAction(score, subject, onClick = { editing = true })
+    NativeCollectionRatingToolbarAction(
+        score, subject, onClick = { editing = true },
+        onBoundsChanged = { ratingAnchor = it },
+    )
 }
 
 /** Library albums use the existing membership-verified batch/single editor. */
@@ -7291,14 +7305,21 @@ private fun CanonicalLibraryAlbumRatingToolbarAction(
             com.music.bitchord.ui.screens.isValidCanonicalEntityRating(it)
         }
         var editing by remember(selection) { mutableStateOf(false) }
+        var ratingAnchor by remember(selection) {
+            mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+        }
         if (editing) {
             com.music.bitchord.ui.screens.CanonicalLibraryEntityRatingDialog(
                 targets = listOf(selection),
                 selectedSource = selectedSource,
                 onDismiss = { editing = false },
+                anchorBounds = ratingAnchor,
             )
         }
-        NativeCollectionRatingToolbarAction(score, "álbum", onClick = { editing = true })
+        NativeCollectionRatingToolbarAction(
+            score, "álbum", onClick = { editing = true },
+            onBoundsChanged = { ratingAnchor = it },
+        )
     }
 }
 

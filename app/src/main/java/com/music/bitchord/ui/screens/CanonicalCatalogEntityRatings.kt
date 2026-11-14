@@ -73,6 +73,7 @@ internal fun CanonicalCatalogEntityRatingDialog(
     target: CanonicalEntityRatingTarget,
     title: String,
     onDismiss: () -> Unit,
+    anchorBounds: androidx.compose.ui.unit.IntRect? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val dao = remember(context) { ListeningEventDatabase.get(context).canonicalEntityRatingDao() }
@@ -83,6 +84,7 @@ internal fun CanonicalCatalogEntityRatingDialog(
     CanonicalRecordingFeedbackPanel(
         rating = current,
         title = title,
+        anchorBounds = anchorBounds,
         saving = saving,
         denied = denied,
         onDismiss = { if (!saving) onDismiss() },

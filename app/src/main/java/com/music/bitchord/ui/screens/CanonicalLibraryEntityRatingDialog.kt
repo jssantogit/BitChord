@@ -125,6 +125,7 @@ internal fun CanonicalLibraryEntityRatingDialog(
     targets: List<CanonicalLibrarySelection>,
     selectedSource: String?,
     onDismiss: () -> Unit,
+    anchorBounds: androidx.compose.ui.unit.IntRect? = null,
 ) {
     val app = LocalContext.current.applicationContext
     val unique = remember(targets) { targets.distinct() }
@@ -148,6 +149,7 @@ internal fun CanonicalLibraryEntityRatingDialog(
     CanonicalRecordingFeedbackPanel(
         rating = current?.ratingValue,
         title = title,
+        anchorBounds = anchorBounds,
         saving = saving,
         denied = denied,
         onDismiss = { if (!saving) onDismiss() },
