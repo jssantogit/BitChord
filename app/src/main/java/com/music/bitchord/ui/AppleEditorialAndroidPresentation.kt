@@ -353,3 +353,23 @@ internal fun appleReleasesPreservingVerifiedArtwork(
         else album
     }
 }
+
+
+/** An Apple Search page is appendable; refreshed pages must not downgrade
+ * already verified artwork for the exact same storefront product. */
+internal fun appleSearchRowsPreservingVerifiedArtwork(
+    fresh: List<AppleEditorialSearchRow>,
+    previous: List<AppleEditorialSearchRow>,
+): List<AppleEditorialSearchRow> {
+    if (fresh.isEmpty() || previous.isEmpty()) return fresh
+    val oldById = previous.groupBy { it.browseId }
+    return fresh.map { item ->
+        val route = AppleCatalogBrowseRoute.parse(item.browseId)
+        val old = oldById[item.browseId]?.singleOrNull()
+        val artwork = if (route?.kind == ItunesCatalogItemType.ALBUM &&
+            old?.browseId == item.browseId
+        ) appleKeepVerifiedArtworkAcrossPaging(item.artworkUri, old.artworkUri)
+        else item.artworkUri
+        if (artwork != item.artworkUri) item.copy(artworkUri = artwork) else item
+    }
+}
