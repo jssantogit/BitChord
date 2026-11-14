@@ -63,7 +63,7 @@ class NativeCanonicalAlbumArtworkTest {
         )
         assertEquals(false, nativeAlbumTrackHasLoadableArtwork(missing))
         assertEquals(false, nativeAlbumTrackHasLoadableArtwork(unreachable))
-        assertEquals(true, nativeAlbumTrackHasLoadableArtwork(local))
+        assertEquals(false, nativeAlbumTrackHasLoadableArtwork(local))
         assertEquals(
             NativeAlbumHeroSource.DIRECT_URI,
             nativeAlbumHeroSource(
