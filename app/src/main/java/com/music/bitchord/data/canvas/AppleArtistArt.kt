@@ -59,7 +59,8 @@ internal fun exactAppleArtistPageUrl(browseId: String, storeUrl: String?): Strin
         .matchEntire(browseId) ?: return null
     if (storeUrl.isNullOrBlank()) return null
     val uri = try { java.net.URI(storeUrl) } catch (_: Exception) { return null }
-    if (uri.scheme != "https" || uri.host?.lowercase(Locale.ROOT) != "music.apple.com" ||
+    if (uri.scheme != "https" || uri.host?.lowercase(Locale.ROOT) !in
+        setOf("music.apple.com", "itunes.apple.com") ||
         uri.userInfo != null || uri.port != -1 || uri.rawFragment != null
     ) return null
     val path = uri.rawPath?.trimEnd('/') ?: return null
