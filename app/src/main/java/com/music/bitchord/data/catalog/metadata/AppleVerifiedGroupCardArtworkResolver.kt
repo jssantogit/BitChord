@@ -37,8 +37,15 @@ internal fun uniqueAppleGroupCardEdition(
         !it.releaseGroupMbid.equals(requestedGroupMbid, ignoreCase = true) ||
             it.artistDisplay.isNullOrBlank()
     }) return null
-    val eligible = page.items.filter(::isCuratedMusicBrainzRelease)
-    if (eligible.size == 1) return eligible.single().musicBrainzId
+    val officialAudio = page.items.filter {
+        it.status.equals("Official", ignoreCase = true) &&
+            it.isVideoOnlyMedia != true && it.isVideoOnlyContent != true
+    }
+    val eligible = officialAudio.filter(::isCuratedMusicBrainzRelease)
+    // A non-curated Official variant may still be picked by an independent
+    // group-detail page. It must not silently disappear from ambiguity checks.
+    if (officialAudio.size == 1 && eligible.size == 1)
+        return eligible.single().musicBrainzId
     // When multiple Official audio Releases exist, a selected exact-title
     // edition can represent the default Group cover ONLY if all competing
     // Official editions declare a clear alternate package. Do not guess
@@ -49,7 +56,7 @@ internal fun uniqueAppleGroupCardEdition(
     val alternate = Regex(
         """(?i)\b(?:deluxe|version|ver\.?|limited|collector|reissue|remaster|remix|instrumental|karaoke|live|vinyl|photobook|jewel\s*case|photocard|digipack|nemo|poca|platform|kit\s+album|sped\s+up|slowed|signed)\b""",
     )
-    if (eligible.any { edition ->
+    if (officialAudio.any { edition ->
         edition.musicBrainzId != primary.musicBrainzId &&
             (!edition.title.startsWith(title, ignoreCase = true) ||
                 !alternate.containsMatchIn(edition.title.substring(title.length)))
