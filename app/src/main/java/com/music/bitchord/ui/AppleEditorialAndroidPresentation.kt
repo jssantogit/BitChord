@@ -2,6 +2,7 @@ package com.music.bitchord.ui
 
 import com.music.bitchord.data.catalog.metadata.AppleTriSourceEditorialEntry
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
+import com.music.bitchord.data.catalog.metadata.safeAppleArtwork
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
 import com.music.bitchord.data.catalog.metadata.AppleExploreGenrePolicy
 import java.time.LocalDate
@@ -242,3 +243,33 @@ internal fun appleFirstHomeEditorialIsPending(
     hasCandidateSeeds: Boolean,
 ): Boolean = musicBrainzStillLoading || (appleStillLoading && hasCandidateSeeds)
 
+
+
+/**
+ * The image probe and the Apple release ID must both agree before refreshing
+ * Home/Explore. This is presentation-only: never write CDN variants to Room.
+ */
+internal fun appleEditorialReleasesWithProbedArtwork(
+    releases: List<ItunesEditorialRelease>,
+    requestedAlbumId: String,
+    original: String?,
+    probed: String?,
+): List<ItunesEditorialRelease> {
+    val route = AppleCatalogBrowseRoute.parse(requestedAlbumId)
+        ?.takeIf { it.kind == ItunesCatalogItemType.ALBUM } ?: return releases
+    if (original.isNullOrBlank() || probed == original ||
+        safeAppleArtwork(original) == null ||
+        safeAppleArtwork(probed) == null
+    ) return releases
+    if (releases.count {
+        it.appleScopedId == requestedAlbumId &&
+            it.storefront == route.storefront && it.appleCollectionId == route.id
+    } != 1) return releases
+    return releases.map { release ->
+        if (release.appleScopedId == requestedAlbumId &&
+            release.storefront == route.storefront &&
+            release.appleCollectionId == route.id &&
+            release.artworkUrl == original
+        ) release.copy(artworkUrl = probed) else release
+    }
+}
