@@ -153,6 +153,50 @@ internal fun NativeReleaseActionRow(
     }
 }
 
+/**
+ * Playlists without playable recordings still have a real Library identity.
+ * Keep their pin control, but do not show fake Play/Shuffle actions while the
+ * track list is empty, loading or metadata-only. The pin uses the exact same
+ * 50dp Apple-style control and semantics as the playable release action row.
+ */
+@Composable
+internal fun NativePlaylistHeroActions(
+    canPlay: Boolean,
+    isPinned: Boolean,
+    onTogglePin: () -> Unit,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+) {
+    Spacer(Modifier.height(18.dp))
+    if (canPlay) {
+        Box(Modifier.testTag("playlist-hero-playback-actions")) {
+            NativeReleaseActionRow(
+                onPlay = onPlay,
+                onShuffle = onShuffle,
+                isLocal = false,
+                reservePinAction = true,
+                pinTargetLabel = "playlist",
+                isPinnedInLibrary = isPinned,
+                onTogglePin = onTogglePin,
+            )
+        }
+    } else {
+        Box(
+            modifier = Modifier.fillMaxWidth().testTag("playlist-hero-pin-only"),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircleIconButton(
+                icon = if (isPinned) BitChordIcons.Check else BitChordIcons.Plus,
+                contentDescription = if (isPinned)
+                    "Desafixar playlist da Biblioteca" else "Fixar playlist na Biblioteca",
+                onClick = onTogglePin,
+                haptic = if (isPinned) Haptic.ToggleOff else Haptic.ToggleOn,
+                size = RELEASE_SIDE_BUTTON,
+            )
+        }
+    }
+}
+
 @Suppress("UNUSED_PARAMETER") // Rating/editing are owned by the top toolbar, kept for existing caller API.
 @Composable
 internal fun NativeReleaseHeaderLayout(
