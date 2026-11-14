@@ -86,6 +86,8 @@ class NativeSearchRowTest {
         assertFalse("mediaAssetId" in fields)
         assertFalse("providerKey" in fields)
         assertFalse("streamUrl" in fields)
+        assertFalse("appleStoreBadgeUrl" in fields)
+        assertFalse("appleStoreUrl" in fields)
         assertTrue("title" in fields)
         assertTrue("artworkUri" in fields)
     }
