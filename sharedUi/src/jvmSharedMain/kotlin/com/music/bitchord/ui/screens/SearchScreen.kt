@@ -137,6 +137,9 @@ data class CanonicalCatalogSearchRow(
     val artworkProvenance: CanonicalArtworkProvenance? = null,
     /** Complete MusicBrainz release/group artist credit IDs; not persisted in Room. */
     val artistCreditMbids: List<String>? = null,
+    /** Only present with a proved exact Apple edition and matching badge. */
+    val appleStoreUrl: String? = null,
+    val appleStoreBadgeUrl: String? = null,
 )
 
 /**
