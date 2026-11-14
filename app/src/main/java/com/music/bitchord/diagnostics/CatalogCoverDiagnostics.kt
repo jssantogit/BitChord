@@ -1,6 +1,7 @@
 package com.music.bitchord.diagnostics
 
 import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
+import com.music.bitchord.data.catalog.metadata.AppleArtworkProbeTelemetry
 
 /**
  * Privacy-safe export bridge. CAA metadata HTTP outcomes and completed Coil
@@ -9,11 +10,31 @@ import com.music.bitchord.data.catalog.metadata.CatalogCoverTelemetry
  * No MBIDs, titles, URLs, device IDs, network peer names, or search queries.
  */
 internal object CatalogCoverDiagnostics {
-    fun lines(s: CatalogCoverTelemetry.Snapshot): List<String> = buildList {
+    fun lines(
+        s: CatalogCoverTelemetry.Snapshot,
+        apple: AppleArtworkProbeTelemetry.Snapshot =
+            AppleArtworkProbeTelemetry.process.snapshot(),
+    ): List<String> = buildList {
         add("scope=caa_metadata_and_coil_image_loads")
         add("window=since_last_capture_start_or_process_start")
         add("not_measured=gpu_draw_latency_wrong_cover_rate")
         add("image_scope=coil_load_caa_urls_only")
+        // 1024px is an undocumented CDN rendition. A valid decoded bounds
+        // response proves the dimensions offered by its URL, NOT that Coil
+        // subsequently loaded or drew it. Keep those counters separate.
+        add("apple_cdn_evidence_is_not_coil_render_success=true")
+        add("apple_cdn_window=since_app_process_start")
+        add("apple_cdn_1024 attempts=${apple.attempts1024}" +
+            " dimension_verified=${apple.verified1024}")
+        add("apple_cdn_720 attempts=${apple.attempts720}" +
+            " dimension_verified=${apple.verified720}")
+        add("apple_cdn_600 attempts=${apple.attempts600}" +
+            " dimension_verified=${apple.verified600}")
+        add("apple_cdn_cache_positive_hits=${apple.positiveCacheHits}" +
+            " negative_hits=${apple.negativeCacheHits}")
+        add("apple_cdn_network_samples=${apple.networkSampleCount}" +
+            " apple_cdn_network_p50_ms=${apple.p50NetworkMs ?: "unknown"}" +
+            " apple_cdn_network_p95_ms=${apple.p95NetworkMs ?: "unknown"}")
         add("cache_hits=${s.positiveCacheHits} negative_cache_hits=${s.negativeCacheHits}" +
             " coalesced_requests=${s.coalescedRequests}")
         add("direct_front_candidates=${s.directFrontCandidates} source=legacy_front_presence_counter")
