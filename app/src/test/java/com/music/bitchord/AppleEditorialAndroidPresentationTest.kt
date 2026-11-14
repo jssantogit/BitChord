@@ -10,6 +10,8 @@ import com.music.bitchord.ui.AppleCatalogBrowseRoute
 import com.music.bitchord.ui.AppleEditorialShelfHeadings
 import com.music.bitchord.ui.appleEditorialShelves
 import com.music.bitchord.ui.appleEditorialReleasesWithProbedArtwork
+import com.music.bitchord.ui.appleArtistAlbumRowsWithProbedArtwork
+import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -42,6 +44,28 @@ class AppleEditorialAndroidPresentationTest {
         classification = AppleEditorialClassification.resolve(release, emptyList()),
         discogsEdition = null,
     )
+
+    @Test fun artistDiscographyOnlyReplacesSameAppleAlbumIdAndOriginalImage() {
+        val tiny = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
+        val large = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/600x600bb.jpg"
+        val first = AppleEditorialSearchRow(
+            browseId = "itunes:br:album:101", title = "HOT", artistName = "ILLIT",
+            artworkUri = tiny, releaseDate = null,
+        )
+        val second = first.copy(browseId = "itunes:br:album:102")
+        val rows = listOf(first, second)
+        val updated = appleArtistAlbumRowsWithProbedArtwork(
+            rows, first.browseId, tiny, large,
+        )
+        assertEquals(large, updated.first().artworkUri)
+        assertSame(second, updated.last())
+        assertEquals(rows, appleArtistAlbumRowsWithProbedArtwork(
+            rows, "itunes:br:album:102", "https://cdn.test/foreign.jpg", large,
+        ))
+        assertEquals(rows, appleArtistAlbumRowsWithProbedArtwork(
+            rows, "catalog:RELEASE:101", tiny, large,
+        ))
+    }
 
     @Test fun verifiedLargeAppleImageOnlyPatchesTheExactProduct() {
         val tiny = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
