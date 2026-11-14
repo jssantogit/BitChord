@@ -1,6 +1,11 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Alignment
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -16,19 +21,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
-import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
-import com.music.bitchord.data.catalog.metadata.CoverArtArchive
-import com.music.bitchord.data.catalog.metadata.CoverArtSize
-import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
-import com.music.bitchord.ui.loadCanonicalCoversProgressively
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import android.content.Intent
 import android.net.Uri
@@ -46,18 +41,22 @@ import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.theme.ArtworkPalette
+import com.music.bitchord.data.catalog.metadata.safeAppleArtwork
+import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
 
-/** Only a confirmed Release MBID can supply the front for a recording.
- * A title/artist match would risk showing the wrong edition's cover. */
-internal fun nativePublicTopCoverReleaseIds(
-    rows: List<CanonicalCatalogSearchRow>,
-): List<String> = rows.asSequence()
-    .filter { it.artworkUri.isNullOrBlank() }
-    .mapNotNull { it.coverReleaseMbid }
-    .filter(String::isNotBlank)
-    .distinct()
-    .take(10)
-    .toList()
+/**
+ * Artist-top artwork must be certified by the exact Apple edition resolver,
+ * not discovered through CAA, ListenBrainz image hints or fuzzy titles.
+ */
+internal fun nativePublicTopVerifiedAppleArtwork(
+    row: CanonicalCatalogSearchRow,
+): String? {
+    val approved = appleApprovedBadgeForStoreUrl(row.appleStoreUrl)
+    return row.artworkUri?.takeIf {
+        safeAppleArtwork(it) != null &&
+            approved != null && approved == row.appleStoreBadgeUrl
+    }
+}
 
 /**
  * Online rank and Library tracks share the native track row geometry. The
@@ -75,33 +74,6 @@ internal fun NativeArtistPublicTopSection(
     val exact = rows.filter {
         it.kind == CanonicalSearchKind.RECORDING &&
             it.artistScopeMbid?.equals(artistMbid, ignoreCase = true) == true
-    }
-    val context = LocalContext.current.applicationContext
-    val coverArt = remember(context) {
-        CoverArtArchive(
-            store = RoomMusicBrainzCoverArtStore(
-                CanonicalCatalogDatabase.get(context).catalogDao(),
-            ),
-        )
-    }
-    val coverIds = nativePublicTopCoverReleaseIds(exact)
-    val recoveredCovers by produceState(
-        initialValue = emptyMap<String, String>(), key1 = coverIds,
-    ) {
-        if (coverIds.isEmpty()) return@produceState
-        loadCanonicalCoversProgressively(
-            keys = coverIds,
-            maxConcurrent = 2,
-            fetch = { edition ->
-                withContext(Dispatchers.IO) {
-                    try {
-                        coverArt.findCover(edition, null, CoverArtSize.THUMBNAIL)
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                      catch (_: Exception) { null }
-                }
-            },
-            publish = { batch -> value = value + batch },
-        )
     }
     NativeArtistTracksShelf(
         title = stringResource(R.string.top_songs),
@@ -125,8 +97,7 @@ internal fun NativeArtistPublicTopSection(
                         .background(palette.onBackground.copy(alpha = 0.08f)),
                 ) {
                     CoverPlaceholder(Icons.Rounded.MusicNote, Modifier.fillMaxSize())
-                    (recording.artworkUri?.takeIf(String::isNotBlank)
-                        ?: recoveredCovers[recording.coverReleaseMbid])?.let { art ->
+                    nativePublicTopVerifiedAppleArtwork(recording)?.let { art ->
                         AsyncImage(
                             model = art.artworkAt(ROW_ART_PX),
                             contentDescription = null,
@@ -157,7 +128,26 @@ internal fun NativeArtistPublicTopSection(
             rating = {},
             showRatingSlot = false,
             actions = {
-                Box {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    val storeUrl = recording.appleStoreUrl
+                    val badgeUrl = recording.appleStoreBadgeUrl
+                    if (storeUrl != null && badgeUrl != null &&
+                        nativePublicTopVerifiedAppleArtwork(recording) != null
+                    ) {
+                        AsyncImage(
+                            model = badgeUrl,
+                            contentDescription = "Abrir edição na loja Apple",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.width(86.dp).height(28.dp)
+                                .clickable {
+                                    val intent = Intent(
+                                        Intent.ACTION_VIEW, Uri.parse(storeUrl),
+                                    )
+                                    runCatching { context.startActivity(intent) }
+                                },
+                        )
+                    }
+                    Box {
                     RowMoreButton(
                         onClick = { menuExpanded = true },
                         modifier = Modifier.testTag("artist-top-more-${recording.musicBrainzId}"),
@@ -178,6 +168,7 @@ internal fun NativeArtistPublicTopSection(
                                 runCatching { context.startActivity(intent) }
                             },
                         )
+                    }
                     }
                 }
             },
