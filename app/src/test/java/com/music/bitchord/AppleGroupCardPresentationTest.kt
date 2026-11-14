@@ -1,6 +1,9 @@
 package com.music.bitchord
 
 import com.music.bitchord.ui.screens.appleGroupCardBadgeFor
+import com.music.bitchord.ui.screens.nativeLiveArtistShelf
+import com.music.bitchord.data.model.HomeShelf
+import com.music.bitchord.data.model.ShelfItem
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -26,6 +29,16 @@ class AppleGroupCardPresentationTest {
             "catalog:RELEASE:541adf5a-48d4-4f7b-a7bb-afd3cea5af27", url, source))
         assertNull(appleGroupCardBadgeFor("catalog:RELEASE_GROUP:bad", url, source))
         assertNull(appleGroupCardBadgeFor(card, url, emptyMap()))
+    }
+
+    @Test fun expandedArtistGridUsesLatestCoverWithoutLosingShelfIdentity() {
+        val old = HomeShelf("Álbuns", listOf(ShelfItem(
+            title = "SUPER REAL ME", subtitle = "EP", thumbnailUrl = null,
+            videoId = null, browseId = card,
+        )))
+        val current = old.copy(items = listOf(old.items.single().copy(thumbnailUrl = url)))
+        assertSame(current, nativeLiveArtistShelf(old, listOf(current)))
+        assertSame(old, nativeLiveArtistShelf(old, emptyList()))
     }
 
     @Test fun forgedOrExternalArtworkCannotAcquireApplePromoBadge() {
