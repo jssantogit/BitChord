@@ -55,6 +55,8 @@ internal data class MusicBrainzCatalogReleaseDetail(
     val editionFormats: List<String> = emptyList(),
     val editionLabelCatalogPairs: List<Pair<String, String>> = emptyList(),
     val editionLabelCatalogComplete: Boolean = true,
+    /** Explicit direct Release URL linkage; Group/artist links are not evidence. */
+    val linkedAppleAlbumIds: List<Long> = emptyList(),
 )
 
 /** Transient source proof; defaults deliberately deny destructive reconciliation. */
@@ -240,7 +242,7 @@ internal class MusicBrainzCatalogGraph(
             ?: return MusicBrainzCatalogGraphResult.Failure(MusicBrainzCatalogSearchFailure.INVALID_QUERY)
         val raw = try {
             client.get("release/$normalized", mapOf(
-                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups+labels",
+                "fmt" to "json", "inc" to "recordings+artist-credits+release-groups+labels+url-rels",
             ))
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -399,6 +401,7 @@ internal class MusicBrainzCatalogGraph(
                         data.integer("media-count") == media.size),
                 status = data.string("status"),
                 barcode = data.string("barcode"),
+                linkedAppleAlbumIds = musicBrainzAppleReleaseAlbumIds(data["relations"]),
                 artistCreditNames = data.artistCreditNames(),
                 editionLabels = data.array("label-info").take(12).mapNotNull { entry ->
                     val info = entry as? JsonObject ?: return@mapNotNull null
