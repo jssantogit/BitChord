@@ -294,6 +294,21 @@ internal fun appleArtistArtworkTasksForNewPages(
     ) null else appleArtworkTargetPxForShelf(index, featuredCount) to album
 }
 
+/**
+ * High-res covers are an image-quality concern, not a promotional badge
+ * feature. The exact Apple album route and safe Apple CDN art are sufficient
+ * to probe 1024px even when the UI deliberately shows zero store emblems.
+ */
+internal fun appleNativeAlbumMayProbeLargeCover(
+    page: com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage?,
+): Boolean {
+    if (page == null) return false
+    val route = AppleCatalogBrowseRoute.parse(page.album.browseId)
+        ?.takeIf { it.kind == ItunesCatalogItemType.ALBUM } ?: return false
+    return route.storefront.isNotBlank() &&
+        safeAppleArtwork(page.album.artworkUri) != null
+}
+
 /** Artist discographies use typed Apple IDs, never a title/artist cover join. */
 internal fun appleArtistAlbumRowsWithProbedArtwork(
     rows: List<AppleEditorialSearchRow>,
