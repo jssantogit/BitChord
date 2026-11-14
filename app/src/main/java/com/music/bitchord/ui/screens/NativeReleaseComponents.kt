@@ -154,11 +154,33 @@ internal fun NativeReleaseActionRow(
 }
 
 /**
- * Playlists without playable recordings still have a real Library identity.
- * Keep their pin control, but do not show fake Play/Shuffle actions while the
- * track list is empty, loading or metadata-only. The pin uses the exact same
- * 50dp Apple-style control and semantics as the playable release action row.
+ * A saved release may have metadata but no playable MediaAssets. A real pin
+ * capability must remain accessible without implying a Play/Shuffle action.
+ * Album and playlist details share the same first-party circular control.
  */
+@Composable
+internal fun NativeReleasePinOnlyAction(
+    targetLabel: String,
+    isPinned: Boolean,
+    onTogglePin: () -> Unit,
+    tag: String,
+) {
+    Box(
+        modifier = Modifier.fillMaxWidth().testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        CircleIconButton(
+            icon = if (isPinned) BitChordIcons.Check else BitChordIcons.Plus,
+            contentDescription = if (isPinned)
+                "Desafixar $targetLabel da Biblioteca" else "Fixar $targetLabel na Biblioteca",
+            onClick = onTogglePin,
+            haptic = if (isPinned) Haptic.ToggleOff else Haptic.ToggleOn,
+            size = RELEASE_SIDE_BUTTON,
+        )
+    }
+}
+
+/** A playlist with no playable recordings is still pinnable. */
 @Composable
 internal fun NativePlaylistHeroActions(
     canPlay: Boolean,
@@ -169,7 +191,7 @@ internal fun NativePlaylistHeroActions(
 ) {
     Spacer(Modifier.height(18.dp))
     if (canPlay) {
-        Box(Modifier.testTag("playlist-hero-playback-actions")) {
+        Box(Modifier.fillMaxWidth().testTag("playlist-hero-playback-actions")) {
             NativeReleaseActionRow(
                 onPlay = onPlay,
                 onShuffle = onShuffle,
@@ -181,19 +203,48 @@ internal fun NativePlaylistHeroActions(
             )
         }
     } else {
-        Box(
-            modifier = Modifier.fillMaxWidth().testTag("playlist-hero-pin-only"),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircleIconButton(
-                icon = if (isPinned) BitChordIcons.Check else BitChordIcons.Plus,
-                contentDescription = if (isPinned)
-                    "Desafixar playlist da Biblioteca" else "Fixar playlist na Biblioteca",
-                onClick = onTogglePin,
-                haptic = if (isPinned) Haptic.ToggleOff else Haptic.ToggleOn,
-                size = RELEASE_SIDE_BUTTON,
+        NativeReleasePinOnlyAction(
+            targetLabel = "playlist",
+            isPinned = isPinned,
+            onTogglePin = onTogglePin,
+            tag = "playlist-hero-pin-only",
+        )
+    }
+}
+
+/**
+ * The exact same rule for album details. Optional onTogglePin expresses a real
+ * capability; a metadata-only album without one must not fabricate an action.
+ */
+@Composable
+internal fun NativeAlbumHeroActions(
+    canPlay: Boolean,
+    isPinned: Boolean,
+    onTogglePin: (() -> Unit)?,
+    onPlay: () -> Unit,
+    onShuffle: () -> Unit,
+) {
+    if (canPlay) {
+        Spacer(Modifier.height(18.dp))
+        Box(Modifier.fillMaxWidth().testTag("album-hero-playback-actions")) {
+            NativeReleaseActionRow(
+                onPlay = onPlay,
+                onShuffle = onShuffle,
+                isLocal = false,
+                reservePinAction = true,
+                pinTargetLabel = "álbum",
+                isPinnedInLibrary = isPinned,
+                onTogglePin = onTogglePin,
             )
         }
+    } else if (onTogglePin != null) {
+        Spacer(Modifier.height(18.dp))
+        NativeReleasePinOnlyAction(
+            targetLabel = "álbum",
+            isPinned = isPinned,
+            onTogglePin = onTogglePin,
+            tag = "album-hero-pin-only",
+        )
     }
 }
 
