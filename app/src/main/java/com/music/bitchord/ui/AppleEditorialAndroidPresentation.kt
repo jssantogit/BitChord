@@ -286,11 +286,12 @@ internal fun appleEditorialReleasesWithProbedArtwork(
 internal fun appleArtistArtworkTasksForNewPages(
     candidates: List<AppleEditorialSearchRow>,
     alreadyQueued: MutableSet<String>,
+    featuredCount: Int = 0,
 ): List<Pair<Int, AppleEditorialSearchRow>> = candidates.mapIndexedNotNull { index, album ->
     if (AppleCatalogBrowseRoute.parse(album.browseId)?.kind !=
             ItunesCatalogItemType.ALBUM ||
         !alreadyQueued.add(album.browseId)
-    ) null else index to album
+    ) null else appleArtworkTargetPxForShelf(index, featuredCount) to album
 }
 
 /** Artist discographies use typed Apple IDs, never a title/artist cover join. */
