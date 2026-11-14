@@ -193,6 +193,8 @@ internal class AppleHighResolutionArtwork(
                 val now = clockMs()
                 val prior = cache[candidate] ?: try {
                     persistence?.load(candidate)?.also { cache[candidate] = it }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
                 } catch (_: Exception) { null }
                 if (prior != null && prior.expiresAtMs > now)
                     return@withLock prior.valid
@@ -212,6 +214,7 @@ internal class AppleHighResolutionArtwork(
                 cache[candidate] = record
                 // Persistence failures are never image-loading failures.
                 try { persistence?.save(candidate, record) }
+                catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { }
                 accepted
             }
