@@ -5245,6 +5245,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 is AppleEditorialLoad.Failure -> UiState.Error("apple_catalog_unavailable")
             }
+            // The Apple-native album already owns its store identity. Paint
+            // its 100px image immediately; verify a larger Apple CDN variant
+            // independently, without a MusicBrainz UPC lookup or developer key.
+            val initialAlbum = (_appleEditorialDetail.value as? UiState.Success)?.data
+            if (initialAlbum?.appleStoreBadgeUrl != null) {
+                launch {
+                    val originalUrl = initialAlbum.album.artworkUri
+                    val upgraded = appleHighResolutionArtwork.upgrade(originalUrl, 720)
+                    if (upgraded != null && upgraded != originalUrl &&
+                        activeAppleAlbumId == row.browseId &&
+                        _searchSource.value == SearchSource.CANONICAL
+                    ) {
+                        _appleEditorialDetail.update { state ->
+                            if (state !is UiState.Success ||
+                                state.data.album.browseId != row.browseId ||
+                                state.data.album.artworkUri != originalUrl
+                            ) state else UiState.Success(state.data.copy(
+                                album = state.data.album.copy(artworkUri = upgraded),
+                            ))
+                        }
+                    }
+                }
+            }
             // First paint is strictly Apple. The extra MusicBrainz lookups
             // happen only after the detail is already visible, and cannot
             // replace its artwork, name, track order or commercial identity.
@@ -5272,8 +5295,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             response, row.browseId, evidence,
                         )
                         val current = (_appleEditorialDetail.value as? UiState.Success)?.data
-                        if (refined != null && current != null && refined != current) {
-                            _appleEditorialDetail.value = UiState.Success(refined)
+                        if (refined != null && current != null &&
+                            refined.album.browseId == current.album.browseId
+                        ) {
+                            // Reconciliation is metadata-only. An already
+                            // dimension-probed Apple hero must not regress to
+                            // the Search API's original 100px thumbnail.
+                            val preserved = refined.copy(album = refined.album.copy(
+                                artworkUri = current.album.artworkUri,
+                            ))
+                            if (preserved != current)
+                                _appleEditorialDetail.value = UiState.Success(preserved)
                         }
                     }
                 }
