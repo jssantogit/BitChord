@@ -48,11 +48,16 @@ internal fun nativeAlbumHeroSource(
 internal fun nativeAlbumTrackHasLoadableArtwork(track: CanonicalBrowseTrack?): Boolean {
     val revision = track?.artworkUri?.trim().orEmpty()
     if (revision.isBlank()) return false
-    if (revision.startsWith("content://", ignoreCase = true) ||
-        revision.startsWith("file://", ignoreCase = true)) return true
-    return track?.availableAssets?.any {
-        it.providerKey.startsWith("opensubsonic:")
-    } == true
+    val localArt = revision.startsWith("content://", ignoreCase = true) ||
+        revision.startsWith("file://", ignoreCase = true)
+    // Match CanonicalUnifiedArtwork: local Coil content is allowed only for
+    // MediaStore-backed tracks. A remote provider cannot resolve a local URI.
+    // RemoteTrackArtwork additionally rejects content/file revisions.
+    return if (localArt) {
+        track?.availableAssets?.any { it.providerKey == "local-mediastore" } == true
+    } else {
+        track?.availableAssets?.any { it.providerKey.startsWith("opensubsonic:") } == true
+    }
 }
 
 /** Preserve a placeholder under the remote art until it actually paints. */
