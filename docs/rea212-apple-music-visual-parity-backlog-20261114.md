@@ -68,3 +68,23 @@ Este registro acompanha os cortes sem transformar aproximações em afirmações
 5. **Critério de STOP:** registrar `unknown/requires_runtime` quando fonte não sustentar medida; evitar nova exploração ampla do APK ou promessas de pixel-perfect. Esta lista é backlog, **não** autorização para criar a issue agora.
 
 **Gate de aceite destes cortes:** compilar/testar Android e shared UI no HEAD exato e realizar smoke visual no aparelho antes de fechar/mesclar a #212. Nenhum APK novo solicitado por este corte.
+
+## Corte R3 adicional — ações autênticas no álbum e nos lançamentos de artista (14/11/2026)
+
+Fonte de referência permanece [R3/R5 do handoff final](https://github.com/jssantogit/am-descomp/blob/fase-3-investigacao-visual/docs/rea212-final-visual-handoff.md). Isto é um refinamento funcional e de consistência da UI Android; **não** é evidência de que o Apple Music implementa exatamente o gesto ou a posição da ação.
+
+| Superfície | Implementado na PR #212 | Limite / evidência pendente |
+| --- | --- | --- |
+| Detalhe de álbum local/remoto | `NativeCanonicalAlbumContent` agora delega a `NativeAlbumHeroActions`: com faixas reproduzíveis preserva Play/Shuffle/pin; com zero faixas reproduzíveis mantém o **pin circular** somente se `onTogglePin` for real. Nunca cria uma fila falsa. `NativeAlbumHeroActionsTest` cobre três estados (pin-only, reproduzível, sem capacidade). | R3/S07 reescalada não comprova dimensões, posição de + nem presença de controle na versão Apple. A persistência do pin é uma função BitChord, não uma cópia inventada do Apple Music. Revalidar avatar/capa, título longo, comportamento durante loading/erro, tema e TalkBack em aparelho. |
+| Lançamento recente do artista | `NativeArtistTopReleaseCard` passou a encaminhar hold ao menu contextual canônico, desde que não haja seleção em andamento; abre o release verificado e não uma inferência pelo título. | R3/V03 confirma rolagem e mudanças no hero, não o gesto de hold no card. Confirmar visibilidade do backdrop, posicionamento do menu, retorno ao mesmo scroll, seleção, alternância de arte e acessibilidade no BitChord físico. |
+| Grades horizontais do artista | Cards `NativeArtistReleaseCard` de Álbuns, Singles/EPs e Lançamentos agora usam `nativeArtistReleaseHoldAction` com **ReleaseId exato**, sem ⋯ adicional e sem menus durante seleção. Teste unitário protege identidade e modo seleção. | Sem prova Apple de tempo de hold, efeitos de profundidade, sombra, blur e limites do menu sobre carrossel. Preservar classes MusicBrainz pendentes e a origem dos lançamentos até integração da PR #216. |
+
+**Gate:** [REA212 Album and artist actions validation #43629542099](https://github.com/jssantogit/BitChord/actions/runs/43629542099), branch temporária com a fonte do corte de produção/teste exatamente em `62dbfa99`; a verificação final de testes deve ser registrada com seu resultado real. Nenhum APK foi solicitado, gerado ou distribuído por este corte.
+
+### Acréscimo à futura issue de lacunas do am-descomp (não criar agora)
+
+- R3 álbum: falta evidência comparável, em coordenadas e dimensões de runtime, da distância entre fim do hero, ações e primeira faixa, além do comportamento durante carregamento parcial e ação +.
+- R3 artista: falta evidência do menu de hold sobre o card destacado e os cards horizontais, bem como da interação menu/rolagem/blur. Tratar como **desconhecido no Apple**, mesmo que a UI do BitChord já ofereça a interação.
+- R5: falta prova dos limiares e curvas de animação do hero e título do artista, particularmente se a arte chega depois do conteúdo; não inventar easing ou duração.
+
+Critério de parada: documentar `unknown/requires_runtime` quando a evidência for insuficiente; não reabrir decompilação ampla ou distribuir mídia proprietária.
