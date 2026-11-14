@@ -17,9 +17,9 @@ internal fun appleGroupCardBadgeFor(
     verifiedPromotions: Map<String, Pair<String, String>>,
 ): AppleGroupCardBadge? {
     val prefix = "catalog:RELEASE_GROUP:"
-    if (browseId?.startsWith(prefix) != true || displayedArtworkUrl.isNullOrBlank())
-        return null
-    val group = browseId.removePrefix(prefix)
+    val id = browseId?.takeIf { it.startsWith(prefix) } ?: return null
+    if (displayedArtworkUrl.isNullOrBlank()) return null
+    val group = id.removePrefix(prefix)
     val (art, store) = verifiedPromotions[group] ?: return null
     if (displayedArtworkUrl != art || safeAppleArtwork(art) == null) return null
     val badge = appleApprovedBadgeForStoreUrl(store) ?: return null
