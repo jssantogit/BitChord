@@ -16,6 +16,8 @@ import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.music.bitchord.ui.components.NativeContextActionPlate
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,8 +52,10 @@ internal fun CanonicalLibraryBatchActionBar(
     var expanded by remember { mutableStateOf(true) }
     // Compact phone-safe dock: the count is never squeezed between four
     // 48dp controls on one line. Both rows use the existing wizard actions
-    // inside the same native Settings surface, not an invented panel.
-    SettingsGroupSurface(modifier.widthIn(max = 340.dp)) {
+    // inside the same lifted plate as held-item menus, not a second Settings sheet.
+    NativeContextActionPlate(
+        modifier = modifier.widthIn(max = 340.dp).testTag("native-selection-held-card"),
+    ) {
         Column(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
