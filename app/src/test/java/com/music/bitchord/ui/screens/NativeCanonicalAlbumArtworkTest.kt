@@ -50,4 +50,27 @@ class NativeCanonicalAlbumArtworkTest {
             )
         }
     }
+    @Test fun trackWithNoUsableArtworkMustNotSuppressVerifiedReleaseCover() {
+        val missing = com.music.bitchord.data.catalog.CanonicalBrowseTrack(
+            recordingId = "a", title = "Track A", artistDisplay = "Artist",
+            durationMs = null, artworkUri = null, availableAssets = emptyList(),
+        )
+        val unreachable = missing.copy(
+            artworkUri = "https://example.invalid/cover",
+        )
+        val local = missing.copy(
+            artworkUri = "content://media/external/audio/albumart/22",
+        )
+        assertEquals(false, nativeAlbumTrackHasLoadableArtwork(missing))
+        assertEquals(false, nativeAlbumTrackHasLoadableArtwork(unreachable))
+        assertEquals(true, nativeAlbumTrackHasLoadableArtwork(local))
+        assertEquals(
+            NativeAlbumHeroSource.DIRECT_URI,
+            nativeAlbumHeroSource(
+                "https://images.example/verified-release.jpg",
+                hasTrackArtwork = nativeAlbumTrackHasLoadableArtwork(unreachable),
+            ),
+        )
+    }
+
 }
