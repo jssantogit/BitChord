@@ -3921,9 +3921,9 @@ private fun BitChordApp(
                             title = activeCanonicalGenre?.title ?: stringResource(R.string.explore),
                             onItemLongPress = onShelfLongPress,
                             publicPlaylistNotice = canonicalGenrePlaylistNotice,
-                            onBack = if (activeCanonicalGenre != null) {
-                                { activeCanonicalGenre = null }
-                            } else null,
+                            // The global FrostedTopBar owns this back button.
+                            // An in-list back overlays the global ⋯ on genre pages.
+                            onBack = null,
                             signedIn = true,
                             leadHero = true,
                             currentSong = player.song,
@@ -4603,9 +4603,15 @@ private fun BitChordApp(
                 val appleDownloadsChrome = shouldUseAppleDownloadsChrome(
                     detail?.browseId, settingsOpen = showSettings,
                 ) && !showHistory && !showReplay
+                val appleExploreGenreChrome = shouldShowExploreGenreTopBarBack(
+                    selectedTab, TAB_EXPLORE, activeCanonicalGenre != null, detail != null,
+                ) && !showSettings && !showHistory && !showReplay &&
+                    !showAccountScrobbling && !showSources && !showListenTogether &&
+                    !showWearOs && !showEqualizer && !showSmartPlaylistBuilder &&
+                    openedPublicPlaylist == null
                 val appleLibraryRoundChrome = appleLibraryLandingChrome ||
                     appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
-                    appleExploreRootChrome || appleDownloadsChrome
+                    appleExploreRootChrome || appleExploreGenreChrome || appleDownloadsChrome
 
                 FrostedTopBar(
                     title = when {
@@ -4649,15 +4655,16 @@ private fun BitChordApp(
                     separateActions = appleLibraryRoundChrome,
                     rootActionsOffset = when {
                         appleExploreRootChrome -> 20.dp
+                        appleExploreGenreChrome -> 12.dp
                         appleLibraryLandingChrome -> 10.dp
                         appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
                             appleDownloadsChrome -> 12.dp
                         else -> 0.dp
                     },
                     categoryBackButton = appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
-                        appleDownloadsChrome,
+                        appleExploreGenreChrome || appleDownloadsChrome,
                     backButtonOffset = if (appleLibraryCategoryChrome || applePlaylistCategoryChrome ||
-                        appleDownloadsChrome) 12.dp else 0.dp,
+                        appleExploreGenreChrome || appleDownloadsChrome) 12.dp else 0.dp,
                     // The generic top bar scroll flag flips after 24px,
                     // while the large Home heading is still fully legible.
                     // Only show its compact replacement when item 0 has left
@@ -4744,6 +4751,7 @@ private fun BitChordApp(
                         openedPublicPlaylist != null -> ({ openedPublicPlaylist = null })
                         detailActiveShelf != null -> ({ detailActiveShelf = null })
                         detail != null -> ({ viewModel.closeDetail(); Unit })
+                        appleExploreGenreChrome -> ({ activeCanonicalGenre = null })
 
                         else -> null
                     },
@@ -4856,7 +4864,7 @@ private fun BitChordApp(
                             com.music.bitchord.ui.components.AppleRootSettingsOverflow(
                                 hazeState = hazeState,
                                 description = when {
-                                    appleExploreRootChrome -> "Mais opções de Explorar"
+                                    appleExploreRootChrome || appleExploreGenreChrome -> "Mais opções de Explorar"
                                     appleDownloadsChrome -> "Mais opções de Downloads"
                                     else -> "Mais opções da biblioteca"
                                 },
