@@ -672,8 +672,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     private var canonicalSearchCoverJob: Job? = null
     private var canonicalHomeCoverJob: Job? = null
-    // At most two failed CAA artist-shelf cards per visit may attempt a
-    // verified Apple match; ordinary CAA discovery stays the fast path.
+    // Verified iTunes covers are now the target catalog source, regardless
+    // of whether the group already has a CAA sleeve.
     private val canonicalGroupCardArtworkResolver by lazy {
         com.music.bitchord.data.catalog.metadata.AppleVerifiedGroupCardArtworkResolver()
     }
@@ -1260,6 +1260,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val offlineOnly = (_canonicalDetail.value as? UiState.Success)
                 ?.data?.rows?.firstOrNull()?.fromOfflineCache == true
             var firstEditionPage: MusicBrainzCatalogPage<MusicBrainzReleaseHit>? = null
+            // Begin Apple verification before archive enrichment. CAA only
+            // supplies a transitional fallback when no exact Apple identity is
+            // available; a pre-existing CAA cover does not skip this work.
+            if (!offlineOnly) startCanonicalGroupCardAppleCoverage(
+                artist,
+                canonicalAppleGroupCardArtworkCandidates(
+                    (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty(),
+                    limit = 16,
+                ),
+            )
             // Additional edition pages now stream concurrently with CAA
             // lookups. The map must support safe independent IO workers.
             val artistEditions = java.util.concurrent.ConcurrentHashMap<
@@ -1386,7 +1396,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val attempted = mutableSetOf<String>()
             var initialCoverWave = true
             var expandedArtistEditionPages = false
-            var appleFallbackStarted = false
             while (true) {
                 currentCoroutineContext().ensureActive()
                 if (_searchSource.value != SearchSource.CANONICAL ||
@@ -1499,13 +1508,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     },
                 )
-                // Wait until the first CAA cover wave has finished before
-                // considering Apple fallback. This avoids parallel per-card
-                // lookups while CAA can already provide a better sleeve.
-                if (!appleFallbackStarted) {
-                    appleFallbackStarted = true
-                    startCanonicalGroupCardAppleFallback(artist, batch)
-                }
                 // Only groups newly supported by late, positively-linked
                 // Official editions may retry if their earlier cover failed.
                 // Existing success is never reloaded, and expansion is bounded.
@@ -1517,42 +1519,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Small, bounded artist-shelf fallback. The source must prove a complete
-     * singleton Official ReleaseGroup, then independently certify UPC and
-     * full tracklist through AppleVerifiedEditionArtworkResolver.
-     * Never decorate a Group already carrying CAA artwork with a 100px asset.
+     * Artist shelves prefer exact iTunes covers, even when a CAA image
+     * already exists. A complete Official singleton-group browse is the
+     * current conservative gate; ambiguous groups await later resolution.
+     * Apple artwork and its mandatory store attribution remain UI-only.
      */
-    private fun startCanonicalGroupCardAppleFallback(
+    private fun startCanonicalGroupCardAppleCoverage(
         artist: CanonicalCatalogSearchRow,
-        attemptedRows: List<CanonicalCatalogSearchRow>,
+        candidates: List<CanonicalCatalogSearchRow>,
     ) {
         canonicalGroupCardArtworkJob?.cancel()
-        val current = (_canonicalDetail.value as? UiState.Success)?.data
-            ?: return
-        val missing = attemptedRows.filter { candidate ->
-            candidate.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                current.rows.any {
-                    it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                        it.musicBrainzId == candidate.musicBrainzId &&
-                        it.artworkUri.isNullOrBlank() &&
-                        canonicalEditorialReleaseType(it) != null
-                }
-        }.distinctBy { it.musicBrainzId }.take(2)
-        if (missing.isEmpty()) return
+        if (candidates.isEmpty()) return
         canonicalGroupCardArtworkJob = viewModelScope.launch(Dispatchers.IO) {
-            for (candidate in missing) {
-                currentCoroutineContext().ensureActive()
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    canonicalPath.lastOrNull() != artist
-                ) return@launch
-                val proof = try {
-                    canonicalGroupCardArtworkResolver.resolve(candidate.musicBrainzId, "br")
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { null } ?: continue
-                val artwork = proof.artworkUrl
-                val route = canonicalNativeBrowseId(artist)
-                canonicalArtworkPresentationMutex.withLock {
+            val permits = Semaphore(2)
+            candidates.forEach { candidate ->
+                launch {
+                    permits.withPermit {
+                        currentCoroutineContext().ensureActive()
+                        if (_searchSource.value != SearchSource.CANONICAL ||
+                            canonicalPath.lastOrNull() != artist
+                        ) return@withPermit
+                        val proof = try {
+                            canonicalGroupCardArtworkResolver.resolve(
+                                candidate.musicBrainzId, "br",
+                            )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) { null } ?: return@withPermit
+                        val artwork = proof.artworkUrl
+                        val route = canonicalNativeBrowseId(artist)
+                        canonicalArtworkPresentationMutex.withLock {
                     if (_searchSource.value != SearchSource.CANONICAL ||
                         canonicalPath.lastOrNull() != artist
                     ) return@withLock
@@ -1562,8 +1558,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         it.kind == CanonicalSearchKind.RELEASE_GROUP &&
                             it.musicBrainzId == candidate.musicBrainzId
                     } ?: return@withLock
-                    if (!row.artworkUri.isNullOrBlank() ||
-                        canonicalEditorialReleaseType(row) == null ||
+                    if (canonicalEditorialReleaseType(row) == null ||
                         com.music.bitchord.data.catalog.metadata
                             .verifiedAppleArtworkForDisplayedGroupCover(
                                 proof, candidate.musicBrainzId,
@@ -1581,7 +1576,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             state.data.copy(rows = state.data.rows.map { item ->
                                 if (item.kind == CanonicalSearchKind.RELEASE_GROUP &&
                                     item.musicBrainzId == candidate.musicBrainzId &&
-                                    item.artworkUri.isNullOrBlank()
+                                    item.artworkUri != artwork
                                 ) item.copy(artworkUri = artwork) else item
                             }),
                         )
@@ -1592,7 +1587,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 page.sections.none { shelf ->
                                     shelf.items.any {
                                         it.browseId == "catalog:RELEASE_GROUP:${candidate.musicBrainzId}" &&
-                                            it.thumbnailUrl.isNullOrBlank()
+                                            it.thumbnailUrl != artwork
                                     }
                                 }
                             ) page else page.copy(
@@ -1601,6 +1596,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     mapOf(candidate.musicBrainzId to (artwork to row.title)),
                                 ),
                             )
+                        }
+                    }
                         }
                     }
                 }
