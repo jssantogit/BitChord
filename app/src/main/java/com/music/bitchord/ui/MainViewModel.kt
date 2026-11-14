@@ -672,6 +672,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
     private var canonicalSearchCoverJob: Job? = null
     private var canonicalHomeCoverJob: Job? = null
+    // At most two failed CAA artist-shelf cards per visit may attempt a
+    // verified Apple match; ordinary CAA discovery stays the fast path.
+    private val canonicalGroupCardArtworkResolver by lazy {
+        com.music.bitchord.data.catalog.metadata.AppleVerifiedGroupCardArtworkResolver()
+    }
+    private var canonicalGroupCardArtworkJob: Job? = null
+    private val _canonicalGroupCardApplePromotions =
+        MutableStateFlow<Map<String, Pair<String, String>>>(emptyMap())
+    internal val canonicalGroupCardApplePromotions =
+        _canonicalGroupCardApplePromotions.asStateFlow()
 
     /**
      * Fill only genuine CAA artwork on an IO worker. A 404 or temporary error
@@ -1376,6 +1386,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val attempted = mutableSetOf<String>()
             var initialCoverWave = true
             var expandedArtistEditionPages = false
+            var appleFallbackStarted = false
             while (true) {
                 currentCoroutineContext().ensureActive()
                 if (_searchSource.value != SearchSource.CANONICAL ||
@@ -1488,12 +1499,111 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                     },
                 )
+                // Wait until the first CAA cover wave has finished before
+                // considering Apple fallback. This avoids parallel per-card
+                // lookups while CAA can already provide a better sleeve.
+                if (!appleFallbackStarted) {
+                    appleFallbackStarted = true
+                    startCanonicalGroupCardAppleFallback(artist, batch)
+                }
                 // Only groups newly supported by late, positively-linked
                 // Official editions may retry if their earlier cover failed.
                 // Existing success is never reloaded, and expansion is bounded.
                 if (expandNow) attempted.removeAll(lateEditionGroups)
                 if (_searchSource.value != SearchSource.CANONICAL ||
                     canonicalPath.lastOrNull() != artist) break
+            }
+        }
+    }
+
+    /**
+     * Small, bounded artist-shelf fallback. The source must prove a complete
+     * singleton Official ReleaseGroup, then independently certify UPC and
+     * full tracklist through AppleVerifiedEditionArtworkResolver.
+     * Never decorate a Group already carrying CAA artwork with a 100px asset.
+     */
+    private fun startCanonicalGroupCardAppleFallback(
+        artist: CanonicalCatalogSearchRow,
+        attemptedRows: List<CanonicalCatalogSearchRow>,
+    ) {
+        canonicalGroupCardArtworkJob?.cancel()
+        val current = (_canonicalDetail.value as? UiState.Success)?.data
+            ?: return
+        val missing = attemptedRows.filter { candidate ->
+            candidate.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                current.rows.any {
+                    it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                        it.musicBrainzId == candidate.musicBrainzId &&
+                        it.artworkUri.isNullOrBlank() &&
+                        canonicalEditorialReleaseType(it) != null
+                }
+        }.distinctBy { it.musicBrainzId }.take(2)
+        if (missing.isEmpty()) return
+        canonicalGroupCardArtworkJob = viewModelScope.launch(Dispatchers.IO) {
+            for (candidate in missing) {
+                currentCoroutineContext().ensureActive()
+                if (_searchSource.value != SearchSource.CANONICAL ||
+                    canonicalPath.lastOrNull() != artist
+                ) return@launch
+                val proof = try {
+                    canonicalGroupCardArtworkResolver.resolve(candidate.musicBrainzId, "br")
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null } ?: continue
+                val artwork = proof.artworkUrl
+                val route = canonicalNativeBrowseId(artist)
+                canonicalArtworkPresentationMutex.withLock {
+                    if (_searchSource.value != SearchSource.CANONICAL ||
+                        canonicalPath.lastOrNull() != artist
+                    ) return@withLock
+                    val rows = (_canonicalDetail.value as? UiState.Success)?.data?.rows
+                        ?: return@withLock
+                    val row = rows.singleOrNull {
+                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                            it.musicBrainzId == candidate.musicBrainzId
+                    } ?: return@withLock
+                    if (!row.artworkUri.isNullOrBlank() ||
+                        canonicalEditorialReleaseType(row) == null ||
+                        com.music.bitchord.data.catalog.metadata
+                            .verifiedAppleArtworkForDisplayedGroupCover(
+                                proof, candidate.musicBrainzId,
+                                proof.musicBrainzReleaseId, row.artworkUri,
+                            ) == null
+                    ) return@withLock
+                    // Artist card artwork and badge are both ephemeral UI
+                    // state. Do not persist the Apple promo in the CAA cache,
+                    // which has different rights and provenance.
+                    _canonicalGroupCardApplePromotions.update {
+                        it + (candidate.musicBrainzId to (artwork to proof.storeUrl))
+                    }
+                    _canonicalDetail.update { state ->
+                        if (state !is UiState.Success) state else UiState.Success(
+                            state.data.copy(rows = state.data.rows.map { item ->
+                                if (item.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                                    item.musicBrainzId == candidate.musicBrainzId &&
+                                    item.artworkUri.isNullOrBlank()
+                                ) item.copy(artworkUri = artwork) else item
+                            }),
+                        )
+                    }
+                    _detailStack.update { pages ->
+                        pages.map { page ->
+                            if (page.browseId != route ||
+                                page.sections.none { shelf ->
+                                    shelf.items.any {
+                                        it.browseId == "catalog:RELEASE_GROUP:${candidate.musicBrainzId}" &&
+                                            it.thumbnailUrl.isNullOrBlank()
+                                    }
+                                }
+                            ) page else page.copy(
+                                sections = canonicalArtistShelvesWithCoverUpdates(
+                                    page.sections,
+                                    mapOf(candidate.musicBrainzId to (artwork to row.title)),
+                                ),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1564,6 +1674,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun clearCanonicalCatalogNavigation() {
+        canonicalGroupCardArtworkJob?.cancel()
+        _canonicalGroupCardApplePromotions.value = emptyMap()
         canonicalAppleArtworkJob?.cancel()
         _canonicalAppleArtworkPromotion.value = null
         canonicalDetailCoverJob?.cancel()
@@ -1785,6 +1897,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
         val startedNanos = System.nanoTime()
+        canonicalGroupCardArtworkJob?.cancel()
+        _canonicalGroupCardApplePromotions.value = emptyMap()
         canonicalAppleArtworkJob?.cancel()
         _canonicalAppleArtworkPromotion.value = null
         canonicalDetailCoverJob?.cancel()
