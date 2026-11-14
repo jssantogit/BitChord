@@ -33,7 +33,7 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistNativeSheetReuseTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun sharedSettingsGroupSelectionDockFitsPhoneAndCollapsesNativeActions() {
+    @Test fun liftedContextSelectionDockFitsPhoneAndCollapsesNativeActions() {
         var added = 0
         var queued = 0
         compose.setContent {
@@ -49,7 +49,7 @@ class PlaylistNativeSheetReuseTest {
                 )
             }
         }
-        compose.onNodeWithTag("native-settings-group-surface").assertExists()
+        compose.onNodeWithTag("native-selection-held-card").assertExists()
         compose.onNodeWithContentDescription("Adicionar seleção à playlist").performClick()
         compose.onNodeWithContentDescription("Adicionar seleção à fila").performClick()
         compose.runOnIdle {

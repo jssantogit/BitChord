@@ -335,7 +335,9 @@ internal fun CanonicalRecordingFeedbackPanel(
             modifier = Modifier.fillMaxWidth()
                 .then(if (anchorBounds == null) Modifier.navigationBarsPadding() else Modifier)
                 .padding(
-                    start = 20.dp, end = 20.dp,
+                    // Preserve five 56dp star targets on narrow phones.
+                    start = if (anchorBounds == null) 12.dp else 20.dp,
+                    end = if (anchorBounds == null) 12.dp else 20.dp,
                     top = if (anchorBounds == null) 28.dp else 18.dp,
                     bottom = if (anchorBounds == null) 20.dp else 18.dp,
                 )
@@ -538,7 +540,7 @@ internal fun CanonicalRecordingFeedbackPanel(
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                 NativeContextActionPlate(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
                 ) { ratingEditorContent() }
             }
         }
