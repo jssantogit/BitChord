@@ -601,10 +601,10 @@ private fun AppleSettingsPopup(
             // The system-owned Popup remains anchored to its launcher.
             val plateShape = RoundedCornerShape(18.dp)
             val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-            val plateColor = (if (isDark) Color.Black else Color.White).copy(alpha = 0.94f)
+            val plateColor = nativeCompactPlateColor(isDark, artworkElevation = null)
             Box(
                 Modifier.width(208.dp)
-                    .shadow(20.dp, plateShape)
+                    .nativeCompactMenuLiftShadow(isDark, plateShape)
                     .clip(plateShape)
                     .background(plateColor)
                     .testTag("apple-root-settings-popup"),

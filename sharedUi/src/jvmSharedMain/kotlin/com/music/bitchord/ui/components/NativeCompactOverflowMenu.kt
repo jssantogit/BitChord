@@ -41,6 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -120,9 +123,41 @@ internal fun nativeCompactMenuRowHeightDp(homePlateStyle: Boolean): Int =
 internal fun nativeCompactMenuCornerRadiusDp(homePlateStyle: Boolean): Int =
     if (homePlateStyle) 16 else 18
 
-/** One source for the colored/neutral plate shared by top-bar overflow menus. */
-internal fun nativeCompactPlateColor(isDark: Boolean, artworkElevation: Color?): Color =
-    (artworkElevation ?: if (isDark) Color.Black else Color.White).copy(alpha = 0.96f)
+/**
+ * Elevation must remain legible on an AMOLED black page. A translucent black
+ * overlay (the old 0.96f plate) is invisible over a black background, even
+ * when the popup has a 20dp shadow.
+ *
+ * Keep art-colored plates chromatic, but lift their luminance slightly. The
+ * opaque surface prevents underlying text and covers bleeding into the menu.
+ * No light hairline or outlined Material fallback is drawn.
+ */
+fun nativeCompactPlateColor(isDark: Boolean, artworkElevation: Color?): Color = when {
+    artworkElevation != null -> lerp(
+        artworkElevation, if (isDark) Color.White else Color.Black,
+        if (isDark) 0.12f else 0.06f,
+    ).copy(alpha = 1f)
+    isDark -> Color(0xFF29292D)
+    else -> Color(0xFFF5F5F7)
+}
+
+/** Show enough of the actual page to preserve context while the plate lifts. */
+fun nativeCompactMenuScrimAlpha(isDark: Boolean): Float =
+    if (isDark) 0.28f else 0.22f
+
+/**
+ * A soft neutral ambient halo, not a white outline. Shared by source filters,
+ * sort filters and the root/row ⋯ popups. No extra outline is introduced.
+ */
+fun Modifier.nativeCompactMenuLiftShadow(isDark: Boolean, shape: Shape): Modifier =
+    shadow(
+        elevation = 24.dp,
+        shape = shape,
+        clip = false,
+        ambientColor = if (isDark) Color(0xFF51505B).copy(alpha = 0.27f)
+            else Color.Black.copy(alpha = 0.15f),
+        spotColor = Color.Black.copy(alpha = if (isDark) 0.75f else 0.25f),
+    )
 
 /**
  * One compact popup surface for Home/Explore and the playlist editor.
@@ -202,13 +237,16 @@ fun NativeCompactOverflowMenu(
                     animationSpec = tween(exitDuration, easing = FastOutSlowInEasing),
                 ),
             ) {
+                val plateShape =
+                    RoundedCornerShape(nativeCompactMenuCornerRadiusDp(homePlateStyle).dp)
                 Surface(
                     modifier = modifier.widthIn(min = minMenuWidth, max = maxMenuWidth)
+                        .nativeCompactMenuLiftShadow(isDark, plateShape)
                         .testTag("native-compact-overflow"),
-                    shape = RoundedCornerShape(nativeCompactMenuCornerRadiusDp(homePlateStyle).dp),
+                    shape = plateShape,
                     color = plate,
                     contentColor = MaterialTheme.colorScheme.onSurface,
-                    shadowElevation = 20.dp,
+                    shadowElevation = 0.dp,
                     // A single solid plate, no Material3 outlined fallback.
                     border = null,
                 ) {

@@ -8000,7 +8000,9 @@ private fun FrostedMenuPanel(
     // Shared with the anchored catalog-source and compact ⋯ menus:
     // consistent opaque-looking neutral plate; only the page behind is dimmed.
     val darkPlate = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val solidPlate = (if (darkPlate) Color.Black else Color.White).copy(alpha = 0.94f)
+    val solidPlate = com.music.bitchord.ui.components.nativeCompactPlateColor(
+        isDark = darkPlate, artworkElevation = null,
+    )
     // The sort/source panels use the same native 18dp geometry.
     val shape = RoundedCornerShape(18.dp)
     val entrance = com.music.bitchord.ui.components.rememberFrostedMenuEntranceModifier(
@@ -8019,7 +8021,11 @@ private fun FrostedMenuPanel(
                 val origin = coords.positionInWindow()
                 rootOrigin = androidx.compose.ui.unit.IntOffset(origin.x.toInt(), origin.y.toInt())
             }
-            .background(MaterialTheme.colorScheme.scrim.copy(alpha = .48f))
+            .background(
+                MaterialTheme.colorScheme.scrim.copy(
+                    alpha = com.music.bitchord.ui.components.nativeCompactMenuScrimAlpha(darkPlate),
+                ),
+            )
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.TopStart,
     ) {
@@ -8041,9 +8047,14 @@ private fun FrostedMenuPanel(
             color = solidPlate,
             contentColor = MaterialTheme.colorScheme.onSurface,
             shape = shape,
-            shadowElevation = 20.dp,
+            shadowElevation = 0.dp,
             modifier = position
                 .width(IntrinsicSize.Max)
+                .then(
+                    Modifier.nativeCompactMenuLiftShadow(
+                        isDark = darkPlate, shape = shape,
+                    ),
+                )
                 .onSizeChanged { popupSize = it }
                 .then(entrance)
                 .clip(shape)
