@@ -2228,17 +2228,17 @@ internal fun canonicalNativeReleasePaletteUri(
 }
 
 /**
- * Root categories are collections, not releases: keep the native floating
- * toolbar, its wide text field and existing ActionPill, but never reserve a
- * generic sleeve-sized rectangle above the actual list/grid.
- */
-/**
  * Canonical category lists keep their inset hairlines only between entries.
  * Do not paint a separator below the final visible track, album or artist.
  */
 internal fun shouldDrawCanonicalLibraryRowDivider(index: Int, total: Int): Boolean =
     index >= 0 && index < total - 1
 
+/**
+ * Root categories are collections, not releases: keep the native floating
+ * toolbar, its wide text field and existing ActionPill, but never reserve a
+ * generic sleeve-sized rectangle above the actual list/grid.
+ */
 internal fun shouldShowCanonicalLibraryCategoryPlayback(
     context: CanonicalSmartFilterContext,
     isAlbumDetail: Boolean,
