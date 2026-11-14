@@ -28,6 +28,10 @@ data class AppleEditorialSearchRow(
     val releaseDate: String?,
     val kind: AppleEditorialSearchKind = AppleEditorialSearchKind.ALBUM,
     val category: AppleEditorialReleaseCategory = AppleEditorialReleaseCategory.UNCLASSIFIED,
+    /** Exact Apple storefront product link, never inferred from a title. */
+    val appleStoreUrl: String? = null,
+    /** Unmodified official badge only when appleStoreUrl passed validation. */
+    val appleStoreBadgeUrl: String? = null,
 )
 
 data class AppleEditorialTrackRow(
@@ -71,4 +75,6 @@ data class AppleEditorialTrackSearchRow(
     val artworkUri: String?,
     val albumBrowseId: String?,
     val durationMs: Long?,
+    val appleStoreUrl: String? = null,
+    val appleStoreBadgeUrl: String? = null,
 )
