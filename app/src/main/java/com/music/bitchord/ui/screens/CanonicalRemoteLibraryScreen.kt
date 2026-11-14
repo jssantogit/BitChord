@@ -2232,6 +2232,13 @@ internal fun canonicalNativeReleasePaletteUri(
  * toolbar, its wide text field and existing ActionPill, but never reserve a
  * generic sleeve-sized rectangle above the actual list/grid.
  */
+/**
+ * Canonical category lists keep their inset hairlines only between entries.
+ * Do not paint a separator below the final visible track, album or artist.
+ */
+internal fun shouldDrawCanonicalLibraryRowDivider(index: Int, total: Int): Boolean =
+    index >= 0 && index < total - 1
+
 internal fun shouldShowCanonicalLibraryCategoryPlayback(
     context: CanonicalSmartFilterContext,
     isAlbumDetail: Boolean,
@@ -2517,10 +2524,10 @@ private fun NativeUnifiedLibraryBody(
                                 onToggleSelection = { onToggleSelection(target) },
                             )
                         }
-                    } else items(
+                    } else itemsIndexed(
                         items = tracks,
-                        key = CanonicalBrowseTrack::recordingId,
-                    ) { track ->
+                        key = { _, track -> track.recordingId },
+                    ) { index, track ->
                         val target = CanonicalLibrarySelection(
                             CanonicalLibraryEntityType.TRACK, track.recordingId,
                         )
@@ -2535,11 +2542,13 @@ private fun NativeUnifiedLibraryBody(
                             selected = target in selectedItems,
                             onToggleSelection = { onToggleSelection(target) },
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 84.dp),
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                        )
+                        if (shouldDrawCanonicalLibraryRowDivider(index, tracks.size)) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 84.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                            )
+                        }
                     }
                 }
                 CanonicalSmartFilterContext.ALBUMS -> when (entityState) {
@@ -2582,7 +2591,7 @@ private fun NativeUnifiedLibraryBody(
                                     onToggleSelection = { onToggleSelection(target) },
                                 )
                             }
-                        } else items(albums, key = { it.id }) { album ->
+                        } else itemsIndexed(albums, key = { _, album -> album.id }) { index, album ->
                             val art = entityArtworkById[album.id]
                             val target = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.ALBUM, album.id,
@@ -2626,11 +2635,13 @@ private fun NativeUnifiedLibraryBody(
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 84.dp),
-                                thickness = 0.5.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                            )
+                            if (shouldDrawCanonicalLibraryRowDivider(index, albums.size)) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 84.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                )
+                            }
                         }
                     }
                     is CanonicalEntityBrowseState.Artists -> Unit
@@ -2673,7 +2684,7 @@ private fun NativeUnifiedLibraryBody(
                                     onToggleSelection = { onToggleSelection(target) },
                                 )
                             }
-                        } else items(artists, key = { it.id }) { artist ->
+                        } else itemsIndexed(artists, key = { _, artist -> artist.id }) { index, artist ->
                             val art = entityArtworkById[artist.id]
                             val target = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.ARTIST, artist.id,
@@ -2716,11 +2727,13 @@ private fun NativeUnifiedLibraryBody(
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 84.dp),
-                                thickness = 0.5.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                            )
+                            if (shouldDrawCanonicalLibraryRowDivider(index, artists.size)) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 84.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                )
+                            }
                         }
                     }
                     is CanonicalEntityBrowseState.Albums -> Unit
