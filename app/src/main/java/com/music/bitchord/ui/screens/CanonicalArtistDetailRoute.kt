@@ -28,8 +28,8 @@ internal fun rememberNativeCanonicalArtistScrollState(
     artistId: String?,
     artistName: String,
 ): LazyListState {
-    val key = artistId?.takeIf(String::isNotBlank)?.let { "artist-id:$it" }
-        ?: "display-artist:$artistName"
+    // Reuse the identical key that already scopes nested album navigation.
+    val key = canonicalArtistDetailNavigationKey(artistId, artistName)
     return rememberSaveable(key, saver = LazyListState.Saver) { LazyListState() }
 }
 
