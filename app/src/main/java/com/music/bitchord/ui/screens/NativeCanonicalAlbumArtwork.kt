@@ -40,6 +40,21 @@ internal fun nativeAlbumHeroSource(
     }
 }
 
+/**
+ * A track merely existing does not prove that its artwork can be rendered.
+ * The canonical painter only decodes a content/file URI directly, or asks
+ * the OpenSubsonic loader for an asset with a nonblank artwork revision.
+ */
+internal fun nativeAlbumTrackHasLoadableArtwork(track: CanonicalBrowseTrack?): Boolean {
+    val revision = track?.artworkUri?.trim().orEmpty()
+    if (revision.isBlank()) return false
+    if (revision.startsWith("content://", ignoreCase = true) ||
+        revision.startsWith("file://", ignoreCase = true)) return true
+    return track?.availableAssets?.any {
+        it.providerKey.startsWith("opensubsonic:")
+    } == true
+}
+
 /** Preserve a placeholder under the remote art until it actually paints. */
 @Composable
 internal fun NativeCanonicalAlbumArtwork(
@@ -51,7 +66,7 @@ internal fun NativeCanonicalAlbumArtwork(
         CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())
         when (nativeAlbumHeroSource(
             releaseArtworkUri = releaseArtworkUri,
-            hasTrackArtwork = artworkTrack != null,
+            hasTrackArtwork = nativeAlbumTrackHasLoadableArtwork(artworkTrack),
         )) {
             NativeAlbumHeroSource.DIRECT_URI -> AsyncImage(
                 model = releaseArtworkUri?.trim(),
