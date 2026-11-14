@@ -9,11 +9,13 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
  * The public iTunes Search API guarantees artworkUrl100/60, NOT a large image.
- * Its image CDN commonly supports /720x720bb.jpg variants, but that path is
+ * Its image CDN commonly serves size-suffixed variants, but that path is
  * undocumented. Therefore never publish a guessed variant until we have
  * fetched and checked real decoded dimensions from that same Apple host.
  *
@@ -24,7 +26,7 @@ internal fun appleHighResolutionArtworkCandidate(
     original: String?,
     desiredPx: Int,
 ): String? {
-    if (desiredPx !in setOf(600, 720, 1000) ||
+    if (desiredPx !in setOf(600, 720, 1024) ||
         original.isNullOrBlank() || original.length > 2048 ||
         safeAppleArtwork(original) == null
     ) return null
@@ -117,37 +119,45 @@ internal class AppleHighResolutionArtwork(
 ) {
     private data class Cached(val valid: Boolean, val expiresAt: Long)
     private val cache = ConcurrentHashMap<String, Cached>()
+    // Striped single-flight locks: at most one network check per URL while
+    // unrelated covers can load in parallel. A bounded stripe array avoids
+    // an unbounded per-album Mutex map and survives cache eviction.
+    private val probeLocks = Array(32) { Mutex() }
 
-    suspend fun upgrade(artworkUrl: String?, desiredPx: Int = 720): String? {
+    suspend fun upgrade(artworkUrl: String?, desiredPx: Int = 1024): String? {
         val original = safeAppleArtwork(artworkUrl) ?: return artworkUrl
-        // A 720px image is preferred for hero artwork, but Apple's public
-        // CDN can expose 600px while rejecting another requested rung.
+        // Hero: aim for 1024; fall back directly to 720 then 600.
+        // Avoid 1000px as a redundant fourth network probe that would slow
+        // broken CDN responses. Small cards request 600 only.
         val sizes = when (desiredPx) {
-            1000 -> listOf(1000, 720, 600)
+            1024 -> listOf(1024, 720, 600)
             720 -> listOf(720, 600)
             else -> listOf(desiredPx)
         }
         for (size in sizes) {
             val candidate = appleHighResolutionArtworkCandidate(original, size)
                 ?: continue
-            val now = clockMs()
-            val prior = cache[candidate]
-            if (prior != null && prior.expiresAt > now) {
-                if (prior.valid) return candidate
-                continue
+            val stripe = (candidate.hashCode() and Int.MAX_VALUE) % probeLocks.size
+            val verified = probeLocks[stripe].withLock {
+                val now = clockMs()
+                val prior = cache[candidate]
+                if (prior != null && prior.expiresAt > now)
+                    return@withLock prior.valid
+                val measured = try {
+                    dimensions.read(candidate)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) { null }
+                val accepted = measured?.let { (width, height) ->
+                    width >= size && height >= size && width == height
+                } == true
+                if (cache.size > 192) cache.clear()
+                cache[candidate] = Cached(
+                    accepted,
+                    now + if (accepted) 12 * 60 * 60_000L else 30 * 60_000L,
+                )
+                accepted
             }
-            val measured = try {
-                dimensions.read(candidate)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) { null }
-            val verified = measured?.let { (width, height) ->
-                width >= size && height >= size && width == height
-            } == true
-            if (cache.size > 192) cache.clear()
-            cache[candidate] = Cached(
-                verified, now + if (verified) 12 * 60 * 60_000L else 30 * 60_000L,
-            )
             if (verified) return candidate
         }
         return original
@@ -155,7 +165,7 @@ internal class AppleHighResolutionArtwork(
 
     suspend fun upgrade(
         edition: AppleVerifiedEditionArtwork,
-        desiredPx: Int = 720,
+        desiredPx: Int = 1024,
     ): AppleVerifiedEditionArtwork {
         val selected = upgrade(edition.artworkUrl, desiredPx)
         return if (selected == edition.artworkUrl || selected == null) edition
