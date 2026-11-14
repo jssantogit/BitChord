@@ -4,6 +4,8 @@ import com.music.bitchord.data.catalog.metadata.AppleArtworkDimensionSource
 import com.music.bitchord.data.catalog.metadata.AppleHighResolutionArtwork
 import com.music.bitchord.data.catalog.metadata.appleHighResolutionArtworkCandidate
 import com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtwork
+import com.music.bitchord.data.catalog.metadata.AppleArtworkProbePersistence
+import com.music.bitchord.data.catalog.metadata.AppleArtworkProbeRecord
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.async
@@ -133,6 +135,63 @@ class AppleHighResolutionArtworkTest {
         assertNull(appleHighResolutionArtworkCandidate(thumb, 1080))
         assertEquals(thumb.replace("100x100bb.jpg", "1024x1024bb.jpg"),
             appleHighResolutionArtworkCandidate(thumb, 1024))
+    }
+
+    @Test fun positiveVerificationSurvivesNewResolverInstanceWithoutReprobing() = runBlocking {
+        val persisted = mutableMapOf<String, AppleArtworkProbeRecord>()
+        val records = object : AppleArtworkProbePersistence {
+            override fun load(candidate: String): AppleArtworkProbeRecord? = persisted[candidate]
+            override fun save(candidate: String, record: AppleArtworkProbeRecord) {
+                persisted[candidate] = record
+            }
+        }
+        var requests = 0
+        val initial = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource {
+                requests++
+                1024 to 1024
+            },
+            persistence = records,
+        )
+        val hero = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        assertEquals(hero, initial.upgrade(thumb, 1024))
+        val reopened = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource {
+                requests++
+                error("persisted valid CDN proof must avoid repeat HTTP")
+            },
+            persistence = records,
+        )
+        assertEquals(hero, reopened.upgrade(thumb, 1024))
+        assertEquals(1, requests)
+    }
+
+    @Test fun expiredPersistedProofMustBeRechecked() = runBlocking {
+        val persisted = mutableMapOf<String, AppleArtworkProbeRecord>()
+        val records = object : AppleArtworkProbePersistence {
+            override fun load(candidate: String): AppleArtworkProbeRecord? = persisted[candidate]
+            override fun save(candidate: String, record: AppleArtworkProbeRecord) {
+                persisted[candidate] = record
+            }
+        }
+        var now = 1_000L
+        val hero = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        val first = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource { 1024 to 1024 },
+            persistence = records, clockMs = { now },
+        )
+        assertEquals(hero, first.upgrade(thumb, 1024))
+        now += 13 * 60 * 60_000L
+        var reprobes = 0
+        val reopened = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource {
+                reprobes++
+                null
+            },
+            persistence = records, clockMs = { now },
+        )
+        assertEquals(thumb, reopened.upgrade(thumb, 1024))
+        assertEquals(3, reprobes)
     }
 
     @Test fun negativeProbeCacheRetriesAfterExpiryWithoutForgettingValid600Px() = runBlocking {
