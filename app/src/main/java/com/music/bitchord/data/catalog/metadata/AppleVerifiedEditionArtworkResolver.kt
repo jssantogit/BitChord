@@ -11,6 +11,9 @@ internal fun interface AppleArtworkEditionSource {
 internal fun interface AppleArtworkUpcSource {
     suspend fun lookup(barcode: String, storefront: String): ItunesCatalogResult
 }
+internal fun interface AppleArtworkLinkedAlbumSource {
+    suspend fun lookup(collectionId: Long, storefront: String): ItunesCatalogResult
+}
 
 /**
  * On-demand, Android-only bridge from an exact MusicBrainz Release to a
@@ -31,6 +34,10 @@ internal class AppleVerifiedEditionArtworkResolver(
     private val upc: AppleArtworkUpcSource = AppleArtworkUpcSource { barcode, country ->
         ItunesCatalogClient().lookupUpc(barcode, country)
     },
+    private val linked: AppleArtworkLinkedAlbumSource =
+        AppleArtworkLinkedAlbumSource { appleId, country ->
+            ItunesCatalogClient().lookupAlbum(appleId, country)
+        },
     private val evidence: AppleAlbumEditionEvidenceSource =
         MusicBrainzBarcodeEditionEvidenceSource(),
     private val clockMs: () -> Long = System::currentTimeMillis,
@@ -85,7 +92,23 @@ internal class AppleVerifiedEditionArtworkResolver(
             !mb.status.equals("Official", ignoreCase = true) ||
             mb.groupMbid.isNullOrBlank() || !mb.hasCompleteTracklist
         ) return null
-        val barcode = mb.barcode?.trim()?.takeIf(upcPattern::matches) ?: return null
+        // UPC remains the strict, independent primary route. For editions
+        // without a usable barcode (or without an unambiguous UPC result),
+        // only an explicit exact MB Release→Apple album URL may seed a direct
+        // lookup. A title, artist or ReleaseGroup URL alone is never enough.
+        val barcode = mb.barcode?.trim()?.takeIf(upcPattern::matches)
+        val upcProof = if (barcode != null)
+            resolveByBarcode(mb, id, storefront, barcode)
+        else null
+        return upcProof ?: resolveByExactReleaseLink(mb, id, storefront)
+    }
+
+    private suspend fun resolveByBarcode(
+        mb: MusicBrainzCatalogReleaseDetail,
+        id: String,
+        storefront: String,
+        barcode: String,
+    ): AppleVerifiedEditionArtwork? {
         val appleLookup = upc.lookup(barcode, storefront)
         val candidateProof = appleVerifiedEditionArtwork(
             mb, appleLookup, storefront,
@@ -102,5 +125,50 @@ internal class AppleVerifiedEditionArtworkResolver(
             !match.appleScopedId.equals(candidateProof.appleScopedId, ignoreCase = true)
         ) return null
         return candidateProof
+    }
+
+    private suspend fun resolveByExactReleaseLink(
+        mb: MusicBrainzCatalogReleaseDetail,
+        id: String,
+        storefront: String,
+    ): AppleVerifiedEditionArtwork? {
+        val appleId = mb.linkedAppleAlbumIds.distinct().singleOrNull()
+            ?.takeIf { it > 0L } ?: return null
+        val response = linked.lookup(appleId, storefront)
+            as? ItunesCatalogResult.Success ?: return null
+        if (response.possiblyTruncated) return null
+        val albums = response.items.filter { it.type == ItunesCatalogItemType.ALBUM }
+        val tracks = response.items.filter { it.type == ItunesCatalogItemType.TRACK }
+        if (albums.size != 1 || tracks.isEmpty() ||
+            response.items.size != 1 + tracks.size
+        ) return null
+        val source = albums.single()
+        if (source.id != appleId || source.collectionId != appleId ||
+            source.storefront != storefront ||
+            source.trackCount == null || source.trackCount != tracks.size ||
+            appleStoreLinkForExactProduct(
+                source.storeUrl, ItunesCatalogItemType.ALBUM, appleId, storefront,
+            ) == null ||
+            safeAppleArtwork(source.artworkUrl) == null
+        ) return null
+        val apple = ItunesEditorialCatalog.assemble(storefront, response.items)
+            .singleOrNull()?.takeIf {
+                it.appleCollectionId == appleId &&
+                    it.appleScopedId == "itunes:$storefront:album:$appleId"
+            } ?: return null
+        val proof = AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
+            apple, mb,
+        ) as? AppleMusicBrainzEditionMatch.Verified ?: return null
+        if (!proof.musicBrainzReleaseId.equals(id, ignoreCase = true) ||
+            !proof.musicBrainzReleaseGroupId.equals(mb.groupMbid, ignoreCase = true) ||
+            proof.appleScopedId != apple.appleScopedId
+        ) return null
+        return AppleVerifiedEditionArtwork(
+            musicBrainzReleaseId = proof.musicBrainzReleaseId,
+            musicBrainzReleaseGroupId = proof.musicBrainzReleaseGroupId,
+            appleScopedId = proof.appleScopedId,
+            artworkUrl = source.artworkUrl!!,
+            storeUrl = source.storeUrl!!,
+        )
     }
 }
