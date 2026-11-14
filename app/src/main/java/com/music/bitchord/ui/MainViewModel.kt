@@ -5230,12 +5230,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val previous = current?.albums?.singleOrNull {
                     it.browseId == album.browseId
                 }
-                if (previous?.artworkUri != null &&
-                    com.music.bitchord.data.catalog.metadata
-                        .appleHighResolutionArtworkCandidate(
-                            album.artworkUri, 600,
-                        ) == previous.artworkUri
-                ) album.copy(artworkUri = previous.artworkUri) else album
+                val displayedArtwork = appleKeepVerifiedArtworkAcrossPaging(
+                    album.artworkUri, previous?.artworkUri,
+                )
+                if (displayedArtwork != album.artworkUri)
+                    album.copy(artworkUri = displayedArtwork) else album
             }
             fresh.copy(
                 albums = restored,
