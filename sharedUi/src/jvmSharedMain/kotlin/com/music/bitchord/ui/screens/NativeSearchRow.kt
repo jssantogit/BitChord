@@ -2,11 +2,13 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,6 +22,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +50,9 @@ data class NativeSearchRowUi(
     val artistPortrait: Boolean,
     val downloadBadge: Boolean = false,
     val durationLabel: String? = null,
+    /** The exact Apple source's own product link and official store badge. */
+    val appleStoreUrl: String? = null,
+    val appleStoreBadgeUrl: String? = null,
 )
 
 /**
@@ -61,6 +68,7 @@ fun NativeSearchResultRow(
     onLongPress: (() -> Unit)? = null,
     horizontalPadding: androidx.compose.ui.unit.Dp = PAGE_GUTTER,
 ) {
+    val uriHandler = LocalUriHandler.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,6 +123,20 @@ fun NativeSearchResultRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val storeUrl = row.appleStoreUrl
+        val badgeUrl = row.appleStoreBadgeUrl
+        if (storeUrl != null && badgeUrl != null) {
+            // The badge is the unmodified image linked to the exact Apple
+            // product; its click is separate from the native detail route.
+            Spacer(Modifier.width(6.dp))
+            AsyncImage(
+                model = badgeUrl,
+                contentDescription = "Abrir produto na loja Apple",
+                modifier = Modifier.width(90.dp).height(30.dp)
+                    .clickable { runCatching { uriHandler.openUri(storeUrl) } },
+                contentScale = ContentScale.Fit,
             )
         }
         row.durationLabel?.let { duration ->
