@@ -4642,7 +4642,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     coroutineScope {
                         repeat(2) {
                             launch {
-                                for ((index, album) in queue) {
+                                for ((targetPx, album) in queue) {
                                     currentCoroutineContext().ensureActive()
                                     if (activeAppleArtistId != artistBrowseId ||
                                         _searchSource.value != SearchSource.CANONICAL
@@ -4650,7 +4650,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                     val upgraded = try {
                                         appleHighResolutionArtwork.upgrade(
                                             album.artworkUri,
-                                            appleArtworkTargetPxForShelf(index, featuredCount),
+                                            targetPx,
                                         )
                                     } catch (cancelled: CancellationException) {
                                         throw cancelled
@@ -4675,7 +4675,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             val queue = appleArtistArtworkQueue ?: return
-            appleArtistArtworkTasksForNewPages(candidates, appleArtistArtworkQueued)
+            appleArtistArtworkTasksForNewPages(candidates, appleArtistArtworkQueued, featuredCount)
                 .forEach { queue.trySend(it) }
         }
     }
