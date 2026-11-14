@@ -749,6 +749,8 @@ private fun LazyListScope.appleEditorialTrackRows(
                     artworkUri = track.artworkUri,
                     artistPortrait = false,
                     durationLabel = canonicalDurationLabel(track.durationMs),
+                    appleStoreUrl = track.appleStoreUrl,
+                    appleStoreBadgeUrl = track.appleStoreBadgeUrl,
                 ),
                 onClick = if (track.albumBrowseId != null) {
                     { onAlbumOpen(track) }
@@ -812,6 +814,8 @@ private fun LazyListScope.appleEditorialArtistRows(
                         .substringBefore('·').trim(),
                     artworkUri = artist.artworkUri,
                     artistPortrait = true,
+                    appleStoreUrl = artist.appleStoreUrl,
+                    appleStoreBadgeUrl = artist.appleStoreBadgeUrl,
                 ),
                 onClick = { onOpen(artist) },
                 onLongPress = null,
@@ -1015,6 +1019,8 @@ private fun LazyListScope.appleEditorialAlbumRows(
                     subtitle = album.artistName,
                     artworkUri = album.artworkUri,
                     artistPortrait = false,
+                    appleStoreUrl = album.appleStoreUrl,
+                    appleStoreBadgeUrl = album.appleStoreBadgeUrl,
                 ),
                 onClick = { onOpen(album) },
                 onLongPress = null,
