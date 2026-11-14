@@ -2,7 +2,6 @@ package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Alignment
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
@@ -22,7 +21,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import android.content.Intent
@@ -148,27 +146,31 @@ internal fun NativeArtistPublicTopSection(
                         )
                     }
                     Box {
-                    RowMoreButton(
-                        onClick = { menuExpanded = true },
-                        modifier = Modifier.testTag("artist-top-more-${recording.musicBrainzId}"),
-                        tint = palette.onBackgroundVariant,
-                    )
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Ver no MusicBrainz") },
-                            onClick = {
-                                menuExpanded = false
-                                val intent = Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("https://musicbrainz.org/recording/${recording.musicBrainzId}"),
-                                )
-                                runCatching { context.startActivity(intent) }
-                            },
+                        RowMoreButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.testTag(
+                                "artist-top-more-${recording.musicBrainzId}",
+                            ),
+                            tint = palette.onBackgroundVariant,
                         )
-                    }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Ver no MusicBrainz") },
+                                onClick = {
+                                    menuExpanded = false
+                                    val intent = Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(
+                                            "https://musicbrainz.org/recording/${recording.musicBrainzId}",
+                                        ),
+                                    )
+                                    runCatching { context.startActivity(intent) }
+                                },
+                            )
+                        }
                     }
                 }
             },
