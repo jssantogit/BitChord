@@ -12,6 +12,7 @@ import com.music.bitchord.ui.appleEditorialShelves
 import com.music.bitchord.ui.appleEditorialReleasesWithProbedArtwork
 import com.music.bitchord.ui.appleArtistAlbumRowsWithProbedArtwork
 import com.music.bitchord.ui.appleArtworkTargetPxForShelf
+import com.music.bitchord.ui.appleKeepVerifiedArtworkAcrossPaging
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import org.junit.Assert.*
 import org.junit.Test
@@ -45,6 +46,20 @@ class AppleEditorialAndroidPresentationTest {
         classification = AppleEditorialClassification.resolve(release, emptyList()),
         discogsEdition = null,
     )
+
+    @Test fun artistPaginationRetains1024ArtworkButRejectsForeignEditionSleeve() {
+        val original = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
+        val high1024 = original.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        val high720 = original.replace("100x100bb.jpg", "720x720bb.jpg")
+        val other = "https://is1-ssl.mzstatic.com/image/thumb/Music/b/1024x1024bb.jpg"
+        assertEquals(high1024, appleKeepVerifiedArtworkAcrossPaging(original, high1024))
+        assertEquals(high720, appleKeepVerifiedArtworkAcrossPaging(original, high720))
+        assertEquals(original, appleKeepVerifiedArtworkAcrossPaging(original, other))
+        assertEquals(original, appleKeepVerifiedArtworkAcrossPaging(original, null))
+        assertEquals(original, appleKeepVerifiedArtworkAcrossPaging(
+            original, "https://attacker.example/art.jpg",
+        ))
+    }
 
     @Test fun artworkPolicyCapsOnlyProminentCardsAt1024Pixels() {
         assertEquals(1024, appleArtworkTargetPxForShelf(0, 4))
