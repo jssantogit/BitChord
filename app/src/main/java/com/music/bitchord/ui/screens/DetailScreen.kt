@@ -114,6 +114,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.border
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.music.bitchord.ui.components.ResilientAppleCover
 import coil3.compose.LocalPlatformContext
 import coil3.compose.AsyncImagePainter
 import coil3.request.ImageRequest
@@ -1318,7 +1319,7 @@ private fun ReleaseHeader(
                     modifier = Modifier.matchParentSize(),
                 )
             }
-            AsyncImage(
+            ResilientAppleCover(
                 model = (offlinePoster ?: page.thumbnailUrl).artworkAt(HEADER_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
@@ -1865,7 +1866,7 @@ private fun ArtistCardArtwork(
     val observer = rememberCaaCoverLoadObserver(item.thumbnailUrl)
     val uriHandler = LocalUriHandler.current
     Box(Modifier.fillMaxSize()) {
-        AsyncImage(
+        ResilientAppleCover(
             // Never rewrite a returned 100px Apple CDN URL to an unverified size.
             model = if (applePromotion != null) item.thumbnailUrl
                 else item.thumbnailUrl.artworkAt(CARD_ART_PX),
