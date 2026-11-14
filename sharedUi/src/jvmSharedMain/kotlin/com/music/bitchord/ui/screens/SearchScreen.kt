@@ -731,7 +731,7 @@ private fun LazyListScope.appleEditorialTrackRows(
         }
     }
     when (results) {
-        null -> item(key = "apple:track:hint") {
+        null -> if (!showHeading) item(key = "apple:track:hint") {
             MessageState(stringResource(Res.string.canonical_search_hint))
         }
         UiState.Loading -> songListSkeleton(keyPrefix = "apple:tracks")
@@ -794,7 +794,7 @@ private fun LazyListScope.appleEditorialArtistRows(
         }
     }
     when (results) {
-        null -> item(key = "apple:artist:hint") {
+        null -> if (!showHeading) item(key = "apple:artist:hint") {
             MessageState(stringResource(Res.string.canonical_search_hint))
         }
         UiState.Loading -> songListSkeleton(keyPrefix = "apple:artists")
@@ -998,7 +998,7 @@ private fun LazyListScope.appleEditorialAlbumRows(
         }
     }
     when (results) {
-        null -> item(key = "apple:album:hint") {
+        null -> if (!showHeading) item(key = "apple:album:hint") {
             MessageState(stringResource(Res.string.canonical_search_hint))
         }
         UiState.Loading -> songListSkeleton(keyPrefix = "apple:albums")
