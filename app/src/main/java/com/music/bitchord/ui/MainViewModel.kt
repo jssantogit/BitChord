@@ -1726,46 +1726,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             resolved, entry.musicBrainzId, displayedGroupReleaseMbid,
                         )
                 } else resolved) ?: return@launch
-                val certified = appleHighResolutionArtwork.upgrade(proof, 720)
                 val route = canonicalNativeBrowseId(entry)
-                canonicalArtworkPresentationMutex.withLock {
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    canonicalPath.lastOrNull() != entry ||
-                    _detailStack.value.none { it.browseId == route }
-                ) return@withLock
-                val current = (_canonicalDetail.value as? UiState.Success)?.data
-                    ?: return@withLock
-                val chosenArtwork = com.music.bitchord.data.catalog.metadata
-                    .bestCertifiedAppleOrArchiveCover(
-                        certified.artworkUrl, current.artworkUri,
-                    )
-                // The Group page can initially contain a CAA Front from
-                // another edition. Do not attach this Apple product badge
-                // to that different sleeve; only display it when Apple
-                // actually supplies the selected detail edition's cover.
-                if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                    com.music.bitchord.data.catalog.metadata
-                        .verifiedAppleArtworkForDisplayedGroupCover(
-                            certified, entry.musicBrainzId, displayedGroupReleaseMbid,
-                            current.artworkUri,
-                        ) == null
-                ) return@withLock
-                _canonicalAppleArtworkPromotion.value = route to certified
-                if (chosenArtwork != null && chosenArtwork != current.artworkUri) {
-                    _canonicalDetail.value = UiState.Success(current.copy(
-                        artworkUri = chosenArtwork,
-                        rows = canonicalReleaseTracksWithArtwork(
-                            current.rows, chosenArtwork,
-                            previousInheritedArtwork = current.artworkUri,
-                        ),
-                    ))
-                    _detailStack.value = _detailStack.value.map { page ->
-                        if (page.browseId == route)
-                            page.copy(thumbnailUrl = chosenArtwork)
-                        else page
+                suspend fun publishSelectedAppleCover(
+                    verified: com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtwork,
+                ) {
+                    canonicalArtworkPresentationMutex.withLock {
+                        if (_searchSource.value != SearchSource.CANONICAL ||
+                            canonicalPath.lastOrNull() != entry ||
+                            _detailStack.value.none { it.browseId == route }
+                        ) return@withLock
+                        val current = (_canonicalDetail.value as? UiState.Success)?.data
+                            ?: return@withLock
+                        val chosenArtwork = com.music.bitchord.data.catalog.metadata
+                            .bestCertifiedAppleOrArchiveCover(
+                                verified.artworkUrl, current.artworkUri,
+                            )
+                        if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
+                            com.music.bitchord.data.catalog.metadata
+                                .verifiedAppleArtworkForDisplayedGroupCover(
+                                    verified, entry.musicBrainzId, displayedGroupReleaseMbid,
+                                    current.artworkUri,
+                                ) == null
+                        ) return@withLock
+                        _canonicalAppleArtworkPromotion.value = route to verified
+                        if (chosenArtwork != null && chosenArtwork != current.artworkUri) {
+                            _canonicalDetail.value = UiState.Success(current.copy(
+                                artworkUri = chosenArtwork,
+                                rows = canonicalReleaseTracksWithArtwork(
+                                    current.rows, chosenArtwork,
+                                    previousInheritedArtwork = current.artworkUri,
+                                ),
+                            ))
+                            _detailStack.value = _detailStack.value.map { page ->
+                                if (page.browseId == route)
+                                    page.copy(thumbnailUrl = chosenArtwork)
+                                else page
+                            }
+                        }
                     }
                 }
-                }
+                // Show the certified Apple thumbnail immediately instead of
+                // waiting behind a network request for a larger rendition.
+                publishSelectedAppleCover(proof)
+                val large = appleHighResolutionArtwork.upgrade(proof, 1024)
+                if (large.artworkUrl != proof.artworkUrl)
+                    publishSelectedAppleCover(large)
             }
         }
         canonicalDetailCoverJob?.cancel()
@@ -5379,7 +5384,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (initialAlbum?.appleStoreBadgeUrl != null) {
                 launch {
                     val originalUrl = initialAlbum.album.artworkUri
-                    val upgraded = appleHighResolutionArtwork.upgrade(originalUrl, 720)
+                    val upgraded = appleHighResolutionArtwork.upgrade(originalUrl, 1024)
                     if (upgraded != null && upgraded != originalUrl &&
                         activeAppleAlbumId == row.browseId &&
                         _searchSource.value == SearchSource.CANONICAL
