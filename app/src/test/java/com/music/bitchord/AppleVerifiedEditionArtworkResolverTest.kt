@@ -2,6 +2,10 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -78,6 +82,52 @@ class AppleVerifiedEditionArtworkResolverTest {
             )
             assertNull(resolver.resolve(id, "br"))
         }
+
+    @Test fun unrelatedReleaseCoverLookupsMustNeverWaitForOneAnother() = runBlocking {
+        val firstStarted = CompletableDeferred<Unit>()
+        val secondStarted = CompletableDeferred<Unit>()
+        val resolver = AppleVerifiedEditionArtworkResolver(
+            edition = AppleArtworkEditionSource { release ->
+                if (release == id) {
+                    firstStarted.complete(Unit)
+                    secondStarted.await()
+                } else {
+                    secondStarted.complete(Unit)
+                    firstStarted.await()
+                }
+                // No UPC: each lookup stops after its independent edition read.
+                mb(release).copy(barcode = null)
+            },
+            upc = AppleArtworkUpcSource { _, _ ->
+                error("no UPC is available")
+            },
+        )
+        withTimeout(2_000L) {
+            val first = async { resolver.resolve(id) }
+            val second = async { resolver.resolve(other) }
+            assertNull(first.await())
+            assertNull(second.await())
+        }
+    }
+
+    @Test fun concurrentRequestsForOneReleaseReuseTheSameProofWork() = runBlocking {
+        var reads = 0
+        val resolver = AppleVerifiedEditionArtworkResolver(
+            edition = AppleArtworkEditionSource {
+                reads++
+                delay(40)
+                mb().copy(barcode = null)
+            },
+            upc = AppleArtworkUpcSource { _, _ ->
+                error("no UPC is available")
+            },
+        )
+        val a = async { resolver.resolve(id) }
+        val b = async { resolver.resolve(id) }
+        assertNull(a.await())
+        assertNull(b.await())
+        assertEquals(1, reads)
+    }
 
     @Test fun failingOrMissingBarcodeNeverRequestsApple() = runBlocking {
         var calls = 0
