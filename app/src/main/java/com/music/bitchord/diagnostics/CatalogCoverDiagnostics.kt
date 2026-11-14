@@ -35,6 +35,12 @@ internal object CatalogCoverDiagnostics {
         add("apple_cdn_network_samples=${apple.networkSampleCount}" +
             " apple_cdn_network_p50_ms=${apple.p50NetworkMs ?: "unknown"}" +
             " apple_cdn_network_p95_ms=${apple.p95NetworkMs ?: "unknown"}")
+        add("apple_coil_load_success=${apple.coilSuccess}" +
+            " errors=${apple.coilFailure}" +
+            " cancelled=${apple.coilCancelled}")
+        add("apple_coil_sources memory=${apple.coilMemory}" +
+            " disk=${apple.coilDisk} network=${apple.coilNetwork}")
+        add("apple_coil_p95_load_ms=${apple.coilP95Ms ?: "unknown"}")
         add("cache_hits=${s.positiveCacheHits} negative_cache_hits=${s.negativeCacheHits}" +
             " coalesced_requests=${s.coalescedRequests}")
         add("direct_front_candidates=${s.directFrontCandidates} source=legacy_front_presence_counter")
