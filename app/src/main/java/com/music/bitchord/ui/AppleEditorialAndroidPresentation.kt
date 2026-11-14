@@ -4,6 +4,7 @@ import com.music.bitchord.data.catalog.metadata.AppleTriSourceEditorialEntry
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
 import com.music.bitchord.data.catalog.metadata.safeAppleArtwork
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
+import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
 import com.music.bitchord.data.catalog.metadata.AppleExploreGenrePolicy
 import java.time.LocalDate
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
@@ -37,6 +38,20 @@ internal data class AppleCatalogBrowseRoute(
             return AppleCatalogBrowseRoute(match.groupValues[1], kind, id)
         }
     }
+}
+
+/**
+ * Apple-first editorial cards carry their own exact product attribution, not
+ * a guessed URL constructed from a title or MusicBrainz relationship.
+ */
+private fun ItunesEditorialRelease.asAttributableShelfItem(): ShelfItem {
+    val badge = appleApprovedBadgeForStoreUrl(storeUrl)
+    return ShelfItem(
+        title = title, subtitle = artistName,
+        thumbnailUrl = artworkUrl, videoId = null, browseId = appleScopedId,
+        appleStoreUrl = storeUrl?.takeIf { badge != null },
+        appleStoreBadgeUrl = badge,
+    )
 }
 
 /** Headings are provided by Android localized resources, never hardcoded here. */
@@ -86,13 +101,7 @@ internal fun appleEditorialShelves(
             title = label,
             items = products.map { item ->
                 val apple = item.release
-                ShelfItem(
-                    title = apple.title,
-                    subtitle = apple.artistName,
-                    thumbnailUrl = apple.artworkUrl,
-                    videoId = null,
-                    browseId = apple.appleScopedId,
-                )
+                apple.asAttributableShelfItem()
             },
         )
     }
@@ -136,15 +145,7 @@ internal fun appleFirstHomeShelves(
         // Source-order is append-stable while public Apple probes complete.
         // Do not re-sort whole shelves every time a newly found album arrives.
     fun cards(releases: List<ItunesEditorialRelease>): List<ShelfItem> =
-        releases.map { album ->
-            ShelfItem(
-                title = album.title,
-                subtitle = album.artistName,
-                thumbnailUrl = album.artworkUrl,
-                videoId = null,
-                browseId = album.appleScopedId,
-            )
-        }
+        releases.map { album -> album.asAttributableShelfItem() }
 
     val recentCutoff = today.minusDays(90)
     val recent = clean.filter { album ->
@@ -203,12 +204,7 @@ internal fun appleFirstGenreShelves(
         }
         // Artist/title probes append; preserving order avoids scroll jumps.
         .take(24)
-        .map { album ->
-            ShelfItem(
-                album.title, album.artistName, album.artworkUrl,
-                videoId = null, browseId = album.appleScopedId,
-            )
-        }
+        .map { album -> album.asAttributableShelfItem() }
     return buildList {
         if (releases.isNotEmpty()) add(HomeShelf(releaseHeading, releases))
         publicPlaylists?.takeIf { it.items.isNotEmpty() }?.let(::add)
