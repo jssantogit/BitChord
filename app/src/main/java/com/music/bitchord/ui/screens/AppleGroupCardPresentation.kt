@@ -2,6 +2,7 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
 import com.music.bitchord.data.catalog.metadata.safeAppleArtwork
+import com.music.bitchord.data.model.HomeShelf
 
 /** Per-card attribution is bound to the *currently rendered* artwork. */
 internal data class AppleGroupCardBadge(
@@ -25,3 +26,10 @@ internal fun appleGroupCardBadgeFor(
     val badge = appleApprovedBadgeForStoreUrl(store) ?: return null
     return AppleGroupCardBadge(art, store, badge)
 }
+
+
+/** A Show All overlay holds the old shelf value; always paint live card updates. */
+internal fun nativeLiveArtistShelf(
+    opened: HomeShelf,
+    currentSections: List<HomeShelf>,
+): HomeShelf = currentSections.firstOrNull { it.title == opened.title } ?: opened
