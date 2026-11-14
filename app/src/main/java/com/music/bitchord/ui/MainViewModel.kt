@@ -131,6 +131,7 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -687,6 +688,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
     private var canonicalGroupCardArtworkJob: Job? = null
+    private val groupCardAppleQueueLock = Any()
+    private var groupCardAppleQueue: Channel<Pair<Int, CanonicalCatalogSearchRow>>? = null
+    private var groupCardAppleArtistMbid: String? = null
+    private val groupCardAppleEnqueued = mutableSetOf<String>()
     private val _canonicalGroupCardApplePromotions =
         MutableStateFlow<Map<String, Pair<String, String>>>(emptyMap())
     internal val canonicalGroupCardApplePromotions =
@@ -1366,24 +1371,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         artist: CanonicalCatalogSearchRow,
         candidates: List<CanonicalCatalogSearchRow>,
     ) {
-        canonicalGroupCardArtworkJob?.cancel()
         if (candidates.isEmpty()) return
-        canonicalGroupCardArtworkJob = viewModelScope.launch(Dispatchers.IO) {
-            val permits = Semaphore(2)
-            candidates.forEachIndexed { index, candidate ->
-                launch {
-                    permits.withPermit {
+        synchronized(groupCardAppleQueueLock) {
+            if (groupCardAppleArtistMbid != artist.musicBrainzId ||
+                canonicalGroupCardArtworkJob?.isActive != true
+            ) {
+                canonicalGroupCardArtworkJob?.cancel()
+                groupCardAppleQueue?.close()
+                groupCardAppleEnqueued.clear()
+                groupCardAppleArtistMbid = artist.musicBrainzId
+                val queue = Channel<Pair<Int, CanonicalCatalogSearchRow>>(Channel.UNLIMITED)
+                groupCardAppleQueue = queue
+                canonicalGroupCardArtworkJob = viewModelScope.launch(Dispatchers.IO) {
+                    // Exactly two IO workers across all album pages. New artist
+                    // pagination appends tasks instead of restarting the first
+                    // 16 covers and cancelling slow but valid verifications.
+                    coroutineScope {
+                        repeat(2) {
+                            launch {
+                                for ((index, candidate) in queue) {
                         currentCoroutineContext().ensureActive()
                         if (_searchSource.value != SearchSource.CANONICAL ||
                             canonicalPath.lastOrNull() != artist
-                        ) return@withPermit
+                        ) continue
                         val proof = try {
                             canonicalGroupCardArtworkResolver.resolve(
                                 candidate.musicBrainzId, "br", candidate.title,
                             )
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (_: Exception) { null } ?: return@withPermit
+                        } catch (_: Exception) { null } ?: continue
                         val route = canonicalNativeBrowseId(artist)
                         suspend fun publishGroupCard(
                             verified: com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtwork,
@@ -1451,8 +1468,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         )
                         if (promoted.artworkUrl != proof.artworkUrl)
                             publishGroupCard(promoted)
+
+                                }
+                            }
+                        }
                     }
                 }
+            }
+            val queue = groupCardAppleQueue ?: return
+            candidates.forEachIndexed { index, row ->
+                if (groupCardAppleEnqueued.add(row.musicBrainzId))
+                    queue.trySend(index to row)
             }
         }
     }
