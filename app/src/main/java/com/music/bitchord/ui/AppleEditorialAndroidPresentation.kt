@@ -9,6 +9,7 @@ import java.time.LocalDate
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.ShelfItem
+import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 
 /**
  * Explicit Apple storefront routing. A source ID must NEVER be interpreted
@@ -271,5 +272,27 @@ internal fun appleEditorialReleasesWithProbedArtwork(
             release.appleCollectionId == route.id &&
             release.artworkUrl == original
         ) release.copy(artworkUrl = probed) else release
+    }
+}
+
+
+/** Artist discographies use typed Apple IDs, never a title/artist cover join. */
+internal fun appleArtistAlbumRowsWithProbedArtwork(
+    rows: List<AppleEditorialSearchRow>,
+    albumBrowseId: String,
+    original: String?,
+    probed: String?,
+): List<AppleEditorialSearchRow> {
+    val route = AppleCatalogBrowseRoute.parse(albumBrowseId)
+        ?.takeIf { it.kind == ItunesCatalogItemType.ALBUM } ?: return rows
+    if (original.isNullOrBlank() || original == probed ||
+        safeAppleArtwork(original) == null || safeAppleArtwork(probed) == null
+    ) return rows
+    if (rows.count { it.browseId == albumBrowseId } != 1) return rows
+    return rows.map { row ->
+        if (row.browseId == albumBrowseId &&
+            AppleCatalogBrowseRoute.parse(row.browseId) == route &&
+            row.artworkUri == original
+        ) row.copy(artworkUri = probed) else row
     }
 }
