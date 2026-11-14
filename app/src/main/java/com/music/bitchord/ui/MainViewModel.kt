@@ -4865,11 +4865,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 is AppleEditorialLoad.Failure -> UiState.Error("apple_catalog_unavailable")
             }
-            // The Apple-native album already owns its store identity. Paint
-            // its 100px image immediately; verify a larger Apple CDN variant
-            // independently, without a MusicBrainz UPC lookup or developer key.
+            // Store identity is already typed and exact. A 100px thumbnail is
+            // retained only as fallback metadata: the native hero waits for a
+            // dimension-verified CDN cover, independent of any store badge.
             val initialAlbum = (_appleEditorialDetail.value as? UiState.Success)?.data
-            if (initialAlbum?.appleStoreBadgeUrl != null) {
+            if (appleNativeAlbumMayProbeLargeCover(initialAlbum)) {
                 launch {
                     val originalUrl = initialAlbum.album.artworkUri
                     val upgraded = appleHighResolutionArtwork.upgrade(originalUrl, 1024)
