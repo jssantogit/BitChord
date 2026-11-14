@@ -1,0 +1,43 @@
+name: REA 212 - Explore selection rating Android validation
+on:
+  push:
+    branches:
+      - validation/rea212-explore-selection-rating-f4d1e27-20261114
+
+permissions:
+  contents: read
+
+jobs:
+  android-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact PR source (no APK)
+        run: |
+          set -euo pipefail
+          git diff --exit-code f4d1e274c966d157a950b836129b64f0d7b09b88 HEAD -- app sharedUi shared
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Write local properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android unit tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared Automix regression
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+      - name: Shared UI regressions
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Upload failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-ui-test-failures-${{ github.sha }}
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
