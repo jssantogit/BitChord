@@ -32,7 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          approved="ae11ff3d3a37a237d3387116e3f32b717a2532c7"
+          approved="46ae157d9e19c5a754492b1c23694de52f3c0765"
           trigger=".github/workflows/catalog-216-smoke-apk.yml"
           test "$(git branch --show-current)" = "" || true
           git merge-base --is-ancestor "$approved" HEAD
@@ -59,7 +59,7 @@ jobs:
           echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
           chmod +x gradlew
 
-      # The exact production/test sources passed Android CI #43617167419.
+      # The exact production/test sources passed Android CI #43635880428.
       # Build only: avoid repeating 3,654+ JVM tests on unchanged sources.
       - name: Build installable Android dev debug APK
         run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
@@ -68,7 +68,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf 'pr=216\nci_approved_source=ae11ff3d3a37a237d3387116e3f32b717a2532c7\nbuild_commit=%s\n' "$(git rev-parse HEAD)" > catalog-216-apk-manifest.txt
+          printf 'pr=216\nci_approved_source=46ae157d9e19c5a754492b1c23694de52f3c0765\nbuild_commit=%s\n' "$(git rev-parse HEAD)" > catalog-216-apk-manifest.txt
           find app/build/outputs/apk/dev/debug -name '*.apk' -type f -print -exec sha256sum '{}' \; >> catalog-216-apk-manifest.txt
           grep -q '\.apk' catalog-216-apk-manifest.txt
 
