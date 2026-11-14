@@ -1,0 +1,83 @@
+# Temporary branch-scoped smoke artifact for PR #216. Do not merge this workflow.
+# Triggered by its own file on the PR branch after explicit user authorization.
+name: Catalog #216 — Android Smoke APK
+
+on:
+  push:
+    branches:
+      - catalog/tri-source-editorial-integration-20261113
+    paths:
+      - .github/workflows/catalog-216-smoke-apk.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: catalog-216-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  android-dev-apk:
+    name: PR #216 · dev debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require unchanged CI-approved source and explicit APK trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          approved="ae11ff3d3a37a237d3387116e3f32b717a2532c7"
+          trigger=".github/workflows/catalog-216-smoke-apk.yml"
+          test "$(git branch --show-current)" = "" || true
+          git merge-base --is-ancestor "$approved" HEAD
+          changed="$(git diff --name-only "$approved" HEAD)"
+          if [[ "$changed" != "$trigger" ]]; then
+            echo "::error::Only the explicit APK workflow may differ from the CI-approved source"
+            printf 'Unexpected files:\n%s\n' "$changed"
+            exit 1
+          fi
+          echo "CI-approved Android code unchanged: $approved"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure local build properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+
+      # The exact production/test sources passed Android CI #43617167419.
+      # Build only: avoid repeating 3,654+ JVM tests on unchanged sources.
+      - name: Build installable Android dev debug APK
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+
+      - name: Record build identity and SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'pr=216\nci_approved_source=ae11ff3d3a37a237d3387116e3f32b717a2532c7\nbuild_commit=%s\n' "$(git rev-parse HEAD)" > catalog-216-apk-manifest.txt
+          find app/build/outputs/apk/dev/debug -name '*.apk' -type f -print -exec sha256sum '{}' \; >> catalog-216-apk-manifest.txt
+          grep -q '\.apk' catalog-216-apk-manifest.txt
+
+      - name: Publish PR #216 smoke APK and manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitchord-pr216-android-smoke-${{ github.sha }}
+          path: |
+            app/build/outputs/apk/dev/debug/*.apk
+            catalog-216-apk-manifest.txt
+          if-no-files-found: error
+          retention-days: 14
