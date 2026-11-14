@@ -210,7 +210,8 @@ private fun CanonicalGenreSleeve(
 ) {
     val tone = remember(item.title) { moodToneFor(item.title, null) }
     NativeExploreCategorySleeve(
-        item.title, item.thumbnailUrl, tone, modifier, MaterialTheme.typography.titleMedium,
+        item.title, appleProminentArtworkOrNull(item.thumbnailUrl), tone, modifier,
+        MaterialTheme.typography.titleMedium,
     )
 }
 
