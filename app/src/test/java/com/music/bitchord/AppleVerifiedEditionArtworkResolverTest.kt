@@ -153,6 +153,51 @@ class AppleVerifiedEditionArtworkResolverTest {
         assertEquals(1, directReads)
     }
 
+    @Test fun directReleaseLinkAvoidsSlowUnnecessaryBarcodeSearchWhenBothExist() = runBlocking {
+        var upcCalls = 0
+        var directCalls = 0
+        val resolver = AppleVerifiedEditionArtworkResolver(
+            edition = AppleArtworkEditionSource {
+                mb().copy(linkedAppleAlbumIds = listOf(101L))
+            },
+            upc = AppleArtworkUpcSource { _, _ ->
+                upcCalls++
+                response()
+            },
+            linked = AppleArtworkLinkedAlbumSource { _, _ ->
+                directCalls++
+                response()
+            },
+            evidence = AppleAlbumEditionEvidenceSource {
+                error("direct edition relation must not enumerate UPC candidates")
+            },
+        )
+        assertEquals(art, resolver.resolve(id, "br")?.artworkUrl)
+        assertEquals(0, upcCalls)
+        assertEquals(1, directCalls)
+    }
+
+    @Test fun invalidDirectReleaseRelationCanStillUseIndependentUpcProof() = runBlocking {
+        var upcCalls = 0
+        val resolver = AppleVerifiedEditionArtworkResolver(
+            edition = AppleArtworkEditionSource {
+                mb().copy(linkedAppleAlbumIds = listOf(202L))
+            },
+            upc = AppleArtworkUpcSource { _, _ ->
+                upcCalls++
+                response()
+            },
+            linked = AppleArtworkLinkedAlbumSource { _, _ ->
+                ItunesCatalogResult.Failure(ItunesCatalogFailure.UNAVAILABLE)
+            },
+            evidence = AppleAlbumEditionEvidenceSource {
+                AppleAlbumEditionEvidence(listOf(mb()), emptyList())
+            },
+        )
+        assertEquals(art, resolver.resolve(id, "br")?.artworkUrl)
+        assertEquals(1, upcCalls)
+    }
+
     @Test fun linkedAppleIdNeverBorrowedFromAnotherProductOrTracklist() = runBlocking {
         for (appleResponse in listOf(
             response().copy(items = response().items.map { item ->
