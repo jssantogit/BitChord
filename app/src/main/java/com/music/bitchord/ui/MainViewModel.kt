@@ -1268,7 +1268,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // when no matching verified edition was included in that page.
             val offlineOnly = (_canonicalDetail.value as? UiState.Success)
                 ?.data?.rows?.firstOrNull()?.fromOfflineCache == true
-            var firstEditionPage: MusicBrainzCatalogPage<MusicBrainzReleaseHit>? = null
             // Begin Apple verification before archive enrichment. CAA only
             // supplies a transitional fallback when no exact Apple identity is
             // available; a pre-existing CAA cover does not skip this work.
@@ -1276,70 +1275,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 artist,
                 canonicalAppleGroupCardArtworkCandidates(
                     (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty(),
-                    limit = 16,
+                    limit = 48,
                 ),
             )
             // Additional edition pages now stream concurrently with CAA
             // lookups. The map must support safe independent IO workers.
             val artistEditions = java.util.concurrent.ConcurrentHashMap<
                 String, List<MusicBrainzReleaseHit>>()
-            // Navidrome/Auxio-inspired cache-first artist shelves: artwork already
-            // vetted in Room must never wait for an external MusicBrainz
-            // official-edition browse (which has a shared rate limit). A single
-            // SQL batch hydrates the still-blank cards while the online index
-            // is obtained independently. This does not invent group identity.
-            launch {
-                // A filled 500px thumbnail can still be an earlier, wrong
-                // edition sleeve. Revalidate all visible Official audio groups,
-                // not only empty/250px cards. Bound the Room IN query and let
-                // the normal progressive worker cover later paginated groups.
-                val visibleRows = (_canonicalDetail.value as? UiState.Success)
-                    ?.data?.rows.orEmpty()
-                val candidateIds = canonicalWarmGroupArtworkCandidateMbids(
-                    visibleRows, limit = 400,
-                )
-                if (candidateIds.isNotEmpty()) {
-                    val verified = coverArtArchive.cachedVerifiedGroupCovers(
-                        candidateIds, CoverArtSize.THUMBNAIL,
-                    )
-                    if (verified.isNotEmpty() &&
-                        _searchSource.value == SearchSource.CANONICAL &&
-                        canonicalPath.lastOrNull() == artist
-                    ) {
-                        val latestRows = (_canonicalDetail.value as? UiState.Success)
-                            ?.data?.rows.orEmpty()
-                        val updates = canonicalArtistVerifiedGroupUpdates(
-                            latestRows, verified,
-                        )
-                        if (updates.isNotEmpty()) {
-                            val applicable = updates.mapValues { it.value.first }
-                            _canonicalDetail.update { old ->
-                                if (old !is UiState.Success) old else UiState.Success(
-                                    old.data.copy(rows = canonicalRowsWithVerifiedGroupCoverBatch(
-                                        old.data.rows, applicable,
-                                    )),
-                                )
-                            }
-                            val artistId = canonicalNativeBrowseId(artist)
-                            _detailStack.update { pages ->
-                                pages.map { page ->
-                                    if (page.browseId != artistId) page else page.copy(
-                                        sections = canonicalArtistShelvesWithCoverUpdates(
-                                            page.sections, updates,
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // Never hydrate legacy CAA Front images into artist cards:
+            // the Apple proof worker owns artwork and store attribution.
             if (!offlineOnly) try {
                 when (val batch = musicBrainzGraph.browseOfficialReleasesForArtist(
                     artist.musicBrainzId, limit = 100,
                 )) {
                     is MusicBrainzCatalogGraphResult.Success -> {
-                        firstEditionPage = batch.value
                         artistEditions.putAll(batch.value.items.filter {
                             isCuratedMusicBrainzRelease(it) && it.releaseGroupMbid != null
                         }.groupBy { requireNotNull(it.releaseGroupMbid) })
@@ -1402,128 +1351,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
-            val attempted = mutableSetOf<String>()
-            var initialCoverWave = true
-            var expandedArtistEditionPages = false
-            while (true) {
-                currentCoroutineContext().ensureActive()
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    canonicalPath.lastOrNull() != artist) break
-                // Front-load six covers. For long artist discographies, then
-                // collect another bounded set of 100-edition artist pages,
-                // instead of N rate-limited group browse requests. Resolved
-                // MBIDs remain linked; a failed page never erases earlier art.
-                val firstPage = firstEditionPage
-                val expandNow = !expandedArtistEditionPages &&
-                    attempted.size >= 6 && firstPage?.nextOffset != null && !offlineOnly
-                if (expandNow) expandedArtistEditionPages = true
-                val lateEditionGroups = java.util.concurrent.ConcurrentHashMap
-                    .newKeySet<String>()
-                val batch = (_canonicalDetail.value as? UiState.Success)?.data?.rows
-                    .orEmpty().filter {
-                        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                            canonicalEditorialReleaseType(it) != null &&
-                            canonicalNeedsCoverRefresh(it.artworkUri) &&
-                            it.musicBrainzId !in attempted
-                    }.let { pending ->
-                        // Paint the first eight without holding them behind
-                        // additional artist browse pages. Once they complete,
-                        // stream the entire remaining queue with three fixed
-                        // workers, not another 6-at-a-time completion barrier.
-                        if (initialCoverWave) pending.take(8) else pending
-                    }
-                if (batch.isEmpty()) break
-                initialCoverWave = false
-                attempted.addAll(batch.map { it.musicBrainzId })
-                // Stream finished covers immediately instead of withholding an
-                // entire six-row wave behind the slowest CAA network lookup.
-                // At most three calls are active; bursts coalesce before state
-                // updates, and navigation checks prevent stale artwork.
-                // The edition-page fetch MUST NOT interrupt the next
-                // streaming cover wave: on TWICE-scale discographies three
-                // sequential rate-limited MusicBrainz pages were visibly
-                // freezing artwork after the first eight covers.
-                loadCanonicalCoversWhileExpandingEditions(
-                    keys = batch,
-                    maxConcurrent = 3,
-                    expandEditions = {
-                        if (expandNow && firstPage != null) {
-                            collectCanonicalArtistOfficialEditionPages(
-                                firstPage = firstPage,
-                                maxAdditionalPages = 3,
-                                fetch = { offset ->
-                                    musicBrainzGraph.browseOfficialReleasesForArtist(
-                                        artist.musicBrainzId, limit = 100, offset = offset,
-                                    )
-                                },
-                                onPage = { editions ->
-                                    lateEditionGroups.addAll(
-                                        editions.keys - artistEditions.keys,
-                                    )
-                                    artistEditions.putAll(editions)
-                                },
-                            )
-                        }
-                    },
-                    fetch = { group ->
-                        val cover = try {
-                            canonicalArtworkForRow(
-                                group, prefetchedOfficialEditions =
-                                    artistEditions[group.musicBrainzId],
-                            )
-                        } catch (cancelled: CancellationException) {
-                            throw cancelled
-                        } catch (_: Exception) { null }
-                        val releaseEvidence = artistEditions[group.musicBrainzId]
-                            ?: try {
-                                MusicBrainzCatalogIndex(CanonicalCatalogDatabase.get(
-                                    getApplication<Application>(),
-                                )).cachedGroupReleases(group.musicBrainzId)
-                            } catch (cancelled: CancellationException) { throw cancelled }
-                              catch (_: Exception) { emptyList() }
-                        cover?.let {
-                            group.musicBrainzId to (it to canonicalOfficialGroupDisplayTitle(
-                                group.title, releaseEvidence,
-                            ))
-                        }
-                    },
-                    publish = paint@{ ready ->
-                        if (_searchSource.value != SearchSource.CANONICAL ||
-                            canonicalPath.lastOrNull() != artist) return@paint
-                        val results = ready.values.toMap()
-                        _canonicalDetail.update { old ->
-                            if (old !is UiState.Success) old else UiState.Success(
-                                old.data.copy(rows = canonicalArtistRowsWithOfficialCoverUpdates(
-                                    old.data.rows, results,
-                                )),
-                            )
-                        }
-                        val artistId = canonicalNativeBrowseId(artist)
-                        _detailStack.update { pages ->
-                            if (_searchSource.value != SearchSource.CANONICAL ||
-                                canonicalPath.lastOrNull() != artist) pages else {
-                                pages.map { page ->
-                                    if (page.browseId != artistId) page else page.copy(
-                                        // Already ordered by canonicalNativeSections
-                                        // at initial paint and paging. Preserve
-                                        // every other card instance; full rebuilds
-                                        // were O(discography x covers).
-                                        sections = canonicalArtistShelvesWithCoverUpdates(
-                                            page.sections, results,
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                    },
-                )
-                // Only groups newly supported by late, positively-linked
-                // Official editions may retry if their earlier cover failed.
-                // Existing success is never reloaded, and expansion is bounded.
-                if (expandNow) attempted.removeAll(lateEditionGroups)
-                if (_searchSource.value != SearchSource.CANONICAL ||
-                    canonicalPath.lastOrNull() != artist) break
-            }
+            // Apple card coverage above runs independently. Only metadata
+            // corrections (from Official MB editions) remain in this job.
         }
     }
 
