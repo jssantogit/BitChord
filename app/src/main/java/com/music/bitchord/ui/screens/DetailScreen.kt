@@ -355,6 +355,8 @@ fun DetailScreen(
      * must be placed adjacent to the certified cover.
      */
     appleStorePromotionUrl: String? = null,
+    /** Artist cards only: Group MBID -> exact promotional artwork and store URL. */
+    appleGroupCardPromotions: Map<String, Pair<String, String>> = emptyMap(),
 ) {
     val applePromotionBadge = remember(page.browseId, appleStorePromotionUrl) {
         if (page.browseId.startsWith("catalog:RELEASE:") ||
@@ -807,6 +809,10 @@ fun DetailScreen(
                         onClick = { onSectionItemClick(topRelease) },
                         onLongPress = onSectionItemLongPress?.let { { it(topRelease) } },
                         saved = topRelease.browseId?.let { releaseLibrary[it]?.saved },
+                        applePromotion = appleGroupCardBadgeFor(
+                            topRelease.browseId, topRelease.thumbnailUrl,
+                            appleGroupCardPromotions,
+                        ),
                         onToggleSaved = onToggleReleaseLibrary?.let { toggle ->
                             topRelease.browseId?.let { id -> { toggle(id) } }
                         },
@@ -1130,6 +1136,9 @@ fun DetailScreen(
                             palette = palette,
                             onClick = { onSectionItemClick(item) },
                             onLongPress = onSectionItemLongPress?.let { { it(item) } },
+                            applePromotion = appleGroupCardBadgeFor(
+                                item.browseId, item.thumbnailUrl, appleGroupCardPromotions,
+                            ),
                         )
                 }
             }
@@ -1219,6 +1228,7 @@ fun DetailScreen(
         onItemClick = onSectionItemClick,
         onItemLongPress = onSectionItemLongPress,
         contentPadding = contentPadding,
+        appleGroupCardPromotions = appleGroupCardPromotions,
     )
 }
 }
@@ -1681,9 +1691,9 @@ private fun TopReleaseCard(
     onLongPress: (() -> Unit)?,
     saved: Boolean?,
     onToggleSaved: (() -> Unit)?,
+    applePromotion: AppleGroupCardBadge? = null,
 ) {
     val haptics = rememberHaptics()
-    val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
     NativeArtistTopReleaseCard(
         title = item.title,
         subtitle = item.subtitle,
@@ -1691,14 +1701,7 @@ private fun TopReleaseCard(
         palette = palette,
         onClick = onClick,
         onLongPress = onLongPress,
-        artwork = {
-            AsyncImage(
-                model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
-                contentDescription = null,
-                onState = observeCaaCover,
-                modifier = Modifier.fillMaxSize(),
-            )
-        },
+        artwork = { ArtistCardArtwork(item, applePromotion) },
         trailing = if (onToggleSaved != null && saved != null) {
             {
                 Spacer(Modifier.width(10.dp))
@@ -1840,8 +1843,8 @@ private fun SectionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier.width(SHELF_CARD_WIDTH),
     onLongPress: (() -> Unit)? = null,
+    applePromotion: AppleGroupCardBadge? = null,
 ) {
-    val observeCaaCover = rememberCaaCoverLoadObserver(item.thumbnailUrl)
     NativeArtistReleaseCard(
         title = item.title,
         subtitle = item.subtitle,
@@ -1849,15 +1852,47 @@ private fun SectionCard(
         onClick = onClick,
         modifier = modifier,
         onLongPress = onLongPress,
-        artwork = {
-            AsyncImage(
-                model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
-                contentDescription = null,
-                onState = observeCaaCover,
-                modifier = Modifier.fillMaxSize(),
-            )
-        },
+        artwork = { ArtistCardArtwork(item, applePromotion) },
     )
+}
+
+/** Promo badges are their original Apple assets, clickable independently of the card. */
+@Composable
+private fun ArtistCardArtwork(
+    item: ShelfItem,
+    applePromotion: AppleGroupCardBadge?,
+) {
+    val observer = rememberCaaCoverLoadObserver(item.thumbnailUrl)
+    val uriHandler = LocalUriHandler.current
+    Box(Modifier.fillMaxSize()) {
+        AsyncImage(
+            // Never rewrite a returned 100px Apple CDN URL to an unverified size.
+            model = if (applePromotion != null) item.thumbnailUrl
+                else item.thumbnailUrl.artworkAt(CARD_ART_PX),
+            contentDescription = null,
+            onState = observer,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (applePromotion != null) {
+            Box(
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .padding(bottom = 5.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Color.Black.copy(alpha = 0.68f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = applePromotion.badgeUrl,
+                    contentDescription = "Abrir lançamento na Apple Music",
+                    modifier = Modifier.width(112.dp).height(32.dp)
+                        .clickable {
+                            runCatching { uriHandler.openUri(applePromotion.storeUrl) }
+                        },
+                    contentScale = ContentScale.Fit,
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -1868,6 +1903,7 @@ private fun ArtistShelfGridPage(
     onItemLongPress: ((ShelfItem) -> Unit)?,
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
+    appleGroupCardPromotions: Map<String, Pair<String, String>> = emptyMap(),
 ) {
     val gridState = rememberLazyGridState()
     BoxWithConstraints(modifier.fillMaxSize().background(palette.background)) {
@@ -1892,6 +1928,9 @@ private fun ArtistShelfGridPage(
                     onClick = { onItemClick(item) },
                     onLongPress = onItemLongPress?.let { { it(item) } },
                     modifier = Modifier.fillMaxWidth(),
+                    applePromotion = appleGroupCardBadgeFor(
+                        item.browseId, item.thumbnailUrl, appleGroupCardPromotions,
+                    ),
                 )
             }
         }
