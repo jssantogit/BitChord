@@ -3839,28 +3839,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             worldwideReleaseFetchedAtMs = System.currentTimeMillis()
             worldwideReleaseRetryAtMs = 0L
 
-            // Covers must be verified by their own group / official edition;
-            // the MusicBrainz search result itself has no trusted artwork.
-            val permits = Semaphore(2)
-            canonicalWorldwideArtworkPriority(rows, until).forEach { row ->
-                launch {
-                    permits.withPermit {
-                        val cover = try { canonicalArtworkForRow(row) }
-                            catch (cancelled: CancellationException) { throw cancelled }
-                            catch (_: Exception) { null }
-                        if (cover != null && worldwideReleaseEpoch.isCurrent(generation)) {
-                            _canonicalWorldwideReleases.update { old ->
-                                old.map { current ->
-                                    if (current.musicBrainzId == row.musicBrainzId &&
-                                        canonicalNeedsCoverRefresh(current.artworkUri)
-                                    ) current.copy(artworkUri = cover)
-                                    else current
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // Worldwide MB groups are *only* title/artist seed hints for
+            // AppleHomeEditorialDiscovery. The visible Home cards originate
+            // exclusively from Apple storefront products. Resolving CAA Front
+            // images for those invisible seed rows wastes HTTP requests,
+            // delays subsequent MusicBrainz lookups and revives the retired
+            // secondary-cover source without benefiting any displayed card.
+            // Do not start a Cover Art Archive warmup from this path.
         }.also { job ->
             job.invokeOnCompletion {
                 if (worldwideReleaseEpoch.isCurrent(generation)) {
