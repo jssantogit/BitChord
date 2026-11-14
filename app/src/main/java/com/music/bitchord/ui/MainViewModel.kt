@@ -3706,6 +3706,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ?: UiState.Error("Não foi possível consultar o catálogo Apple.")
                 }
             }
+            // First paint retains Apple's published thumbnail. Upgrade only
+            // visible Apple product cards after verifying CDN response bounds;
+            // two probes at a time, without blocking Home or the iTunes API.
+            if (result is AppleEditorialLoad.Success) {
+                val permits = Semaphore(2)
+                result.releases.take(12).forEach { album ->
+                    launch {
+                        permits.withPermit {
+                            val upgraded = appleHighResolutionArtwork.upgrade(
+                                album.artworkUrl, 600,
+                            )
+                            if (upgraded != null && upgraded != album.artworkUrl &&
+                                appleHomeEpoch.isCurrent(generation) &&
+                                isCanonicalDiscoverySelected()
+                            ) _appleHomeReleases.update { state ->
+                                if (state !is UiState.Success) state else UiState.Success(
+                                    appleEditorialReleasesWithProbedArtwork(
+                                        state.data, album.appleScopedId,
+                                        album.artworkUrl, upgraded,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -4039,6 +4065,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             ?: UiState.Error("Não foi possível consultar o gênero na Apple.")
                     }
                 })
+            }
+            if (result is AppleEditorialLoad.Success) {
+                val permits = Semaphore(2)
+                result.releases.take(12).forEach { album ->
+                    launch {
+                        permits.withPermit {
+                            val upgraded = appleHighResolutionArtwork.upgrade(
+                                album.artworkUrl, 600,
+                            )
+                            if (upgraded != null && upgraded != album.artworkUrl &&
+                                appleGenreEpoch.isCurrent(generation) &&
+                                appleGenreActiveTag == tag
+                            ) _appleGenreReleases.update { old ->
+                                val current = old[tag] as? UiState.Success ?: return@update old
+                                old + (tag to UiState.Success(
+                                    appleEditorialReleasesWithProbedArtwork(
+                                        current.data, album.appleScopedId,
+                                        album.artworkUrl, upgraded,
+                                    ),
+                                ))
+                            }
+                        }
+                    }
+                }
             }
         }
     }
