@@ -5,6 +5,7 @@ import com.music.bitchord.ui.canonicalGenreArtworkPriority
 import com.music.bitchord.ui.canonicalWorldwideArtworkPriority
 import com.music.bitchord.ui.canonicalAppleGroupCardArtworkCandidates
 import com.music.bitchord.ui.canonicalPublicWithoutLegacyArchiveArtwork
+import com.music.bitchord.ui.canonicalAppleGroupCardArtworkBatches
 import com.music.bitchord.ui.screens.CanonicalCatalogSearchRow
 import com.music.bitchord.ui.screens.CanonicalSearchKind
 import org.junit.Assert.assertEquals
@@ -64,6 +65,23 @@ class CanonicalPublicArtworkPriorityTest {
         assertTrue(canonicalAppleGroupCardArtworkCandidates(
             listOf(official), limit = 0,
         ).isEmpty())
+    }
+
+    @Test fun longArtistDiscographiesQueueAllVerifiedGroupCandidatesWithoutDuplication() {
+        val rows = (1..125).map(::row)
+        val batches = canonicalAppleGroupCardArtworkBatches(
+            rows + rows.take(8), batchSize = 24,
+        )
+        assertEquals(6, batches.size)
+        assertEquals(125, batches.flatten().size)
+        assertEquals(rows.map { it.musicBrainzId },
+            batches.flatten().map { it.musicBrainzId })
+        assertEquals(24, batches.first().size)
+        assertEquals(5, batches.last().size)
+        assertTrue(canonicalAppleGroupCardArtworkBatches(rows, 24, 0).isEmpty())
+        assertEquals(48, canonicalAppleGroupCardArtworkBatches(
+            rows, 24, maxCandidates = 48,
+        ).flatten().size)
     }
 
     @Test fun genreArtworkTargetsVisibleEditorialCardsOnly() {
