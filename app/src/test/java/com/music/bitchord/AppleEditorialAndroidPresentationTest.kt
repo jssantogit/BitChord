@@ -11,6 +11,7 @@ import com.music.bitchord.ui.AppleEditorialShelfHeadings
 import com.music.bitchord.ui.appleEditorialShelves
 import com.music.bitchord.ui.appleEditorialReleasesWithProbedArtwork
 import com.music.bitchord.ui.appleArtistAlbumRowsWithProbedArtwork
+import com.music.bitchord.ui.appleArtworkTargetPxForShelf
 import com.music.bitchord.ui.screens.AppleEditorialSearchRow
 import org.junit.Assert.*
 import org.junit.Test
@@ -44,6 +45,15 @@ class AppleEditorialAndroidPresentationTest {
         classification = AppleEditorialClassification.resolve(release, emptyList()),
         discogsEdition = null,
     )
+
+    @Test fun artworkPolicyCapsOnlyProminentCardsAt1024Pixels() {
+        assertEquals(1024, appleArtworkTargetPxForShelf(0, 4))
+        assertEquals(1024, appleArtworkTargetPxForShelf(3, 4))
+        assertEquals(600, appleArtworkTargetPxForShelf(4, 4))
+        assertEquals(600, appleArtworkTargetPxForShelf(0, 0))
+        assertEquals(600, appleArtworkTargetPxForShelf(-1, 4))
+        assertEquals(600, appleArtworkTargetPxForShelf(4, 100))
+    }
 
     @Test fun artistDiscographyOnlyReplacesSameAppleAlbumIdAndOriginalImage() {
         val tiny = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
