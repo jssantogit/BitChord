@@ -1538,7 +1538,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (candidates.isEmpty()) return
         canonicalGroupCardArtworkJob = viewModelScope.launch(Dispatchers.IO) {
             val permits = Semaphore(2)
-            candidates.forEach { candidate ->
+            candidates.forEachIndexed { index, candidate ->
                 launch {
                     permits.withPermit {
                         currentCoroutineContext().ensureActive()
@@ -1552,7 +1552,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { null } ?: return@withPermit
-                        val promoted = appleHighResolutionArtwork.upgrade(proof, 600)
+                        val promoted = appleHighResolutionArtwork.upgrade(
+                            proof, appleArtworkTargetPxForShelf(index, 2),
+                        )
                         val artwork = promoted.artworkUrl
                         val route = canonicalNativeBrowseId(artist)
                         canonicalArtworkPresentationMutex.withLock {
@@ -3722,7 +3724,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         permits.withPermit {
                             // Only the first four featured Home cards use
                             // 1024px; the remaining compact tiles use 600px.
-                            val target = if (index < 4) 1024 else 600
+                            val target = appleArtworkTargetPxForShelf(index, 4)
                             val upgraded = appleHighResolutionArtwork.upgrade(
                                 album.artworkUrl, target,
                             )
@@ -4082,7 +4084,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         permits.withPermit {
                             // Only the first four featured Explore cards use
                             // 1024px; the remaining compact tiles use 600px.
-                            val target = if (index < 4) 1024 else 600
+                            val target = appleArtworkTargetPxForShelf(index, 4)
                             val upgraded = appleHighResolutionArtwork.upgrade(
                                 album.artworkUrl, target,
                             )
@@ -5158,7 +5160,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             val displayed = (_appleEditorialArtistDetail.value as? UiState.Success)?.data
             if (displayed?.artist?.browseId == row.browseId)
-                upgradeAppleArtistCardArtwork(row.browseId, displayed.albums.take(12))
+                upgradeAppleArtistCardArtwork(
+                    row.browseId, displayed.albums.take(12), featuredCount = 4,
+                )
         }
     }
 
@@ -5170,16 +5174,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun upgradeAppleArtistCardArtwork(
         artistBrowseId: String,
         candidates: List<AppleEditorialSearchRow>,
+        featuredCount: Int = 0,
     ) {
         appleArtistArtworkJob?.cancel()
         if (candidates.isEmpty()) return
         appleArtistArtworkJob = viewModelScope.launch(Dispatchers.IO) {
             val permits = Semaphore(2)
-            candidates.forEach { album ->
+            candidates.forEachIndexed { index, album ->
                 launch {
                     permits.withPermit {
                         val upgraded = appleHighResolutionArtwork.upgrade(
-                            album.artworkUri, 600,
+                            album.artworkUri,
+                            appleArtworkTargetPxForShelf(index, featuredCount),
                         )
                         if (upgraded != null && upgraded != album.artworkUri &&
                             activeAppleArtistId == artistBrowseId &&
