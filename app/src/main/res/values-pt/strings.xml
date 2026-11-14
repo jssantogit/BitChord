@@ -1382,11 +1382,11 @@
     <string name="playback_recovery_dismiss">Dispensar</string>
     <string name="canonical_discovery_header">Descoberta do catálogo</string>
     <string name="canonical_discovery_setting_title">Início e Explorar com catálogo</string>
-    <string name="canonical_discovery_setting_subtitle">Use músicas salvas e MusicBrainz no Início e em Explorar. Este modo também é usado quando o YouTube Music está desativado.</string>
+    <string name="canonical_discovery_setting_subtitle">Use músicas salvas e o catálogo online no Início e em Explorar. A integração com o iTunes está em andamento; estas telas ainda usam dados do MusicBrainz. Este modo também funciona sem YouTube Music.</string>
     <string name="canonical_discovery_home_title">Suas músicas</string>
     <string name="canonical_discovery_explore_title">Explore o catálogo</string>
-    <string name="canonical_discovery_description">Explore coleções salvas no dispositivo ou pesquise no MusicBrainz. Metadados do catálogo não garantem áudio reproduzível.</string>
-    <string name="canonical_discovery_search">Pesquisar no MusicBrainz</string>
+    <string name="canonical_discovery_description">Explore coleções salvas no dispositivo ou pesquise no catálogo online. Os metadados não garantem áudio reproduzível.</string>
+    <string name="canonical_discovery_search">Pesquisar no catálogo</string>
     <string name="canonical_discovery_open_library">Abrir biblioteca</string>
     <string name="canonical_discovery_downloaded_collections">Coleções baixadas</string>
     <string name="canonical_discovery_local_playlists">Playlists salvas no dispositivo</string>

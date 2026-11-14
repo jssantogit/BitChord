@@ -29,11 +29,11 @@
     <string name="listen_now">Listen Now</string>
     <string name="canonical_discovery_header">Catalog discovery</string>
     <string name="canonical_discovery_setting_title">Catalog-first Home and Explore</string>
-    <string name="canonical_discovery_setting_subtitle">Use saved music and MusicBrainz on Home and Explore. This mode is also used automatically when YouTube Music is disabled.</string>
+    <string name="canonical_discovery_setting_subtitle">Use saved music and the online catalog on Home and Explore. iTunes integration is in progress; these screens still use MusicBrainz data. This mode also works when YouTube Music is disabled.</string>
     <string name="canonical_discovery_home_title">Your music</string>
     <string name="canonical_discovery_explore_title">Explore the catalog</string>
-    <string name="canonical_discovery_description">Browse collections saved on this device or search MusicBrainz. Catalog metadata does not guarantee playable audio.</string>
-    <string name="canonical_discovery_search">Search MusicBrainz</string>
+    <string name="canonical_discovery_description">Browse collections saved on this device or search the online catalog. Catalog metadata does not guarantee playable audio.</string>
+    <string name="canonical_discovery_search">Search the catalog</string>
     <string name="canonical_discovery_open_library">Open Library</string>
     <string name="canonical_discovery_downloaded_collections">Downloaded collections</string>
     <string name="canonical_discovery_local_playlists">Playlists saved on this device</string>
