@@ -1,0 +1,44 @@
+name: REA212 Library and details Android validation
+on:
+  push:
+    branches: [validation/rea212-library-details-ece026cb-20261114]
+permissions:
+  contents: read
+jobs:
+  android-and-shared-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Verify production and test files equal PR source
+        run: |
+          set -euo pipefail
+          git diff --exit-code ece026cbe96baddfc729eb118e33dfbff4d87105 HEAD -- app sharedUi shared
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure local properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Android unit tests including REA212 Library and playlist
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI JVM tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Shared Automix regression
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+      - name: Upload reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-library-details-unit-reports-${{ github.sha }}
+          path: |
+            app/build/reports/tests/
+            sharedUi/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
