@@ -67,6 +67,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import coil3.compose.AsyncImage
+import com.music.bitchord.ui.components.ResilientAppleCover
 import com.music.bitchord.data.model.BrowseItem
 import com.music.bitchord.data.model.BrowseType
 import com.music.bitchord.data.model.ROW_ART_PX
@@ -1067,7 +1068,7 @@ private fun LazyListScope.appleEditorialAlbumDetail(
                     ),
                 ) {
                     album.artworkUri?.let { art ->
-                        AsyncImage(
+                        ResilientAppleCover(
                             model = art,
                             contentDescription = stringResource(Res.string.canonical_cover_art),
                             modifier = Modifier.size(156.dp).clip(RoundedCornerShape(10.dp)),
