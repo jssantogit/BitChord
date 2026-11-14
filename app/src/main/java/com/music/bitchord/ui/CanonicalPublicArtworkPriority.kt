@@ -47,3 +47,22 @@ internal fun canonicalGenreArtworkPriority(
         .distinctBy { it.musicBrainzId }
         .take(limit.coerceIn(0, 48))
 }
+
+
+/**
+ * iTunes is the desired catalog-cover authority. Unlike CAA refresh queues,
+ * this list includes already-covered groups: an older CAA bitmap is not
+ * evidence that an exact Apple product has been checked. Keep the first
+ * visible editorial cards responsive and let later batches be paged.
+ */
+internal fun canonicalAppleGroupCardArtworkCandidates(
+    rows: List<CanonicalCatalogSearchRow>,
+    limit: Int,
+): List<CanonicalCatalogSearchRow> = rows.asSequence()
+    .filter {
+        it.kind == CanonicalSearchKind.RELEASE_GROUP &&
+            canonicalEditorialReleaseType(it) != null
+    }
+    .distinctBy { it.musicBrainzId }
+    .take(limit.coerceIn(0, 48))
+    .toList()
