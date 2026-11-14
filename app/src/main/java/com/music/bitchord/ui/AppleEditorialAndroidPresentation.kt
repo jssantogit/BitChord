@@ -45,11 +45,15 @@ internal data class AppleCatalogBrowseRoute(
  * a guessed URL constructed from a title or MusicBrainz relationship.
  */
 private fun ItunesEditorialRelease.asAttributableShelfItem(): ShelfItem {
-    val badge = appleApprovedBadgeForStoreUrl(storeUrl)
+    val exactLink = com.music.bitchord.data.catalog.metadata
+        .appleStoreLinkForExactProduct(
+            storeUrl, ItunesCatalogItemType.ALBUM, appleCollectionId, storefront,
+        )
+    val badge = appleApprovedBadgeForStoreUrl(exactLink)
     return ShelfItem(
         title = title, subtitle = artistName,
         thumbnailUrl = artworkUrl, videoId = null, browseId = appleScopedId,
-        appleStoreUrl = storeUrl?.takeIf { badge != null },
+        appleStoreUrl = exactLink?.takeIf { badge != null },
         appleStoreBadgeUrl = badge,
     )
 }
