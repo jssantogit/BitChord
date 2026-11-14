@@ -588,6 +588,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var appleArtistDetailJob: Job? = null
     private var appleArtistPagingJob: Job? = null
     private var appleArtistArtworkJob: Job? = null
+    private val appleArtistArtworkQueueLock = Any()
+    private var appleArtistArtworkQueue: Channel<Pair<Int, AppleEditorialSearchRow>>? = null
+    private var appleArtistArtworkQueueArtistId: String? = null
+    private val appleArtistArtworkQueued = mutableSetOf<String>()
     private var appleArtistPager: AppleArtistDiscographyPager? = null
     private var activeAppleArtistId: String? = null
     private val _appleEditorialTracks =
@@ -1228,6 +1232,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleArtistSearchJob?.cancel()
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
+        resetAppleArtistArtworkQueue()
         appleArtistPager = null
         appleTrackSearchJob?.cancel()
         resetApplePublicSearchPaging()
@@ -4528,7 +4533,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         backAppleEditorialAlbum()
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
-        appleArtistArtworkJob?.cancel()
+        resetAppleArtistArtworkQueue()
         appleArtistHeroJob?.cancel()
         activeAppleArtistHeroArt = row.artworkUri
         // Only the Apple search record for THIS exact artist route can supply
@@ -4596,48 +4601,82 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val displayed = (_appleEditorialArtistDetail.value as? UiState.Success)?.data
             if (displayed?.artist?.browseId == row.browseId)
                 upgradeAppleArtistCardArtwork(
-                    row.browseId, displayed.albums.take(12), featuredCount = 4,
+                    row.browseId, displayed.albums, featuredCount = 4,
                 )
         }
     }
 
     /**
-     * Only the Apple-confirmed artist's own albums may receive the CDN probe.
-     * Separate jobs keep large album grids responsive while two HTTP image
-     * requests at most verify actual 600px pixels; no public API paging cost.
+     * One queue per exact Apple artist: successive pages append work instead
+     * of cancelling already inflight probes. Two IO workers verify actual
+     * 1024/600px CDN dimensions before the native shelf paints large covers.
      */
+    private fun resetAppleArtistArtworkQueue() {
+        synchronized(appleArtistArtworkQueueLock) {
+            appleArtistArtworkJob?.cancel()
+            appleArtistArtworkQueue?.close()
+            appleArtistArtworkQueue = null
+            appleArtistArtworkQueueArtistId = null
+            appleArtistArtworkQueued.clear()
+            appleArtistArtworkJob = null
+        }
+    }
+
     private fun upgradeAppleArtistCardArtwork(
         artistBrowseId: String,
         candidates: List<AppleEditorialSearchRow>,
         featuredCount: Int = 0,
     ) {
-        appleArtistArtworkJob?.cancel()
         if (candidates.isEmpty()) return
-        appleArtistArtworkJob = viewModelScope.launch(Dispatchers.IO) {
-            val permits = Semaphore(2)
-            candidates.forEachIndexed { index, album ->
-                launch {
-                    permits.withPermit {
-                        val upgraded = appleHighResolutionArtwork.upgrade(
-                            album.artworkUri,
-                            appleArtworkTargetPxForShelf(index, featuredCount),
-                        )
-                        if (upgraded != null && upgraded != album.artworkUri &&
-                            activeAppleArtistId == artistBrowseId &&
-                            _searchSource.value == SearchSource.CANONICAL
-                        ) _appleEditorialArtistDetail.update { state ->
-                            if (state !is UiState.Success ||
-                                state.data.artist.browseId != artistBrowseId
-                            ) state else UiState.Success(state.data.copy(
-                                albums = appleArtistAlbumRowsWithProbedArtwork(
-                                    state.data.albums, album.browseId,
-                                    album.artworkUri, upgraded,
-                                ),
-                            ))
+        synchronized(appleArtistArtworkQueueLock) {
+            if (appleArtistArtworkQueueArtistId != artistBrowseId ||
+                appleArtistArtworkJob?.isActive != true
+            ) {
+                appleArtistArtworkJob?.cancel()
+                appleArtistArtworkQueue?.close()
+                appleArtistArtworkQueued.clear()
+                appleArtistArtworkQueueArtistId = artistBrowseId
+                val queue = Channel<Pair<Int, AppleEditorialSearchRow>>(Channel.UNLIMITED)
+                appleArtistArtworkQueue = queue
+                appleArtistArtworkJob = viewModelScope.launch(Dispatchers.IO) {
+                    coroutineScope {
+                        repeat(2) {
+                            launch {
+                                for ((index, album) in queue) {
+                                    currentCoroutineContext().ensureActive()
+                                    if (activeAppleArtistId != artistBrowseId ||
+                                        _searchSource.value != SearchSource.CANONICAL
+                                    ) continue
+                                    val upgraded = try {
+                                        appleHighResolutionArtwork.upgrade(
+                                            album.artworkUri,
+                                            appleArtworkTargetPxForShelf(index, featuredCount),
+                                        )
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) { null }
+                                    if (upgraded == null || upgraded == album.artworkUri ||
+                                        activeAppleArtistId != artistBrowseId
+                                    ) continue
+                                    _appleEditorialArtistDetail.update { state ->
+                                        if (state !is UiState.Success ||
+                                            state.data.artist.browseId != artistBrowseId
+                                        ) state else UiState.Success(state.data.copy(
+                                            albums = appleArtistAlbumRowsWithProbedArtwork(
+                                                state.data.albums, album.browseId,
+                                                album.artworkUri, upgraded,
+                                            ),
+                                        ))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
+            val queue = appleArtistArtworkQueue ?: return
+            appleArtistArtworkTasksForNewPages(candidates, appleArtistArtworkQueued)
+                .forEach { queue.trySend(it) }
         }
     }
 
@@ -4715,7 +4754,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     upgradeAppleArtistCardArtwork(browseId,
                         updated.albums.filter { added ->
                             detail.albums.none { it.browseId == added.browseId }
-                        }.take(12))
+                        })
             }
         }
     }
@@ -4752,7 +4791,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     upgradeAppleArtistCardArtwork(browseId,
                         updated.albums.filter { added ->
                             detail.albums.none { it.browseId == added.browseId }
-                        }.take(12))
+                        })
             }
         }
     }
@@ -4763,7 +4802,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleArtistHeroJob?.cancel()
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
-        appleArtistArtworkJob?.cancel()
+        resetAppleArtistArtworkQueue()
         appleArtistPager = null
         _appleEditorialArtistDetail.value = null
     }
