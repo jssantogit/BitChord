@@ -1143,6 +1143,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 val album = (entityState as? CanonicalEntityBrowseState.Albums)
                     ?.releases?.firstOrNull { it.id == detail.id }
                 NativeCanonicalLibraryAlbumDetail(
+                    releaseIdentity = detail.id,
                     title = canonicalAlbumDisplayTitle(
                         detail.name, albumHeaderEvidence?.primaryType,
                     ),
