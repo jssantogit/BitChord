@@ -9,6 +9,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.ui.AppleCatalogBrowseRoute
 import com.music.bitchord.ui.AppleEditorialShelfHeadings
 import com.music.bitchord.ui.appleEditorialShelves
+import com.music.bitchord.ui.appleFirstHomeShelves
 import com.music.bitchord.ui.appleEditorialReleasesWithProbedArtwork
 import com.music.bitchord.ui.appleArtistAlbumRowsWithProbedArtwork
 import com.music.bitchord.ui.appleArtworkTargetPxForShelf
@@ -172,6 +173,26 @@ class AppleEditorialAndroidPresentationTest {
         assertEquals(albums, appleEditorialReleasesWithProbedArtwork(
             albums, "catalog:RELEASE_GROUP:101", tiny, large,
         ))
+    }
+
+    @Test fun homeShelfCardsCarryExactAppleProductBadgeAndRejectForgedLinks() {
+        val realStore = "https://music.apple.com/br/album/hot/101"
+        val clean = release(101, "HOT", ItunesEditorialReleaseFormat.EP)
+            .copy(storeUrl = realStore)
+        val forged = release(102, "HOT", ItunesEditorialReleaseFormat.SINGLE)
+            .copy(storeUrl = "https://music.apple.com.attacker.example/br/album/102")
+        val shelves = appleFirstHomeShelves(
+            listOf(clean, forged), emptyList(), "Recentes", "Descobrir", "2026-11-14",
+        )
+        val cards = shelves.flatMap { it.items }
+        assertEquals(2, cards.size)
+        assertEquals(realStore, cards[0].appleStoreUrl)
+        assertEquals(
+            "https://www.apple.com/ca/itunes/link/images/link-badge-music.png",
+            cards[0].appleStoreBadgeUrl,
+        )
+        assertNull(cards[1].appleStoreUrl)
+        assertNull(cards[1].appleStoreBadgeUrl)
     }
 
     @Test fun typedItunesRoutesNeverMasqueradeAsMusicBrainzBrowseIds() {
