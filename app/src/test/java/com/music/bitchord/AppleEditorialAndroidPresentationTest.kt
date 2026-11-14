@@ -193,6 +193,14 @@ class AppleEditorialAndroidPresentationTest {
         )
         assertNull(cards[1].appleStoreUrl)
         assertNull(cards[1].appleStoreBadgeUrl)
+        val mismatched = clean.copy(
+            storeUrl = "https://music.apple.com/br/album/somebody-else/999",
+        )
+        val wrongCard = appleFirstHomeShelves(
+            listOf(mismatched), emptyList(), "Recentes", "Descobrir", "2026-11-14",
+        ).flatMap { it.items }.single()
+        assertNull(wrongCard.appleStoreUrl)
+        assertNull(wrongCard.appleStoreBadgeUrl)
     }
 
     @Test fun typedItunesRoutesNeverMasqueradeAsMusicBrainzBrowseIds() {
