@@ -62,7 +62,9 @@ internal fun appleVerifiedEditionArtwork(
         album.artistId == null || album.artistId <= 0L ||
         album.trackCount == null || album.trackCount != tracks.size ||
         album.title.isBlank() || album.artistName.isNullOrBlank() ||
-        !safeAppleStorePromotionUrl(album.storeUrl) ||
+        appleStoreLinkForExactProduct(
+            album.storeUrl, ItunesCatalogItemType.ALBUM, album.id, storefront,
+        ) == null ||
         safeAppleArtwork(album.artworkUrl) == null ||
         album.upc?.let { it != barcode } == true ||
         tracks.any { it.storefront != storefront || it.collectionId != album.id }
@@ -130,7 +132,12 @@ internal fun canonicalAppleArtworkFor(
 ): String? = proof?.artworkUrl?.takeIf {
     proof.musicBrainzReleaseId.equals(requestedReleaseMbid, ignoreCase = true) &&
         proof.musicBrainzReleaseGroupId.equals(requestedGroupMbid, ignoreCase = true) &&
-        safeAppleStorePromotionUrl(proof.storeUrl) &&
+        proof.appleScopedId.substringAfterLast(':').toLongOrNull()?.let {
+            appleStoreLinkForExactProduct(
+                proof.storeUrl, ItunesCatalogItemType.ALBUM, it,
+                proof.appleScopedId.split(':').getOrNull(1).orEmpty(),
+            ) != null
+        } == true &&
         safeAppleArtwork(proof.artworkUrl) != null
 }
 
