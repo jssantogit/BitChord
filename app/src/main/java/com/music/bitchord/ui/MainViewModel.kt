@@ -5834,7 +5834,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } else UiState.Success(combined)
             if (combined.isNotEmpty()) reportFirstPaint("search_complete_first", combined.size)
             recordCanonicalLoadTiming("search_complete", startedNanos, combined.size)
-            if (_canonicalResults.value is UiState.Success) enrichCanonicalSearchCovers(query)
+            // General Search renders typed Apple album/artist/song results;
+            // MusicBrainz rows here are metadata/identity hints only. Do not
+            // launch an invisible CAA cover-enrichment pass for their cards.
         }
     }
 
@@ -5966,7 +5968,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null
                 ) return@launch
                 _canonicalResults.value = UiState.Success(verified)
-                enrichCanonicalSearchCovers(cursor.query)
+                // ApplePublicSearchPager owns the visible search artwork.
+                // Never warm legacy CAA images for this hidden MB page.
                 val advanced = cursor.advance(recordings, groups, editions, artists)
                 canonicalSearchPageCursors = advanced
                 _canonicalSearchHasMore.value = advanced.hasMore
