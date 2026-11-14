@@ -1,0 +1,46 @@
+name: REA212 final album artist artwork Android gate
+on:
+  push:
+    branches: [validation/rea212-final-artwork-52c90da-20261114]
+permissions:
+  contents: read
+jobs:
+  android-complete:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Confirm exact tested source
+        run: |
+          set -euo pipefail
+          git diff --exit-code 52c90da288be6db7f7f987d530ff7f3fdc4b471d HEAD -- app sharedUi shared
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure local.properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused cover, scroll and artist background tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests "com.music.bitchord.ui.screens.NativeCanonicalAlbumArtworkTest" --tests "com.music.bitchord.ui.screens.NativeAlbumDetailScrollStateTest" --tests "com.music.bitchord.ui.screens.NativeArtistBackdropAvailabilityTest"
+      - name: Full Android unit suite
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI JVM suite
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Shared Automix regression
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+      - name: Report failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-final-artwork-reports-${{ github.sha }}
+          path: |
+            app/build/reports/tests/
+            sharedUi/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
