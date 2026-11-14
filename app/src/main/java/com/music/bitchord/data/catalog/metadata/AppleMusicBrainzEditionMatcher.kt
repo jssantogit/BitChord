@@ -49,6 +49,7 @@ internal object AppleMusicBrainzEditionMatcher {
     private fun check(
         apple: ItunesEditorialRelease,
         mb: MusicBrainzCatalogReleaseDetail,
+        exactLinkedAlbum: Boolean = false,
     ): Grade {
         val group = validMbid(mb.groupMbid) ?: return Grade.NO_MATCH
         if (validMbid(mb.musicBrainzId) == null ||
@@ -65,12 +66,20 @@ internal object AppleMusicBrainzEditionMatcher {
             mb.artistCreditNames.isEmpty()
         ) return Grade.NO_MATCH
 
-        val aUpc = apple.upc
-        val mbUpc = mb.barcode?.trim()
-        if (aUpc.isNullOrBlank() || mbUpc.isNullOrBlank() ||
-            !upcPattern.matches(aUpc) || !upcPattern.matches(mbUpc)
-        ) return Grade.CANDIDATE
-        if (aUpc != mbUpc) return Grade.NO_MATCH
+        // Only the dedicated exact Release URL crosswalk may bypass missing
+        // UPC. General catalog matching NEVER treats title/tracklist alone
+        // as release-level identity. Multiple explicit links are ambiguous.
+        if (exactLinkedAlbum &&
+            mb.linkedAppleAlbumIds.distinct() != listOf(apple.appleCollectionId)
+        ) return Grade.NO_MATCH
+        val aUpc = apple.upc?.trim()?.takeIf(String::isNotEmpty)
+        val mbUpc = mb.barcode?.trim()?.takeIf(String::isNotEmpty)
+        if ((aUpc != null && !upcPattern.matches(aUpc)) ||
+            (mbUpc != null && !upcPattern.matches(mbUpc)) ||
+            (aUpc != null && mbUpc != null && aUpc != mbUpc)
+        ) return Grade.NO_MATCH
+        if (!exactLinkedAlbum && (aUpc == null || mbUpc == null))
+            return Grade.CANDIDATE
 
         val appleYear = apple.releaseDate?.take(4)?.toIntOrNull()
         val mbYear = mb.releaseDate?.take(4)?.toIntOrNull()
@@ -151,7 +160,28 @@ internal object AppleMusicBrainzEditionMatcher {
             else AppleMusicBrainzEditionMatch.Candidate(pending.distinct().sorted())
         }
         val mb = verified.single()
-        return AppleMusicBrainzEditionMatch.Verified(
+        return verifiedMatch(apple, mb)
+    }
+
+    /**
+     * An exact MB Release→Apple album URL relationship is stronger than a
+     * loose title comparison, but still needs Official status, credited
+     * artist, release date, complete positional tracklist and real Recording
+     * IDs. No release-group or artist-level URLs qualify.
+     */
+    fun matchExplicitLinkedAlbum(
+        apple: ItunesEditorialRelease,
+        mb: MusicBrainzCatalogReleaseDetail,
+    ): AppleMusicBrainzEditionMatch =
+        if (check(apple, mb, exactLinkedAlbum = true) == Grade.VERIFIED)
+            verifiedMatch(apple, mb)
+        else AppleMusicBrainzEditionMatch.NoMatch
+
+    private fun verifiedMatch(
+        apple: ItunesEditorialRelease,
+        mb: MusicBrainzCatalogReleaseDetail,
+    ): AppleMusicBrainzEditionMatch.Verified =
+        AppleMusicBrainzEditionMatch.Verified(
             appleScopedId = apple.appleScopedId,
             musicBrainzReleaseId = validMbid(mb.musicBrainzId)!!,
             musicBrainzReleaseGroupId = validMbid(mb.groupMbid)!!,
@@ -163,5 +193,4 @@ internal object AppleMusicBrainzEditionMatcher {
                 ItunesVerifiedRecordingLink(a.scopedId, validMbid(m.recordingMbid)!!)
             },
         )
-    }
 }
