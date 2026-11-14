@@ -1,6 +1,7 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogClient
+import com.music.bitchord.data.catalog.metadata.appleStoreLinkForExactProduct
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogFailure
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
@@ -50,6 +51,38 @@ class ItunesCatalogClientTest {
         assertEquals("album", transport.parameters["entity"])
         assertEquals("br", transport.parameters["country"])
         assertEquals("20", transport.parameters["limit"])
+    }
+
+    @Test fun AppleStoreLinksMustBelongToTheExactProductAndStorefront() {
+        val album = "https://music.apple.com/br/album/how-sweet/101"
+        val artist = "https://music.apple.com/br/artist/newjeans/77"
+        val song = "https://music.apple.com/br/album/how-sweet/101?i=202"
+        assertEquals(album, appleStoreLinkForExactProduct(
+            album, ItunesCatalogItemType.ALBUM, 101, "br"))
+        assertEquals(artist, appleStoreLinkForExactProduct(
+            artist, ItunesCatalogItemType.ARTIST, 77, "br"))
+        assertEquals(song, appleStoreLinkForExactProduct(
+            song, ItunesCatalogItemType.TRACK, 202, "br"))
+        assertEquals("https://itunes.apple.com/br/album/id101?uo=4",
+            appleStoreLinkForExactProduct(
+                "https://itunes.apple.com/br/album/id101?uo=4",
+                ItunesCatalogItemType.ALBUM, 101, "br"))
+        for (unsafe in listOf(
+            "https://music.apple.com/br/album/how-sweet/102",
+            "https://music.apple.com/us/album/how-sweet/101",
+            "https://music.apple.com/br/album/other/101?i=202",
+            "https://music.apple.com.attacker.com/br/album/101",
+            "https://attacker@music.apple.com/br/album/101",
+            "https://music.apple.com:8181/br/album/101",
+            "http://music.apple.com/br/album/101",
+        )) assertNull(appleStoreLinkForExactProduct(
+            unsafe, ItunesCatalogItemType.ALBUM, 101, "br"))
+        assertNull(appleStoreLinkForExactProduct(
+            "https://music.apple.com/br/album/how-sweet/101?i=203",
+            ItunesCatalogItemType.TRACK, 202, "br"))
+        assertNull(appleStoreLinkForExactProduct(
+            "https://music.apple.com/br/artist/77",
+            ItunesCatalogItemType.ALBUM, 77, "br"))
     }
 
     @Test fun trackSearchRejectsVideoAndForeignUrlWhileDeduplicatingById() = runBlocking {
