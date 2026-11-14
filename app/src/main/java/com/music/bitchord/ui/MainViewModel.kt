@@ -5218,7 +5218,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         .appleHighResolutionArtworkCandidate(
                             album.artworkUri, 600,
                         ) == previous.artworkUri
-                ) previous else album
+                ) album.copy(artworkUri = previous.artworkUri) else album
             }
             fresh.copy(
                 albums = restored,
