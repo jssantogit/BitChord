@@ -305,3 +305,25 @@ internal fun appleArtistAlbumRowsWithProbedArtwork(
  */
 internal fun appleArtworkTargetPxForShelf(index: Int, featuredCount: Int): Int =
     if (index >= 0 && index < featuredCount.coerceIn(0, 4)) 1024 else 600
+
+
+/**
+ * The Apple artist pager reconstructs its rows from the raw 100px Search API
+ * snapshots. Retain a previously verified 600/720/1024 variant ONLY when
+ * both URLs share the identical CDN asset identity. Do not revert 1024px
+ * covers during pagination, or borrow a sleeve by artist/title.
+ */
+internal fun appleKeepVerifiedArtworkAcrossPaging(
+    currentFromApple: String?,
+    previouslyDisplayed: String?,
+): String? {
+    if (previouslyDisplayed.isNullOrBlank() ||
+        currentFromApple.isNullOrBlank() ||
+        currentFromApple == previouslyDisplayed
+    ) return currentFromApple
+    return if (listOf(600, 720, 1024).any { target ->
+        com.music.bitchord.data.catalog.metadata
+            .appleHighResolutionArtworkCandidate(currentFromApple, target) ==
+                previouslyDisplayed
+    }) previouslyDisplayed else currentFromApple
+}
