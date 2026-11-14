@@ -681,7 +681,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // CDN variants are never trusted until a bounded HTTP bounds probe confirms
     // real image dimensions; the original Apple URL is the safe fallback.
     private val appleHighResolutionArtwork by lazy {
-        com.music.bitchord.data.catalog.metadata.AppleHighResolutionArtwork()
+        com.music.bitchord.data.catalog.metadata.AppleHighResolutionArtwork(
+            persistence = com.music.bitchord.data.catalog.metadata
+                .AndroidAppleArtworkProbePersistence(getApplication<Application>()),
+        )
     }
     private var canonicalGroupCardArtworkJob: Job? = null
     private val _canonicalGroupCardApplePromotions =
