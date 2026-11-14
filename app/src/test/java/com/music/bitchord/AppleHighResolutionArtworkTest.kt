@@ -6,6 +6,8 @@ import com.music.bitchord.data.catalog.metadata.appleHighResolutionArtworkCandid
 import com.music.bitchord.data.catalog.metadata.AppleVerifiedEditionArtwork
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -86,6 +88,61 @@ class AppleHighResolutionArtworkTest {
         assertEquals(
             listOf(large, fallback600), asked,
         )
+    }
+
+    @Test fun valid1024HeroHasPriorityOverAllSmallerVariants() = runBlocking {
+        val hero1024 = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        assertEquals(hero1024, appleHighResolutionArtworkCandidate(thumb, 1024))
+        var requests = 0
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource {
+                assertEquals(hero1024, it)
+                requests++
+                1024 to 1024
+            },
+        )
+        assertEquals(hero1024, service.upgrade(thumb, 1024))
+        assertEquals(hero1024, service.upgrade(thumb, 1024))
+        assertEquals(1, requests)
+    }
+
+    @Test fun hero1024FallsBackToVerified720WithoutMakingFourSlowRequests() = runBlocking {
+        val hero1024 = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        val asked = mutableListOf<String>()
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource { url ->
+                asked += url
+                if (url == large) 720 to 720 else null
+            },
+        )
+        assertEquals(large, service.upgrade(thumb, 1024))
+        assertEquals(listOf(hero1024, large), asked)
+    }
+
+    @Test fun alreadyLargeArtworkNeverDowngradesAfterFailedBiggerProbe() = runBlocking {
+        val hero1024 = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource { null },
+        )
+        assertEquals(large, service.upgrade(large, 1024))
+        assertEquals(hero1024, appleHighResolutionArtworkCandidate(large, 1024))
+    }
+
+    @Test fun concurrentRequestsForSameArtworkShareOneNetworkProbe() = runBlocking {
+        var called = 0
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource {
+                called++
+                delay(40)
+                1024 to 1024
+            },
+        )
+        val a = async { service.upgrade(thumb, 1024) }
+        val b = async { service.upgrade(thumb, 1024) }
+        val hero = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        assertEquals(hero, a.await())
+        assertEquals(hero, b.await())
+        assertEquals(1, called)
     }
 
     @Test fun cancellationIsPropagatedWithoutCachingFailure() = runBlocking {
