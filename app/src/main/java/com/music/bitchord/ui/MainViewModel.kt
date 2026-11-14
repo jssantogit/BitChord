@@ -677,6 +677,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val canonicalGroupCardArtworkResolver by lazy {
         com.music.bitchord.data.catalog.metadata.AppleVerifiedGroupCardArtworkResolver()
     }
+    // CDN variants are never trusted until a bounded HTTP bounds probe confirms
+    // real image dimensions; the original Apple URL is the safe fallback.
+    private val appleHighResolutionArtwork by lazy {
+        com.music.bitchord.data.catalog.metadata.AppleHighResolutionArtwork()
+    }
     private var canonicalGroupCardArtworkJob: Job? = null
     private val _canonicalGroupCardApplePromotions =
         MutableStateFlow<Map<String, Pair<String, String>>>(emptyMap())
@@ -1546,7 +1551,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { null } ?: return@withPermit
-                        val artwork = proof.artworkUrl
+                        val promoted = appleHighResolutionArtwork.upgrade(proof, 600)
+                        val artwork = promoted.artworkUrl
                         val route = canonicalNativeBrowseId(artist)
                         canonicalArtworkPresentationMutex.withLock {
                     if (_searchSource.value != SearchSource.CANONICAL ||
@@ -1561,15 +1567,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     if (canonicalEditorialReleaseType(row) == null ||
                         com.music.bitchord.data.catalog.metadata
                             .verifiedAppleArtworkForDisplayedGroupCover(
-                                proof, candidate.musicBrainzId,
-                                proof.musicBrainzReleaseId, row.artworkUri,
+                                promoted, candidate.musicBrainzId,
+                                promoted.musicBrainzReleaseId, row.artworkUri,
                             ) == null
                     ) return@withLock
                     // Artist card artwork and badge are both ephemeral UI
                     // state. Do not persist the Apple promo in the CAA cache,
                     // which has different rights and provenance.
                     _canonicalGroupCardApplePromotions.update {
-                        it + (candidate.musicBrainzId to (artwork to proof.storeUrl))
+                        it + (candidate.musicBrainzId to (artwork to promoted.storeUrl))
                     }
                     _canonicalDetail.update { state ->
                         if (state !is UiState.Success) state else UiState.Success(
@@ -1719,6 +1725,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             resolved, entry.musicBrainzId, displayedGroupReleaseMbid,
                         )
                 } else resolved) ?: return@launch
+                val certified = appleHighResolutionArtwork.upgrade(proof, 720)
                 val route = canonicalNativeBrowseId(entry)
                 canonicalArtworkPresentationMutex.withLock {
                 if (_searchSource.value != SearchSource.CANONICAL ||
@@ -1729,7 +1736,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     ?: return@withLock
                 val chosenArtwork = com.music.bitchord.data.catalog.metadata
                     .bestCertifiedAppleOrArchiveCover(
-                        proof.artworkUrl, current.artworkUri,
+                        certified.artworkUrl, current.artworkUri,
                     )
                 // The Group page can initially contain a CAA Front from
                 // another edition. Do not attach this Apple product badge
@@ -1738,11 +1745,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
                     com.music.bitchord.data.catalog.metadata
                         .verifiedAppleArtworkForDisplayedGroupCover(
-                            proof, entry.musicBrainzId, displayedGroupReleaseMbid,
+                            certified, entry.musicBrainzId, displayedGroupReleaseMbid,
                             current.artworkUri,
                         ) == null
                 ) return@withLock
-                _canonicalAppleArtworkPromotion.value = route to proof
+                _canonicalAppleArtworkPromotion.value = route to certified
                 if (chosenArtwork != null && chosenArtwork != current.artworkUri) {
                     _canonicalDetail.value = UiState.Success(current.copy(
                         artworkUri = chosenArtwork,
