@@ -54,6 +54,8 @@ internal object AppleMusicBrainzEditionMatcher {
         val group = validMbid(mb.groupMbid) ?: return Grade.NO_MATCH
         if (validMbid(mb.musicBrainzId) == null ||
             !mb.status.equals("Official", ignoreCase = true) ||
+            mb.isVideoOnlyContent == true ||
+            (exactLinkedAlbum && !mb.completeness.positionsExplicitUnique) ||
             apple.musicBrainzReleaseGroupId?.let { validMbid(it) != group } == true ||
             !Regex("^[a-z]{2}$").matches(apple.storefront) ||
             apple.appleScopedId != "itunes:${apple.storefront}:album:${apple.appleCollectionId}" ||
