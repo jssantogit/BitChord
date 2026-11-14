@@ -36,8 +36,11 @@ internal class AppleVerifiedEditionArtworkResolver(
     private val clockMs: () -> Long = System::currentTimeMillis,
 ) {
     private data class Cached(val value: AppleVerifiedEditionArtwork?, val expiresAtMs: Long)
-    private val mutex = Mutex()
     private val cache = linkedMapOf<String, Cached>()
+    // Each MB edition owns its own cache/reconciliation job. A global mutex
+    // would make 16 artist cards queue behind the slowest unrelated barcode
+    // lookup. Fixed stripes keep memory bounded while coalescing same-ID work.
+    private val editionLocks = Array(32) { Mutex() }
     private val mbid = Regex("^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$")
     private val upcPattern = Regex("^[0-9]{8,14}$")
 
@@ -47,9 +50,14 @@ internal class AppleVerifiedEditionArtworkResolver(
         if (!mbid.matches(id) || !Regex("^[a-z]{2}$").matches(storefront))
             return null
         val key = "$storefront|$id"
-        return mutex.withLock {
+        val stripe = (key.hashCode() and Int.MAX_VALUE) % editionLocks.size
+        return editionLocks[stripe].withLock {
             val now = clockMs()
-            cache[key]?.takeIf { it.expiresAtMs > now }?.let { return@withLock it.value }
+            // Lock only the short mutable map access, NEVER the network. An
+            // edition's stripe covers its entire remote lookup.
+            synchronized(cache) {
+                cache[key]?.takeIf { it.expiresAtMs > now }
+            }?.let { return@withLock it.value }
             val result = try {
                 resolveUncached(id, storefront)
             } catch (cancelled: CancellationException) {
@@ -57,12 +65,14 @@ internal class AppleVerifiedEditionArtworkResolver(
             } catch (_: Exception) {
                 null
             }
-            // Keep cache tightly bounded across hundreds of detail opens.
-            if (cache.size >= 48) cache.remove(cache.keys.first())
-            cache[key] = Cached(
-                result,
-                now + if (result == null) 15 * 60_000L else 6 * 60 * 60_000L,
-            )
+            synchronized(cache) {
+                if (cache.size >= 48 && !cache.containsKey(key))
+                    cache.remove(cache.keys.first())
+                cache[key] = Cached(
+                    result,
+                    clockMs() + if (result == null) 15 * 60_000L else 6 * 60 * 60_000L,
+                )
+            }
             result
         }
     }
