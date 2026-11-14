@@ -28,6 +28,24 @@ class AppleArtworkProbeTelemetryTest {
         assertNull(meter.snapshot().p95NetworkMs)
     }
 
+    @Test fun separatelyCountsCoilDecodeAndCacheSourcesWithoutTreatingProbeAsRender() {
+        val meter = AppleArtworkProbeTelemetry()
+        meter.recordNetwork(1024, true, 120)
+        assertEquals(0, meter.snapshot().coilSuccess)
+        meter.recordCoilImageResult(true, 40L, "MEMORY_CACHE")
+        meter.recordCoilImageResult(true, 120L, "DISK")
+        meter.recordCoilImageResult(false, 300L, null)
+        meter.recordCoilImageCancellation()
+        val result = meter.snapshot()
+        assertEquals(2, result.coilSuccess)
+        assertEquals(1, result.coilFailure)
+        assertEquals(1, result.coilCancelled)
+        assertEquals(1, result.coilMemory)
+        assertEquals(1, result.coilDisk)
+        assertEquals(0, result.coilNetwork)
+        assertEquals(300L, result.coilP95Ms)
+    }
+
     @Test fun ignoresUnexpectedSizesAndBoundsLatency() {
         val meter = AppleArtworkProbeTelemetry(maxSamples = 2)
         meter.recordNetwork(2048, true, 1)
