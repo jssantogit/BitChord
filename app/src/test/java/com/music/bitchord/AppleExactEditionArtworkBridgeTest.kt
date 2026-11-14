@@ -108,16 +108,17 @@ class AppleExactEditionArtworkBridgeTest {
         assertNull(appleVerifiedEditionArtwork(mb, complete(), "us"))
     }
 
-    @Test fun sourceSelectionNeverDowngradesVerifiedCaaHeroToApple100Pixels() {
+    @Test fun exactItunesArtworkReplacesCaaRegardlessOfThePreviousArchiveResolution() {
         val apple100 = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/100x100bb.jpg"
         val apple600 = "https://is1-ssl.mzstatic.com/image/thumb/Music/a/600x600bb.jpg"
         val caa500 = "https://coverartarchive.org/release/$id/front-500"
         assertEquals(apple100, bestCertifiedAppleOrArchiveCover(apple100, null))
-        assertEquals(caa500, bestCertifiedAppleOrArchiveCover(apple100, caa500))
+        assertEquals(apple100, bestCertifiedAppleOrArchiveCover(apple100, caa500))
         assertEquals(apple600, bestCertifiedAppleOrArchiveCover(apple600, caa500))
-        assertEquals(caa500, bestCertifiedAppleOrArchiveCover(
-            "https://is1-ssl.mzstatic.com/image/thumb/Music/a.jpg", caa500,
-        ))
+        assertEquals("https://is1-ssl.mzstatic.com/image/thumb/Music/a.jpg",
+            bestCertifiedAppleOrArchiveCover(
+                "https://is1-ssl.mzstatic.com/image/thumb/Music/a.jpg", caa500,
+            ))
         assertEquals(caa500, bestCertifiedAppleOrArchiveCover(
             "https://attacker.example/artwork/600x600bb.jpg", caa500,
         ))
@@ -166,7 +167,7 @@ class AppleExactEditionArtworkBridgeTest {
         ))
     }
 
-    @Test fun groupBadgeIsOnlyEligibleWhenTheSelectedAppleSleeveActuallyWins() {
+    @Test fun selectedAppleEditionWinsOverArchiveAndBadgeRemainsExact() {
         val exact = appleVerifiedEditionArtwork(mb, complete(), "br")!!
         val archive500 = "https://coverartarchive.org/release/$id/front-500"
         val apple100 = exact.copy(artworkUrl =
@@ -176,9 +177,9 @@ class AppleExactEditionArtworkBridgeTest {
         assertEquals(apple100, verifiedAppleArtworkForDisplayedGroupCover(
             apple100, group, id, currentArtworkUrl = null,
         ))
-        // A different edition's existing CAA sleeve must never be advertised
-        // as the Apple product represented by the badge.
-        assertNull(verifiedAppleArtworkForDisplayedGroupCover(
+        // The verified selected Apple edition replaces the archive sleeve;
+        // the badge may follow only the new Apple image, never the old CAA.
+        assertEquals(apple100, verifiedAppleArtworkForDisplayedGroupCover(
             apple100, group, id, currentArtworkUrl = archive500,
         ))
         // A high-res URL directly RETURNED by Apple can win; no rewriting.
