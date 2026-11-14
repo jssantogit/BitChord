@@ -10,6 +10,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesCatalogItem
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
 import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
+import com.music.bitchord.data.catalog.metadata.appleStoreLinkForExactProduct
 import com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage
 import com.music.bitchord.ui.screens.AppleEditorialArtistDetailPage
 import com.music.bitchord.ui.screens.AppleEditorialSearchKind
@@ -50,7 +51,10 @@ private fun ItunesEditorialRelease.asNativeSearchRow(): AppleEditorialSearchRow?
         ?.takeIf { it.kind == ItunesCatalogItemType.ALBUM &&
             it.storefront == storefront && it.id == appleCollectionId } ?: return null
     if (title.isBlank() || artistName.isBlank()) return null
-    val badge = appleApprovedBadgeForStoreUrl(storeUrl)
+    val exactLink = appleStoreLinkForExactProduct(
+        storeUrl, ItunesCatalogItemType.ALBUM, appleCollectionId, storefront,
+    )
+    val badge = appleApprovedBadgeForStoreUrl(exactLink)
     return AppleEditorialSearchRow(
         browseId = appleScopedId,
         title = title,
@@ -64,7 +68,7 @@ private fun ItunesEditorialRelease.asNativeSearchRow(): AppleEditorialSearchRow?
             ItunesEditorialReleaseFormat.UNCLASSIFIED ->
                 AppleEditorialReleaseCategory.UNCLASSIFIED
         },
-        appleStoreUrl = storeUrl?.takeIf { badge != null },
+        appleStoreUrl = exactLink?.takeIf { badge != null },
         appleStoreBadgeUrl = badge,
     )
 }
@@ -200,10 +204,14 @@ internal fun appleNativeArtistSearchRows(
         artworkUri = artist.artworkUrl,
         releaseDate = null,
         kind = AppleEditorialSearchKind.ARTIST,
-        appleStoreUrl = artist.storeUrl?.takeIf {
-            appleApprovedBadgeForStoreUrl(it) != null
-        },
-        appleStoreBadgeUrl = appleApprovedBadgeForStoreUrl(artist.storeUrl),
+        appleStoreUrl = appleStoreLinkForExactProduct(
+            artist.storeUrl, ItunesCatalogItemType.ARTIST, artist.id, artist.storefront,
+        ),
+        appleStoreBadgeUrl = appleApprovedBadgeForStoreUrl(
+            appleStoreLinkForExactProduct(
+                artist.storeUrl, ItunesCatalogItemType.ARTIST, artist.id, artist.storefront,
+            ),
+        ),
     )
 }
 
@@ -253,9 +261,13 @@ internal fun appleNativeTrackSearchRows(
         artworkUri = track.artworkUrl,
         albumBrowseId = albumRoute?.let { "itunes:${it.storefront}:album:${it.id}" },
         durationMs = track.durationMs,
-        appleStoreUrl = track.storeUrl?.takeIf {
-            appleApprovedBadgeForStoreUrl(it) != null
-        },
-        appleStoreBadgeUrl = appleApprovedBadgeForStoreUrl(track.storeUrl),
+        appleStoreUrl = appleStoreLinkForExactProduct(
+            track.storeUrl, ItunesCatalogItemType.TRACK, track.id, track.storefront,
+        ),
+        appleStoreBadgeUrl = appleApprovedBadgeForStoreUrl(
+            appleStoreLinkForExactProduct(
+                track.storeUrl, ItunesCatalogItemType.TRACK, track.id, track.storefront,
+            ),
+        ),
     )
 }
