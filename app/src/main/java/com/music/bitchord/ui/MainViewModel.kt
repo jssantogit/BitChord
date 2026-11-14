@@ -16,10 +16,6 @@ import com.music.bitchord.data.canvas.AppleArtistArtRepository
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
-import com.music.bitchord.data.catalog.metadata.CoverArtArchive
-import com.music.bitchord.data.catalog.metadata.CoverArtSize
-import com.music.bitchord.data.catalog.metadata.MusicBrainzCoverArtCacheEntry
-import com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
