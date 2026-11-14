@@ -1,10 +1,13 @@
 package com.music.bitchord.data.catalog.metadata
 
+import android.content.Context
 import android.graphics.BitmapFactory
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
@@ -110,15 +113,63 @@ private class AndroidAppleArtworkDimensionSource : AppleArtworkDimensionSource {
 }
 
 /**
+ * Persist the outcome and expiry of an already-verified CDN image URL, never
+ * artwork bytes, album titles, Apple IDs, listening history or search terms.
+ * The real Android store hashes URL keys rather than exposing raw links.
+ */
+internal data class AppleArtworkProbeRecord(
+    val valid: Boolean,
+    val expiresAtMs: Long,
+)
+
+internal interface AppleArtworkProbePersistence {
+    fun load(candidate: String): AppleArtworkProbeRecord?
+    fun save(candidate: String, record: AppleArtworkProbeRecord)
+}
+
+internal class AndroidAppleArtworkProbePersistence(context: Context) :
+    AppleArtworkProbePersistence {
+    private val prefs = context.getSharedPreferences(
+        "apple_artwork_probe_outcomes_v1", Context.MODE_PRIVATE,
+    )
+
+    private fun key(candidate: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(candidate.toByteArray(StandardCharsets.UTF_8))
+        return digest.joinToString("") {
+            (it.toInt() and 0xff).toString(16).padStart(2, '0')
+        }
+    }
+
+    override fun load(candidate: String): AppleArtworkProbeRecord? {
+        val value = prefs.getString(key(candidate), null)?.split(':') ?: return null
+        if (value.size != 2 || value[0] !in setOf("0", "1")) return null
+        val expires = value[1].toLongOrNull()?.takeIf { it > 0L } ?: return null
+        return AppleArtworkProbeRecord(value[0] == "1", expires)
+    }
+
+    override fun save(candidate: String, record: AppleArtworkProbeRecord) {
+        val hashed = key(candidate)
+        // A small, durable URL-proof index. When full, discard old hints,
+        // never album images or user data. Future requests can reverify.
+        if (!prefs.contains(hashed) && prefs.all.size >= 256)
+            prefs.edit().clear().apply()
+        prefs.edit().putString(
+            hashed, "${if (record.valid) 1 else 0}:${record.expiresAtMs}",
+        ).apply()
+    }
+}
+
+/**
  * Successful probes live for 12h; failures retry after 30m. No unbounded
  * negatives and no extra public iTunes API requests (only the image host).
  */
 internal class AppleHighResolutionArtwork(
     private val dimensions: AppleArtworkDimensionSource = AndroidAppleArtworkDimensionSource(),
     private val clockMs: () -> Long = System::currentTimeMillis,
+    private val persistence: AppleArtworkProbePersistence? = null,
 ) {
-    private data class Cached(val valid: Boolean, val expiresAt: Long)
-    private val cache = ConcurrentHashMap<String, Cached>()
+    private val cache = ConcurrentHashMap<String, AppleArtworkProbeRecord>()
     // Striped single-flight locks: at most one network check per URL while
     // unrelated covers can load in parallel. A bounded stripe array avoids
     // an unbounded per-album Mutex map and survives cache eviction.
@@ -140,8 +191,10 @@ internal class AppleHighResolutionArtwork(
             val stripe = (candidate.hashCode() and Int.MAX_VALUE) % probeLocks.size
             val verified = probeLocks[stripe].withLock {
                 val now = clockMs()
-                val prior = cache[candidate]
-                if (prior != null && prior.expiresAt > now)
+                val prior = cache[candidate] ?: try {
+                    persistence?.load(candidate)?.also { cache[candidate] = it }
+                } catch (_: Exception) { null }
+                if (prior != null && prior.expiresAtMs > now)
                     return@withLock prior.valid
                 val measured = try {
                     dimensions.read(candidate)
@@ -152,10 +205,14 @@ internal class AppleHighResolutionArtwork(
                     width >= size && height >= size && width == height
                 } == true
                 if (cache.size > 192) cache.clear()
-                cache[candidate] = Cached(
+                val record = AppleArtworkProbeRecord(
                     accepted,
-                    now + if (accepted) 12 * 60 * 60_000L else 30 * 60_000L,
+                    clockMs() + if (accepted) 12 * 60 * 60_000L else 30 * 60_000L,
                 )
+                cache[candidate] = record
+                // Persistence failures are never image-loading failures.
+                try { persistence?.save(candidate, record) }
+                catch (_: Exception) { }
                 accepted
             }
             if (verified) return candidate
