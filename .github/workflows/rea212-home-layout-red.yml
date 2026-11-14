@@ -1,0 +1,25 @@
+name: REA212 Home layout RED
+on:
+  push:
+    branches: [validation/rea212-home-layout-red-51adaa1-20261114]
+permissions:
+  contents: read
+jobs:
+  red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Verify source-only validation
+        run: git diff --exit-code 51adaa1906f4818bf23d703a0e2ed0f977a4263c HEAD -- app sharedUi shared
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Expected RED Home contract
+        run: |
+          chmod +x gradlew
+          ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest --tests "com.music.bitchord.ui.screens.NativeHomeShelfPresentationTest"
