@@ -100,7 +100,6 @@ import com.music.bitchord.ui.performance.RuntimePerformanceUiContext
 import com.music.bitchord.ui.player.MeshGradientBackground
 import com.music.bitchord.ui.player.MeshPalette
 
-/** How far the Listen now heading and feed sit above the shared top inset. */
 /**
  * A 100px Search API thumbnail is fine for a 52dp list row, but never for a
  * full-bleed editorial hero or album-sized square. The Apple CDN's larger
@@ -112,10 +111,10 @@ import com.music.bitchord.ui.player.MeshPalette
 internal fun appleProminentArtworkOrNull(url: String?): String? {
     if (url.isNullOrBlank()) return null
     val uri = try { java.net.URI(url) } catch (_: Exception) { return null }
-    val host = uri.host?.lowercase(java.util.Locale.ROOT) ?: return null
+    val host = uri.host?.lowercase(java.util.Locale.ROOT) ?: return url
     if (host != "mzstatic.com" && !host.endsWith(".mzstatic.com")) return url
     val match = Regex(
-        """/(\\d{2,4})x(\\d{2,4})(?:bb|-[0-9]{2,3})\\.(?:jpe?g|png|webp)$""",
+        """/(\d{2,4})x(\d{2,4})(?:bb|-[0-9]{2,3})\.(?:jpe?g|png|webp)$""",
         RegexOption.IGNORE_CASE,
     ).find(uri.path.orEmpty()) ?: return null
     val width = match.groupValues[1].toIntOrNull() ?: return null
@@ -123,6 +122,7 @@ internal fun appleProminentArtworkOrNull(url: String?): String? {
     return url.takeIf { width >= 600 && height >= 600 }
 }
 
+/** How far the Listen now heading and feed sit above the shared top inset. */
 private val HOME_TITLE_LIFT = 28.dp
 
 private const val RECENTS_TITLE = "Recents"
