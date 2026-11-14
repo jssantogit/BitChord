@@ -13,6 +13,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
       - name: Verify exact PR source (no APK)
         run: |
           set -euo pipefail
