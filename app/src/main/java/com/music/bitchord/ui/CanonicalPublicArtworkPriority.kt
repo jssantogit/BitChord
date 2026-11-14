@@ -66,3 +66,22 @@ internal fun canonicalAppleGroupCardArtworkCandidates(
     .distinctBy { it.musicBrainzId }
     .take(limit.coerceIn(0, 48))
     .toList()
+
+/**
+ * MusicBrainz is still the identity/edition graph, but CAA is retired as
+ * artwork for PUBLIC catalog UI. A persisted pre-migration Front-v5 must not
+ * sneak back into newly rendered artist/release cards or album headers.
+ *
+ * Preserve unrelated local/remote artwork; this helper is scoped strictly to
+ * public catalog rows, never the user's library or server album covers.
+ */
+internal fun canonicalPublicWithoutLegacyArchiveArtwork(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    val host = try {
+        java.net.URI(url).host?.lowercase(java.util.Locale.ROOT)
+    } catch (_: Exception) { null }
+    return if (host == "coverartarchive.org" || host == "www.coverartarchive.org" ||
+        host == "archive.org" || host?.endsWith(".archive.org") == true
+    ) null else url
+}
+
