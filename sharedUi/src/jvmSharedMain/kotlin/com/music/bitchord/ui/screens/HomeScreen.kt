@@ -101,6 +101,28 @@ import com.music.bitchord.ui.player.MeshGradientBackground
 import com.music.bitchord.ui.player.MeshPalette
 
 /** How far the Listen now heading and feed sit above the shared top inset. */
+/**
+ * A 100px Search API thumbnail is fine for a 52dp list row, but never for a
+ * full-bleed editorial hero or album-sized square. The Apple CDN's larger
+ * URL is produced only after Android verified its actual dimensions; do not
+ * upscale the original to hide a pending/failing probe.
+ *
+ * This is presentation only. It does not grant identity to any artwork URL.
+ */
+internal fun appleProminentArtworkOrNull(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    val uri = try { java.net.URI(url) } catch (_: Exception) { return null }
+    val host = uri.host?.lowercase(java.util.Locale.ROOT) ?: return null
+    if (host != "mzstatic.com" && !host.endsWith(".mzstatic.com")) return url
+    val match = Regex(
+        """/(\\d{2,4})x(\\d{2,4})(?:bb|-[0-9]{2,3})\\.(?:jpe?g|png|webp)$""",
+        RegexOption.IGNORE_CASE,
+    ).find(uri.path.orEmpty()) ?: return null
+    val width = match.groupValues[1].toIntOrNull() ?: return null
+    val height = match.groupValues[2].toIntOrNull() ?: return null
+    return url.takeIf { width >= 600 && height >= 600 }
+}
+
 private val HOME_TITLE_LIFT = 28.dp
 
 private const val RECENTS_TITLE = "Recents"
@@ -923,12 +945,14 @@ private fun HeroCard(
             .contextClick(onLongPress),
     ) {
         val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
-        if (hasCatalogIdentity) CatalogArtworkFallback(
+        val isAppleCard = item.browseId?.startsWith("itunes:") == true
+        val prominent = appleProminentArtworkOrNull(item.thumbnailUrl)
+        if (hasCatalogIdentity || (isAppleCard && prominent == null)) CatalogArtworkFallback(
             hero = true, modifier = Modifier.fillMaxSize(),
         )
-        if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
+        if (prominent != null || !(hasCatalogIdentity || isAppleCard)) {
             ResilientAppleCover(
-                model = item.thumbnailUrl.artworkAt(HEADER_ART_PX),
+                model = prominent.artworkAt(HEADER_ART_PX),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
@@ -1200,12 +1224,14 @@ internal fun ShelfCard(
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                 ) {
                     val hasCatalogIdentity = item.browseId?.startsWith("catalog:") == true
-                    if (hasCatalogIdentity) CatalogArtworkFallback(
+                    val isAppleCard = item.browseId?.startsWith("itunes:") == true
+                    val prominent = appleProminentArtworkOrNull(item.thumbnailUrl)
+                    if (hasCatalogIdentity || (isAppleCard && prominent == null)) CatalogArtworkFallback(
                         hero = false, modifier = Modifier.fillMaxSize(),
                     )
-                    if (!item.thumbnailUrl.isNullOrBlank() || !hasCatalogIdentity) {
+                    if (prominent != null || !(hasCatalogIdentity || isAppleCard)) {
                         ResilientAppleCover(
-                            model = item.thumbnailUrl.artworkAt(CARD_ART_PX),
+                            model = prominent.artworkAt(CARD_ART_PX),
                             contentDescription = null,
                             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                             modifier = Modifier.fillMaxSize(),
