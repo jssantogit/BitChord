@@ -72,6 +72,41 @@ class AppleVerifiedGroupCardArtworkResolverTest {
         )))
     }
 
+    @Test fun oneExactTitleOfficialAmidExplicitAlternateOfficialPackagingIsEligible() {
+        val deluxe = edition(alternate).copy(title = "SUPER REAL ME (Deluxe Version)")
+        assertNull(uniqueAppleGroupCardEdition(group, page(edition(), deluxe)))
+        assertEquals(releaseId, uniqueAppleGroupCardEdition(
+            group, page(edition(), deluxe), "SUPER REAL ME",
+        ))
+        assertNull(uniqueAppleGroupCardEdition(
+            group, page(edition(), edition(alternate)), "SUPER REAL ME",
+        ))
+        assertNull(uniqueAppleGroupCardEdition(
+            group, page(edition(), edition(alternate).copy(title = "SUPER REAL ME (Japan)")),
+            "SUPER REAL ME",
+        ))
+        assertNull(uniqueAppleGroupCardEdition(
+            group, page(edition(), deluxe, total = 3), "SUPER REAL ME",
+        ))
+    }
+
+    @Test fun selectedCleanOfficialEditionResolvesItsOwnAppleProof() = runBlocking {
+        val resolver = AppleVerifiedGroupCardArtworkResolver(
+            groups = AppleGroupCardEditionSource {
+                MusicBrainzCatalogGraphResult.Success(page(
+                    edition(),
+                    edition(alternate).copy(title = "SUPER REAL ME (Deluxe Version)"),
+                ))
+            },
+            editions = AppleGroupCardArtworkSource { id, _ ->
+                assertEquals(releaseId, id)
+                verified
+            },
+        )
+        assertEquals(verified, resolver.resolve(group, "br", "SUPER REAL ME"))
+        assertNull(resolver.resolve(group, "br"))
+    }
+
     @Test fun verifiedOfficialEditionIsSelectedFromCompleteMixedStatusGroup() = runBlocking {
         var checkedId: String? = null
         val resolver = AppleVerifiedGroupCardArtworkResolver(
