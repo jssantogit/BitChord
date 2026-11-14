@@ -89,34 +89,18 @@ internal fun appleVerifiedEditionArtwork(
 }
 
 /**
- * The public iTunes Search API documents 100px (sometimes 60/30px) assets.
- * Do not expand a 100px bitmap over an already verified 500px CAA hero:
- * upscaling a low-resolution file is not a high-resolution artwork source.
- * A larger Apple asset is eligible only when its *returned URL* itself
- * declares an unambiguous larger pixel size. No undocumented URL rewriting.
+ * iTunes is the canonical visual source for an EXACTLY verified Apple edition.
+ * CAA remains a temporary fallback only when there is no Apple identity
+ * proof. Image dimensions must never reverse a verified provenance decision:
+ * 100px official Apple artwork takes precedence over any existing CAA cover.
+ *
+ * This does not rewrite 100px CDN URLs to undocumented larger variants.
+ * Callers must couple the selected Apple image to its official store badge.
  */
 internal fun bestCertifiedAppleOrArchiveCover(
     certifiedAppleUrl: String?,
     currentArchiveUrl: String?,
-): String? {
-    val officialApple = safeAppleArtwork(certifiedAppleUrl)
-        ?: return currentArchiveUrl
-    if (currentArchiveUrl.isNullOrBlank()) return officialApple
-    val applePath = runCatching { URI(officialApple).path }.getOrNull().orEmpty()
-    val dims = Regex(
-        """/([0-9]{2,4})x([0-9]{2,4})(?:bb|-[0-9]{2,3})\.(?:jpg|jpeg|png|webp)$""",
-        RegexOption.IGNORE_CASE,
-    ).find(applePath)
-    val appleSize = dims?.let { match ->
-        val width = match.groupValues[1].toIntOrNull()
-        width?.takeIf { it == match.groupValues[2].toIntOrNull() }
-    } ?: return currentArchiveUrl
-    val archiveSize = Regex("""/front-([0-9]{2,4})$""")
-        .find(currentArchiveUrl)?.groupValues?.get(1)?.toIntOrNull()
-        ?: return currentArchiveUrl
-    return if (appleSize >= 500 && appleSize > archiveSize)
-        officialApple else currentArchiveUrl
-}
+): String? = safeAppleArtwork(certifiedAppleUrl) ?: currentArchiveUrl
 
 /**
  * Explicit Release AND ReleaseGroup identity required, not just an artist,
@@ -168,8 +152,8 @@ internal fun verifiedAppleArtworkForDisplayedGroupEdition(
 
 /**
  * A ReleaseGroup may already show the CAA Front of a DIFFERENT edition.
- * Only attach an Apple badge when the selected edition's Apple image actually
- * replaces that sleeve; an archived image is never an Apple promotional image.
+ * The exact selected Apple edition replaces it when verified, and the badge
+ * must appear ONLY beside the newly rendered Apple image, not the old CAA.
  */
 internal fun verifiedAppleArtworkForDisplayedGroupCover(
     proof: AppleVerifiedEditionArtwork?,
