@@ -51,6 +51,16 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import com.music.bitchord.ui.components.NativeContextActionPlate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.paneTitle
@@ -280,6 +290,8 @@ internal fun CanonicalRecordingFeedbackPanel(
     saving: Boolean = false,
     denied: Boolean = false,
     title: String? = null,
+    /** Window-space bounds of a dedicated star control. Menu actions leave this null. */
+    anchorBounds: IntRect? = null,
 ) {
     var selected by remember { mutableDoubleStateOf(rating?.takeIf { it in 1.0..5.0 } ?: 0.0) }
     var touched by remember { mutableStateOf(false) }
@@ -311,45 +323,33 @@ internal fun CanonicalRecordingFeedbackPanel(
             tween(durationMillis = 180, easing = FastOutSlowInEasing),
         )
     }
-    // Rating is a contextual bottom sheet, not a Settings card or a centered
-    // alert. Follow the user's marked composition: stars and two equal actions,
-    // no artwork, text summary, visible title or drag handle. The pane title
-    // remains exposed to accessibility services.
+    // A dedicated star is a contextual launcher: the small card grows at
+    // its actual icon bounds. Overflow/menu actions keep the modal editor, but
+    // both variants share the lifted menu's opaque plate and confirmation flow.
     val darkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val sheetBackground = ratingSheetSolidColor(darkTheme)
-    val sheetForeground = if (darkTheme) androidx.compose.ui.graphics.Color.White
-        else androidx.compose.ui.graphics.Color.Black
+    val sheetForeground = if (darkTheme) Color.White else Color.Black
     val sheetTitle = title ?: stringResource(Res.string.recording_feedback_dialog_title)
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = requestDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(
-            usePlatformDefaultWidth = false,
-        ),
-    ) {
-        // A genuine bottom-aligned surface without a drag handle or blur.
-        // Dialog preserves the app's already-tested pointer/Back behavior;
-        // ModalBottomSheet did not dispatch several Robolectric touches.
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            androidx.compose.material3.Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-                color = sheetBackground,
-                contentColor = sheetForeground,
-            ) {
+    val ratingEditorContent: @Composable () -> Unit = {
         Column(
             modifier = Modifier.fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 32.dp, bottom = 20.dp)
-                .testTag("native-rating-bottom-sheet")
+                .then(if (anchorBounds == null) Modifier.navigationBarsPadding() else Modifier)
+                .padding(
+                    start = 20.dp, end = 20.dp,
+                    top = if (anchorBounds == null) 28.dp else 18.dp,
+                    bottom = if (anchorBounds == null) 20.dp else 18.dp,
+                )
+                .testTag(if (anchorBounds == null) "native-rating-bottom-sheet"
+                    else "native-rating-anchored-content")
                 .semantics { paneTitle = sheetTitle }
                 .graphicsLayer {
                     val entrance = ratingDialogEntranceFrame(dialogEntrance.value, reduceMotion)
-                    alpha = entrance.alpha
-                    scaleX = entrance.scale
-                    scaleY = entrance.scale
+                    alpha = if (anchorBounds == null) entrance.alpha
+                        else 0.75f + 0.25f * dialogEntrance.value
+                    scaleX = if (anchorBounds == null) entrance.scale
+                        else 0.86f + 0.14f * dialogEntrance.value
+                    scaleY = scaleX
+                    transformOrigin = if (anchorBounds == null) TransformOrigin.Center
+                        else TransformOrigin(1f, 0f)
                 },
             verticalArrangement = Arrangement.spacedBy(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -501,6 +501,44 @@ internal fun CanonicalRecordingFeedbackPanel(
                 )
             }
         }
+    }
+    if (anchorBounds != null) {
+        val cardWidth = (LocalConfiguration.current.screenWidthDp - 24).coerceIn(1, 340).dp
+        val launcherBounds = anchorBounds
+        val positionProvider = remember(launcherBounds) {
+            object : PopupPositionProvider {
+                override fun calculatePosition(
+                    anchorBounds: IntRect,
+                    windowSize: IntSize,
+                    layoutDirection: LayoutDirection,
+                    popupContentSize: IntSize,
+                ): IntOffset = anchoredRatingCardPosition(
+                    anchor = launcherBounds, popup = popupContentSize,
+                    window = windowSize, layoutDirection = layoutDirection,
+                    gap = 10, margin = 12,
+                )
+            }
+        }
+        Popup(
+            popupPositionProvider = positionProvider,
+            onDismissRequest = requestDismiss,
+            properties = PopupProperties(focusable = true),
+        ) {
+            NativeContextActionPlate(
+                modifier = Modifier.width(cardWidth).testTag("native-rating-anchored-card"),
+            ) { ratingEditorContent() }
+        }
+    } else {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = requestDismiss,
+            properties = androidx.compose.ui.window.DialogProperties(
+                usePlatformDefaultWidth = false,
+            ),
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                NativeContextActionPlate(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                ) { ratingEditorContent() }
             }
         }
     }
