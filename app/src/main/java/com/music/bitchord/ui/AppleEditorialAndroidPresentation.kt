@@ -276,6 +276,23 @@ internal fun appleEditorialReleasesWithProbedArtwork(
 }
 
 
+/**
+ * Keep a single ordered queue over successive Apple artist pages. A page
+ * contains 24 verified products: processing only the first 12 leaves the rest
+ * at 100px forever when the native shelf refuses to upscale thumbnails.
+ *
+ * The exact storefront route is the dedupe key, never artist/title.
+ */
+internal fun appleArtistArtworkTasksForNewPages(
+    candidates: List<AppleEditorialSearchRow>,
+    alreadyQueued: MutableSet<String>,
+): List<Pair<Int, AppleEditorialSearchRow>> = candidates.mapIndexedNotNull { index, album ->
+    if (AppleCatalogBrowseRoute.parse(album.browseId)?.kind !=
+            ItunesCatalogItemType.ALBUM ||
+        !alreadyQueued.add(album.browseId)
+    ) null else index to album
+}
+
 /** Artist discographies use typed Apple IDs, never a title/artist cover join. */
 internal fun appleArtistAlbumRowsWithProbedArtwork(
     rows: List<AppleEditorialSearchRow>,
