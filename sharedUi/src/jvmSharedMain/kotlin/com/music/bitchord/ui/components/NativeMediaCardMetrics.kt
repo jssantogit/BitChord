@@ -15,6 +15,10 @@ import androidx.compose.ui.unit.dp
 object NativeMediaCardMetrics {
     val shelfWidth = 150.dp
     val shelfCaptionGap = 10.dp
+    // Recent-listen covers use the existing square shelf composition, not the
+    // editorials' tall overlay. Keep the skeleton and real cards identical.
+    val recentCoverWidth = shelfWidth
+    const val recentCoverRatio = 1f
     val squareCoverRadius = 12.dp
     val squareCoverShape = RoundedCornerShape(squareCoverRadius)
 

@@ -201,17 +201,29 @@ fun LazyListScope.recentlyPlayedSkeleton(listLayout: Boolean) {
                     }
                 }
             } else {
-                BoxWithConstraints {
-                    val cardWidth = heroCardWidth(maxWidth)
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        userScrollEnabled = false,
-                    ) {
-                        items(2) {
+                // Match the actual RecentShelf GRID role: square covers with
+                // title and artist outside the image. Do not reserve a tall
+                // hero-sized placeholder that jumps when history arrives.
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    userScrollEnabled = false,
+                ) {
+                    items(3) { card ->
+                        Column(Modifier.width(NativeMediaCardMetrics.recentCoverWidth)) {
                             ShimmerBox(
-                                modifier = Modifier.width(cardWidth).aspectRatio(HERO_CARD_RATIO),
-                                shape = RoundedCornerShape(18.dp),
+                                modifier = Modifier
+                                    .width(NativeMediaCardMetrics.recentCoverWidth)
+                                    .aspectRatio(NativeMediaCardMetrics.recentCoverRatio),
+                                shape = NativeMediaCardMetrics.squareCoverShape,
+                            )
+                            Spacer(Modifier.height(NativeMediaCardMetrics.shelfCaptionGap))
+                            SkeletonLine(
+                                fraction = TitleWidths[card % TitleWidths.size], height = 13.dp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            SkeletonLine(
+                                fraction = SubtitleWidths[card % SubtitleWidths.size], height = 11.dp,
                             )
                         }
                     }

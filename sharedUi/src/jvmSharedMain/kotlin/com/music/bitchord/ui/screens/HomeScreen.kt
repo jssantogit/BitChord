@@ -106,6 +106,26 @@ private val HOME_TITLE_LIFT = 28.dp
 private const val RECENTS_TITLE = "Recents"
 private const val RECENT_TRACKS_PER_COLUMN = 4
 
+/**
+ * A Home shelf's semantic role must not depend on loading order. Listening
+ * history has cover art plus captions outside the covers, unlike an editorial
+ * hero with its title over artwork. It may be first or follow another shelf.
+ */
+internal enum class HomeShelfPresentation {
+    RECENT_COVERS, EDITORIAL_HERO, SQUARE_SHELF,
+}
+
+internal fun homeShelfPresentation(
+    shelfTitle: String,
+    index: Int,
+    firstIsHero: Boolean,
+): HomeShelfPresentation = when {
+    shelfTitle.trim().equals(RECENTS_TITLE, ignoreCase = true) ->
+        HomeShelfPresentation.RECENT_COVERS
+    index == 0 && firstIsHero -> HomeShelfPresentation.EDITORIAL_HERO
+    else -> HomeShelfPresentation.SQUARE_SHELF
+}
+
 private fun List<ShelfItem>.playingItemMatcher(song: Song?): (ShelfItem) -> Boolean {
     song ?: return { false }
     // The card that was played, when the shelf holds it, and only that one —
@@ -301,6 +321,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
     shelves.forEachIndexed { index, shelf ->
         item(key = shelf.title + index) {
             val openItem: (ShelfItem) -> Unit = { item -> onItemClick(item, shelf.title) }
+            val presentation = homeShelfPresentation(shelf.title, index, firstIsHero)
             if (shelf.title == "Playlists" && shelf.items.isEmpty() &&
                 emptyPlaylistNotice != null
             ) {
@@ -315,7 +336,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
-            } else if (index == 0 && shelf.title.equals(RECENTS_TITLE, ignoreCase = true)) {
+            } else if (presentation == HomeShelfPresentation.RECENT_COVERS) {
                 RecentShelf(
                     shelf = shelf,
                     onItemClick = openItem,
@@ -325,7 +346,7 @@ private fun androidx.compose.foundation.lazy.LazyListScope.itemsIndexedShelves(
                     viewType = recentsViewType,
                     onViewTypeToggle = onRecentsViewTypeToggle,
                 )
-            } else if (index == 0 && firstIsHero) {
+            } else if (presentation == HomeShelfPresentation.EDITORIAL_HERO) {
                 HeroShelf(
                     shelf = shelf,
                     onItemClick = openItem,
@@ -359,8 +380,8 @@ private fun RecentShelf(
 ) {
     Column(Modifier.padding(bottom = 26.dp)) {
         RecentSectionHeader(
-            title = shelf.title,
-            subtitle = shelf.subtitle,
+            title = localizeShelfTitle(shelf.title),
+            subtitle = localizeShelfSubtitle(shelf.subtitle),
             viewType = viewType,
             onViewTypeToggle = onViewTypeToggle,
         )
@@ -388,22 +409,24 @@ private fun RecentShelf(
                 }
             }
         } else {
-            BoxWithConstraints {
-                val cardWidth = heroCardWidth(maxWidth)
-                ShelfRow(
-                    contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    items(shelf.items) { item ->
-                        HeroCard(
-                            item = item,
-                            onClick = { onItemClick(item) },
-                            onLongPress = onItemLongPress?.let { { it(item) } },
-                            modifier = Modifier.width(cardWidth),
-                            isCurrent = isCurrentItem(item),
-                            isPlaying = isCurrentItem(item) && isPlaying,
-                        )
-                    }
+            // Listening history is a cover carousel, never the tall editorial
+            // image with the track title painted on top. Preserve click/hold
+            // and playing indicators using the existing native square card.
+            ShelfRow(
+                contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                items(shelf.items) { item ->
+                    ShelfCard(
+                        item = item,
+                        onClick = { onItemClick(item) },
+                        onLongPress = onItemLongPress?.let { { it(item) } },
+                        modifier = Modifier
+                            .width(NativeMediaCardMetrics.recentCoverWidth)
+                            .testTag("home-recent-square-card"),
+                        isCurrent = isCurrentItem(item),
+                        isPlaying = isCurrentItem(item) && isPlaying,
+                    )
                 }
             }
         }

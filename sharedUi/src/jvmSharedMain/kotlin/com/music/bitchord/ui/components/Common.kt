@@ -166,7 +166,7 @@ val FLOATING_BAR_MAX_WIDTH = 440.dp
 val SHELF_CARD_WIDTH = NativeMediaCardMetrics.shelfWidth
 
 /** Share of the row a lead-shelf card takes, so the next one peeks in past it. */
-private const val HERO_CARD_FRACTION = 0.70f
+private const val HERO_CARD_FRACTION = 0.62f
 
 /**
  * How wide a lead-shelf card is ever allowed to get.
@@ -176,14 +176,18 @@ private const val HERO_CARD_FRACTION = 0.70f
  * caption over some artwork rather than a canvas — blown up that far it stops
  * being the top of a feed and becomes a poster with a shelf hiding under it.
  *
- * Set just clear of what the widest phone asks for (0.70 of 448dp is 314dp), so
- * every phone keeps the width the fraction gives it and only a screen wider than
- * any phone is held back to it.
+ * The editorial reference sample shows a narrower card with part of the
+ * next visible. A 0.62 share reaches ~278dp on a 448dp phone; on larger
+ * screens the cap keeps it from becoming a poster.
  */
 private val HERO_CARD_MAX_WIDTH = 320.dp
 
-/** A lead-shelf card's proportions: a touch taller than it is wide. */
-const val HERO_CARD_RATIO = 0.92f
+/**
+ * Editorial reference V01 has an approximate width:height of 0.75.
+ * This is a visually grounded adaptation, not a claimed Apple dp token.
+ * The same role is used by the loading hero skeleton.
+ */
+const val HERO_CARD_RATIO = 0.75f
 
 /**
  * How wide a lead-shelf card should be in a row [available] wide — the shared
