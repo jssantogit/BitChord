@@ -1,6 +1,8 @@
 package com.music.bitchord.data.catalog.metadata
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal fun interface AppleGroupCardEditionSource {
     suspend fun browse(groupMbid: String): MusicBrainzCatalogGraphResult<MusicBrainzCatalogPage<MusicBrainzReleaseHit>>
@@ -65,7 +67,15 @@ internal class AppleVerifiedGroupCardArtworkResolver(
             resolver.resolve(release, storefront)
         }
     },
+    private val clockMs: () -> Long = System::currentTimeMillis,
 ) {
+    private data class Cached(
+        val proof: AppleVerifiedEditionArtwork?,
+        val expiresAtMs: Long,
+    )
+    private val cache = linkedMapOf<String, Cached>()
+    private val locks = Array(32) { Mutex() }
+
     suspend fun resolve(
         groupMbid: String,
         storefront: String = "br",
@@ -75,23 +85,41 @@ internal class AppleVerifiedGroupCardArtworkResolver(
                 .matches(groupMbid) ||
             !Regex("^[a-z]{2}$").matches(storefront)
         ) return null
-        val page = try {
-            when (val result = groups.browse(groupMbid)) {
-                is MusicBrainzCatalogGraphResult.Success -> result.value
-                is MusicBrainzCatalogGraphResult.Failure -> null
+        val key = "${groupMbid.lowercase()}:${storefront}:${groupTitle?.trim()?.lowercase().orEmpty()}"
+        val stripe = (key.hashCode() and Int.MAX_VALUE) % locks.size
+        return locks[stripe].withLock {
+            val now = clockMs()
+            synchronized(cache) {
+                cache[key]?.takeIf { it.expiresAtMs > now }
+            }?.let { return@withLock it.proof }
+            val page = try {
+                when (val result = groups.browse(groupMbid)) {
+                    is MusicBrainzCatalogGraphResult.Success -> result.value
+                    is MusicBrainzCatalogGraphResult.Failure -> null
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null }
+            val editionId = page?.let {
+                uniqueAppleGroupCardEdition(groupMbid, it, groupTitle)
             }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) { null } ?: return null
-        val editionId = uniqueAppleGroupCardEdition(groupMbid, page, groupTitle)
-            ?: return null
-        val proof = try {
-            editions.resolve(editionId, storefront)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) { null }
-        return verifiedAppleArtworkForDisplayedGroupEdition(
-            proof, groupMbid, editionId,
-        )
+            val candidate = if (editionId != null) try {
+                editions.resolve(editionId, storefront)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null } else null
+            val proof = verifiedAppleArtworkForDisplayedGroupEdition(
+                candidate, groupMbid, editionId,
+            )
+            synchronized(cache) {
+                if (cache.size >= 96 && !cache.containsKey(key))
+                    cache.remove(cache.keys.first())
+                cache[key] = Cached(
+                    proof,
+                    clockMs() + if (proof != null) 6 * 60 * 60_000L else 15 * 60_000L,
+                )
+            }
+            proof
+        }
     }
 }
