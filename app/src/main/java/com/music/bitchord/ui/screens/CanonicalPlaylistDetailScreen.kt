@@ -675,31 +675,23 @@ internal fun CanonicalPlaylistDetailScreen(
                     }
                 },
                 actions = {
-                    if (canPlay) {
-                        Spacer(Modifier.height(18.dp))
-                        NativeReleaseActionRow(
-                            onPlay = {
-                                if (card is LibraryPlaylistCard.Normal) {
-                                    onLegacyPlay(card.id, playableHistoricalSongs, 0)
-                                } else onAction(CanonicalCollectionIntent.PLAY_NOW)
-                            },
-                            onShuffle = {
-                                if (card is LibraryPlaylistCard.Normal) {
-                                    onLegacyShuffle(card.id, playableHistoricalSongs)
-                                } else onShuffle()
-                            },
-                            // Every playlist with a + uses it to pin in the
-                            // Library. Queue actions remain in the existing
-                            // overflow/track sheets, never hidden behind +.
-                            isLocal = false,
-                            reservePinAction = true,
-                            pinTargetLabel = "playlist",
-                            isPinnedInLibrary = pinnedPlaylists.any { it.id == card.id },
-                            onTogglePin = {
-                                playlistPinRepo.toggle(LibraryPlaylistPin(card.id, card.title))
-                            },
-                        )
-                    }
+                    NativePlaylistHeroActions(
+                        canPlay = canPlay,
+                        isPinned = pinnedPlaylists.any { it.id == card.id },
+                        onTogglePin = {
+                            playlistPinRepo.toggle(LibraryPlaylistPin(card.id, card.title))
+                        },
+                        onPlay = {
+                            if (card is LibraryPlaylistCard.Normal) {
+                                onLegacyPlay(card.id, playableHistoricalSongs, 0)
+                            } else onAction(CanonicalCollectionIntent.PLAY_NOW)
+                        },
+                        onShuffle = {
+                            if (card is LibraryPlaylistCard.Normal) {
+                                onLegacyShuffle(card.id, playableHistoricalSongs)
+                            } else onShuffle()
+                        },
+                    )
                 }
             )
             }
