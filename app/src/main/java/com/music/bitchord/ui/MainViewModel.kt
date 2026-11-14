@@ -1230,8 +1230,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             ),
                         )
                     }
-                    if (entry.kind == CanonicalSearchKind.ARTIST)
+                    if (entry.kind == CanonicalSearchKind.ARTIST) {
+                        // New pages join the SAME worker queue, not a new CAA
+                        // pass or a restart of 48 earlier Apple lookups.
+                        canonicalAppleGroupCardArtworkBatches(merged).forEach {
+                            startCanonicalGroupCardAppleCoverage(entry, it)
+                        }
                         enrichCanonicalNativeDetailCovers(entry)
+                    }
                 }
             } finally {
                 _canonicalLoadingMore.value = false
@@ -1253,9 +1259,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalAppleArtworkPromotion.asStateFlow()
 
     /**
-     * Fill visible native artist shelves progressively. Group MBIDs are the
-     * identity boundary; fallback artwork may be from a Release known to
-     * belong to that exact group, never from fuzzy name matching.
+     * Retain artist titles and editorial format from MusicBrainz; only
+     * proven Apple products own public catalog covers. No CAA warmup.
      */
     private var activeDetailCoverArtistMbid: String? = null
 
@@ -1273,16 +1278,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // when no matching verified edition was included in that page.
             val offlineOnly = (_canonicalDetail.value as? UiState.Success)
                 ?.data?.rows?.firstOrNull()?.fromOfflineCache == true
-            // Begin Apple verification before archive enrichment. CAA only
-            // supplies a transitional fallback when no exact Apple identity is
-            // available; a pre-existing CAA cover does not skip this work.
-            if (!offlineOnly) startCanonicalGroupCardAppleCoverage(
-                artist,
-                canonicalAppleGroupCardArtworkCandidates(
-                    (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty(),
-                    limit = 48,
-                ),
-            )
+            // One bounded worker queue covers all fetched groups, including
+            // the cached-first artist page. The iTunes source owns the image
+            // even if an obsolete CAA URL was previously stored in Room.
+            canonicalAppleGroupCardArtworkBatches(
+                (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty(),
+            ).forEach { startCanonicalGroupCardAppleCoverage(artist, it) }
             // Additional edition pages now stream concurrently with CAA
             // lookups. The map must support safe independent IO workers.
             val artistEditions = java.util.concurrent.ConcurrentHashMap<
@@ -1362,10 +1363,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Artist shelves prefer exact iTunes covers, even when a CAA image
-     * already exists. A complete Official singleton-group browse is the
-     * current conservative gate; ambiguous groups await later resolution.
-     * Apple artwork and its mandatory store attribution remain UI-only.
+     * Artist shelves prefer exact iTunes covers. A complete group browse
+     * proves a unique canonical Official edition; ambiguous standard-looking
+     * editions remain without a cover instead of borrowing a CAA image.
+     * Apple artwork and mandatory store attribution remain UI-only.
      */
     private fun startCanonicalGroupCardAppleCoverage(
         artist: CanonicalCatalogSearchRow,
