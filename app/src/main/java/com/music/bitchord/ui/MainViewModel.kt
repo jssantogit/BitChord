@@ -1652,7 +1652,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }).filter { it.isNotBlank() }.joinToString(" · ")
                 else -> row.subtitle.orEmpty()
             },
-            thumbnailUrl = row.artworkUri.takeUnless {
+            thumbnailUrl = canonicalPublicWithoutLegacyArchiveArtwork(
+                row.artworkUri,
+            ).takeUnless {
                 row.kind == CanonicalSearchKind.RELEASE_GROUP &&
                     canonicalEditorialReleaseType(row) == null
             },
@@ -1676,8 +1678,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openCanonicalCatalogEntry(row: CanonicalCatalogSearchRow) {
         if (_searchSource.value != SearchSource.CANONICAL ||
             row.kind == CanonicalSearchKind.RECORDING) return
-        canonicalPath.add(row)
-        showCanonicalCatalogEntry(row)
+        val publicRow = row.copy(
+            artworkUri = canonicalPublicWithoutLegacyArchiveArtwork(row.artworkUri),
+        )
+        canonicalPath.add(publicRow)
+        showCanonicalCatalogEntry(publicRow)
     }
 
     fun backCanonicalCatalogEntry() {
@@ -1934,34 +1939,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalDetail.value = UiState.Loading
         _searchScrollReset.value += 1
         canonicalBrowseJob = viewModelScope.launch {
-            // A card can be stale even after this group's Front-v5 has been
-            // saved by the artist shelf. Read that exact verified MBID once,
-            // then give the identical URL to both header and all tracks.
-            // No archive request or fuzzy artist/title fallback.
-            val groupArtwork = if (entry.kind == CanonicalSearchKind.RELEASE_GROUP &&
-                canonicalEditorialReleaseType(entry) != null
-            ) {
-                try {
-                    withContext(Dispatchers.IO) {
-                        coverArtArchive.cachedVerifiedGroupCover(
-                            entry.musicBrainzId, CoverArtSize.THUMBNAIL,
-                        )
-                    }
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) { null }
-            } else null
-            val initialArtwork = canonicalVerifiedGroupDetailArtwork(entry, groupArtwork)
-            if (groupArtwork != null && _searchSource.value == SearchSource.CANONICAL &&
-                canonicalPath.lastOrNull() == entry
-            ) {
-                val pageId = canonicalNativeBrowseId(entry)
-                _detailStack.update { pages -> pages.map { page ->
-                    if (page.browseId == pageId &&
-                        canonicalShouldAcceptVerifiedGroupArtwork(page.thumbnailUrl, groupArtwork))
-                        page.copy(thumbnailUrl = groupArtwork) else page
-                } }
-            }
+            // CAA cache entries belong to the retired artwork authority.
+            // A previously persisted Front must not re-enter the public
+            // Album/EP/Single header while Apple proof is still loading.
+            val initialArtwork = canonicalPublicWithoutLegacyArchiveArtwork(
+                entry.artworkUri,
+            )
             // Reopening an already browsed artist should paint persisted
             // metadata and verified Front-v4 artwork immediately. A slow
             // MusicBrainz browse refreshes this page later; it must not hold
@@ -1985,7 +1968,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         releaseDate = hit.firstReleaseDate,
                         releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                         secondaryTypes = hit.secondaryTypes,
-                        artworkUri = hit.artworkUri,
+                        artworkUri = canonicalPublicWithoutLegacyArchiveArtwork(
+                            hit.artworkUri,
+                        ),
                         fromOfflineCache = true,
                     ) }
                     val preview = CanonicalCatalogDetailPage(
@@ -2034,7 +2019,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             CanonicalCatalogDetailPage(
                                 title = cached.title,
                                 summary = "Saved release · refreshing",
-                                artworkUri = entry.artworkUri,
+                                artworkUri = initialArtwork,
                                 rows = canonicalReleaseTracksWithArtwork(
                                     cached.tracks.map { track ->
                                         CanonicalCatalogSearchRow(
@@ -2048,7 +2033,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                             durationMs = track.durationMs,
                                         )
                                     },
-                                    entry.artworkUri,
+                                    initialArtwork,
                                 ),
                             )
                         }
@@ -2116,7 +2101,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 releaseDate = hit.firstReleaseDate,
                                 releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                                 secondaryTypes = hit.secondaryTypes,
-                                artworkUri = verifiedGroups[hit.musicBrainzId]?.artworkUri,
+                                artworkUri = canonicalPublicWithoutLegacyArchiveArtwork(
+                                    verifiedGroups[hit.musicBrainzId]?.artworkUri,
+                                ),
                             ) },
                             nextOffset = result.value.nextOffset,
                             totalCount = result.value.total,
@@ -2142,7 +2129,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 releaseDate = hit.firstReleaseDate,
                                 releaseKind = hit.primaryType?.takeUnless { it.equals("Other", true) },
                                 secondaryTypes = hit.secondaryTypes,
-                                artworkUri = hit.artworkUri,
+                                artworkUri = canonicalPublicWithoutLegacyArchiveArtwork(
+                                    hit.artworkUri,
+                                ),
                                 fromOfflineCache = true,
                             ) },
                         ))
