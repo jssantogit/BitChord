@@ -73,6 +73,21 @@ class AppleHighResolutionArtworkTest {
         }
     }
 
+    @Test fun usesVerified600PxWhen720PxVariantDoesNotExist() = runBlocking {
+        val fallback600 = thumb.replace("100x100bb.jpg", "600x600bb.jpg")
+        val asked = mutableListOf<String>()
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource { url ->
+                asked += url
+                if (url == fallback600) 600 to 600 else null
+            },
+        )
+        assertEquals(fallback600, service.upgrade(thumb, 720))
+        assertEquals(
+            listOf(large, fallback600), asked,
+        )
+    }
+
     @Test fun cancellationIsPropagatedWithoutCachingFailure() = runBlocking {
         var calls = 0
         val service = AppleHighResolutionArtwork(
