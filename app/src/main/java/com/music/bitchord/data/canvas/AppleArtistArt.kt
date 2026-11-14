@@ -307,8 +307,11 @@ object AppleArtistArtRepository {
         // The clip is a different picture from the still, with its own colours
         // — the page has to match whichever one is on screen.
         val colours = clip?.optJSONObject("previewFrame")?.takeIf { video != null } ?: hero
+        // A missing optional palette is not evidence that the photograph is
+        // invalid. Use a neutral native wash rather than discard a verified
+        // artist page's image and leave another empty portrait.
         val background = colours.optString("bgColor").toArgb()
-            ?: hero.optString("bgColor").toArgb() ?: return null
+            ?: hero.optString("bgColor").toArgb() ?: 0xFF161616.toInt()
         val accent = colours.optString("textColor1").toArgb() ?: background
         return AppleArtistArt(
             heroUrl = heroUrl,
