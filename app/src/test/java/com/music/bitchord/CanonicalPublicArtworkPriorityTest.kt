@@ -32,8 +32,8 @@ class CanonicalPublicArtworkPriorityTest {
         assertEquals(null, canonicalPublicWithoutLegacyArchiveArtwork(archived))
         assertEquals(apple, canonicalPublicWithoutLegacyArchiveArtwork(apple))
         assertEquals(ordinary, canonicalPublicWithoutLegacyArchiveArtwork(ordinary))
-        assertEquals(caa, canonicalPublicWithoutLegacyArchiveArtwork(
-            "https://coverartarchive.org.attacker.example/release/abc/front-500"))
+        val spoof = "https://coverartarchive.org.attacker.example/release/abc/front-500"
+        assertEquals(spoof, canonicalPublicWithoutLegacyArchiveArtwork(spoof))
         assertEquals(null, canonicalPublicWithoutLegacyArchiveArtwork(null))
     }
 
