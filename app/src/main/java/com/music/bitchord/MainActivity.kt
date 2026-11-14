@@ -372,6 +372,10 @@ import com.music.bitchord.ui.screens.explicitCoverUri
 import com.music.bitchord.ui.screens.SmartPlaylistBuilderScreen
 import com.music.bitchord.ui.screens.ExploreScreen
 import com.music.bitchord.ui.screens.SearchScreen
+import com.music.bitchord.ui.screens.AppleNativeAlbumDetail
+import com.music.bitchord.ui.screens.AppleNativeArtistDetail
+import com.music.bitchord.ui.screens.AppleNativeDetailKind
+import com.music.bitchord.ui.screens.appleNativeDetailKind
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.ui.onboarding.OnboardingScreen
 import com.music.bitchord.ui.replay.ReplayScreen
@@ -895,6 +899,12 @@ private fun BitChordApp(
     val detailStack by viewModel.detailStack.collectAsStateWithLifecycle()
     val releaseLibrary by viewModel.releaseLibrary.collectAsStateWithLifecycle()
     val detail = detailStack.lastOrNull()
+    // Storefront-scoped IDs render through the same first-party native detail
+    // building blocks. They never enter the MusicBrainz/YouTube detail stack.
+    val appleNativeKind = if (selectedTab == TAB_SEARCH && detail == null)
+        appleNativeDetailKind(appleAlbumDetail, appleArtistDetail)
+        else AppleNativeDetailKind.NONE
+    val appleNativeDetailOpen = appleNativeKind != AppleNativeDetailKind.NONE
     // Local Music, Downloads and the other device folders draw as release
     // pages, but they have no artwork to wash the top inset in, so they keep
     // the plain bar; their top bar trades the overflow for a sort-and-view
@@ -2944,6 +2954,8 @@ private fun BitChordApp(
                         communityMetadataRecording != null -> "community_recording:" + communityMetadataRecording!!.musicBrainzId
                         openedPublicPlaylist != null -> "public_playlist:" + openedPublicPlaylist!!.mbid
                         detail != null -> detail.browseId
+                        appleNativeDetailOpen -> if (appleNativeKind == AppleNativeDetailKind.ALBUM)
+                            "apple_native_album" else "apple_native_artist"
                         rediscoveryRecordingId != null -> "rediscovery:" + rediscoveryRecordingId
                         showCanonicalMyRatings -> "my_ratings"
                         unifiedLibraryCategory != null -> "unified_library"
@@ -3474,6 +3486,25 @@ private fun BitChordApp(
                             onEditSignatureApi = { editingSignatureApi = true },
                             contentPadding = listPadding,
                         )
+                    } else if (key == "apple_native_album") {
+                        appleAlbumDetail?.let { apple ->
+                            AppleNativeAlbumDetail(
+                                state = apple,
+                                contentPadding = listPadding,
+                                listState = pageDetailListState,
+                            )
+                        }
+                    } else if (key == "apple_native_artist") {
+                        appleArtistDetail?.let { artist ->
+                            AppleNativeArtistDetail(
+                                state = artist,
+                                contentPadding = listPadding,
+                                listState = pageDetailListState,
+                                onAlbumOpen = viewModel::openAppleEditorialEntry,
+                                onLoadMore = viewModel::loadMoreAppleEditorialArtist,
+                                onSearchMore = viewModel::searchMoreAppleEditorialArtist,
+                            )
+                        }
                     } else if (page != null) {
                         // Local Music, Downloads and the other device folders are
                         // this same release page: the header any playlist has, then
@@ -4453,6 +4484,10 @@ private fun BitChordApp(
                         openedPublicPlaylist != null -> openedPublicPlaylist?.title.orEmpty()
                         detail != null && detailActiveShelf != null -> detailActiveShelf?.title.orEmpty()
                         detail != null -> detail.title
+                        appleNativeKind == AppleNativeDetailKind.ALBUM ->
+                            (appleAlbumDetail as? UiState.Success)?.data?.album?.title.orEmpty()
+                        appleNativeKind == AppleNativeDetailKind.ARTIST ->
+                            (appleArtistDetail as? UiState.Success)?.data?.artist?.title.orEmpty()
 
                         selectedTab == TAB_HOME -> stringResource(R.string.home)
                         else -> tabs[selectedTab].label
@@ -4551,6 +4586,9 @@ private fun BitChordApp(
                         openedPublicPlaylist != null -> ({ openedPublicPlaylist = null })
                         detailActiveShelf != null -> ({ detailActiveShelf = null })
                         detail != null -> ({ viewModel.closeDetail(); Unit })
+                        appleNativeKind == AppleNativeDetailKind.ALBUM -> backAppleAlbum
+                        appleNativeKind == AppleNativeDetailKind.ARTIST ->
+                            ({ viewModel.backAppleEditorialArtist() })
 
                         else -> null
                     },
@@ -4558,6 +4596,7 @@ private fun BitChordApp(
                     // Only on the Search tab itself, not on anything pushed over it.
                     accessory = if (
                         selectedTab == TAB_SEARCH && detail == null &&
+                        !appleNativeDetailOpen &&
                         libraryShowAll == null && unifiedLibraryCategory == null &&
                         !showSettings && !showAccountScrobbling &&
                         !showSources && !showListenTogether && !showWearOs && !showEqualizer && !showDiscord &&
@@ -4768,13 +4807,14 @@ private fun BitChordApp(
                             // there is a batch to report on — see
                             // [TopBarDownloadButton], which decides that for
                             // itself rather than being told.
-                            if (unifiedLibraryCategory == null) {
+                            if (unifiedLibraryCategory == null && !appleNativeDetailOpen) {
                                 TopBarDownloadButton(onClick = { showDownloadManager = true })
                             }
                             // Not on a release page, whose pill already carries
                             // three of its own controls — Apple Music leaves the
                             // profile off its album pages too.
-                            if (!isReleaseDetail && openedPublicPlaylist == null &&
+                            if (!isReleaseDetail && !appleNativeDetailOpen &&
+                                openedPublicPlaylist == null &&
                                 !shouldUseUnifiedAlbumDetailToolbar(
                                     unifiedLibraryCategory, unifiedLibraryDetailOpen,
                                     unifiedLibraryNestedAlbumOpen,
