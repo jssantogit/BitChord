@@ -3231,38 +3231,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * One bounded, sequential metadata scan respects the MusicBrainz request
      * limiter. An unsuccessful scan is not repeated on every tab re-entry.
      */
-    fun loadCanonicalExploreGenreCovers() {
-        if (canonicalGenrePreviewJob?.isActive == true) return
-        val now = System.currentTimeMillis()
-        if (now - canonicalGenrePreviewAttemptMs < 6L * 60L * 60L * 1000L) return
-        canonicalGenrePreviewAttemptMs = now
-        canonicalGenrePreviewJob = viewModelScope.launch(Dispatchers.IO) {
-            val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
-            for (genre in canonicalExploreGenres) {
-                currentCoroutineContext().ensureActive()
-                if (genre.tag in _canonicalExploreGenreCovers.value) continue
-                val result = try {
-                    musicBrainzSearch.searchReleaseGroupsForTag(genre.tag, limit = 20)
-                } catch (cancelled: CancellationException) { throw cancelled }
-                  catch (_: Exception) { null }
-                val hits = (result as? MusicBrainzCatalogSearchResult.Success)
-                    ?.page?.items.orEmpty()
-                val rows = canonicalPublicGenreRows(hits, today)
-                val previews = canonicalGenreArtworkPriority(genre, rows, today, limit = 3)
-                for (candidate in previews) {
-                    currentCoroutineContext().ensureActive()
-                    val cover = try {
-                        withTimeoutOrNull(5_000L) { canonicalArtworkForRow(candidate) }
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                      catch (_: Exception) { null }
-                    if (!cover.isNullOrBlank()) {
-                        _canonicalExploreGenreCovers.update { it + (genre.tag to cover) }
-                        break
-                    }
-                }
-            }
-        }
-    }
+    /** Public Explore artwork is derived from official Apple storefront
+     * releases in MainActivity's appleExploreGenreCoverMap. Legacy CAA image
+     * fetching here would be unlabelled and frequently unrelated to the
+     * displayed genre/product, so this compatibility entry is inert. */
+    fun loadCanonicalExploreGenreCovers() = Unit
 
     /**
      * Small, cached public searches. An empty or failing query never delays
