@@ -47,6 +47,9 @@ import kotlin.math.roundToInt
  * drawn once: nothing about it changes as the page moves, so it is rasterised
  * on the first frame and only composited after that.
  */
+/** A missing artist photo is a color-only hero, not a Coil request for null. */
+internal fun hasNativeArtistBackdropStill(url: String?): Boolean = !url.isNullOrBlank()
+
 @Composable
 internal fun PageBackground(
     palette: ArtworkPalette,
@@ -57,11 +60,11 @@ internal fun PageBackground(
     modifier: Modifier = Modifier,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
-    // Not under a canvas: a still blurred over the foot of a moving clip would
-    // freeze the bottom of the video into the wrong picture.
-    val softenFoot = canvas == null && !reduceDynamicBlur &&
+    val art = heroUrl?.takeIf(::hasNativeArtistBackdropStill)
+    // Do not allocate two empty painters for an artist with no portrait.
+    // A still over a moving canvas would also freeze the animation's foot.
+    val softenFoot = art != null && canvas == null && !reduceDynamicBlur &&
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-    val art = heroUrl
 
     Box(modifier.clipToBounds()) {
         Box(
@@ -70,14 +73,20 @@ internal fun PageBackground(
                 .height(artHeight)
                 .offset { IntOffset(0, listState.headerTop(artHeight.toPx()).roundToInt()) },
         ) {
-            AsyncImage(
-                model = art,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(palette.elevated),
-            )
+            if (art != null) {
+                AsyncImage(
+                    model = art,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .matchParentSize()
+                        .background(palette.elevated),
+                )
+            } else {
+                // The header may still be compact and show the artist's name.
+                // No spurious gray rectangle should sit above the page wash.
+                Box(Modifier.matchParentSize().background(palette.wash))
+            }
 
             // Above the still art but below the scrim, so the scrim that
             // settles the header into the page still sits over it. Always
