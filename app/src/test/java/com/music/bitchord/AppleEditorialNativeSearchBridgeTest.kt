@@ -77,6 +77,27 @@ class AppleEditorialNativeSearchBridgeTest {
         assertNull(unsafe.appleStoreBadgeUrl)
     }
 
+    @Test fun appleSearchAlbumStoreBadgeLinksOnlyToItsExactVerifiedProduct() {
+        val product = "https://music.apple.com/br/album/hot/101"
+        val source = AppleEditorialLoad.Success(
+            releases = listOf(
+                edition(101).copy(storeUrl = product),
+                edition(102).copy(
+                    storeUrl = "https://music.apple.com.attacker.example/br/album/102",
+                ),
+            ),
+            state = AppleEditorialReadState.COMPLETE,
+        )
+        val rows = appleNativeSearchRows(source)
+        assertEquals(product, rows[0].appleStoreUrl)
+        assertEquals(
+            "https://www.apple.com/ca/itunes/link/images/link-badge-music.png",
+            rows[0].appleStoreBadgeUrl,
+        )
+        assertNull(rows[1].appleStoreUrl)
+        assertNull(rows[1].appleStoreBadgeUrl)
+    }
+
     @Test fun appSearchRowsPreserveExactAppleProductIdentityAndArtwork() {
         val source = AppleEditorialLoad.Success(
             releases = listOf(edition(101), edition(102, "HOT - Single")),
