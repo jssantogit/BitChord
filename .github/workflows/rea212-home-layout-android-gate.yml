@@ -1,0 +1,44 @@
+name: REA212 Home editorial and recents Android validation
+on:
+  push:
+    branches: [validation/rea212-home-layout-a8c3cc2-20261114]
+permissions:
+  contents: read
+jobs:
+  android-and-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Verify source equals exact PR HEAD
+        run: |
+          set -euo pipefail
+          git diff --exit-code a8c3cc2ef251ba99527bb2dd8260bc20cbc84e90 HEAD -- app sharedUi shared
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure local properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Home focused regression
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest --tests "com.music.bitchord.ui.screens.NativeHomeShelfPresentationTest"
+      - name: Android unit tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI JVM tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Upload failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-home-layout-test-failures-${{ github.sha }}
+          path: |
+            app/build/reports/tests/
+            sharedUi/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
