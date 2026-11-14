@@ -17,6 +17,16 @@ class AppleArtistStorePageIdentityTest {
         )
     }
 
+    @Test fun exactLegacyItunesArtistLinkMayOpenTheSameMusicAppleArtistPage() {
+        assertEquals(
+            "https://music.apple.com/br/artist/newjeans/1656329288",
+            exactAppleArtistPageUrl(
+                "itunes:br:artist:1656329288",
+                "https://itunes.apple.com/br/artist/newjeans/1656329288?uo=4",
+            ),
+        )
+    }
+
     @Test fun namesakesDoNotBorrowAnotherAppleArtistPortrait() {
         assertNull(exactAppleArtistPageUrl(
             "itunes:br:artist:1656329288",
