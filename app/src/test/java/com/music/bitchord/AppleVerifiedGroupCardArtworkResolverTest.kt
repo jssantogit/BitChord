@@ -126,6 +126,48 @@ class AppleVerifiedGroupCardArtworkResolverTest {
         assertEquals(alternate, checkedId)
     }
 
+    @Test fun multipleVisitsReuseGroupEditionSelectionWithoutRebrowsing() = runBlocking {
+        var browses = 0
+        var editionReads = 0
+        val resolver = AppleVerifiedGroupCardArtworkResolver(
+            groups = AppleGroupCardEditionSource {
+                browses++
+                MusicBrainzCatalogGraphResult.Success(page(edition()))
+            },
+            editions = AppleGroupCardArtworkSource { _, _ ->
+                editionReads++
+                verified
+            },
+        )
+        assertEquals(verified, resolver.resolve(group, "br", "SUPER REAL ME"))
+        assertEquals(verified, resolver.resolve(group, "br", "SUPER REAL ME"))
+        assertEquals(1, browses)
+        assertEquals(1, editionReads)
+    }
+
+    @Test fun negativeGroupSelectionRetriesAfterShortTtl() = runBlocking {
+        var now = 1_000L
+        var browses = 0
+        val resolver = AppleVerifiedGroupCardArtworkResolver(
+            groups = AppleGroupCardEditionSource {
+                browses++
+                MusicBrainzCatalogGraphResult.Success(page(
+                    edition(), edition(alternate),
+                ))
+            },
+            editions = AppleGroupCardArtworkSource { _, _ ->
+                error("ambiguous official group cannot initiate UPC lookup")
+            },
+            clockMs = { now },
+        )
+        assertNull(resolver.resolve(group, "br", "SUPER REAL ME"))
+        assertNull(resolver.resolve(group, "br", "SUPER REAL ME"))
+        assertEquals(1, browses)
+        now += 16 * 60_000L
+        assertNull(resolver.resolve(group, "br", "SUPER REAL ME"))
+        assertEquals(2, browses)
+    }
+
     @Test fun eligibleCardReceivesOnlyTheExactAppleProductWithAttribution() = runBlocking {
         var lookups = 0
         val resolver = AppleVerifiedGroupCardArtworkResolver(
