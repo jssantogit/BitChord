@@ -1,0 +1,46 @@
+name: REA212 artist scroll and album artwork evidence
+on:
+  push:
+    branches: [validation/rea212-artist-state-art-evidence-63b672a-20261114]
+permissions:
+  contents: read
+jobs:
+  android-shared:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Verify exact PR production/test source
+        run: |
+          set -euo pipefail
+          git diff --exit-code 63b672aef085a597bc0c0e58465a210c543e7d2a HEAD -- app sharedUi shared
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure local properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Focused artist identity and artwork fallback regression
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests "com.music.bitchord.ui.screens.NativeCanonicalArtistScrollStateTest" --tests "com.music.bitchord.ui.screens.NativeAlbumTrackArtworkEvidenceTest" --tests "com.music.bitchord.ui.screens.NativeCanonicalAlbumArtworkTest"
+      - name: Complete Android unit tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Shared UI JVM tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Shared Automix regression
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+      - name: Upload failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-artist-state-art-evidence-reports-${{ github.sha }}
+          path: |
+            app/build/reports/tests/
+            sharedUi/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
