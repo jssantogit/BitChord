@@ -168,6 +168,7 @@ internal class AppleHighResolutionArtwork(
     private val dimensions: AppleArtworkDimensionSource = AndroidAppleArtworkDimensionSource(),
     private val clockMs: () -> Long = System::currentTimeMillis,
     private val persistence: AppleArtworkProbePersistence? = null,
+    private val telemetry: AppleArtworkProbeTelemetry = AppleArtworkProbeTelemetry.process,
 ) {
     private val cache = ConcurrentHashMap<String, AppleArtworkProbeRecord>()
     // Striped single-flight locks: at most one network check per URL while
@@ -196,8 +197,11 @@ internal class AppleHighResolutionArtwork(
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null }
-                if (prior != null && prior.expiresAtMs > now)
+                if (prior != null && prior.expiresAtMs > now) {
+                    telemetry.recordCacheHit(prior.valid)
                     return@withLock prior.valid
+                }
+                val requestStarted = System.nanoTime()
                 val measured = try {
                     dimensions.read(candidate)
                 } catch (cancelled: CancellationException) {
@@ -206,6 +210,11 @@ internal class AppleHighResolutionArtwork(
                 val accepted = measured?.let { (width, height) ->
                     width >= size && height >= size && width == height
                 } == true
+                telemetry.recordNetwork(
+                    size, accepted,
+                    ((System.nanoTime() - requestStarted) / 1_000_000L)
+                        .coerceAtLeast(0),
+                )
                 if (cache.size > 192) cache.clear()
                 val record = AppleArtworkProbeRecord(
                     accepted,
