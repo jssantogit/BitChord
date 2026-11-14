@@ -296,3 +296,12 @@ internal fun appleArtistAlbumRowsWithProbedArtwork(
         ) row.copy(artworkUri = probed) else row
     }
 }
+
+
+/**
+ * UI artwork budget. Large featured cards and album detail heroes can use a
+ * native 1024px Apple rendition; ordinary grids stay at 600px. Never schedule
+ * more than four large thumbnails from a single page of shelf candidates.
+ */
+internal fun appleArtworkTargetPxForShelf(index: Int, featuredCount: Int): Int =
+    if (index >= 0 && index < featuredCount.coerceIn(0, 4)) 1024 else 600
