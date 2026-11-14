@@ -35,13 +35,13 @@ internal fun appleHighResolutionArtworkCandidate(
         uri.userInfo != null || uri.port != -1 || uri.rawPath.contains('%')
     ) return null
     val match = Regex(
-        """/(\d{2,4})x(\d{2,4})(bb|-\d{2,3})\.(jpg|jpeg|png|webp)$""",
+        """([/.])(\d{2,4})x(\d{2,4})(bb|-\d{2,3})\.(jpg|jpeg|png|webp)$""",
         RegexOption.IGNORE_CASE,
     ).find(uri.rawPath) ?: return null
-    val originalWidth = match.groupValues[1].toIntOrNull() ?: return null
-    val originalHeight = match.groupValues[2].toIntOrNull() ?: return null
+    val originalWidth = match.groupValues[2].toIntOrNull() ?: return null
+    val originalHeight = match.groupValues[3].toIntOrNull() ?: return null
     if (originalWidth != originalHeight || originalWidth >= desiredPx) return null
-    val newSuffix = "/${desiredPx}x${desiredPx}${match.groupValues[3]}.${match.groupValues[4]}"
+    val newSuffix = "${match.groupValues[1]}${desiredPx}x${desiredPx}${match.groupValues[4]}.${match.groupValues[5]}"
     // Only replace the final size path component, never a catalog/image ID.
     val candidate = original.removeSuffix(match.value) + newSuffix
     return candidate.takeIf { safeAppleArtwork(it) != null }
@@ -120,26 +120,37 @@ internal class AppleHighResolutionArtwork(
 
     suspend fun upgrade(artworkUrl: String?, desiredPx: Int = 720): String? {
         val original = safeAppleArtwork(artworkUrl) ?: return artworkUrl
-        val candidate = appleHighResolutionArtworkCandidate(original, desiredPx)
-            ?: return original
-        val now = clockMs()
-        val prior = cache[candidate]
-        if (prior != null && prior.expiresAt > now) {
-            return if (prior.valid) candidate else original
+        // A 720px image is preferred for hero artwork, but Apple's public
+        // CDN can expose 600px while rejecting another requested rung.
+        val sizes = when (desiredPx) {
+            1000 -> listOf(1000, 720, 600)
+            720 -> listOf(720, 600)
+            else -> listOf(desiredPx)
         }
-        val measured = try {
-            dimensions.read(candidate)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) { null }
-        val verified = measured?.let { (width, height) ->
-            width >= desiredPx && height >= desiredPx && width == height
-        } == true
-        if (cache.size > 192) cache.clear()
-        cache[candidate] = Cached(
-            verified, now + if (verified) 12 * 60 * 60_000L else 30 * 60_000L,
-        )
-        return if (verified) candidate else original
+        for (size in sizes) {
+            val candidate = appleHighResolutionArtworkCandidate(original, size)
+                ?: continue
+            val now = clockMs()
+            val prior = cache[candidate]
+            if (prior != null && prior.expiresAt > now) {
+                if (prior.valid) return candidate
+                continue
+            }
+            val measured = try {
+                dimensions.read(candidate)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { null }
+            val verified = measured?.let { (width, height) ->
+                width >= size && height >= size && width == height
+            } == true
+            if (cache.size > 192) cache.clear()
+            cache[candidate] = Cached(
+                verified, now + if (verified) 12 * 60 * 60_000L else 30 * 60_000L,
+            )
+            if (verified) return candidate
+        }
+        return original
     }
 
     suspend fun upgrade(
