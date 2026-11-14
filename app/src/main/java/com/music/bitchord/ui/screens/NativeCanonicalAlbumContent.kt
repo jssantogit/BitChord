@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -16,12 +18,22 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtwork
 import com.music.bitchord.ui.components.SourceQuality
 import com.music.bitchord.ui.theme.ArtworkPalette
 
+/**
+ * The list is keyed by the verified ReleaseId, never by a title or mutable
+ * track list. This retains scroll on palette/artwork/Room refresh and resets
+ * it when a different album is opened in the same detail host.
+ */
+@Composable
+internal fun rememberNativeAlbumDetailListState(releaseIdentity: String): LazyListState =
+    rememberSaveable(releaseIdentity, saver = LazyListState.Saver) { LazyListState() }
+
 /** A single native release body for Library albums and albums nested in artists.
  * The caller owns verified media membership, source-specific cover, rating,
  * running order and playback capabilities. Only one visual tree is rendered.
  */
 @Composable
 internal fun NativeCanonicalAlbumContent(
+    releaseIdentity: String,
     title: String,
     credit: String,
     visibleTracks: List<CanonicalBrowseTrack>,
@@ -51,7 +63,13 @@ internal fun NativeCanonicalAlbumContent(
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().background(palette.background)) {
         val sleeve = (maxWidth * 0.76f).coerceAtMost(maxHeight * 0.6f)
-        LazyColumn(contentPadding = PaddingValues(bottom = 112.dp)) {
+        // An album refresh keeps its place; opening a different ReleaseId
+        // starts at its own header instead of inheriting the previous scroll.
+        val releaseListState = rememberNativeAlbumDetailListState(releaseIdentity)
+        LazyColumn(
+            state = releaseListState,
+            contentPadding = PaddingValues(bottom = 112.dp),
+        ) {
             item(key = headerKey) {
                 NativeReleaseHeaderLayout(
                     title = title,
