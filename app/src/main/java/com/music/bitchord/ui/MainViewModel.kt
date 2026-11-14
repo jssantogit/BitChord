@@ -4954,7 +4954,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * albums with raw MusicBrainz releases behind the user's back.
      */
     /** Preserve already-displayed entities while loading distinct public search slices. */
+    private var appleSearchArtworkJob: Job? = null
+
     private fun resetApplePublicSearchPaging() {
+        appleSearchArtworkJob?.cancel()
+        appleSearchArtworkJob = null
         applePublicPagingJobs.values.forEach { it.cancel() }
         applePublicPagingJobs.clear()
         applePublicPagers.clear()
@@ -4982,12 +4986,46 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         ),
                     ),
                 )
-            AppleSearchSection.ALBUMS ->
-                _appleEditorialResults.value = UiState.Success(
+            AppleSearchSection.ALBUMS -> {
+                val rows = appleSearchRowsPreservingVerifiedArtwork(
                     appleNativeAlbumSearchRowsInSourceOrder(
                         snapshot.visible, storefront = "br",
                     ),
+                    (_appleEditorialResults.value as? UiState.Success)?.data.orEmpty(),
                 )
+                _appleEditorialResults.value = UiState.Success(rows)
+                // A 48px search row does not justify 1024px. Verify at most
+                // twelve 600px images after the first paint, without delaying
+                // search pagination or the native album detail route.
+                val pager = applePublicPagers[section]
+                val query = _query.value.trim()
+                appleSearchArtworkJob?.cancel()
+                appleSearchArtworkJob = viewModelScope.launch(Dispatchers.IO) {
+                    val permits = Semaphore(2)
+                    rows.take(12).forEach { album ->
+                        launch {
+                            permits.withPermit {
+                                val higher = appleHighResolutionArtwork.upgrade(
+                                    album.artworkUri, 600,
+                                )
+                                if (higher != null && higher != album.artworkUri &&
+                                    applePublicPagers[section] === pager &&
+                                    _query.value.trim() == query &&
+                                    _searchSource.value == SearchSource.CANONICAL
+                                ) _appleEditorialResults.update { state ->
+                                    if (state !is UiState.Success) state
+                                    else UiState.Success(
+                                        appleArtistAlbumRowsWithProbedArtwork(
+                                            state.data, album.browseId,
+                                            album.artworkUri, higher,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
         _appleSearchPaging.update { current ->
             current + (section to AppleSearchPageStatus(
