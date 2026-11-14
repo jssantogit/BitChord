@@ -590,6 +590,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var appleArtistSearchJob: Job? = null
     private var appleArtistDetailJob: Job? = null
     private var appleArtistPagingJob: Job? = null
+    private var appleArtistArtworkJob: Job? = null
     private var appleArtistPager: AppleArtistDiscographyPager? = null
     private var activeAppleArtistId: String? = null
     private val _appleEditorialTracks =
@@ -5097,6 +5098,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         backAppleEditorialAlbum()
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
+        appleArtistArtworkJob?.cancel()
         // Only the Apple search record for THIS exact artist route can supply
         // a candidate store URL. A stage name, album title, or external page
         // cannot authorize an artist crosswalk.
@@ -5143,6 +5145,47 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 is AppleArtistPageLoad.Failure, AppleArtistPageLoad.InvalidQuery ->
                     UiState.Error("apple_catalog_unavailable")
             }
+            val displayed = (_appleEditorialArtistDetail.value as? UiState.Success)?.data
+            if (displayed?.artist?.browseId == row.browseId)
+                upgradeAppleArtistCardArtwork(row.browseId, displayed.albums.take(12))
+        }
+    }
+
+    /**
+     * Only the Apple-confirmed artist's own albums may receive the CDN probe.
+     * Separate jobs keep large album grids responsive while two HTTP image
+     * requests at most verify actual 600px pixels; no public API paging cost.
+     */
+    private fun upgradeAppleArtistCardArtwork(
+        artistBrowseId: String,
+        candidates: List<AppleEditorialSearchRow>,
+    ) {
+        appleArtistArtworkJob?.cancel()
+        if (candidates.isEmpty()) return
+        appleArtistArtworkJob = viewModelScope.launch(Dispatchers.IO) {
+            val permits = Semaphore(2)
+            candidates.forEach { album ->
+                launch {
+                    permits.withPermit {
+                        val upgraded = appleHighResolutionArtwork.upgrade(
+                            album.artworkUri, 600,
+                        )
+                        if (upgraded != null && upgraded != album.artworkUri &&
+                            activeAppleArtistId == artistBrowseId &&
+                            _searchSource.value == SearchSource.CANONICAL
+                        ) _appleEditorialArtistDetail.update { state ->
+                            if (state !is UiState.Success ||
+                                state.data.artist.browseId != artistBrowseId
+                            ) state else UiState.Success(state.data.copy(
+                                albums = appleArtistAlbumRowsWithProbedArtwork(
+                                    state.data.albums, album.browseId,
+                                    album.artworkUri, upgraded,
+                                ),
+                            ))
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -5159,15 +5202,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val readState = if (snapshot.coverageUncertain)
             AppleEditorialReadState.POSSIBLY_TRUNCATED
         else AppleEditorialReadState.COMPLETE
+        val current = (_appleEditorialArtistDetail.value as? UiState.Success)?.data
         return appleNativeArtistDetail(
             AppleEditorialLoad.Success(snapshot.visible, readState),
             browseId, artistName,
-        )?.copy(
-            hasMore = snapshot.hasMore,
-            loadingMore = loading,
-            pageError = error,
-            noAdditionalResults = noNew,
-        )
+        )?.let { fresh ->
+            // Paging cannot revert already-decoded higher-resolution assets to
+            // Apple's original 100px thumbnails for unchanged Apple product IDs.
+            val restored = fresh.albums.map { album ->
+                val previous = current?.albums?.singleOrNull {
+                    it.browseId == album.browseId
+                }
+                if (previous?.artworkUri != null &&
+                    com.music.bitchord.data.catalog.metadata
+                        .appleHighResolutionArtworkCandidate(
+                            album.artworkUri, 600,
+                        ) == previous.artworkUri
+                ) previous else album
+            }
+            fresh.copy(
+                albums = restored,
+                hasMore = snapshot.hasMore,
+                loadingMore = loading,
+                pageError = error,
+                noAdditionalResults = noNew,
+            )
+        }
     }
 
     /** Load local pages first, then bounded public iTunes discovery probes. */
@@ -5196,6 +5256,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )?.let { UiState.Success(it) } ?: UiState.Error("apple_catalog_unavailable")
                 is AppleArtistPageLoad.Failure, AppleArtistPageLoad.InvalidQuery ->
                     UiState.Success(detail.copy(loadingMore = false, pageError = true))
+            }
+            if (result is AppleArtistPageLoad.Success) {
+                val updated = (_appleEditorialArtistDetail.value as? UiState.Success)?.data
+                if (updated?.artist?.browseId == browseId)
+                    upgradeAppleArtistCardArtwork(browseId,
+                        updated.albums.filter { added ->
+                            detail.albums.none { it.browseId == added.browseId }
+                        }.take(12))
             }
         }
     }
@@ -5226,6 +5294,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 is AppleArtistPageLoad.Failure, AppleArtistPageLoad.InvalidQuery ->
                     UiState.Success(detail.copy(loadingMore = false, pageError = true))
             }
+            if (result is AppleArtistPageLoad.Success) {
+                val updated = (_appleEditorialArtistDetail.value as? UiState.Success)?.data
+                if (updated?.artist?.browseId == browseId)
+                    upgradeAppleArtistCardArtwork(browseId,
+                        updated.albums.filter { added ->
+                            detail.albums.none { it.browseId == added.browseId }
+                        }.take(12))
+            }
         }
     }
 
@@ -5233,6 +5309,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         activeAppleArtistId = null
         appleArtistDetailJob?.cancel()
         appleArtistPagingJob?.cancel()
+        appleArtistArtworkJob?.cancel()
         appleArtistPager = null
         _appleEditorialArtistDetail.value = null
     }
