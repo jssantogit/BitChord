@@ -108,7 +108,7 @@ import com.music.bitchord.ui.player.MeshPalette
  *
  * This is presentation only. It does not grant identity to any artwork URL.
  */
-internal fun appleProminentArtworkOrNull(url: String?): String? {
+fun appleProminentArtworkOrNull(url: String?): String? {
     if (url.isNullOrBlank()) return null
     val uri = try { java.net.URI(url) } catch (_: Exception) { return null }
     val host = uri.host?.lowercase(java.util.Locale.ROOT) ?: return url
