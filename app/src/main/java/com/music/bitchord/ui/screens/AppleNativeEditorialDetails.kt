@@ -1,6 +1,7 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.components.NativeDetailTrackNumber
@@ -76,6 +78,7 @@ internal fun AppleNativeAlbumDetail(
     contentPadding: PaddingValues,
     listState: LazyListState = rememberLazyListState(),
 ) {
+    val openLink = LocalUriHandler.current
     when (state) {
         UiState.Loading -> AppleNativePending("Carregando álbum…")
         is UiState.Error -> AppleNativePending("Não foi possível carregar este álbum.")
@@ -160,13 +163,28 @@ internal fun AppleNativeAlbumDetail(
                     }
                     page.discogsAttributionText?.let { source ->
                         item(key = "apple:native:album:discogs") {
-                            // Attribution text, never a store badge.
-                            Text(
-                                source,
-                                color = palette.onBackgroundVariant,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(horizontal = PAGE_GUTTER, vertical = 16.dp),
-                            )
+                            // Source attribution remains functional without
+                            // reinstating any Apple/iTunes store emblem.
+                            Column(Modifier.padding(horizontal = PAGE_GUTTER, vertical = 16.dp)) {
+                                Text(
+                                    source,
+                                    color = palette.onBackgroundVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = page.discogsAttributionUrl?.let { sourceUrl ->
+                                        Modifier.clickable {
+                                            runCatching { openLink.openUri(sourceUrl) }
+                                        }
+                                    } ?: Modifier,
+                                )
+                                page.discogsNonAffiliationNotice?.let { notice ->
+                                    Text(
+                                        notice,
+                                        color = palette.onBackgroundVariant,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
