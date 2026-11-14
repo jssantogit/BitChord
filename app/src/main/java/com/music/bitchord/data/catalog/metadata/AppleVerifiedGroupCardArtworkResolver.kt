@@ -12,8 +12,9 @@ internal fun interface AppleGroupCardArtworkSource {
 
 /**
  * A ReleaseGroup shelf is work-scoped, not edition-scoped. It may use Apple
- * artwork only when the complete group browse proves exactly ONE eligible
- * Official MB edition; a first-ranked edition is not enough.
+ * artwork only when a complete group browse proves exactly ONE eligible
+ * Official audio MB edition. Additional bootleg/promo editions are not
+ * candidates, and the first-ranked edition is never sufficient evidence.
  *
  * The returned MB Release is only a candidate. The independent UPC + complete
  * tracklist + competing-edition check must still certify the Apple product.
@@ -23,20 +24,23 @@ internal fun uniqueAppleGroupCardEdition(
     requestedGroupMbid: String,
     page: MusicBrainzCatalogPage<MusicBrainzReleaseHit>,
 ): String? {
-    if (page.offset != 0 || page.total != 1 ||
-        page.consumedCount != 1 || page.items.size != 1
+    // A partial browse can hide another competing Official edition. Fail
+    // closed on incomplete, malformed, duplicated or huge result sets.
+    if (page.offset != 0 || page.total !in 1..100 ||
+        page.consumedCount != page.total || page.items.size != page.total ||
+        page.items.map { it.musicBrainzId.lowercase() }.distinct().size != page.total
     ) return null
-    val edition = page.items.single()
-    if (!edition.releaseGroupMbid.equals(requestedGroupMbid, ignoreCase = true) ||
-        edition.artistDisplay.isNullOrBlank() ||
-        !isCuratedMusicBrainzRelease(edition)
-    ) return null
-    return edition.musicBrainzId
+    if (page.items.any {
+        !it.releaseGroupMbid.equals(requestedGroupMbid, ignoreCase = true) ||
+            it.artistDisplay.isNullOrBlank()
+    }) return null
+    return page.items.filter(::isCuratedMusicBrainzRelease)
+        .singleOrNull()?.musicBrainzId
 }
 
 internal class AppleVerifiedGroupCardArtworkResolver(
     private val groups: AppleGroupCardEditionSource = AppleGroupCardEditionSource { group ->
-        MusicBrainzCatalogGraph().browseGroupReleases(group, limit = 2)
+        MusicBrainzCatalogGraph().browseGroupReleases(group, limit = 100)
     },
     private val editions: AppleGroupCardArtworkSource = run {
         val resolver = AppleVerifiedEditionArtworkResolver()
