@@ -1410,7 +1410,7 @@
     <string name="canonical_discovery_home_title">Ваша музыка</string>
     <string name="canonical_discovery_explore_title">Изучить каталог</string>
     <string name="canonical_discovery_description">Просматривайте коллекции на устройстве или ищите в MusicBrainz. Метаданные не гарантируют доступности аудио.</string>
-    <string name="canonical_discovery_search">Поиск в MusicBrainz</string>
+    <string name="canonical_discovery_search">Поиск по каталогу</string>
     <string name="canonical_discovery_open_library">Открыть медиатеку</string>
     <string name="canonical_discovery_downloaded_collections">Загруженные коллекции</string>
     <string name="canonical_discovery_local_playlists">Плейлисты на устройстве</string>

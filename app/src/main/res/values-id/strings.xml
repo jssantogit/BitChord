@@ -1355,7 +1355,7 @@
     <string name="canonical_discovery_home_title">Musik Anda</string>
     <string name="canonical_discovery_explore_title">Jelajahi katalog</string>
     <string name="canonical_discovery_description">Jelajahi koleksi yang tersimpan di perangkat atau cari di MusicBrainz. Metadata tidak menjamin audio dapat diputar.</string>
-    <string name="canonical_discovery_search">Cari di MusicBrainz</string>
+    <string name="canonical_discovery_search">Cari di katalog</string>
     <string name="canonical_discovery_open_library">Buka pustaka</string>
     <string name="canonical_discovery_downloaded_collections">Koleksi yang diunduh</string>
     <string name="canonical_discovery_local_playlists">Daftar putar tersimpan di perangkat</string>

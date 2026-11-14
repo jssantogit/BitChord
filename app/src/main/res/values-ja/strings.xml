@@ -1356,7 +1356,7 @@
     <string name="canonical_discovery_home_title">あなたの音楽</string>
     <string name="canonical_discovery_explore_title">カタログを探索</string>
     <string name="canonical_discovery_description">端末に保存したコレクションを表示するか、MusicBrainzで検索します。メタデータがあっても再生できる音源があるとは限りません。</string>
-    <string name="canonical_discovery_search">MusicBrainzで検索</string>
+    <string name="canonical_discovery_search">カタログを検索</string>
     <string name="canonical_discovery_open_library">ライブラリを開く</string>
     <string name="canonical_discovery_downloaded_collections">ダウンロード済みコレクション</string>
     <string name="canonical_discovery_local_playlists">端末に保存したプレイリスト</string>

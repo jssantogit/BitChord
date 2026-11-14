@@ -1418,7 +1418,7 @@
     <string name="canonical_discovery_home_title">Twoja muzyka</string>
     <string name="canonical_discovery_explore_title">Odkrywaj katalog</string>
     <string name="canonical_discovery_description">Przeglądaj kolekcje zapisane na urządzeniu lub wyszukuj w MusicBrainz. Metadane nie gwarantują dźwięku do odtworzenia.</string>
-    <string name="canonical_discovery_search">Szukaj w MusicBrainz</string>
+    <string name="canonical_discovery_search">Przeszukaj katalog</string>
     <string name="canonical_discovery_open_library">Otwórz bibliotekę</string>
     <string name="canonical_discovery_downloaded_collections">Pobrane kolekcje</string>
     <string name="canonical_discovery_local_playlists">Playlisty zapisane na urządzeniu</string>

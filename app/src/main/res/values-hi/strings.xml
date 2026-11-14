@@ -1378,7 +1378,7 @@
     <string name="canonical_discovery_home_title">आपका संगीत</string>
     <string name="canonical_discovery_explore_title">कैटलॉग एक्सप्लोर करें</string>
     <string name="canonical_discovery_description">डिवाइस पर सेव किए गए संग्रह देखें या MusicBrainz में खोजें। मेटाडेटा होने का मतलब ऑडियो उपलब्ध होना नहीं है।</string>
-    <string name="canonical_discovery_search">MusicBrainz में खोजें</string>
+    <string name="canonical_discovery_search">कैटलॉग खोजें</string>
     <string name="canonical_discovery_open_library">लाइब्रेरी खोलें</string>
     <string name="canonical_discovery_downloaded_collections">डाउनलोड किए गए संग्रह</string>
     <string name="canonical_discovery_local_playlists">डिवाइस पर सेव प्लेलिस्ट</string>

@@ -1317,7 +1317,7 @@
     <string name="canonical_discovery_home_title">La tua musica</string>
     <string name="canonical_discovery_explore_title">Esplora il catalogo</string>
     <string name="canonical_discovery_description">Sfoglia le raccolte salvate sul dispositivo o cerca su MusicBrainz. I metadati non garantiscono audio riproducibile.</string>
-    <string name="canonical_discovery_search">Cerca su MusicBrainz</string>
+    <string name="canonical_discovery_search">Cerca nel catalogo</string>
     <string name="canonical_discovery_open_library">Apri raccolta</string>
     <string name="canonical_discovery_downloaded_collections">Raccolte scaricate</string>
     <string name="canonical_discovery_local_playlists">Playlist salvate sul dispositivo</string>

@@ -1335,7 +1335,7 @@
     <string name="canonical_discovery_home_title">Müziğiniz</string>
     <string name="canonical_discovery_explore_title">Kataloğu keşfet</string>
     <string name="canonical_discovery_description">Cihazdaki kayıtlı koleksiyonları inceleyin veya MusicBrainz üzerinde arama yapın. Katalog verileri çalınabilir ses garantisi vermez.</string>
-    <string name="canonical_discovery_search">MusicBrainz ara</string>
+    <string name="canonical_discovery_search">Katalogda ara</string>
     <string name="canonical_discovery_open_library">Kitaplığı aç</string>
     <string name="canonical_discovery_downloaded_collections">İndirilen koleksiyonlar</string>
     <string name="canonical_discovery_local_playlists">Cihaza kaydedilen çalma listeleri</string>

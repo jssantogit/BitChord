@@ -1348,7 +1348,7 @@
     <string name="canonical_discovery_home_title">你的音乐</string>
     <string name="canonical_discovery_explore_title">探索目录</string>
     <string name="canonical_discovery_description">浏览此设备上的已保存合集，或搜索 MusicBrainz。目录元数据不代表音频一定可播放。</string>
-    <string name="canonical_discovery_search">搜索 MusicBrainz</string>
+    <string name="canonical_discovery_search">搜索目录</string>
     <string name="canonical_discovery_open_library">打开音乐库</string>
     <string name="canonical_discovery_downloaded_collections">已下载的合集</string>
     <string name="canonical_discovery_local_playlists">设备上保存的播放列表</string>

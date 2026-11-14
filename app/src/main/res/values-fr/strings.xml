@@ -1379,7 +1379,7 @@
     <string name="canonical_discovery_home_title">Votre musique</string>
     <string name="canonical_discovery_explore_title">Explorer le catalogue</string>
     <string name="canonical_discovery_description">Parcourez les collections enregistrées sur cet appareil ou recherchez sur MusicBrainz. Les métadonnées ne garantissent pas un fichier audio lisible.</string>
-    <string name="canonical_discovery_search">Rechercher sur MusicBrainz</string>
+    <string name="canonical_discovery_search">Rechercher dans le catalogue</string>
     <string name="canonical_discovery_open_library">Ouvrir la bibliothèque</string>
     <string name="canonical_discovery_downloaded_collections">Collections téléchargées</string>
     <string name="canonical_discovery_local_playlists">Playlists enregistrées sur cet appareil</string>

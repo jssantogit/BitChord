@@ -1383,7 +1383,7 @@
     <string name="canonical_discovery_home_title">המוזיקה שלך</string>
     <string name="canonical_discovery_explore_title">עיון בקטלוג</string>
     <string name="canonical_discovery_description">עיינו באוספים השמורים במכשיר או חפשו ב-MusicBrainz. נתוני קטלוג אינם מבטיחים שמע שניתן לנגן.</string>
-    <string name="canonical_discovery_search">חיפוש ב-MusicBrainz</string>
+    <string name="canonical_discovery_search">חיפוש בקטלוג</string>
     <string name="canonical_discovery_open_library">פתיחת הספרייה</string>
     <string name="canonical_discovery_downloaded_collections">אוספים שהורדו</string>
     <string name="canonical_discovery_local_playlists">רשימות השמעה שמורות במכשיר</string>

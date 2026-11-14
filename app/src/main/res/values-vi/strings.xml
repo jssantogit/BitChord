@@ -1295,7 +1295,7 @@
     <string name="canonical_discovery_home_title">Nhạc của bạn</string>
     <string name="canonical_discovery_explore_title">Khám phá danh mục</string>
     <string name="canonical_discovery_description">Duyệt bộ sưu tập đã lưu trên thiết bị hoặc tìm kiếm MusicBrainz. Siêu dữ liệu không đảm bảo có âm thanh phát được.</string>
-    <string name="canonical_discovery_search">Tìm trên MusicBrainz</string>
+    <string name="canonical_discovery_search">Tìm trong danh mục</string>
     <string name="canonical_discovery_open_library">Mở thư viện</string>
     <string name="canonical_discovery_downloaded_collections">Bộ sưu tập đã tải xuống</string>
     <string name="canonical_discovery_local_playlists">Danh sách phát lưu trên thiết bị</string>

@@ -1378,7 +1378,7 @@
     <string name="canonical_discovery_home_title">Deine Musik</string>
     <string name="canonical_discovery_explore_title">Katalog entdecken</string>
     <string name="canonical_discovery_description">Durchsuche gespeicherte Sammlungen auf diesem Gerät oder MusicBrainz. Katalogmetadaten garantieren keine abspielbaren Audiodateien.</string>
-    <string name="canonical_discovery_search">MusicBrainz durchsuchen</string>
+    <string name="canonical_discovery_search">Katalog durchsuchen</string>
     <string name="canonical_discovery_open_library">Bibliothek öffnen</string>
     <string name="canonical_discovery_downloaded_collections">Heruntergeladene Sammlungen</string>
     <string name="canonical_discovery_local_playlists">Auf diesem Gerät gespeicherte Playlists</string>

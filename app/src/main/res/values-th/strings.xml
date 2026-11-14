@@ -1361,7 +1361,7 @@
     <string name="canonical_discovery_home_title">เพลงของคุณ</string>
     <string name="canonical_discovery_explore_title">สำรวจแค็ตตาล็อก</string>
     <string name="canonical_discovery_description">เรียกดูคอลเล็กชันที่บันทึกไว้ในอุปกรณ์หรือค้นหา MusicBrainz ข้อมูลเมตาไม่ได้รับประกันว่าจะมีเสียงให้เล่น</string>
-    <string name="canonical_discovery_search">ค้นหา MusicBrainz</string>
+    <string name="canonical_discovery_search">ค้นหาในแค็ตตาล็อก</string>
     <string name="canonical_discovery_open_library">เปิดคลังเพลง</string>
     <string name="canonical_discovery_downloaded_collections">คอลเล็กชันที่ดาวน์โหลด</string>
     <string name="canonical_discovery_local_playlists">เพลย์ลิสต์ที่บันทึกในอุปกรณ์</string>
