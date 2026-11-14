@@ -96,6 +96,42 @@ class AppleMusicBrainzEditionMatcherTest {
             match.recordingLinks.map { it.appleScopedId to it.musicBrainzRecordingId })
     }
 
+    @Test fun exactMusicBrainzReleaseLinkCanProveCompleteEditionWithoutBarcode() {
+        val linked = candidate(barcode = null).copy(
+            linkedAppleAlbumIds = listOf(101L),
+        )
+        val album = apple(upc = null)
+        assertFalse(
+            AppleMusicBrainzEditionMatcher.match(album, listOf(linked))
+                is AppleMusicBrainzEditionMatch.Verified,
+        )
+        val proof = AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(album, linked)
+        assertTrue(proof is AppleMusicBrainzEditionMatch.Verified)
+        assertEquals(releaseId,
+            (proof as AppleMusicBrainzEditionMatch.Verified).musicBrainzReleaseId)
+    }
+
+    @Test fun linkedAlbumEditionMustStillMatchExactAppleIdAndTracklist() {
+        val linked = candidate(barcode = null).copy(
+            linkedAppleAlbumIds = listOf(101L),
+        )
+        assertFalse(AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
+            apple(upc = null, appleId = 102), linked,
+        ) is AppleMusicBrainzEditionMatch.Verified)
+        assertFalse(AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
+            apple(upc = null, tracks = listOf(
+                song(201, "Magnetic", 1), song(202, "My World", 2),
+            )), linked,
+        ) is AppleMusicBrainzEditionMatch.Verified)
+        assertFalse(AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
+            apple(upc = null), linked.copy(hasCompleteTracklist = false),
+        ) is AppleMusicBrainzEditionMatch.Verified)
+        assertFalse(AppleMusicBrainzEditionMatcher.matchExplicitLinkedAlbum(
+            apple(upc = "9999999999999"),
+            linked.copy(barcode = "8801234567890"),
+        ) is AppleMusicBrainzEditionMatch.Verified)
+    }
+
     @Test fun missingBarcodeOrPartialAppleTracklistCannotProveEdition() {
         assertFalse(AppleMusicBrainzEditionMatcher.match(apple(upc = null),
             listOf(candidate())) is AppleMusicBrainzEditionMatch.Verified)
