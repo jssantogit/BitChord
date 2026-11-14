@@ -9,6 +9,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesEditorialCatalog
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItem
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialRelease
 import com.music.bitchord.data.catalog.metadata.ItunesEditorialReleaseFormat
+import com.music.bitchord.data.catalog.metadata.appleApprovedBadgeForStoreUrl
 import com.music.bitchord.ui.screens.AppleEditorialAlbumDetailPage
 import com.music.bitchord.ui.screens.AppleEditorialArtistDetailPage
 import com.music.bitchord.ui.screens.AppleEditorialSearchKind
@@ -49,6 +50,7 @@ private fun ItunesEditorialRelease.asNativeSearchRow(): AppleEditorialSearchRow?
         ?.takeIf { it.kind == ItunesCatalogItemType.ALBUM &&
             it.storefront == storefront && it.id == appleCollectionId } ?: return null
     if (title.isBlank() || artistName.isBlank()) return null
+    val badge = appleApprovedBadgeForStoreUrl(storeUrl)
     return AppleEditorialSearchRow(
         browseId = appleScopedId,
         title = title,
@@ -62,6 +64,8 @@ private fun ItunesEditorialRelease.asNativeSearchRow(): AppleEditorialSearchRow?
             ItunesEditorialReleaseFormat.UNCLASSIFIED ->
                 AppleEditorialReleaseCategory.UNCLASSIFIED
         },
+        appleStoreUrl = storeUrl?.takeIf { badge != null },
+        appleStoreBadgeUrl = badge,
     )
 }
 
@@ -196,6 +200,10 @@ internal fun appleNativeArtistSearchRows(
         artworkUri = artist.artworkUrl,
         releaseDate = null,
         kind = AppleEditorialSearchKind.ARTIST,
+        appleStoreUrl = artist.storeUrl?.takeIf {
+            appleApprovedBadgeForStoreUrl(it) != null
+        },
+        appleStoreBadgeUrl = appleApprovedBadgeForStoreUrl(artist.storeUrl),
     )
 }
 
@@ -245,5 +253,9 @@ internal fun appleNativeTrackSearchRows(
         artworkUri = track.artworkUrl,
         albumBrowseId = albumRoute?.let { "itunes:${it.storefront}:album:${it.id}" },
         durationMs = track.durationMs,
+        appleStoreUrl = track.storeUrl?.takeIf {
+            appleApprovedBadgeForStoreUrl(it) != null
+        },
+        appleStoreBadgeUrl = appleApprovedBadgeForStoreUrl(track.storeUrl),
     )
 }
