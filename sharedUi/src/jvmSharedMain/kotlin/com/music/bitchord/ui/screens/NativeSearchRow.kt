@@ -33,6 +33,7 @@ import com.music.bitchord.data.model.ROW_ART_PX
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.ResilientAppleCover
 import com.music.bitchord.ui.components.contextClick
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.thumbnailBorder
@@ -81,7 +82,7 @@ fun NativeSearchResultRow(
     ) {
         Box(Modifier.size(52.dp)) {
             val shape = if (row.artistPortrait) CircleShape else RoundedCornerShape(8.dp)
-            AsyncImage(
+            ResilientAppleCover(
                 model = row.artworkUri.artworkAt(ROW_ART_PX),
                 contentDescription = null,
                 modifier = Modifier
