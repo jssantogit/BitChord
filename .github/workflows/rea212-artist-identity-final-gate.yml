@@ -1,0 +1,38 @@
+name: REA212 artist identity key focused validation
+on:
+  push:
+    branches: [validation/rea212-artist-scroll-identity-ff238d9-20261114]
+permissions:
+  contents: read
+jobs:
+  android-focused:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 5
+      - name: Check source matches PR code exactly
+        run: |
+          set -euo pipefail
+          git diff --exit-code ff238d9e2a4c9e1ff99c2fedc03e12cc15e96adc HEAD -- app sharedUi shared
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: temurin
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure Android test prerequisites
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+          chmod +x gradlew
+      - name: Verify final identity and artwork policy
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest --tests "com.music.bitchord.ui.screens.NativeCanonicalArtistScrollStateTest" --tests "com.music.bitchord.ui.screens.NativeAlbumTrackArtworkEvidenceTest" --tests "com.music.bitchord.ui.screens.NativeCanonicalAlbumArtworkTest" --tests "com.music.bitchord.ui.screens.CanonicalArtistDetailStateTest"
+      - name: Upload failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-artist-identity-tests-${{ github.sha }}
+          path: app/build/reports/tests/
+          if-no-files-found: ignore
+          retention-days: 3
