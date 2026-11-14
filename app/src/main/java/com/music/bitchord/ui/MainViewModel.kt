@@ -3686,7 +3686,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         onProgress = { releases ->
                             if (appleHomeEpoch.isCurrent(generation) &&
                                 isCanonicalDiscoverySelected()
-                            ) _appleHomeReleases.value = UiState.Success(releases)
+                            ) _appleHomeReleases.update { state ->
+                                UiState.Success(appleReleasesPreservingVerifiedArtwork(
+                                    releases,
+                                    (state as? UiState.Success)?.data.orEmpty(),
+                                ))
+                            }
                         },
                     )
             } catch (cancelled: CancellationException) {
@@ -3702,7 +3707,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _appleHomeProbeReport.value = result.probeReport
                     com.music.bitchord.data.catalog.metadata
                         .recordAppleEditorialProbeReport("home", result.probeReport)
-                    UiState.Success(result.releases)
+                    UiState.Success(appleReleasesPreservingVerifiedArtwork(
+                        result.releases,
+                        (_appleHomeReleases.value as? UiState.Success)?.data.orEmpty(),
+                    ))
                 }
                 is AppleEditorialLoad.Failure -> {
                     _appleHomeProbeReport.value = result.probeReport
@@ -4043,8 +4051,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             if (releases.isNotEmpty() &&
                                 appleGenreEpoch.isCurrent(generation) &&
                                 appleGenreActiveTag == tag
-                            ) _appleGenreReleases.update {
-                                it + (tag to UiState.Success(releases))
+                            ) _appleGenreReleases.update { state ->
+                                val old = (state[tag] as? UiState.Success)?.data.orEmpty()
+                                state + (tag to UiState.Success(
+                                    appleReleasesPreservingVerifiedArtwork(releases, old),
+                                ))
                             }
                         },
                     )
@@ -4064,7 +4075,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             com.music.bitchord.data.catalog.metadata
                                 .recordAppleEditorialProbeReport("genre", report)
                         }
-                        UiState.Success(result.releases)
+                        UiState.Success(appleReleasesPreservingVerifiedArtwork(
+                            result.releases,
+                            (old[tag] as? UiState.Success)?.data.orEmpty(),
+                        ))
                     }
                     is AppleEditorialLoad.Failure -> {
                         result.probeReport?.let { report ->
