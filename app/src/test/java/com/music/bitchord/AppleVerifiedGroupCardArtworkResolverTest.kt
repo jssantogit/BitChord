@@ -57,6 +57,40 @@ class AppleVerifiedGroupCardArtworkResolverTest {
             page(edition().copy(isVideoOnlyMedia = true))))
     }
 
+    @Test fun oneOfficialEditionAmongCompleteBootlegVariantsIsSafe() {
+        val mixed = page(
+            edition(status = "Bootleg"),
+            edition(alternate, status = "Official"),
+            edition("bc36ebc6-d875-46ea-88c7-b644e93c151e", status = "Promotion"),
+        )
+        assertEquals(alternate, uniqueAppleGroupCardEdition(group, mixed))
+        assertNull(uniqueAppleGroupCardEdition(group, page(
+            edition(), edition(alternate), total = 3,
+        )))
+        assertNull(uniqueAppleGroupCardEdition(group, page(
+            edition(), edition(alternate),
+        )))
+    }
+
+    @Test fun verifiedOfficialEditionIsSelectedFromCompleteMixedStatusGroup() = runBlocking {
+        var checkedId: String? = null
+        val resolver = AppleVerifiedGroupCardArtworkResolver(
+            groups = AppleGroupCardEditionSource {
+                MusicBrainzCatalogGraphResult.Success(page(
+                    edition(status = "Bootleg"),
+                    edition(alternate, status = "Official"),
+                ))
+            },
+            editions = AppleGroupCardArtworkSource { id, _ ->
+                checkedId = id
+                verified.copy(musicBrainzReleaseId = alternate)
+            },
+        )
+        assertEquals(alternate,
+            resolver.resolve(group, "br")?.musicBrainzReleaseId)
+        assertEquals(alternate, checkedId)
+    }
+
     @Test fun eligibleCardReceivesOnlyTheExactAppleProductWithAttribution() = runBlocking {
         var lookups = 0
         val resolver = AppleVerifiedGroupCardArtworkResolver(
