@@ -129,6 +129,71 @@ class AppleVerifiedEditionArtworkResolverTest {
         assertEquals(1, reads)
     }
 
+    @Test fun explicitMusicBrainzReleaseAppleAlbumLinkProvesNoBarcodeEdition() = runBlocking {
+        var directReads = 0
+        val resolver = AppleVerifiedEditionArtworkResolver(
+            edition = AppleArtworkEditionSource {
+                mb().copy(barcode = null, linkedAppleAlbumIds = listOf(101L))
+            },
+            upc = AppleArtworkUpcSource { _, _ ->
+                error("barcode lookup cannot run without a barcode")
+            },
+            linked = AppleArtworkLinkedAlbumSource { appleId, country ->
+                assertEquals(101L, appleId)
+                assertEquals("br", country)
+                directReads++
+                response()
+            },
+        )
+        val verified = resolver.resolve(id, "br")
+        assertEquals(art, verified?.artworkUrl)
+        assertEquals(store, verified?.storeUrl)
+        assertEquals("itunes:br:album:101", verified?.appleScopedId)
+        assertEquals(verified, resolver.resolve(id, "br"))
+        assertEquals(1, directReads)
+    }
+
+    @Test fun linkedAppleIdNeverBorrowedFromAnotherProductOrTracklist() = runBlocking {
+        for (appleResponse in listOf(
+            response().copy(items = response().items.map { item ->
+                if (item.type == ItunesCatalogItemType.ALBUM)
+                    item.copy(id = 202, collectionId = 202)
+                else item
+            }),
+            response().copy(items = response().items.map { item ->
+                if (item.type == ItunesCatalogItemType.TRACK)
+                    item.copy(title = "Different Song")
+                else item
+            }),
+            response().copy(possiblyTruncated = true),
+        )) {
+            val resolver = AppleVerifiedEditionArtworkResolver(
+                edition = AppleArtworkEditionSource {
+                    mb().copy(barcode = null, linkedAppleAlbumIds = listOf(101L))
+                },
+                upc = AppleArtworkUpcSource { _, _ -> error("no UPC") },
+                linked = AppleArtworkLinkedAlbumSource { _, _ -> appleResponse },
+            )
+            assertNull(resolver.resolve(id, "br"))
+        }
+    }
+
+    @Test fun competingExplicitAppleLinksAreInconclusiveNotFirstResultWins() = runBlocking {
+        var directCalls = 0
+        val resolver = AppleVerifiedEditionArtworkResolver(
+            edition = AppleArtworkEditionSource {
+                mb().copy(barcode = null, linkedAppleAlbumIds = listOf(101L, 102L))
+            },
+            upc = AppleArtworkUpcSource { _, _ -> error("no UPC") },
+            linked = AppleArtworkLinkedAlbumSource { _, _ ->
+                directCalls++
+                response()
+            },
+        )
+        assertNull(resolver.resolve(id, "br"))
+        assertEquals(0, directCalls)
+    }
+
     @Test fun failingOrMissingBarcodeNeverRequestsApple() = runBlocking {
         var calls = 0
         val resolver = AppleVerifiedEditionArtworkResolver(
