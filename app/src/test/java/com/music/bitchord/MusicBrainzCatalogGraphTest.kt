@@ -94,6 +94,43 @@ class MusicBrainzCatalogGraphTest {
     private val original = "e614e432-ca77-41c1-82c1-4e3a24ebbb0c"
     private val sped = "3e619ba2-34f0-4649-83d8-05483e2fabe5"
 
+    @Test fun exactReleaseGraphReadsOnlyDirectAppleAlbumUrlRelations() = runBlocking {
+        val trackId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        val recordingId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        val graph = MusicBrainzCatalogGraph(MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    assertEquals("release/$worldwide", path)
+                    assertTrue(parameters["inc"]?.contains("url-rels") == true)
+                    return """{"id":"$worldwide","title":"SUPER REAL ME","status":"Official",
+                        "release-group":{"id":"$group"},
+                        "artist-credit":[{"name":"ILLIT"}],
+                        "media":[{"position":1,"track-count":1,"tracks":[{
+                            "id":"$trackId","title":"Magnetic","position":1,
+                            "recording":{"id":"$recordingId","title":"Magnetic"}
+                        }]}],
+                        "relations":[
+                            {"type":"streaming","target-type":"url","url":{
+                                "resource":"https://music.apple.com/us/album/super-real-me/101"
+                            }},
+                            {"type":"official homepage","target-type":"url","url":{
+                                "resource":"https://music.apple.com/us/album/other/102"
+                            }}
+                        ]}"""
+                }
+            },
+            rateLimiter = com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter(
+                delayMillis = {},
+            ),
+        ))
+        val result = graph.lookupRelease(worldwide) as
+            MusicBrainzCatalogGraphResult.Success<MusicBrainzCatalogReleaseDetail>
+        assertEquals(listOf(101L), result.value.linkedAppleAlbumIds)
+        assertEquals(group, result.value.groupMbid)
+    }
+
     @Test fun releaseGraphPreservesExplicitZeroPositionsAsCompleteEvidence() = runBlocking {
         val track = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         val recording = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
