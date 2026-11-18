@@ -266,6 +266,7 @@ internal fun canonicalArtistRatingTarget(
 internal data class CanonicalArtistRatingUiState(
     val target: CanonicalEntityRatingTarget?,
     val rated: Boolean = false,
+    val value: Double? = null,
 )
 
 /**
@@ -287,7 +288,12 @@ internal fun rememberCanonicalArtistRating(
         ListeningEventDatabase.get(context).canonicalEntityRatingDao()
             .observe(target.entityType, target.entityId)
             .collectLatest { saved ->
-                value = CanonicalArtistRatingUiState(target, rated = saved != null)
+                val score = saved?.ratingValue?.takeIf(::isValidCanonicalEntityRating)
+                value = CanonicalArtistRatingUiState(
+                    target = target,
+                    rated = score != null,
+                    value = score,
+                )
             }
     }
 }

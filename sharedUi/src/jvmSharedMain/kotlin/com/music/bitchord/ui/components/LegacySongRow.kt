@@ -131,14 +131,8 @@ fun SongRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongPress: (() -> Unit)? = null,
-    /**
-     * What the trailing ⋮ does, when it should differ from [onLongPress].
-     *
-     * Defaults to the long-press, since on most pages the two are the same
-     * menu. Downloads is the exception: holding a row there starts a
-     * multi-selection, and the ⋮ has to stay the actions sheet rather than
-     * silently tick a checkbox.
-     */
+    /** Optional desktop/accessibility secondary-click callback. No song row
+     * renders an inline ⋮; Android uses its long-press action instead. */
     onMore: (() -> Unit)? = null,
     onSwipeToQueue: (() -> Unit)? = null,
     /**
@@ -181,6 +175,9 @@ fun SongRow(
     activeTint: Color = MaterialTheme.colorScheme.primary,
     /** Search results use artwork bars instead of the usual current-song icon. */
     searchPlayingStyle: Boolean = false,
+    /** Legacy parameter for source adapters; never draws a trailing ⋮.
+     * Its only possible effect is a secondary-click callback. */
+    showMoreButton: Boolean = false,
     /** True while a Downloads row belongs to the current multi-selection. */
     selected: Boolean = false,
     /**
@@ -194,13 +191,14 @@ fun SongRow(
         onSwipeToQueue = onSwipeToQueue,
         rowBackground = rowBackground,
         modifier = modifier,
-    ) { rowModifier ->
+    ) { rowModifier, swipeCover ->
         SongRowContent(
             song = song,
             onClick = onClick,
             onLongPress = onLongPress,
-            onMore = onMore ?: onLongPress,
+            onMore = if (showMoreButton) onMore ?: onLongPress else null,
             modifier = rowModifier,
+            swipeCover = swipeCover,
             trackNumber = trackNumber,
             subtitleColor = subtitleColor,
             downloadedTint = downloadedTint,
@@ -222,6 +220,7 @@ private fun SongRowContent(
     onLongPress: (() -> Unit)?,
     onMore: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    swipeCover: Color = Color.Transparent,
     trackNumber: Int? = null,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     downloadedTint: Color? = MaterialTheme.colorScheme.primary,
@@ -250,7 +249,7 @@ private fun SongRowContent(
         onMore = onMore,
         modifier = modifier,
         opacity = if (unavailable) 0.45f else 1f,
-        background = activeBackground,
+        background = nativeCapturedSwipeRowBackground(swipeCover, activeBackground),
         textGap = if (trackNumber == null) 14.dp else PAGE_GUTTER,
         leading = {
             if (trackNumber != null) {
@@ -325,11 +324,6 @@ private fun SongRowContent(
                     strokeWidth = 2.dp,
                     color = subtitleColor,
                 )
-            }
-        },
-        actions = {
-            if (onMore != null && !matching && !unavailable) {
-                RowMoreButton(onClick = onMore, tint = subtitleColor)
             }
         },
     )

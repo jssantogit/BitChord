@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import com.music.bitchord.sharedui.resources.*
 import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
+import com.music.bitchord.ui.components.NativeMediaCardMetrics
 import com.music.bitchord.ui.components.contextClick
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.icons.BitChordIcons
@@ -48,7 +49,7 @@ internal fun NativeShelfCard(
             .contextClick(onLongPress),
     ) {
         artwork()
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(NativeMediaCardMetrics.shelfCaptionGap))
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,

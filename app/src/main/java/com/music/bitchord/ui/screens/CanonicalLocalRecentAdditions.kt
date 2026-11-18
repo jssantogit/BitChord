@@ -1,15 +1,23 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.compose.foundation.clickable
+import com.music.bitchord.ui.components.longPressMenuClickable
+import com.music.bitchord.ui.components.NativeInlineTextAction
+import com.music.bitchord.playback.CanonicalCollectionIntent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -48,6 +56,7 @@ import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.ShelfRow
+import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -198,6 +207,9 @@ internal fun CanonicalLocalRecentAdditions(
     viewType: LibraryViewType = LibraryViewType.GRID,
     sourceKey: String? = null,
     stars: Int? = null,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val database = remember(context) { CanonicalCatalogDatabase.get(context) }
@@ -297,6 +309,8 @@ internal fun CanonicalLocalRecentAdditions(
                     dates = RecentLocalAdditionsSnapshot.dates(),
                 ),
                 onPlayTrack = onPlayTrack,
+                onTrackAction = onTrackAction,
+                onTrackHold = onTrackHold,
                 contentPadding = contentPadding,
                 loading = recent == null && !loadFailed,
                 error = loadFailed,
@@ -309,7 +323,8 @@ internal fun CanonicalLocalRecentAdditions(
             )
         }
     } else if (recent != null) {
-        CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll)
+        CanonicalRecentAdditionsShelf(recent.orEmpty(), onPlayTrack, onSeeAll,
+            onTrackAction = onTrackAction, onTrackHold = onTrackHold)
     } else if (loadFailed) {
         Text(
             "Não foi possível consultar as adições locais.",
@@ -317,12 +332,9 @@ internal fun CanonicalLocalRecentAdditions(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     } else {
-        Box(
-            Modifier.fillMaxWidth().height(96.dp).testTag("native-recent-shelf-loading"),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp))
-        }
+        NativeLoadingSpinner(
+            modifier = Modifier.height(96.dp).testTag("native-recent-shelf-loading"),
+        )
     }
 }
 
@@ -332,6 +344,9 @@ internal fun CanonicalRecentAdditionsShelf(
     recent: List<V2DisplayRow>,
     onPlayTrack: (String) -> Unit,
     onSeeAll: () -> Unit = {},
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     if (recent.isEmpty()) return
     Column(
@@ -345,11 +360,11 @@ internal fun CanonicalRecentAdditionsShelf(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                "Adições recentes",
+                "Adições Recentes",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
-            TextButton(onClick = onSeeAll) { Text("Ver todos") }
+            NativeInlineTextAction(label = "Ver todos", onClick = onSeeAll)
         }
         // The Library already has a snapping/lazy shelf; reuse it rather than
         // recreating a horizontalScroll Row for recent local recordings.
@@ -360,8 +375,10 @@ internal fun CanonicalRecentAdditionsShelf(
             items(recent, key = { it.id }) { track ->
                 CanonicalRecentAdditionCard(
                     track = track,
-                    modifier = Modifier.width(142.dp),
+                    modifier = Modifier.width(SHELF_CARD_WIDTH),
                     onClick = { onPlayTrack(track.id) },
+                    onTrackAction = onTrackAction,
+                    onTrackHold = onTrackHold,
                 )
             }
         }
@@ -374,9 +391,17 @@ private fun CanonicalRecentAdditionCard(
     track: V2DisplayRow,
     modifier: Modifier,
     onClick: () -> Unit,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     Column(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier
+            .testTag("canonical-recent-card")
+            .longPressMenuClickable(
+                onClick = onClick,
+                onLongClick = onTrackHold?.let { hold -> { hold(track) } },
+            ),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         androidx.compose.foundation.layout.Box(
@@ -401,6 +426,10 @@ private fun CanonicalRecentAdditionCard(
     }
 }
 
+/** The parent already uses topBarContentPadding(). Only a small animated
+ * breathing space belongs between that bar and the inline search field. */
+internal val recentAdditionsSearchTopClearance = 2.dp
+
 /** Reuses LocalFolder's canonical two-column grid layout and card. */
 @Composable
 internal fun CanonicalRecentAdditionsGrid(
@@ -414,34 +443,48 @@ internal fun CanonicalRecentAdditionsGrid(
     onQueryChange: (String) -> Unit = {},
     viewType: LibraryViewType = LibraryViewType.GRID,
     filterActive: Boolean = false,
+    onTrackAction: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    /** Consumed by the owning full-window lifted preview, when available. */
+    onTrackHold: ((V2DisplayRow) -> Unit)? = null,
 ) {
     if (loading && recent.isEmpty()) {
         // Initial MediaStore projection can be expensive. The same native
         // spinner already used in playlists belongs in the center of the
         // content, not a text-only row at the upper-left corner.
-        Box(
+        NativeLoadingSpinner(
             modifier = Modifier.fillMaxSize().testTag("native-recent-loading"),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator(modifier = Modifier.size(28.dp))
-        }
+        )
         return
     }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = contentPadding,
     ) {
-        if (showSearch) item(key = "recent-search") {
-            DetailSearchField(
-                query = query,
-                onQueryChange = onQueryChange,
-                onClose = { onQueryChange("") },
-                autoFocus = true,
-                onFocused = {},
-                palette = themeArtworkPalette(),
-                placeholder = "Pesquisar em adições recentes",
-                horizontalInset = PAGE_GUTTER,
-            )
+        item(key = "recent-search") {
+            // Keeping the item mounted lets the field expand the content
+            // gently downward. Its parent already reserves the floating top
+            // toolbar, so another 88dp spacer produced an enormous void.
+            AnimatedVisibility(
+                visible = showSearch,
+                enter = expandVertically(animationSpec = tween(200)) + fadeIn(tween(160)),
+                exit = shrinkVertically(animationSpec = tween(180)) + fadeOut(tween(140)),
+            ) {
+                Column(Modifier.padding(
+                    top = recentAdditionsSearchTopClearance,
+                    bottom = 8.dp,
+                )) {
+                    DetailSearchField(
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        onClose = { onQueryChange("") },
+                        autoFocus = true,
+                        onFocused = {},
+                        palette = themeArtworkPalette(),
+                        placeholder = "Pesquisar em adições recentes",
+                        horizontalInset = PAGE_GUTTER,
+                    )
+                }
+            }
         }
         if (recent.isEmpty()) item {
             Text(
@@ -464,6 +507,7 @@ internal fun CanonicalRecentAdditionsGrid(
                         SmartPlaylistPreviewArtwork(track, Modifier.fillMaxSize())
                     },
                     onClick = { onPlayTrack(track.id) },
+                    onLongPress = onTrackHold?.let { hold -> { hold(track) } },
                     horizontalPadding = PAGE_GUTTER,
                     artworkSize = 52.dp,
                 )
@@ -473,6 +517,8 @@ internal fun CanonicalRecentAdditionsGrid(
                 CanonicalRecentAdditionCard(
                     track = track, modifier = Modifier.fillMaxWidth(),
                     onClick = { onPlayTrack(track.id) },
+                    onTrackAction = onTrackAction,
+                    onTrackHold = onTrackHold,
                 )
             }
         }

@@ -8,6 +8,8 @@ import com.music.bitchord.data.catalog.metadata.ListenBrainzPublicPlaylistTrack
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -38,7 +40,6 @@ import android.net.Uri
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -56,10 +57,17 @@ import com.music.bitchord.data.model.UiState
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.NativeDetailTrackArtwork
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.NativeInlineTextAction
+import com.music.bitchord.ui.components.HeldContextMenu
+import com.music.bitchord.ui.components.HeldItem
+import com.music.bitchord.ui.components.LongPressOrigin
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+
+/** Match the rounded 52dp sleeves used by the canonical Library track rows. */
+internal fun publicPlaylistTrackCoverShape() = RoundedCornerShape(8.dp)
 
 /** Warm only the first visible public sleeves and the exact hero.
  * The shared Coil planner enforces the same trusted-URL policy everywhere. */
@@ -166,10 +174,48 @@ internal fun CanonicalPublicPlaylistDetailScreen(
     }
     val availableIds = catalogRows.mapTo(HashSet()) { it.id }
     val palette = rememberArtworkPalette(imageUrl = playlist.artworkUrl)
+    var heldMetadataTrack by remember(playlist.mbid) {
+        mutableStateOf<Triple<String, String, String>?>(null)
+    }
+    var heldMetadataOrigin by remember(playlist.mbid) {
+        mutableStateOf<HeldItem?>(null)
+    }
+    val dismissHeldMetadata: () -> Unit = {
+        heldMetadataTrack = null
+        heldMetadataOrigin = null
+    }
     NativePlaylistDetailFrame(
         palette = palette,
         listState = listState,
         bottomPadding = contentPadding.calculateBottomPadding(),
+        heldActions = { hazeState ->
+            HeldContextMenu(
+                item = heldMetadataTrack,
+                held = heldMetadataOrigin,
+                hazeState = hazeState,
+                hostProvidesBlur = true,
+                bottomChromeClearance = maxOf(154.dp, contentPadding.calculateBottomPadding()),
+                plateTint = palette.elevated,
+                onDismiss = dismissHeldMetadata,
+                onPreviewClick = if (heldMetadataTrack?.first?.let { it in availableIds } == true) {
+                    { chosen ->
+                        dismissHeldMetadata()
+                        onVerifiedRecordingPlay(chosen.first)
+                    }
+                } else null,
+            ) { (recording, title, artist) ->
+                CanonicalMetadataRecordingHeldActions(
+                    recordingId = recording,
+                    title = title,
+                    artist = artist,
+                    onDismiss = dismissHeldMetadata,
+                    onRate = { editingRecording = it },
+                    onAddToPlaylist = { id, label, credit ->
+                        addingRecording = Triple(id, label, credit)
+                    },
+                )
+            }
+        },
     ) {
         item(key = "public-playlist-cover") {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -183,7 +229,9 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                     onRate = if (ratingTarget != null) ({ editingRating = true }) else null,
                     sleeveSize = maxWidth * .76f,
                     artwork = {
-                        Box(Modifier.fillMaxSize()) {
+                        // The Library's custom-cover branch clips its whole
+                        // sleeve, not just the fallback underneath the image.
+                        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp))) {
                             CanonicalPlaylistCoverArt(
                                 rows = emptyList(), modifier = Modifier.fillMaxSize(),
                             )
@@ -247,15 +295,16 @@ internal fun CanonicalPublicPlaylistDetailScreen(
         }
         when (state) {
             UiState.Loading -> item(key = "public-playlist-loading") {
-                NativeLoadingSpinner()
+                NativeLoadingSpinner(modifier = Modifier.fillParentMaxHeight(0.62f))
             }
             is UiState.Error -> item(key = "public-playlist-error") {
                 Text(state.message, color = palette.onBackgroundVariant,
                     modifier = Modifier.padding(horizontal = PAGE_GUTTER))
-                TextButton(onClick = onRetry,
-                    modifier = Modifier.padding(horizontal = PAGE_GUTTER)) {
-                    Text("Tentar novamente")
-                }
+                NativeInlineTextAction(
+                    label = "Tentar novamente",
+                    onClick = onRetry,
+                    modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+                )
             }
             is UiState.Success -> {
                 if (entries.isEmpty()) item(key = "public-playlist-empty") {
@@ -271,21 +320,25 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                     val playable = recordingId != null && recordingId in availableIds
                     val coverUri = entry.artworkUrl
                         ?: catalogRows.firstOrNull { it.id == recordingId }?.localArtworkUri
-                    var menuExpanded by remember(playlist.mbid, originalIndex) {
-                        mutableStateOf(false)
-                    }
                     NativeDetailTrackRowLayout(
                         onClick = if (playable && recordingId != null)
                             ({ onVerifiedRecordingPlay(recordingId) }) else null,
                         onLongPress = if (recordingId?.let(::isVerifiedCatalogRecordingId) == true)
-                            ({ menuExpanded = true }) else null,
-                        onMore = if (recordingId?.let(::isVerifiedCatalogRecordingId) == true)
-                            ({ menuExpanded = true }) else null,
+                            ({
+                                LongPressOrigin.consume()?.let { origin ->
+                                    heldMetadataOrigin = origin
+                                    heldMetadataTrack = Triple(
+                                        recordingId!!, entry.title, entry.artist,
+                                    )
+                                }
+                            }) else null,
+                        onMore = null,
                         opacity = 1f,
                         leading = {
                             NativeDetailTrackArtwork(showPlayingBars = false) {
                                 Box(
                                     Modifier.fillMaxSize()
+                                        .clip(publicPlaylistTrackCoverShape())
                                         .background(MaterialTheme.colorScheme.surfaceVariant),
                                     contentAlignment = Alignment.Center,
                                 ) {
@@ -319,22 +372,8 @@ internal fun CanonicalPublicPlaylistDetailScreen(
                         },
                         rating = {},
                         showRatingSlot = false,
-                        actions = {
-                            CanonicalMetadataTrackMore(
-                                recordingId = recordingId,
-                                title = entry.title,
-                                artist = entry.artist,
-                                palette = palette,
-                                expanded = menuExpanded,
-                                onOpen = { menuExpanded = true },
-                                onDismiss = { menuExpanded = false },
-                                onRate = { editingRecording = it },
-                                onAddToPlaylist = { id, title, artist ->
-                                    addingRecording = Triple(id, title, artist)
-                                },
-                                tag = "public-playlist-track-more-$originalIndex",
-                            )
-                        },
+                        actions = {},
+
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(start = 80.dp),

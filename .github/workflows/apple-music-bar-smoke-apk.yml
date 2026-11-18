@@ -1,0 +1,105 @@
+name: Apple Music Bottom Bar · Smoke APK
+
+on:
+  # Explicit label remains supported when the workflow is available to the PR.
+  pull_request:
+    types: [labeled]
+  # This branch-scoped request is reliable even while PR checks are not
+  # emitted for a workflow defined only on the experiment branch.
+  # Only a user-authorized request document can trigger a build.
+  push:
+    branches: [experiment/apple-music-bottom-bar-pr209-20261108]
+    paths: [docs/rea212-motion-smoke-request.md]
+
+# This workflow exists only on the experimental PR branch.
+# It is not a release pipeline and does not publish a signed production app.
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-music-bottom-bar-apk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dev-debug-apk:
+    if: (github.event_name == 'pull_request' && github.event.pull_request.number == 212 && github.head_ref == 'experiment/apple-music-bottom-bar-pr209-20261108' && github.event.label.name == 'apple-music-smoke') || (github.event_name == 'push' && github.ref == 'refs/heads/experiment/apple-music-bottom-bar-pr209-20261108')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Configure local build properties
+        run: |
+          echo "LASTFM_API_KEY=${{ secrets.LASTFM_API_KEY }}" > local.properties
+          echo "LASTFM_SECRET=${{ secrets.LASTFM_SECRET }}" >> local.properties
+      # The physical smoke APK must be generated only from a tested HEAD.
+      # Do not weaken these gates to get an artifact if a motion regression fails.
+      - name: Verify focused rating UI tests before the full suite
+        run: |
+          ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest \
+            --tests "com.music.bitchord.ui.screens.CanonicalRatingAnchorRoutesTest" \
+            --tests "com.music.bitchord.ui.screens.NativeFrostedRatingInteractionTest" \
+            --tests "com.music.bitchord.ui.screens.CanonicalRecordingFeedbackControlsTest.numericRatingStyleShowsOneV3DigitPerSelectedStar"
+      - name: Run Android unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew --build-cache -Pbitchord.bundleWear=false :app:testDevDebugUnitTest
+      - name: Explain Android test failures
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+          root = Path("app/build/test-results/testDevDebugUnitTest")
+          for path in sorted(root.rglob("TEST-*.xml")):
+              try:
+                  tree = ET.parse(path)
+              except ET.ParseError:
+                  continue
+              for case in tree.iter("testcase"):
+                  failure = case.find("failure")
+                  if failure is not None:
+                      print(f"\nFAILED {case.get('classname')}.{case.get('name')}")
+                      print((failure.get("message") or "").strip()[:1200])
+                      print((failure.text or "").strip()[:4000])
+          PY
+      - name: Upload Android failure reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rea212-android-test-failures-${{ github.sha }}
+          path: |
+            app/build/test-results/testDevDebugUnitTest/
+            app/build/reports/tests/testDevDebugUnitTest/
+          retention-days: 3
+          if-no-files-found: ignore
+      - name: Run shared Automix planner tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :shared:jvmTest --tests "com.music.bitchord.playback.smart.AdvancedAutomixPlannerTest"
+      - name: Run shared native UI presentation tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :sharedUi:jvmTest
+      - name: Assemble Android devDebug after green tests
+        run: ./gradlew --build-cache -Pbitchord.bundleWear=false :app:assembleDevDebug
+      - name: Select universal APK and record checksum
+        run: |
+          set -euo pipefail
+          mkdir -p smoke-apk
+          find app/build/outputs/apk/dev/debug -maxdepth 1 -name '*.apk' -type f -print
+          universal="$(find app/build/outputs/apk/dev/debug -maxdepth 1 -name '*universal*.apk' -type f -print -quit)"
+          if [[ -z "$universal" ]]; then
+            echo "Universal APK was not generated." >&2
+            exit 1
+          fi
+          cp "$universal" smoke-apk/BitChord-AppleMusicBar-devDebug-universal.apk
+          sha256sum smoke-apk/*.apk | tee smoke-apk/SHA256SUMS.txt
+      - name: Upload experiment APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-music-bar-devDebug-${{ github.event.pull_request.head.sha || github.sha }}
+          path: smoke-apk/
+          retention-days: 7
+          if-no-files-found: error

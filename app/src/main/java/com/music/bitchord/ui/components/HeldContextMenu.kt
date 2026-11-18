@@ -412,4 +412,4 @@ private suspend fun PointerInputScope.swallowAll() {
  */
 @Suppress("UNUSED_PARAMETER")
 internal fun heldContextPlateColor(themeBackground: Color, artworkElevation: Color?): Color =
-    if (themeBackground.luminance() < 0.5f) Color(0xFF29292D) else Color(0xFFF5F5F7)
+    nativeCompactPlateColor(themeBackground.luminance() < 0.5f, artworkElevation = null)

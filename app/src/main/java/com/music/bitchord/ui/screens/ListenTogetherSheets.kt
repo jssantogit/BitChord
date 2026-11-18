@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,14 +25,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -39,8 +37,11 @@ import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -54,6 +55,8 @@ import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.listentogether.PartyPreview
 import com.music.bitchord.ui.components.PillTextField
 import com.music.bitchord.ui.components.QrCode
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 
 /**
  * Which of the party sheets is up, if any.
@@ -183,6 +186,52 @@ internal fun GlowingAvatar(
 }
 
 /**
+ * Primary action shared by create, code lookup, join confirmation and invite.
+ * 52dp is existing BitChord dialog geometry, not a recovered Apple metric.
+ * The party state machine retains ownership of all enabled/busy decisions.
+ */
+@Composable
+internal fun PartyPrimaryAction(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+) {
+    val ink = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(
+                if (enabled) appleMusicKeyColor()
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            )
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag("party-primary-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = ink,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = ink,
+            )
+        }
+    }
+}
+
+/**
  * What the screen is when there is no party yet.
  *
  * Two doors rather than one, and they are not equals: creating is the common
@@ -224,30 +273,54 @@ internal fun PartyLanding(
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(28.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(R.string.listen_together_create_action),
             onClick = onCreate,
             enabled = enabled,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.listen_together_create_action),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         Spacer(Modifier.height(6.dp))
-        TextButton(
+        PartySheetTextAction(
+            label = stringResource(R.string.listen_together_join_existing),
             onClick = onJoin,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.listen_together_join_existing),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        )
+    }
+}
+
+/**
+ * Centered native text action for the join and invite sheets. The 48dp row
+ * and neutral presentation are BitChord adaptations, not unverified Apple
+ * dimensions. The invite code keeps its original bold, widely spaced text.
+ */
+@Composable
+internal fun PartySheetTextAction(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    compact: Boolean = false,
+    codeStyle: Boolean = false,
+) {
+    val ink = if (codeStyle) MaterialTheme.colorScheme.onSurface
+        else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = modifier
+            .then(if (compact) Modifier else Modifier.fillMaxWidth())
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag("party-sheet-text-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = if (codeStyle) MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 3.sp,
+            ) else MaterialTheme.typography.titleMedium,
+            color = ink.copy(alpha = if (enabled) 1f else 0.4f),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -352,7 +425,7 @@ internal fun CreatePartySheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            StepperButton("−", enabled = enabled && maxMembers > 2) {
+            PartyStepperControl("−", enabled = enabled && maxMembers > 2) {
                 onMaxMembersChange(maxMembers - 1)
             }
             Text(
@@ -362,34 +435,46 @@ internal fun CreatePartySheet(
                 modifier = Modifier.width(32.dp),
                 textAlign = TextAlign.Center,
             )
-            StepperButton("+", enabled = enabled && maxMembers < 10) {
+            PartyStepperControl("+", enabled = enabled && maxMembers < 10) {
                 onMaxMembersChange(maxMembers + 1)
             }
         }
         Spacer(Modifier.height(24.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(
+                if (busy) R.string.listen_together_creating else R.string.listen_together_create_action,
+            ),
             onClick = onCreate,
             enabled = enabled && !busy,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(
-                text = stringResource(
-                    if (busy) R.string.listen_together_creating else R.string.listen_together_create_action,
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         SheetError(error)
         Spacer(Modifier.height(12.dp))
     }
 }
 
+/**
+ * Native 40dp party-size control. The M3 text button showed full-strength
+ * foreground even when disabled; ink and semantics now share the same state.
+ * The circle is a BitChord adaptation, not an Apple Music measured stepper.
+ */
 @Composable
-private fun StepperButton(label: String, enabled: Boolean, onClick: () -> Unit) {
-    TextButton(onClick = onClick, enabled = enabled) {
-        Text(label, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onSurface)
+internal fun PartyStepperControl(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val ink = MaterialTheme.colorScheme.onSurface
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(ink.copy(alpha = if (enabled) 0.065f else 0.025f))
+            .border(1.dp, ink.copy(alpha = if (enabled) 0.12f else 0.05f), CircleShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .testTag("listen-together-party-stepper"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.titleLarge,
+            color = ink.copy(alpha = if (enabled) 1f else 0.36f),
+        )
     }
 }
 
@@ -451,20 +536,13 @@ internal fun JoinPartySheet(
             onSubmit = onSubmit,
         )
         Spacer(Modifier.height(20.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(
+                if (busy) R.string.listen_together_joining else R.string.listen_together_join_action,
+            ),
             onClick = onSubmit,
             enabled = enabled && !busy && code.length == ListenTogether.CODE_LENGTH,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(
-                text = stringResource(
-                    if (busy) R.string.listen_together_joining else R.string.listen_together_join_action,
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         SheetError(error)
         Spacer(Modifier.height(16.dp))
     }
@@ -609,36 +687,23 @@ internal fun JoinConfirmSheet(
             )
         }
         Spacer(Modifier.height(20.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(
+                when {
+                    preview.isFull -> R.string.listen_together_full
+                    busy -> R.string.listen_together_joining
+                    else -> R.string.listen_together_join_action
+                },
+            ),
             onClick = onJoin,
             enabled = !busy && !preview.isFull,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Text(
-                text = stringResource(
-                    when {
-                        preview.isFull -> R.string.listen_together_full
-                        busy -> R.string.listen_together_joining
-                        else -> R.string.listen_together_join_action
-                    },
-                ),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         SheetError(error)
         Spacer(Modifier.height(4.dp))
-        TextButton(
+        PartySheetTextAction(
+            label = stringResource(R.string.listen_together_not_now),
             onClick = onDismiss,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.listen_together_not_now),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             text = stringResource(R.string.listen_together_preview_footer),
@@ -671,19 +736,11 @@ internal fun InviteSheet(
     ) {
         SheetHeader(title = stringResource(R.string.listen_together_invite_title))
         Spacer(Modifier.height(20.dp))
-        Button(
+        PartyPrimaryAction(
+            label = stringResource(R.string.listen_together_share_link),
+            icon = PlaylistEditorIcons.Link,
             onClick = onShareLink,
-            shape = RoundedCornerShape(percent = 50),
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) {
-            Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = stringResource(R.string.listen_together_share_link),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
+        )
         Spacer(Modifier.height(24.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -706,20 +763,13 @@ internal fun InviteSheet(
                 // somebody on the phone the party was made on — reading six
                 // characters out is still the fastest way into a party in the
                 // same room.
-                TextButton(
+                PartySheetTextAction(
+                    label = code,
                     onClick = onCopyCode,
-                    contentPadding = ButtonDefaults.TextButtonWithIconContentPadding,
                     modifier = Modifier.offset(x = (-12).dp),
-                ) {
-                    Text(
-                        text = code,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 3.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
+                    compact = true,
+                    codeStyle = true,
+                )
             }
             QrCode(content = link, size = 132.dp)
         }

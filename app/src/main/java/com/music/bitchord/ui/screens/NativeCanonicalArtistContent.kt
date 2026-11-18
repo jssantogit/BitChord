@@ -32,6 +32,22 @@ import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.theme.ArtworkPalette
 
 /**
+ * A verified release keeps its exact ReleaseId when the artist card is held.
+ * Batch-selection mode owns the gesture; no contextual sheet is opened then.
+ */
+internal fun nativeArtistReleaseHoldAction(
+    selectionActive: Boolean,
+    release: ReleaseEntity,
+    onReleaseOptions: (ReleaseEntity) -> Unit,
+): (() -> Unit)? = if (selectionActive) null else ({ onReleaseOptions(release) })
+
+/** A verified artist can be rated without pretending its songs are playable. */
+internal fun shouldShowNativeCanonicalArtistActions(
+    hasTracks: Boolean,
+    canRate: Boolean,
+): Boolean = hasTracks || canRate
+
+/**
  * Native artist content built exclusively from typed Library assets,
  * evidenced releases and caller-supplied capabilities. No repository
  * lifecycle, fake media IDs or provider-specific navigation.
@@ -58,6 +74,7 @@ internal fun NativeCanonicalArtistContent(
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
     onReleaseOptions: (ReleaseEntity) -> Unit,
     onRateArtist: (() -> Unit)?,
+    onRateArtistAnchorChange: ((androidx.compose.ui.unit.IntRect) -> Unit)? = null,
     onPlayAll: (List<CanonicalBrowseTrack>, Boolean) -> Unit,
 ) {
     val shownTracks = tracks.filter {
@@ -105,16 +122,24 @@ internal fun NativeCanonicalArtistContent(
                     artHeight = photoHeight, appleArt = appleArt, signature = null,
                 )
             }
-            if (shownTracks.isNotEmpty()) {
+            if (shouldShowNativeCanonicalArtistActions(
+                    hasTracks = shownTracks.isNotEmpty(),
+                    canRate = artistRatingState.target != null && onRateArtist != null,
+                )
+            ) {
                 item(key = "artist-actions") {
                     // The native artist page uses three circular buttons,
                     // not the wide album/folder action pills.
                     ActionRow(
                         onPlay = { onPlayAll(shownTracks, false) },
                         onShuffle = { onPlayAll(shownTracks, true) },
+                        canPlay = shownTracks.isNotEmpty(),
+                        canShuffle = shownTracks.isNotEmpty(),
+                        onRateArtistAnchorChange = onRateArtistAnchorChange,
                         onRateArtist = if (artistRatingState.target != null)
                             onRateArtist else null,
                         artistRated = artistRatingState.rated,
+                        artistRating = artistRatingState.value,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )
                 }
@@ -147,6 +172,11 @@ internal fun NativeCanonicalArtistContent(
                                 onToggleSelection(target)
                             } else onOpenRelease(release)
                         },
+                        onLongPress = nativeArtistReleaseHoldAction(
+                            selectionActive = selectedItems.isNotEmpty(),
+                            release = release,
+                            onReleaseOptions = onReleaseOptions,
+                        ),
                         artwork = {
                             val track = nativeReleases.artwork[release.id]
                             if (track != null) CanonicalUnifiedArtwork(
@@ -193,6 +223,10 @@ internal fun NativeCanonicalArtistContent(
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
+                            onLongPress = if (selectedItems.isEmpty()) {
+                                ({ onTrackOptions(track) })
+                            } else null,
+                            showInlineOptions = false,
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.TRACK, track.recordingId,
@@ -232,8 +266,13 @@ internal fun NativeCanonicalArtistContent(
                                     )
                                 ) else onOpenRelease(release)
                             },
-                            // Artist shelf cards navigate directly. Their
-                            // contextual controls belong on the release page.
+                            // Reuse the lifted menu already available in this
+                            // Library host. No inline Material 3 overflow button.
+                            onLongPress = nativeArtistReleaseHoldAction(
+                                selectionActive = selectedItems.isNotEmpty(),
+                                release = release,
+                                onReleaseOptions = onReleaseOptions,
+                            ),
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.ALBUM, release.id,

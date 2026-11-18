@@ -57,7 +57,10 @@ internal fun LazyListScope.nativeCanonicalAlbumTrackRows(
             artworkLoader = artworkLoader,
             onClick = { onTrackPlay(track) },
             onEditRating = { onTrackEditRating(track) },
+            // Detail pages use the lifted long-press menu; ⋯ rows are retired.
             onOptions = { onTrackOptions(track) },
+            onLongPress = { onTrackOptions(track) },
+            showInlineOptions = false,
             albumTrackNumber = nativeCanonicalAlbumRowNumber(
                 track.recordingId, index, trackNumbers,
             ),

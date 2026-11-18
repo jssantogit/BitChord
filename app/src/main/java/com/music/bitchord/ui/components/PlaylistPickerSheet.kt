@@ -1,7 +1,10 @@
 package com.music.bitchord.ui.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,15 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Link
-import androidx.compose.material.icons.rounded.Lock
-import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -55,6 +49,14 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.data.model.PlaylistPrivacy
@@ -64,6 +66,8 @@ import com.music.bitchord.data.model.UserPlaylist
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
+import com.music.bitchord.ui.theme.appleSelectionAccentColor
 import java.util.Locale
 
 /**
@@ -88,28 +92,71 @@ fun PlaylistPickerSheet(
     playlists: List<UserPlaylist>,
     loading: Boolean,
     onAdd: (List<UserPlaylist>) -> Unit,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, (Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     song: Song? = null,
     startCreating: Boolean = false,
+    onDraftChanged: (Boolean) -> Unit = {},
+    onSavingChanged: (Boolean) -> Unit = {},
+    onRequestDismiss: (() -> Unit)? = null,
 ) {
     var creating by remember { mutableStateOf(startCreating) }
+    var formSaving by remember { mutableStateOf(false) }
+    var formDirty by remember { mutableStateOf(false) }
+    var confirmDiscard by remember { mutableStateOf(false) }
     // By id rather than by value: the list is re-fetched under an open sheet,
     // and a refreshed row must stay ticked.
     var selected by remember { mutableStateOf(emptySet<String>()) }
+    // The picker and its creation form are two states of the same sheet.
+    // Animate only the arriving state; keeping the outgoing form mounted
+    // would compete with the new name field's automatic keyboard focus.
+    val routeArrival = rememberRouteArrivalModifier(
+        routeKey = if (creating) "playlist-create" else "playlist-picker",
+        reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current,
+        forward = creating,
+    )
 
     if (creating) {
         NewPlaylistForm(
             // Nowhere to go back to when the sheet opened straight onto the
             // form; the sheet's own dismiss is the way out.
-            onBack = if (startCreating) null else ({ creating = false }),
+            onBack = if (startCreating) onRequestDismiss else ({
+                if (formSaving) Unit
+                else if (formDirty) confirmDiscard = true
+                else { onDraftChanged(false); creating = false }
+            }),
             onCreate = onCreate,
-            modifier = modifier,
+            onSavingChanged = { saving ->
+                formSaving = saving
+                onSavingChanged(saving)
+            },
+            onDraftChanged = { changed ->
+                formDirty = changed
+                onDraftChanged(changed)
+            },
+            modifier = modifier.then(routeArrival),
         )
+        if (confirmDiscard && !formSaving) {
+            ConfirmationAlert(
+                hazeState = null,
+                title = stringResource(R.string.editor_discard_title),
+                description = stringResource(R.string.editor_discard_playlist_body),
+                confirmLabel = stringResource(R.string.editor_discard_confirm),
+                dismissLabel = stringResource(R.string.editor_keep_editing),
+                destructive = true,
+                onConfirm = {
+                    confirmDiscard = false
+                    formDirty = false
+                    onDraftChanged(false)
+                    creating = false
+                },
+                onDismiss = { confirmDiscard = false },
+            )
+        }
         return
     }
 
-    Column(modifier.fillMaxWidth()) {
+    Column(modifier.then(routeArrival).fillMaxWidth()) {
         if (song != null) {
             SheetTrackHeader(song)
             HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
@@ -122,7 +169,7 @@ fun PlaylistPickerSheet(
         ActionRow(
             icon = BitChordIcons.Plus,
             label = stringResource(R.string.new_playlist),
-            onClick = { creating = true },
+            onClick = { formDirty = false; onDraftChanged(false); creating = true },
         )
 
         when {
@@ -168,21 +215,17 @@ fun PlaylistPickerSheet(
                     }
                 }
                 Spacer(Modifier.height(12.dp))
-                Button(
+                NativeSettingsPrimaryAction(
+                    label = if (selected.isEmpty()) {
+                        stringResource(R.string.add_to_playlist)
+                    } else {
+                        pluralStringResource(R.plurals.add_to_playlists_count, selected.size, selected.size)
+                    },
                     onClick = { onAdd(playlists.filter { it.playlistId in selected }) },
                     enabled = selected.isNotEmpty(),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 22.dp),
-                ) {
-                    Text(
-                        if (selected.isEmpty()) {
-                            stringResource(R.string.add_to_playlist)
-                        } else {
-                            pluralStringResource(R.plurals.add_to_playlists_count, selected.size, selected.size)
-                        },
-                    )
-                }
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+                    tag = "playlist-picker-confirm-action",
+                )
             }
         }
         Spacer(Modifier.height(24.dp))
@@ -194,7 +237,8 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick, role = Role.Checkbox)
+            .semantics { this.selected = selected }
             .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -228,10 +272,13 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
         }
         Spacer(Modifier.width(12.dp))
         Icon(
-            imageVector = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+            imageVector = if (selected) PlaylistEditorIcons.Selected else PlaylistEditorIcons.Unselected,
             contentDescription = null,
-            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
+            tint = appleSelectionAccentColor(
+                selected = selected,
+                neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            modifier = Modifier.size(22.dp).testTag("playlist-picker-selection-icon"),
         )
     }
 }
@@ -243,22 +290,42 @@ private fun PlaylistRow(playlist: UserPlaylist, selected: Boolean, onClick: () -
 @Composable
 private fun NewPlaylistForm(
     onBack: (() -> Unit)?,
-    onCreate: (String, PlaylistPrivacy) -> Unit,
+    onCreate: (String, PlaylistPrivacy, (Boolean) -> Unit) -> Unit,
+    onDraftChanged: (Boolean) -> Unit,
+    onSavingChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var name by remember { mutableStateOf("") }
     var privacy by remember { mutableStateOf(PlaylistPrivacy.PRIVATE) }
+    var saving by remember { mutableStateOf(false) }
+    var saveFailed by remember { mutableStateOf(false) }
+    var attempted by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val nameLabel = stringResource(R.string.playlist_name)
+    val nameError = when {
+        name.length > 80 -> stringResource(R.string.playlist_editor_name_too_long)
+        (attempted || name.isNotEmpty()) && name.isBlank() ->
+            stringResource(R.string.playlist_editor_name_required)
+        else -> null
+    }
+    val validName = name.isNotBlank() && name.length <= 80
 
-    // The form exists to be typed into; opening it with the keyboard already
-    // up saves the tap that would otherwise always follow.
+    // Preserve the active input/IME; only an accepted save clears focus.
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
     val submit: () -> Unit = {
-        if (name.isNotBlank()) {
-            focusManager.clearFocus()
-            onCreate(name, privacy)
+        attempted = true
+        if (validName && !saving) {
+            saving = true
+            onSavingChanged(true)
+            saveFailed = false
+            onCreate(name.trim(), privacy) { succeeded ->
+                saving = false
+                onSavingChanged(false)
+                if (!succeeded) saveFailed = true
+                else focusManager.clearFocus()
+            }
         }
     }
 
@@ -276,11 +343,16 @@ private fun NewPlaylistForm(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             onBack?.let {
-                IconButton(onClick = it) {
+                IconButton(
+                    onClick = it,
+                    modifier = Modifier.size(40.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+                ) {
                     Icon(
-                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        PlaylistEditorIcons.Back,
                         contentDescription = stringResource(R.string.back),
                         tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
@@ -299,10 +371,16 @@ private fun NewPlaylistForm(
         }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
+        Text(
+            nameLabel,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 16.dp)
+                .padding(horizontal = 22.dp, vertical = 8.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp))
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -317,7 +395,13 @@ private fun NewPlaylistForm(
                 }
                 BasicTextField(
                     value = name,
-                    onValueChange = { name = it },
+                    onValueChange = {
+                        if (!saving) {
+                            name = it
+                            saveFailed = false
+                            onDraftChanged(it.isNotEmpty() || privacy != PlaylistPrivacy.PRIVATE)
+                        }
+                    },
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         color = MaterialTheme.colorScheme.onBackground,
@@ -327,19 +411,28 @@ private fun NewPlaylistForm(
                     keyboardActions = KeyboardActions(onDone = { submit() }),
                     modifier = Modifier
                         .fillMaxWidth()
+                        .testTag("playlist-editor-create-name")
+                        .semantics {
+                            contentDescription = nameLabel
+                            if (nameError != null) error(nameError)
+                        }
                         .focusRequester(focusRequester),
                 )
             }
             if (name.isNotEmpty()) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
-                        .clickable { name = "" },
+                        .clickable(enabled = !saving) {
+                            name = ""
+                            saveFailed = false
+                            onDraftChanged(privacy != PlaylistPrivacy.PRIVATE)
+                        },
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Rounded.Close,
+                        PlaylistEditorIcons.Close,
                         contentDescription = stringResource(R.string.clear_name),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
@@ -348,10 +441,29 @@ private fun NewPlaylistForm(
             }
         }
 
+        if (nameError != null) {
+            Text(
+                nameError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 22.dp),
+            )
+        }
+        if (saveFailed) {
+            Text(
+                stringResource(R.string.playlist_editor_save_failed),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 22.dp)
+                    .testTag("playlist-editor-save-error")
+                    .semantics { liveRegion = LiveRegionMode.Polite },
+            )
+        }
         SheetHeading(stringResource(R.string.who_can_see_it).uppercase(Locale.getDefault()))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -360,21 +472,26 @@ private fun NewPlaylistForm(
                     icon = option.icon,
                     label = option.label,
                     selected = option == privacy,
-                    onClick = { privacy = option },
+                    onClick = {
+                        if (!saving) {
+                            privacy = option
+                            onDraftChanged(name.isNotEmpty() || option != PlaylistPrivacy.PRIVATE)
+                        }
+                    },
                 )
             }
         }
 
         Spacer(Modifier.height(20.dp))
-        Button(
+        NativeSettingsPrimaryAction(
+            label = stringResource(R.string.create_playlist),
             onClick = submit,
-            enabled = name.isNotBlank(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp),
-        ) {
-            Text(stringResource(R.string.create_playlist))
-        }
+            enabled = validName && !saving,
+            loading = saving,
+            loadingTag = "playlist-editor-saving",
+            tag = "playlist-picker-create-action",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+        )
         Spacer(Modifier.height(28.dp))
     }
 }
@@ -390,17 +507,36 @@ internal fun RenamePlaylistForm(
     onBack: () -> Unit,
     onRename: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onDraftChanged: (Boolean) -> Unit = {},
 ) {
-    var name by remember { mutableStateOf(playlist.title) }
+    var name by remember(playlist.playlistId) { mutableStateOf(playlist.title) }
+    var confirmDiscard by remember(playlist.playlistId) { mutableStateOf(false) }
+    var attempted by remember(playlist.playlistId) { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val nameLabel = stringResource(R.string.playlist_name)
+    val nameError = when {
+        name.length > 80 -> stringResource(R.string.playlist_editor_name_too_long)
+        (attempted || name.isNotEmpty()) && name.isBlank() ->
+            stringResource(R.string.playlist_editor_name_required)
+        else -> null
+    }
+    val hasChanges = name != playlist.title
+    val validName = name.isNotBlank() && name.length <= 80
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    val requestBack: () -> Unit = {
+        if (hasChanges) confirmDiscard = true
+        else { onDraftChanged(false); onBack() }
+    }
+    BackHandler { requestBack() }
 
     val submit: () -> Unit = {
-        if (name.isNotBlank()) {
+        attempted = true
+        if (validName && hasChanges) {
             focusManager.clearFocus()
-            onRename(name)
+            onDraftChanged(false)
+            onRename(name.trim())
         }
     }
 
@@ -417,11 +553,16 @@ internal fun RenamePlaylistForm(
                 .padding(start = 8.dp, end = 22.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = onBack) {
+            IconButton(
+                onClick = requestBack,
+                modifier = Modifier.size(40.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape),
+            ) {
                 Icon(
-                    Icons.AutoMirrored.Rounded.ArrowBack,
+                    PlaylistEditorIcons.Back,
                     contentDescription = stringResource(R.string.back),
                     tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(22.dp),
                 )
             }
             Text(
@@ -433,17 +574,26 @@ internal fun RenamePlaylistForm(
         }
         HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline)
 
+        Text(
+            nameLabel,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(start = 22.dp, end = 22.dp, top = 14.dp),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 22.dp, vertical = 16.dp)
+                .padding(horizontal = 22.dp, vertical = 8.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(11.dp))
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             BasicTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = {
+                    name = it
+                    onDraftChanged(it != playlist.title)
+                },
                 singleLine = true,
                 textStyle = MaterialTheme.typography.bodyLarge.copy(
                     color = MaterialTheme.colorScheme.onBackground,
@@ -453,19 +603,46 @@ internal fun RenamePlaylistForm(
                 keyboardActions = KeyboardActions(onDone = { submit() }),
                 modifier = Modifier
                     .weight(1f)
+                    .testTag("playlist-editor-rename-name")
+                    .semantics {
+                        contentDescription = nameLabel
+                        if (nameError != null) error(nameError)
+                    }
                     .focusRequester(focusRequester),
             )
         }
-        Button(
-            onClick = submit,
-            enabled = name.isNotBlank() && name != playlist.title,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 22.dp),
-        ) {
-            Text(stringResource(R.string.save_name))
+        if (nameError != null) {
+            Text(
+                nameError,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 22.dp),
+            )
         }
+        NativeSettingsPrimaryAction(
+            label = stringResource(R.string.save_name),
+            onClick = submit,
+            enabled = validName && hasChanges,
+            tag = "playlist-picker-rename-action",
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp),
+        )
         Spacer(Modifier.height(28.dp))
+    }
+    if (confirmDiscard) {
+        ConfirmationAlert(
+            hazeState = null,
+            title = stringResource(R.string.editor_discard_title),
+            description = stringResource(R.string.editor_discard_playlist_body),
+            confirmLabel = stringResource(R.string.editor_discard_confirm),
+            dismissLabel = stringResource(R.string.editor_keep_editing),
+            destructive = true,
+            onConfirm = {
+                confirmDiscard = false
+                onDraftChanged(false)
+                onBack()
+            },
+            onDismiss = { confirmDiscard = false },
+        )
     }
 }
 
@@ -476,9 +653,9 @@ internal fun RenamePlaylistForm(
  */
 private val PlaylistPrivacy.icon: ImageVector
     get() = when (this) {
-        PlaylistPrivacy.PRIVATE -> Icons.Rounded.Lock
-        PlaylistPrivacy.UNLISTED -> Icons.Rounded.Link
-        PlaylistPrivacy.PUBLIC -> Icons.Rounded.Public
+        PlaylistPrivacy.PRIVATE -> PlaylistEditorIcons.Lock
+        PlaylistPrivacy.UNLISTED -> PlaylistEditorIcons.Link
+        PlaylistPrivacy.PUBLIC -> PlaylistEditorIcons.Globe
     }
 
 /** The search filters' pill, carrying an icon ahead of its label. */
@@ -504,15 +681,16 @@ private fun PrivacyPill(
                     MaterialTheme.colorScheme.surfaceVariant
                 },
             )
-            .clickable(onClick = onClick)
-            .padding(start = 11.dp, end = 14.dp, top = 7.dp, bottom = 7.dp),
+            .clickable(onClick = onClick, role = Role.RadioButton)
+            .semantics { this.selected = selected }
+            .padding(start = 12.dp, end = 14.dp, top = 9.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = content,
-            modifier = Modifier.size(16.dp),
+            modifier = Modifier.size(18.dp),
         )
         Spacer(Modifier.width(6.dp))
         Text(

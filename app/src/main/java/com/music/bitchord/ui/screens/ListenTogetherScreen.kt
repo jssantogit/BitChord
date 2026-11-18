@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.appleSettingsSwitchColors
+
 import android.content.Intent
 import android.text.format.DateFormat
 import android.widget.Toast
@@ -11,6 +13,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,9 +52,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -72,6 +73,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
@@ -90,6 +93,7 @@ import coil3.compose.AsyncImage
 import com.music.bitchord.R
 import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.NativeAlertHost
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.data.listentogether.JamInviteLink
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.listentogether.PartyActivity
@@ -98,6 +102,10 @@ import com.music.bitchord.data.listentogether.ServerConnectionState
 import com.music.bitchord.data.listentogether.ServerUrlError
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** The host cannot evict occupied slots merely by reducing room capacity. */
+internal fun canDecreasePartyCapacity(capacity: Int, participantCount: Int): Boolean =
+    capacity > maxOf(2, participantCount)
 
 internal fun ServerUrlError.toMessageRes(): Int = when (this) {
     ServerUrlError.Whitespace -> R.string.listen_together_err_whitespace
@@ -875,9 +883,17 @@ private fun InAParty(
                     )
                     Text(stringResource(R.string.listen_together_host_controls), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                TextButton(onClick = { onSetCapacity(state.maxMembers - 1) }, enabled = state.maxMembers > maxOf(2, state.members.size)) { Text("−", color = MaterialTheme.colorScheme.onSurface) }
+                PartyStepperControl(
+                    label = "−",
+                    enabled = canDecreasePartyCapacity(state.maxMembers, state.members.size),
+                    onClick = { onSetCapacity(state.maxMembers - 1) },
+                )
                 Text("${state.maxMembers}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.width(28.dp), textAlign = TextAlign.Center)
-                TextButton(onClick = { onSetCapacity(state.maxMembers + 1) }, enabled = state.maxMembers < 10) { Text("+", color = MaterialTheme.colorScheme.onSurface) }
+                PartyStepperControl(
+                    label = "+",
+                    enabled = state.maxMembers < 10,
+                    onClick = { onSetCapacity(state.maxMembers + 1) },
+                )
             }
             RowDivider()
             SettingsRow(
@@ -888,10 +904,7 @@ private fun InAParty(
                     Switch(
                         checked = state.hostOnlyControl,
                         onCheckedChange = onSetHostOnlyControl,
-                        colors = SwitchDefaults.colors(
-                            checkedTrackColor = MaterialTheme.colorScheme.primary,
-                            checkedBorderColor = MaterialTheme.colorScheme.primary,
-                        ),
+                        colors = appleSettingsSwitchColors(),
                     )
                 },
                 onClick = { onSetHostOnlyControl(!state.hostOnlyControl) },
@@ -1062,9 +1075,23 @@ private fun MemberRow(member: PartyMember, isYou: Boolean, canKick: Boolean = fa
             Spacer(Modifier.width(8.dp))
             Badge(stringResource(R.string.listen_together_host))
         } else if (canKick) {
-            TextButton(onClick = onKick) { Text(stringResource(R.string.listen_together_remove)) }
+            PartyMemberRemoveAction(
+                label = stringResource(R.string.listen_together_remove),
+                onClick = onKick,
+            )
         }
     }
+}
+
+/** Destructive member action shares the global native text-control geometry. */
+@Composable
+internal fun PartyMemberRemoveAction(label: String, onClick: () -> Unit) {
+    NativeInlineTextAction(
+        label = label,
+        onClick = onClick,
+        destructive = true,
+        tag = "party-member-remove-action",
+    )
 }
 
 @Composable

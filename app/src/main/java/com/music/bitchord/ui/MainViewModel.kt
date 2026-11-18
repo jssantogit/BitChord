@@ -28,6 +28,7 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogPage
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseGroupHit
 import com.music.bitchord.data.catalog.metadata.MusicBrainzArtistDiscographyPager
+import com.music.bitchord.data.catalog.metadata.retryTransientArtistDiscography
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraphResult
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogReleaseDetail
 import com.music.bitchord.data.catalog.metadata.MusicBrainzReleaseHit
@@ -515,6 +516,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** True while a committed search is in flight — gates suggestion/media callbacks. */
     private var searchSubmitted = false
+    // Compose observes the same submit gate as the existing search pipelines:
+    // origin choices before submit, result-type tabs after submit.
+    private val _searchCommitted = MutableStateFlow(false)
+    val searchCommitted: StateFlow<Boolean> = _searchCommitted.asStateFlow()
 
     /**
      * What the search page offers while a query is being typed, led by the
@@ -553,6 +558,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         SourceRegistry.configs.value,
     ))
     val searchSource: StateFlow<SearchSource> = _searchSource.asStateFlow()
+    // A dedicated search tab names one configured API/indexed provider. Never
+    // reuse the previous blended ADDONS namespace for unrelated servers.
+    private val _selectedSearchProviderKey = MutableStateFlow<String?>(null)
+    val selectedSearchProviderKey: StateFlow<String?> = _selectedSearchProviderKey.asStateFlow()
 
     /**
      * The Addons source's answer for the submitted query: every enabled addon
@@ -1320,8 +1329,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         clearCanonicalCatalogNavigation()
     }
 
-    private fun switchSearchSource(source: SearchSource, rerunCurrentQuery: Boolean = true) {
-        if (_searchSource.value == source) return
+    private fun switchSearchSource(
+        source: SearchSource,
+        rerunCurrentQuery: Boolean = true,
+        force: Boolean = false,
+    ) {
+        if (_searchSource.value == source && !force) return
+        val wasSubmitted = searchSubmitted
+        searchSubmitted = false
+        _searchCommitted.value = false
         _searchSource.value = source
         if (source == SearchSource.CANONICAL &&
             _filter.value !in setOf(
@@ -1336,7 +1352,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             SearchSource.LIBRARY -> loadLibrarySongs()
             SearchSource.YOUTUBE,
             SearchSource.ADDONS,
-            SearchSource.CANONICAL -> if (rerunCurrentQuery && _query.value.isNotBlank()) submitSearch()
+            SearchSource.CANONICAL -> if (rerunCurrentQuery && wasSubmitted && _query.value.isNotBlank()) submitSearch()
         }
         if (source == SearchSource.YOUTUBE) {
             suggestPipelineJob = startSuggestPipeline()
@@ -1493,9 +1509,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             var displayedGroupReleaseMbid: String? = null
             val output: UiState<CanonicalCatalogDetailPage> = when (entry.kind) {
                 CanonicalSearchKind.ARTIST -> when (
-                    val result = // Group-first discovery needs enough range for albums AND singles/EPs;
-                    // 25 arbitrary upstream groups often omitted actual releases.
-                    musicBrainzGraph.browseReleaseGroupsForArtist(entry.musicBrainzId, limit = 75)
+                    // A single transient MB 503/rate-limit must not discard
+                    // NewJeans (or any other verified artist) on first entry.
+                    // Keep the same exact Artist MBID and bounded browse page.
+                    val result = retryTransientArtistDiscography(
+                        fetch = {
+                            musicBrainzGraph.browseReleaseGroupsForArtist(
+                                entry.musicBrainzId, limit = 75,
+                            )
+                        },
+                    )
                 ) {
                     is MusicBrainzCatalogGraphResult.Success -> {
                         artistFirstPage = result.value
@@ -1545,7 +1568,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { emptyList() }
-                        if (cached.isEmpty()) UiState.Error("Unable to load artist discography")
+                        if (cached.isEmpty()) UiState.Error("Não foi possível carregar a discografia do artista. Tente novamente.")
                         else UiState.Success(CanonicalCatalogDetailPage(
                             title = entry.title,
                             summary = "Saved release groups · offline catalog",
@@ -1755,7 +1778,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             null
                         }
                         if (page != null) UiState.Success(page)
-                        else UiState.Error("Unable to load release tracks")
+                        else canonicalVerifiedLiveReleaseDetailPage(
+                            incoming = details,
+                            artworkUri = entry.artworkUri,
+                        )?.let { UiState.Success(it) }
+                            ?: UiState.Error("Não foi possível carregar as faixas desta edição.")
                     }
                     is MusicBrainzCatalogGraphResult.Failure -> {
                         val cached = try {
@@ -1773,7 +1800,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             throw cancelled
                         } catch (_: Exception) { null to emptySet<String>() }
                         val details = cached.first
-                        if (details == null) UiState.Error("Unable to load release tracks")
+                        if (details == null) UiState.Error("Não foi possível carregar as faixas desta edição.")
                         else UiState.Success(CanonicalCatalogDetailPage(
                             title = details.title,
                             summary = "Saved release · offline catalog",
@@ -1966,6 +1993,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Every track in the Local Music folder, read when the Library source is picked. */
     private val _librarySongs = MutableStateFlow<UiState<List<Song>>>(UiState.Loading)
+    /** Exposes *unfiltered* local availability for the optional Local source tab. */
+    val availableLocalSongs: StateFlow<UiState<List<Song>>> = _librarySongs.asStateFlow()
 
     /**
      * The Library source's answer for the current query: the Local Music
@@ -2492,10 +2521,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         title: String,
         @Suppress("UNUSED_PARAMETER") privacy: PlaylistPrivacy,
         song: Song? = null,
+        onResult: (Boolean) -> Unit = {},
     ) {
         val name = title.trim().ifBlank { text(R.string.new_playlist) }
         viewModelScope.launch {
-            com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, listOfNotNull(song))
+            val saved = try {
+                com.music.bitchord.data.spotify.LocalPlaylistStore.savePlaylist(name, listOfNotNull(song))
+                true
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                false
+            }
+            onResult(saved)
         }
     }
 
@@ -4288,6 +4326,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val allowed = effectiveSearchSource(_searchSource.value, SourceRegistry.configs.value)
         if (allowed != _searchSource.value) switchSearchSource(allowed, rerunCurrentQuery = false)
         searchSubmitted = true
+        _searchCommitted.value = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
         // A saved search/suggestion must stay in its selected namespace.
@@ -4319,6 +4358,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (newValue.isBlank()) {
             searchSubmitted = false
+        _searchCommitted.value = false
             _suggestions.value = emptyList()
             _typeaheadResults.value = emptyList()
             _results.value = null
@@ -4353,6 +4393,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         addonSearchJob?.cancel()
         _addonResults.value = null
         searchSubmitted = false
+        _searchCommitted.value = false
         if (_searchSource.value == SearchSource.CANONICAL) {
             // A stale metadata result must not appear under a new query.
             canonicalSearchJob?.cancel()
@@ -4389,6 +4430,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val q = _query.value.trim()
         if (q.isEmpty() || _searchSource.value == SearchSource.LIBRARY) return
         searchSubmitted = true
+        _searchCommitted.value = true
         _suggestions.value = emptyList()
         _typeaheadResults.value = emptyList()
         if (_searchSource.value == SearchSource.ADDONS) {
@@ -5804,10 +5846,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     private fun runAddonSearch(q: String, recordHistory: Boolean = true) {
         if (recordHistory) SearchHistory.recordAddonQuery(q)
-        runServerAssetSearch(q)
+        val selected = _selectedSearchProviderKey.value
+            .takeIf { _searchSource.value == SearchSource.ADDONS }
+        if (selected?.startsWith("remote:") == true || selected == null) {
+            runServerAssetSearch(q)
+        } else {
+            serverSearchJob?.cancel()
+            _serverResults.value = UiState.Success(emptyList())
+        }
         addonSearchJob?.cancel()
+        if (selected?.startsWith("remote:") == true) {
+            // This is an indexed OpenSubsonic/Jellyfin account. Never query
+            // unrelated network addons from its dedicated tab.
+            _addonResults.value = UiState.Success(emptyList())
+            return
+        }
         if (recordHistory) _searchScrollReset.value += 1
         val addons = SourceRegistry.active().filterIsInstance<AddonSource>()
+            .filter { selected == null || selected == "addon:${it.configId}" }
         if (addons.isEmpty()) {
             _addonResults.value = UiState.Success(emptyList())
             return
@@ -5834,6 +5890,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Read-only persisted remote search. Playback revalidates account access. */
     private fun runServerAssetSearch(query: String) {
         serverSearchJob?.cancel()
+        val selected = _selectedSearchProviderKey.value
+            .takeIf { _searchSource.value == SearchSource.ADDONS }
+        if (selected?.startsWith("addon:") == true) {
+            _serverResults.value = UiState.Success(emptyList())
+            return
+        }
+        val scopedProvider = selected?.removePrefix("remote:")
         _serverResults.value = UiState.Loading
         serverSearchJob = viewModelScope.launch {
             val result: UiState<List<CanonicalServerSearchRow>> = try {
@@ -5848,7 +5911,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             isCanonicalPersonalProviderCurrentlyAuthorized(app, it.providerKey)
                         }
                 }
-                UiState.Success(rows.distinctBy { it.recordingId to it.providerKey }.map { row ->
+                UiState.Success(rows.asSequence()
+                    .filter { scopedProvider == null || it.providerKey == scopedProvider }
+                    .distinctBy { it.recordingId to it.providerKey }.map { row ->
                     CanonicalServerSearchRow(
                         recordingId = row.recordingId,
                         mediaAssetId = row.mediaAssetId,
@@ -5857,7 +5922,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         artistDisplay = row.artistDisplay,
                         artworkUri = row.artworkUri,
                     )
-                })
+                }.toList())
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -5881,7 +5946,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun setSearchSource(source: SearchSource) {
         val allowed = effectiveSearchSource(source, SourceRegistry.configs.value)
         searchSourceExplicitlySelected = true
+        if (allowed != SearchSource.ADDONS) _selectedSearchProviderKey.value = null
         switchSearchSource(allowed)
+    }
+
+    /** An API tab binds one provider, including when switching between two APIs. */
+    fun selectSearchProvider(providerKey: String) {
+        if (!providerKey.startsWith("addon:") && !providerKey.startsWith("remote:")) return
+        if (providerKey == _selectedSearchProviderKey.value &&
+            _searchSource.value == SearchSource.ADDONS
+        ) return
+        _selectedSearchProviderKey.value = providerKey
+        searchSourceExplicitlySelected = true
+        switchSearchSource(SearchSource.ADDONS, force = true)
     }
 
     /**
@@ -6014,6 +6091,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         searchSubmitted = true
+        _searchCommitted.value = true
         runSearch()
     }
 
@@ -6219,6 +6297,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
          */
 
         fun browseTypeOf(browseId: String, fallback: BrowseType = BrowseType.OTHER): BrowseType = when {
+            // Canonical IDs are typed declarations; never infer an artist
+            // or an album from a display title, and never treat an Artist
+            // as a generic playlist for long-press queue actions.
+            browseId.startsWith("catalog:ARTIST:") -> BrowseType.ARTIST
+            browseId.startsWith("catalog:RELEASE:") ||
+                browseId.startsWith("catalog:RELEASE_GROUP:") -> BrowseType.ALBUM
             // Built for playlists, but an album downloaded whole opens through
             // the same prefix, and its page should read as the album it is.
             browseId.startsWith(Downloads.PLAYLIST_PREFIX) ->
@@ -6280,6 +6364,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         thumbnailUrl: String? = null,
         type: BrowseType = BrowseType.OTHER,
     ) {
+        // MusicBrainz has no YouTube playlist/album browse ID. Opening a
+        // catalog card through an overflow menu must use the same native
+        // metadata route as tapping its tile; no retired backend request.
+        if (browseId.startsWith("catalog:")) {
+            val known = (
+                (_canonicalDetail.value as? UiState.Success)?.data?.rows.orEmpty() +
+                (_canonicalDiscoveryCatalog.value as? UiState.Success)?.data.orEmpty() +
+                (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+            ).firstOrNull { canonicalNativeBrowseId(it) == browseId }
+            val target = known ?: canonicalRowFromBrowseTarget(
+                browseId, title, subtitle, thumbnailUrl,
+            )
+            if (target != null) openCanonicalNativeDetail(target)
+            return
+        }
         // A fast double tap used to push two identical loading pages and launch
         // two identical browse requests. Besides wasting the connection, both
         // completions then raced to update every matching browse id in the

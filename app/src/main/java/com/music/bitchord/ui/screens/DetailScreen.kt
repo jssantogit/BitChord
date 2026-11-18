@@ -366,7 +366,7 @@ fun DetailScreen(
     /** Source-specific supplemental content inside this single native list. */
     footerContent: LazyListScope.(ArtworkPalette) -> Unit = {},
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
-    /** Same shared lifted metadata action as canonical album recordings. */
+    /** Full-screen lifted metadata menu owned by the root, not an M3 dropdown. */
     onCanonicalTrackHold: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
@@ -375,8 +375,11 @@ fun DetailScreen(
     /** Verified current MusicBrainz ReleaseGroup, never an inferred local Song. */
     canonicalFeaturedRelease: CanonicalCatalogSearchRow? = null,
     onCanonicalFeaturedReleaseOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
+    /** Lift public artist cards using the same canonical actions as search results. */
+    onCanonicalArtistEntityHold: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** MBID, title, creator and description only: no internal DTO in public API. */
     onCanonicalArtistPlaylistOpen: ((String, String, String, String?) -> Unit)? = null,
+    onCanonicalArtistPlaylistHold: ((String, String, String, String?) -> Unit)? = null,
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -423,11 +426,16 @@ fun DetailScreen(
     }
     val catalogRating by rememberCanonicalCatalogEntityRating(catalogRatingTarget)
     var editingCatalogRating by remember(page.browseId) { mutableStateOf(false) }
+    var artistRatingAnchor by remember(page.browseId) {
+        mutableStateOf<androidx.compose.ui.unit.IntRect?>(null)
+    }
     if (editingCatalogRating && catalogRatingTarget != null) {
         CanonicalCatalogEntityRatingDialog(
             target = catalogRatingTarget,
             title = if (isArtist) "Avaliar artista" else "Avaliar álbum",
             onDismiss = { editingCatalogRating = false },
+            anchorBounds = if (isArtist) artistRatingAnchor else null,
+            artworkUrl = page.thumbnailUrl,
         )
     }
     val localArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -549,21 +557,6 @@ fun DetailScreen(
     // on an album that was closed and reopened would be a page that appears to
     // have lost most of its tracks.
     var query by rememberSaveable(page.browseId) { mutableStateOf("") }
-    var editingMetadataRecording by remember(page.browseId) { mutableStateOf<String?>(null) }
-    var addingMetadataRecording by remember(page.browseId) {
-        mutableStateOf<Triple<String, String, String>?>(null)
-    }
-    addingMetadataRecording?.let { (recording, title, artist) ->
-        CanonicalMetadataRecordingPlaylistPicker(
-            recordingId = recording, title = title, artist = artist,
-            onDismiss = { addingMetadataRecording = null },
-        )
-    }
-    editingMetadataRecording?.let { recording ->
-        CanonicalMetadataRecordingRatingDialog(
-            recordingId = recording, onDismiss = { editingMetadataRecording = null },
-        )
-    }
     val canonicalVisibleTrackIndices = remember(canonicalTracks, query, songSort) {
         canonicalMetadataAlbumVisibleIndices(
             canonicalTracks.map { it.title to it.subtitle }, query, songSort,
@@ -685,7 +678,9 @@ fun DetailScreen(
     AnimatedContent(
         targetState = activeShelf,
         transitionSpec = {
-            fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+            // The prior shelf may belong to a different artist/album state.
+            // Keep its pixels out of the arriving section without moving the hero.
+            fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(0))
         },
         label = "artist_shelf_transition",
         modifier = modifier.fillMaxSize(),
@@ -783,7 +778,9 @@ fun DetailScreen(
                         onToggleSubscription = onToggleSubscription,
                         onRateArtist = if (catalogRatingTarget?.entityType == "ARTIST")
                             ({ editingCatalogRating = true }) else null,
+                        onRateArtistAnchorChange = { artistRatingAnchor = it },
                         artistRated = catalogRating != null,
+                        artistRating = catalogRating,
                         bottomSpace = 22.dp,
                         playColor = appleArt?.keyColor?.let { Color(it) },
                     )
@@ -802,6 +799,7 @@ fun DetailScreen(
                         release = canonicalFeaturedRelease,
                         palette = palette,
                         onOpen = onCanonicalFeaturedReleaseOpen,
+                        onLongPress = onCanonicalArtistEntityHold,
                     )
                 }
             }
@@ -955,15 +953,13 @@ fun DetailScreen(
                         val row = canonicalTracks[originalIndex]
                         val canPlay = row.hasCatalogedAsset && onCanonicalTrackPlay != null
                         val hasMetadataActions = isVerifiedCatalogRecordingId(row.musicBrainzId)
-                        var menuExpanded by remember(page.browseId, originalIndex) {
-                            mutableStateOf(false)
-                        }
                         NativeDetailTrackRowLayout(
                             onClick = if (canPlay) ({
                                 onCanonicalTrackPlay?.invoke(row.musicBrainzId)
                             }) else null,
-                            onLongPress = if (hasMetadataActions) ({ menuExpanded = true }) else null,
-                            onMore = if (hasMetadataActions) ({ menuExpanded = true }) else null,
+                            onLongPress = if (hasMetadataActions)
+                                onCanonicalTrackHold?.let { hold -> { hold(row) } } else null,
+                            onMore = null,
                             textGap = PAGE_GUTTER,
                             leading = {
                                 NativeDetailTrackNumber(
@@ -993,22 +989,8 @@ fun DetailScreen(
                             },
                             rating = {},
                             showRatingSlot = false,
-                            actions = {
-                                CanonicalMetadataTrackMore(
-                                    recordingId = row.musicBrainzId,
-                                    title = row.title,
-                                    artist = row.subtitle.orEmpty().ifBlank { page.title },
-                                    palette = palette,
-                                    expanded = menuExpanded,
-                                    onOpen = { menuExpanded = true },
-                                    onDismiss = { menuExpanded = false },
-                                    onRate = { editingMetadataRecording = it },
-                                    onAddToPlaylist = { id, title, artist ->
-                                        addingMetadataRecording = Triple(id, title, artist)
-                                    },
-                                    tag = "canonical-album-track-more-$originalIndex",
-                                )
-                            },
+                            actions = {},
+
                         )
                         if (index < canonicalVisibleTrackIndices.lastIndex) {
                             HorizontalDivider(
@@ -1086,6 +1068,7 @@ fun DetailScreen(
                                 onSongClick(queue, position)
                             },
                             onLongPress = { onSongLongPress(song) },
+                            showMoreButton = false,
                             onSwipeToQueue = { onSongSwipe(song) },
                             rowBackground = Color.Transparent,
                             // The track's place on the release, not its place in
@@ -1207,6 +1190,7 @@ fun DetailScreen(
                         artistMbid = publicArtistMbid,
                         palette = palette,
                         onOpen = onCanonicalFeaturedReleaseOpen,
+                        onLongPress = onCanonicalArtistEntityHold,
                     )
                 }
                 if (publicTopRows.isNotEmpty() && onCanonicalArtistPlaylistOpen != null) {
@@ -1218,6 +1202,7 @@ fun DetailScreen(
                                 .map { it.musicBrainzId }.toSet(),
                             palette = palette,
                             onOpen = onCanonicalArtistPlaylistOpen,
+                            onLongPress = onCanonicalArtistPlaylistHold,
                         )
                     }
                 }
@@ -1226,6 +1211,7 @@ fun DetailScreen(
                         artistMbid = publicArtistMbid,
                         palette = palette,
                         onOpen = onCanonicalFeaturedReleaseOpen,
+                        onLongPress = onCanonicalArtistEntityHold,
                     )
                 }
             }
@@ -1293,6 +1279,35 @@ fun DetailScreen(
 }
 
 /**
+ * A public MusicBrainz album needs the real release-to-artist credit, not
+ * matching display names. Never infer the artist of a release group from a
+ * similarly named release, and never turn multiple credited leads into one.
+ */
+internal fun verifiedCatalogReleaseLeadArtistRoute(
+    albumBrowseId: String,
+    credits: List<com.music.bitchord.data.catalog.MusicBrainzReleaseArtistCreditEntity>,
+): String? {
+    if (!albumBrowseId.startsWith("catalog:RELEASE:")) return null
+    val releaseId = albumBrowseId.removePrefix("catalog:RELEASE:")
+    val uuid = Regex("^[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$")
+    if (!uuid.matches(releaseId)) return null
+    return credits.filter { it.releaseId.equals(releaseId, ignoreCase = true) &&
+        it.position == 0 && uuid.matches(it.musicBrainzArtistId) }
+        .distinctBy { it.musicBrainzArtistId.lowercase() }
+        .singleOrNull()?.musicBrainzArtistId?.let { "catalog:ARTIST:$it" }
+}
+
+/** Source-bound credit navigation is not inferred from display names of public releases. */
+internal fun detailAlbumArtistBrowseId(
+    albumBrowseId: String,
+    artistId: String?,
+    artistName: String,
+): String? = artistId?.takeIf(String::isNotBlank)
+    ?: com.music.bitchord.data.LocalGroups.folderOf(albumBrowseId)
+        ?.takeIf { artistName.isNotBlank() }
+        ?.let { folder -> com.music.bitchord.data.LocalGroups.artistPageId(folder, artistName) }
+
+/**
  * An album or playlist, laid out as Apple Music does: the sleeve framed in the
  * middle of the page, the title, credit and meta under it, then Shuffle, a
  * labelled Play pill and Add to Library across one row.
@@ -1350,13 +1365,36 @@ private fun ReleaseHeader(
     // own long-press "Open artist" already reads from.
     val artist = songs.firstOrNull()
 
-    val onCreditClick: (() -> Unit)? = artist?.let { song ->
-        song.artistId?.let { id ->
-            if (onArtistClick != null) {
-                { onArtistClick(id, song.artist) }
-            } else null
+    // Source-owned local album groups have an equally source-owned artist
+    // page even without a YouTube artistId. Do not turn arbitrary album
+    // credits into public YouTube browse IDs or do a fuzzy name lookup.
+    val albumArtistContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val albumArtistRoute by androidx.compose.runtime.produceState<String?>(
+        initialValue = null, key1 = page.browseId,
+    ) {
+        if (!page.browseId.startsWith("catalog:RELEASE:")) return@produceState
+        val releaseId = page.browseId.removePrefix("catalog:RELEASE:")
+        value = try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val credits = com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+                    .get(albumArtistContext).catalogDao()
+                    .musicBrainzReleaseArtistCredits(releaseId)
+                verifiedCatalogReleaseLeadArtistRoute(page.browseId, credits)
+            }
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            throw c
+        } catch (_: Exception) {
+            null
         }
     }
+    val creditArtistId = artist?.let { song ->
+        detailAlbumArtistBrowseId(page.browseId, song.artistId, song.artist)
+    } ?: albumArtistRoute
+    val creditName = artist?.artist?.takeIf(String::isNotBlank) ?: credit
+    val onCreditClick: (() -> Unit)? =
+        if (creditArtistId != null && creditName.isNotBlank() && onArtistClick != null) {
+            { onArtistClick(creditArtistId, creditName) }
+        } else null
 
     // Use the same approved native release compositor as unified Library
     // albums, nested artist albums and normal/smart playlists. This adapter
@@ -1618,7 +1656,8 @@ private fun CompactSongRow(
         if (downloadedTint != null) {
             DownloadedBadge(song.videoId, downloadedTint)
         }
-        RowMoreButton(onClick = onLongPress, tint = palette.onBackgroundVariant)
+        // Artist detail tracks open their lifted menu by holding the row.
+        // The old trailing three-dot icon is intentionally retired here.
     }
 }
 

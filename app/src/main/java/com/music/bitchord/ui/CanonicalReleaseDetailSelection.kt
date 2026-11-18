@@ -59,3 +59,38 @@ internal suspend fun canonicalPersistedReleaseDetailPage(
         artworkUri = artworkUri,
     )
 }
+
+/**
+ * If Room rejects a write or storage fails, a complete MusicBrainz lookup is
+ * still useful to the current screen. It remains ephemeral, metadata-only
+ * and never creates a false provider MediaAsset or persists an incomplete
+ * edition. No fallback from ambiguous title/artist text is allowed.
+ */
+internal fun canonicalVerifiedLiveReleaseDetailPage(
+    incoming: MusicBrainzCatalogReleaseDetail,
+    artworkUri: String?,
+): CanonicalCatalogDetailPage? {
+    val proof = incoming.completeness
+    if (!proof.countsExplicitAndExact || !proof.offsetsValid ||
+        !proof.positionsExplicitUnique || incoming.tracks.isEmpty()
+    ) return null
+    val rows = incoming.tracks.map { track ->
+        CanonicalCatalogSearchRow(
+            musicBrainzId = track.recordingMbid,
+            kind = CanonicalSearchKind.RECORDING,
+            title = "${track.mediumNumber}.${track.trackNumber}  ${track.title}",
+            subtitle = track.artistDisplay ?: incoming.artistDisplay,
+            hasCatalogedAsset = false,
+            fromOfflineCache = false,
+            trackMbid = track.trackMbid,
+            durationMs = track.durationMs,
+        )
+    }
+    return CanonicalCatalogDetailPage(
+        title = incoming.title,
+        summary = listOfNotNull(incoming.country, incoming.releaseDate)
+            .joinToString(" · "),
+        artworkUri = artworkUri,
+        rows = canonicalReleaseTracksWithArtwork(rows, artworkUri),
+    )
+}

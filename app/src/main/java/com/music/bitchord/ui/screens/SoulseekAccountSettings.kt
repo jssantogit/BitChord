@@ -2,6 +2,10 @@ package com.music.bitchord.ui.screens
 
 import com.music.bitchord.ui.components.ConfirmationAlert
 import com.music.bitchord.ui.components.NativeAlertHost
+import com.music.bitchord.ui.components.NativeSettingsSecondaryAction
+import com.music.bitchord.ui.components.NativeSettingsPrimaryAction
+import com.music.bitchord.ui.components.PillTextField
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 
 import android.app.Activity
 import android.view.WindowManager
@@ -10,16 +14,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -29,7 +31,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.BuildConfig
 import com.music.bitchord.acquisition.a0.SoulseekAccountProbe
@@ -152,23 +156,37 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
         if (!pilot) {
             Text("Recurso experimental disponível apenas no BitChord devDebug.")
         } else {
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it.take(256) },
-                label = { Text("Usuário Soulseek") },
-                enabled = !busy,
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it.take(256) },
-                label = { Text("Senha (deixe vazia para reutilizar a conta salva)") },
-                visualTransformation = PasswordVisualTransformation(),
-                enabled = !busy,
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "Usuário Soulseek",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PillTextField(
+                    value = username,
+                    onValueChange = { username = it.take(256) },
+                    placeholder = "Usuário Soulseek",
+                    enabled = !busy,
+                    accessibilityLabel = "Usuário Soulseek",
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val label = "Senha (deixe vazia para reutilizar a conta salva)"
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PillTextField(
+                    value = password,
+                    onValueChange = { password = it.take(256) },
+                    placeholder = "Senha",
+                    enabled = !busy,
+                    isPassword = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    accessibilityLabel = label,
+                )
+            }
             Text(
                 "Aviso: o protocolo Soulseek envia credenciais por TCP sem TLS. " +
                     "Use somente uma conta e senha exclusivas de testes. " +
@@ -180,6 +198,10 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
                     checked = acknowledged,
                     onCheckedChange = { acknowledged = it },
                     enabled = !busy,
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = appleMusicKeyColor(),
+                        checkmarkColor = Color.White,
+                    ),
                 )
                 Text(
                     "Entendo e autorizo o teste de autenticação sem TLS.",
@@ -187,22 +209,22 @@ internal fun SoulseekAccountSettingsScreen(contentPadding: PaddingValues) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            OutlinedButton(
+            NativeSettingsSecondaryAction(
+                label = "Testar conexão",
                 onClick = { testAndMaybeSave(false) },
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Testar conexão") }
-            Button(
+            )
+            NativeSettingsPrimaryAction(
+                label = "Conectar e salvar conta",
                 onClick = { testAndMaybeSave(true) },
                 enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Conectar e salvar conta") }
+            )
             if (savedUsername != null) {
-                OutlinedButton(
+                NativeSettingsSecondaryAction(
+                    label = "Desconectar e esquecer credenciais",
                     onClick = { confirmForget = true },
                     enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Desconectar e esquecer credenciais") }
+                )
             }
         }
     }

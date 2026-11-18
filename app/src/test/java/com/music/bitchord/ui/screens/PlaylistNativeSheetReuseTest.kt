@@ -33,7 +33,7 @@ import org.robolectric.annotation.ConscryptMode
 class PlaylistNativeSheetReuseTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun sharedSettingsGroupSelectionDockFitsPhoneAndCollapsesNativeActions() {
+    @Test fun liftedContextSelectionDockFitsPhoneAndCollapsesNativeActions() {
         var added = 0
         var queued = 0
         compose.setContent {
@@ -49,15 +49,22 @@ class PlaylistNativeSheetReuseTest {
                 )
             }
         }
-        compose.onNodeWithTag("native-settings-group-surface").assertExists()
-        compose.onNodeWithContentDescription("Adicionar seleção à playlist").performClick()
-        compose.onNodeWithContentDescription("Adicionar seleção à fila").performClick()
+        compose.onNodeWithTag("native-selection-held-card").assertExists()
+        // The compact dock is deliberately collapsed until the user expands it.
+        compose.onNodeWithText("Adicionar seleção à playlist").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Expandir ações")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Adicionar seleção à playlist")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Adicionar seleção à fila")
+            .performSemanticsAction(SemanticsActions.OnClick)
         compose.runOnIdle {
             assertEquals(1, added)
             assertEquals(1, queued)
         }
-        compose.onNodeWithContentDescription("Recolher ações").performClick()
-        compose.onNodeWithContentDescription("Adicionar seleção à playlist").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Recolher ações")
+            .performSemanticsAction(SemanticsActions.OnClick)
+        compose.onNodeWithText("Adicionar seleção à playlist").assertDoesNotExist()
     }
 
     @Test fun nativePlaylistSheetKeepsWizardHeaderAndSettingsRowBehavior() {

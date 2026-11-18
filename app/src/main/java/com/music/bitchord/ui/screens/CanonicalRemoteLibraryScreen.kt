@@ -3,6 +3,8 @@ package com.music.bitchord.ui.screens
 import android.graphics.BitmapFactory
 import coil3.compose.AsyncImage
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -34,24 +36,18 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -69,10 +65,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.pointerInput
@@ -83,9 +81,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.R
+import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.components.shouldBlurHeldContextBackdrop
 import com.music.bitchord.data.catalog.CanonicalBrowseLibrary
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.data.catalog.CanonicalEntitySortDateRow
 import com.music.bitchord.data.catalog.UnifiedLocalCatalogIndex
 import com.music.bitchord.data.model.BrowseType
@@ -95,15 +96,23 @@ import com.music.bitchord.data.settings.LibraryViewType
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.ui.components.BrowseActionsSheet
+import com.music.bitchord.ui.components.HeldContextMenu
+import com.music.bitchord.ui.components.HeldItem
+import com.music.bitchord.ui.components.LongPressOrigin
+import com.music.bitchord.ui.components.SongActionsPresentation
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import com.music.bitchord.ui.components.BrowseTarget
 import com.music.bitchord.ui.components.RowMoreButton
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import com.music.bitchord.ui.components.NativeDetailTrackNumber
 import com.music.bitchord.ui.components.NUMBERED_ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.NativeTrackRowText
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.components.CoverPlaceholder
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import com.music.bitchord.ui.theme.ArtworkPalette
 import com.music.bitchord.ui.theme.rememberArtworkPalette
 import com.music.bitchord.data.catalog.ArtistEntity
@@ -152,6 +161,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.time.LocalDate
@@ -253,6 +263,14 @@ private data class CanonicalLibraryMenuTarget(
  * a credential-free disk cache or authenticate a cover-art request at runtime.
  * Authenticated URLs and provider cover IDs never enter Compose state.
  */
+/** Only album/artist detail toolbars open the frosted anchored overflow card.
+ * A held item keeps its lifted representation; track actions retain their route.
+ */
+internal fun canonicalLibraryDetailUsesAnchoredOverflow(
+    detailOpen: Boolean,
+    type: CanonicalLibraryEntityType,
+): Boolean = detailOpen && type != CanonicalLibraryEntityType.TRACK
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CanonicalRemoteLibraryScreen(
@@ -265,6 +283,10 @@ internal fun CanonicalRemoteLibraryScreen(
     detailBackToken: Int = 0,
     onDetailChanged: (Boolean) -> Unit = {},
     onNestedAlbumChanged: (Boolean) -> Unit = {},
+    onDetailOverflowVisibilityChange: (CanonicalLibraryEntityType?) -> Unit = {},
+    detailOverflowAnchor: androidx.compose.ui.unit.IntRect? = null,
+    onOpenSettings: () -> Unit = {},
+    onAlbumRatingTargetChanged: (CanonicalLibrarySelection?) -> Unit = {},
     initialPinnedSelection: CanonicalLibraryPin? = null,
     initialContext: CanonicalSmartFilterContext = CanonicalSmartFilterContext.SONGS,
     selectedSourceKey: String? = null,
@@ -276,7 +298,15 @@ internal fun CanonicalRemoteLibraryScreen(
     albumPlaylistToken: Int = 0,
     artistMenuToken: Int = 0,
     onSourceKeysChanged: (List<String>) -> Unit = {},
+    /** Actual canonical album route; null means the parent cannot navigate. */
+    onOpenCatalogAlbum: ((String, String, String) -> Unit)? = null,
+    /** Proven ReleaseId with available source assets; bypass public MB lookup. */
+    onOpenNativeAlbum: ((String, String, String) -> Unit)? = null,
+    /** Exact credited ArtistId and source provider, never a display-name lookup. */
+    onOpenSourceOwnedArtist: ((String, String, String) -> Unit)? = null,
+    heldMenuBottomChromeClearance: Dp = 100.dp,
     selectionBarBottomPadding: Dp = 140.dp,
+    hazeState: HazeState? = null,
 ) {
     val context = LocalContext.current
     val controller = rememberMediaController()
@@ -320,6 +350,7 @@ internal fun CanonicalRemoteLibraryScreen(
     var libraryQuery by remember(unified) { mutableStateOf("") }
     LaunchedEffect(searchVisible) { if (!searchVisible) libraryQuery = "" }
     val selectedStars = if (unified) selectedStarsFilter else null
+    var localIndexReady by remember(unified) { mutableStateOf(!unified) }
     LaunchedEffect(unified) {
         if (unified) {
             try {
@@ -328,6 +359,10 @@ internal fun CanonicalRemoteLibraryScreen(
                 throw cancelled
             } catch (_: Exception) {
                 // Keep remote rows visible if local media scan is unavailable.
+            } finally {
+                // A failed optional local scan must not trap remote-only libraries
+                // behind an endless loader.
+                localIndexReady = true
             }
         }
     }
@@ -340,7 +375,24 @@ internal fun CanonicalRemoteLibraryScreen(
         if (unified) multiRepository.observe(sources.toSet())
         else repository.observe(providerKey)
     }
-    val library by libraryFlow.collectAsStateWithLifecycle(initialValue = CanonicalBrowseLibrary.EMPTY)
+    // EMPTY is valid after the first Room emission, but not before it. A
+    // placeholder empty list briefly rendered a false 'Nenhuma música' frame
+    // while the local index/database had not produced their initial results.
+    // Keep the original lifecycle-aware collection; only its initial value
+    // becomes nullable so an unobserved flow cannot masquerade as empty data.
+    val nullableLibraryFlow = remember(libraryFlow) {
+        libraryFlow.map<CanonicalBrowseLibrary, CanonicalBrowseLibrary?> { it }
+    }
+    val librarySnapshot by nullableLibraryFlow.collectAsStateWithLifecycle(initialValue = null)
+    val initialLibraryLoading = canonicalLibraryInitialLoading(
+        unified = unified,
+        firstEmissionReceived = librarySnapshot != null,
+        localIndexReady = localIndexReady,
+        // Display verified Room rows immediately: only a genuinely empty
+        // initial projection must wait for the in-flight MediaStore scan.
+        persistedRowsPresent = librarySnapshot?.tracks?.isNotEmpty() == true,
+    )
+    val library = librarySnapshot ?: CanonicalBrowseLibrary.EMPTY
     // Album/artist scores belong to their own local table, not track ratings.
     // A single Room flow powers all visible rows and repaints after editing.
     val entityRatingDao = remember(context.applicationContext) {
@@ -362,6 +414,7 @@ internal fun CanonicalRemoteLibraryScreen(
     // Preserve native RecordingId-scoped rating edits from the main branch.
     var editingRecordingId by remember { mutableStateOf<String?>(null) }
     var libraryMenu by remember { mutableStateOf<CanonicalLibraryMenuTarget?>(null) }
+    var heldLibraryMenuOrigin by remember { mutableStateOf<HeldItem?>(null) }
     var playlistPickerSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
@@ -390,6 +443,7 @@ internal fun CanonicalRemoteLibraryScreen(
     var ratingDialogSelection by remember {
         mutableStateOf<List<CanonicalLibrarySelection>?>(null)
     }
+    var artistRatingAnchor by remember { mutableStateOf<androidx.compose.ui.unit.IntRect?>(null) }
     val libraryActionScope = rememberCoroutineScope()
     val filterRepo = remember(context.applicationContext) {
         SmartPlaylistV2FilterRepository(
@@ -458,6 +512,21 @@ internal fun CanonicalRemoteLibraryScreen(
     var detailQuery by remember(selectedEntity?.id) { mutableStateOf("") }
     var artistNestedReleaseOpen by remember { mutableStateOf(false) }
     var artistNestedBackToken by remember { mutableIntStateOf(0) }
+    // Report only a live toolbar-owned menu; held previews never select the toolbar button.
+    val toolbarMenuType = libraryMenu?.selection?.type?.takeIf { type ->
+        heldLibraryMenuOrigin == null && selectedEntity != null &&
+            ((type == CanonicalLibraryEntityType.ALBUM &&
+                selectedContext == CanonicalSmartFilterContext.ALBUMS) ||
+             (type == CanonicalLibraryEntityType.ARTIST &&
+                selectedContext == CanonicalSmartFilterContext.ARTISTS &&
+                !artistNestedReleaseOpen))
+    }
+    LaunchedEffect(toolbarMenuType) {
+        onDetailOverflowVisibilityChange(toolbarMenuType)
+    }
+    DisposableEffect(Unit) {
+        onDispose { onDetailOverflowVisibilityChange(null) }
+    }
     LaunchedEffect(selectedEntity?.id) { artistNestedReleaseOpen = false }
     LaunchedEffect(detailBackToken) {
         if (detailBackToken > 0) {
@@ -476,10 +545,22 @@ internal fun CanonicalRemoteLibraryScreen(
                 artistNestedReleaseOpen,
         )
     }
+    // The floating rating button follows a verified ReleaseId. Nested
+    // artist releases publish their own selection from CanonicalArtistDetailRoute.
+    LaunchedEffect(unified, selectedContext, selectedEntity?.id) {
+        if (unified && selectedContext == CanonicalSmartFilterContext.ALBUMS) {
+            onAlbumRatingTargetChanged(selectedEntity?.let { selected ->
+                CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, selected.id)
+            })
+        } else {
+            onAlbumRatingTargetChanged(null)
+        }
+    }
     DisposableEffect(Unit) {
         onDispose {
             onDetailChanged(false)
             onNestedAlbumChanged(false)
+            onAlbumRatingTargetChanged(null)
         }
     }
     var selectedFilterId by remember(providerKey, selectedContext) {
@@ -793,6 +874,50 @@ internal fun CanonicalRemoteLibraryScreen(
         }
         else -> emptyList()
     }
+    val verifiedAlbumCreditArtist by produceState<
+        com.music.bitchord.ui.components.SourceOwnedArtistEvidence?
+    >(initialValue = null, key1 = selectedEntity?.id, key2 = selectedSource,
+        key3 = scopedDetailTracks) {
+        val id = selectedEntity?.id
+            ?.takeIf { selectedContext == CanonicalSmartFilterContext.ALBUMS }
+            ?: return@produceState
+        // When every visible source is selected, only a single proven asset
+        // provider can claim the credit. Never jump to a random server.
+        val source = selectedSource ?: scopedDetailTracks
+            .flatMap { track -> track.availableAssets.map { it.providerKey } }
+            .distinct().singleOrNull() ?: return@produceState
+        value = try {
+            withContext(Dispatchers.IO) {
+                val albumArtist = (entityState as? CanonicalEntityBrowseState.Albums)
+                    ?.releases?.firstOrNull { it.id == id }?.artistDisplay
+                    ?: scopedDetailTracks.firstOrNull()?.artistDisplay.orEmpty()
+                com.music.bitchord.ui.components.verifiedSourceOwnedPlayerArtist(
+                    recordingId = id,
+                    providerKey = source,
+                    credits = catalogDao.releaseArtistCredits(id),
+                    availableArtists = catalogDao.providerScopedArtists(source),
+                    // Older local/Navidrome releases can have an album credit
+                    // but no releaseArtistCredits row yet. Only a unique artist
+                    // in the *same selected provider* is a safe fallback.
+                    artistName = albumArtist,
+                ) ?: com.music.bitchord.ui.components.verifiedLocalAlbumDisplayArtist(
+                    providerKey = source,
+                    albumCredit = albumArtist,
+                    // These are the release's scoped Recording+Asset members,
+                    // NOT text search results. Reject mixed artist credits and
+                    // any member not present in the selected provider.
+                    memberArtistNames = scopedDetailTracks.map { track ->
+                        if (track.availableAssets.any { it.providerKey == source })
+                            track.artistDisplay else ""
+                    },
+                )
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            null
+        }
+    }
     // The release title/type/year are only enriched from verified canonical
     // ReleaseGroup or MusicBrainz Edition evidence. No "- EP" heuristics when
     // that evidence is absent; no provider name used as a surrogate ID.
@@ -871,15 +996,24 @@ internal fun CanonicalRemoteLibraryScreen(
         ))
     }
     val openTrackMenu: (CanonicalBrowseTrack) -> Unit = { track ->
+        heldLibraryMenuOrigin = LongPressOrigin.consume()
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.TRACK, track.recordingId),
             track.title, track.artistDisplay, track.artworkUri,
         )
     }
     val openAlbumMenu: (ReleaseEntity) -> Unit = { album ->
+        heldLibraryMenuOrigin = LongPressOrigin.consume()
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, album.id),
-            album.title, album.artistDisplay.orEmpty(), album.artworkUri,
+            album.title, album.artistDisplay.orEmpty(),
+            // Match the exact image painted by NativeLibraryEntityCard:
+            // its proven Recording->Release artwork wins over the optional
+            // ReleaseEntity metadata artwork. This is not a title match.
+            heldLibraryAlbumArtworkSource(
+                releaseArtwork = album.artworkUri,
+                verifiedRecordingArtwork = entityArtworkById[album.id]?.artworkUri,
+            ),
         )
     }
     LaunchedEffect(albumMenuToken) {
@@ -935,6 +1069,7 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
     val openArtistMenu: (CanonicalSelectedEntity) -> Unit = { artist ->
+        heldLibraryMenuOrigin = LongPressOrigin.consume()
         libraryMenu = CanonicalLibraryMenuTarget(
             CanonicalLibrarySelection(CanonicalLibraryEntityType.ARTIST, artist.id),
             artist.name, "Artista",
@@ -978,11 +1113,36 @@ internal fun CanonicalRemoteLibraryScreen(
         }
     }
 
+    // Nested category/detail navigation had an immediate replacement even
+    // while the parent Library tab already used the new route arrival.
+    // One current page moves; no extra content copy or repository re-query.
+    val nestedLibraryArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
+        routeKey = "library:${selectedContext.name}:${selectedEntity?.id ?: "shelf"}",
+        reduceMotion = com.music.bitchord.ui.LocalReduceAnimations.current,
+        forward = selectedEntity != null,
+        rootTabPrefix = "library:",
+    )
+    val heldLibraryHaze = remember { HazeState() }
+    // Keep the lifted preview's palette and menu alive through its return
+    // animation. Root Library does not have selectedEntity, so using only that
+    // page's artwork previously turned every menu black.
+    var exitLibraryMenu by remember { mutableStateOf<CanonicalLibraryMenuTarget?>(null) }
+    var exitLibraryWasHeld by remember { mutableStateOf(false) }
+    val heldDetailPalette = rememberArtworkPalette(
+        imageUrl = heldLibraryPaletteArtworkSource(
+            itemArtwork = (libraryMenu ?: exitLibraryMenu)?.imageUrl,
+            detailArtwork = selectedEntity?.artworkUri,
+        ),
+    )
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background,
     ) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(nestedLibraryArrival)) {
+        // Capture page content separately from the lifted overlays.
+        Box(Modifier.fillMaxSize()
+            .hazeSource(heldLibraryHaze)
+        ) {
         if (unified) {
             // Selected albums/artists keep the exact native page chrome.
             // Only their revalidated RecordingId membership changes.
@@ -995,7 +1155,8 @@ internal fun CanonicalRemoteLibraryScreen(
             val shownTracks = if (detail != null) detailMatches else
                 if (selectedContext == CanonicalSmartFilterContext.SONGS)
                     displayedTracks else eligibleTracks
-            val shownState = if (detail == null) filteredState else when (detailState) {
+            val shownState = if (initialLibraryLoading) CanonicalSongFilterState.Loading
+                else if (detail == null) filteredState else when (detailState) {
                 CanonicalDetailBrowseState.Loading -> CanonicalSongFilterState.Loading
                 CanonicalDetailBrowseState.Failed -> CanonicalSongFilterState.Failed
                 is CanonicalDetailBrowseState.Ready -> CanonicalSongFilterState.Ready(detailMatches)
@@ -1018,6 +1179,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     searching = searchVisible,
                     nestedBackToken = artistNestedBackToken,
                     onNestedDetailChanged = { artistNestedReleaseOpen = it },
+                    onNestedAlbumRatingTargetChanged = onAlbumRatingTargetChanged,
                     albumSort = albumSort,
                     albumMenuToken = albumMenuToken,
                     albumPlaylistToken = albumPlaylistToken,
@@ -1049,6 +1211,7 @@ internal fun CanonicalRemoteLibraryScreen(
                     onTrackEditRating = editRating,
                     onTrackOptions = openTrackMenu,
                     onReleaseOptions = openAlbumMenu,
+                    onArtistRatingAnchorChanged = { artistRatingAnchor = it },
                     onRateArtist = {
                         // The same rating editor handles verified canonical
                         // ArtistIds and separately keyed display-artist groups.
@@ -1085,6 +1248,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 val album = (entityState as? CanonicalEntityBrowseState.Albums)
                     ?.releases?.firstOrNull { it.id == detail.id }
                 NativeCanonicalLibraryAlbumDetail(
+                    releaseIdentity = detail.id,
                     title = canonicalAlbumDisplayTitle(
                         detail.name, albumHeaderEvidence?.primaryType,
                     ),
@@ -1101,6 +1265,11 @@ internal fun CanonicalRemoteLibraryScreen(
                     albumQuality = canonicalAlbumSourceQuality(
                         scopedDetailTracks, selectedSource,
                     ),
+                    onCreditClick = verifiedAlbumCreditArtist?.let { credit ->
+                        onOpenSourceOwnedArtist?.let { open ->
+                            { open(credit.artistId, credit.artistName, credit.providerKey) }
+                        }
+                    },
                     onRateAlbum = {
                         ratingDialogSelection = listOf(selection)
                     },
@@ -1142,7 +1311,8 @@ internal fun CanonicalRemoteLibraryScreen(
                     else CanonicalSmartFilterContext.SONGS,
                 tracks = sortCanonicalUnifiedTracks(shownTracks, unifiedSort),
                 filteredState = shownState,
-                entityState = entityState,
+                entityState = if (initialLibraryLoading) CanonicalEntityBrowseState.Loading
+                    else entityState,
                 artworkLoader = artworkLoader,
                 query = if (detail == null) libraryQuery else detailQuery,
                 onQueryChange = { if (detail == null) libraryQuery = it else detailQuery = it },
@@ -1200,7 +1370,9 @@ internal fun CanonicalRemoteLibraryScreen(
                         TrackList(
                             tracks = scopedDetailTracks,
                             artworkLoader = artworkLoader,
-                            onTrackPlay = playTrack,                            onTrackEditRating = editRating,
+                            onTrackPlay = playTrack,
+                            onTrackEditRating = editRating,
+                            onTrackOptions = openTrackMenu,
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
@@ -1250,7 +1422,9 @@ internal fun CanonicalRemoteLibraryScreen(
                                 TrackList(
                                     tracks = displayedTracks,
                                     artworkLoader = artworkLoader,
-                                    onTrackPlay = playTrack,                                    onTrackEditRating = editRating,
+                                    onTrackPlay = playTrack,
+                            onTrackEditRating = editRating,
+                            onTrackOptions = openTrackMenu,
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
@@ -1297,7 +1471,86 @@ internal fun CanonicalRemoteLibraryScreen(
                 }
             }
         }
-        libraryMenu?.let { menu ->
+        } // The lifted overlay is the source's sibling, not its child.
+        // The lifted menu must remain mounted through its 230ms return
+        // animation; removing the parent let on dismiss clipped that motion.
+        LaunchedEffect(libraryMenu, heldLibraryMenuOrigin) {
+            if (libraryMenu != null) {
+                exitLibraryMenu = libraryMenu
+                exitLibraryWasHeld = canonicalLibraryUsesHeldContextMenu(
+                    hasCapturedHold = heldLibraryMenuOrigin != null,
+                    hasHazeBackdrop = true,
+                )
+            } else {
+                kotlinx.coroutines.delay(300)
+                exitLibraryMenu = null
+                exitLibraryWasHeld = false
+            }
+        }
+        (libraryMenu ?: exitLibraryMenu)?.let { menu ->
+            // A track's album is unrelated to its display title. Require the
+            // exact canonical Recording → ReleaseGroup link before exposing
+            // a navigation option; do this once per opened menu off-main.
+            val linkedAlbum by produceState<CatalogReleaseGroupEntity?>(
+                initialValue = null, key1 = menu.selection, key2 = libraryMenu != null,
+            ) {
+                value = if (libraryMenu != null &&
+                    menu.selection.type == CanonicalLibraryEntityType.TRACK &&
+                    isVerifiedCatalogRecordingId(menu.selection.entityId)
+                ) try {
+                    withContext(Dispatchers.IO) {
+                        val id = menu.selection.entityId
+                        val links = catalogDao.recordingReleaseGroupLinksByIds(listOf(id))
+                        canonicalPlaylistAlbumForRecording(id, links)
+                            ?.let { catalogDao.catalogReleaseGroup(it) }
+                            ?.takeIf { it.title.isNotBlank() }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                } else null
+            }
+            // MusicBrainz may be offline even when this exact Release already
+            // has playable assets in MediaStore or Navidrome. Prefer the
+            // provider-scoped native detail (no external lookup) if and only if
+            // a single linked ReleaseId is present in the chosen source.
+            val sourceOwnedAlbum by produceState<ReleaseEntity?>(
+                initialValue = null,
+                key1 = menu.selection,
+                key2 = libraryMenu != null,
+                key3 = selectedSource to selectedEntity?.id,
+            ) {
+                value = if (libraryMenu != null &&
+                    menu.selection.type == CanonicalLibraryEntityType.TRACK &&
+                    isVerifiedCatalogRecordingId(menu.selection.entityId)
+                ) try {
+                    withContext(Dispatchers.IO) {
+                        val recordingId = menu.selection.entityId
+                        val linkedReleases =
+                            catalogDao.releaseIdsForVisibleRecordings(listOf(recordingId))
+                        val sourceKeys = if (unified) sources.filter {
+                            selectedSource == null || selectedSource == it
+                        } else listOf(providerKey)
+                        val releases = sourceKeys.flatMap { key ->
+                            catalogDao.providerScopedReleases(key)
+                        }.distinctBy { it.id }
+                        val preferred = selectedEntity?.id?.takeIf {
+                            selectedContext == CanonicalSmartFilterContext.ALBUMS
+                        }
+                        val chosen = uniqueSourceOwnedAlbumReleaseId(
+                            linkedReleaseIds = linkedReleases,
+                            sourceReleaseIds = releases.mapTo(HashSet()) { it.id },
+                            preferredReleaseId = preferred,
+                        )
+                        releases.firstOrNull { it.id == chosen }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                } else null
+            }
             val sourceForAction = if (unified) selectedSource else providerKey
             val art = when (menu.selection.type) {
                 CanonicalLibraryEntityType.TRACK -> library.tracks.firstOrNull {
@@ -1327,11 +1580,21 @@ internal fun CanonicalRemoteLibraryScreen(
                     )
                 }
             }
-            ModalBottomSheet(
-                onDismissRequest = { libraryMenu = null },
-                containerColor = MaterialTheme.colorScheme.background,
-            ) {
+            val useHeldMenu = canonicalLibraryUsesHeldContextMenu(
+                hasCapturedHold = heldLibraryMenuOrigin != null,
+                hasHazeBackdrop = true,
+            )
+            val menuBody: @Composable () -> Unit = {
                 BrowseActionsSheet(
+                    presentation = if (
+                        canonicalLibraryHeldPresentation(
+                            heldNow = useHeldMenu,
+                            liveMenuVisible = libraryMenu != null,
+                            heldBeforeExit = exitLibraryWasHeld,
+                        ) || (canonicalLibraryDetailUsesAnchoredOverflow(
+                            selectedEntity != null, menu.selection.type,
+                        ))
+                    ) SongActionsPresentation.Menu else SongActionsPresentation.Sheet,
                     target = BrowseTarget(
                         browseId = null,
                         title = menu.title,
@@ -1362,6 +1625,27 @@ internal fun CanonicalRemoteLibraryScreen(
                     onAddToPlaylist = {
                         playlistPickerSelection = listOf(menu.selection)
                         libraryMenu = null
+                    },
+                    onOpenAlbum = sourceOwnedAlbum?.let { album ->
+                        onOpenNativeAlbum?.let { open ->
+                            {
+                                libraryMenu = null
+                                heldLibraryMenuOrigin = null
+                                open(album.id, album.title, album.artistDisplay.orEmpty())
+                            }
+                        }
+                    } ?: linkedAlbum?.let { group ->
+                        onOpenCatalogAlbum?.let { open ->
+                            {
+                                libraryMenu = null
+                                heldLibraryMenuOrigin = null
+                                open(
+                                    "catalog:RELEASE_GROUP:${group.id}",
+                                    group.title,
+                                    group.artistDisplay.orEmpty(),
+                                )
+                            }
+                        }
                     },
                     onSelect = if (selectedEntity == null) {
                         {
@@ -1400,6 +1684,78 @@ internal fun CanonicalRemoteLibraryScreen(
                     },
                 )
             }
+            if (useHeldMenu || exitLibraryWasHeld) {
+                HeldContextMenu(
+                    item = libraryMenu.takeIf { useHeldMenu },
+                    held = heldLibraryMenuOrigin,
+                    hazeState = heldLibraryHaze,
+                    bottomChromeClearance = heldMenuBottomChromeClearance,
+                    hostProvidesBlur = true,
+                    plateTint = heldDetailPalette.elevated,
+                    onDismiss = {
+                        libraryMenu = null
+                        heldLibraryMenuOrigin = null
+                    },
+                    onPreviewClick = if (selectedEntity == null) {
+                        { target ->
+                            libraryMenu = null
+                            heldLibraryMenuOrigin = null
+                            when (target.selection.type) {
+                                CanonicalLibraryEntityType.TRACK ->
+                                    library.tracks.firstOrNull {
+                                        it.recordingId == target.selection.entityId
+                                    }?.let(playTrack)
+                                CanonicalLibraryEntityType.ALBUM, CanonicalLibraryEntityType.ARTIST ->
+                                    selectedEntity = CanonicalSelectedEntity(
+                                        target.selection.entityId, target.title, target.imageUrl,
+                                    )
+                            }
+                        }
+                    } else null,
+                ) {
+                    menuBody()
+                }
+            }
+            if (libraryMenu != null && !useHeldMenu) {
+                if (canonicalLibraryDetailUsesAnchoredOverflow(
+                    selectedEntity != null, menu.selection.type,
+                )) {
+                    // The detail toolbar owns this menu. Do not open the old
+                    // bottom sheet: expand the same frosted card from its ⋯.
+                    com.music.bitchord.FrostedMenuPanel(
+                        hazeState = heldLibraryHaze,
+                        anchorBounds = detailOverflowAnchor,
+                        onDismiss = {
+                            libraryMenu = null
+                            heldLibraryMenuOrigin = null
+                        },
+                    ) {
+                        menuBody()
+                        com.music.bitchord.FrostedMenuRow(
+                            label = "Configurações",
+                            checked = false,
+                            icon = androidx.compose.material.icons.Icons.Rounded.Settings,
+                            onClick = {
+                                libraryMenu = null
+                                heldLibraryMenuOrigin = null
+                                onOpenSettings()
+                            },
+                        )
+                    }
+                } else {
+                    ModalBottomSheet(
+                        onDismissRequest = {
+                            libraryMenu = null
+                            heldLibraryMenuOrigin = null
+                        },
+                        shape = androidx.compose.ui.graphics.RectangleShape,
+                        dragHandle = null,
+                        containerColor = MaterialTheme.colorScheme.background,
+                    ) {
+                        menuBody()
+                    }
+                }
+            }
         }
         playlistPickerSelection?.let { selected ->
             CanonicalLibraryPlaylistPicker(
@@ -1419,6 +1775,17 @@ internal fun CanonicalRemoteLibraryScreen(
                 targets = ratings,
                 selectedSource = if (unified) selectedSource else providerKey,
                 onDismiss = { ratingDialogSelection = null },
+                // Only a direct tap on the artist hero star uses its anchor.
+                // Batch/context menus keep the standard action editor.
+                anchorBounds = if (
+                    selectedEntity != null &&
+                    selectedContext == CanonicalSmartFilterContext.ARTISTS &&
+                    ratings.size == 1 &&
+                    ratings.single().type == CanonicalLibraryEntityType.ARTIST
+                ) artistRatingAnchor else null,
+                artworkUrl = selectedEntity?.artworkUri
+                    ?: selectedEntity?.id?.let { entityArtworkById[it]?.artworkUri }
+                    ?: scopedDetailTracks.firstOrNull()?.artworkUri,
             )
         }
         // Keep the draft while navigating, but never float batch actions over
@@ -1437,6 +1804,7 @@ internal fun CanonicalRemoteLibraryScreen(
                 }) { { ratingDialogSelection = selectedItems.toList() } } else null,
                 onPlayNext = { queueMultiSelection(CanonicalCollectionIntent.ADD_NEXT) },
                 onAddToQueue = { queueMultiSelection(CanonicalCollectionIntent.ADD_TO_QUEUE) },
+                hazeState = hazeState,
             )
         }
         }
@@ -1565,10 +1933,12 @@ internal fun NativeLoadingSpinner(modifier: Modifier = Modifier) {
     // Same first-party progress indicator already used by the playlists UI.
     // Loading is neither an empty-state sentence nor an error message.
     Box(
-        modifier = modifier.fillMaxWidth().height(88.dp).testTag("native-library-loading"),
+        modifier = modifier.fillMaxWidth().heightIn(min = 88.dp).testTag("native-library-loading"),
         contentAlignment = Alignment.Center,
     ) {
-        CircularProgressIndicator(modifier = Modifier.size(28.dp))
+        CircularProgressIndicator(
+            modifier = Modifier.size(28.dp).testTag("native-library-loading-indicator"),
+        )
     }
 }
 
@@ -1581,6 +1951,19 @@ internal fun RemoteBrowseMessage(message: String) {
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
     )
 }
+
+/** The outgoing lifted row keeps its native compact actions until exit ends. */
+internal fun canonicalLibraryHeldPresentation(
+    heldNow: Boolean,
+    liveMenuVisible: Boolean,
+    heldBeforeExit: Boolean,
+): Boolean = heldNow || (!liveMenuVisible && heldBeforeExit)
+
+/** A real captured hold is required; toolbar overflow still opens the sheet. */
+internal fun canonicalLibraryUsesHeldContextMenu(
+    hasCapturedHold: Boolean,
+    hasHazeBackdrop: Boolean,
+): Boolean = hasCapturedHold && hasHazeBackdrop
 
 /** Selection is by canonical ID; text is presentation only. */
 @Composable
@@ -1619,7 +2002,7 @@ private fun RemoteCanonicalEntityList(
 
 /** Only fields supported by the selected canonical media context are offered. */
 @Composable
-private fun RemoteSongSavedFilterMenu(
+internal fun RemoteSongSavedFilterMenu(
     selectedName: String?,
     options: List<SavedSmartPlaylistV2Filter>,
     selectedFilterId: String?,
@@ -1627,17 +2010,27 @@ private fun RemoteSongSavedFilterMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
-        TextButton(onClick = { expanded = true }) {
-            Text("Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Todas as músicas") },
+        NativeInlineTextAction(
+            label = "Filtro: " + (selectedName ?: if (selectedFilterId == null) "Todas" else "Indisponível"),
+            onClick = { expanded = true },
+        )
+        // This may contain dozens of filters, so cap the viewport instead of
+        // letting the native popup extend beyond the available display.
+        val maxPopupHeight = LocalConfiguration.current.screenHeightDp.dp * 0.68f
+        com.music.bitchord.ui.components.NativeCompactOverflowMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            maxContentHeight = maxPopupHeight,
+        ) {
+            com.music.bitchord.ui.components.NativeCompactMenuItem(
+                label = "Todas as músicas",
+                selected = selectedFilterId == null,
                 onClick = { expanded = false; onSelect(null) },
             )
             options.forEach { filter ->
-                DropdownMenuItem(
-                    text = { Text(filter.name) },
+                com.music.bitchord.ui.components.NativeCompactMenuItem(
+                    label = filter.name,
+                    selected = selectedFilterId == filter.id,
                     onClick = { expanded = false; onSelect(filter.id) },
                 )
             }
@@ -1646,7 +2039,7 @@ private fun RemoteSongSavedFilterMenu(
 }
 
 @Composable
-private fun RemoteBrowseTopBar(
+internal fun RemoteBrowseTopBar(
     title: String,
     onBack: () -> Unit,
 ) {
@@ -1657,12 +2050,12 @@ private fun RemoteBrowseTopBar(
             .heightIn(min = 56.dp)
             .padding(horizontal = 8.dp),
     ) {
-        IconButton(onClick = onBack) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                contentDescription = stringResource(R.string.remote_library_back),
-            )
-        }
+        CircleIconButton(
+            icon = PlaylistEditorIcons.Back,
+            contentDescription = stringResource(R.string.remote_library_back),
+            onClick = onBack,
+        )
+        Spacer(Modifier.width(8.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
@@ -1717,6 +2110,7 @@ private fun TrackList(
     artworkLoader: OpenSubsonicArtworkLoader,
     onTrackPlay: (CanonicalBrowseTrack) -> Unit,
     onTrackEditRating: (CanonicalBrowseTrack) -> Unit,
+    onTrackOptions: (CanonicalBrowseTrack) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (tracks.isEmpty()) {
@@ -1736,6 +2130,9 @@ private fun TrackList(
                 artworkLoader = artworkLoader,
                 onClick = { onTrackPlay(track) },
                 onEditRating = { onTrackEditRating(track) },
+                onOptions = { onTrackOptions(track) },
+                onLongPress = { onTrackOptions(track) },
+                showInlineOptions = false,
             )
             HorizontalDivider(
                 modifier = Modifier.padding(start = 84.dp),
@@ -1759,6 +2156,7 @@ internal fun CanonicalTrackRow(
     // Only a category's row enters selection on long press; detail pages don't.
     onLongPress: (() -> Unit)? = null,
     compactForArtist: Boolean = false,
+    showInlineOptions: Boolean = false,
     palette: ArtworkPalette? = null,
     albumTrackNumber: Int? = null,
 ) {
@@ -1768,8 +2166,8 @@ internal fun CanonicalTrackRow(
             if (selectionMode && onToggleSelection != null) onToggleSelection()
             else onClick()
         },
-        onLongPress = onLongPress,
-        onMore = onOptions,
+        onLongPress = if (selectionMode) null else onLongPress ?: onOptions,
+        onMore = null,
         horizontalInset = if (compactForArtist) 0.dp else PAGE_GUTTER,
         modifier = if (compactForArtist) Modifier else Modifier.heightIn(min = 68.dp),
         textGap = if (albumTrackNumber != null) PAGE_GUTTER
@@ -1818,58 +2216,16 @@ internal fun CanonicalTrackRow(
         },
         actions = {
             if (selectionMode && onToggleSelection != null) {
-                IconButton(onClick = onToggleSelection, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        if (selected) Icons.Rounded.CheckCircle
-                        else Icons.Rounded.RadioButtonUnchecked,
-                        contentDescription = if (selected) "Desmarcar faixa" else "Selecionar faixa",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-            } else {
-                CanonicalCatalogRatingMenu(onEdit = onEditRating, onOpenMenu = onOptions)
+                NativeLibrarySelectionAction(
+                    selected = selected,
+                    label = if (selected) "Desmarcar faixa" else "Selecionar faixa",
+                    onToggle = onToggleSelection,
+                )
             }
+            // Track options live in HeldContextMenu; never place a fallback
+            // ellipsis or rating-only popup at the edge of a music row.
         },
     )
-}
-
-/**
- * Preserve main-branch rating menu alongside the canonical filter tabs.
- */
-@Composable
-internal fun CanonicalCatalogRatingMenu(
-    onEdit: () -> Unit,
-    onOpenMenu: (() -> Unit)? = null,
-) {
-    if (onOpenMenu != null) {
-        // This is already the native canonical BrowseActionsSheet route.
-        // Do not compose a second (dormant) rating-only dropdown beneath it.
-        RowMoreButton(
-            onClick = onOpenMenu,
-            contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
-        )
-        return
-    }
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        RowMoreButton(
-            onClick = { expanded = true },
-            contentDescription = sharedStringResource(Res.string.canonical_rating_song_options),
-        )
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text(sharedStringResource(Res.string.recording_feedback_edit)) },
-                leadingIcon = { Icon(Icons.Rounded.Star, contentDescription = null) },
-                onClick = {
-                    expanded = false
-                    onEdit()
-                },
-            )
-        }
-    }
 }
 
 @Composable
@@ -1994,6 +2350,27 @@ internal fun canonicalNativeReleasePaletteUri(
 }
 
 /**
+ * Canonical category lists keep their inset hairlines only between entries.
+ * Do not paint a separator below the final visible track, album or artist.
+ */
+/** Match the held cover with the one actually painted by the Library card. */
+internal fun heldLibraryAlbumArtworkSource(
+    releaseArtwork: String?,
+    verifiedRecordingArtwork: String?,
+): String? = verifiedRecordingArtwork?.takeIf(String::isNotBlank)
+    ?: releaseArtwork?.takeIf(String::isNotBlank)
+
+/** Held menus take their tint from the item the user actually picked. */
+internal fun heldLibraryPaletteArtworkSource(
+    itemArtwork: String?,
+    detailArtwork: String?,
+): String? = itemArtwork?.takeIf(String::isNotBlank)
+    ?: detailArtwork?.takeIf(String::isNotBlank)
+
+internal fun shouldDrawCanonicalLibraryRowDivider(index: Int, total: Int): Boolean =
+    index >= 0 && index < total - 1
+
+/**
  * Root categories are collections, not releases: keep the native floating
  * toolbar, its wide text field and existing ActionPill, but never reserve a
  * generic sleeve-sized rectangle above the actual list/grid.
@@ -2018,25 +2395,26 @@ internal fun NativeUnifiedLibraryCategoryHeader(
 ) {
     Column(
         Modifier.fillMaxWidth()
-            .padding(top = topBarContentPadding(), bottom = 12.dp),
+            .padding(top = topBarContentPadding() + 8.dp, bottom = 12.dp),
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
             color = palette.onBackground,
-            modifier = Modifier.padding(horizontal = PAGE_GUTTER),
+            modifier = Modifier.padding(start = PAGE_GUTTER + 16.dp, end = PAGE_GUTTER),
         )
-        Spacer(Modifier.height(12.dp))
-        DetailSearchField(
+        Spacer(Modifier.height(8.dp))
+        NativeDetailSearchField(
             query = query,
             onQueryChange = onQueryChange,
             onClose = { onQueryChange("") },
             autoFocus = searching,
             onFocused = {},
             palette = palette,
-            placeholder = "Buscar em $title",
-            horizontalInset = PAGE_GUTTER,
+            placeholder = stringResource(R.string.apple_library_search_in_category, title),
+            horizontalInset = PAGE_GUTTER + 4.dp,
+            appleLibraryCategoryStyle = true,
         )
         if (shouldShowCanonicalLibraryCategoryPlayback(
                 context, isAlbumDetail = false, hasPlayableTracks = hasPlayableTracks,
@@ -2173,7 +2551,9 @@ private fun NativeUnifiedLibraryBody(
     BoxWithConstraints(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
     ) {
-        val dragModifier = if (canLongPressSelect) {
+        // A hold opens the existing contextual ⋯ menu. Once the user enters
+        // selection mode, holding and dragging continues to paint selections.
+        val dragModifier = if (canLongPressSelect && selectedItems.isNotEmpty()) {
             Modifier.pointerInput(dragRows, dragIndices, gridMode) {
                 val visited = mutableSetOf<CanonicalLibrarySelection>()
                 var previousIndex: Int? = null
@@ -2242,7 +2622,7 @@ private fun NativeUnifiedLibraryBody(
             when (selectedContext) {
                 CanonicalSmartFilterContext.SONGS -> when (filteredState) {
                     CanonicalSongFilterState.Loading -> item {
-                        NativeLoadingSpinner()
+                        NativeLoadingSpinner(modifier = Modifier.fillParentMaxHeight(0.68f))
                     }
                     CanonicalSongFilterState.Failed -> item {
                         RemoteBrowseMessage("Não foi possível aplicar o filtro.")
@@ -2273,17 +2653,17 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onTrackPlay(track)
                                 },
-                                onMore = { onTrackOptions(track) },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onMore = null, // Category root has no inline overflow.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onTrackOptions(track) }) else null,
                                 selectionMode = selectedItems.isNotEmpty(),
                                 selected = target in selectedItems,
                                 onToggleSelection = { onToggleSelection(target) },
                             )
                         }
-                    } else items(
+                    } else itemsIndexed(
                         items = tracks,
-                        key = CanonicalBrowseTrack::recordingId,
-                    ) { track ->
+                        key = { _, track -> track.recordingId },
+                    ) { index, track ->
                         val target = CanonicalLibrarySelection(
                             CanonicalLibraryEntityType.TRACK, track.recordingId,
                         )
@@ -2292,21 +2672,24 @@ private fun NativeUnifiedLibraryBody(
                             onClick = { onTrackPlay(track) },
                             onEditRating = { onTrackEditRating(track) },
                             onOptions = { onTrackOptions(track) },
-                            onLongPress = null, // The list-level gesture handles hold and drag.
+                            showInlineOptions = false,
+                            onLongPress = if (selectedItems.isEmpty()) ({ onTrackOptions(track) }) else null,
                             selectionMode = selectedItems.isNotEmpty(),
                             selected = target in selectedItems,
                             onToggleSelection = { onToggleSelection(target) },
                         )
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 84.dp),
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                        )
+                        if (shouldDrawCanonicalLibraryRowDivider(index, tracks.size)) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(start = 84.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                            )
+                        }
                     }
                 }
                 CanonicalSmartFilterContext.ALBUMS -> when (entityState) {
                     CanonicalEntityBrowseState.Loading -> item {
-                        NativeLoadingSpinner()
+                        NativeLoadingSpinner(modifier = Modifier.fillParentMaxHeight(0.68f))
                     }
                     CanonicalEntityBrowseState.Failed -> item {
                         RemoteBrowseMessage("Não foi possível carregar os álbuns.")
@@ -2337,14 +2720,14 @@ private fun NativeUnifiedLibraryBody(
                                             album.id, album.title, album.artworkUri,
                                         ))
                                     },
-                                    onMore = { onAlbumOptions(album) },
-                                    onLongPress = null, // The list-level gesture handles hold and drag.
+                                    onMore = null, // Category root has no inline overflow.
+                                    onLongPress = if (selectedItems.isEmpty()) ({ onAlbumOptions(album) }) else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
                                 )
                             }
-                        } else items(albums, key = { it.id }) { album ->
+                        } else itemsIndexed(albums, key = { _, album -> album.id }) { index, album ->
                             val art = entityArtworkById[album.id]
                             val target = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.ALBUM, album.id,
@@ -2364,16 +2747,15 @@ private fun NativeUnifiedLibraryBody(
                                         album.id, album.title, album.artworkUri,
                                     ))
                                 },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onAlbumOptions(album) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
-                                        IconButton(onClick = { onToggleSelection(target) }) {
-                                            Icon(
-                                                if (target in selectedItems) Icons.Rounded.CheckCircle
-                                                else Icons.Rounded.RadioButtonUnchecked,
-                                                contentDescription = "Selecionar álbum",
-                                            )
-                                        }
+                                        NativeLibrarySelectionAction(
+                                            selected = target in selectedItems,
+                                            label = if (target in selectedItems) "Desmarcar álbum"
+                                                else "Selecionar álbum",
+                                            onToggle = { onToggleSelection(target) },
+                                        )
                                     } else Row(verticalAlignment = Alignment.CenterVertically) {
                                         canonicalLibraryEntityRatingForRow(
                                             entityRatings, target,
@@ -2384,24 +2766,25 @@ private fun NativeUnifiedLibraryBody(
                                                 modifier = Modifier.padding(end = 8.dp),
                                             )
                                         }
-                                        RowMoreButton(onClick = { onAlbumOptions(album) })
                                     }
                                 },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 84.dp),
-                                thickness = 0.5.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                            )
+                            if (shouldDrawCanonicalLibraryRowDivider(index, albums.size)) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 84.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                )
+                            }
                         }
                     }
                     is CanonicalEntityBrowseState.Artists -> Unit
                 }
                 CanonicalSmartFilterContext.ARTISTS -> when (entityState) {
                     CanonicalEntityBrowseState.Loading -> item {
-                        NativeLoadingSpinner()
+                        NativeLoadingSpinner(modifier = Modifier.fillParentMaxHeight(0.68f))
                     }
                     CanonicalEntityBrowseState.Failed -> item {
                         RemoteBrowseMessage("Não foi possível carregar os artistas.")
@@ -2430,14 +2813,14 @@ private fun NativeUnifiedLibraryBody(
                                         if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                         else onEntitySelect(artist)
                                     },
-                                    onMore = { onArtistOptions(artist) },
-                                    onLongPress = null, // The list-level gesture handles hold and drag.
+                                    onMore = null, // Category root has no inline overflow.
+                                    onLongPress = if (selectedItems.isEmpty()) ({ onArtistOptions(artist) }) else null,
                                     selectionMode = selectedItems.isNotEmpty(),
                                     selected = target in selectedItems,
                                     onToggleSelection = { onToggleSelection(target) },
                                 )
                             }
-                        } else items(artists, key = { it.id }) { artist ->
+                        } else itemsIndexed(artists, key = { _, artist -> artist.id }) { index, artist ->
                             val art = entityArtworkById[artist.id]
                             val target = CanonicalLibrarySelection(
                                 CanonicalLibraryEntityType.ARTIST, artist.id,
@@ -2456,16 +2839,15 @@ private fun NativeUnifiedLibraryBody(
                                     if (selectedItems.isNotEmpty()) onToggleSelection(target)
                                     else onEntitySelect(artist)
                                 },
-                                onLongPress = null, // The list-level gesture handles hold and drag.
+                                onLongPress = if (selectedItems.isEmpty()) ({ onArtistOptions(artist) }) else null,
                                 trailing = {
                                     if (selectedItems.isNotEmpty()) {
-                                        IconButton(onClick = { onToggleSelection(target) }) {
-                                            Icon(
-                                                if (target in selectedItems) Icons.Rounded.CheckCircle
-                                                else Icons.Rounded.RadioButtonUnchecked,
-                                                contentDescription = "Selecionar artista",
-                                            )
-                                        }
+                                        NativeLibrarySelectionAction(
+                                            selected = target in selectedItems,
+                                            label = if (target in selectedItems) "Desmarcar artista"
+                                                else "Selecionar artista",
+                                            onToggle = { onToggleSelection(target) },
+                                        )
                                     } else Row(verticalAlignment = Alignment.CenterVertically) {
                                         canonicalLibraryEntityRatingForRow(
                                             entityRatings, target,
@@ -2476,17 +2858,18 @@ private fun NativeUnifiedLibraryBody(
                                                 modifier = Modifier.padding(end = 8.dp),
                                             )
                                         }
-                                        RowMoreButton(onClick = { onArtistOptions(artist) })
                                     }
                                 },
                                 artworkSize = 52.dp,
                                 horizontalPadding = PAGE_GUTTER,
                             )
-                            HorizontalDivider(
-                                modifier = Modifier.padding(start = 84.dp),
-                                thickness = 0.5.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
-                            )
+                            if (shouldDrawCanonicalLibraryRowDivider(index, artists.size)) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 84.dp),
+                                    thickness = 0.5.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                )
+                            }
                         }
                     }
                     is CanonicalEntityBrowseState.Albums -> Unit
@@ -2592,16 +2975,12 @@ internal fun NativeLibraryEntityCard(
                 )
             }
             if (selectionMode && onToggleSelection != null) {
-                IconButton(
-                    onClick = onToggleSelection,
+                NativeLibrarySelectionAction(
+                    selected = selected,
+                    label = if (selected) "Desmarcar ${title}" else "Selecionar ${title}",
+                    onToggle = onToggleSelection,
                     modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    Icon(
-                        if (selected) Icons.Rounded.CheckCircle
-                        else Icons.Rounded.RadioButtonUnchecked,
-                        contentDescription = "Selecionar ${title}",
-                    )
-                }
+                )
             } else if (onMore != null) {
                 RowMoreButton(
                     onClick = onMore,
@@ -2634,3 +3013,12 @@ internal fun NativeLibraryEntityCard(
         }
     }
 }
+
+/** Do not mistake the pre-emission placeholder for a verified empty library. */
+internal fun canonicalLibraryInitialLoading(
+    unified: Boolean,
+    firstEmissionReceived: Boolean,
+    localIndexReady: Boolean,
+    persistedRowsPresent: Boolean = false,
+): Boolean = !firstEmissionReceived ||
+    (unified && !localIndexReady && !persistedRowsPresent)

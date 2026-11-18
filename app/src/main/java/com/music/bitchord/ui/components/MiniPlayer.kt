@@ -30,6 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -171,6 +175,14 @@ private fun pullLift(pulled: Float, ease: Float): Float =
         PULL_LIFT_RATE * 2f * ease * (sqrt(1f + pulled / ease) - 1f)
     }
 
+/** Preserve pull dispatch while suppressing elastic visual motion. */
+internal fun miniPlayerLiftForMotion(pulled: Float, ease: Float, reduced: Boolean): Float =
+    if (reduced) 0f else pullLift(pulled, ease)
+
+/** A cancelled pull must not keep the previous track's rubber-band offset. */
+internal fun miniPlayerShouldAnimateLiftSettle(completedNormally: Boolean, reducedMotion: Boolean): Boolean =
+    completedNormally && !reducedMotion
+
 /**
  * Pulling the mini player up into the full player, the way the full player is
  * pulled back down into it: the player follows the finger the whole way, and
@@ -185,6 +197,13 @@ interface MiniPlayerPull {
 
     /** The finger lifted, moving this fast in pixels a second. */
     fun release(velocity: Float)
+
+    /**
+     * The gesture was interrupted (track replacement or pointer cancellation).
+     * Unlike release(0), cancellation must not infer a flick from prior travel.
+     * Hosts that implement only legacy release remain source-compatible.
+     */
+    fun cancel() { release(0f) }
 }
 
 /**
@@ -213,21 +232,49 @@ internal fun Modifier.miniPlayerGestures(
     /** Listening in a party whose host holds the controls. Swipes say so instead of skipping. */
     locked: Boolean = false,
     onBlocked: () -> Unit = {},
+    /** Turns off the mini's own elastic lift and settle, not sheet drag input. */
+    reduceMotion: Boolean = false,
+    /**
+     * Stable queue/media identity. An actual track replacement cancels any
+     * still-held swipe; updated metadata for the same entry must not.
+     * Defaults to Unit for unrelated consumers of the shared recognizer.
+     */
+    gestureIdentity: Any = Unit,
+    /** Optional visual drag feedback; does not alter track-skip decisions. */
+    onHorizontalSwipe: (Float, Boolean) -> Unit = { _, _ -> },
+    /** Reset visual swipe state immediately when a pointer is interrupted. */
+    onHorizontalCancel: () -> Unit = {},
 ): Modifier {
-    // Playback state updates can recompose the bar while a finger is down.
-    // Keep the gesture coroutine alive through those updates while still
-    // dispatching to the latest controller callbacks when the drag finishes.
+    // Recomposition from metadata updates must not cancel an active drag.
+    // A genuinely new queue entry must restart the detector so an old
+    // pointer cannot skip the new track or expand it unexpectedly.
+    // Updated controller callbacks remain available via rememberUpdatedState.
     val currentPull by rememberUpdatedState(pull)
     val currentOnNext by rememberUpdatedState(onNext)
     val currentOnPrevious by rememberUpdatedState(onPrevious)
     val currentLocked by rememberUpdatedState(locked)
     val currentOnBlocked by rememberUpdatedState(onBlocked)
+    val currentReduceMotion by rememberUpdatedState(reduceMotion)
+    val currentOnHorizontalSwipe by rememberUpdatedState(onHorizontalSwipe)
+    val currentOnHorizontalCancel by rememberUpdatedState(onHorizontalCancel)
     val scope = rememberCoroutineScope()
     // Read at draw only, in the layer below: a pull moves the bar without
     // recomposing it.
     val lift = remember { mutableFloatStateOf(0f) }
     val settle = remember { arrayOfNulls<Job>(1) }
-    return pointerInput(Unit) {
+    LaunchedEffect(gestureIdentity) {
+        // Even a spring from a PREVIOUS completed gesture must not continue
+        // on a replacement queue entry.
+        settle[0]?.cancel()
+        lift.floatValue = 0f
+    }
+    LaunchedEffect(reduceMotion) {
+        if (reduceMotion) {
+            settle[0]?.cancel()
+            lift.floatValue = 0f
+        }
+    }
+    return pointerInput(gestureIdentity) {
         val trackThreshold = TRACK_SWIPE_THRESHOLD.toPx()
         val liftEase = PULL_LIFT_EASE.toPx()
         val maxVelocity = viewConfiguration.maximumFlingVelocity
@@ -257,10 +304,21 @@ internal fun Modifier.miniPlayerGestures(
 
             if (!vertical) {
                 var dragged = slopped.position.x - down.position.x
-                // Read before consuming: a consumed change reports no movement.
-                val finished = drag(pointer) { change ->
-                    dragged += change.positionChange().x
-                    change.consume()
+                currentOnHorizontalSwipe(dragged, true)
+                // A queue replacement cancels pointerInput while drag() is
+                // suspended. Always end feedback, but never let a cancelled
+                // drag animate the old swipe over the new queue entry.
+                var finished = false
+                try {
+                    // Read before consuming: a consumed change reports no movement.
+                    finished = drag(pointer) { change ->
+                        dragged += change.positionChange().x
+                        currentOnHorizontalSwipe(dragged, true)
+                        change.consume()
+                    }
+                } finally {
+                    if (!finished) currentOnHorizontalCancel()
+                    currentOnHorizontalSwipe(0f, false)
                 }
                 if (!finished) return@awaitEachGesture
                 val crossed = dragged <= -trackThreshold || dragged >= trackThreshold
@@ -277,35 +335,48 @@ internal fun Modifier.miniPlayerGestures(
             val tracker = VelocityTracker()
             tracker.addPointerInputChange(down)
             tracker.addPointerInputChange(slopped)
-            // The player gets all of it from the touch down, slop included, so
-            // it starts out level with the finger. The bar starts from here,
-            // from nothing: lifted by the slop as well, it jumped a few pixels
-            // in one frame before it began to follow.
-            target.drag(slopped.position.y - down.position.y)
-            var pulled = 0f
-            val finished = drag(pointer) { change ->
-                val delta = change.positionChange().y
-                change.consume()
-                tracker.addPointerInputChange(change)
-                pulled -= delta
-                target.drag(delta)
-                lift.floatValue = pullLift(pulled, liftEase)
-            }
-            target.release(
-                if (finished) tracker.calculateVelocity().y.coerceIn(-maxVelocity, maxVelocity) else 0f,
-            )
-            // Let go, the bar springs home: under the player on its way up, or
-            // in full view if the pull fell short and the player went back.
-            val from = lift.floatValue
-            settle[0] = scope.launch {
-                animate(
-                    initialValue = from,
-                    targetValue = 0f,
-                    animationSpec = spring(
-                        dampingRatio = 0.65f,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                ) { value, _ -> lift.floatValue = value }
+            var completedNormally = false
+            try {
+                // The player gets all of the touch slop; the bar's visual
+                // lift only starts after the gesture direction is resolved.
+                target.drag(slopped.position.y - down.position.y)
+                var pulled = 0f
+                completedNormally = drag(pointer) { change ->
+                    val delta = change.positionChange().y
+                    change.consume()
+                    tracker.addPointerInputChange(change)
+                    pulled -= delta
+                    target.drag(delta)
+                    lift.floatValue = miniPlayerLiftForMotion(pulled, liftEase, currentReduceMotion)
+                }
+            } finally {
+                // A real finger-up can choose open/closed from velocity.
+                // Cancelling pointerInput on a queue change must *not* call
+                // release(0): PlayerSheetMotion still infers average velocity
+                // from the earlier drag and could open the sheet unexpectedly.
+                if (completedNormally) {
+                    target.release(tracker.calculateVelocity().y.coerceIn(-maxVelocity, maxVelocity))
+                } else {
+                    target.cancel()
+                }
+                settle[0]?.cancel()
+                if (!miniPlayerShouldAnimateLiftSettle(completedNormally, currentReduceMotion)) {
+                    // The old pull was interrupted: snap before the next
+                    // queue entry can render; only a real finger-up springs.
+                    lift.floatValue = 0f
+                } else {
+                    val from = lift.floatValue
+                    settle[0] = scope.launch {
+                        animate(
+                            initialValue = from,
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = 0.65f,
+                                stiffness = Spring.StiffnessMediumLow,
+                            ),
+                        ) { value, _ -> lift.floatValue = value }
+                    }
+                }
             }
         }
     }.graphicsLayer { translationY = -lift.floatValue }
@@ -361,6 +432,7 @@ fun MiniPlayer(
     modifier: Modifier = Modifier,
 ) {
     val reduceDynamicBlur by AppSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val reduceMotion by AppSettings.reduceAnimation.collectAsStateWithLifecycle()
     val haptics = rememberHaptics()
     // percent rather than a dp figure, so the corner stays exactly half the
     // height if the row's contents ever change it — which is what keeps a pill
@@ -383,6 +455,8 @@ fun MiniPlayer(
                 },
                 locked = controlsLocked,
                 onBlocked = onBlockedControl,
+                reduceMotion = reduceMotion,
+                gestureIdentity = appleMiniPlayerContentKey(song),
             )
             .clip(shape)
             .then(
@@ -437,10 +511,10 @@ fun MiniPlayer(
             }
             if (isLoading) {
                 Box(Modifier.size(GLYPH_SLOT), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(
+                    MiniPlayerLoadingIndicator(
                         color = MaterialTheme.colorScheme.onBackground,
-                        strokeWidth = 2.dp,
-                        modifier = Modifier.size(SPINNER_SIZE),
+                        size = SPINNER_SIZE,
+                        reduceMotion = reduceMotion,
                     )
                 }
             } else {
@@ -488,15 +562,53 @@ fun MiniPlayer(
  * read as one glyph at two sizes. Shared with the glass bar's docked player.
  */
 @Composable
-internal fun MiniPlayerNextGlyph(tint: Color) {
+internal fun MiniPlayerNextGlyph(tint: Color, glyphSize: Dp = NEXT_GLYPH_SIZE) {
     Icon(
         painter = painterResource(SharedRes.drawable.ic_player_next),
         contentDescription = stringResource(R.string.widget_next),
         tint = tint,
         modifier = Modifier
-            .size(NEXT_GLYPH_SIZE)
+            .size(glyphSize)
             .graphicsLayer { scaleY = 0.85f },
     )
 }
 
 private val NEXT_GLYPH_SIZE = 25.dp
+
+
+/**
+ * The loading state remains visible under Reduce animations, but the
+ * indeterminate rotation stops. This is BitChord's accessibility policy.
+ * Null requests the existing continuous spinner; otherwise use a static arc.
+ */
+internal fun miniPlayerStaticLoadingArc(reducedMotion: Boolean): Float? =
+    if (reducedMotion) 0.75f else null
+
+@Composable
+internal fun MiniPlayerLoadingIndicator(
+    color: Color,
+    size: Dp,
+    reduceMotion: Boolean,
+) {
+    val fixedArc = miniPlayerStaticLoadingArc(reduceMotion)
+    if (fixedArc == null) {
+        CircularProgressIndicator(
+            color = color,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(size),
+        )
+    } else {
+        CircularProgressIndicator(
+            progress = { fixedArc },
+            color = color,
+            strokeWidth = 2.dp,
+            gapSize = 0.dp,
+            // The arc is a stationary loading affordance, NOT measured 75%
+            // completion. Prevent a screen reader from announcing fake
+            // progress while preserving the indeterminate loading role.
+            modifier = Modifier.size(size).clearAndSetSemantics {
+                progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+            },
+        )
+    }
+}

@@ -168,6 +168,7 @@ internal fun CanonicalLibraryPlaylistPicker(
             // invented playlist-creation destination or nested picker.
             onBack = onDismiss,
             embeddedInLibrary = true,
+            normalOnlyCreation = true,
             initialLibraryRecordingIds = wizardSeed,
             initialLibrarySource = selectedSource,
             onLibraryNormalSaved = { onDismiss() },
@@ -192,7 +193,7 @@ internal fun CanonicalLibraryPlaylistPicker(
                     SettingsRow(
                         icon = Icons.Rounded.Add,
                         title = "Nova playlist",
-                        subtitle = "Usar o editor de playlists normal ou inteligente",
+                        subtitle = "Criar uma playlist normal",
                         reserveIconSpace = false,
                         onClick = ::openNativeWizard,
                         trailing = {

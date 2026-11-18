@@ -1,11 +1,15 @@
 package com.music.bitchord.ui.screens
 import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
+import com.music.bitchord.ui.components.NativeInlineTextAction
 
 import android.content.Context
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,10 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import com.music.bitchord.playback.CanonicalCollectionIntent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -26,6 +29,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -283,12 +288,18 @@ private fun AdaptiveCollectionsBody(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
                 if (section.rows.isNotEmpty() && onCollectionAction != null) {
                     Row(Modifier.padding(horizontal = 20.dp)) {
-                        TextButton(onClick = {
-                            onCollectionAction(section.kind, CanonicalCollectionIntent.PLAY_NOW)
-                        }) { Text(texts.play) }
-                        TextButton(onClick = {
-                            onCollectionAction(section.kind, CanonicalCollectionIntent.ADD_TO_QUEUE)
-                        }) { Text(texts.addToQueue) }
+                        NativeInlineTextAction(
+                            label = texts.play,
+                            onClick = {
+                                onCollectionAction(section.kind, CanonicalCollectionIntent.PLAY_NOW)
+                            },
+                        )
+                        NativeInlineTextAction(
+                            label = texts.addToQueue,
+                            onClick = {
+                                onCollectionAction(section.kind, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                            },
+                        )
                     }
                 }
                 if (section.rows.isEmpty()) {
@@ -297,9 +308,20 @@ private fun AdaptiveCollectionsBody(
                     LazyRow(contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(section.rows, key = { it.recordingId }) { row ->
-                            Card(Modifier.width(210.dp).clickable {
-                                onRecordingClick(section.kind, row.recordingId)
-                            }) {
+                            val shape = RoundedCornerShape(12.dp)
+                            Box(
+                                modifier = Modifier
+                                    .width(210.dp)
+                                    .clip(shape)
+                                    .background(MaterialTheme.colorScheme.surface)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
+                                        shape,
+                                    )
+                                    .clickable { onRecordingClick(section.kind, row.recordingId) }
+                                    .testTag("native-adaptive-collection-card"),
+                            ) {
                                 Column(Modifier.padding(12.dp)) {
                                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                         Text(row.title, modifier = Modifier.weight(1f),

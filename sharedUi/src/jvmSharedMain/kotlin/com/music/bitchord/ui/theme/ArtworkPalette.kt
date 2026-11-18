@@ -20,13 +20,12 @@ import com.music.bitchord.ui.graphics.ColorUtils
 import com.music.bitchord.ui.graphics.forPixelAccess
 import com.music.bitchord.ui.graphics.paletteSwatches
 import com.music.bitchord.ui.graphics.toImageBitmap
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.artworkAt
-import com.music.bitchord.ui.player.PlayerPlatform
+import com.music.bitchord.ui.LocalReduceAnimations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.pow
@@ -123,7 +122,10 @@ fun rememberArtworkPalette(
     keyColors: ArtworkKeyColors? = null,
 ): ArtworkPalette {
     val scheme = MaterialTheme.colorScheme
-    val reduceAnimation by PlayerPlatform.host.settings.reduceAnimation.collectAsStateWithLifecycle()
+    // A palette is a presentation primitive, not a player session. The app
+    // supplies this preference at its Compose root; isolated editors and
+    // previews must not require PlayerPlatform.install().
+    val reduceAnimation = LocalReduceAnimations.current
     // Always asked, so the composable call is unconditional; handed nothing to
     // read when the colours are already in hand.
     val decoded = rememberArtworkSeed(if (keyColors == null) imageUrl else null, artPx)

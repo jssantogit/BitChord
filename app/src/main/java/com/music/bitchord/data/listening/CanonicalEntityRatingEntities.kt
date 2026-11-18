@@ -39,4 +39,8 @@ internal interface CanonicalEntityRatingDao {
 
     @Upsert
     suspend fun upsert(value: CanonicalEntityRatingEntity)
+
+    /** Clearing a rating deletes the first-party row; zero is never persisted as a score. */
+    @Query("DELETE FROM canonical_entity_rating WHERE entityType = :entityType AND entityId = :entityId")
+    suspend fun clear(entityType: String, entityId: String): Int
 }

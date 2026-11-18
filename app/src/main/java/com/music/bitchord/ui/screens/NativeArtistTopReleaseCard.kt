@@ -23,10 +23,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.NativeMediaCardMetrics
 import com.music.bitchord.ui.components.longPressMenuClickable
 import com.music.bitchord.ui.theme.ArtworkPalette
-
-private const val TOP_RELEASE_COVER_EDGE_ALPHA = 0.215f
 
 /**
  * The approved Apple-style featured release card. Both online artist
@@ -47,31 +46,33 @@ internal fun NativeArtistTopReleaseCard(
     onLongPress: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    val shape = RoundedCornerShape(28.dp)
-    val coverShape = RoundedCornerShape(12.dp)
+    val shape = NativeMediaCardMetrics.featuredShape
+    val coverShape = NativeMediaCardMetrics.squareCoverShape
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = PAGE_GUTTER)
             .padding(bottom = 22.dp)
-            .clip(shape)
-            .background(Color.White.copy(alpha = LIGHT_FILL_ALPHA), shape)
-            .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_EDGE_ALPHA), shape)
-            .clip(shape)
+            // Capture (and hide) the native featured-card fill and edge along
+            // with its contents; otherwise a white backing remains in the list.
             .longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
+            .clip(shape)
+            .background(Color.White.copy(alpha = NativeMediaCardMetrics.featuredFillAlpha), shape)
+            .border(1.dp, Color.White.copy(alpha = NativeMediaCardMetrics.featuredEdgeAlpha), shape)
+            .clip(shape)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(88.dp)
+                .size(NativeMediaCardMetrics.featuredArtworkSize)
                 .clip(coverShape)
-                .border(1.dp, Color.White.copy(alpha = TOP_RELEASE_COVER_EDGE_ALPHA), coverShape)
+                .border(1.dp, Color.White.copy(alpha = NativeMediaCardMetrics.featuredEdgeAlpha), coverShape)
                 .background(palette.elevated),
         ) {
             artwork()
         }
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(NativeMediaCardMetrics.featuredArtworkGap))
         Column(Modifier.weight(1f)) {
             Text(
                 text = subtitle,

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.music.bitchord.ui.LocalReduceAnimations
 
 /**
  * Grey stand-ins for content still on the wire, laid out to the same metrics as
@@ -41,7 +43,7 @@ import androidx.compose.ui.unit.dp
  */
 
 /** How long one highlight sweep takes to cross a placeholder. */
-private const val SHIMMER_PERIOD_MS = 1400
+private const val SHIMMER_PERIOD_MS = GlobalMotionPolicy.skeletonSweepMillis
 
 private val BlockShape = RoundedCornerShape(6.dp)
 private val LineShape = RoundedCornerShape(4.dp)
@@ -63,6 +65,13 @@ fun ShimmerBox(modifier: Modifier = Modifier, shape: Shape = BlockShape) {
     val highlight = MaterialTheme.colorScheme.onSurfaceVariant
         .copy(alpha = 0.16f)
         .compositeOver(base)
+    // Shared by Home, Explore, Library, Search and details. Do not keep an
+    // infinite draw animation alive when the user enables Reduce animations.
+    val reduceMotion = LocalReduceAnimations.current
+    if (!GlobalMotionPolicy.shimmerEnabled(reduceMotion)) {
+        Box(modifier.clip(shape).background(base))
+        return
+    }
     val sweep = rememberInfiniteTransition(label = "skeleton").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -73,9 +82,7 @@ fun ShimmerBox(modifier: Modifier = Modifier, shape: Shape = BlockShape) {
         modifier
             .clip(shape)
             .drawWithCache {
-                // The band travels from fully off one edge to fully off the
-                // other, which leaves a beat of flat grey between passes rather
-                // than a highlight permanently parked somewhere on the block.
+                // Remains a draw-only sweep, no per-frame recomposition.
                 val band = size.width * 0.5f
                 val startX = -band + sweep.value * (size.width + band * 2)
                 val brush = Brush.horizontalGradient(
@@ -194,17 +201,29 @@ fun LazyListScope.recentlyPlayedSkeleton(listLayout: Boolean) {
                     }
                 }
             } else {
-                BoxWithConstraints {
-                    val cardWidth = heroCardWidth(maxWidth)
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        userScrollEnabled = false,
-                    ) {
-                        items(2) {
+                // Match the actual RecentShelf GRID role: square covers with
+                // title and artist outside the image. Do not reserve a tall
+                // hero-sized placeholder that jumps when history arrives.
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = PAGE_GUTTER),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    userScrollEnabled = false,
+                ) {
+                    items(3) { card ->
+                        Column(Modifier.width(NativeMediaCardMetrics.recentCoverWidth)) {
                             ShimmerBox(
-                                modifier = Modifier.width(cardWidth).aspectRatio(HERO_CARD_RATIO),
-                                shape = RoundedCornerShape(18.dp),
+                                modifier = Modifier
+                                    .width(NativeMediaCardMetrics.recentCoverWidth)
+                                    .aspectRatio(NativeMediaCardMetrics.recentCoverRatio),
+                                shape = NativeMediaCardMetrics.squareCoverShape,
+                            )
+                            Spacer(Modifier.height(NativeMediaCardMetrics.shelfCaptionGap))
+                            SkeletonLine(
+                                fraction = TitleWidths[card % TitleWidths.size], height = 13.dp,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            SkeletonLine(
+                                fraction = SubtitleWidths[card % SubtitleWidths.size], height = 11.dp,
                             )
                         }
                     }

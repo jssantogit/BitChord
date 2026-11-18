@@ -116,6 +116,7 @@ internal fun NativeArtistIncludedInShelf(
     artistMbid: String,
     palette: ArtworkPalette,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onLongPress: ((CanonicalCatalogSearchRow) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val appearanceCoverArt = remember(context) {
@@ -191,6 +192,7 @@ internal fun NativeArtistIncludedInShelf(
             subtitle = appearance.artistCredit + " · " + appearance.title,
             palette = palette,
             onClick = { onOpen(page) },
+            onLongPress = nativeArtistPublicShelfHoldAction(page, onLongPress),
             artwork = {
                 Box(Modifier.fillMaxSize()) {
                     CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())

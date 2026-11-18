@@ -57,3 +57,10 @@ object AppUi {
  * refresh nobody asked for — so the desktop switches it off.
  */
 val LocalPullToRefreshEnabled = staticCompositionLocalOf { true }
+
+/**
+ * Platform-hosted motion preference for shared Compose components.
+ * Android provides AppSettings.reduceAnimation once at the root; other hosts
+ * can provide their own preference. Defaults to normal motion in previews.
+ */
+val LocalReduceAnimations = staticCompositionLocalOf { false }

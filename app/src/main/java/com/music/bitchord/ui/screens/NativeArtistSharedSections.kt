@@ -21,9 +21,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.topBarContentPadding
 import com.music.bitchord.ui.components.trackColumnWidth
 import com.music.bitchord.data.canvas.CanvasArtwork
 import com.music.bitchord.ui.theme.ArtworkPalette
@@ -84,6 +92,39 @@ internal fun nativeArtistVisibleSections(
 }
 
 /**
+ * Foreground stops being visible below the floating top bar, while the separate
+ * artist photograph stays edge-to-edge. Preserve the existing scroll geometry;
+ * the old hard clipRect generated a conspicuous straight 'invisible ceiling'
+ * through artist name/logo glyphs as they scrolled behind the toolbar.
+ */
+internal fun nativeArtistListMaskTopPx(topBarBottomPx: Float, viewportHeightPx: Float): Float =
+    topBarBottomPx.coerceIn(0f, viewportHeightPx.coerceAtLeast(0f))
+
+internal data class NativeArtistListFadeRange(
+    val transparentUntilPx: Float,
+    val fullyVisibleFromPx: Float,
+)
+
+/**
+ * Fade the entire moving foreground over a short strip *below* toolbar chrome.
+ * A viewport shorter than the toolbar must stay hidden rather than reappear.
+ */
+internal fun nativeArtistListFadeRangePx(
+    topBarBottomPx: Float,
+    viewportHeightPx: Float,
+    fadeHeightPx: Float,
+): NativeArtistListFadeRange {
+    val start = nativeArtistListMaskTopPx(topBarBottomPx, viewportHeightPx)
+    val feather = fadeHeightPx.takeIf { it.isFinite() && it > 0f } ?: 1f
+    return NativeArtistListFadeRange(start, start + feather)
+}
+
+/** Mirrors the linear alpha ramp supplied to the GPU brush; useful for tests. */
+internal fun nativeArtistListFadeAlphaAtPx(yPx: Float, range: NativeArtistListFadeRange): Float =
+    ((yPx - range.transparentUntilPx) /
+        (range.fullyVisibleFromPx - range.transparentUntilPx)).coerceIn(0f, 1f)
+
+/**
  * Exact native artist screen structure extracted from DetailScreen:
  * one photo wash beneath one scrolling list. The artist header, actions,
  * ratings, filters, albums and menus remain caller-provided native sections.
@@ -103,6 +144,9 @@ internal fun NativeArtistDetailFrame(
     modifier: Modifier = Modifier,
     content: LazyListScope.() -> Unit,
 ) {
+    // The top bar floats over the artist photo. The moving text/buttons fade
+    // smoothly beneath it instead of meeting a visible clip boundary.
+    val topBarClearancePx = with(LocalDensity.current) { topBarContentPadding().toPx() }
     Box(modifier.fillMaxSize().background(palette.wash)) {
         PageBackground(
             palette = palette,
@@ -114,7 +158,26 @@ internal fun NativeArtistDetailFrame(
         )
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize()
+                // DstIn must operate on the list's own layer, or it will erase
+                // the independently rendered photo wash behind the foreground.
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    val fade = nativeArtistListFadeRangePx(
+                        topBarBottomPx = topBarClearancePx,
+                        viewportHeightPx = size.height,
+                        fadeHeightPx = 64.dp.toPx(),
+                    )
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black),
+                            startY = fade.transparentUntilPx,
+                            endY = fade.fullyVisibleFromPx,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
             contentPadding = contentPadding,
             content = content,
         )

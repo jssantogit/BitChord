@@ -30,6 +30,7 @@ internal fun NativeArtistPublicPlaylistsShelf(
     verifiedRecordingMbids: Set<String>,
     palette: ArtworkPalette,
     onOpen: (String, String, String, String?) -> Unit,
+    onLongPress: ((String, String, String, String?) -> Unit)? = null,
 ) {
     val lists by produceState<List<ListenBrainzPublicPlaylist>>(
         initialValue = emptyList(), key1 = artistMbid, key2 = verifiedRecordingMbids,
@@ -57,6 +58,9 @@ internal fun NativeArtistPublicPlaylistsShelf(
             subtitle = playlist.creator,
             palette = palette,
             onClick = { onOpen(playlist.mbid, playlist.title, playlist.creator, playlist.description) },
+            onLongPress = onLongPress?.let { hold ->
+                { hold(playlist.mbid, playlist.title, playlist.creator, playlist.description) }
+            },
             artwork = {
                 Box(Modifier.fillMaxSize()) {
                     CoverPlaceholder(Icons.Rounded.LibraryMusic, Modifier.fillMaxSize())

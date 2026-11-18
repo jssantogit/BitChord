@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Refresh
@@ -35,7 +36,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
@@ -65,13 +65,20 @@ import com.music.bitchord.data.spotify.LocalPlaylistStore
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.data.listening.CanonicalStaticPlaylistRepository
 import com.music.bitchord.data.listening.SmartPlaylistDefinitionDatabase
+import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.CanonicalRecordingReleaseGroupLinkRow
+import com.music.bitchord.data.catalog.CatalogReleaseGroupEntity
 import com.music.bitchord.playback.CanonicalCollectionIntentPlanner
 import com.music.bitchord.ui.components.PAGE_GUTTER
-import com.music.bitchord.ui.components.RowMoreButton
+import com.music.bitchord.ui.components.NativeCompactMenuItem
+import com.music.bitchord.ui.components.HeldContextMenu
+import com.music.bitchord.ui.components.HeldItem
+import com.music.bitchord.ui.components.LongPressOrigin
 import com.music.bitchord.ui.components.ActionRow
 import com.music.bitchord.ui.components.NativeDetailTrackRowLayout
 import com.music.bitchord.ui.components.SongRow
 import com.music.bitchord.ui.components.NativeDetailTrackSwipeContainer
+import com.music.bitchord.ui.components.nativeCapturedSwipeRowBackground
 import com.music.bitchord.ui.components.NativeDetailTrackArtwork
 import com.music.bitchord.ui.components.NativeDetailTrackRatingSlot
 import com.music.bitchord.ui.components.NativeTrackRowText
@@ -79,8 +86,8 @@ import com.music.bitchord.ui.components.CanonicalRatingStars
 import com.music.bitchord.ui.components.LocalCanonicalRatingDisplay
 import com.music.bitchord.ui.components.CanonicalRatingDisplaySnapshot
 import com.music.bitchord.ui.components.RatingDisplay
-import com.music.bitchord.ui.theme.AccentRed
 import com.music.bitchord.ui.theme.rememberArtworkPalette
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.icons.BitChordIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -228,6 +235,18 @@ internal fun V2DisplayRow.isAvailablePlaylistMember(): Boolean =
         // Metadata-only labels are useful offline but NEVER a playback proof.
         !artist.endsWith(CATALOG_METADATA_NO_AUDIO_SUFFIX)
 
+/** Only an exact, uniquely proven Recording → ReleaseGroup relationship
+ * enables album navigation. No artist/title inference or arbitrary edition. */
+internal fun canonicalPlaylistAlbumForRecording(
+    recordingId: String,
+    links: List<CanonicalRecordingReleaseGroupLinkRow>,
+): String? = links.asSequence()
+    .filter { it.recordingId == recordingId }
+    .map { it.releaseGroupId }
+    .distinct()
+    .singleOrNull()
+    ?.takeIf(::isVerifiedCatalogRecordingId)
+
 /** The same native Library row used everywhere, wired to canonical playback. */
 /** Native SongRow's proven dimensions and controls, but canonical RecordingIds. */
 /** Match the chosen remote rendition first; only fall back to a proven
@@ -250,14 +269,14 @@ internal fun CanonicalPlaylistTrackRow(
     track: V2DisplayRow,
     onPlay: (String) -> Unit,
     onQueue: ((String, CanonicalCollectionIntent) -> Unit)? = null,
+    onHeldActions: (() -> Unit)? = null,
     titleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onBackground,
     subtitleColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
     rowBackground: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.background,
-    activeTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    activeTint: androidx.compose.ui.graphics.Color = appleMusicKeyColor(),
     isCurrent: Boolean = false,
     isPlaying: Boolean = false,
 ) {
-    var menuExpanded by remember(track.id) { mutableStateOf(false) }
     val available = track.isAvailablePlaylistMember()
     val swipeSetting = com.music.bitchord.ui.AppUi.hostOrNull?.swipeToPlayNext
     val playNext = swipeSetting?.collectAsStateWithLifecycle()?.value ?: false
@@ -273,17 +292,20 @@ internal fun CanonicalPlaylistTrackRow(
         onSwipeToQueue = onSwipeToQueue,
         // The row must mask the queue reveal on an artwork-tinted page.
         rowBackground = rowBackground,
-    ) { rowModifier ->
+    ) { rowModifier, swipeCover ->
         NativeDetailTrackRowLayout(
             modifier = rowModifier.then(
                 if (isCurrent) Modifier.testTag("canonical-playlist-current-track")
                 else Modifier,
             ),
-            background = if (isCurrent) activeTint.copy(alpha = 0.14f)
+            background = nativeCapturedSwipeRowBackground(
+                swipeCover,
+                if (isCurrent) activeTint.copy(alpha = 0.14f)
                 else androidx.compose.ui.graphics.Color.Transparent,
+            ),
             onClick = if (available) ({ onPlay(track.id) }) else null,
-            onLongPress = if (available) ({ menuExpanded = true }) else null,
-            onMore = if (available) ({ menuExpanded = true }) else null,
+            onLongPress = if (available) onHeldActions else null,
+            onMore = null,
             opacity = if (available) 1f else 0.45f,
             leading = {
                 NativeDetailTrackArtwork(showPlayingBars = isCurrent && isPlaying) {
@@ -312,28 +334,8 @@ internal fun CanonicalPlaylistTrackRow(
                     color = titleColor,
                 )
             },
-            actions = {
-                if (available) {
-                    Box {
-                        RowMoreButton(
-                            onClick = { menuExpanded = true }, tint = subtitleColor,
-                            contentDescription = "Ações da música",
-                        )
-                        if (menuExpanded) {
-                            CanonicalTrackActionSheet(
-                                onDismiss = { menuExpanded = false },
-                                onPlay = { onPlay(track.id) },
-                                onPlayNext = onQueue?.let { queue ->
-                                    { queue(track.id, CanonicalCollectionIntent.ADD_NEXT) }
-                                },
-                                onAddToQueue = onQueue?.let { queue ->
-                                    { queue(track.id, CanonicalCollectionIntent.ADD_TO_QUEUE) }
-                                },
-                            )
-                        }
-                    }
-                }
-            },
+            actions = {},
+
         )
     }
 }
@@ -351,49 +353,56 @@ internal fun canonicalPlaylistSwipeIntent(playNext: Boolean): CanonicalCollectio
     else CanonicalCollectionIntent.ADD_TO_QUEUE
 
 /**
- * Native action-row presentation reused from SongActionsSheet / BrowseActionsSheet.
- * The actions carry only the clicked canonical RecordingId, never a legacy Song.
+ * Provider-independent playlist track actions. They are composed inside the
+ * same frosted HeldContextMenu used by local and Navidrome rows, not in a
+ * solid Popup anchored to a now-retired row ellipsis.
  */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun CanonicalTrackActionSheet(
+internal fun CanonicalPlaylistHeldTrackActions(
     onDismiss: () -> Unit,
     onPlay: () -> Unit,
     onPlayNext: (() -> Unit)?,
     onAddToQueue: (() -> Unit)?,
+    onOpenAlbum: (() -> Unit)?,
 ) {
-    androidx.compose.material3.ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = androidx.compose.material3.rememberModalBottomSheetState(
-            skipPartiallyExpanded = true,
-        ),
-        containerColor = MaterialTheme.colorScheme.background,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-        ) {
-            ActionRow(Icons.Rounded.PlayArrow, "Reproduzir daqui") {
-                onPlay()
+        NativeCompactMenuItem(
+            label = "Reproduzir daqui",
+            icon = Icons.Rounded.PlayArrow,
+            onClick = {
                 onDismiss()
-            }
-            onPlayNext?.let { next ->
-                ActionRow(Icons.Rounded.SkipNext, "Reproduzir a seguir") {
+                onPlay()
+            },
+        )
+        onPlayNext?.let { next ->
+            NativeCompactMenuItem(
+                label = "Reproduzir a seguir",
+                icon = Icons.Rounded.SkipNext,
+                onClick = {
+                    onDismiss()
                     next()
-                    onDismiss()
-                }
-            }
-            onAddToQueue?.let { queue ->
-                ActionRow(
-                    Icons.AutoMirrored.Rounded.QueueMusic,
-                    "Adicionar à fila",
-                    modifier = Modifier.testTag("canonical-track-queue-action"),
-                ) {
-                    queue()
-                    onDismiss()
-                }
-            }
+                },
+            )
         }
-    }
+        onAddToQueue?.let { queue ->
+            NativeCompactMenuItem(
+                label = "Adicionar à fila",
+                icon = Icons.AutoMirrored.Rounded.QueueMusic,
+                onClick = {
+                    onDismiss()
+                    queue()
+                },
+            )
+        }
+        onOpenAlbum?.let { openAlbum ->
+            NativeCompactMenuItem(
+                label = "Abrir álbum",
+                icon = Icons.Rounded.Album,
+                onClick = {
+                    onDismiss()
+                    openAlbum()
+                },
+            )
+        }
 }
 
 /**
@@ -408,6 +417,7 @@ internal fun CanonicalPlaylistDetailScreen(
     onShuffle: () -> Unit,
     onTrackClick: (String) -> Unit,
     onTrackQueue: (String, CanonicalCollectionIntent) -> Unit,
+    onOpenAlbum: (String, String, String) -> Unit = { _, _, _ -> },
     onLegacyPlay: (String, List<Song>, Int) -> Unit = { _, _, _ -> },
     onLegacyShuffle: (String, List<Song>) -> Unit = { _, _ -> },
     onLegacyQueue: (List<Song>) -> Unit = {},
@@ -534,6 +544,38 @@ internal fun CanonicalPlaylistDetailScreen(
     LaunchedEffect(card.id, rows) {
         onRowsReady(rows)
     }
+    // Resolve in batches, once per playlist snapshot. Rendering lazy rows
+    // never queries Room individually and never guesses album by track name.
+    val albumByRecording by produceState(
+        initialValue = emptyMap<String, CatalogReleaseGroupEntity>(),
+        key1 = card.id, key2 = rows,
+    ) {
+        val ids = rows.orEmpty().map { it.id }.distinct().filter(::isVerifiedCatalogRecordingId)
+        value = if (ids.isEmpty()) emptyMap() else try {
+            withContext(Dispatchers.IO) {
+                val dao = CanonicalCatalogDatabase.get(context).catalogDao()
+                val links = ids.chunked(300).flatMap { chunk ->
+                    dao.recordingReleaseGroupLinksByIds(chunk)
+                }.groupBy { it.recordingId }
+                val uniqueLinks = ids.mapNotNull { recordingId ->
+                    canonicalPlaylistAlbumForRecording(
+                        recordingId, links[recordingId].orEmpty(),
+                    )?.let { recordingId to it }
+                }.toMap()
+                val groups = uniqueLinks.values.distinct().chunked(300)
+                    .flatMap { groupIds -> dao.catalogReleaseGroupsByIds(groupIds) }
+                    .associateBy(CatalogReleaseGroupEntity::id)
+                uniqueLinks.mapNotNull { (recordingId, groupId) ->
+                    groups[groupId]?.takeIf { it.title.isNotBlank() }
+                        ?.let { recordingId to it }
+                }.toMap()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
     val visibleRows = remember(rows, query, sort) {
         val filtered = rows.orEmpty().filter {
             it.title.contains(query, ignoreCase = true) ||
@@ -571,10 +613,51 @@ internal fun CanonicalPlaylistDetailScreen(
         (rows?.size ?: 0) <= CanonicalCollectionIntentPlanner.MAX_INPUT_SIZE &&
         rows.orEmpty().all { it.isAvailablePlaylistMember() }
 
+    var heldTrack by remember(card.id) { mutableStateOf<V2DisplayRow?>(null) }
+    var heldTrackOrigin by remember(card.id) { mutableStateOf<HeldItem?>(null) }
+    val dismissHeldTrack: () -> Unit = {
+        heldTrack = null
+        heldTrackOrigin = null
+    }
     NativePlaylistDetailFrame(
         palette = palette,
         listState = listState ?: rememberLazyListState(),
         bottomPadding = contentPadding.calculateBottomPadding(),
+        heldActions = { hazeState ->
+            HeldContextMenu(
+                item = heldTrack,
+                held = heldTrackOrigin,
+                hazeState = hazeState,
+                hostProvidesBlur = true,
+                bottomChromeClearance = maxOf(154.dp, contentPadding.calculateBottomPadding()),
+                plateTint = palette.elevated,
+                onDismiss = dismissHeldTrack,
+                onPreviewClick = { chosen ->
+                    dismissHeldTrack()
+                    onTrackClick(chosen.id)
+                },
+            ) { chosen ->
+                CanonicalPlaylistHeldTrackActions(
+                    onDismiss = dismissHeldTrack,
+                    onPlay = { onTrackClick(chosen.id) },
+                    onPlayNext = {
+                        onTrackQueue(chosen.id, CanonicalCollectionIntent.ADD_NEXT)
+                    },
+                    onAddToQueue = {
+                        onTrackQueue(chosen.id, CanonicalCollectionIntent.ADD_TO_QUEUE)
+                    },
+                    onOpenAlbum = albumByRecording[chosen.id]?.let { group ->
+                        {
+                            onOpenAlbum(
+                                "catalog:RELEASE_GROUP:${group.id}",
+                                group.title,
+                                group.artistDisplay.orEmpty(),
+                            )
+                        }
+                    },
+                )
+            }
+        },
     ) {
         item(key = "playlist-detail-cover") {
             // The same hero frame used by DetailScreen.ReleaseHeader; the
@@ -612,31 +695,23 @@ internal fun CanonicalPlaylistDetailScreen(
                     }
                 },
                 actions = {
-                    if (canPlay) {
-                        Spacer(Modifier.height(18.dp))
-                        NativeReleaseActionRow(
-                            onPlay = {
-                                if (card is LibraryPlaylistCard.Normal) {
-                                    onLegacyPlay(card.id, playableHistoricalSongs, 0)
-                                } else onAction(CanonicalCollectionIntent.PLAY_NOW)
-                            },
-                            onShuffle = {
-                                if (card is LibraryPlaylistCard.Normal) {
-                                    onLegacyShuffle(card.id, playableHistoricalSongs)
-                                } else onShuffle()
-                            },
-                            // Every playlist with a + uses it to pin in the
-                            // Library. Queue actions remain in the existing
-                            // overflow/track sheets, never hidden behind +.
-                            isLocal = false,
-                            reservePinAction = true,
-                            pinTargetLabel = "playlist",
-                            isPinnedInLibrary = pinnedPlaylists.any { it.id == card.id },
-                            onTogglePin = {
-                                playlistPinRepo.toggle(LibraryPlaylistPin(card.id, card.title))
-                            },
-                        )
-                    }
+                    NativePlaylistHeroActions(
+                        canPlay = canPlay,
+                        isPinned = pinnedPlaylists.any { it.id == card.id },
+                        onTogglePin = {
+                            playlistPinRepo.toggle(LibraryPlaylistPin(card.id, card.title))
+                        },
+                        onPlay = {
+                            if (card is LibraryPlaylistCard.Normal) {
+                                onLegacyPlay(card.id, playableHistoricalSongs, 0)
+                            } else onAction(CanonicalCollectionIntent.PLAY_NOW)
+                        },
+                        onShuffle = {
+                            if (card is LibraryPlaylistCard.Normal) {
+                                onLegacyShuffle(card.id, playableHistoricalSongs)
+                            } else onShuffle()
+                        },
+                    )
                 }
             )
             }
@@ -667,7 +742,7 @@ internal fun CanonicalPlaylistDetailScreen(
             }
         }
         if (rows == null && card !is LibraryPlaylistCard.Normal) item(key = "playlist-detail-loading") {
-            NativeLoadingSpinner()
+            NativeLoadingSpinner(modifier = Modifier.fillParentMaxHeight(0.62f))
         }
         if (rows?.isEmpty() == true && card !is LibraryPlaylistCard.Normal) {
             if (trackLoadFailed) {
@@ -709,16 +784,12 @@ internal fun CanonicalPlaylistDetailScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    IconButton(
-                                        onClick = { suggestionPage++ },
+                                    PlaylistSuggestionAction(
+                                        icon = Icons.Rounded.Refresh,
+                                        label = "Atualizar sugestões",
                                         enabled = availableSuggestions.size > 5,
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Refresh,
-                                            contentDescription = "Atualizar sugestões",
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                        )
-                                    }
+                                        onClick = { suggestionPage++ },
+                                    )
                                 }
                                 suggestions.forEach { suggested ->
                                     LibraryRow(
@@ -734,16 +805,12 @@ internal fun CanonicalPlaylistDetailScreen(
                                         },
                                         horizontalPadding = 16.dp,
                                         trailing = {
-                                            IconButton(
-                                                onClick = { addSuggested(suggested.id) },
+                                            PlaylistSuggestionAction(
+                                                icon = Icons.Rounded.AddCircleOutline,
+                                                label = "Adicionar ${suggested.title}",
                                                 enabled = pendingSuggestionId == null,
-                                            ) {
-                                                Icon(
-                                                    Icons.Rounded.AddCircleOutline,
-                                                    contentDescription = "Adicionar ${suggested.title}",
-                                                    tint = MaterialTheme.colorScheme.onSurface,
-                                                )
-                                            }
+                                                onClick = { addSuggested(suggested.id) },
+                                            )
                                         },
                                     )
                                 }
@@ -802,6 +869,14 @@ internal fun CanonicalPlaylistDetailScreen(
                 track = track,
                 onPlay = onTrackClick,
                 onQueue = onTrackQueue,
+                onHeldActions = {
+                    // The row's long press records exact native coordinates.
+                    // Without these, never replace a track with a floating popup.
+                    LongPressOrigin.consume()?.let { origin ->
+                        heldTrackOrigin = origin
+                        heldTrack = track
+                    }
+                },
                 titleColor = palette.onBackground,
                 subtitleColor = palette.onBackgroundVariant,
                 rowBackground = palette.background,

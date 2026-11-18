@@ -5,6 +5,8 @@ import androidx.compose.ui.unit.Dp
 import com.music.bitchord.sharedui.resources.*
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,6 +19,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -37,13 +40,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DownloadDone
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.NorthWest
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -52,6 +50,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -61,10 +60,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import com.music.bitchord.ui.theme.appleMusicKeyColor
+import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import coil3.compose.AsyncImage
 import com.music.bitchord.ui.components.ResilientAppleCover
@@ -82,12 +87,13 @@ import com.music.bitchord.data.model.EntityType
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
 import com.music.bitchord.ui.components.RowMoreButton
-import com.music.bitchord.ui.components.PlayingAccent
 import com.music.bitchord.ui.components.ROW_DIVIDER_INSET
 import com.music.bitchord.ui.components.SearchField
 import com.music.bitchord.ui.components.SongRow
 import com.music.bitchord.ui.player.rememberPlaybackArtworkImageModel
 import com.music.bitchord.ui.components.SearchPlayingBars
+import com.music.bitchord.ui.LocalReduceAnimations
+import com.music.bitchord.ui.components.GlobalMotionPolicy
 import com.music.bitchord.ui.components.thumbnailBorder
 import com.music.bitchord.ui.components.songListSkeleton
 import com.music.bitchord.ui.haptics.Haptic
@@ -240,8 +246,11 @@ fun SearchScreen(
     canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
     canonicalPublicPlaylists: UiState<List<CanonicalPublicPlaylistSearchRow>>? = null,
     onCanonicalPlaylistOpen: (CanonicalPublicPlaylistSearchRow) -> Unit = {},
+    onCanonicalPlaylistLongPress: ((CanonicalPublicPlaylistSearchRow) -> Unit)? = null,
     canonicalDetail: UiState<CanonicalCatalogDetailPage>? = null,
     onCanonicalOpen: (CanonicalCatalogSearchRow) -> Unit = {},
+    onCanonicalLongPress: ((CanonicalCatalogSearchRow) -> Unit)? = null,
+    onCanonicalRecordingInfo: (CanonicalCatalogSearchRow) -> Unit = {},
     onCanonicalBack: () -> Unit = {},
     onCanonicalLoadMore: () -> Unit = {},
     canonicalLoadingMore: Boolean = false,
@@ -254,6 +263,8 @@ fun SearchScreen(
     /** Canonical remote assets, not source-owned stream URLs. */
     serverResults: UiState<List<CanonicalServerSearchRow>>? = null,
     onServerPlay: (CanonicalServerSearchRow) -> Unit = {},
+    /** Verified server assets have their own long-press route in the host. */
+    onServerLongPress: ((CanonicalServerSearchRow) -> Unit)? = null,
     /** The Addons source's tracks for the submitted query; null until one is submitted. */
     addonResults: UiState<List<Song>>? = null,
     /** Words searched in the Addons tab before, newest first; shown while the field is empty. */
@@ -273,6 +284,9 @@ fun SearchScreen(
      * about the results, and the switcher would just push them down.
      */
     sourceSwitcher: (@Composable () -> Unit)? = null,
+    /** Mirrors the actual ViewModel submit state; Local remains live while typing. */
+    searchCommitted: Boolean = false,
+    appleResultTabs: Boolean = false,
     /** Apple commercial catalog; IDs are storefront-scoped, never MBIDs. */
     appleResults: UiState<List<AppleEditorialSearchRow>>? = null,
     appleArtistResults: UiState<List<AppleEditorialSearchRow>>? = null,
@@ -343,7 +357,7 @@ fun SearchScreen(
                     modifier = Modifier.padding(start = PAGE_GUTTER, end = PAGE_GUTTER, bottom = 4.dp),
                 )
             }
-            if (sourceSwitcher != null) {
+            if (sourceSwitcher != null && !searchCommitted && query.isNotBlank()) {
                 // Source origins remain selectable while a query is visible,
                 // so changing General ↔ Server ↔ Local does not require the
                 // user to clear and retype the same artist or release.
@@ -358,18 +372,20 @@ fun SearchScreen(
             // Catalog searches have artist/album/recording types too. The
             // underlying source is metadata, not a separate user-facing tab.
             // YouTube-only video/playlist filters are never offered there.
-            if (!suggesting && !searchingLibrary && !searchingAddons &&
+            if ((if (appleResultTabs) searchCommitted else !suggesting) &&
+                !searchingLibrary && !searchingAddons &&
                 (!searchingCanonical || canonicalDetail == null) &&
                 (results != null || (searchingCanonical &&
                     (canonicalResults != null || appleResults != null ||
                         appleArtistResults != null || appleTrackResults != null)))
             ) {
                 SearchFilterTabs(
+                    appleStyle = appleResultTabs,
                     filter = filter,
                     onFilterChange = onFilterChange,
                     available = if (searchingCanonical) listOf(
-                        SearchFilter.ALL, SearchFilter.SONGS,
-                        SearchFilter.ALBUMS, SearchFilter.ARTISTS,
+                        SearchFilter.ALL, SearchFilter.ARTISTS,
+                        SearchFilter.ALBUMS, SearchFilter.SONGS,
                         SearchFilter.PLAYLISTS,
                     ) else SearchFilter.entries,
                 )
@@ -382,84 +398,195 @@ fun SearchScreen(
             contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()),
         ) {
             when {
-                searchingCanonical -> when {
-                    query.isBlank() && canonicalResults == null &&
-                        canonicalDetail == null && appleResults == null &&
-                        appleArtistResults == null && appleTrackResults == null -> {
-                        val recent = canonicalRecentSearchEntries(history)
-                        if (recent.isEmpty()) {
-                            item { MessageState(stringResource(Res.string.canonical_search_start)) }
-                        } else {
-                            recentSearches(
-                                history = recent,
-                                currentSong = currentSong,
-                                isPlaying = isPlaying,
-                                onClick = onHistoryClick,
-                                onRemove = onHistoryRemove,
-                                onClear = onHistoryClear,
+                searchingCanonical -> {
+                    if (canonicalSearchEditing(query, searchCommitted, canonicalDetail != null)) {
+                        // Only locally known text, not invented Apple/server completions:
+                        // an explicit action for the typed query plus matching history.
+                        val known = canonicalRecentSearchEntries(history)
+                            .map { it.title }
+                            .filter { it.startsWith(query, ignoreCase = true) &&
+                                !it.equals(query, ignoreCase = true) }
+                            .distinct()
+                            .take(2)
+                        item(key = "canonical:typed-query-suggestion") {
+                            SuggestionRow(
+                                term = query.trim(),
+                                isQueryAction = true,
+                                onFill = null,
+                                onClick = {
+                                    onSubmit()
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                },
+                            )
+                        }
+                        itemsIndexed(known, key = { _, term -> "canonical:completion:$term" }) { _, term ->
+                            SuggestionRow(
+                                term = term,
+                                isQueryAction = false,
+                                onFill = { onQueryChange(term) },
+                                onClick = {
+                                    onSuggestionClick(term)
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                },
+                            )
+                        }
+                        // The ViewModel already resolves cached MusicBrainz
+                        // artists/recordings while typing. Reuse those real
+                        // identities without any new network requests.
+                        val cachedMatches = (canonicalResults as? UiState.Success)
+                            ?.data.orEmpty()
+                        itemsIndexed(
+                            canonicalRowsForQuery(
+                                cachedMatches, query, SearchFilter.ALL,
+                            ).take(5),
+                            key = { _, row ->
+                                "canonical:cached:" + row.kind + ":" +
+                                    (row.trackMbid ?: row.musicBrainzId)
+                            },
+                        ) { _, row ->
+                            val kind = when (row.kind) {
+                                CanonicalSearchKind.RECORDING -> stringResource(Res.string.canonical_recording_kind)
+                                CanonicalSearchKind.RELEASE_GROUP -> stringResource(Res.string.canonical_group_kind)
+                                CanonicalSearchKind.RELEASE -> stringResource(Res.string.canonical_release_kind)
+                                CanonicalSearchKind.ARTIST -> stringResource(Res.string.canonical_artist_kind)
+                            }
+                            NativeSearchResultRow(
+                                row = canonicalNativeSearchRowUi(row, kind),
+                                onLongPress = onCanonicalLongPress?.let { held -> { held(row) } },
+                                onClick = when {
+                                    row.kind != CanonicalSearchKind.RECORDING -> ({ onCanonicalOpen(row) })
+                                    row.hasCatalogedAsset -> ({ onCanonicalPlay(row.musicBrainzId) })
+                                    else -> ({ onCanonicalRecordingInfo(row) })
+                                },
                             )
                         }
                     }
-                    filter == SearchFilter.PLAYLISTS && canonicalDetail == null ->
-                        canonicalPublicPlaylistSearchResults(
-                            canonicalPublicPlaylists, onCanonicalPlaylistOpen,
-                        )
-                    catalogSearchMusicBrainzVisible && canonicalDetail == null ->
-                        canonicalMusicBrainzResults(
-                            query, canonicalResults, canonicalDetail, filter,
-                            onCanonicalOpen, onCanonicalBack,
-                            onCanonicalLoadMore, canonicalLoadingMore,
-                            onCanonicalSearchLoadMore, canonicalSearchHasMore,
-                            canonicalSearchLoadingMore,
-                            onCanonicalPlay, onCanonicalAddToQueue,
-                        )
-                    filter == SearchFilter.ARTISTS && canonicalDetail == null ->
-                        appleEditorialArtistRows(
-                            appleArtistResults, onAppleOpen,
-                            paging = applePaging[AppleSearchSection.ARTISTS],
-                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ARTISTS) },
-                        )
-                    filter == SearchFilter.ALBUMS && canonicalDetail == null ->
-                        appleEditorialAlbumRows(
-                            appleResults, onAppleOpen,
-                            paging = applePaging[AppleSearchSection.ALBUMS],
-                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ALBUMS) },
-                        )
-                    filter == SearchFilter.SONGS && canonicalDetail == null ->
-                        appleEditorialTrackRows(
-                            appleTrackResults, onAppleTrackOpen,
-                            paging = applePaging[AppleSearchSection.TRACKS],
-                            onLoadMore = { onAppleLoadMore(AppleSearchSection.TRACKS) },
-                        )
-                    filter == SearchFilter.ALL && canonicalDetail == null &&
-                        query.isNotBlank() -> {
-                        // Apple owns visible artist, song and album lists.
-                        // MusicBrainz identities are resolved separately;
-                        // they must not be used as a second editorial shelf.
-                        appleEditorialArtistRows(
-                            appleArtistResults, onAppleOpen, showHeading = true,
-                            paging = applePaging[AppleSearchSection.ARTISTS],
-                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ARTISTS) },
-                        )
-                        appleEditorialTrackRows(
-                            appleTrackResults, onAppleTrackOpen, showHeading = true,
-                            paging = applePaging[AppleSearchSection.TRACKS],
-                            onLoadMore = { onAppleLoadMore(AppleSearchSection.TRACKS) },
-                        )
-                        appleEditorialAlbumRows(
-                            appleResults, onAppleOpen, showHeading = true,
-                            paging = applePaging[AppleSearchSection.ALBUMS],
-                            onLoadMore = { onAppleLoadMore(AppleSearchSection.ALBUMS) },
+                    if (query.isBlank() &&
+                        canonicalResults == null && canonicalDetail == null &&
+                        appleResults == null && appleArtistResults == null &&
+                        appleTrackResults == null
+                    ) {
+                    // Same recent-search row, clear/remove actions, and persisted
+                    // list as the original Search; never route legacy video IDs
+                    // through a MusicBrainz-only history entry.
+                    val recent = canonicalRecentSearchEntries(history)
+                    if (recent.isEmpty()) {
+                        item {
+                            MessageState(stringResource(Res.string.canonical_search_start))
+                        }
+                    } else {
+                        recentSearches(
+                            history = recent,
+                            currentSong = currentSong,
+                            isPlaying = isPlaying,
+                            onClick = onHistoryClick,
+                            onRemove = onHistoryRemove,
+                            onClear = onHistoryClear,
                         )
                     }
-                    else -> canonicalMusicBrainzResults(
-                        query, canonicalResults, canonicalDetail, filter,
-                        onCanonicalOpen, onCanonicalBack,
-                        onCanonicalLoadMore, canonicalLoadingMore,
-                        onCanonicalSearchLoadMore, canonicalSearchHasMore,
-                        canonicalSearchLoadingMore,
-                        onCanonicalPlay, onCanonicalAddToQueue,
+                } else if (canonicalSearchEditing(query, searchCommitted, canonicalDetail != null)) {
+                    // The pre-submit surface above owns text suggestions. Do not
+                    // append the generic catalog "start searching" hint beneath them.
+                    // On submit, the existing result renderer takes over.
+                } else if (filter == SearchFilter.PLAYLISTS && canonicalDetail == null) {
+                    canonicalPublicPlaylistSearchResults(
+                        canonicalPublicPlaylists, onCanonicalPlaylistOpen,
+                        onCanonicalPlaylistLongPress,
                     )
+                } else if (catalogSearchMusicBrainzVisible && canonicalDetail == null) {
+                    canonicalMusicBrainzResults(
+                    query, canonicalResults, canonicalDetail, filter, onCanonicalOpen,
+                    onCanonicalLongPress, onCanonicalBack,
+                    onCanonicalLoadMore, canonicalLoadingMore,
+                    onCanonicalSearchLoadMore, canonicalSearchHasMore,
+                    canonicalSearchLoadingMore,
+                    onCanonicalPlay, onCanonicalAddToQueue,
+                    onCanonicalRecordingInfo, appleResultTabs,
+                )
+                } else if (filter == SearchFilter.ARTISTS && canonicalDetail == null) {
+                    appleEditorialArtistRows(
+                        appleArtistResults, onAppleOpen,
+                        paging = applePaging[AppleSearchSection.ARTISTS],
+                        onLoadMore = { onAppleLoadMore(AppleSearchSection.ARTISTS) },
+                    )
+                } else if (filter == SearchFilter.ALBUMS && canonicalDetail == null) {
+                    appleEditorialAlbumRows(
+                        appleResults, onAppleOpen,
+                        paging = applePaging[AppleSearchSection.ALBUMS],
+                        onLoadMore = { onAppleLoadMore(AppleSearchSection.ALBUMS) },
+                    )
+                } else if (filter == SearchFilter.SONGS && canonicalDetail == null) {
+                    appleEditorialTrackRows(
+                        appleTrackResults, onAppleTrackOpen,
+                        paging = applePaging[AppleSearchSection.TRACKS],
+                        onLoadMore = { onAppleLoadMore(AppleSearchSection.TRACKS) },
+                    )
+                } else if (filter == SearchFilter.ALL && canonicalDetail == null && query.isNotBlank()) {
+                    appleEditorialArtistRows(
+                        appleArtistResults, onAppleOpen, showHeading = true,
+                        paging = applePaging[AppleSearchSection.ARTISTS],
+                        onLoadMore = { onAppleLoadMore(AppleSearchSection.ARTISTS) },
+                    )
+                    appleEditorialTrackRows(
+                        appleTrackResults, onAppleTrackOpen, showHeading = true,
+                        paging = applePaging[AppleSearchSection.TRACKS],
+                        onLoadMore = { onAppleLoadMore(AppleSearchSection.TRACKS) },
+                    )
+                    appleEditorialAlbumRows(
+                        appleResults, onAppleOpen, showHeading = true,
+                        paging = applePaging[AppleSearchSection.ALBUMS],
+                        onLoadMore = { onAppleLoadMore(AppleSearchSection.ALBUMS) },
+                    )
+                } else {
+                    canonicalMusicBrainzResults(
+                    query, canonicalResults, canonicalDetail, filter, onCanonicalOpen,
+                    onCanonicalLongPress, onCanonicalBack,
+                    onCanonicalLoadMore, canonicalLoadingMore,
+                    onCanonicalSearchLoadMore, canonicalSearchHasMore,
+                    canonicalSearchLoadingMore,
+                    onCanonicalPlay, onCanonicalAddToQueue,
+                    onCanonicalRecordingInfo, appleResultTabs,
+                )
+                }
+                }
+                searchingAddons && serverSearchEditing(query, searchCommitted) -> {
+                    // Server search is explicit; the backend has no verified
+                    // live-suggestion API. The typed action and stored terms
+                    // are the only pre-submit suggestions.
+                    item(key = "server:typed-query-suggestion") {
+                        SuggestionRow(
+                            term = query.trim(),
+                            isQueryAction = true,
+                            onFill = null,
+                            onClick = {
+                                onSubmit()
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            },
+                        )
+                    }
+                    val knownTerms = addonHistory
+                        .filter { it.startsWith(query, ignoreCase = true) &&
+                            !it.equals(query, ignoreCase = true) }
+                        .distinct()
+                        .take(2)
+                    itemsIndexed(
+                        knownTerms,
+                        key = { _, term -> "server:known-completion:$term" },
+                    ) { _, term ->
+                        SuggestionRow(
+                            term = term,
+                            isQueryAction = false,
+                            onFill = { onQueryChange(term) },
+                            onClick = {
+                                onAddonHistoryClick(term)
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            },
+                        )
+                    }
                 }
                 searchingLibrary || searchingAddons -> if (
                     searchingLibrary ||
@@ -478,6 +605,7 @@ fun SearchScreen(
                     onSongClick = if (searchingAddons) onAddonSongClick else onLibrarySongClick,
                     onSongLongPress = onSongLongPress,
                     onSongSwipe = onSongSwipe,
+                    appleStyle = appleResultTabs,
                 )
                 suggesting -> {
                     searchSuggestions(
@@ -540,7 +668,7 @@ fun SearchScreen(
                         }
                     }
                     searchSections(results.data, filter).forEach { section ->
-                        section.title?.let { title ->
+                        if (!appleResultTabs) section.title?.let { title ->
                             item(key = "search-section:$title") {
                                 Text(
                                     text = title,
@@ -577,7 +705,8 @@ fun SearchScreen(
                                     isCurrent = isCurrentRow(row.song),
                                     isPlaying = isPlaying && isCurrentRow(row.song),
                                     searchPlayingStyle = true,
-                                    activeTint = PlayingAccent,
+                                    showMoreButton = false,
+                                    activeTint = appleMusicKeyColor(),
                                 )
                                 is SearchResult.Browse -> BrowseRow(
                                     item = row.item,
@@ -585,7 +714,7 @@ fun SearchScreen(
                                     onLongPress = onBrowseLongPress?.let { { it(row.item) } },
                                 )
                             }
-                            if (index < section.rows.lastIndex) {
+                            if (!appleResultTabs && index < section.rows.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                                     thickness = 0.5.dp,
@@ -603,7 +732,7 @@ fun SearchScreen(
                     }
                 }
             }
-            if (!searchingLibrary && query.isNotBlank() &&
+            if (!appleResultTabs && !searchingLibrary && query.isNotBlank() &&
                 (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
                 (!searchingCanonical || canonicalDetail == null) &&
                 (searchingCanonical || (!searchingAddons && results != null))
@@ -611,12 +740,15 @@ fun SearchScreen(
                 // General contains both public metadata and authorized server
                 // renditions. A server result uses the same canonical queue
                 // contract, never a videoId derived from an MBID.
-                canonicalServerSearchRows(serverResults, onServerPlay)
+                canonicalServerSearchRows(serverResults, onServerPlay, onServerLongPress)
             }
             if (searchingAddons && query.isNotBlank()) {
-                canonicalServerSearchRows(serverResults, onServerPlay)
+                canonicalServerSearchRows(
+                    serverResults, onServerPlay, onServerLongPress,
+                    appleStyle = appleResultTabs,
+                )
             }
-            if (searchingCanonical && canonicalDetail == null &&
+            if (!appleResultTabs && searchingCanonical && canonicalDetail == null &&
                 (filter == SearchFilter.ALL || filter == SearchFilter.SONGS) &&
                 (addonResults as? UiState.Success)?.data?.isNotEmpty() == true
             ) {
@@ -892,6 +1024,7 @@ private fun LazyListScope.appleEditorialAlbumRows(
 private fun LazyListScope.canonicalPublicPlaylistSearchResults(
     results: UiState<List<CanonicalPublicPlaylistSearchRow>>?,
     onOpen: (CanonicalPublicPlaylistSearchRow) -> Unit,
+    onLongPress: ((CanonicalPublicPlaylistSearchRow) -> Unit)?,
 ) {
     when (results) {
         null -> item(key = "public-playlists:hint") {
@@ -913,6 +1046,7 @@ private fun LazyListScope.canonicalPublicPlaylistSearchResults(
                     artistPortrait = false,
                 ),
                 onClick = { onOpen(playlist) },
+                onLongPress = onLongPress?.let { held -> { held(playlist) } },
             )
         }
     }
@@ -924,6 +1058,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     detail: UiState<CanonicalCatalogDetailPage>?,
     filter: SearchFilter,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onLongPress: ((CanonicalCatalogSearchRow) -> Unit)?,
     onBack: () -> Unit,
     onLoadMore: () -> Unit,
     loadingMore: Boolean,
@@ -932,11 +1067,17 @@ private fun LazyListScope.canonicalMusicBrainzResults(
     searchLoadingMore: Boolean,
     onPlay: (String) -> Unit,
     onAddToQueue: (String) -> Unit,
+    onRecordingInfo: (CanonicalCatalogSearchRow) -> Unit,
+    appleStyle: Boolean,
 ) {
     if (detail != null) {
         item(key = "musicbrainz:navigation") {
             Column(Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp)) {
-                OutlinedButton(onClick = onBack) { Text(stringResource(Res.string.canonical_back)) }
+                NativeSearchSecondaryAction(
+                    label = stringResource(Res.string.canonical_back),
+                    onClick = onBack,
+                    icon = PlaylistEditorIcons.Back,
+                )
                 if (detail is UiState.Success) {
                     detail.data.artworkUri?.let { art ->
                         AsyncImage(
@@ -979,7 +1120,7 @@ private fun LazyListScope.canonicalMusicBrainzResults(
             // Artists lead General, then Songs, then Albums. Switching a
             // filter removes the headers rather than duplicating that UI.
             canonicalSearchDisplaySections(rows.data, filter).forEach { section ->
-                section.first?.let { type ->
+                if (!appleStyle) section.first?.let { type ->
                     item(key = "musicbrainz:section:${type.name}") {
                         Text(
                             text = stringResource(when (type) {
@@ -1011,13 +1152,14 @@ private fun LazyListScope.canonicalMusicBrainzResults(
                 // presentation data, and playback stays evidence-gated.
                 NativeSearchResultRow(
                     row = canonicalNativeSearchRowUi(row, kind),
+                    onLongPress = onLongPress?.let { held -> { held(row) } },
                     onClick = when {
                         row.kind != CanonicalSearchKind.RECORDING -> ({ onOpen(row) })
                         row.hasCatalogedAsset -> ({ onPlay(row.musicBrainzId) })
-                        else -> null
+                        else -> ({ onRecordingInfo(row) })
                     },
                 )
-                if (index < section.second.lastIndex) {
+                if (!appleStyle && index < section.second.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
@@ -1028,34 +1170,42 @@ private fun LazyListScope.canonicalMusicBrainzResults(
             }
             if (detail is UiState.Success && detail.data.nextOffset != null) {
                 item(key = "musicbrainz:load-more") {
-                    OutlinedButton(
+                    NativeSearchSecondaryAction(
+                        label = stringResource(Res.string.canonical_more_editions),
                         onClick = onLoadMore,
                         enabled = !loadingMore,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-                    ) {
-                        if (loadingMore) CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp), strokeWidth = 2.dp,
-                        ) else Text(stringResource(Res.string.canonical_more_editions))
-                    }
+                        loading = loadingMore,
+                        modifier = Modifier.fillMaxWidth()
+                            .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
+                    )
                 }
             }
         }
     }
     if (detail == null && results is UiState.Success && searchHasMore) {
         item(key = "musicbrainz:search:load-more") {
-            OutlinedButton(
+            NativeSearchSecondaryAction(
+                label = stringResource(Res.string.canonical_more_results),
                 onClick = onSearchLoadMore,
                 enabled = !searchLoadingMore,
+                loading = searchLoadingMore,
                 modifier = Modifier.fillMaxWidth()
                     .padding(horizontal = PAGE_GUTTER, vertical = 12.dp),
-            ) {
-                if (searchLoadingMore) CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp), strokeWidth = 2.dp,
-                ) else Text(stringResource(Res.string.canonical_more_results))
-            }
+            )
         }
     }
 }
+
+/** Pre-submit suggestions must not share space with a submitted result or its empty hint. */
+fun canonicalSearchEditing(
+    query: String,
+    searchCommitted: Boolean,
+    detailOpen: Boolean,
+): Boolean = query.isNotBlank() && !searchCommitted && !detailOpen
+
+/** No server lookup occurs until the user explicitly submits the query. */
+fun serverSearchEditing(query: String, searchCommitted: Boolean): Boolean =
+    query.isNotBlank() && !searchCommitted
 
 /** Show only terms, not YouTube media IDs, in the canonical empty-query surface. */
 fun canonicalRecentSearchEntries(history: List<SearchHistoryEntity>): List<SearchHistoryEntity> =
@@ -1231,10 +1381,12 @@ fun canonicalDisplaySubtitle(row: CanonicalCatalogSearchRow, kindLabel: String):
 private fun LazyListScope.canonicalServerSearchRows(
     rows: UiState<List<CanonicalServerSearchRow>>?,
     onPlay: (CanonicalServerSearchRow) -> Unit,
+    onHold: ((CanonicalServerSearchRow) -> Unit)? = null,
+    appleStyle: Boolean = false,
 ) {
     val results = (rows as? UiState.Success)?.data.orEmpty()
     if (results.isEmpty()) return
-    item(key = "server:heading") {
+    if (!appleStyle) item(key = "server:heading") {
         Text(
             text = stringResource(Res.string.canonical_server_heading),
             modifier = Modifier.fillMaxWidth().padding(horizontal = PAGE_GUTTER, vertical = 14.dp),
@@ -1248,8 +1400,9 @@ private fun LazyListScope.canonicalServerSearchRows(
         NativeSearchResultRow(
             row = canonicalServerNativeSearchRowUi(row),
             onClick = { onPlay(row) },
+            onLongPress = onHold?.let { held -> { held(row) } },
         )
-        HorizontalDivider(
+        if (!appleStyle) HorizontalDivider(
             modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
             thickness = 0.5.dp,
             color = MaterialTheme.colorScheme.outline,
@@ -1289,6 +1442,7 @@ private fun LazyListScope.librarySearchResults(
     onSongClick: (List<Song>, Int) -> Unit,
     onSongLongPress: (Song) -> Unit,
     onSongSwipe: (Song) -> Unit,
+    appleStyle: Boolean = false,
 ) {
     when (results) {
         null -> if (addons && query.isEmpty() && addonHistory.isNotEmpty()) {
@@ -1322,10 +1476,11 @@ private fun LazyListScope.librarySearchResults(
                     isCurrent = isCurrentRow(song),
                     isPlaying = isPlaying && isCurrentRow(song),
                     searchPlayingStyle = true,
-                    activeTint = PlayingAccent,
+                    showMoreButton = false,
+                    activeTint = appleMusicKeyColor(),
                     showSourceQuality = addons,
                 )
-                if (index < tracks.lastIndex) {
+                if (!appleStyle && index < tracks.lastIndex) {
                     HorizontalDivider(
                         modifier = Modifier.padding(start = ROW_DIVIDER_INSET),
                         thickness = 0.5.dp,
@@ -1383,30 +1538,20 @@ private fun TopResultCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            RowMoreButton(
-                onClick = onLongPress,
-                tint = MaterialTheme.colorScheme.onSurface,
-                iconSize = 24.dp,
-            )
+            // Top-result context is exclusively the card's long press.
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(
+            NativeSearchSecondaryAction(
+                label = stringResource(Res.string.play),
                 onClick = onPlay,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-            ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.play))
-            }
-            OutlinedButton(
+                icon = BitChordIcons.Play,
+            )
+            NativeSearchSecondaryAction(
+                label = stringResource(Res.string.playlist_action),
                 onClick = onPlaylist,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-            ) {
-                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null)
-                Spacer(Modifier.width(6.dp))
-                Text(stringResource(Res.string.playlist_action))
-            }
+                icon = PlaylistEditorIcons.Add,
+            )
         }
     }
 }
@@ -1478,7 +1623,7 @@ private fun SuggestionRow(
             // The first row is the deliberate action to search the exact text
             // in the field, not a server-provided completion. Naming it makes
             // the otherwise duplicated wording read as intentional.
-            text = if (isQueryAction) """${stringResource(Res.string.search)} "$term"""" else term,
+            text = term,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
@@ -1601,7 +1746,7 @@ private fun TypeaheadSongRow(
             Text(
                 text = song.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) PlayingAccent else MaterialTheme.colorScheme.onBackground,
+                color = if (isCurrent) appleMusicKeyColor() else MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1646,7 +1791,7 @@ private fun LazyListScope.recentSearches(
             Text(
                 text = stringResource(Res.string.clear),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = appleMusicKeyColor(),
                 modifier = Modifier
                     .clip(RoundedCornerShape(percent = 50))
                     .clickable(onClick = onClear)
@@ -1688,7 +1833,7 @@ private fun LazyListScope.recentAddonSearches(
             Text(
                 text = stringResource(Res.string.clear),
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary,
+                color = appleMusicKeyColor(),
                 modifier = Modifier
                     .clip(RoundedCornerShape(percent = 50))
                     .clickable(onClick = onClear)
@@ -1705,7 +1850,7 @@ private fun LazyListScope.recentAddonSearches(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                Icons.Rounded.History,
+                Icons.Rounded.Search,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(22.dp),
@@ -1758,10 +1903,10 @@ private fun RecentSearchEntityRow(
     ) {
         Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
             if (entity.id.startsWith("q:")) {
-                // Reuse native History icon for search terms, never a fake
+                // Reuse the native search glyph for search terms, never a fake
                 // missing track artwork or playback indicator.
                 Icon(
-                    Icons.Rounded.History,
+                    Icons.Rounded.Search,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(24.dp),
@@ -1786,7 +1931,7 @@ private fun RecentSearchEntityRow(
             Text(
                 text = entity.title,
                 style = MaterialTheme.typography.titleMedium,
-                color = if (isCurrent) PlayingAccent else MaterialTheme.colorScheme.onBackground,
+                color = if (isCurrent) appleMusicKeyColor() else MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -1869,22 +2014,71 @@ fun canonicalDurationLabel(durationMs: Long?): String? {
  */
 @Composable
 private fun SearchFilterTabs(
+    appleStyle: Boolean = false,
     filter: SearchFilter,
     onFilterChange: (SearchFilter) -> Unit,
     available: List<SearchFilter> = SearchFilter.entries,
 ) {
     val haptics = rememberHaptics()
+    val reduceMotion = LocalReduceAnimations.current
+    val selectionDuration = GlobalMotionPolicy.duration(GlobalMotionPolicy.selectionTintMillis, reduceMotion)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = PAGE_GUTTER, vertical = 6.dp),
+            .padding(
+                horizontal = if (appleStyle) 0.dp else PAGE_GUTTER,
+                vertical = if (appleStyle) 4.dp else 6.dp,
+            ),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         available.forEach { entry ->
             val selected = entry == filter
-            Box(
+            if (appleStyle) {
+                // Bitchord-only tint feedback. AM-DECOMP verifies selection
+                // colors but does not establish a timing for the indicator.
+                val textTint by animateColorAsState(
+                    targetValue = if (selected) appleMusicKeyColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                    animationSpec = tween(durationMillis = selectionDuration),
+                    label = "appleResultTabTextTint",
+                )
+                val lineTint by animateColorAsState(
+                    targetValue = if (selected) appleMusicKeyColor() else Color.Transparent,
+                    animationSpec = tween(durationMillis = selectionDuration),
+                    label = "appleResultTabUnderlineTint",
+                )
+                Column(
+                    // Horizontal scrolling supplies unbounded width; use intrinsic
+                    // label width so the fillMaxWidth bar cannot collapse.
+                    modifier = Modifier.width(IntrinsicSize.Max).clickable {
+                        if (!selected) haptics.play(Haptic.Select)
+                        onFilterChange(entry)
+                    },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        text = (when (entry) {
+                            SearchFilter.ALL -> stringResource(Res.string.apple_search_top_results)
+                            SearchFilter.SONGS -> stringResource(Res.string.canonical_filter_songs)
+                            SearchFilter.ALBUMS -> stringResource(Res.string.albums)
+                            SearchFilter.ARTISTS -> stringResource(Res.string.artists)
+                            SearchFilter.VIDEOS -> stringResource(Res.string.canonical_filter_videos)
+                            SearchFilter.PLAYLISTS -> stringResource(Res.string.playlists)
+                        }).uppercase(Locale.getDefault()),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = textTint,
+                        maxLines = 1,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    )
+                    Box(
+                        Modifier.fillMaxWidth()
+                            .height(3.dp)
+                            .testTag(if (selected) "apple-selected-result-indicator" else "apple-result-indicator")
+                            .background(lineTint),
+                    )
+                }
+            } else Box(
                 modifier = Modifier
                     .clip(FILTER_PILL_SHAPE)
                     .background(
@@ -1919,5 +2113,64 @@ private fun SearchFilterTabs(
     }
 }
 
+/**
+ * Root-search origins are a pre-submit step, just as Apple shows its catalog
+ * selector before the category tabs. Bitchord must keep its third Server
+ * source rather than mislabel MusicBrainz as an Apple Music subscription.
+ */
+@Composable
+fun AppleSearchOriginTabs(
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    val reduceMotion = LocalReduceAnimations.current
+    val selectionDuration = GlobalMotionPolicy.duration(GlobalMotionPolicy.selectionTintMillis, reduceMotion)
+    Row(
+        modifier = Modifier.fillMaxWidth().then(
+            if (options.size <= 2) Modifier else Modifier.horizontalScroll(rememberScrollState()),
+        ),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        options.forEachIndexed { index, label ->
+            val selected = index == selectedIndex
+            val textTint by animateColorAsState(
+                targetValue = if (selected) appleMusicKeyColor() else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = tween(durationMillis = selectionDuration),
+                label = "appleOriginTabTextTint",
+            )
+            val lineTint by animateColorAsState(
+                targetValue = if (selected) appleMusicKeyColor() else Color.Transparent,
+                animationSpec = tween(durationMillis = selectionDuration),
+                label = "appleOriginTabUnderlineTint",
+            )
+            Column(
+                modifier = Modifier
+                    .then(if (options.size <= 2) Modifier.weight(1f) else Modifier.width(IntrinsicSize.Max))
+                    .clickable { if (!selected) onSelect(index) }
+                    .semantics { this.selected = selected },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = label.uppercase(Locale.getDefault()),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = textTint,
+                    maxLines = 1,
+                    modifier = Modifier.padding(horizontal = 15.dp, vertical = 13.dp),
+                )
+                Box(
+                    Modifier.fillMaxWidth()
+                        .height(3.dp)
+                        .testTag(if (selected) "apple-selected-origin-indicator" else "apple-origin-indicator")
+                        .background(lineTint),
+                )
+            }
+        }
+    }
+}
+
 /** Rounded, but well short of a capsule — the corner reads as a cut, not a curve. */
+/** Apple-style selected tabs are blue independently of the dynamic artwork theme. */
+
 private val FILTER_PILL_SHAPE = RoundedCornerShape(12.dp)

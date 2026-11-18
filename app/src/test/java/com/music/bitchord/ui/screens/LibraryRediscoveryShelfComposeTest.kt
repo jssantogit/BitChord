@@ -104,6 +104,7 @@ class LibraryRediscoveryShelfComposeTest {
         )
         compose.setContent { LibraryRediscoveryShelf(state.value, onRecordingClick = {}) }
         compose.onNodeWithText("Older Song").assertExists()
+        compose.onNodeWithTag("native-rediscovery-card").assertExists()
         compose.runOnIdle { state.value = RediscoveryShelfUiState.Empty }
         compose.onNodeWithText("Older Song").assertDoesNotExist()
     }

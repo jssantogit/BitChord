@@ -189,6 +189,49 @@ class NativeArtistSharedSectionsComposeTest {
         compose.runOnIdle { assertEquals(1, toggled) }
     }
 
+    /**
+     * Scrolling an artist's hero upward must not paint its large circular
+     * transport actions over the status icons or frosted top-bar controls.
+     * Only the LIST is masked; the artist photograph still reaches edge-to-edge.
+     */
+    @Test fun artistScrollMaskKeepsContentBelowItsTopBarAndClampsToViewport() {
+        assertEquals(0f, nativeArtistListMaskTopPx(0f, 900f))
+        assertEquals(108f, nativeArtistListMaskTopPx(108f, 900f))
+        assertEquals(900f, nativeArtistListMaskTopPx(1200f, 900f))
+        assertEquals(0f, nativeArtistListMaskTopPx(-4f, 900f))
+        assertEquals(0f, nativeArtistListMaskTopPx(56f, 0f))
+    }
+
+    /**
+     * The former clipRect made the logo hit an invisible straight ceiling
+     * when the artist page was swiped upward. The foreground must instead
+     * fade OUT through a nonzero strip below the fixed toolbar, without ever
+     * letting it paint under the toolbar or altering the backdrop layer.
+     */
+    @Test fun scrollingArtistTitleFadesInsteadOfBeingHardCutAtTopBar() {
+        val fade = nativeArtistListFadeRangePx(
+            topBarBottomPx = 108f,
+            viewportHeightPx = 900f,
+            fadeHeightPx = 64f,
+        )
+        assertEquals(108f, fade.transparentUntilPx)
+        assertEquals(172f, fade.fullyVisibleFromPx)
+        assertEquals(0f, nativeArtistListFadeAlphaAtPx(108f, fade))
+        assertEquals(0.25f, nativeArtistListFadeAlphaAtPx(124f, fade))
+        assertEquals(0.5f, nativeArtistListFadeAlphaAtPx(140f, fade))
+        assertEquals(1f, nativeArtistListFadeAlphaAtPx(172f, fade))
+    }
+
+    @Test fun artistTitleFadeStaysSafeOnSmallWindowsAndMalformedViewport() {
+        val cramped = nativeArtistListFadeRangePx(540f, 520f, 64f)
+        assertEquals(520f, cramped.transparentUntilPx)
+        assertEquals(584f, cramped.fullyVisibleFromPx)
+        assertEquals(0f, nativeArtistListFadeAlphaAtPx(510f, cramped))
+        val zero = nativeArtistListFadeRangePx(-12f, 0f, 64f)
+        assertEquals(0f, zero.transparentUntilPx)
+        assertEquals(64f, zero.fullyVisibleFromPx)
+    }
+
     @Test fun sharedNativeArtistFrameShowsContentAndKeepsClicksAlive() {
         var ratingOpens = 0
         compose.setContent {

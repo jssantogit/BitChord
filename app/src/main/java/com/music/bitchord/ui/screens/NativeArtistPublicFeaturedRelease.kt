@@ -53,6 +53,7 @@ internal fun NativeArtistPublicFeaturedRelease(
     release: CanonicalCatalogSearchRow,
     palette: ArtworkPalette,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onLongPress: ((CanonicalCatalogSearchRow) -> Unit)? = null,
 ) {
     val context = LocalContext.current.applicationContext
     val featuredCoverArchive = remember(context) {
@@ -96,6 +97,7 @@ internal fun NativeArtistPublicFeaturedRelease(
         label = label,
         palette = palette,
         onClick = { onOpen(release) },
+        onLongPress = nativeArtistPublicShelfHoldAction(release, onLongPress),
         artwork = {
             Box(Modifier.fillMaxSize()) {
                 CoverPlaceholder(Icons.Rounded.Album, Modifier.fillMaxSize())

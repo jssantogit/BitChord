@@ -1,0 +1,51 @@
+package com.music.bitchord.ui.components
+
+/**
+ * Shared Android/Compose motion policy. A route or component must opt into a
+ * particular role: these values are NOT universal Apple Music timings.
+ *
+ * The only Apple-backed duration here is the conditional Loader fade-out:
+ * am-descomp/docs/motion/home-and-content.md traces alpha -> 0 in 400 ms with
+ * DecelerateInterpolator. This does not establish a 400ms content/route fade.
+ *
+ * The header and shimmer values below are pre-existing BitChord timings,
+ * centralized to ensure that our Reduce animations setting is obeyed.
+ */
+object GlobalMotionPolicy {
+    const val loaderExitMillis = 400
+    const val headerChromeMillis = 220
+    // Existing BitChord bottom-bar tint duration, reused by search selectors.
+    const val selectionTintMillis = 180
+    const val skeletonSweepMillis = 1400
+
+    fun duration(baseMillis: Int, reduced: Boolean): Int {
+        require(baseMillis >= 0) { "Motion duration must be nonnegative" }
+        return if (reduced) 0 else baseMillis
+    }
+
+    fun shimmerEnabled(reduced: Boolean): Boolean = !reduced
+
+    fun indeterminateRefreshEnabled(refreshing: Boolean, reduced: Boolean): Boolean =
+        refreshing && !reduced
+
+    /** Feedback follows the finger only when animation is permitted. */
+    fun refreshPuckRotationDegrees(pullFraction: Float, reduced: Boolean): Float =
+        if (reduced || !pullFraction.isFinite()) 0f
+        else pullFraction.coerceIn(0f, 2f) * 180f
+
+    /**
+     * Only a finished, actual refresh can retain the puck during the
+     * optional 400ms exit. A drag that never triggered refresh must not
+     * remain visible, and the accessible reduced-motion path is immediate.
+     */
+    fun keepRefreshPuckVisible(
+        refreshing: Boolean,
+        pulling: Boolean,
+        completedRefreshExit: Boolean,
+        reduced: Boolean,
+    ): Boolean = refreshing || pulling || (completedRefreshExit && !reduced)
+
+    /** No pressed scale is displayed when Reduce animations is enabled. */
+    fun pressedScale(pressed: Boolean, reduced: Boolean, activeScale: Float = 0.98f): Float =
+        if (reduced || !pressed) 1f else activeScale
+}

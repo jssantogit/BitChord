@@ -2,9 +2,12 @@ package com.music.bitchord.ui.screens
 
 import android.app.Application
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.remember
+import dev.chrisbanes.haze.HazeState
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -24,16 +27,37 @@ import org.robolectric.annotation.ConscryptMode
 class CanonicalCatalogRatingMenuTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun threeDotMenuOpensFirstNativeRatingEditorWithoutStarPlaceholder() {
+    @Test fun catalogReleaseThreeDotMenuUsesTheSharedNativePopup() {
+        compose.setContent {
+            MaterialTheme {
+                CanonicalCatalogReleaseOverflowMenu(
+                    browseId = "catalog:RELEASE:66dd7663-76a4-4e31-93ae-730ccd49d7d8",
+                    title = "Test Album", subtitle = "Test Artist", cover = null,
+                    expanded = true, onDismiss = {},
+                    hazeState = remember { HazeState() }, onSettings = {},
+                )
+            }
+        }
+        compose.onNodeWithTag("native-frosted-overflow").assertExists()
+        compose.onNodeWithText("Configurações").assertExists()
+    }
+
+    @Test fun heldMetadataRecordingOffersRatingWithoutAnySongEllipsis() {
         var edits = 0
         compose.setContent {
             MaterialTheme {
-                CanonicalCatalogRatingMenu(onEdit = { edits++ })
+                androidx.compose.foundation.layout.Column {
+                    CanonicalMetadataRecordingHeldActions(
+                        recordingId = "66dd7663-76a4-4e31-93ae-730ccd49d7d8",
+                        title = "Circles", artist = "ASTRO",
+                        onDismiss = {}, onRate = { edits++ },
+                        onAddToPlaylist = { _, _, _ -> },
+                    )
+                }
             }
         }
-        compose.onNodeWithText("Edit rating").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Song options").performClick()
-        compose.onNodeWithText("Edit rating").performClick()
+        compose.onNodeWithContentDescription("Song options").assertDoesNotExist()
+        compose.onNodeWithText("Avaliar faixa").performClick()
         compose.runOnIdle { assertEquals(1, edits) }
     }
 }

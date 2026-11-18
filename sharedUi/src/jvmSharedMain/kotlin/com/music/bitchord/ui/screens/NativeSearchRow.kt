@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,10 +63,14 @@ fun NativeSearchResultRow(
     onLongPress: (() -> Unit)? = null,
     horizontalPadding: androidx.compose.ui.unit.Dp = PAGE_GUTTER,
 ) {
+    // Search metadata is deliberately presentation-only. Long-press actions
+    // require a source-owned host callback; never invent an opaque per-row
+    // menu or turn a hold on a remote asset into "Play".
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) {
+            .testTag("native-search-result-row")
+            .then(if (onClick != null || onLongPress != null) {
                 Modifier.longPressMenuClickable(onClick = onClick, onLongClick = onLongPress)
                     .contextClick(onLongPress)
             } else Modifier)
@@ -118,13 +123,7 @@ fun NativeSearchResultRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        row.durationLabel?.let { duration ->
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        // No trailing track ⋮ and no hidden solid menu. Catalog and Library
+        // adapters provide their verified actions through the held host.
     }
 }

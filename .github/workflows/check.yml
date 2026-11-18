@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # Per-PR workflows supersede old HEADs; main runs are keyed by commit and
 # must never be cancelled by newer integration commits.

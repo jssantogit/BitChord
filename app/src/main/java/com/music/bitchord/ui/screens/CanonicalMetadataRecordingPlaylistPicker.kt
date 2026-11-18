@@ -54,9 +54,19 @@ internal fun CanonicalMetadataRecordingPlaylistPicker(
     ) {
         repository.observe().collectLatest { value = it }
     }
+    var creating by remember(recordingId) { mutableStateOf(false) }
     var saving by remember(recordingId) { mutableStateOf(false) }
     var errorMessage by remember(recordingId) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    if (creating) {
+        CanonicalMetadataNewPlaylistEditor(
+            labels = listOf(recording),
+            onDismiss = { creating = false },
+            onSaved = onDismiss,
+        )
+        return
+    }
 
     PlaylistWizardSheetChrome(
         title = "Adicionar à playlist",
@@ -70,6 +80,12 @@ internal fun CanonicalMetadataRecordingPlaylistPicker(
             Text(
                 text = recording.title + " · " + recording.artist,
                 style = MaterialTheme.typography.bodyMedium,
+            )
+            SettingsRow(
+                icon = Icons.Rounded.PlaylistAdd,
+                title = "Nova playlist",
+                subtitle = "Criar uma playlist normal",
+                onClick = { creating = true },
             )
             if (playlists == null) NativeLoadingSpinner()
             else if (playlists.orEmpty().isEmpty()) Text(
@@ -96,9 +112,10 @@ internal fun CanonicalMetadataRecordingPlaylistPicker(
                                             actual.recordingIds, recording.recordingId,
                                         ) ?: error("Identidade inválida")
                                         if (ids == actual.recordingIds) false else {
+                                            // Never persist an unlabeled metadata-only member.
+                                            check(CatalogMetadataRecordingLabelRepository.get(context)
+                                                .rememberLabel(recording))
                                             repository.save(actual.copy(recordingIds = ids))
-                                            CatalogMetadataRecordingLabelRepository.get(context)
-                                                .rememberLabel(recording)
                                             true
                                         }
                                     }

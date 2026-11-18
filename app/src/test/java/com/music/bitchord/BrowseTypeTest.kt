@@ -20,6 +20,18 @@ class BrowseTypeTest {
     }
 
     @Test
+    fun `resolves explicit canonical artist and release routes without title guessing`() {
+        assertEquals(BrowseType.ARTIST,
+            MainViewModel.browseTypeOf("catalog:ARTIST:artist-uuid"))
+        assertEquals(BrowseType.ALBUM,
+            MainViewModel.browseTypeOf("catalog:RELEASE:release-uuid"))
+        assertEquals(BrowseType.ALBUM,
+            MainViewModel.browseTypeOf("catalog:RELEASE_GROUP:group-uuid"))
+        assertEquals(BrowseType.OTHER,
+            MainViewModel.browseTypeOf("catalog:RECORDING:recording-uuid"))
+    }
+
+    @Test
     fun `resolves UC artist IDs as BrowseType ARTIST`() {
         assertEquals(BrowseType.ARTIST, MainViewModel.browseTypeOf("UC1234567890abcdef"))
     }

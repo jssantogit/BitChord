@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -33,11 +34,9 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -48,6 +47,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +62,7 @@ import com.music.bitchord.download.DownloadProgress
 import com.music.bitchord.download.DownloadSession
 import com.music.bitchord.download.Downloads
 import com.music.bitchord.ui.haptics.Haptic
+import com.music.bitchord.ui.theme.appleMusicKeyColor
 import com.music.bitchord.ui.haptics.rememberHaptics
 
 /**
@@ -96,7 +98,7 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val tint by animateColorAsState(
         targetValue = when {
             failed -> MaterialTheme.colorScheme.error
-            else -> MaterialTheme.colorScheme.primary
+            else -> appleMusicKeyColor()
         },
         animationSpec = tween(220),
         label = "downloadRingTint",
@@ -121,7 +123,7 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             shrinkTowards = Alignment.End,
         ),
     ) {
-        IconButton(
+        TopBarDownloadAction(
             onClick = {
                 haptics.play(Haptic.Select)
                 onClick()
@@ -167,6 +169,28 @@ fun TopBarDownloadButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+/**
+ * The download indicator uses the same native 40dp icon slot as the three-dot
+ * header action. Content may be a ring, success or failure glyph; visibility,
+ * completion and the haptic callback stay with the session owner.
+ */
+@Composable
+internal fun TopBarDownloadAction(
+    onClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(AppleFloatingControlMetrics.toolbarDiameter)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .testTag("apple-topbar-download-action"),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
     }
 }
 
@@ -221,7 +245,9 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                 )
             }
             if (session.busy) {
-                TextButton(
+                NativeInlineTextAction(
+                    label = stringResource(R.string.cancel_all),
+                    destructive = true,
                     onClick = {
                         // Only what is still going. Cancelling a finished row
                         // would drop it from the list, which is the one thing
@@ -229,18 +255,16 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                         items.filterNot { it.progress.settled }
                             .forEach { Downloads.cancel(it.videoId) }
                     },
-                ) {
-                    Text(stringResource(R.string.cancel_all))
-                }
+                )
             } else {
-                TextButton(
+                NativeInlineTextAction(
+                    label = stringResource(R.string.clear),
+                    subdued = true,
                     onClick = {
                         DownloadSession.clear()
                         onDismiss()
                     },
-                ) {
-                    Text(stringResource(R.string.clear))
-                }
+                )
             }
         }
 
@@ -254,8 +278,8 @@ fun DownloadManagerSheet(onDismiss: () -> Unit, modifier: Modifier = Modifier) {
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp)
                     .height(3.dp),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                color = appleMusicKeyColor(),
+                trackColor = appleMusicKeyColor().copy(alpha = 0.18f),
                 strokeCap = StrokeCap.Round,
                 gapSize = 0.dp,
                 drawStopIndicator = {},
@@ -366,8 +390,8 @@ private fun DownloadManagerRow(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                        color = appleMusicKeyColor(),
+                        trackColor = appleMusicKeyColor().copy(alpha = 0.18f),
                         strokeCap = StrokeCap.Round,
                         gapSize = 0.dp,
                         drawStopIndicator = {},

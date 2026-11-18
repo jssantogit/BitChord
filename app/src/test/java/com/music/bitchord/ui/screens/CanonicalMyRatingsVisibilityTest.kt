@@ -63,8 +63,26 @@ class CanonicalMyRatingsVisibilityTest {
         compose.onNodeWithText("Track A").assertIsDisplayed()
         compose.onNodeWithText("Artist A").assertIsDisplayed()
         // Icon-only presentation: numeric value survives through accessibility.
-        compose.onNodeWithContentDescription("4.5/5", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Avaliação: 4,5 de 5 estrelas", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Rating: 4.5").assertDoesNotExist()
+    }
+
+    @Test fun compactRatingRowStillOpensExistingCanonicalEditor() {
+        var opened: String? = null
+        compose.setContent {
+            MaterialTheme {
+                CanonicalMyRatingsContent(
+                    state = MyRatingsUiState.Content(
+                        items = listOf(MyRatingsRow("canonical-rec-a", 4.5, "Track A", "Artist A")),
+                        hasMore = false,
+                    ),
+                    onBack = {},
+                    onEdit = { opened = it },
+                )
+            }
+        }
+        compose.onNodeWithText("Edit rating").performClick()
+        compose.runOnIdle { assertEquals("canonical-rec-a", opened) }
     }
 
     @Test fun failedRoomReadShowsErrorInsteadOfFalseEmptyState() {

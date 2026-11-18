@@ -31,27 +31,26 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.music.bitchord.R
-import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.spotify.SpotifyImportTrack
 import com.music.bitchord.data.spotify.SpotifyImporter
-import com.music.bitchord.data.spotify.spotifyImportMetadataSong
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
- * Paste a public Spotify playlist link and preserve all track metadata locally.
+ * Preview a public Spotify playlist without creating incompatible entries.
  *
- * The same frosted card as the addon editor, rather than a Material dialog.
- * Public embed metadata does not prove a playable MediaAsset; missing audio
- * stays visible rather than being guessed or silently discarded.
+ * Spotify public embed metadata has no verified MusicBrainz RecordingIds;
+ * writing it as a canonical playlist would fabricate identity. Older imports
+ * remain readable through the historical compatibility shelf, but new data
+ * cannot silently enter the retired LocalPlaylistStore. This preview is
+ * intentionally non-persistent until a verified identity import is available.
  */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SpotifyImportAlert(
     hazeState: HazeState,
-    onImported: (title: String, songs: List<Song>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -74,15 +73,10 @@ fun SpotifyImportAlert(
         status = context.getString(R.string.spotify_import_fetching)
         scope.launch {
             try {
-                val (name, tracks) = SpotifyImporter.fetchPlaylistTracks(id)
+                val (_, tracks) = SpotifyImporter.fetchPlaylistTracks(id)
                 if (tracks.isEmpty()) error(context.getString(R.string.spotify_import_none))
-                // No duration or provider-owned asset in the public embed.
-                // Preserve the entire playlist without fabricating a YouTube
-                // video or matching titles to unverified musical recordings.
-                val songs = tracks.mapIndexed { index, track ->
-                    spotifyImportMetadataSong(id, index, track)
-                }
-                onImported(name, songs)
+                // Metadata-only preview, not a playlist. An exact canonical
+                // RecordingId cannot be inferred from Spotify track names.
                 unmatched = tracks
             } catch (e: CancellationException) {
                 throw e
@@ -102,7 +96,7 @@ fun SpotifyImportAlert(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = stringResource(R.string.spotify_import_title),
+                text = "Prévia de playlist do Spotify",
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp, fontWeight = FontWeight.W600),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
@@ -110,7 +104,8 @@ fun SpotifyImportAlert(
             val missed = unmatched
             if (missed != null) {
                 Text(
-                    text = stringResource(R.string.spotify_import_metadata_only, missed.size),
+                    text = "Prévia de ${missed.size} faixas. Nenhuma playlist foi criada: " +
+                    "o Spotify não fornece aqui IDs de gravações verificáveis.",
                     modifier = Modifier.padding(top = 4.dp, bottom = 10.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 17.sp),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -167,7 +162,7 @@ fun SpotifyImportAlert(
             AlertAction(label = stringResource(R.string.done), emphasised = true, onClick = onDismiss)
         } else {
             AlertAction(
-                label = stringResource(R.string.spotify_import_button),
+                label = "Pré-visualizar",
                 emphasised = true,
                 onClick = ::start,
                 enabled = link.isNotBlank() && !working,

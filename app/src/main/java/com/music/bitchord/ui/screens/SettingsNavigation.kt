@@ -37,7 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import com.music.bitchord.ui.components.NativeInlineTextAction
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -219,9 +219,11 @@ internal fun SettingsDetailHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onClearFilter) {
-                Text(stringResource(R.string.settings_nav_show_all))
-            }
+            NativeInlineTextAction(
+                label = stringResource(R.string.settings_nav_show_all),
+                onClick = onClearFilter,
+                tag = "settings-show-all-action",
+            )
         }
     }
 }

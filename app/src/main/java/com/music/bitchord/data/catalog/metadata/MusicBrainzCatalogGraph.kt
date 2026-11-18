@@ -21,6 +21,26 @@ internal sealed interface MusicBrainzCatalogGraphResult<out T> {
     data class Failure(val reason: MusicBrainzCatalogSearchFailure) : MusicBrainzCatalogGraphResult<Nothing>
 }
 
+/**
+ * A transient MusicBrainz outage must not immediately replace an artist's
+ * discography with a hard error. Retry only UNAVAILABLE once, after a gentle
+ * delay; malformed data, invalid MBIDs and page errors are not retryable.
+ *
+ * This retains the verified identity contract: neither response is guessed
+ * from a title and the caller still uses its persisted offline cache.
+ */
+internal suspend fun <T> retryTransientArtistDiscography(
+    fetch: suspend () -> MusicBrainzCatalogGraphResult<T>,
+    delayBeforeRetry: suspend () -> Unit = { kotlinx.coroutines.delay(1_100L) },
+): MusicBrainzCatalogGraphResult<T> {
+    val first = fetch()
+    if (first !is MusicBrainzCatalogGraphResult.Failure ||
+        first.reason != MusicBrainzCatalogSearchFailure.UNAVAILABLE
+    ) return first
+    delayBeforeRetry()
+    return fetch()
+}
+
 internal data class MusicBrainzCatalogTrack(
     val trackMbid: String,
     val recordingMbid: String,

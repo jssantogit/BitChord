@@ -40,6 +40,16 @@ class UnifiedLibraryToolbarPolicyTest {
         ))
     }
 
+    @Test fun artistAndAlbumDetailOverflowsUseAnchoredCardWithoutAFullScreenSheet() {
+        val artist = com.music.bitchord.ui.screens.CanonicalLibraryEntityType.ARTIST
+        val album = com.music.bitchord.ui.screens.CanonicalLibraryEntityType.ALBUM
+        val track = com.music.bitchord.ui.screens.CanonicalLibraryEntityType.TRACK
+        assertTrue(com.music.bitchord.ui.screens.canonicalLibraryDetailUsesAnchoredOverflow(true, artist))
+        assertTrue(com.music.bitchord.ui.screens.canonicalLibraryDetailUsesAnchoredOverflow(true, album))
+        assertFalse(com.music.bitchord.ui.screens.canonicalLibraryDetailUsesAnchoredOverflow(true, track))
+        assertFalse(com.music.bitchord.ui.screens.canonicalLibraryDetailUsesAnchoredOverflow(false, artist))
+    }
+
     @Test fun artistDetailGetsNativeOverflowForPinWithoutTakingAlbumOrNestedToolbar() {
         assertTrue(shouldUseUnifiedArtistDetailToolbar(
             CanonicalSmartFilterContext.ARTISTS, detailOpen = true, nestedAlbumOpen = false,

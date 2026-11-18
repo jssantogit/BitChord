@@ -33,6 +33,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -51,6 +52,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -107,6 +109,7 @@ import androidx.compose.ui.unit.sp
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.components.GlobalMotionPolicy
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.listentogether.PartyMember
@@ -200,6 +203,7 @@ internal fun PlayerScrubber(
     transitionWindow: ClosedFloatingPointRange<Float>?,
     onScrub: (Float) -> Unit,
     onScrubFinished: () -> Unit,
+    appleStyle: Boolean = false,
     centerLabel: @Composable BoxScope.() -> Unit = {},
 ) {
     val shown = shown()
@@ -249,8 +253,10 @@ internal fun PlayerScrubber(
             // for as long as a blend holds the bar.
             Box(
                 modifier = Modifier
-                    .matchParentSize()
+                    .fillMaxWidth()
+                    .then(if (appleStyle) Modifier.heightIn(min = 24.dp) else Modifier)
                     .graphicsLayer { alpha = 1f - mixPulse.cover },
+                contentAlignment = Alignment.Center,
             ) {
                 centerLabel()
             }
@@ -317,6 +323,7 @@ internal fun PlaybackQualityLabel(
     song: Song,
     isLoading: Boolean,
     modifier: Modifier = Modifier,
+    appleStyle: Boolean = false,
 ) {
     val wifiQuality by PlayerSettings.audioQualityWifi.collectAsStateWithLifecycle()
     val cellularQuality by PlayerSettings.audioQualityCellular.collectAsStateWithLifecycle()
@@ -339,6 +346,7 @@ internal fun PlaybackQualityLabel(
         losslessRequested = effectiveQuality == AudioQuality.LOSSLESS,
         nerdStats = nerdStats,
         modifier = modifier,
+        appleStyle = appleStyle,
     )
 }
 
@@ -551,6 +559,31 @@ internal fun VolumeRow(
  * With the queue up the lyrics glyph steps aside and the capsule slides over
  * into its place, leaving the queue glyph — lit — as the way back.
  */
+/**
+ * Animate one actionable capsule at a time. The original overlapping
+ * AnimatedContent fade (old capsule out + new capsule in) double-exposed
+ * icons/labels during the queue transition. The exit is immediate; entry,
+ * motion and size use the original BitChord durations, not unverified Apple
+ * action-sheet timing. Reduce animations makes all four properties immediate.
+ */
+internal data class PlayerQueuePillMotion(
+    val slideMillis: Int,
+    val enterMillis: Int,
+    val exitMillis: Int,
+    val resizeMillis: Int,
+)
+internal fun playerQueuePillMotion(reduced: Boolean): PlayerQueuePillMotion =
+    PlayerQueuePillMotion(
+        slideMillis = GlobalMotionPolicy.duration(PILL_SLIDE_MS, reduced),
+        enterMillis = GlobalMotionPolicy.duration(180, reduced),
+        exitMillis = 0,
+        resizeMillis = GlobalMotionPolicy.duration(220, reduced),
+    )
+
+/** Shared panel/drawer durations are BitChord values, never Apple claims. */
+internal fun playerPanelMotionMillis(base: Int, reduced: Boolean): Int =
+    GlobalMotionPolicy.duration(base, reduced)
+
 @Composable
 internal fun PlayerActionRow(
     lyricsOpen: Boolean,
@@ -568,6 +601,8 @@ internal fun PlayerActionRow(
     /** Opens [ListenTogetherMembersSheet] rather than settings directly. */
     onOpenListenTogetherMembers: () -> Unit,
 ) {
+    val reduceMotion by PlayerSettings.reduceAnimation.collectAsStateWithLifecycle()
+    val motion = playerQueuePillMotion(reduceMotion)
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Sized for the wider of the two capsules — the three-up one — in both
         // states. Computed for whichever was on screen it would change as they
@@ -579,7 +614,8 @@ internal fun PlayerActionRow(
         // slide relays out the row and recomposes nothing.
         val toStart = animateFloatAsState(
             targetValue = if (queueOpen) 1f else 0f,
-            animationSpec = tween(PILL_SLIDE_MS, easing = FastOutSlowInEasing),
+            animationSpec = if (reduceMotion) snap()
+                else tween(motion.slideMillis, easing = FastOutSlowInEasing),
             label = "playerBottomPillSlide",
         )
         Box(
@@ -590,8 +626,9 @@ internal fun PlayerActionRow(
             // the queue glyph, lit, is how you get back.
             AnimatedVisibility(
                 visible = !queueOpen,
-                enter = fadeIn(tween(180, delayMillis = 120)),
-                exit = fadeOut(tween(120)),
+                enter = fadeIn(tween(playerPanelMotionMillis(180, reduceMotion),
+                    delayMillis = playerPanelMotionMillis(120, reduceMotion))),
+                exit = fadeOut(tween(playerPanelMotionMillis(120, reduceMotion))),
                 modifier = Modifier.align(Alignment.CenterStart),
             ) {
                 BottomGlyph(
@@ -619,11 +656,15 @@ internal fun PlayerActionRow(
                 },
                 targetState = queueOpen,
                 transitionSpec = {
-                    (fadeIn(tween(180, delayMillis = 140)) togetherWith fadeOut(tween(140)))
-                        // Unclipped: the capsule's own rounded ends are what
-                        // the eye follows through the width change, and the
-                        // default clip cuts them square while it happens.
-                        .using(SizeTransform(clip = false) { _, _ -> tween(220) })
+                    (fadeIn(tween(motion.enterMillis)) togetherWith
+                        fadeOut(tween(motion.exitMillis)))
+                        // Retire the old clickable capsule immediately, then
+                        // animate only the incoming one. No double-exposure
+                        // of output / party beneath shuffle / repeat.
+                        // Unclipped: rounded capsule ends own their shape.
+                        .using(SizeTransform(clip = false) { _, _ ->
+                            tween(motion.resizeMillis)
+                        })
                 },
                 label = "playerBottomPill",
             ) { showQueueModes ->
@@ -1541,7 +1582,16 @@ private fun LosslessOrStats(
     losslessRequested: Boolean,
     nerdStats: NerdStats.Snapshot?,
     modifier: Modifier = Modifier,
+    appleStyle: Boolean = false,
 ) {
+    val measuredBadge = appleQualityBadgeKind(
+        measuredLossless = nerdStats?.isLossless,
+        measuredHiRes = nerdStats?.isHiRes == true,
+        measuredAtmos = nerdStats?.isDolbyAtmos == true,
+        measuredHighQuality = nerdStats?.isHiQuality == true,
+        measuredMediumQuality = nerdStats?.isMediumQuality == true,
+        resolving = stillRacing || (isLoading && losslessRequested && nerdStats == null),
+    )
     when {
         // Still resolving — either the player itself is buffering, or a
         // module is still racing YouTube for this track in the background
@@ -1567,44 +1617,83 @@ private fun LosslessOrStats(
         (stillRacing && nerdStats?.isLossless != true) ||
             (isLoading && losslessRequested && nerdStats == null) -> LosslessLabel(
             text = stringResource(Res.string.upgrading_quality),
-            iconPainter = painterResource(Res.drawable.ic_lossless),
+            iconPainter = if (appleStyle) rememberVectorPainter(AppleQualityVectors.Lossless) else painterResource(Res.drawable.ic_lossless),
             // Breathes for as long as the search runs: a wait, not a result,
             // and the one badge state that is still going to change.
             pulsing = true,
             animated = false,
             modifier = modifier,
+            appleStyle = appleStyle,
         )
-        nerdStats?.isLossless == true -> LosslessLabel(
+        (measuredBadge == AppleQualityBadgeKind.LOSSLESS || measuredBadge == AppleQualityBadgeKind.HI_RES) -> LosslessLabel(
             // Same line Tidal, Qobuz and Apple Music draw it at — see
             // [NerdStats.Snapshot.isHiRes].
-            text = stringResource(if (nerdStats.isHiRes) Res.string.hi_res_lossless else Res.string.lossless),
-            iconPainter = painterResource(Res.drawable.ic_lossless),
+            text = stringResource(if (measuredBadge == AppleQualityBadgeKind.HI_RES) Res.string.hi_res_lossless else Res.string.lossless),
+            iconPainter = if (appleStyle) rememberVectorPainter(AppleQualityVectors.Lossless) else painterResource(Res.drawable.ic_lossless),
             // Shimmer is reserved for the thing that was asked for and
             // confirmed. It is what makes the badge read as an achievement
             // rather than a label, which only one of these two is.
-            animated = true,
+            animated = !appleStyle,
             modifier = modifier,
+            appleStyle = appleStyle,
         )
-        nerdStats?.isDolbyAtmos == true -> LosslessLabel(
-            text = "Dolby Atmos",
-            animated = true,
-            iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
-            modifier = modifier,
-        )
+        measuredBadge == AppleQualityBadgeKind.DOLBY_ATMOS -> {
+            if (appleStyle) {
+                AppleDolbyAtmosBadge(modifier)
+            } else {
+                LosslessLabel(
+                    text = "Dolby Atmos",
+                    animated = true,
+                    iconPainter = painterResource(Res.drawable.ic_dolby_atmos),
+                    iconSize = 13.dp,
+                    modifier = modifier,
+                )
+            }
+        }
         // Lossy, but the good end of lossy — a module's 320kbps tier, which
         // for a great many tracks is the best copy that exists anywhere the
         // app can reach. See [NerdStats.Snapshot.isHiQuality].
-        nerdStats?.isHiQuality == true -> LosslessLabel(
+        measuredBadge == AppleQualityBadgeKind.HIGH -> LosslessLabel(
             text = stringResource(Res.string.high_quality),
             animated = false,
             iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
             // A Material glyph's own size is 24dp; the badge's are drawn small.
             iconSize = 13.dp,
             modifier = modifier,
+            appleStyle = appleStyle,
         )
-        // Below that, no badge: "Medium Quality" and "Data Saver" are gone.
-        // The space under the bar is kept for what is worth announcing.
+        // The Apple-derived variant must not become completely blank for
+        // measured compressed audio. This is a Bitchord informational fallback,
+        // not a claim that the stream is Apple Music Lossless/Atmos.
+        appleStyle && measuredBadge == AppleQualityBadgeKind.MEDIUM -> LosslessLabel(
+            text = stringResource(Res.string.medium_quality),
+            animated = false,
+            iconPainter = rememberVectorPainter(Icons.Rounded.Headphones),
+            iconSize = 13.dp,
+            modifier = modifier,
+            appleStyle = true,
+        )
+        // No measured codec/bitrate: do not invent an Atmos or Lossless badge.
         else -> {}
+    }
+}
+
+/** The extracted Apple Music Atmos asset is one 83×15dp wordmark.
+ * A separate double-D glyph plus text has the wrong proportions and spacing. */
+@Composable
+private fun AppleDolbyAtmosBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(5.dp))
+            .padding(horizontal = 7.dp, vertical = 3.5.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(Res.drawable.ic_apple_nowplaying_dolby_atmos),
+            contentDescription = "Dolby Atmos",
+            tint = LocalPlayerTint.current.copy(alpha = 0.9f),
+            modifier = Modifier.size(width = 83.dp, height = 15.dp),
+        )
     }
 }
 
@@ -1619,6 +1708,7 @@ private fun LosslessLabel(
     pulsing: Boolean = false,
     /** Unspecified draws [iconPainter] at its own size. */
     iconSize: Dp = Dp.Unspecified,
+    appleStyle: Boolean = false,
 ) {
     // Only while asked for, and not at all under "Reduce animation": the
     // label then just holds still, which says "waiting" well enough.
@@ -1641,33 +1731,40 @@ private fun LosslessLabel(
         // label — no recomposition, no relayout. ModulateAlpha fades each draw
         // call in place rather than through an offscreen buffer: the glyph and
         // the word never overlap, so there is nothing a buffer would fix.
-        modifier = modifier.graphicsLayer {
-            alpha = pulse?.value ?: 1f
-            compositingStrategy = CompositingStrategy.ModulateAlpha
-        },
+        modifier = modifier
+            .then(if (appleStyle) Modifier.background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(5.dp))
+                .padding(horizontal = 7.dp, vertical = 3.5.dp) else Modifier)
+            .graphicsLayer {
+                alpha = pulse?.value ?: 1f
+                compositingStrategy = CompositingStrategy.ModulateAlpha
+            },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val tint = LocalPlayerTint.current.copy(alpha = if (animated) 0.7f else 0.45f)
+        val tint = LocalPlayerTint.current.copy(alpha = if (appleStyle) 0.85f else if (animated) 0.7f else 0.45f)
         // At the drawable's own size — the wave is wide, the double-D
         // nearly square, and one box squashed one of them.
         Icon(
             painter = iconPainter,
             contentDescription = null,
             tint = tint,
-            modifier = if (iconSize.isSpecified) Modifier.size(iconSize) else Modifier,
+            modifier = if (appleStyle && !iconSize.isSpecified) Modifier.size(width = 14.dp, height = 9.dp)
+                else if (iconSize.isSpecified) Modifier.size(iconSize) else Modifier,
         )
-        Spacer(Modifier.width(4.dp))
+        Spacer(Modifier.width(if (appleStyle) 5.dp else 4.dp))
         if (animated) {
             ShimmerText(text = text)
         } else {
             Text(
                 text = text,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Medium,
-                    fontSize = (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
+                    fontWeight = if (appleStyle) FontWeight.Normal else FontWeight.Medium,
+                    fontSize = if (appleStyle) 11.sp else (MaterialTheme.typography.labelMedium.fontSize.value + BADGE_SIZE_BUMP).sp,
+                    // Android's Material label line-height and font padding
+                    // otherwise make the 11sp Apple badge visibly too tall.
+                    lineHeight = if (appleStyle) 13.sp else MaterialTheme.typography.labelMedium.lineHeight,
                 ),
-                color = LocalPlayerTint.current.copy(alpha = 0.45f),
+                color = LocalPlayerTint.current.copy(alpha = if (appleStyle) 0.9f else 0.45f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

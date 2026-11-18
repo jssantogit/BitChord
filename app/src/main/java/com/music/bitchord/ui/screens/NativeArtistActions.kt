@@ -20,6 +20,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -33,6 +36,9 @@ import com.music.bitchord.R
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.ui.icons.BitChordIcons
+import com.music.bitchord.ui.components.CompactRatingIndicator
+import com.music.bitchord.ui.components.CompactRatingGeometry
+import com.music.bitchord.ui.icons.PlaylistEditorIcons
 
 /** Native artist star is context/capability-driven, not a legacy provider ID. */
 internal enum class NativeArtistStarKind { FOLLOW, RATE, UNAVAILABLE }
@@ -64,7 +70,9 @@ internal fun ActionRow(
     onToggleSubscription: (() -> Unit)? = null,
     /** Only the canonical Library artist route can supply first-party rating. */
     onRateArtist: (() -> Unit)? = null,
+    onRateArtistAnchorChange: ((IntRect) -> Unit)? = null,
     artistRated: Boolean = false,
+    artistRating: Double? = null,
     /** Apple's fill for the Play circle; null leaves it white. */
     playColor: Color? = null,
 ) {
@@ -104,13 +112,31 @@ internal fun ActionRow(
                 size = ARTIST_SIDE_BUTTON,
             )
         } else if (starKind == NativeArtistStarKind.RATE) {
-            CircleIconButton(
-                icon = if (artistRated) Icons.Rounded.Star else Icons.Rounded.StarBorder,
-                contentDescription = "Avaliar artista",
-                onClick = { onRateArtist?.invoke() },
-                haptic = Haptic.ToggleOn,
-                size = ARTIST_SIDE_BUTTON,
-            )
+            Box(
+                Modifier.then(if (onRateArtistAnchorChange == null) Modifier
+                    else Modifier.onGloballyPositioned { coords ->
+                        val b = coords.boundsInWindow()
+                        onRateArtistAnchorChange(IntRect(
+                            b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt(),
+                        ))
+                    }),
+            ) {
+                CircleIconButton(
+                    icon = PlaylistEditorIcons.Ratings,
+                    contentDescription = "Avaliar artista · ${com.music.bitchord.ui.components.compactRatingAccessibility(artistRating)}",
+                    onClick = { onRateArtist?.invoke() },
+                    haptic = Haptic.ToggleOn,
+                    size = ARTIST_SIDE_BUTTON,
+                    customIcon = {
+                        CompactRatingIndicator(
+                            value = artistRating,
+                            geometry = CompactRatingGeometry.STANDALONE,
+                            size = 30.dp,
+                            showUnrated = true,
+                        )
+                    },
+                )
+            }
         } else {
             CircleIconButton(
                 icon = Icons.Rounded.StarBorder,

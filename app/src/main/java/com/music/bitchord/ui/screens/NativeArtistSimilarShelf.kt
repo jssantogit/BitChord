@@ -91,6 +91,7 @@ internal fun NativeArtistSimilarShelf(
     artistMbid: String,
     palette: ArtworkPalette,
     onOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onLongPress: ((CanonicalCatalogSearchRow) -> Unit)? = null,
 ) {
     val related by produceState<List<ListenBrainzSimilarArtist>>(
         initialValue = emptyList(), key1 = artistMbid,
@@ -140,6 +141,7 @@ internal fun NativeArtistSimilarShelf(
             subtitle = "Artista",
             palette = palette,
             onClick = { onOpen(page) },
+            onLongPress = nativeArtistPublicShelfHoldAction(page, onLongPress),
             artworkShape = nativeArtistSimilarArtworkShape,
             artwork = {
                 Box(Modifier.fillMaxSize()) {

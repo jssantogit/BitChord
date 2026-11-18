@@ -1,5 +1,10 @@
 package com.music.bitchord.ui.screens
 
+import com.music.bitchord.ui.components.appleSettingsSwitchColors
+import com.music.bitchord.ui.components.appleSettingsSliderColors
+import com.music.bitchord.ui.theme.appleSelectionAccentColor
+import com.music.bitchord.ui.theme.appleMusicKeyColor
+
 import com.music.bitchord.wear.WatchInstaller
 import android.content.Context
 import android.content.Intent
@@ -14,6 +19,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import com.music.bitchord.ui.components.longPressMenuClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,7 +67,6 @@ import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Gradient
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.VisibilityOff
@@ -95,7 +101,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -158,6 +163,7 @@ import com.music.bitchord.data.NerdStats
 import com.music.bitchord.data.scrobbling.LastFM
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.settings.AppSettings
+import com.music.bitchord.ui.components.CompactRatingStyle
 import com.music.bitchord.data.canvas.VisualRetentionMode
 import com.music.bitchord.data.canvas.VisualSurface
 import com.music.bitchord.data.canvas.CanvasCache
@@ -244,6 +250,7 @@ internal fun SettingsScreen(
     val lyricsSources by AppSettings.lyricsSources.collectAsStateWithLifecycle()
     val translationLanguage by AppSettings.translationLanguage.collectAsStateWithLifecycle()
     val theme by AppSettings.themeMode.collectAsStateWithLifecycle()
+    val compactRatingStyle by AppSettings.compactRatingStyle.collectAsStateWithLifecycle()
     val sessionId by AppSettings.audioSessionId.collectAsStateWithLifecycle()
     val outputPcmMode by AppSettings.outputPcmMode.collectAsStateWithLifecycle()
     val preferUsbDac by AppSettings.preferUsbDac.collectAsStateWithLifecycle()
@@ -404,8 +411,18 @@ internal fun SettingsScreen(
         if (selectedSection != null) sectionScrollState.scrollTo(0)
     }
 
+    // Keep the category/home scroll states and real preference controls.
+    // Only the newly selected page's drawing moves a few dp on navigation;
+    // ordinary switch/search/scroll updates do not animate the whole list.
+    val routeArrival = com.music.bitchord.ui.components.rememberRouteArrivalModifier(
+        routeKey = "settings:${selectedSection?.name ?: "home"}",
+        reduceMotion = reduceAnimation,
+        forward = selectedSection != null,
+        rootTabPrefix = "settings:",
+    )
     Column(
         modifier = modifier
+            .then(routeArrival)
             .fillMaxWidth()
             .verticalScroll(scrollState)
             .padding(contentPadding),
@@ -662,10 +679,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = smartFade,
                             onCheckedChange = AppSettings::setSmartFadeEnabled,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setSmartFadeEnabled(!smartFade) },
@@ -701,10 +715,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = skipSilence,
                             onCheckedChange = AppSettings::setSkipSilence,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setSkipSilence(!skipSilence) },
@@ -720,10 +731,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = smartVersionAlignment,
                             onCheckedChange = AppSettings::setSmartVersionAlignment,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setSmartVersionAlignment(!smartVersionAlignment) },
@@ -744,6 +752,21 @@ internal fun SettingsScreen(
                     modifier = Modifier.padding(start = ROW_INSET, end = ROW_INSET, bottom = 14.dp),
                 )
             }
+            row("Estilo das avaliações", "avaliação", "rating", "estrelas", "cores", "numérica") {
+                SettingsRow(
+                    icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Ratings,
+                    title = "Estilo das avaliações",
+                    subtitle = "Como as notas salvas aparecem no aplicativo",
+                )
+                SegmentedControl(
+                    options = listOf("Por cores", "Numérica"),
+                    selectedIndex = CompactRatingStyle.entries.indexOf(compactRatingStyle),
+                    onSelect = { AppSettings.setCompactRatingStyle(CompactRatingStyle.entries[it]) },
+                    modifier = Modifier.padding(
+                        start = ROW_INSET, end = ROW_INSET, bottom = 14.dp,
+                    ),
+                )
+            }
             val reduceAnimationTitle = stringResource(R.string.reduce_animation)
             row(reduceAnimationTitle, "motion") {
                 SettingsRow(
@@ -754,10 +777,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = reduceAnimation,
                             onCheckedChange = AppSettings::setReduceAnimation,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setReduceAnimation(!reduceAnimation) },
@@ -773,10 +793,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = reduceDynamicBlur,
                             onCheckedChange = AppSettings::setReduceDynamicBlur,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setReduceDynamicBlur(!reduceDynamicBlur) },
@@ -800,10 +817,7 @@ internal fun SettingsScreen(
                             checked = liquidGlass,
                             onCheckedChange = AppSettings::setLiquidGlass,
                             enabled = liquidGlassSupported,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setLiquidGlass(!liquidGlass) },
@@ -824,10 +838,7 @@ internal fun SettingsScreen(
                             Switch(
                                 checked = fullBleedArtwork,
                                 onCheckedChange = AppSettings::setFullBleedArtwork,
-                                colors = SwitchDefaults.colors(
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
-                                ),
+                                colors = appleSettingsSwitchColors(),
                             )
                         },
                         onClick = { AppSettings.setFullBleedArtwork(!fullBleedArtwork) },
@@ -844,10 +855,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = legacyMeshGradient,
                             onCheckedChange = AppSettings::setLegacyMeshGradient,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setLegacyMeshGradient(!legacyMeshGradient) },
@@ -866,10 +874,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = animatedCanvas,
                             onCheckedChange = AppSettings::setAnimatedCanvas,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setAnimatedCanvas(!animatedCanvas) },
@@ -920,10 +925,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = signatureApiEnabled,
                             onCheckedChange = AppSettings::setSignatureApiEnabled,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setSignatureApiEnabled(!signatureApiEnabled) },
@@ -973,7 +975,7 @@ internal fun SettingsScreen(
                                 .clip(RoundedCornerShape(16.dp))
                                 .border(
                                     width = if (selected) 1.5.dp else 0.dp,
-                                    color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                    color = appleSelectionAccentColor(selected = selected, neutral = Color.Transparent),
                                     shape = RoundedCornerShape(16.dp),
                                 )
                                 .semantics { this.selected = selected }
@@ -1012,8 +1014,10 @@ internal fun SettingsScreen(
                                 textAlign = TextAlign.Center,
                                 maxLines = 2,
                                 style = MaterialTheme.typography.labelMedium,
-                                color = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = appleSelectionAccentColor(
+                                    selected = selected,
+                                    neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
                                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                 modifier = Modifier.padding(top = 6.dp),
                             )
@@ -1038,10 +1042,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = syncedLyrics,
                             onCheckedChange = AppSettings::setSyncedLyrics,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setSyncedLyrics(!syncedLyrics) },
@@ -1061,10 +1062,7 @@ internal fun SettingsScreen(
                             Switch(
                                 checked = lyricsBlur,
                                 onCheckedChange = AppSettings::setLyricsBlur,
-                                colors = SwitchDefaults.colors(
-                                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                    checkedBorderColor = MaterialTheme.colorScheme.primary,
-                                ),
+                                colors = appleSettingsSwitchColors(),
                             )
                         },
                         onClick = { AppSettings.setLyricsBlur(!lyricsBlur) },
@@ -1127,10 +1125,7 @@ internal fun SettingsScreen(
                                     AppSettings.setHighPerformanceMode(false)
                                 }
                             },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = {
@@ -1199,10 +1194,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = filterNonMusicAudio,
                             onCheckedChange = AppSettings::setFilterNonMusicAudio,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setFilterNonMusicAudio(!filterNonMusicAudio) },
@@ -1229,10 +1221,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = showCacheFolder,
                             onCheckedChange = AppSettings::setShowCacheFolder,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setShowCacheFolder(!showCacheFolder) },
@@ -1456,10 +1445,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = replayGenres,
                             onCheckedChange = AppSettings::setReplayGenres,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setReplayGenres(!replayGenres) },
@@ -1504,10 +1490,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = swipeToPlayNext,
                             onCheckedChange = AppSettings::setSwipeToPlayNext,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setSwipeToPlayNext(!swipeToPlayNext) },
@@ -1516,17 +1499,14 @@ internal fun SettingsScreen(
             val dontRepeatSongsTitle = stringResource(R.string.dont_repeat_songs)
             row(dontRepeatSongsTitle, "radio", "suggestions") {
                 SettingsRow(
-                    icon = Icons.Rounded.History,
+                    icon = Icons.Rounded.FilterAlt,
                     title = dontRepeatSongsTitle,
                     subtitle = stringResource(R.string.dont_repeat_songs_subtitle),
                     trailing = {
                         Switch(
                             checked = dontRepeatSuggestions,
                             onCheckedChange = AppSettings::setDontRepeatSuggestions,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setDontRepeatSuggestions(!dontRepeatSuggestions) },
@@ -1542,10 +1522,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = stopOnTaskRemoved,
                             onCheckedChange = AppSettings::setStopOnTaskRemoved,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setStopOnTaskRemoved(!stopOnTaskRemoved) },
@@ -1561,10 +1538,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = hideVolumeBar,
                             onCheckedChange = AppSettings::setHideVolumeBar,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setHideVolumeBar(!hideVolumeBar) },
@@ -1580,10 +1554,7 @@ internal fun SettingsScreen(
                         Switch(
                             checked = hideStatusBarInPlayer,
                             onCheckedChange = AppSettings::setHideStatusBarInPlayer,
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                                checkedBorderColor = MaterialTheme.colorScheme.primary,
-                            ),
+                            colors = appleSettingsSwitchColors(),
                         )
                     },
                     onClick = { AppSettings.setHideStatusBarInPlayer(!hideStatusBarInPlayer) },
@@ -1655,7 +1626,7 @@ internal fun SettingsScreen(
                 append("BitChord $version  ")
                 val linkStyles = TextLinkStyles(
                     style = SpanStyle(
-                        color = MaterialTheme.colorScheme.primary,
+                        color = appleMusicKeyColor(),
                         textDecoration = TextDecoration.Underline,
                     ),
                 )
@@ -2147,7 +2118,10 @@ private fun QualitySheet(
                     Icon(
                         Icons.Rounded.Check,
                         contentDescription = stringResource(R.string.selected),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = appleSelectionAccentColor(
+                            selected = true,
+                            neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -2224,7 +2198,10 @@ private fun AutomixPerformanceSheet(
                     Icon(
                         Icons.Rounded.Check,
                         contentDescription = stringResource(R.string.selected),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = appleSelectionAccentColor(
+                            selected = true,
+                            neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -2306,7 +2283,10 @@ private fun DownloadQualitySheet(
                     Icon(
                         Icons.Rounded.Check,
                         contentDescription = stringResource(R.string.selected),
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = appleSelectionAccentColor(
+                            selected = true,
+                            neutral = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.size(22.dp),
                     )
                 }
@@ -2512,6 +2492,7 @@ internal fun lyricsSourcesCountValue(enabledCount: Int): String? =
  * to approximate with the nearest speaker outline. Exactly one of it and [icon]
  * is expected; the painter wins where both are given.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SettingsRow(
     icon: ImageVector? = null,
@@ -2523,6 +2504,8 @@ internal fun SettingsRow(
     enabled: Boolean = true,
     iconPainter: Painter? = null,
     onClick: (() -> Unit)? = null,
+    /** A held saved-filter row can reveal actions without selecting the editor. */
+    onLongPress: (() -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     /** Opt-in native leading slot for larger artwork/glyph badges without a new row. */
     leading: (@Composable () -> Unit)? = null,
@@ -2536,7 +2519,17 @@ internal fun SettingsRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (onClick != null && enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                when {
+                    onLongPress != null -> Modifier.longPressMenuClickable(
+                        enabled = enabled,
+                        onClick = onClick ?: onLongPress,
+                        onLongClick = onLongPress,
+                    )
+                    onClick != null && enabled -> Modifier.clickable(onClick = onClick)
+                    else -> Modifier
+                }
+            )
             .alpha(if (enabled) 1f else 0.45f)
             .heightIn(min = minHeight)
             .padding(horizontal = ROW_INSET, vertical = 12.dp),
@@ -2651,10 +2644,7 @@ internal fun SettingsSubRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                checkedBorderColor = MaterialTheme.colorScheme.primary,
-            ),
+            colors = appleSettingsSwitchColors(),
         )
     }
 }
@@ -2665,10 +2655,10 @@ internal fun Badge(text: String) {
     Text(
         text = text.uppercase(Locale.ROOT),
         style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary,
+        color = appleMusicKeyColor(),
         modifier = Modifier
             .clip(RoundedCornerShape(5.dp))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.16f))
+            .background(appleMusicKeyColor().copy(alpha = 0.16f))
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
 }
@@ -2696,11 +2686,7 @@ internal fun SliderRow(
     steps: Int,
     subtitle: String? = null,
 ) {
-    val colors = SliderDefaults.colors(
-        thumbColor = MaterialTheme.colorScheme.primary,
-        activeTrackColor = MaterialTheme.colorScheme.primary,
-        inactiveTrackColor = MaterialTheme.colorScheme.outline,
-    )
+    val colors = appleSettingsSliderColors()
     Column(Modifier.padding(start = ROW_INSET, end = ROW_INSET, top = 12.dp, bottom = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(

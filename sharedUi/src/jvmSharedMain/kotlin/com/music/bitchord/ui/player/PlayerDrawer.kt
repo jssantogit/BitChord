@@ -1,11 +1,14 @@
 package com.music.bitchord.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -109,6 +112,7 @@ fun PlayerDrawer(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val reduceDynamicBlur by PlayerSettings.reduceDynamicBlur.collectAsStateWithLifecycle()
+    val reduceMotion by PlayerSettings.reduceAnimation.collectAsStateWithLifecycle()
 
     // How far the drawer has been dragged down, in pixels. Released, it either
     // springs back or goes — see [DISMISS_DRAG_FRACTION].
@@ -116,7 +120,7 @@ fun PlayerDrawer(
     var height by remember { mutableIntStateOf(0) }
     val offset by animateFloatAsState(
         targetValue = drag,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        animationSpec = if (reduceMotion) snap() else spring(stiffness = Spring.StiffnessMediumLow),
         label = "playerDrawerOffset",
     )
     // Fades with the drawer rather than staying at full strength under a sheet
@@ -192,8 +196,10 @@ fun PlayerDrawer(
     ) {
         AnimatedVisibility(
             visible = shown,
-            enter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it },
-            exit = slideOutVertically(tween(180)) { it },
+            enter = if (reduceMotion) EnterTransition.None
+                else slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it },
+            exit = if (reduceMotion) ExitTransition.None
+                else slideOutVertically(tween(180)) { it },
         ) {
         Column(
             modifier = Modifier

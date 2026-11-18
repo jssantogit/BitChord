@@ -43,6 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.data.model.HomeShelf
 import com.music.bitchord.data.model.LibraryPage
@@ -54,6 +56,7 @@ import com.music.bitchord.ui.icons.BitChordIcons
 import com.music.bitchord.ui.components.LIBRARY_GRID_SPACING
 import com.music.bitchord.ui.components.MessageState
 import com.music.bitchord.ui.components.PAGE_GUTTER
+import com.music.bitchord.ui.components.AppleTextRoles
 import com.music.bitchord.ui.components.PullToRefresh
 import com.music.bitchord.ui.components.SHELF_CARD_WIDTH
 import com.music.bitchord.ui.components.libraryGrid
@@ -83,7 +86,6 @@ fun LibraryScreen(
     onShelfItemClick: (ShelfItem) -> Unit,
     onShelfItemLongPress: (ShelfItem) -> Unit,
     onNewPlaylist: () -> Unit,
-    onImportSpotifyPlaylist: (() -> Unit)? = null,
     /**
      * A shelf's "Show all" — every shelf's row here stops at five cards (see
      * [LibraryGridShelf]), so this is the only way to reach whatever didn't
@@ -142,17 +144,26 @@ fun LibraryScreen(
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = contentPadding,
+            // The Apple Library heading shares the vertical band of the
+            // floating root actions. The generic page inset placed it an
+            // entire toolbar-height too low in device comparisons.
+            contentPadding = if (navigationHome) PaddingValues(
+                top = (contentPadding.calculateTopPadding() - 48.dp).coerceAtLeast(0.dp),
+                bottom = contentPadding.calculateBottomPadding(),
+            ) else contentPadding,
         ) {
             if (showTitle) {
                 item {
                     Text(
                         text = stringResource(Res.string.library),
-                        style = MaterialTheme.typography.displayLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        style = if (navigationHome) AppleTextRoles.libraryLandingTitle(
+                            MaterialTheme.typography.headlineLarge,
+                        ) else MaterialTheme.typography.displayLarge,
+                        color = if (navigationHome) androidx.compose.ui.graphics.Color.White
+                            else MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(
-                            start = PAGE_GUTTER,
-                            end = PAGE_GUTTER,
+                            start = if (navigationHome) 18.dp else PAGE_GUTTER,
+                            end = if (navigationHome) 18.dp else PAGE_GUTTER,
                             top = if (navigationHome) 4.dp else 8.dp,
                             bottom = if (navigationHome) 0.dp else 8.dp,
                         ),
@@ -160,19 +171,27 @@ fun LibraryScreen(
                 }
             }
             if (navigationHome) {
-                pinnedSection?.let { section ->
-                    item(key = "canonical-library-pins") { section() }
-                }
-                if (links.isNotEmpty()) {
-                    item(key = "library-navigation") {
-                        LibraryLinkList(links = links, onClick = onShelfItemClick, compact = true)
+                // Compose the observed Apple Library order from existing real
+                // Bitchord data and routes, never a second library screen.
+                appleLibraryLandingSections(
+                    hasPins = pinnedSection != null,
+                    hasCategories = links.isNotEmpty(),
+                    hasRecent = localAdditions != null,
+                ).forEach { section ->
+                    when (section) {
+                        AppleLibraryLandingSection.PINS -> item(key = "canonical-library-pins") {
+                            pinnedSection?.invoke()
+                        }
+                        AppleLibraryLandingSection.CATEGORIES -> item(key = "library-navigation") {
+                            LibraryLinkList(links = links, onClick = onShelfItemClick, compact = true)
+                        }
+                        AppleLibraryLandingSection.RECENT -> item(key = "recent-local-additions") {
+                            localAdditions?.invoke()
+                        }
                     }
                 }
-                localAdditions?.let { section ->
-                    item(key = "recent-local-additions") { section() }
-                }
-                // The category pages own their shelves; do not render the old
-                // Replay/rediscovery/playlists blocks underneath the home links.
+                // Existing category destinations own search, rating/source
+                // filters, ordering, batch selection, and actual media rows.
                 return@LazyColumn
             }
             item(key = "replay") { replay() }
@@ -202,7 +221,6 @@ fun LibraryScreen(
                         onItemClick = onShelfItemClick,
                         onItemLongPress = onShelfItemLongPress,
                         onNewPlaylist = onNewPlaylist,
-                        onImportSpotifyPlaylist = onImportSpotifyPlaylist,
                         onShowAll = { onShowAll(emptyPlaylists) },
                     )
                 }
@@ -235,7 +253,6 @@ fun LibraryScreen(
                                 onItemClick = onShelfItemClick,
                                 onItemLongPress = onShelfItemLongPress,
                                 onNewPlaylist = onNewPlaylist,
-                                onImportSpotifyPlaylist = onImportSpotifyPlaylist,
                                 onShowAll = { onShowAll(emptyPlaylists) },
                             )
                         }
@@ -250,7 +267,6 @@ fun LibraryScreen(
                                     onItemClick = onShelfItemClick,
                                     onItemLongPress = onShelfItemLongPress,
                                     onNewPlaylist = onNewPlaylist,
-                                    onImportSpotifyPlaylist = onImportSpotifyPlaylist,
                                     onShowAll = { onShowAll(pinnedFirst) },
                                     pinnedPlaylists = pinnedPlaylists,
                                 )
@@ -304,11 +320,11 @@ private fun LibraryLinkList(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 54.dp)
+                     .heightIn(min = if (compact) 44.dp else 54.dp)
                     .clickable(enabled = link.enabled) {
                         link.onClick?.invoke() ?: onClick(link.item)
                     }
-                    .padding(horizontal = PAGE_GUTTER),
+                    .padding(horizontal = if (compact) PAGE_GUTTER + 8.dp else PAGE_GUTTER),
             ) {
                 if (link.logo != null) {
                     // A mark, not a glyph: white on dark, black on light, with
@@ -318,28 +334,32 @@ private fun LibraryLinkList(
                         contentDescription = null,
                         tint = if (link.enabled) MaterialTheme.colorScheme.onBackground
                             else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(LINK_ICON_SIZE),
+                        // The traced category vector has a 40dp viewport with its
+                        // glyph inset inside that viewport. Drawing it at the old
+                        // 24dp Material slot would shrink the actual glyph.
+                        modifier = Modifier.size(if (compact) 40.dp else LINK_ICON_SIZE),
                     )
                 } else {
                     Icon(
                         imageVector = link.icon,
                         contentDescription = null,
-                        tint = if (link.enabled) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(LINK_ICON_SIZE),
+                        tint = if (!link.enabled) MaterialTheme.colorScheme.onSurfaceVariant
+                            else if (compact) MaterialTheme.colorScheme.onBackground
+                            else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(if (compact) 22.dp else LINK_ICON_SIZE),
                     )
                 }
-                Spacer(Modifier.width(LINK_ICON_GAP))
+                Spacer(Modifier.width(if (compact && link.logo != null) 0.dp else LINK_ICON_GAP))
                 Text(
                     text = link.item.title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = AppleTextRoles.categoryLabel(MaterialTheme.typography.bodyLarge),
                     color = if (link.enabled) MaterialTheme.colorScheme.onBackground
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Icon(
+                if (!compact) Icon(
                     imageVector = BitChordIcons.ChevronRight,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .6f),
@@ -348,7 +368,7 @@ private fun LibraryLinkList(
             }
             if (index < links.lastIndex) {
                 HorizontalDivider(
-                    modifier = Modifier.padding(start = PAGE_GUTTER + LINK_ICON_SIZE + LINK_ICON_GAP),
+                    modifier = Modifier.padding(start = PAGE_GUTTER + LINK_ICON_SIZE + LINK_ICON_GAP + if (compact) 8.dp else 0.dp),
                     thickness = 0.5.dp,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -371,7 +391,6 @@ private fun PlaylistShelf(
     onItemClick: (ShelfItem) -> Unit,
     onItemLongPress: (ShelfItem) -> Unit,
     onNewPlaylist: () -> Unit,
-    onImportSpotifyPlaylist: (() -> Unit)? = null,
     onShowAll: () -> Unit,
     pinnedPlaylists: List<String> = emptyList(),
 ) {
@@ -389,15 +408,6 @@ private fun PlaylistShelf(
                     subtitle = stringResource(Res.string.saved_to_youtube_music),
                     onClick = onNewPlaylist,
                 )
-                if (onImportSpotifyPlaylist != null) {
-                    NewShelfCard(
-                        icon = BitChordIcons.Download,
-                        label = stringResource(Res.string.import_spotify),
-                        subtitle = stringResource(Res.string.import_spotify_subtitle),
-                        onClick = onImportSpotifyPlaylist,
-                        logo = Res.drawable.spotify_logo,
-                    )
-                }
             }
         },
     )

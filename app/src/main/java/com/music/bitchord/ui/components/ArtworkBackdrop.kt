@@ -12,6 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -21,6 +23,26 @@ import com.music.bitchord.data.model.CARD_ART_PX
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.ui.theme.ArtworkPalette
+
+/**
+ * The artwork wash must follow the actual PAGE palette, not
+ * isSystemInDarkTheme(): the user can choose a light/dark BitChord theme
+ * independently of Android. These stops are used by artwork-backed player
+ * menus and sheets, so using the phone theme made the menu look washed out
+ * when the two settings disagreed.
+ */
+internal data class ArtworkBackdropWashAlphas(
+    val top: Float,
+    val middle: Float,
+    val lower: Float,
+)
+
+internal fun artworkBackdropWashAlphas(pageBackground: Color): ArtworkBackdropWashAlphas =
+    if (pageBackground.luminance() < 0.5f) {
+        ArtworkBackdropWashAlphas(top = 0.40f, middle = 0.55f, lower = 0.85f)
+    } else {
+        ArtworkBackdropWashAlphas(top = 0.08f, middle = 0.25f, lower = 0.72f)
+    }
 
 /**
  * The colour a surface takes from the artwork it is about: a flat tint
@@ -81,19 +103,18 @@ fun ArtworkBackdrop(
                     .blur(72.dp, BlurredEdgeTreatment.Unbounded),
             )
         }
-        val isDark = androidx.compose.foundation.isSystemInDarkTheme()
-        val alpha0 = if (isDark) 0.40f else 0.08f
-        val alpha1 = if (isDark) 0.55f else 0.25f
-        val alpha2 = if (isDark) 0.85f else 0.72f
+        // The artwork palette follows the app's theme override, which can
+        // differ from the phone's system theme.
+        val alphas = artworkBackdropWashAlphas(palette.background)
 
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to palette.background.copy(alpha = alpha0),
-                        0.20f to palette.background.copy(alpha = alpha1),
-                        0.55f to palette.background.copy(alpha = alpha2),
+                        0f to palette.background.copy(alpha = alphas.top),
+                        0.20f to palette.background.copy(alpha = alphas.middle),
+                        0.55f to palette.background.copy(alpha = alphas.lower),
                         washFraction to palette.background,
                     ),
                 ),

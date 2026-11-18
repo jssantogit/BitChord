@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.music.bitchord.ui.AppUi
+import com.music.bitchord.ui.player.AppleQueueVectors
 import com.music.bitchord.ui.haptics.Haptic
 import com.music.bitchord.ui.haptics.rememberHaptics
 import com.music.bitchord.sharedui.resources.Res
@@ -62,7 +64,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.layout
 import com.music.bitchord.sharedui.resources.more
@@ -82,7 +83,9 @@ fun NativeDetailTrackSwipeContainer(
     onSwipeToQueue: (() -> Unit)?,
     rowBackground: Color,
     modifier: Modifier = Modifier,
-    content: @Composable (Modifier) -> Unit,
+    // Carry the swipe cover into the row's OWN drawing. Passing a Modifier.background
+    // to content painted outside the held capture, leaving a bright bar behind it.
+    content: @Composable (Modifier, Color) -> Unit,
 ) {
     val haptics = rememberHaptics()
     val swipeStateHolder = remember { mutableStateOf<SwipeToDismissBoxState?>(null) }
@@ -106,7 +109,7 @@ fun NativeDetailTrackSwipeContainer(
     swipeStateHolder.value = swipeState
 
     if (onSwipeToQueue == null) {
-        content(modifier)
+        content(modifier, Color.Transparent)
         return
     }
 
@@ -132,7 +135,7 @@ fun NativeDetailTrackSwipeContainer(
         modifier = modifier.onSizeChanged { boxWidth = it.width.toFloat() },
         backgroundContent = { QueueSwipeBackground(swipeState) },
     ) {
-        content(Modifier.background(rowBackground))
+        content(Modifier, rowBackground)
     }
 }
 
@@ -183,6 +186,11 @@ private fun QueueSwipeLabel(playNext: Boolean) {
         )
     }
 }
+
+/** Render the swipe cover and current/selection tint in the same captured layer.
+ * This solid cover still hides the queue-reveal artwork while the row slides. */
+fun nativeCapturedSwipeRowBackground(swipeCover: Color, activeTint: Color): Color =
+    activeTint.compositeOver(swipeCover)
 
 /**
  * Native artwork frame for playable playlist/song rows across all providers.
@@ -334,6 +342,9 @@ fun RowScope.NativeTrackRowText(
 }
 
 
+/** Shared plain overflow glyph across toolbars and contextual row menus. */
+internal fun nativeRowMoreGlyph() = AppleQueueVectors.MorePlain
+
 /**
  * The ⋮ at the end of a row. Its circle is a touch target nobody sees, so it
  * hangs [ROW_MORE_OUTSET] into the page gutter: the dots end at the row's
@@ -357,7 +368,7 @@ fun RowMoreButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Rounded.MoreVert,
+            nativeRowMoreGlyph(),
             contentDescription = contentDescription ?: stringResource(Res.string.more),
             tint = tint,
             modifier = Modifier.size(iconSize),
@@ -380,7 +391,10 @@ fun Modifier.hangIntoGutter(outset: Dp): Modifier = layout { measurable, constra
 }
 
 /** The accent a current song's title takes in lists that mark it with [SearchPlayingBars]. */
-val PlayingAccent = Color(0xFFFB4A62)
+// Kept as a binary/source compatibility alias for consumers not yet migrated.
+ // Visible native lists use theme-aware appleMusicKeyColor() instead.
+@Deprecated("Use the theme-aware appleMusicKeyColor() in composables")
+val PlayingAccent = com.music.bitchord.ui.theme.AppleMusicLightKey
 
 @Composable
 fun SearchPlayingBars(modifier: Modifier = Modifier) {

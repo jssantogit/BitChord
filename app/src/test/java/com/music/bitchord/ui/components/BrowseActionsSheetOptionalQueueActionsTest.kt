@@ -5,11 +5,14 @@ import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
 import com.music.bitchord.R
 import com.music.bitchord.data.model.BrowseType
 import org.junit.Assert.assertEquals
+import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,6 +53,31 @@ class BrowseActionsSheetOptionalQueueActionsTest {
         compose.onNodeWithText(context.getString(R.string.unpin)).assertExists().performClick()
         assertEquals(1, playlistTaps)
         assertEquals(1, pinTaps)
+    }
+
+    @Test fun albumActionsReuseThePlayerHeaderGeometryButKeepTheirOwnCommands() {
+        var playlistTaps = 0
+        var ratingTaps = 0
+        compose.setContent {
+            MaterialTheme {
+                BrowseActionsSheet(
+                    target = BrowseTarget(
+                        browseId = "verified-album",
+                        title = "ARIRANG",
+                        subtitle = "BTS",
+                        type = BrowseType.ALBUM,
+                    ),
+                    onAddToPlaylist = { playlistTaps++ },
+                    onEditRating = { ratingTaps++ },
+                )
+            }
+        }
+        compose.onNodeWithTag("native-solid-browse-header")
+            .assertHeightIsEqualTo(112.dp)
+        compose.onNodeWithText("Adicionar à playlist").performClick()
+        compose.onNodeWithText("Editar avaliação").performClick()
+        assertEquals(1, playlistTaps)
+        assertEquals(1, ratingTaps)
     }
 
     @Test fun realQueueCallbacksKeepBothExistingActions() {

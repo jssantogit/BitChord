@@ -213,7 +213,7 @@ class CanonicalLibraryListRefinementsTest {
         compose.onNodeWithText("Avaliar álbum").assertDoesNotExist()
     }
 
-    @Test fun nativeAlbumRatingHasPriorityOverOtherwiseAvailableQuality() {
+    @Test fun ratedAlbumKeepsVerifiedQualityWhileRatingMovesToTopToolbar() {
         compose.setContent {
             MaterialTheme {
                 NativeReleaseHeaderLayout(
@@ -230,8 +230,11 @@ class CanonicalLibraryListRefinementsTest {
                 )
             }
         }
-        compose.onNodeWithTag("native-album-rating").assertExists()
-        compose.onNodeWithTag("native-album-source-quality").assertDoesNotExist()
+        // The saved personal score belongs in the top-right action circle,
+        // not in a third row beneath the album title and artist. Verified
+        // source quality remains visible independently of the personal score.
+        compose.onNodeWithTag("native-album-rating").assertDoesNotExist()
+        compose.onNodeWithTag("native-album-source-quality").assertExists()
     }
 
     @Test fun nativeAlbumAndArtistRatingsAreScopedToTheirExactTypedIdentities() {

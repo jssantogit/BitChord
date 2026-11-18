@@ -1,5 +1,7 @@
 package com.music.bitchord.ui.screens
 
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,6 +17,21 @@ import com.music.bitchord.data.catalog.ReleaseEntity
 import com.music.bitchord.data.settings.SongSort
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicArtworkLoader
 import com.music.bitchord.ui.theme.rememberArtworkPalette
+
+/**
+ * Artist navigation changes the verified identity without necessarily removing
+ * this route's composition. Keep the scroll through art/catalog refreshes and
+ * nested albums, but never inherit a different artist's previous offset.
+ */
+@Composable
+internal fun rememberNativeCanonicalArtistScrollState(
+    artistId: String?,
+    artistName: String,
+): LazyListState {
+    // Reuse the identical key that already scopes nested album navigation.
+    val key = canonicalArtistDetailNavigationKey(artistId, artistName)
+    return rememberSaveable(key, saver = LazyListState.Saver) { LazyListState() }
+}
 
 /**
  * This typed route feeds the shared native artist compositor with the
@@ -39,6 +56,7 @@ internal fun CanonicalArtistDetailRoute(
     searching: Boolean,
     nestedBackToken: Int,
     onNestedDetailChanged: (Boolean) -> Unit,
+    onNestedAlbumRatingTargetChanged: (CanonicalLibrarySelection?) -> Unit = {},
     albumSort: SongSort = SongSort.DEFAULT,
     albumMenuToken: Int = 0,
     albumPlaylistToken: Int = 0,
@@ -48,6 +66,7 @@ internal fun CanonicalArtistDetailRoute(
     onTrackOptions: (CanonicalBrowseTrack) -> Unit,
     onReleaseOptions: (ReleaseEntity) -> Unit,
     onRateArtist: (() -> Unit)? = null,
+    onArtistRatingAnchorChanged: ((androidx.compose.ui.unit.IntRect) -> Unit)? = null,
     onRateRelease: ((ReleaseEntity) -> Unit)? = null,
     selectedItems: List<CanonicalLibrarySelection>,
     onToggleSelection: (CanonicalLibrarySelection) -> Unit,
@@ -92,7 +111,7 @@ internal fun CanonicalArtistDetailRoute(
     // It keeps DISPLAY_ARTIST separate from a verified canonical ArtistId.
     val artistRatingState by rememberCanonicalArtistRating(artistId)
     // Keep scrolling position across nested album navigation.
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listState = rememberNativeCanonicalArtistScrollState(artistId, artistName)
     val nestedNavigation = rememberCanonicalArtistNestedNavigation(
         artistId = artistId,
         artistName = artistName,
@@ -109,6 +128,11 @@ internal fun CanonicalArtistDetailRoute(
     )
 
     val selectedAlbum = nestedNavigation.openedRelease
+    LaunchedEffect(selectedAlbum?.id) {
+        onNestedAlbumRatingTargetChanged(selectedAlbum?.let {
+            CanonicalLibrarySelection(CanonicalLibraryEntityType.ALBUM, it.id)
+        })
+    }
     if (selectedAlbum != null) {
         val albumSelection = CanonicalLibrarySelection(
             CanonicalLibraryEntityType.ALBUM, selectedAlbum.id,
@@ -138,6 +162,9 @@ internal fun CanonicalArtistDetailRoute(
             onTrackPlay = onTrackPlay,
             onTrackEditRating = onTrackEditRating,
             onTrackOptions = onTrackOptions,
+            onCreditClick = if (selectedAlbum.artistDisplay == artistName) {
+                { nestedNavigation.close() }
+            } else null,
         )
         return
     }
@@ -163,6 +190,7 @@ internal fun CanonicalArtistDetailRoute(
         onTrackOptions = onTrackOptions,
         onReleaseOptions = releaseOptionsWithArtwork,
         onRateArtist = onRateArtist,
+        onRateArtistAnchorChange = onArtistRatingAnchorChanged,
         onPlayAll = onPlayAll,
     )
 }

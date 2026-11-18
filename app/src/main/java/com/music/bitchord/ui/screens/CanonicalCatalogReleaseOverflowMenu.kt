@@ -2,14 +2,14 @@ package com.music.bitchord.ui.screens
 
 import android.content.Intent
 import android.net.Uri
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -20,8 +20,12 @@ internal fun CanonicalCatalogReleaseOverflowMenu(
     title: String,
     subtitle: String,
     cover: String?,
+    plateTint: Color? = null,
     expanded: Boolean,
     onDismiss: () -> Unit,
+    hazeState: dev.chrisbanes.haze.HazeState,
+    anchorBounds: androidx.compose.ui.unit.IntRect? = null,
+    onSettings: () -> Unit,
 ) {
     val context = LocalContext.current
     val target = remember(browseId) { canonicalCatalogEntityRatingTarget(browseId) }
@@ -39,26 +43,54 @@ internal fun CanonicalCatalogReleaseOverflowMenu(
             onDismiss = { ratingOpen = false },
         )
     }
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        if (target != null) {
-            DropdownMenuItem(text = { Text("Avaliar álbum") }, onClick = {
-                onDismiss()
-                ratingOpen = true
-            })
-        }
-        if (validCatalogMetadataPin(pin)) {
-            DropdownMenuItem(
-                text = { Text(if (isPinned) "Desafixar da Biblioteca" else "Fixar na Biblioteca") },
-                onClick = { repo.toggle(pin); onDismiss() },
+    if (expanded) {
+        com.music.bitchord.FrostedMenuPanel(
+            hazeState = hazeState,
+            anchorBounds = anchorBounds,
+            onDismiss = onDismiss,
+        ) {
+            if (target != null) {
+                com.music.bitchord.FrostedMenuRow(
+                    label = "Avaliar álbum",
+                    checked = false,
+                    icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.RatingPlain,
+                    onClick = {
+                        onDismiss()
+                        ratingOpen = true
+                    },
+                )
+            }
+            if (validCatalogMetadataPin(pin)) {
+                com.music.bitchord.FrostedMenuRow(
+                    label = if (isPinned) "Desafixar da Biblioteca" else "Fixar na Biblioteca",
+                    checked = false,
+                    icon = com.music.bitchord.ui.icons.BitChordIcons.Pin,
+                    onClick = { repo.toggle(pin); onDismiss() },
+                )
+            }
+            if (target != null) {
+                com.music.bitchord.FrostedMenuRow(
+                    label = "Ver no MusicBrainz",
+                    checked = false,
+                    icon = com.music.bitchord.ui.icons.PlaylistEditorIcons.Globe,
+                    onClick = {
+                        onDismiss()
+                        val endpoint = if (target.entityType == "RELEASE_GROUP")
+                            "release-group" else "release"
+                        val url = Uri.parse("https://musicbrainz.org/$endpoint/" + target.entityId)
+                        context.startActivity(Intent(Intent.ACTION_VIEW, url))
+                    },
+                )
+            }
+            com.music.bitchord.FrostedMenuRow(
+                label = "Configurações",
+                checked = false,
+                icon = androidx.compose.material.icons.Icons.Rounded.Settings,
+                onClick = {
+                    onDismiss()
+                    onSettings()
+                },
             )
-        }
-        if (target != null) {
-            DropdownMenuItem(text = { Text("Ver no MusicBrainz") }, onClick = {
-                onDismiss()
-                val endpoint = if (target.entityType == "RELEASE_GROUP") "release-group" else "release"
-                val url = Uri.parse("https://musicbrainz.org/$endpoint/" + target.entityId)
-                context.startActivity(Intent(Intent.ACTION_VIEW, url))
-            })
         }
     }
 }

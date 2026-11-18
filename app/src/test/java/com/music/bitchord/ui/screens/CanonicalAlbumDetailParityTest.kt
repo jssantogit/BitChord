@@ -105,6 +105,48 @@ class CanonicalAlbumDetailParityTest {
         assertEquals("ALLDAY PROJECT - EP", canonicalAlbumDisplayTitle("ALLDAY PROJECT - EP", "Album"))
         assertEquals("A - EP Collection", canonicalAlbumDisplayTitle("A - EP Collection", "EP"))
     }
+    @Test fun musicBrainzReleaseCreditNavigatesOnlyWithOneVerifiedLeadArtist() {
+        val releaseId = "a8f4b8f4-661e-4553-a524-3ba91d562ed0"
+        val artistId = "0249c38a-4bd0-4c7a-ac07-80bb8063d469"
+        val credit = com.music.bitchord.data.catalog.MusicBrainzReleaseArtistCreditEntity(
+            releaseId = releaseId,
+            position = 0,
+            musicBrainzArtistId = artistId,
+            name = "SAY MY NAME",
+            joinPhrase = null,
+        )
+        assertEquals(
+            "catalog:ARTIST:$artistId",
+            verifiedCatalogReleaseLeadArtistRoute("catalog:RELEASE:$releaseId", listOf(credit)),
+        )
+        assertEquals(null, verifiedCatalogReleaseLeadArtistRoute(
+            "catalog:RELEASE_GROUP:$releaseId", listOf(credit),
+        ))
+        assertEquals(null, verifiedCatalogReleaseLeadArtistRoute(
+            "catalog:RELEASE:$releaseId",
+            listOf(credit, credit.copy(musicBrainzArtistId = "b8f4b8f4-661e-4553-a524-3ba91d562ed0")),
+        ))
+    }
+
+    @Test fun localAlbumCreditOpensOnlyTheArtistInTheSameLocalFolder() {
+        assertEquals(
+            "local:group:artist:all:SAY MY NAME",
+            detailAlbumArtistBrowseId("local:group:album:all:&Our Vibe", null, "SAY MY NAME"),
+        )
+        assertEquals(
+            "UC12345678901234567890",
+            detailAlbumArtistBrowseId("catalog:RELEASE:abc", "UC12345678901234567890", "SAY MY NAME"),
+        )
+        assertEquals(
+            null,
+            detailAlbumArtistBrowseId("catalog:RELEASE:abc", null, "SAY MY NAME"),
+        )
+        assertEquals(
+            null,
+            detailAlbumArtistBrowseId("local:group:album:all:&Our Vibe", null, ""),
+        )
+    }
+
     @Test fun sharedNativeAlbumRowsKeepOriginalNumbersAfterSearchingOrSorting() {
         val original = mapOf("song-c" to 3, "song-a" to 1, "song-b" to 2)
         assertEquals(3, nativeCanonicalAlbumRowNumber("song-c", 0, original))

@@ -1632,14 +1632,19 @@ private fun Modifier.lyricParticles(
  */
 @Composable
 private fun LyricsSkeleton(modifier: Modifier = Modifier) {
-    val sweep = rememberInfiniteTransition(label = "lyricsSkeleton").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(SKELETON_PERIOD_MS, easing = LinearEasing),
-        ),
-        label = "sweep",
-    )
+    val reduceMotion by PlayerSettings.reduceAnimation.collectAsStateWithLifecycle()
+    // Do not mount an infinite transition in reduced motion. A static shimmer
+    // gradient would still be a sweeping animation on every lookup otherwise.
+    val sweep = if (com.music.bitchord.ui.components.GlobalMotionPolicy.shimmerEnabled(reduceMotion)) {
+        rememberInfiniteTransition(label = "lyricsSkeleton").animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                tween(SKELETON_PERIOD_MS, easing = LinearEasing),
+            ),
+            label = "sweep",
+        )
+    } else null
     BoxWithConstraints(
         // No gutter of its own: the list this stands in for bleeds out to the
         // panel's full width and puts the gutter back as content padding, so
@@ -1665,19 +1670,27 @@ private fun LyricsSkeleton(modifier: Modifier = Modifier) {
                                 // every frame, and all any of them needs per
                                 // frame is a fresh gradient.
                                 .drawWithCache {
-                                    val full = column.toPx()
-                                    val band = full * 0.45f
-                                    val startX = -band + sweep.value * (full + band * 2)
-                                    val brush = Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.White.copy(alpha = 0.10f),
-                                            Color.White.copy(alpha = 0.26f),
-                                            Color.White.copy(alpha = 0.10f),
-                                        ),
-                                        startX = startX,
-                                        endX = startX + band,
-                                    )
-                                    onDrawBehind { drawRect(brush) }
+                                    val brush = sweep?.let { animated ->
+                                        val full = column.toPx()
+                                        val band = full * 0.45f
+                                        val startX = -band + animated.value * (full + band * 2)
+                                        Brush.horizontalGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.10f),
+                                                Color.White.copy(alpha = 0.26f),
+                                                Color.White.copy(alpha = 0.10f),
+                                            ),
+                                            startX = startX,
+                                            endX = startX + band,
+                                        )
+                                    }
+                                    onDrawBehind {
+                                        if (brush == null) {
+                                            drawRect(Color.White.copy(alpha = 0.14f))
+                                        } else {
+                                            drawRect(brush)
+                                        }
+                                    }
                                 },
                         )
                     }

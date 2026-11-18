@@ -42,8 +42,10 @@ object AppUpdateChecker {
 
     private const val CACHE_SUBDIR = "updates"
 
-    private const val LATEST_RELEASE_URL =
-        "https://api.github.com/repos/kushagrasinghx/BitChord/releases/latest"
+    // The fork must not offer or sideload the upstream BitChord APK.
+    // Keep the manual update option scoped to this repository's own releases.
+    internal const val LATEST_RELEASE_URL =
+        "https://api.github.com/repos/jssantogit/BitChord/releases/latest"
 
     private val json = Json { ignoreUnknownKeys = true }
 

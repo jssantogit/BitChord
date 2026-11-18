@@ -5,8 +5,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.provider.MediaStore
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import androidx.room.withTransaction
 import com.music.bitchord.data.LocalMediaRepository
 import com.music.bitchord.data.model.Song
@@ -462,8 +463,9 @@ internal data class MediaStoreSourceLookup(
  * All playback identities still come from [CanonicalLocalLibrary.sync].
  */
 internal object UnifiedLocalCatalogIndex {
-    private val mutex = Mutex()
-    @Volatile private var complete = false
+    private val processIndex = LocalIndexSingleFlight(
+        CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    )
 
     private fun trace(
         phase: String,
@@ -487,22 +489,28 @@ internal object UnifiedLocalCatalogIndex {
     }
 
     suspend fun ensure(context: Context) {
-        if (complete) return
+        if (processIndex.isComplete()) return
         if (!LocalMediaRepository.hasStoragePermission(context)) {
             trace("permission_missing")
             return
         }
-        mutex.withLock {
-            if (complete || !LocalMediaRepository.hasStoragePermission(context)) return@withLock
+        val app = context.applicationContext
+        processIndex.await {
             val started = SystemClock.elapsedRealtimeNanos()
-            val app = context.applicationContext
             var scannedCount = 0
             try {
+                // The worker is app-owned, not tied to the screen's LaunchedEffect.
+                if (!LocalMediaRepository.hasStoragePermission(app)) {
+                    trace("permission_missing")
+                    error("Local storage permission revoked during indexing")
+                }
                 val scanned = LocalMediaRepository.getLocalMusic(app)
                 scannedCount = scanned.size
-                trace("scanned", scannedCount)
+                val scannedAt = SystemClock.elapsedRealtimeNanos()
+                trace("scanned", scannedCount, elapsedNanos = scannedAt - started)
                 val indexed = CanonicalLocalLibrary.sync(app, scanned)
-                complete = true
+                trace("persisted", scannedCount, indexed.size,
+                    SystemClock.elapsedRealtimeNanos() - scannedAt)
                 trace("ready", scannedCount, indexed.size,
                     SystemClock.elapsedRealtimeNanos() - started)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
@@ -517,7 +525,7 @@ internal object UnifiedLocalCatalogIndex {
     }
 
     fun invalidate() {
-        complete = false
+        processIndex.invalidate()
         trace("invalidated")
     }
 }
