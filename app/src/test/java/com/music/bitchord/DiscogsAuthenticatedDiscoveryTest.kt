@@ -2,11 +2,45 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.discogs.*
 import kotlinx.coroutines.runBlocking
+import com.music.bitchord.data.providers.*
 import org.junit.Assert.*
 import org.junit.Test
 
 class DiscogsAuthenticatedDiscoveryTest {
     private val token = "A".repeat(40)
+
+    @Test fun canonicalDiscogsOptOutBlocksCredentialedDatabaseSearch() = runBlocking {
+        val key = BuiltInProviderKeys.DISCOGS
+        val descriptor = ProviderDescriptor(key,
+            setOf(ProviderCapability.EDITION_METADATA), ProviderReadiness.READY)
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(descriptor),
+            choices = mapOf(ProviderCapability.EDITION_METADATA to listOf(
+                ProviderChoice(key, enabled, 0))),
+        )
+        val gate = ProviderPolicyGate(policy(false))
+        var contacted = false
+        val client = DiscogsDatabaseSearchClient(
+            enabled = true,
+            tokenProvider = { token },
+            transport = object : DiscogsSearchTransport {
+                override suspend fun search(
+                    query: DiscogsSearchRequest, token: String, userAgent: String,
+                ): DiscogsHttpResponse {
+                    contacted = true
+                    return DiscogsHttpResponse(200, "{}")
+                }
+            },
+            admission = RateLimitedProviderTransport { gate },
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0L),
+        )
+        assertEquals(DiscogsSearchResult.Disabled,
+            client.search(DiscogsSearchRequest("ILLIT")))
+        assertFalse(contacted)
+        gate.replace(policy(true))
+        client.search(DiscogsSearchRequest("ILLIT"))
+        assertTrue(contacted)
+    }
 
     @Test fun noTokenMeansZeroRequestsAndDoesNotClaimNoResults() = runBlocking {
         val client = DiscogsDatabaseSearchClient(

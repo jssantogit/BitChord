@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.music.bitchord.data.providers.ProviderRuntime
 import com.music.bitchord.diagnostics.Diagnostics
 import com.music.bitchord.diagnostics.DiagnosticsShare
 import com.music.bitchord.observability.TraceOutcome
@@ -195,6 +196,14 @@ class A0ManualLoginActivity : Activity() {
                     return
                 }
             } else null
+            // The Activity is also reachable as a devDebug diagnostic entrypoint:
+            // establish its own DOWNLOAD ticket instead of trusting a caller.
+            val accountGeneration = SoulseekActiveSession.admitManualSession(
+                ProviderRuntime.gateOrNull(),
+            ) ?: run {
+                status.text = "Soulseek está desativado ou indisponível em Fontes/Downloads."
+                return
+            }
             val username = user.text.toString()
             val savedAccount = if (password.text.isEmpty()) accountVault.read() else null
             val secret = if (savedAccount?.username == username) {
@@ -224,7 +233,6 @@ class A0ManualLoginActivity : Activity() {
             } else {
                 "Verificando uma sessão; nenhum arquivo será transferido."
             }
-            val accountGeneration = SoulseekActiveSession.generation()
             worker.execute {
                 // Existing Diagnostics capture and structured tracing; no raw inputs.
                 val captureEnabled = runCatching {
@@ -311,6 +319,9 @@ class A0ManualLoginActivity : Activity() {
                             finalOutcome = TraceOutcome.SUCCEEDED
                         } else {
                             ServerSocket(0, 1).use { listener ->
+                                if (!SoulseekActiveSession.registerListener(
+                                        listener, accountGeneration
+                                    )) throw IOException("Soulseek download revoked before search")
                                 activeListener = listener
                                 trace.note(A0SmokeTrace.Stage.SEARCH_LISTENER_OPEN)
                                 listener.soTimeout = 12_000
@@ -358,9 +369,12 @@ class A0ManualLoginActivity : Activity() {
                                         ) {
                                             try {
                                                 listener.accept().use { peer ->
+                                                    if (!SoulseekActiveSession.register(
+                                                            peer, accountGeneration
+                                                        )) return@use
+                                                    activeDirectPeer = peer
                                                     if (!readerGate.isOpen()) return@use
                                                     trace.note(A0SmokeTrace.Stage.DIRECT_ACCEPTED)
-                                                    activeDirectPeer = peer
                                                     peer.soTimeout = 4000
                                                     val observation =
                                                         A0OneShotPublicSearchWire.readOneDirectPeerReply(
@@ -396,6 +410,7 @@ class A0ManualLoginActivity : Activity() {
                                                     A0SmokeTrace.Reason.PEER_IO_FAILURE
                                                 )
                                             } finally {
+                                                activeDirectPeer?.let { SoulseekActiveSession.detach(it) }
                                                 activeDirectPeer = null
                                             }
                                         }
@@ -447,6 +462,9 @@ class A0ManualLoginActivity : Activity() {
                                                 try {
                                                     trace.note(A0SmokeTrace.Stage.INDIRECT_CONNECT_STARTED)
                                                     Socket().use { peer ->
+                                                        if (!SoulseekActiveSession.register(
+                                                                peer, accountGeneration
+                                                            )) throw IOException("Soulseek download revoked")
                                                         activeIndirectPeer = peer
                                                         if (!readerGate.isOpen()) return@use
                                                         peer.connect(
@@ -497,6 +515,7 @@ class A0ManualLoginActivity : Activity() {
                                                         A0SmokeTrace.Reason.PEER_IO_FAILURE
                                                     )
                                                 } finally {
+                                                    activeIndirectPeer?.let { SoulseekActiveSession.detach(it) }
                                                     activeIndirectPeer = null
                                                 }
                                             }
@@ -854,6 +873,7 @@ class A0ManualLoginActivity : Activity() {
                         transfer.cancel()
                     }
                     activeTransfer = null
+                    activeListener?.let { SoulseekActiveSession.detachListener(it) }
                     activeListener?.close()
                     activeListener = null
                     packet?.fill(0)

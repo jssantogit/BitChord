@@ -2,6 +2,10 @@ package com.music.bitchord.data.catalog.metadata
 
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsShadowRelease
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsSourceOnlyDiscovery
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
 import java.text.Normalizer
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -73,7 +77,12 @@ internal object AppleArtistTitleHintPolicy {
  * authorize access to another artist's Discogs artist-index.
  */
 internal class MusicBrainzDiscogsAppleTitleHintSource(
-    private val musicBrainz: MusicBrainzCatalogSearch = MusicBrainzCatalogSearch(),
+    private val musicBrainz: MusicBrainzCatalogSearch = MusicBrainzCatalogSearch(
+        capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
+    ),
+    private val policyGate: () -> ProviderPolicyGate? = {
+        ProviderRuntime.gateForCacheReadOrNull()
+    },
     private val nowMillis: () -> Long = System::currentTimeMillis,
 ) : AppleArtistTitleHintSource {
     override suspend fun suggest(
@@ -95,8 +104,18 @@ internal class MusicBrainzDiscogsAppleTitleHintSource(
             is MusicBrainzCatalogSearchResult.Success -> result.page.items
             is MusicBrainzCatalogSearchResult.Failure -> emptyList()
         }
+        // An exact artist-scoped cache is still Discogs-owned editorial data;
+        // never surface it after the user disables Discogs edition metadata.
+        val gate = policyGate()
+        val discogsTicket = gate?.open(
+            ProviderCapability.EDITION_METADATA, BuiltInProviderKeys.DISCOGS,
+        )
         val discogs = verifiedMbArtistId?.let { id ->
-            DiscogsSourceOnlyDiscovery.store.activeForArtist(id, nowMillis())
+            if (discogsTicket != null) {
+                DiscogsSourceOnlyDiscovery.store.activeForArtist(id, nowMillis())
+            } else emptyList()
+        }.orEmpty().takeIf {
+            discogsTicket != null && gate?.accept(discogsTicket) == true
         }.orEmpty()
         return AppleArtistTitleHintPolicy.select(
             artistName, groups, discogs, emptyList(),

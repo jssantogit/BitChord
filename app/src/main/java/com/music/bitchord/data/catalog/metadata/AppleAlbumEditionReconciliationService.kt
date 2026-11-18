@@ -5,6 +5,11 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionAccess
 import com.music.bitchord.data.catalog.metadata.discogs.DiscogsEditionEnrichment
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadLease
+import com.music.bitchord.data.providers.ProviderRuntime
 
 /** Bounded candidates gathered from MusicBrainz; never products to display. */
 internal data class AppleAlbumEditionEvidence(
@@ -27,7 +32,9 @@ internal fun interface AppleAlbumEditionEvidenceSource {
  * cannot certify that a better matching edition was not omitted.
  */
 internal class MusicBrainzBarcodeEditionEvidenceSource(
-    private val search: MusicBrainzCatalogSearch = MusicBrainzCatalogSearch(),
+    private val search: MusicBrainzCatalogSearch = MusicBrainzCatalogSearch(
+        capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
+    ),
     private val graph: MusicBrainzCatalogGraph = MusicBrainzCatalogGraph(),
     private val upcVerifier: AppleUpcReverseLookupVerifier =
         AppleUpcReverseLookupVerifier(),
@@ -180,6 +187,9 @@ internal class AppleAlbumEditionReconciliationService(
             DiscogsEditionAccess.coordinator.observeRelease(id)
         },
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val policyGate: () -> ProviderPolicyGate? = {
+        ProviderRuntime.gateForCacheReadOrNull()
+    },
 ) {
     suspend fun resolve(album: ItunesEditorialRelease): AppleTriSourceEditorialEntry? {
         if (album.appleCollectionId <= 0L ||
@@ -203,6 +213,16 @@ internal class AppleAlbumEditionReconciliationService(
             album.tracks.size
         ) return null
 
+        // MusicBrainz proof decorates an already-owned Apple album; it never
+        // authorizes the Apple album or inherits its provider permissions.
+        // Require BOTH independent editorial grants while assembling the
+        // cross-provider evidence, including just before publication.
+        val gate = policyGate()
+        val editorialLease = ProviderReadLease.acquire(gate, listOf(
+            ProviderCapability.EDITORIAL_DISCOGRAPHY to BuiltInProviderKeys.ITUNES,
+            ProviderCapability.EDITORIAL_DISCOGRAPHY to BuiltInProviderKeys.MUSICBRAINZ,
+        )) ?: return null
+
         val data = try {
             source.discover(album)
         } catch (cancelled: CancellationException) {
@@ -210,6 +230,7 @@ internal class AppleAlbumEditionReconciliationService(
         } catch (_: Exception) {
             null
         } ?: return null
+        if (!editorialLease.isCurrent()) return null
         val candidateUpc = album.upc ?: data.verifiedAppleUpc
             ?.takeIf { Regex("^[0-9]{8,14}$").matches(it) }
         // A candidate MB barcode must NEVER substitute for proof from the
@@ -250,6 +271,13 @@ internal class AppleAlbumEditionReconciliationService(
             first.release.artworkUrl != album.artworkUrl ||
             first.release.tracks != album.tracks
         ) return null
+        if (!editorialLease.isCurrent()) return null
+
+        // Discogs is a third, optional permission. Revoking/omitting it
+        // removes its enrichment, NEVER the verified Apple+MB proof.
+        val discogsLease = ProviderReadLease.acquire(gate, listOf(
+            ProviderCapability.EDITION_METADATA to BuiltInProviderKeys.DISCOGS,
+        )) ?: return first
 
         // The opt-in Discogs edition coordinator independently verifies
         // canonical release graph, exact Discogs Release relation, tracklist
@@ -261,10 +289,15 @@ internal class AppleAlbumEditionReconciliationService(
         } catch (_: Exception) {
             DiscogsEditionEnrichment.Unavailable
         }
-        if (observed !is DiscogsEditionEnrichment.Verified) return first
+        if (!editorialLease.isCurrent()) return null
+        if (!discogsLease.isCurrent() ||
+            observed !is DiscogsEditionEnrichment.Verified
+        ) return first
         val enriched = keepOriginalAppleFields(
             reconcile(listOf(observed)) ?: return first,
         )
+        if (!editorialLease.isCurrent()) return null
+        if (!discogsLease.isCurrent()) return first
         return if (enriched.match == first.match &&
             enriched.release.appleScopedId == album.appleScopedId &&
             enriched.release.title == album.title &&

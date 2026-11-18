@@ -13,7 +13,15 @@ import com.music.bitchord.auth.sessionId
 import com.music.bitchord.auth.adjacentProfile
 import com.music.bitchord.data.AppUpdateChecker
 import com.music.bitchord.data.canvas.AppleArtistArtRepository
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderRuntime
+import com.music.bitchord.data.providers.ProviderReadLease
+import com.music.bitchord.data.providers.orderedCatalogProviders
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.configuredCanonicalPersonalProviderKeys
+import com.music.bitchord.data.catalog.isCanonicalPersonalProviderCurrentlyAuthorized
 import com.music.bitchord.data.listening.ListeningEventDatabase
 import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogGraph
@@ -39,6 +47,8 @@ import com.music.bitchord.data.catalog.metadata.MusicBrainzMetadataEnrichmentPro
 import com.music.bitchord.data.catalog.metadata.MetadataLookupResult
 import com.music.bitchord.data.catalog.metadata.RecordingMetadataEnrichment
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogIndex
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCachedSearchRepository
+import com.music.bitchord.data.catalog.metadata.MusicBrainzCachedSearchLimits
 import com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRecording
 import com.music.bitchord.data.catalog.metadata.isCuratedMusicBrainzRelease
@@ -563,6 +573,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val _canonicalResults = MutableStateFlow<UiState<List<CanonicalCatalogSearchRow>>?>(null)
     val canonicalResults: StateFlow<UiState<List<CanonicalCatalogSearchRow>>?> = _canonicalResults.asStateFlow()
     private var canonicalSearchJob: Job? = null
+    /** Selects the existing native result renderer for the winning source. */
+    /** Source search snapshots are only reusable for the exact submitted query. */
+    private var catalogAppleQuery: String? = null
+    private var catalogMusicBrainzQuery: String? = null
+    private var canonicalSearchJobProvider: ProviderKey? = null
+
+    private val _catalogSearchMusicBrainzVisible = MutableStateFlow(false)
+    val catalogSearchMusicBrainzVisible: StateFlow<Boolean> =
+        _catalogSearchMusicBrainzVisible.asStateFlow()
+
+    private fun eligibleCatalogSearchProviders() = orderedCatalogProviders(
+        ProviderRuntime.gateOrNull(),
+        ProviderCapability.CATALOG_SEARCH,
+        setOf(BuiltInProviderKeys.MUSICBRAINZ, BuiltInProviderKeys.ITUNES),
+    )
+
+    private fun eligibleEditorialProviders() = orderedCatalogProviders(
+        ProviderRuntime.gateOrNull(),
+        ProviderCapability.EDITORIAL_DISCOGRAPHY,
+        setOf(BuiltInProviderKeys.MUSICBRAINZ, BuiltInProviderKeys.ITUNES),
+    )
+
+    private val _catalogEditorialOrder = MutableStateFlow(eligibleEditorialProviders())
+    val catalogEditorialOrder: StateFlow<List<ProviderKey>> =
+        _catalogEditorialOrder.asStateFlow()
+
     /** The Apple commercial shelf is independent of MB artist/recording search. */
     private val appleEditorialRepository by lazy { AppleEditorialCatalogRepository() }
     private val _appleEditorialResults =
@@ -576,6 +612,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var appleEditorialSearchJob: Job? = null
     private var appleEditorialDetailJob: Job? = null
     private var activeAppleAlbumId: String? = null
+    /** Immutable Apple-only snapshot; external proofs never overwrite this. */
+    private var appleAlbumNativeBaseline: AppleEditorialAlbumDetailPage? = null
     private val _appleEditorialArtists =
         MutableStateFlow<UiState<List<AppleEditorialSearchRow>>?>(null)
     val appleEditorialArtists: StateFlow<UiState<List<AppleEditorialSearchRow>>?> =
@@ -602,6 +640,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Independent page sessions per Apple entity; never share cursors across queries. */
     private val applePublicPagers =
         java.util.concurrent.ConcurrentHashMap<AppleSearchSection, ApplePublicSearchPager>()
+    /** Bind page continuation to the request's original priority epoch, not the current one. */
+    private val applePublicPagerOrders =
+        java.util.concurrent.ConcurrentHashMap<AppleSearchSection, List<ProviderKey>>()
     private val applePublicPagingJobs = mutableMapOf<AppleSearchSection, Job>()
     private val _appleSearchPaging =
         MutableStateFlow<Map<AppleSearchSection, AppleSearchPageStatus>>(emptyMap())
@@ -666,6 +707,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private val musicBrainzSearch by lazy { MusicBrainzCatalogSearch() }
+    /** Discovery/release listings have independent EDITORIAL_DISCOGRAPHY authorization. */
+    private val musicBrainzEditorialSearch by lazy {
+        MusicBrainzCatalogSearch(capability = ProviderCapability.EDITORIAL_DISCOGRAPHY)
+    }
     private val musicBrainzGraph by lazy { MusicBrainzCatalogGraph() }
     // Verified iTunes covers are now the target catalog source, regardless
     // of whether the group already has a CAA sleeve.
@@ -709,6 +754,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * its 500-track response cap. Never assume offset += 25.
      */
     fun loadMoreCanonicalDetail() {
+        val lease = canonicalMusicBrainzDetailLease(ProviderRuntime.gateOrNull()) ?: return
         val entry = canonicalPath.lastOrNull() ?: return
         val current = (_canonicalDetail.value as? UiState.Success)?.data ?: return
         val offset = current.nextOffset ?: return
@@ -716,7 +762,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             (entry.kind != CanonicalSearchKind.ARTIST && entry.kind != CanonicalSearchKind.RELEASE_GROUP)) return
         _canonicalLoadingMore.value = true
         canonicalPagingJob?.cancel()
-        canonicalPagingJob = viewModelScope.launch {
+        val pageJob = viewModelScope.launch {
             try {
                 val page = when (entry.kind) {
                     CanonicalSearchKind.ARTIST -> when (
@@ -770,7 +816,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     else -> null
                 }
                 val stillCurrent = (_canonicalDetail.value as? UiState.Success)?.data
-                if (page != null && _searchSource.value == SearchSource.CANONICAL &&
+                if (page != null && lease.isCurrent() &&
+                    _searchSource.value == SearchSource.CANONICAL &&
                     canonicalPath.lastOrNull() == entry && stillCurrent != null &&
                     stillCurrent.nextOffset == offset
                 ) {
@@ -811,6 +858,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 _canonicalLoadingMore.value = false
             }
         }
+        val unregister = lease.cancelJobOnRevoke(pageJob)
+        pageJob.invokeOnCompletion { unregister() }
+        canonicalPagingJob = pageJob
     }
     private val canonicalPath = mutableListOf<CanonicalCatalogSearchRow>()
     private var canonicalDetailCoverJob: Job? = null
@@ -1057,6 +1107,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * BitChord. A public MBID remains a browse key, NEVER a Song.videoId.
      */
     fun openCanonicalNativeDetail(row: CanonicalCatalogSearchRow) {
+        if (canonicalMusicBrainzDetailLease(ProviderRuntime.gateOrNull()) == null) return
         backAppleEditorialAlbum()
         backAppleEditorialArtist()
         val nativeType = canonicalNativePageType(row.kind) ?: return
@@ -1101,7 +1152,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openCanonicalCatalogEntry(row: CanonicalCatalogSearchRow) {
         if (_searchSource.value != SearchSource.CANONICAL ||
-            row.kind == CanonicalSearchKind.RECORDING) return
+            row.kind == CanonicalSearchKind.RECORDING ||
+            canonicalMusicBrainzDetailLease(ProviderRuntime.gateOrNull()) == null
+        ) return
         val publicRow = row.copy(
             artworkUri = canonicalPublicWithoutLegacyArchiveArtwork(row.artworkUri),
         )
@@ -1295,6 +1348,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun showCanonicalCatalogEntry(entry: CanonicalCatalogSearchRow) {
+        val lease = canonicalMusicBrainzDetailLease(ProviderRuntime.gateOrNull())
+        if (lease == null) {
+            clearCanonicalCatalogNavigation()
+            _detailStack.update { pages ->
+                pages.filterNot { it.browseId.startsWith("catalog:") }
+            }
+            return
+        }
         val startedNanos = System.nanoTime()
         canonicalGroupCardArtworkJob?.cancel()
         _canonicalGroupCardApplePromotions.value = emptyMap()
@@ -1306,7 +1367,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _canonicalLoadingMore.value = false
         _canonicalDetail.value = UiState.Loading
         _searchScrollReset.value += 1
-        canonicalBrowseJob = viewModelScope.launch {
+        val browseJob = viewModelScope.launch {
             // CAA cache entries belong to the retired artwork authority.
             // A previously persisted Front must not re-enter the public
             // Album/EP/Single header while Apple proof is still loading.
@@ -1326,7 +1387,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 } catch (cancelled: CancellationException) { throw cancelled }
                   catch (_: Exception) { emptyList() }
-                if (saved.isNotEmpty() &&
+                if (saved.isNotEmpty() && lease.isCurrent() &&
                     _searchSource.value == SearchSource.CANONICAL &&
                     canonicalPath.lastOrNull() == entry
                 ) {
@@ -1409,7 +1470,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (_: Exception) { null }
-                if (cachedReleasePreview != null &&
+                if (cachedReleasePreview != null && lease.isCurrent() &&
                     _searchSource.value == SearchSource.CANONICAL &&
                     canonicalPath.lastOrNull() == entry
                 ) {
@@ -1554,7 +1615,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Exception) { null }
-                    if (cachedPreview != null &&
+                    if (cachedPreview != null && lease.isCurrent() &&
                         _searchSource.value == SearchSource.CANONICAL &&
                         canonicalPath.lastOrNull() == entry
                     ) {
@@ -1735,7 +1796,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 CanonicalSearchKind.RECORDING -> return@launch
             }
-            if (_searchSource.value == SearchSource.CANONICAL && canonicalPath.lastOrNull() == entry) {
+            if (lease.isCurrent() &&
+                _searchSource.value == SearchSource.CANONICAL &&
+                canonicalPath.lastOrNull() == entry
+            ) {
                 _canonicalDetail.value = output
                 if (output is UiState.Success) {
                     recordCanonicalLoadTiming(
@@ -1789,7 +1853,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // "more" action for unusually large discographies.
             val first = artistFirstPage
             if (entry.kind == CanonicalSearchKind.ARTIST && first?.nextOffset != null &&
-                _searchSource.value == SearchSource.CANONICAL &&
+                lease.isCurrent() && _searchSource.value == SearchSource.CANONICAL &&
                 canonicalPath.lastOrNull() == entry
             ) {
                 _canonicalLoadingMore.value = true
@@ -1812,7 +1876,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (_: Exception) { emptyMap() }
-                        if (_searchSource.value == SearchSource.CANONICAL &&
+                        if (lease.isCurrent() &&
+                            _searchSource.value == SearchSource.CANONICAL &&
                             canonicalPath.lastOrNull() == entry
                         ) {
                             val current = (_canonicalDetail.value as? UiState.Success)?.data
@@ -1865,7 +1930,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // obsolete memberships once, after a complete contiguous
                 // source snapshot, never after a partial page or HTTP 503.
                 if (completedArtistBrowse.reconciliationEligible &&
-                    _searchSource.value == SearchSource.CANONICAL &&
+                    lease.isCurrent() && _searchSource.value == SearchSource.CANONICAL &&
                     canonicalPath.lastOrNull() == entry
                 ) {
                     try {
@@ -1881,7 +1946,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         // Preserve prior membership on any storage failure.
                     }
                 }
-                if (_searchSource.value == SearchSource.CANONICAL &&
+                if (lease.isCurrent() &&
+                    _searchSource.value == SearchSource.CANONICAL &&
                     canonicalPath.lastOrNull() == entry
                 ) enrichCanonicalNativeDetailCovers(entry)
                 } finally {
@@ -1889,6 +1955,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+        val unregister = lease.cancelJobOnRevoke(browseJob)
+        browseJob.invokeOnCompletion { unregister() }
+        canonicalBrowseJob = browseJob
     }
 
     /** The words typed into the Addons search before, newest first. */
@@ -3027,28 +3096,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Only Apple-verified public albums enter the native Home editorial feed. */
-    fun loadAppleHomeEditorial(
-        candidates: List<CanonicalCatalogSearchRow>,
-        force: Boolean = false,
-    ) {
+    /**
+     * The Apple-first Home samples Apple-native album genres under ONE
+     * iTunes editorial ticket; it no longer needs MusicBrainz seed searches.
+     * Only Apple release dates determine the "recent" shelf and actual
+     * storefront IDs determine navigation. Coverage is explicitly bounded.
+     */
+    fun loadAppleHomeEditorial(force: Boolean = false) {
         if (!isCanonicalDiscoverySelected()) return
-        val seeds = candidates.asSequence()
-            .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
-            .mapNotNull { row ->
-                val artist = row.subtitle?.trim().orEmpty()
-                if (artist.isBlank() || row.title.isBlank()) null
-                else com.music.bitchord.data.catalog.metadata.AppleHomeEditorialSeed(
-                    row.title, artist,
-                )
-            }
-            .distinctBy { it.title.lowercase(Locale.ROOT) to
-                it.artist.lowercase(Locale.ROOT) }
-.take(64).toList()
-        if (seeds.isEmpty()) return
-        val fingerprint = seeds.joinToString(separator = "|") {
-            "${it.title.lowercase(Locale.ROOT)}:${it.artist.lowercase(Locale.ROOT)}"
+        val lease = ProviderReadLease.acquire(
+            ProviderRuntime.gateOrNull(),
+            listOf(
+                ProviderCapability.EDITORIAL_DISCOGRAPHY to BuiltInProviderKeys.ITUNES,
+            ),
+        )
+        if (lease == null) {
+            appleHomeJob?.cancel()
+            appleHomeEpoch.invalidateAndNext()
+            _appleHomeReleases.value = UiState.Success(emptyList())
+            return
         }
+        val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC).toString()
+        val fingerprint = "itunes-native:br:$today:genre-v1"
         val now = System.currentTimeMillis()
         if (!force && fingerprint == appleHomeFingerprint &&
             (appleHomeJob?.isActive == true ||
@@ -3058,16 +3127,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val generation = appleHomeEpoch.next()
         appleHomeFingerprint = fingerprint
         appleHomeLastAttemptAtMs = now
-        if (_appleHomeReleases.value !is UiState.Success) {
+        if ((_appleHomeReleases.value as? UiState.Success)?.data.isNullOrEmpty()) {
             _appleHomeReleases.value = UiState.Loading
         }
         appleHomeJob = viewModelScope.launch(Dispatchers.IO) {
             val result = try {
                 com.music.bitchord.data.catalog.metadata
-                    .AppleHomeEditorialDiscovery().discover(
-                        seeds, "br", maxProbes = 8,
+                    .AppleNativeHomeDiscovery().discover(
+                        storefront = "br", todayIsoDate = today, maxGenres = 3,
                         onProgress = { releases ->
-                            if (appleHomeEpoch.isCurrent(generation) &&
+                            if (lease.isCurrent() && appleHomeEpoch.isCurrent(generation) &&
                                 isCanonicalDiscoverySelected()
                             ) _appleHomeReleases.update { state ->
                                 UiState.Success(appleReleasesPreservingVerifiedArtwork(
@@ -3082,7 +3151,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
             }
-            if (!appleHomeEpoch.isCurrent(generation) ||
+            if (!lease.isCurrent() || !appleHomeEpoch.isCurrent(generation) ||
                 !isCanonicalDiscoverySelected()
             ) return@launch
             _appleHomeReleases.value = when (result) {
@@ -3099,28 +3168,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     _appleHomeProbeReport.value = result.probeReport
                     com.music.bitchord.data.catalog.metadata
                         .recordAppleEditorialProbeReport("home", result.probeReport)
-                    // Keep the last Apple-confirmed cards through a transient
-                    // outage, but never fall back to MB-only ReleaseGroups.
                     (_appleHomeReleases.value as? UiState.Success)
                         ?: UiState.Error("Não foi possível consultar o catálogo Apple.")
                 }
             }
-            // First paint retains Apple's published thumbnail. Upgrade only
-            // visible Apple product cards after verifying CDN response bounds;
-            // two probes at a time, without blocking Home or the iTunes API.
             if (result is AppleEditorialLoad.Success) {
                 val permits = Semaphore(2)
                 result.releases.take(12).forEachIndexed { index, album ->
                     launch {
                         permits.withPermit {
-                            // Only the first four featured Home cards use
-                            // 1024px; the remaining compact tiles use 600px.
                             val target = appleArtworkTargetPxForShelf(index, 4)
                             val upgraded = appleHighResolutionArtwork.upgrade(
                                 album.artworkUrl, target,
                             )
                             if (upgraded != null && upgraded != album.artworkUrl &&
-                                appleHomeEpoch.isCurrent(generation) &&
+                                lease.isCurrent() && appleHomeEpoch.isCurrent(generation) &&
                                 isCanonicalDiscoverySelected()
                             ) _appleHomeReleases.update { state ->
                                 if (state !is UiState.Success) state else UiState.Success(
@@ -3134,6 +3196,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
+        }.also { job ->
+            val unregister = lease.cancelJobOnRevoke(job)
+            job.invokeOnCompletion { unregister() }
         }
     }
 
@@ -3143,6 +3208,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Keep the most recent verified snapshot when the network is unavailable.
      */
     fun loadCanonicalWorldwideReleases(force: Boolean = false) {
+        val gate = ProviderRuntime.gateOrNull()
+        val ticket = gate?.open(
+            ProviderCapability.EDITORIAL_DISCOGRAPHY, BuiltInProviderKeys.MUSICBRAINZ,
+        )
+        if (ticket == null) {
+            worldwideReleaseJob?.cancel()
+            worldwideReleaseEpoch.invalidateAndNext()
+            _canonicalWorldwideReleases.value = emptyList()
+            _canonicalWorldwideLoading.value = false
+            return
+        }
         if (worldwideReleaseJob?.isActive == true) return
         val now = System.currentTimeMillis()
         if (!force && (now < worldwideReleaseRetryAtMs ||
@@ -3158,7 +3234,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val rows = try {
                 val narrowFrom = today.minusDays(30).toString()
                 val wideFrom = today.minusDays(90).toString()
-                val recent = musicBrainzSearch.searchRecentReleaseGroups(
+                val recent = musicBrainzEditorialSearch.searchRecentReleaseGroups(
                     narrowFrom, until, limit = 100,
                 )
                 val recentHits =
@@ -3169,7 +3245,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // only typed, dated releases with genuine MusicBrainz IDs.
                 val expandedRows = if (canonicalPublicNeedsMoreEditorialRows(recentRows)) {
                     try {
-                        val expanded = musicBrainzSearch.searchRecentReleaseGroups(
+                        val expanded = musicBrainzEditorialSearch.searchRecentReleaseGroups(
                             wideFrom, until, limit = 100,
                         )
                         val hits = (expanded as? MusicBrainzCatalogSearchResult.Success)
@@ -3183,7 +3259,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val historicalFrom = today.minusDays(365).toString()
                     val historicalThrough = today.minusDays(91).toString()
                     val older = try {
-                        val historical = musicBrainzSearch.searchRecentReleaseGroups(
+                        val historical = musicBrainzEditorialSearch.searchRecentReleaseGroups(
                             historicalFrom, historicalThrough, limit = 100,
                         )
                         val hits = (historical as? MusicBrainzCatalogSearchResult.Success)
@@ -3197,7 +3273,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } else combined
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { emptyList() }
-            if (!worldwideReleaseEpoch.isCurrent(generation)) return@launch
+            if (!gate.accept(ticket) || !worldwideReleaseEpoch.isCurrent(generation)) return@launch
             if (rows.isEmpty()) {
                 worldwideReleaseRetryAtMs = System.currentTimeMillis() + 15L * 60_000L
                 _canonicalWorldwideLoading.value = false
@@ -3216,7 +3292,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // secondary-cover source without benefiting any displayed card.
             // Do not start a Cover Art Archive warmup from this path.
         }.also { job ->
+            val unregister = gate.onRevoke(ticket) { job.cancel() }
             job.invokeOnCompletion {
+                unregister()
                 if (worldwideReleaseEpoch.isCurrent(generation)) {
                     _canonicalWorldwideLoading.value = false
                 }
@@ -3348,27 +3426,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun loadAppleGenreEditorial(
         tag: String,
-        rows: List<CanonicalCatalogSearchRow>,
+        @Suppress("UNUSED_PARAMETER") rows: List<CanonicalCatalogSearchRow>,
         force: Boolean = false,
     ) {
         if (!com.music.bitchord.data.catalog.metadata.AppleExploreGenrePolicy.supports(tag)) {
             return
         }
-        val seeds = rows.asSequence()
-            .filter { it.kind == CanonicalSearchKind.RELEASE_GROUP }
-            .mapNotNull { row ->
-                val artist = row.subtitle?.trim().orEmpty()
-                if (row.title.isBlank() || artist.isBlank()) null else
-                    com.music.bitchord.data.catalog.metadata.AppleHomeEditorialSeed(
-                        row.title, artist,
-                    )
-            }
-            .distinctBy { it.title.lowercase(Locale.ROOT) to
-                it.artist.lowercase(Locale.ROOT) }
-.take(48).toList()
-        val fingerprint = tag + "|" + seeds.joinToString("|") {
-            "${it.title.lowercase(Locale.ROOT)}:${it.artist.lowercase(Locale.ROOT)}"
+        val lease = ProviderReadLease.acquire(
+            ProviderRuntime.gateOrNull(),
+            listOf(ProviderCapability.EDITORIAL_DISCOGRAPHY to BuiltInProviderKeys.ITUNES),
+        )
+        if (lease == null) {
+            appleGenreJob?.cancel()
+            appleGenreEpoch.invalidateAndNext()
+            _appleGenreReleases.update { it + (tag to UiState.Success(emptyList())) }
+            return
         }
+        // Apple native Explore must never depend on MusicBrainz query seeds.
+        val fingerprint = "apple-native:$tag"
         val now = System.currentTimeMillis()
         if (!force && appleGenreActiveTag == tag &&
             appleGenreFingerprint == fingerprint &&
@@ -3386,11 +3461,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         appleGenreJob = viewModelScope.launch(Dispatchers.IO) {
             val result = try {
                 com.music.bitchord.data.catalog.metadata
-                    .AppleExploreGenreDiscovery().discover(
-                        tag, seeds, "br",
+                    .AppleExploreGenreDiscovery().discoverNative(
+                        tag, "br",
                         onProgress = { releases ->
-                            if (releases.isNotEmpty() &&
-                                appleGenreEpoch.isCurrent(generation) &&
+                            if (releases.isNotEmpty() && lease.isCurrent() &&
+                                lease.isCurrent() && appleGenreEpoch.isCurrent(generation) &&
                                 appleGenreActiveTag == tag
                             ) _appleGenreReleases.update { state ->
                                 val old = (state[tag] as? UiState.Success)?.data.orEmpty()
@@ -3405,7 +3480,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 AppleEditorialLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
             }
-            if (!appleGenreEpoch.isCurrent(generation) ||
+            if (!lease.isCurrent() || !appleGenreEpoch.isCurrent(generation) ||
                 appleGenreActiveTag != tag
             ) return@launch
             _appleGenreReleases.update { old ->
@@ -3444,7 +3519,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 album.artworkUrl, target,
                             )
                             if (upgraded != null && upgraded != album.artworkUrl &&
-                                appleGenreEpoch.isCurrent(generation) &&
+                                lease.isCurrent() && appleGenreEpoch.isCurrent(generation) &&
                                 appleGenreActiveTag == tag
                             ) _appleGenreReleases.update { old ->
                                 val current = old[tag] as? UiState.Success ?: return@update old
@@ -3459,12 +3534,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
             }
+        }.also { job ->
+            val unregister = lease.cancelJobOnRevoke(job)
+            job.invokeOnCompletion { unregister() }
         }
     }
 
     /** Explore genre requests use actual MusicBrainz tags, not YouTube pages. */
+    /** Provenance of the last MB genre snapshot; not an Apple storefront claim. */
+    var canonicalGenreResultTag: String? = null
+        private set
+
     fun loadCanonicalGenre(tag: String) {
         val selected = canonicalExploreGenres.firstOrNull { it.tag == tag } ?: return
+        canonicalGenreResultTag = tag
+        val gate = ProviderRuntime.gateOrNull()
+        val ticket = gate?.open(
+            ProviderCapability.EDITORIAL_DISCOGRAPHY, BuiltInProviderKeys.MUSICBRAINZ,
+        )
+        if (ticket == null) {
+            canonicalGenreJob?.cancel()
+            canonicalGenreEpoch.invalidateAndNext()
+            _canonicalGenreResults.value = UiState.Success(emptyList())
+            return
+        }
         appleGenreJob?.cancel()
         appleGenreEpoch.invalidateAndNext()
         appleGenreActiveTag = tag
@@ -3474,24 +3567,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalGenreJob = viewModelScope.launch(Dispatchers.IO) {
             val today = java.time.LocalDate.now(java.time.ZoneOffset.UTC)
             val todayIso = today.toString()
-            val historical = try { musicBrainzSearch.searchReleaseGroupsForTag(selected.tag, 60) }
+            val historical = try { musicBrainzEditorialSearch.searchReleaseGroupsForTag(selected.tag, 60) }
                 catch (cancelled: CancellationException) { throw cancelled }
                 catch (_: Exception) { null }
-            if (!canonicalGenreEpoch.isCurrent(generation)) return@launch
+            if (!gate.accept(ticket) || !canonicalGenreEpoch.isCurrent(generation)) return@launch
             // The tag-only page can be entirely historical; query the same
             // verified tag over the recent window so 'Lançamentos' isn't
             // accidentally hidden by MusicBrainz relevance ordering.
             val recent = try {
-                musicBrainzSearch.searchRecentReleaseGroupsForTag(
+                musicBrainzEditorialSearch.searchRecentReleaseGroupsForTag(
                     selected.tag, today.minusDays(180).toString(), todayIso, limit = 40,
                 )
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { null }
-            if (!canonicalGenreEpoch.isCurrent(generation)) return@launch
+            if (!gate.accept(ticket) || !canonicalGenreEpoch.isCurrent(generation)) return@launch
             val historicalHits = (historical as? MusicBrainzCatalogSearchResult.Success)
                 ?.page?.items
             val recentHits = (recent as? MusicBrainzCatalogSearchResult.Success)
                 ?.page?.items
+            if (!gate.accept(ticket)) return@launch
             if (historicalHits == null && recentHits == null) {
                 _canonicalGenreResults.value = UiState.Error(
                     "Não foi possível carregar o gênero. Tente novamente.",
@@ -3501,16 +3595,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val hits = (historicalHits.orEmpty() + recentHits.orEmpty())
                 .distinctBy { it.musicBrainzId }
             var rows = canonicalPublicGenreRows(hits, todayIso)
+            if (!gate.accept(ticket)) return@launch
             _canonicalGenreResults.value = UiState.Success(rows)
             // A relevance-ranked MusicBrainz tag result can be all EPs/singles.
             // Publish those immediately, then fetch Album-typed tag evidence
             // separately instead of making the Album shelf disappear.
             if (rows.none { canonicalEditorialReleaseType(it) == "Album" }) {
                 val additional = try {
-                    musicBrainzSearch.searchAlbumReleaseGroupsForTag(selected.tag, 24)
+                    musicBrainzEditorialSearch.searchAlbumReleaseGroupsForTag(selected.tag, 24)
                 } catch (cancelled: CancellationException) { throw cancelled }
                   catch (_: Exception) { null }
-                if (!canonicalGenreEpoch.isCurrent(generation)) return@launch
+                if (!gate.accept(ticket) || !canonicalGenreEpoch.isCurrent(generation)) return@launch
                 val albumHits = (additional as? MusicBrainzCatalogSearchResult.Success)
                     ?.page?.items.orEmpty()
                 if (albumHits.isNotEmpty()) {
@@ -3519,6 +3614,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     if (enriched.any { canonicalEditorialReleaseType(it) == "Album" }) {
                         rows = enriched
+                        if (!gate.accept(ticket)) return@launch
                         _canonicalGenreResults.value = UiState.Success(rows)
                     }
                 }
@@ -3528,6 +3624,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // populated from Apple products and their primaryGenreName.
             // Their artwork does not come from MusicBrainz/CAA. Avoid a
             // duplicate, unused archive-image enrichment pass here.
+        }.also { job ->
+            val unregister = gate.onRevoke(ticket) { job.cancel() }
+            job.invokeOnCompletion { unregister() }
         }
     }
 
@@ -3539,43 +3638,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         canonicalDiscoveryCatalogJob?.cancel()
         _canonicalDiscoveryCatalog.value = UiState.Loading
         canonicalDiscoveryCatalogJob = viewModelScope.launch(Dispatchers.IO) {
-            val state = try {
-                val dao = CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao()
-                val recordings = dao.searchKnownMusicBrainzRecordings("", limit = 100)
-                val available = dao.musicBrainzRecordingMbidsWithAssets(
-                    recordings.map { it.musicBrainzId },
-                ).toSet()
+            val app = getApplication<Application>()
+            // The Home owns two independent sorts of evidence. Room editorial
+            // rows come ONLY from the provider's discography capability; local
+            // and configured personal-server assets remain visible after opt-out.
+            val editorialLease = canonicalMusicBrainzDetailLease(ProviderRuntime.gateOrNull())
+            val personalProviders = {
+                (setOf("local-mediastore") +
+                    configuredCanonicalPersonalProviderKeys(app).filter { key ->
+                        isCanonicalPersonalProviderCurrentlyAuthorized(app, key)
+                    }).toSet()
+            }
+            val state: UiState<List<CanonicalCatalogSearchRow>> = try {
+                val cache = MusicBrainzCachedSearchRepository(
+                    CanonicalCatalogDatabase.get(app),
+                    personalProviderKeys = personalProviders,
+                )
+                val snapshot = cache.search(
+                    query = "",
+                    limits = MusicBrainzCachedSearchLimits(
+                        artists = 12, groups = 300, releases = 300, recordings = 100,
+                    ),
+                    capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
+                )
                 val rows = buildList {
-                    dao.searchKnownMusicBrainzArtists("", limit = 12).forEach { hit ->
+                    snapshot.artists.forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.ARTIST, hit.name,
                             hit.disambiguation ?: hit.country, fromOfflineCache = true,
                         ))
                     }
-                    dao.searchKnownMusicBrainzGroups("", limit = 300).forEach { hit ->
+                    snapshot.groups.forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP, hit.title,
                             hit.artistDisplay ?: hit.primaryType, fromOfflineCache = true,
                             releaseDate = hit.firstReleaseDate, releaseKind = hit.primaryType,
                             secondaryTypes = hit.secondaryTypes,
-                            artworkUri = hit.artworkUri,
+                            artworkUri = canonicalPublicWithoutLegacyArchiveArtwork(hit.artworkUri),
                         ))
                     }
-                    dao.searchKnownMusicBrainzReleases("", limit = 300)
-                        .filter(::isCuratedMusicBrainzRelease).forEach { hit ->
+                    snapshot.releases.filter(::isCuratedMusicBrainzRelease).forEach { hit ->
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.RELEASE, hit.title,
                             listOfNotNull(hit.artistDisplay, hit.country, hit.releaseDate)
                                 .joinToString(" · "),
                             fromOfflineCache = true, releaseDate = hit.releaseDate,
-                            artworkUri = hit.artworkUri,
+                            artworkUri = canonicalPublicWithoutLegacyArchiveArtwork(hit.artworkUri),
                         ))
                     }
-                    recordings.filter(::isCuratedMusicBrainzRecording).forEach { hit ->
+                    snapshot.recordings.forEach { hit ->
+                        if (hit.musicBrainzId !in snapshot.recordingMbidsWithAssets &&
+                            !isCuratedMusicBrainzRecording(hit)
+                        ) return@forEach
                         add(CanonicalCatalogSearchRow(
                             hit.musicBrainzId, CanonicalSearchKind.RECORDING, hit.title,
                             hit.artistDisplay,
-                            hasCatalogedAsset = hit.musicBrainzId in available,
+                            hasCatalogedAsset =
+                                hit.musicBrainzId in snapshot.recordingMbidsWithAssets,
                             fromOfflineCache = true,
                         ))
                     }
@@ -3586,6 +3705,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 UiState.Error(text(R.string.canonical_discovery_cache_error))
             }
+            fun visibleCache(): UiState<List<CanonicalCatalogSearchRow>> =
+                if (editorialLease?.isCurrent() == true) state
+                else UiState.Success(
+                    (state as? UiState.Success)?.data.orEmpty()
+                        .filter { it.kind == CanonicalSearchKind.RECORDING &&
+                            it.hasCatalogedAsset },
+                )
             // Keep the catalog in Loading until independent local + Server
             // candidates have been read. Publishing an empty metadata cache
             // first used to flash a false "no catalog" screen on YT opt-out,
@@ -3593,13 +3719,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // MediaStore is scanned off-main and independent of the MusicBrainz
             // cache: a fresh YT-off installation must not render a blank Home
             // just because no public MBID has been looked up yet.
-            val app = getApplication<Application>()
             // Run the independent Room server snapshot alongside MediaStore
             // instead of serially holding back the first Home shelves.
             val remoteDeferred = async(Dispatchers.IO) {
                 try {
+                    val eligibleRemote = configuredCanonicalPersonalProviderKeys(app)
+                        .filter { it.startsWith("opensubsonic:") || it.startsWith("jellyfin:") }
                     CanonicalCatalogDatabase.get(app).catalogDao()
-                        .searchCanonicalRemoteServerAssets("", limit = 400)
+                        .searchCanonicalRemoteServerAssets(
+                            "", limit = 400, providerKeys = eligibleRemote,
+                        )
+                        .filter {
+                            isCanonicalPersonalProviderCurrentlyAuthorized(app, it.providerKey)
+                        }
                         .distinctBy { it.providerKey to it.mediaAssetId }
                         .map { row ->
                             CanonicalServerSearchRow(
@@ -3643,8 +3775,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 isCanonicalDiscoverySelected()
             ) {
                 _canonicalHomeRemotePicks.value = remotePicks
-                _canonicalDiscoveryCatalog.value = state
-                val count = (state as? UiState.Success)?.data?.size ?: 0
+                val verifiedCache = visibleCache()
+                _canonicalDiscoveryCatalog.value = verifiedCache
+                val count = (verifiedCache as? UiState.Success)?.data?.size ?: 0
                 recordCanonicalLoadTiming("home_initial_sections", startedNanos,
                     count + picks.size + remotePicks.size)
             }
@@ -3693,11 +3826,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // preview. A well-played Recording can lie outside that page.
                 // Add it from the EXISTING trusted recording/MBID claim only;
                 // never infer identity by matching title or artist.
-                val indexed = (state as? UiState.Success)?.data.orEmpty()
+                val indexed = (visibleCache() as? UiState.Success)?.data.orEmpty()
                 val seen = indexed.mapTo(HashSet()) { it.kind to it.musicBrainzId }
                 val trendingRows = try {
                     val dao = CanonicalCatalogDatabase.get(app).catalogDao()
-                    val available = dao.musicBrainzRecordingMbidsWithAssets(popularMbids).toSet()
+                    val available = dao.musicBrainzRecordingMbidsWithPersonalAssets(
+                        popularMbids, personalProviders().toList(),
+                    ).toSet()
                     popularMbids
                         .filter { it in available && (CanonicalSearchKind.RECORDING to it) !in seen }
                         .mapNotNull { mbid ->
@@ -3716,7 +3851,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     emptyList()
                 }
                 if (canonicalDiscoveryCatalogEpoch.isCurrent(generation) &&
-                    isCanonicalDiscoverySelected() && state is UiState.Success
+                    isCanonicalDiscoverySelected() && visibleCache() is UiState.Success
                 ) {
                     _canonicalDiscoveryCatalog.value = UiState.Success(
                         (indexed + trendingRows).distinctBy { it.kind to it.musicBrainzId },
@@ -3792,6 +3927,96 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         startSearchPipeline()
+        ProviderRuntime.state?.let { snapshots ->
+            viewModelScope.launch {
+                var previous = eligibleCatalogSearchProviders()
+                var previousEditorial = eligibleEditorialProviders()
+                var previousDiscogs = ProviderRuntime.gateOrNull()?.open(
+                    ProviderCapability.EDITION_METADATA, BuiltInProviderKeys.DISCOGS,
+                ) != null
+                snapshots.collect {
+                    val nextEditorial = eligibleEditorialProviders()
+                    val nextDiscogs = ProviderRuntime.gateOrNull()?.open(
+                        ProviderCapability.EDITION_METADATA, BuiltInProviderKeys.DISCOGS,
+                    ) != null
+                    val externalProofRevoked =
+                        (BuiltInProviderKeys.MUSICBRAINZ in previousEditorial &&
+                            BuiltInProviderKeys.MUSICBRAINZ !in nextEditorial) ||
+                        (previousDiscogs && !nextDiscogs)
+                    previousDiscogs = nextDiscogs
+                    if (externalProofRevoked) {
+                        val baseline = appleAlbumNativeBaseline
+                        _appleEditorialDetail.update { state ->
+                            if (state is UiState.Success) UiState.Success(
+                                appleEditionDetailWithoutExternalEvidence(state.data, baseline),
+                            ) else state
+                        }
+                    }
+                    if (BuiltInProviderKeys.ITUNES in previousEditorial &&
+                        BuiltInProviderKeys.ITUNES !in nextEditorial
+                    ) backAppleEditorialAlbum()
+                    if (nextEditorial != previousEditorial) {
+                        val restoreMbCache = BuiltInProviderKeys.MUSICBRAINZ !in
+                            previousEditorial &&
+                            BuiltInProviderKeys.MUSICBRAINZ in nextEditorial
+                        previousEditorial = nextEditorial
+                        _catalogEditorialOrder.value = nextEditorial
+                        if (BuiltInProviderKeys.MUSICBRAINZ !in nextEditorial) {
+                            // These pages contain source-owned MB discography,
+                            // never the personal MediaAssets that share MBIDs.
+                            clearCanonicalCatalogNavigation()
+                            _detailStack.update { pages ->
+                                pages.filterNot { it.browseId.startsWith("catalog:") }
+                            }
+                            worldwideReleaseJob?.cancel()
+                            worldwideReleaseEpoch.invalidateAndNext()
+                            _canonicalWorldwideReleases.value = emptyList()
+                            _canonicalWorldwideLoading.value = false
+                            _canonicalDiscoveryCatalog.update { current ->
+                                if (current is UiState.Success) UiState.Success(
+                                    current.data.filter { row ->
+                                        row.kind == CanonicalSearchKind.RECORDING &&
+                                            row.hasCatalogedAsset
+                                    },
+                                ) else UiState.Success(emptyList())
+                            }
+                            canonicalGenreJob?.cancel()
+                            canonicalGenreEpoch.invalidateAndNext()
+                            _canonicalGenreResults.value = UiState.Success(emptyList())
+                            canonicalGenreResultTag = null
+                        }
+                        // Apple Home now owns its native genre sample outright:
+                        // revoking MusicBrainz MUST NOT evict Apple cards or
+                        // cancel its independent editorial work.
+                        if (BuiltInProviderKeys.ITUNES !in nextEditorial) {
+                            appleHomeJob?.cancel()
+                            appleHomeEpoch.invalidateAndNext()
+                            _appleHomeReleases.value = UiState.Success(emptyList())
+                        }
+                        if (restoreMbCache && isCanonicalDiscoverySelected()) {
+                            canonicalDiscoveryCatalogJob?.cancel()
+                            canonicalDiscoveryCatalogEpoch.invalidateAndNext()
+                            loadCanonicalDiscoveryCatalog()
+                        }
+                        if (BuiltInProviderKeys.ITUNES !in nextEditorial) {
+                            appleGenreJob?.cancel()
+                            appleGenreEpoch.invalidateAndNext()
+                            _appleGenreReleases.value = emptyMap()
+                        }
+                    }
+                    val next = eligibleCatalogSearchProviders()
+                    if (next != previous) {
+                        previous = next
+                        // Never reuse rows fetched under an earlier permission/order epoch.
+                        catalogAppleQuery = null
+                        catalogMusicBrainzQuery = null
+                        if (searchSubmitted && _searchSource.value == SearchSource.CANONICAL &&
+                            _query.value.isNotBlank()
+                        ) runCanonicalCatalogSearch(_query.value.trim())
+                    }
+                }
+            }
+        }
         if (_searchSource.value == SearchSource.YOUTUBE) {
             suggestPipelineJob = startSuggestPipeline()
             typeaheadPipelineJob = startTypeaheadMediaPipeline()
@@ -4079,7 +4304,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             SearchSource.CANONICAL -> {
                 SearchHistory.recordCanonicalQuery(term)
                 runCanonicalCatalogSearch(term.trim())
-                runAddonSearch(term.trim(), recordHistory = false)
             }
             SearchSource.ADDONS -> runAddonSearch(term.trim())
             SearchSource.LIBRARY -> loadLibrarySongs()
@@ -4177,7 +4401,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_searchSource.value == SearchSource.CANONICAL) {
             SearchHistory.recordCanonicalQuery(q)
             runCanonicalCatalogSearch(q)
-            runAddonSearch(q, recordHistory = false)
             return
         }
         runSearch(anonymous = false)
@@ -4195,15 +4418,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun canonicalCachedSearchRows(
         query: String,
     ): List<CanonicalCatalogSearchRow> {
+            val policy = ProviderRuntime.gateOrNull()
+            val ticket = policy?.open(
+                ProviderCapability.CATALOG_SEARCH, BuiltInProviderKeys.MUSICBRAINZ,
+            ) ?: return emptyList()
             return try {
-                withContext(Dispatchers.IO) {
-                    val dao = CanonicalCatalogDatabase.get(getApplication<Application>()).catalogDao()
-                    val recordings = dao.searchKnownMusicBrainzRecordings(query, 8)
-                    val available = dao.musicBrainzRecordingMbidsWithAssets(
-                        recordings.map { it.musicBrainzId },
-                    ).toSet()
+                val cached = withContext(Dispatchers.IO) {
+                    val app = getApplication<Application>()
+                    val snapshot = MusicBrainzCachedSearchRepository(
+                        CanonicalCatalogDatabase.get(app),
+                        personalProviderKeys = {
+                            (setOf("local-mediastore") +
+                                configuredCanonicalPersonalProviderKeys(app).filter { key ->
+                                    isCanonicalPersonalProviderCurrentlyAuthorized(app, key)
+                                }).toSet()
+                        },
+                    ).search(query, MusicBrainzCachedSearchLimits(
+                        artists = 6, groups = 6, releases = 6, recordings = 8,
+                    ), capability = ProviderCapability.CATALOG_SEARCH)
                     buildList {
-                        dao.searchKnownMusicBrainzArtists(query, 6).forEach { artist ->
+                        snapshot.artists.forEach { artist ->
                             add(CanonicalCatalogSearchRow(
                                 artist.musicBrainzId, CanonicalSearchKind.ARTIST,
                                 artist.name, artist.disambiguation ?: artist.country,
@@ -4211,7 +4445,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             ))
                         }
                         canonicalCuratedCachedMusicBrainzGroups(
-                            dao.searchKnownMusicBrainzGroups(query, 6),
+                            snapshot.groups,
                         ).forEach { group ->
                             add(CanonicalCatalogSearchRow(
                                 group.musicBrainzId, CanonicalSearchKind.RELEASE_GROUP,
@@ -4221,8 +4455,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 fromOfflineCache = true,
                             ))
                         }
-                        dao.searchKnownMusicBrainzReleases(query, 6)
-                            .filter(::isCuratedMusicBrainzRelease).forEach { release ->
+                        snapshot.releases.filter(::isCuratedMusicBrainzRelease).forEach { release ->
                             add(CanonicalCatalogSearchRow(
                                 release.musicBrainzId, CanonicalSearchKind.RELEASE,
                                 release.title,
@@ -4231,17 +4464,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 fromOfflineCache = true,
                             ))
                         }
-                        recordings.filter(::isCuratedMusicBrainzRecording).forEach { recording ->
+                        snapshot.recordings.filter(::isCuratedMusicBrainzRecording).forEach { recording ->
                             add(CanonicalCatalogSearchRow(
                                 recording.musicBrainzId, CanonicalSearchKind.RECORDING,
                                 recording.title, recording.artistDisplay,
-                                hasCatalogedAsset = recording.musicBrainzId in available,
+                                hasCatalogedAsset = recording.musicBrainzId in
+                                    snapshot.recordingMbidsWithAssets,
                                 fromOfflineCache = true,
                                 durationMs = recording.durationMs,
                             ))
                         }
                     }.distinctBy { it.kind to it.musicBrainzId }
                 }
+                if (policy.accept(ticket)) cached else emptyList()
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) { emptyList() }
@@ -4249,7 +4484,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun showCachedCanonicalTypeahead(query: String) {
         canonicalTypeaheadJob?.cancel()
-        if (query.isBlank()) return
+        if (query.isBlank() ||
+            eligibleCatalogSearchProviders().firstOrNull() != BuiltInProviderKeys.MUSICBRAINZ
+        ) return
         canonicalTypeaheadJob = viewModelScope.launch {
             delay(180L)
             if (_searchSource.value != SearchSource.CANONICAL ||
@@ -4263,7 +4500,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ) {
                 val verified = withVerifiedLocalBadges(cached)
                 if (!searchSubmitted && _searchSource.value == SearchSource.CANONICAL &&
-                    _query.value.trim() == query
+                    _query.value.trim() == query &&
+                    eligibleCatalogSearchProviders().firstOrNull() == BuiltInProviderKeys.MUSICBRAINZ
                 ) _canonicalResults.value = UiState.Success(verified)
             }
         }
@@ -4288,13 +4526,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         applePublicPagingJobs.values.forEach { it.cancel() }
         applePublicPagingJobs.clear()
         applePublicPagers.clear()
+        applePublicPagerOrders.clear()
         _appleSearchPaging.value = emptyMap()
     }
 
     private fun publishApplePublicSearch(
         section: AppleSearchSection,
         snapshot: ApplePublicSearchSnapshot,
+        ticket: com.music.bitchord.data.providers.ProviderRequestTicket,
+        requestOrder: List<ProviderKey>,
     ) {
+        if (ProviderRuntime.gateOrNull()?.accept(ticket) != true ||
+            !catalogSearchOrderIsCurrent(
+                BuiltInProviderKeys.ITUNES, requestOrder, eligibleCatalogSearchProviders(),
+            )
+        ) return
         when (section) {
             AppleSearchSection.ARTISTS -> {
                 val prior = (_appleEditorialArtists.value as? UiState.Success)?.data.orEmpty()
@@ -4331,7 +4577,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 )?.heroUrl ?: return@withPermit
                                 if (_searchSource.value != SearchSource.CANONICAL ||
                                     _query.value.trim() != query ||
-                                    applePublicPagers[section] !== pager
+                                    applePublicPagers[section] !== pager ||
+                                    !catalogSearchOrderIsCurrent(
+                                        BuiltInProviderKeys.ITUNES, requestOrder,
+                                        eligibleCatalogSearchProviders(),
+                                    )
                                 ) return@withPermit
                                 _appleEditorialArtists.update { state ->
                                     if (state !is UiState.Success) state else UiState.Success(
@@ -4414,13 +4664,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             AppleSearchSection.TRACKS -> ItunesCatalogEntity.SONG
             AppleSearchSection.ALBUMS -> ItunesCatalogEntity.ALBUM
         }
+        val requestOrder = eligibleCatalogSearchProviders()
         val pager = ApplePublicSearchPager(
             query = query, entity = entity, country = "br", pageSize = 24,
             source = ItunesPublicSearchSource(),
         )
         applePublicPagers[section] = pager
+        applePublicPagerOrders[section] = requestOrder
         _appleSearchPaging.update { it - section }
         return viewModelScope.launch(Dispatchers.IO) {
+            val permissionGate = ProviderRuntime.gateOrNull()
+            val permissionTicket = permissionGate?.open(
+                ProviderCapability.CATALOG_SEARCH, BuiltInProviderKeys.ITUNES,
+            ) ?: return@launch
             val result = try {
                 pager.start()
             } catch (cancelled: CancellationException) {
@@ -4428,12 +4684,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 ApplePublicSearchPageLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
             }
-            if (_searchSource.value != SearchSource.CANONICAL ||
+            if (!permissionGate.accept(permissionTicket) ||
+                !catalogSearchOrderIsCurrent(
+                    BuiltInProviderKeys.ITUNES, requestOrder, eligibleCatalogSearchProviders(),
+                ) ||
+                _searchSource.value != SearchSource.CANONICAL ||
                 _query.value.trim() != query || applePublicPagers[section] !== pager
             ) return@launch
             when (result) {
                 is ApplePublicSearchPageLoad.Success ->
-                    publishApplePublicSearch(section, result.snapshot)
+                    publishApplePublicSearch(section, result.snapshot, permissionTicket, requestOrder)
                 is ApplePublicSearchPageLoad.Failure -> when (section) {
                     AppleSearchSection.ARTISTS ->
                         _appleEditorialArtists.value = UiState.Error("apple_catalog_unavailable")
@@ -4455,10 +4715,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _searchSource.value != SearchSource.CANONICAL
         ) return
         val query = _query.value.trim()
+        val requestOrder = applePublicPagerOrders[section] ?: return
+        if (catalogAppleQuery != query ||
+            !catalogSearchOrderIsCurrent(
+                BuiltInProviderKeys.ITUNES, requestOrder, eligibleCatalogSearchProviders(),
+            )
+        ) return
         _appleSearchPaging.update {
             it + (section to status.copy(loadingMore = true, retryableError = false))
         }
         applePublicPagingJobs[section] = viewModelScope.launch(Dispatchers.IO) {
+            val permissionGate = ProviderRuntime.gateOrNull()
+            val permissionTicket = permissionGate?.open(
+                ProviderCapability.CATALOG_SEARCH, BuiltInProviderKeys.ITUNES,
+            ) ?: return@launch
             val result = try {
                 pager.loadMore()
             } catch (cancelled: CancellationException) {
@@ -4466,13 +4736,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 ApplePublicSearchPageLoad.Failure(ItunesCatalogFailure.UNAVAILABLE)
             }
-            if (applePublicPagers[section] !== pager ||
+            if (!permissionGate.accept(permissionTicket) ||
+                !catalogSearchOrderIsCurrent(
+                    BuiltInProviderKeys.ITUNES, requestOrder, eligibleCatalogSearchProviders(),
+                ) ||
+                applePublicPagers[section] !== pager ||
                 _query.value.trim() != query ||
                 _searchSource.value != SearchSource.CANONICAL
             ) return@launch
             when (result) {
                 is ApplePublicSearchPageLoad.Success ->
-                    publishApplePublicSearch(section, result.snapshot)
+                    publishApplePublicSearch(section, result.snapshot, permissionTicket, requestOrder)
                 is ApplePublicSearchPageLoad.Failure ->
                     _appleSearchPaging.update { current ->
                         current + (section to status.copy(retryableError = true))
@@ -4490,6 +4764,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Artist names remain independently scoped in Apple's storefront. */
     private fun runAppleEditorialArtistSearch(query: String) {
+        catalogAppleQuery = query
         appleArtistSearchJob?.cancel()
         backAppleEditorialArtist()
         _appleEditorialArtists.value = UiState.Loading
@@ -4848,6 +5123,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         clearCanonicalCatalogNavigation()
         appleEditorialDetailJob?.cancel()
         activeAppleAlbumId = row.browseId
+        appleAlbumNativeBaseline = null
         _appleEditorialDetail.value = UiState.Loading
         appleEditorialDetailJob = viewModelScope.launch(Dispatchers.IO) {
             val response = try {
@@ -4863,6 +5139,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _appleEditorialDetail.value = when (response) {
                 is AppleEditorialLoad.Success -> {
                     val detail = appleNativeAlbumDetail(response, row.browseId)
+                    appleAlbumNativeBaseline = detail
                     if (detail != null) UiState.Success(detail)
                     else UiState.Error("apple_album_not_in_storefront")
                 }
@@ -4938,6 +5215,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun backAppleEditorialAlbum() {
         activeAppleAlbumId = null
+        appleAlbumNativeBaseline = null
         appleEditorialDetailJob?.cancel()
         _appleEditorialDetail.value = null
     }
@@ -4948,6 +5226,76 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * A provider-owned MediaAsset lookup must be wired before enabling play.
      */
     private fun runCanonicalCatalogSearch(query: String) {
+        val providers = eligibleCatalogSearchProviders()
+        when (providers.firstOrNull()) {
+            BuiltInProviderKeys.MUSICBRAINZ -> {
+                _catalogSearchMusicBrainzVisible.value = true
+                runMusicBrainzCatalogSearch(
+                    query, allowAppleFallback = BuiltInProviderKeys.ITUNES in providers,
+                )
+            }
+            BuiltInProviderKeys.ITUNES -> {
+                canonicalSearchJobProvider = BuiltInProviderKeys.ITUNES
+                canonicalSearchJob?.cancel()
+                canonicalTypeaheadJob?.cancel()
+                resetCanonicalSearchPagination()
+                resetApplePublicSearchPaging()
+                clearCanonicalCatalogNavigation()
+                _searchScrollReset.value += 1
+                _canonicalResults.value = null
+                _catalogSearchMusicBrainzVisible.value = false
+                runAppleEditorialArtistSearch(query)
+                runAppleEditorialTrackSearch(query)
+                runAppleEditorialAlbumSearch(query)
+                canonicalSearchJob = viewModelScope.launch {
+                    // Preserve Apple's three native typed searches. MusicBrainz
+                    // is consulted only if the winner delivered no usable rows.
+                    for (job in listOfNotNull(
+                        appleArtistSearchJob, appleTrackSearchJob, appleEditorialSearchJob,
+                    )) job.join()
+                    val appleFound = catalogSearchHasUsableRows(
+                        filter = _filter.value,
+                        artists = (_appleEditorialArtists.value as? UiState.Success)
+                            ?.data?.isNotEmpty() == true,
+                        albums = (_appleEditorialResults.value as? UiState.Success)
+                            ?.data?.isNotEmpty() == true,
+                        songs = (_appleEditorialTracks.value as? UiState.Success)
+                            ?.data?.isNotEmpty() == true,
+                    )
+                    val current = eligibleCatalogSearchProviders()
+                    if (!appleFound && _searchSource.value == SearchSource.CANONICAL &&
+                        _query.value.trim() == query &&
+                        current.firstOrNull() == BuiltInProviderKeys.ITUNES &&
+                        BuiltInProviderKeys.MUSICBRAINZ in current
+                    ) {
+                        _catalogSearchMusicBrainzVisible.value = true
+                        runMusicBrainzCatalogSearch(query)
+                    }
+                }
+            }
+            else -> {
+                canonicalSearchJob?.cancel()
+                canonicalTypeaheadJob?.cancel()
+                appleEditorialSearchJob?.cancel()
+                appleArtistSearchJob?.cancel()
+                appleTrackSearchJob?.cancel()
+                resetCanonicalSearchPagination()
+                resetApplePublicSearchPaging()
+                clearCanonicalCatalogNavigation()
+                _catalogSearchMusicBrainzVisible.value = true
+                _canonicalResults.value = UiState.Success(emptyList())
+                _appleEditorialArtists.value = UiState.Success(emptyList())
+                _appleEditorialTracks.value = UiState.Success(emptyList())
+                _appleEditorialResults.value = UiState.Success(emptyList())
+            }
+        }
+    }
+
+    /** Metadata remains provider-native; no Apple ID is ever recast as an MBID. */
+    private fun runMusicBrainzCatalogSearch(
+        query: String,
+        allowAppleFallback: Boolean = false,
+    ) {
         val startedNanos = System.nanoTime()
         val firstPaintReported = java.util.concurrent.atomic.AtomicBoolean(false)
         fun reportFirstPaint(stage: String, count: Int) {
@@ -4962,23 +5310,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         clearCanonicalCatalogNavigation()
         _searchScrollReset.value += 1
         _canonicalResults.value = UiState.Loading
-        runAppleEditorialArtistSearch(query)
-        runAppleEditorialTrackSearch(query)
-        runAppleEditorialAlbumSearch(query)
-        canonicalSearchJob = viewModelScope.launch {
+        catalogMusicBrainzQuery = query
+        canonicalSearchJobProvider = BuiltInProviderKeys.MUSICBRAINZ
+        val requestOrder = eligibleCatalogSearchProviders()
+        val permissionGate = ProviderRuntime.gateOrNull()
+        val permissionTicket = permissionGate?.open(
+            ProviderCapability.CATALOG_SEARCH, BuiltInProviderKeys.MUSICBRAINZ,
+        )
+        if (permissionTicket == null) {
+            _canonicalResults.value = UiState.Success(emptyList())
+            return
+        }
+        fun mayPublish() = catalogPublicationAllowed(
+            permissionGate, permissionTicket,
+            correctSource = _searchSource.value == SearchSource.CANONICAL,
+            correctQuery = _query.value.trim() == query,
+            visibleProvider = _catalogSearchMusicBrainzVisible.value,
+        ) && catalogSearchOrderIsCurrent(
+            BuiltInProviderKeys.MUSICBRAINZ, requestOrder, eligibleCatalogSearchProviders(),
+        )
+        val searchJob = viewModelScope.launch {
             // Do not wait for the first public HTTP response to paint a previously
             // indexed catalog. A sibling IO task also avoids putting Room work
             // in front of the rate-limited MusicBrainz request.
             launch(Dispatchers.IO) {
                 val cached = canonicalCachedSearchRows(query)
-                if (cached.isNotEmpty() && _searchSource.value == SearchSource.CANONICAL &&
-                    _query.value.trim() == query && _canonicalResults.value is UiState.Loading
+                if (cached.isNotEmpty() && mayPublish() &&
+                    _canonicalResults.value is UiState.Loading
                 ) {
                     val verified = withVerifiedLocalBadges(cached)
-                    if (_searchSource.value == SearchSource.CANONICAL &&
-                        _query.value.trim() == query &&
-                        _canonicalResults.value is UiState.Loading
-                    ) {
+                    if (mayPublish() && _canonicalResults.value is UiState.Loading) {
                         _canonicalResults.value = UiState.Success(verified)
                         reportFirstPaint("search_cache", verified.size)
                     }
@@ -4997,9 +5358,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // three rate-limited requests are still pending. Final results
             // replace this preview after all entity types have been queried.
             if (artists is MusicBrainzCatalogSearchResult.Success &&
-                _searchSource.value == SearchSource.CANONICAL &&
-                _query.value.trim() == query &&
-                artists.page.items.isNotEmpty()
+                mayPublish() && artists.page.items.isNotEmpty()
             ) {
                 val current = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
                 val fresh = artists.page.items.map { hit ->
@@ -5022,8 +5381,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // to see the verified recording results. These are metadata-only
             // until the final local MediaAsset claim query has completed.
             if (recordings is MusicBrainzCatalogSearchResult.Success &&
-                _searchSource.value == SearchSource.CANONICAL &&
-                _query.value.trim() == query
+                mayPublish()
             ) {
                 val fresh = recordings.page.items
                     .filter(::isCuratedMusicBrainzRecording)
@@ -5049,8 +5407,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 musicBrainzSearch.searchReleaseGroupsForArtistMbid(artistScopeMbid, limit = 15)
             } else musicBrainzSearch.searchReleaseGroups(query, limit = 15)
             if (groups is MusicBrainzCatalogSearchResult.Success &&
-                _searchSource.value == SearchSource.CANONICAL &&
-                _query.value.trim() == query
+                mayPublish()
             ) {
                 val fresh = groups.page.items.filter(::isCuratedMusicBrainzReleaseGroup)
                     .map { hit -> CanonicalCatalogSearchRow(
@@ -5075,9 +5432,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val editions = if (artistScopeMbid != null) {
                 musicBrainzSearch.searchReleasesForArtistMbid(artistScopeMbid, limit = 15)
             } else musicBrainzSearch.searchReleases(query, limit = 15)
-            if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
-                return@launch
-            }
+            if (!mayPublish()) return@launch
             if (groups is MusicBrainzCatalogSearchResult.Success) {
                 try {
                     withContext(Dispatchers.IO) {
@@ -5119,8 +5474,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     withContext(Dispatchers.IO) {
                         val db = CanonicalCatalogDatabase.get(getApplication<Application>())
                         MusicBrainzCatalogIndex(db).persistRecordings(recordings.page.items)
-                        db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                        db.catalogDao().musicBrainzRecordingMbidsWithPersonalAssets(
                             recordings.page.items.map { it.musicBrainzId },
+                            (setOf("local-mediastore") +
+                            configuredCanonicalPersonalProviderKeys(getApplication<Application>())
+                                .filter { key ->
+                                    isCanonicalPersonalProviderCurrentlyAuthorized(
+                                        getApplication<Application>(), key,
+                                    )
+                                }).toList(),
                         ).toSet()
                     }
                 } catch (cancelled: CancellationException) {
@@ -5208,8 +5570,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     buildList {
                         if (CanonicalSearchKind.RECORDING in failedKinds) {
                             val known = dao.searchKnownMusicBrainzRecordings(query, 25)
-                            val available = dao.musicBrainzRecordingMbidsWithAssets(
+                            val available = dao.musicBrainzRecordingMbidsWithPersonalAssets(
                                 known.map { it.musicBrainzId },
+                                (setOf("local-mediastore") +
+                            configuredCanonicalPersonalProviderKeys(getApplication<Application>())
+                                .filter { key ->
+                                    isCanonicalPersonalProviderCurrentlyAuthorized(
+                                        getApplication<Application>(), key,
+                                    )
+                                }).toList(),
                             ).toSet()
                             known.filter(::isCuratedMusicBrainzRecording).forEach { hit -> add(CanonicalCatalogSearchRow(
                                 hit.musicBrainzId, CanonicalSearchKind.RECORDING,
@@ -5255,9 +5624,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (_: Exception) {
                 emptyList()
             }
-            if (_searchSource.value != SearchSource.CANONICAL || _query.value.trim() != query) {
-                return@launch
-            }
+            if (!mayPublish()) return@launch
             val mergedSearchRows = mergeCanonicalSearchRows(rows, cached, failedKinds)
             val editionLabelRows = canonicalSearchRowsWithOfficialEditionTitles(
                 mergedSearchRows,
@@ -5269,24 +5636,43 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     row.kind != CanonicalSearchKind.RECORDING || canonicalStreamingTitleIsSafe(row.title)
                 }),
             )
-            if (_searchSource.value != SearchSource.CANONICAL ||
-                _query.value.trim() != query
-            ) return@launch
+            if (!mayPublish()) return@launch
             _canonicalResults.value =
                 if (failedKinds.size == CanonicalSearchKind.entries.size && combined.isEmpty()) {
                     UiState.Error("MusicBrainz unavailable and no local matches")
                 } else UiState.Success(combined)
             if (combined.isNotEmpty()) reportFirstPaint("search_complete_first", combined.size)
             recordCanonicalLoadTiming("search_complete", startedNanos, combined.size)
-            // General Search renders typed Apple album/artist/song results;
-            // MusicBrainz rows here are metadata/identity hints only. Do not
-            // launch an invisible CAA cover-enrichment pass for their cards.
+            val matchedFilter = catalogSearchHasUsableRows(
+                filter = _filter.value,
+                artists = combined.any { it.kind == CanonicalSearchKind.ARTIST },
+                albums = combined.any {
+                    it.kind == CanonicalSearchKind.RELEASE ||
+                        it.kind == CanonicalSearchKind.RELEASE_GROUP
+                },
+                songs = combined.any { it.kind == CanonicalSearchKind.RECORDING },
+            )
+            if (allowAppleFallback && !matchedFilter &&
+                eligibleCatalogSearchProviders().firstOrNull() == BuiltInProviderKeys.MUSICBRAINZ &&
+                BuiltInProviderKeys.ITUNES in eligibleCatalogSearchProviders()
+            ) {
+                _catalogSearchMusicBrainzVisible.value = false
+                runAppleEditorialArtistSearch(query)
+                runAppleEditorialTrackSearch(query)
+                runAppleEditorialAlbumSearch(query)
+            }
+            // Preserve the same native presentation paths for both providers.
         }
+        val unregister = permissionGate.onRevoke(permissionTicket) { searchJob.cancel() }
+        searchJob.invokeOnCompletion { unregister() }
+        canonicalSearchJob = searchJob
     }
 
 
     /** Each entity type continues independently; failures retain its raw offset for retry. */
     fun loadMoreCanonicalSearchResults() {
+        val lease = canonicalCatalogSearchPagingLease(ProviderRuntime.gateOrNull()) ?: return
+        if (!_catalogSearchMusicBrainzVisible.value) return
         val cursor = canonicalSearchPageCursors ?: return
         if (_searchSource.value != SearchSource.CANONICAL ||
             _query.value.trim() != cursor.query ||
@@ -5297,7 +5683,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ) return
         _canonicalSearchLoadingMore.value = true
         canonicalSearchPagingJob?.cancel()
-        canonicalSearchPagingJob = viewModelScope.launch {
+        val pagingJob = viewModelScope.launch {
             try {
                 val recordings = cursor.recordings?.let { offset ->
                     cursor.artistScopeMbid?.let {
@@ -5317,7 +5703,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val artists = cursor.artists?.let {
                     musicBrainzSearch.searchArtists(cursor.query, limit = 15, offset = it)
                 }
-                if (_searchSource.value != SearchSource.CANONICAL ||
+                if (!lease.isCurrent() ||
+                    !_catalogSearchMusicBrainzVisible.value ||
+                    _searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != cursor.query ||
                     canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null
                 ) return@launch
@@ -5337,8 +5725,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         }
                         if (recordings is MusicBrainzCatalogSearchResult.Success) {
                             index.persistRecordings(recordings.page.items)
-                            db.catalogDao().musicBrainzRecordingMbidsWithAssets(
+                            db.catalogDao().musicBrainzRecordingMbidsWithPersonalAssets(
                                 recordings.page.items.map { it.musicBrainzId },
+                                (setOf("local-mediastore") +
+                            configuredCanonicalPersonalProviderKeys(getApplication<Application>())
+                                .filter { key ->
+                                    isCanonicalPersonalProviderCurrentlyAuthorized(
+                                        getApplication<Application>(), key,
+                                    )
+                                }).toList(),
                             ).toSet()
                         } else emptySet()
                     }
@@ -5347,7 +5742,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 } catch (_: Exception) {
                     emptySet()
                 }
-                if (_searchSource.value != SearchSource.CANONICAL ||
+                if (!lease.isCurrent() ||
+                    !_catalogSearchMusicBrainzVisible.value ||
+                    _searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != cursor.query || canonicalSearchPageCursors !== cursor ||
                     _canonicalDetail.value != null
                 ) return@launch
@@ -5407,7 +5804,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val verified = withVerifiedLocalBadges(
                     canonicalSearchRowsWithoutRedundantEditions(named),
                 )
-                if (_searchSource.value != SearchSource.CANONICAL ||
+                if (!lease.isCurrent() ||
+                    !_catalogSearchMusicBrainzVisible.value ||
+                    _searchSource.value != SearchSource.CANONICAL ||
                     _query.value.trim() != cursor.query ||
                     canonicalSearchPageCursors !== cursor || _canonicalDetail.value != null
                 ) return@launch
@@ -5423,6 +5822,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ) _canonicalSearchLoadingMore.value = false
             }
         }
+        val unregister = lease.cancelJobOnRevoke(pagingJob)
+        pagingJob.invokeOnCompletion { unregister() }
+        canonicalSearchPagingJob = pagingJob
     }
 
     /**
@@ -5466,8 +5868,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         serverSearchJob = viewModelScope.launch {
             val result: UiState<List<CanonicalServerSearchRow>> = try {
                 val rows = withContext(Dispatchers.IO) {
-                    CanonicalCatalogDatabase.get(getApplication<Application>())
-                        .catalogDao().searchCanonicalRemoteServerAssets(query, limit = 250)
+                    val app = getApplication<Application>()
+                    val eligibleRemote = configuredCanonicalPersonalProviderKeys(app)
+                        .filter { it.startsWith("opensubsonic:") || it.startsWith("jellyfin:") }
+                    CanonicalCatalogDatabase.get(app).catalogDao()
+                        .searchCanonicalRemoteServerAssets(
+                            query, limit = 250, providerKeys = eligibleRemote,
+                        ).filter {
+                            isCanonicalPersonalProviderCurrentlyAuthorized(app, it.providerKey)
+                        }
                 }
                 UiState.Success(rows.distinctBy { it.recordingId to it.providerKey }.map { row ->
                     CanonicalServerSearchRow(
@@ -5527,16 +5936,111 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /**
+     * Reassess the provider for a newly selected tab without blindly
+     * resubmitting every already-complete HTTP search.
+     *
+     * Previous Apple and MB responses are admissible only for the same query.
+     * A provider returning artists must not conceal eligible album/songs
+     * returned by another provider when the user changes the tab.
+     */
+    private fun routeCatalogFilterFromExistingSearch(query: String) {
+        val order = eligibleCatalogSearchProviders()
+        val selected = _filter.value
+        if (selected !in setOf(
+                SearchFilter.ALL, SearchFilter.ARTISTS,
+                SearchFilter.ALBUMS, SearchFilter.SONGS,
+            )
+        ) return
+
+        val mbCoverage = when {
+            catalogMusicBrainzQuery != query -> CatalogFilterCoverage.NOT_QUERIED
+            canonicalSearchJobProvider == BuiltInProviderKeys.MUSICBRAINZ &&
+                canonicalSearchJob?.isActive == true -> CatalogFilterCoverage.LOADING
+            else -> {
+                val rows = (_canonicalResults.value as? UiState.Success)?.data.orEmpty()
+                if (catalogSearchHasUsableRows(
+                    selected,
+                    artists = rows.any { it.kind == CanonicalSearchKind.ARTIST },
+                    albums = rows.any {
+                        it.kind == CanonicalSearchKind.RELEASE ||
+                            it.kind == CanonicalSearchKind.RELEASE_GROUP
+                    },
+                    songs = rows.any { it.kind == CanonicalSearchKind.RECORDING },
+                )) CatalogFilterCoverage.MATCHING else CatalogFilterCoverage.EMPTY
+            }
+        }
+
+        val applePending = when (selected) {
+            SearchFilter.ARTISTS -> appleArtistSearchJob?.isActive == true
+            SearchFilter.ALBUMS -> appleEditorialSearchJob?.isActive == true
+            SearchFilter.SONGS -> appleTrackSearchJob?.isActive == true
+            SearchFilter.ALL -> listOfNotNull(
+                appleArtistSearchJob, appleEditorialSearchJob, appleTrackSearchJob,
+            ).any { it.isActive }
+            else -> false
+        }
+        val appleCoverage = when {
+            catalogAppleQuery != query -> CatalogFilterCoverage.NOT_QUERIED
+            applePending -> CatalogFilterCoverage.LOADING
+            else -> if (catalogSearchHasUsableRows(
+                selected,
+                artists = (_appleEditorialArtists.value as? UiState.Success)
+                    ?.data?.isNotEmpty() == true,
+                albums = (_appleEditorialResults.value as? UiState.Success)
+                    ?.data?.isNotEmpty() == true,
+                songs = (_appleEditorialTracks.value as? UiState.Success)
+                    ?.data?.isNotEmpty() == true,
+            )) CatalogFilterCoverage.MATCHING else CatalogFilterCoverage.EMPTY
+        }
+        val choice = catalogSearchFilterRoute(order, mapOf(
+            BuiltInProviderKeys.MUSICBRAINZ to mbCoverage,
+            BuiltInProviderKeys.ITUNES to appleCoverage,
+        ))
+        when (choice.provider) {
+            BuiltInProviderKeys.MUSICBRAINZ -> {
+                _catalogSearchMusicBrainzVisible.value = true
+                if (choice.shouldFetch) {
+                    runMusicBrainzCatalogSearch(
+                        query,
+                        allowAppleFallback = order.firstOrNull() ==
+                            BuiltInProviderKeys.MUSICBRAINZ &&
+                            BuiltInProviderKeys.ITUNES in order,
+                    )
+                }
+            }
+            BuiltInProviderKeys.ITUNES -> {
+                _catalogSearchMusicBrainzVisible.value = false
+                if (choice.shouldFetch) {
+                    runAppleEditorialArtistSearch(query)
+                    runAppleEditorialTrackSearch(query)
+                    runAppleEditorialAlbumSearch(query)
+                    val jobs = listOfNotNull(
+                        appleArtistSearchJob, appleTrackSearchJob, appleEditorialSearchJob,
+                    )
+                    viewModelScope.launch {
+                        jobs.forEach { it.join() }
+                        if (_searchSource.value == SearchSource.CANONICAL &&
+                            _query.value.trim() == query &&
+                            searchSubmitted
+                        ) routeCatalogFilterFromExistingSearch(query)
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+
     fun onFilterChange(value: SearchFilter) {
         val source = _searchSource.value
         if (source != SearchSource.YOUTUBE && source != SearchSource.CANONICAL) return
         if (_filter.value == value) return
         _filter.value = value
         if (source == SearchSource.CANONICAL) {
-            // All four entity types are already queried with independent MB
-            // cursors. Changing presentation must not spend another public
-            // API request or accidentally reinterpret an MBID as videoId.
             _searchScrollReset.value += 1
+            if (searchSubmitted && _query.value.isNotBlank()) {
+                routeCatalogFilterFromExistingSearch(_query.value.trim())
+            }
             return
         }
         searchSubmitted = true
@@ -5959,6 +6463,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // Resolve only from the user's canonical MediaStore/server assets.
             // A Spotify track ID is never a RecordingId and never falls back
             // to the first YouTube result. Ambiguity remains metadata-only.
+            val allowedSpotifyProviders = withContext(Dispatchers.IO) {
+                configuredCanonicalPersonalProviderKeys(getApplication<Application>()).toList()
+            }
             val gate = Semaphore(SPOTIFY_MATCH_PARALLELISM)
             coroutineScope {
                 tracks.forEachIndexed { index, track ->
@@ -5967,10 +6474,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             if (!open()) return@withPermit
                             val match = try {
                                 withContext(Dispatchers.IO) {
-                                    val candidates = CanonicalCatalogDatabase
-                                        .get(getApplication<Application>())
+                                    val app = getApplication<Application>()
+                                    val candidates = CanonicalCatalogDatabase.get(app)
                                         .catalogDao()
-                                        .spotifyCanonicalAssetCandidates(track.title)
+                                        .spotifyCanonicalAssetCandidates(
+                                            track.title, allowedSpotifyProviders,
+                                        ).filter {
+                                            isCanonicalPersonalProviderCurrentlyAuthorized(
+                                                    app, it.providerKey,
+                                                )
+                                        }
                                     selectSpotifyCanonicalAsset(track, candidates)?.let { asset ->
                                         spotifyCanonicalAssetAsSong(track, asset)
                                     }

@@ -19,6 +19,8 @@ internal data class OpenSubsonicAccountRecord(
     val authMode: OpenSubsonicAuthMode,
     val username: String = "",
     val ratingScopeId: String = "",
+    /** Opaque catalog identity, not the login secret. Legacy records use blank. */
+    val catalogRealmId: String = "",
     val lastHealthAtEpochSeconds: Long? = null,
     val lastHealthReachable: Boolean? = null,
     val lastServerType: String? = null,
@@ -76,27 +78,43 @@ internal class OpenSubsonicAccountRepository(
         val config = configFor(accountId, draft, credential)
         val normalizedCredential = credentialFrom(config.auth)
         val username = (config.auth as? OpenSubsonicAuth.Password)?.username.orEmpty()
+        // Health/sync describe a specific authenticated server realm. The
+        // account ID is stable for catalog history, but it does not make a
+        // different server or credential's previous diagnostics true.
+        val retainedStatus = existing?.takeIf {
+            it.serverUrl == config.normalizedServerUrl &&
+                it.authMode == draft.authMode &&
+                it.username == username &&
+                draft.secretReplacement == null
+        }
         val record = OpenSubsonicAccountRecord(
             accountId = accountId,
             serverUrl = config.normalizedServerUrl,
             authMode = draft.authMode,
             username = username,
             ratingScopeId = UUID.randomUUID().toString(),
-            lastHealthAtEpochSeconds = existing?.lastHealthAtEpochSeconds,
-            lastHealthReachable = existing?.lastHealthReachable,
-            lastServerType = existing?.lastServerType,
-            lastServerVersion = existing?.lastServerVersion,
-            lastSyncAtEpochSeconds = existing?.lastSyncAtEpochSeconds,
-            lastSyncSucceeded = existing?.lastSyncSucceeded,
-            lastSyncSummary = existing?.lastSyncSummary,
+            // A server, principal or credential edit cannot inherit the old
+            // MediaAsset.provider namespace. Keep accountId and historical rows.
+            catalogRealmId = retainedStatus?.catalogRealmId ?: UUID.randomUUID().toString(),
+            lastHealthAtEpochSeconds = retainedStatus?.lastHealthAtEpochSeconds,
+            lastHealthReachable = retainedStatus?.lastHealthReachable,
+            lastServerType = retainedStatus?.lastServerType,
+            lastServerVersion = retainedStatus?.lastServerVersion,
+            lastSyncAtEpochSeconds = retainedStatus?.lastSyncAtEpochSeconds,
+            lastSyncSucceeded = retainedStatus?.lastSyncSucceeded,
+            lastSyncSummary = retainedStatus?.lastSyncSummary,
         )
 
-        // Validate everything before either store changes. Invalidate active
-        // stream leases *before* overwriting credentials, even if persistence
-        // subsequently fails. Cached catalog rows are intentionally untouched.
+        // No cross-store transaction exists between Keystore-backed secrets
+        // and plain account metadata. Fail CLOSED at every crash/commit point:
+        // revoke leases -> remove the old secret -> commit the new realm ->
+        // publish the new secret. If either durable write fails, no old
+        // MediaAsset can be used with a new credential by accident.
+        // Canonical recordings, old provider rows and user history remain.
         OpenSubsonicAccountRevisionClock.revoke()
-        credentials.write(accountId, normalizedCredential)
+        credentials.clear(accountId)
         persistence.write(record)
+        credentials.write(accountId, normalizedCredential)
         return record
     }
 
@@ -120,7 +138,10 @@ internal class OpenSubsonicAccountRepository(
                 secretReplacement = credential,
             ),
             credential = credential,
-        ).copy(ratingScopeId = account.ratingScopeId)
+        ).copy(
+            ratingScopeId = account.ratingScopeId,
+            catalogRealmId = account.catalogRealmId,
+        )
     }
 
     fun savedProvider(): OpenSubsonicProvider? = savedConfig()?.let(::OpenSubsonicProvider)
@@ -185,7 +206,9 @@ internal class OpenSubsonicAccountRepository(
     ): String {
         val changedMode = existing != null && existing.authMode != draft.authMode
         val changedServer = existing != null && existing.serverUrl != normalizedServerUrl(draft.serverUrl)
-        val credentialContextChanged = changedMode || changedServer
+        val changedPrincipal = existing != null && existing.username !=
+            if (draft.authMode == OpenSubsonicAuthMode.PASSWORD) draft.username.trim() else ""
+        val credentialContextChanged = changedMode || changedServer || changedPrincipal
         if (credentialContextChanged && draft.secretReplacement == null) {
             throw IllegalArgumentException(
                 "Enter a new credential when changing the server or authentication mode",

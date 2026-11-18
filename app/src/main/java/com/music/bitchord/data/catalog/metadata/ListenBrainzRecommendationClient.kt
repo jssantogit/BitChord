@@ -1,5 +1,11 @@
 package com.music.bitchord.data.catalog.metadata
 
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCallResult
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderQueryExecutor
+import com.music.bitchord.data.providers.ProviderRuntime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -32,6 +38,9 @@ internal class ListenBrainzRecommendationClient(
     private val limiter: ListenBrainzRateLimiter = ListenBrainzRequestBudget.limiter,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val retryDelay: suspend (Long) -> Unit = { delay(it) },
+    private val gateProvider: () -> ProviderPolicyGate? = {
+        ProviderRuntime.gateForCacheReadOrNull()
+    },
 ) {
     private data class Cached(
         val accountDigest: String,
@@ -50,6 +59,24 @@ internal class ListenBrainzRecommendationClient(
     suspend fun recordings(token: String, count: Int = 16): ListenBrainzRecommendationFetchResult {
         if (token.isBlank()) return ListenBrainzRecommendationFetchResult.NotAuthenticated
         if (count !in 1..50) return ListenBrainzRecommendationFetchResult.InvalidRequest
+        // Account-specific recommendations have an independent user opt-out:
+        // never borrow authorization from scrobbling or public charts. The
+        // executor cancels both HTTP legs when this capability is revoked.
+        val gate = gateProvider() ?: return ListenBrainzRecommendationFetchResult.Unavailable
+        return when (val outcome = ProviderQueryExecutor(gate).execute(
+            ProviderCapability.PERSONAL_RECOMMENDATIONS,
+            BuiltInProviderKeys.LISTENBRAINZ,
+        ) { recordingsAuthorized(token, count) }) {
+            is ProviderCallResult.Success -> outcome.value
+            ProviderCallResult.Denied,
+            ProviderCallResult.Stale,
+            is ProviderCallResult.Failed -> ListenBrainzRecommendationFetchResult.Unavailable
+        }
+    }
+
+    private suspend fun recordingsAuthorized(
+        token: String, count: Int,
+    ): ListenBrainzRecommendationFetchResult {
         val account = MessageDigest.getInstance("SHA-256")
             .digest(token.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it.toInt() and 0xff) }

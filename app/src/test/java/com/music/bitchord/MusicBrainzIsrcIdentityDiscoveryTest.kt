@@ -355,7 +355,7 @@ class MusicBrainzIsrcIdentityDiscoveryTest {
             nowMillis = { virtualTime },
             delayMillis = { millis -> virtualTime += millis },
         )
-        val sharedClient = MusicBrainzClient(transport, limiter, TEST_USER_AGENT)
+        val sharedClient = authorizedMusicBrainzClient(transport, limiter, TEST_USER_AGENT)
         val discovery = MusicBrainzRecordingIdentityDiscoveryProvider(sharedClient)
         val enrichment = MusicBrainzMetadataEnrichmentProvider(sharedClient)
 
@@ -381,7 +381,7 @@ class MusicBrainzIsrcIdentityDiscoveryTest {
 
     private fun client(transport: FakeMusicBrainzTransport): MusicBrainzClient {
         var virtualTime = 0L
-        return MusicBrainzClient(
+        return authorizedMusicBrainzClient(
             transport = transport,
             rateLimiter = MusicBrainzRateLimiter(
                 nowMillis = { virtualTime },

@@ -1,5 +1,12 @@
 package com.music.bitchord.data.catalog.metadata.discogs
 
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCallResult
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderQueryExecutor
+import com.music.bitchord.data.providers.ProviderRuntime
+
 /** Only Verified carries source fields that may be considered for presentation. */
 internal sealed interface DiscogsEditionEnrichment {
     data class Verified(val observation: DiscogsObservation) : DiscogsEditionEnrichment {
@@ -31,12 +38,29 @@ internal class DiscogsEditionRepository(
     private val enabled: Boolean = false,
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val authenticatedDiscovery: DiscogsAuthenticatedDiscovery? = null,
+    private val gateProvider: () -> ProviderPolicyGate? = {
+        ProviderRuntime.gateForCacheReadOrNull()
+    },
 ) {
     /** On provider rollback, purge only volatile Discogs observations. */
     fun clearCachedEvidence() = cache.clear()
 
     suspend fun observe(canonical: CanonicalEditionEvidence): DiscogsEditionEnrichment {
         if (!enabled) return DiscogsEditionEnrichment.Disabled
+        val gate = gateProvider() ?: return DiscogsEditionEnrichment.Disabled
+        return when (val result = ProviderQueryExecutor(gate).execute(
+            ProviderCapability.EDITION_METADATA, BuiltInProviderKeys.DISCOGS,
+        ) { observeAuthorized(canonical) }) {
+            is ProviderCallResult.Success -> result.value
+            is ProviderCallResult.Failed -> DiscogsEditionEnrichment.Unavailable
+            ProviderCallResult.Denied, ProviderCallResult.Stale ->
+                DiscogsEditionEnrichment.Disabled
+        }
+    }
+
+    private suspend fun observeAuthorized(
+        canonical: CanonicalEditionEvidence,
+    ): DiscogsEditionEnrichment {
         val link = when (val result = links.findRelease(canonical.musicBrainzReleaseId)) {
             is DiscogsRelationResult.Linked -> result.link
             DiscogsRelationResult.NoLink -> return observeFallbacks(canonical)

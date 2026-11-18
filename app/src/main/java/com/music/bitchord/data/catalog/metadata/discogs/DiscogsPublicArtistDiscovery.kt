@@ -1,6 +1,10 @@
 package com.music.bitchord.data.catalog.metadata.discogs
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderRequestDeniedException
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -185,6 +189,7 @@ internal class DiscogsPublicArtistDiscovery(
     private val editions: DiscogsClient = DiscogsClient(),
     private val enabled: Boolean = false,
     private val limiter: DiscogsRateLimiter = DiscogsRequestBudget.limiter,
+    private val admission: RateLimitedProviderTransport = RateLimitedProviderTransport(),
     private val nowMillis: () -> Long = System::currentTimeMillis,
     private val userAgent: String =
         "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)",
@@ -194,7 +199,9 @@ internal class DiscogsPublicArtistDiscovery(
         artistName: String,
         completedMusicBrainzTitles: Set<String>,
     ): List<DiscogsShadowRelease> {
-        if (!enabled || artistName.isBlank()) return emptyList()
+        if (!enabled || artistName.isBlank() ||
+            !admission.permitted(ProviderCapability.EDITION_METADATA, BuiltInProviderKeys.DISCOGS)
+        ) return emptyList()
         val relation = try {
             musicBrainz.get("artist/$musicBrainzArtistMbid",
                 mapOf("fmt" to "json", "inc" to "url-rels"))
@@ -208,9 +215,16 @@ internal class DiscogsPublicArtistDiscovery(
         ) ?: return emptyList()
         suspend fun checkedPage(number: Int): DiscogsArtistIndexPage? {
             val response = try {
-                limiter.runHttpLimited { transport.list(artistId, number, userAgent) }
+                admission.execute(
+                    capability = ProviderCapability.EDITION_METADATA,
+                    provider = BuiltInProviderKeys.DISCOGS,
+                    scheduleLimited = { block -> limiter.runHttpLimited { block() } },
+                    networkCall = { transport.list(artistId, number, userAgent) },
+                )
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (_: ProviderRequestDeniedException) {
+                return null
             } catch (_: Exception) {
                 return null
             }

@@ -98,8 +98,16 @@ internal class SharedCalls<T>(
         }
     }
 
-    /** Everything held, dropped — the configuration it was all about is gone. */
-    fun clear() = entries.clear()
+    /**
+     * A removed/replaced source no longer owns any permitted in-flight work.
+     * Unlike clearCompleted(), release must cancel the detached producer jobs,
+     * not merely forget their cache keys and let obsolete HTTP continue.
+     */
+    fun clear() {
+        val pending = entries.values.toList()
+        entries.clear()
+        pending.forEach { it.work.cancel() }
+    }
 
     /**
      * Drops answers that have already completed while preserving work still in

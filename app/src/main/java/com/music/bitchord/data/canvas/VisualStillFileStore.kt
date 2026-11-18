@@ -12,6 +12,13 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import kotlin.coroutines.resume
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
@@ -56,6 +63,7 @@ internal class VisualStillFileStore(
                             temporary.length() > MAX_STILL_BYTES ||
                             generation != invalidation.get()
                         ) return@withContext null
+                        currentCoroutineContext().ensureActive()
                         if (!temporary.renameTo(target)) return@withContext null
                         prune()
                         target
@@ -122,36 +130,8 @@ object VisualStillMedia {
             directory = root,
             maxBytes = { com.music.bitchord.data.settings.AppSettings.visualStillCacheLimitBytes.value },
         ) { url, output ->
-            withContext(Dispatchers.IO) {
-                val request = Request.Builder().url(url).get().build()
-                Http.client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful ||
-                        !isSafeVisualMediaUrl(response.request.url.toString())
-                    ) return@use false
-                    val body = response.body ?: return@use false
-                    if (body.contentLength() > VisualStillFileStore.MAX_STILL_BYTES)
-                        return@use false
-                    // Some image CDNs omit Content-Type; reject known non-image
-                    // responses but let Coil decode exact bytes later.
-                    val mime = body.contentType()?.toString()
-                    if (mime != null && !mime.startsWith("image/")) return@use false
-                    body.byteStream().use { input ->
-                        output.outputStream().buffered().use { sink ->
-                            val buffer = ByteArray(16 * 1024)
-                            var received = 0L
-                            while (true) {
-                                val read = input.read(buffer)
-                                if (read == -1) break
-                                received += read
-                                if (received > VisualStillFileStore.MAX_STILL_BYTES)
-                                    throw IOException("Visual still too large")
-                                sink.write(buffer, 0, read)
-                            }
-                        }
-                    }
-                    output.length() > 0L
-                }
-            }
+            val request = Request.Builder().url(url).get().build()
+            downloadVisualStill(Http.client.newCall(request), output)
         }
     }
 
@@ -170,3 +150,49 @@ object VisualStillMedia {
     suspend fun clear() { store?.clear() }
     fun bytesOnDisk() = store?.bytesOnDisk() ?: 0L
 }
+
+/** Cancel the actual OkHttp connection, including a streaming image body,
+ * when the requesting provider's artwork ticket is revoked. */
+internal suspend fun downloadVisualStill(call: Call, output: File): Boolean =
+    suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resume(false)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val complete = try {
+                    response.use responseHandler@ { received ->
+                        if (!received.isSuccessful ||
+                            !isSafeVisualMediaUrl(received.request.url.toString())
+                        ) return@responseHandler false
+                        val body = received.body ?: return@responseHandler false
+                        if (body.contentLength() > VisualStillFileStore.MAX_STILL_BYTES)
+                            return@responseHandler false
+                        val mime = body.contentType()?.toString()
+                        if (mime != null && !mime.startsWith("image/")) return@responseHandler false
+                        body.byteStream().use { input ->
+                            output.outputStream().buffered().use { sink ->
+                                val buffer = ByteArray(16 * 1024)
+                                var bytes = 0L
+                                while (true) {
+                                    if (!continuation.isActive) return@responseHandler false
+                                    val read = input.read(buffer)
+                                    if (read == -1) break
+                                    bytes += read
+                                    if (bytes > VisualStillFileStore.MAX_STILL_BYTES)
+                                        throw IOException("Visual still too large")
+                                    sink.write(buffer, 0, read)
+                                }
+                            }
+                        }
+                        output.length() > 0L
+                    }
+                } catch (_: IOException) {
+                    false
+                }
+                if (continuation.isActive) continuation.resume(complete)
+            }
+        })
+    }

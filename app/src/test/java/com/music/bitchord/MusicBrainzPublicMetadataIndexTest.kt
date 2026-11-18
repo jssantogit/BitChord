@@ -1,5 +1,7 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.providers.ProviderCachedReadAccess
+
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.MusicBrainzCoverArtCacheEntity
@@ -27,7 +29,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var count = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-${++count}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-${++count}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val korean = "b51c672b-85e0-48fe-8648-470a2422229f"
             val namesake = "11111111-2222-3333-4444-555555555555"
             index.persistArtists(listOf(
@@ -56,7 +58,7 @@ class MusicBrainzPublicMetadataIndexTest {
         try {
             val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
             var created = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-${++created}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-${++created}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val before = MusicBrainzArtistHit(artist, "Original source name", "Old credit", "KR")
             val id = requireNotNull(index.persistArtists(listOf(before))[artist])
             db.catalogDao().upsertArtist(
@@ -92,7 +94,7 @@ class MusicBrainzPublicMetadataIndexTest {
             val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
             val group = "3f5eba8d-4dc1-4599-a936-21f501787f8e"
             var created = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "group-${++created}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "group-${++created}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             index.persistArtists(listOf(MusicBrainzArtistHit(artist, "aespa", null, "KR")))
             val first = MusicBrainzReleaseGroupHit(
                 group, "Original group title", "EP", "2024-01-01", "Old group artist",
@@ -130,7 +132,7 @@ class MusicBrainzPublicMetadataIndexTest {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
-            val index = MusicBrainzCatalogIndex(db)
+            val index = MusicBrainzCatalogIndex(db, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val mbid = "529f87a1-1081-48a4-8ee1-3c08de229858"
             val tagged = MusicBrainzReleaseGroupHit(
                 mbid, "Official album", "Album", "2024-03-25", "ILLIT",
@@ -158,7 +160,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var id = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "generated-${++id}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "generated-${++id}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val artistMbid = "b51c672b-85e0-48fe-8648-470a2422229f"
             val groupMbid = "529f87a1-1081-48a4-8ee1-3c08de229858"
             val artist = MusicBrainzArtistHit(artistMbid, "aespa", "South Korean girl group", "KR")
@@ -193,7 +195,7 @@ class MusicBrainzPublicMetadataIndexTest {
             val artist = "49204a7a-ed85-407a-828f-6fd46f1d8126"
             val group = "11111111-1111-4111-8111-111111111111"
             val edition = "22222222-2222-4222-8222-222222222222"
-            val index = MusicBrainzCatalogIndex(db)
+            val index = MusicBrainzCatalogIndex(db, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             index.persistArtists(listOf(MusicBrainzArtistHit(artist, "NewJeans", null, "KR")))
             index.persistArtistGroups(artist, listOf(
                 MusicBrainzReleaseGroupHit(
@@ -221,7 +223,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var id = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "front-test-${++id}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "front-test-${++id}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val groupId = "22222222-2222-4222-8222-222222222222"
             val editionId = "33333333-3333-4333-8333-333333333333"
             index.persistReleaseGroups(listOf(MusicBrainzReleaseGroupHit(
@@ -269,14 +271,30 @@ class MusicBrainzPublicMetadataIndexTest {
             // Offline SQL cannot leak raw URLs without TTL/host validation.
             assertEquals(null, dao.searchKnownMusicBrainzGroups("New Jeans", 10)
                 .single().artworkUri)
+            // This Room TTL/allowlist test explicitly authorizes CAA; the
+            // production archive stays fail-closed without a provider session.
+            val artworkGate = ProviderCachedReadAccess.permissiveForUnitTests(
+                provider = com.music.bitchord.data.providers.BuiltInProviderKeys.COVER_ART_ARCHIVE,
+                capabilities = setOf(
+                    com.music.bitchord.data.providers.ProviderCapability.RELEASE_ARTWORK,
+                ),
+            ).currentGateOrNull()
             val archive = com.music.bitchord.data.catalog.metadata.CoverArtArchive(
+                transport = com.music.bitchord.data.providers.PolicyGuardedCoverArtArchiveTransport(
+                    com.music.bitchord.data.catalog.metadata.KtorCoverArtArchiveTransport(),
+                    gateProvider = { artworkGate },
+                ),
                 store = com.music.bitchord.data.catalog.metadata.RoomMusicBrainzCoverArtStore(dao),
             )
             assertEquals("https://archive.org/verified-group-thumb-500.jpg",
                 archive.cachedVerifiedGroupCover(groupId))
             assertEquals("https://archive.org/verified-group-front.jpg",
                 dao.musicBrainzCoverArtCache("release-group:front-v5", groupId)?.artworkUri)
+            // The DAO still retains Front-v3 evidence, but must never publish
+            // it directly without the source's artwork authorization.
             assertEquals("https://archive.org/verified-release-front.jpg",
+                dao.musicBrainzCoverArtCache("release:front-v3", editionId)?.artworkUri)
+            assertEquals(null,
                 dao.searchKnownMusicBrainzReleases("New Jeans", 10).single().artworkUri)
         } finally { db.close() }
     }
@@ -287,7 +305,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var seq = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "legacy-${++seq}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "legacy-${++seq}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val artistMbid = "b51c672b-85e0-48fe-8648-470a2422229f"
             val oldGroup = MusicBrainzReleaseGroupHit(
                 "22222222-2222-4222-8222-222222222222",
@@ -321,7 +339,7 @@ class MusicBrainzPublicMetadataIndexTest {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
-            val index = MusicBrainzCatalogIndex(db)
+            val index = MusicBrainzCatalogIndex(db, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val artistA = "b51c672b-85e0-48fe-8648-470a2422229f"
             val artistB = "49204a7a-ed85-407a-828f-6fd46f1d8126"
             val retained = MusicBrainzReleaseGroupHit(
@@ -379,7 +397,7 @@ class MusicBrainzPublicMetadataIndexTest {
         val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
-            val index = MusicBrainzCatalogIndex(db)
+            val index = MusicBrainzCatalogIndex(db, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val artist = "b51c672b-85e0-48fe-8648-470a2422229f"
             val a = MusicBrainzReleaseGroupHit(
                 "11111111-1111-4111-8111-111111111111", "First EP", "EP",
@@ -404,7 +422,33 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var number = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "artist-card-${++number}" })
+            val gate = com.music.bitchord.data.providers.ProviderPolicyGate(
+                com.music.bitchord.data.providers.ProviderCapabilityPolicy(
+                    descriptors = listOf(
+                        com.music.bitchord.data.providers.ProviderDescriptor(
+                            com.music.bitchord.data.providers.BuiltInProviderKeys.MUSICBRAINZ,
+                            setOf(com.music.bitchord.data.providers.ProviderCapability.EDITORIAL_DISCOGRAPHY),
+                            com.music.bitchord.data.providers.ProviderReadiness.READY,
+                        ),
+                        com.music.bitchord.data.providers.ProviderDescriptor(
+                            com.music.bitchord.data.providers.BuiltInProviderKeys.COVER_ART_ARCHIVE,
+                            setOf(com.music.bitchord.data.providers.ProviderCapability.RELEASE_ARTWORK),
+                            com.music.bitchord.data.providers.ProviderReadiness.READY,
+                        ),
+                    ),
+                    choices = mapOf(
+                        com.music.bitchord.data.providers.ProviderCapability.EDITORIAL_DISCOGRAPHY to listOf(
+                            com.music.bitchord.data.providers.ProviderChoice(
+                                com.music.bitchord.data.providers.BuiltInProviderKeys.MUSICBRAINZ, true, 0)),
+                        com.music.bitchord.data.providers.ProviderCapability.RELEASE_ARTWORK to listOf(
+                            com.music.bitchord.data.providers.ProviderChoice(
+                                com.music.bitchord.data.providers.BuiltInProviderKeys.COVER_ART_ARCHIVE, true, 0)),
+                    ),
+                ),
+            )
+            val index = MusicBrainzCatalogIndex(db,
+                idFactory = { "artist-card-${++number}" },
+                cacheRead = ProviderCachedReadAccess { gate })
             val artistMbid = "b51c672b-85e0-48fe-8648-470a2422229f"
             val groupMbid = "529f87a1-1081-48a4-8ee1-3c08de229858"
             val artistIds = index.persistArtists(listOf(MusicBrainzArtistHit(
@@ -444,7 +488,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             val mbid = "2c124b3c-e76b-4046-9980-e88c5ffa4ab2"
-            val index = MusicBrainzCatalogIndex(db)
+            val index = MusicBrainzCatalogIndex(db, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             index.persistRecordings(listOf(MusicBrainzRecordingHit(
                 mbid, "New Jeans", "NewJeans", 180000,
                 hasOfficialAudioRelease = false, isVideo = true,
@@ -452,7 +496,7 @@ class MusicBrainzPublicMetadataIndexTest {
             // The search API can omit both fields, unlike a previous exact
             // lookup. The DTO must carry null/unknown through to Room.
             val search = com.music.bitchord.data.catalog.metadata.MusicBrainzCatalogSearch(
-                com.music.bitchord.data.catalog.metadata.MusicBrainzClient(
+                authorizedMusicBrainzClient(
                     transport = object :
                         com.music.bitchord.data.catalog.metadata.MusicBrainzTransport {
                         override suspend fun get(
@@ -483,7 +527,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var next = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "audio-${++next}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "audio-${++next}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val valid = MusicBrainzRecordingHit(
                 "11111111-1111-4111-8111-111111111111", "Hurt", "NewJeans", 180000,
                 hasOfficialAudioRelease = true, isVideo = false,
@@ -531,7 +575,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var id = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "offline-title-" + (++id) })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "offline-title-" + (++id) }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val artist = "49204a7a-ed85-407a-828f-6fd46f1d8126"
             val group = "9750354e-78df-4058-8758-b5a7a2eccf66"
             index.persistArtists(listOf(MusicBrainzArtistHit(artist, "NewJeans", null, "KR")))
@@ -566,7 +610,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var n = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "recording-cover-" + (++n) })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "recording-cover-" + (++n) }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val group = "11111111-1111-4111-8111-111111111111"
             val release = "22222222-2222-4222-8222-222222222222"
             val record = "33333333-3333-4333-8333-333333333333"
@@ -640,7 +684,7 @@ class MusicBrainzPublicMetadataIndexTest {
             CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
         try {
             var next = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "edition-batch-" + (++next) })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "edition-batch-" + (++next) }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val group = "11111111-1111-4111-8111-111111111111"
             index.persistReleaseGroups(listOf(
                 MusicBrainzReleaseGroupHit(group, "Get Up", "EP", "2023-07-21", "NewJeans"),

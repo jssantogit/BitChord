@@ -4,6 +4,7 @@ import com.music.bitchord.data.catalog.metadata.discogs.*
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
 import kotlinx.coroutines.runBlocking
+import com.music.bitchord.data.providers.*
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -66,6 +67,35 @@ class DiscogsPublicArtistDiscoveryTest {
             DiscogsArtistIndexEntry(DiscogsKind.MASTER, 50, "Named Master"),
             DiscogsArtistIndexEntry(DiscogsKind.RELEASE, 60, "First Name"),
         ), page?.entries)
+    }
+
+    @Test fun disablingDiscogsPreventsEvenAnonymousArtistDiscoveryAndMbLookup() = runBlocking {
+        val key = BuiltInProviderKeys.DISCOGS
+        val gate = ProviderPolicyGate(ProviderCapabilityPolicy(
+            descriptors = listOf(ProviderDescriptor(key,
+                setOf(ProviderCapability.EDITION_METADATA), ProviderReadiness.READY)),
+            choices = mapOf(ProviderCapability.EDITION_METADATA to listOf(
+                ProviderChoice(key, false, 0))),
+        ))
+        var mbCalls = 0
+        val discovery = DiscogsPublicArtistDiscovery(
+            musicBrainz = MusicBrainzClient(transport = object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String {
+                    mbCalls++
+                    return relation()
+                }
+            }),
+            transport = object : DiscogsPublicArtistTransport {
+                override suspend fun list(artistId: Long, page: Int,
+                    userAgent: String): DiscogsHttpResponse =
+                    error("No Discogs network request without canonical permission")
+            },
+            enabled = true,
+            admission = RateLimitedProviderTransport { gate },
+        )
+        assertTrue(discovery.findForArtist(mbid, "ENHYPEN", emptySet()).isEmpty())
+        assertEquals(0, mbCalls)
     }
 
     @Test fun anonymousLinkedArtistCanRecoverTypedMetadataWithoutSearchToken() = runBlocking {

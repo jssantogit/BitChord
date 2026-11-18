@@ -13,6 +13,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import com.music.bitchord.data.providers.*
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -57,6 +58,84 @@ class ListenBrainzPublicPlaylistTest {
          "creator":"kpopfan","title":"Best K-pop songs",
          "extension":{"https://musicbrainz.org/doc/jspf#playlist":{"public":true}}}}
     ]}"""
+
+    @Test fun publicPlaylistDetailRetainsTracksWhenCaaReleaseArtworkIsDisabled() = runBlocking {
+        val listenbrainz = BuiltInProviderKeys.LISTENBRAINZ
+        val caa = BuiltInProviderKeys.COVER_ART_ARCHIVE
+        fun policy(caaOn: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(
+                ProviderDescriptor(listenbrainz,
+                    setOf(ProviderCapability.PUBLIC_PLAYLISTS), ProviderReadiness.READY),
+                ProviderDescriptor(caa,
+                    setOf(ProviderCapability.RELEASE_ARTWORK), ProviderReadiness.READY),
+            ),
+            choices = mapOf(
+                ProviderCapability.PUBLIC_PLAYLISTS to listOf(
+                    ProviderChoice(listenbrainz, true, 0)),
+                ProviderCapability.RELEASE_ARTWORK to listOf(
+                    ProviderChoice(caa, caaOn, 0)),
+            ),
+        )
+        val gate = ProviderPolicyGate(policy(false))
+        val selected = ListenBrainzPublicPlaylist(rock, "Rock", "Curator", null)
+        val jspf = """{"playlist":{
+            "identifier":"https://listenbrainz.org/playlist/$rock",
+            "track":[{"title":"One","creator":"Singer",
+                "identifier":"https://musicbrainz.org/recording/$song",
+                "extension":{"https://musicbrainz.org/doc/jspf#track":{
+                    "release_identifier":"https://musicbrainz.org/release/$pop"
+                }}
+            }]
+        }}"""
+        val client = ListenBrainzPublicPlaylistClient(
+            transport = object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String) = ListenBrainzPublicPlaylistHttp(404, "")
+                override suspend fun detail(mbid: String) = ListenBrainzPublicPlaylistHttp(200, jspf)
+            },
+            limiter = ListenBrainzRateLimiter(waitMillis = {}),
+            cacheRead = ProviderCachedReadAccess { gate },
+        )
+        val without = client.detail(selected)!!
+        assertEquals(listOf("One"), without.tracks.map { it.title })
+        assertNull(without.tracks.single().artworkUrl)
+        gate.replace(policy(true))
+        val withArtwork = client.detail(selected)!!
+        assertEquals("https://coverartarchive.org/release/$pop/front-250.jpg",
+            withArtwork.tracks.single().artworkUrl)
+    }
+
+    @Test fun canonicalPublicPlaylistOptOutHidesCachedResultsWithoutErasingThem() = runBlocking {
+        val key = BuiltInProviderKeys.LISTENBRAINZ
+        val descriptor = ProviderDescriptor(key, setOf(
+            ProviderCapability.PUBLIC_PLAYLISTS), ProviderReadiness.READY)
+        fun policy(on: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(descriptor),
+            choices = mapOf(ProviderCapability.PUBLIC_PLAYLISTS to listOf(
+                ProviderChoice(key, on, 0))),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        var requests = 0
+        val client = ListenBrainzPublicPlaylistClient(
+            transport = object : ListenBrainzPublicPlaylistTransport {
+                override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp {
+                    requests++
+                    return ListenBrainzPublicPlaylistHttp(200, response())
+                }
+                override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp =
+                    ListenBrainzPublicPlaylistHttp(404, "")
+            },
+            limiter = ListenBrainzRateLimiter(waitMillis = {}),
+            cacheRead = ProviderCachedReadAccess { gate },
+        )
+        assertTrue(client.searchGenre("rock")?.isNotEmpty() == true)
+        val before = requests
+        gate.replace(policy(false))
+        assertNull(client.searchGenre("rock"))
+        assertEquals(before, requests)
+        gate.replace(policy(true))
+        assertTrue(client.searchGenre("rock")?.isNotEmpty() == true)
+        assertEquals(before, requests)
+    }
 
     @Test fun publicPlaylistDetailsReuseSuccessfulExactIdWithinFreshnessWindow() = runBlocking {
         var now = 1_000L

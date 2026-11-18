@@ -3,6 +3,13 @@ package com.music.bitchord
 import com.music.bitchord.data.catalog.CanonicalBrowseMediaAsset
 import com.music.bitchord.data.catalog.CanonicalBrowseTrack
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderDescriptor
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountDraft
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRecord
@@ -38,6 +45,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class OpenSubsonicArtworkAccessTest {
+    @Test
+    fun `revoking library while artwork cache opens cannot publish stale private bytes`() = runTest {
+        val fixture = fixture()
+        val key = ProviderKey("opensubsonic", "home")
+        val cache = object : OpenSubsonicArtworkCache {
+            override suspend fun read(cacheKey: String): ByteArray? {
+                fixture.gate.replace(ProviderCapabilityPolicy(
+                    listOf(ProviderDescriptor(key,
+                        setOf(ProviderCapability.PERSONAL_LIBRARY), ProviderReadiness.READY)),
+                    mapOf(ProviderCapability.PERSONAL_LIBRARY to listOf(
+                        ProviderChoice(key, false, 0))),
+                ))
+                return byteArrayOf(7, 8, 9)
+            }
+
+            override suspend fun write(cacheKey: String, bytes: ByteArray) {
+                error("Revoked cached artwork must never be promoted")
+            }
+        }
+        val loader = OpenSubsonicArtworkLoader(
+            fixture.access,
+            OpenSubsonicArtworkTransport { _, _ ->
+                error("Offline cached artwork must never perform HTTP")
+            },
+            cache,
+        )
+        val result = loader.load("asset-canonical", "recording-canonical",
+            fixture.asset.provider) as OpenSubsonicArtworkLoadResult.Placeholder
+        assertEquals("ACCOUNT_MISMATCH", result.reason)
+        assertTrue(fixture.store.assets.containsKey("asset-canonical"))
+    }
+
 
     @Test
     fun `known artwork resolves from canonical media asset through correct account without reading credential`() = runTest {
@@ -48,7 +87,7 @@ class OpenSubsonicArtworkAccessTest {
         val ready = result as OpenSubsonicArtworkAccessResult.Ready
         assertEquals("recording-canonical", ready.request.recordingId)
         assertEquals("asset-canonical", ready.request.mediaAssetId)
-        assertEquals("opensubsonic:home", ready.request.providerKey)
+        assertEquals(fixture.asset.provider, ready.request.providerKey)
         assertTrue(ready.request.cacheKey.startsWith("opensubsonic-artwork:v1:asset-canonical:"))
         assertEquals(0, fixture.credentials.readCalls)
         assertFalse(ready.request.toString().contains("cover-native"))
@@ -254,7 +293,7 @@ class OpenSubsonicArtworkAccessTest {
             loader.load(
                 mediaAssetId = "asset-canonical",
                 expectedRecordingId = "recording-canonical",
-                expectedProviderKey = "opensubsonic:home",
+                expectedProviderKey = fixture.asset.provider,
             )
         }
 
@@ -381,7 +420,7 @@ class OpenSubsonicArtworkAccessTest {
             loader.load(
                 mediaAssetId = "asset-canonical",
                 expectedRecordingId = "recording-canonical",
-                expectedProviderKey = "opensubsonic:home",
+                expectedProviderKey = fixture.asset.provider,
             )
         }.exceptionOrNull()
 
@@ -413,7 +452,7 @@ class OpenSubsonicArtworkAccessTest {
             loader.load(
                 mediaAssetId = "asset-canonical",
                 expectedRecordingId = "recording-canonical",
-                expectedProviderKey = "opensubsonic:home",
+                expectedProviderKey = fixture.asset.provider,
             )
         }.exceptionOrNull()
 
@@ -442,7 +481,7 @@ class OpenSubsonicArtworkAccessTest {
         val result = loader.load(
             mediaAssetId = "asset-canonical",
             expectedRecordingId = "recording-canonical",
-            expectedProviderKey = "opensubsonic:home",
+            expectedProviderKey = fixture.asset.provider,
         ) as OpenSubsonicArtworkLoadResult.Ready
 
         assertArrayEquals(byteArrayOf(12, 13), result.bytes)
@@ -470,7 +509,7 @@ class OpenSubsonicArtworkAccessTest {
             )
             val delays = mutableListOf<Long>()
             val loadSelected: suspend () -> OpenSubsonicArtworkLoadResult = {
-                loader.load("asset-canonical", "recording-canonical", "opensubsonic:home")
+                loader.load("asset-canonical", "recording-canonical", fixture.asset.provider)
             }
 
             val recovered = awaitRecoverableCanonicalArtwork(
@@ -504,7 +543,7 @@ class OpenSubsonicArtworkAccessTest {
                 FakeArtworkCache(),
             )
             val selected: suspend () -> OpenSubsonicArtworkLoadResult = {
-                loader.load("asset-canonical", "recording-canonical", "opensubsonic:home")
+                loader.load("asset-canonical", "recording-canonical", fixture.asset.provider)
             }
             val noRetry: suspend (Long) -> Unit = { error("Permanent HTTP response cannot retry") }
 
@@ -542,11 +581,18 @@ class OpenSubsonicArtworkAccessTest {
                 secretReplacement = secret,
             ),
         )
-        credentials.readCalls = 0
+        val permitted = ProviderKey("opensubsonic", "home")
+        val capability = ProviderCapability.PERSONAL_LIBRARY
+        val gate = ProviderPolicyGate(ProviderCapabilityPolicy(
+            descriptors = listOf(ProviderDescriptor(
+                permitted, setOf(capability), ProviderReadiness.READY,
+            )),
+            choices = mapOf(capability to listOf(ProviderChoice(permitted, true, 0))),
+        ))
         val asset = MediaAssetEntity(
             id = "asset-canonical",
             recordingId = "recording-canonical",
-            provider = "opensubsonic:home",
+            provider = com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey(repository.savedConfig()!!),
             sourceKey = "server-track-native",
             uri = "opensubsonic://asset/home/server-track-native",
             path = null,
@@ -555,16 +601,22 @@ class OpenSubsonicArtworkAccessTest {
             artworkUri = logicalArtworkUri("home", "cover-native"),
         )
         val store = FakeArtworkAssetStore(linkedMapOf(asset.id to asset))
+        // Computing the opaque catalog providerKey for the fixture above
+        // reads the fake credential once; production resolve must still defer
+        // any subsequent credential access until the runtime request.
+        credentials.readCalls = 0
         return Fixture(
             persistence = persistence,
             credentials = credentials,
             repository = repository,
             asset = asset,
             store = store,
+            gate = gate,
             access = OpenSubsonicArtworkAccess(
                 assets = store,
                 accounts = repository,
                 saltFactory = { salt },
+                gateProvider = { gate },
             ),
         )
     }
@@ -582,6 +634,7 @@ class OpenSubsonicArtworkAccessTest {
         val repository: OpenSubsonicAccountRepository,
         val asset: MediaAssetEntity,
         val store: FakeArtworkAssetStore,
+        val gate: ProviderPolicyGate,
         val access: OpenSubsonicArtworkAccess,
     )
 

@@ -1,5 +1,7 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.providers.ProviderCachedReadAccess
+
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.CatalogMusicBrainzTrackEntity
@@ -70,7 +72,7 @@ class MusicBrainzReleaseGraphRoomTest {
         ).allowMainThreadQueries().build()
         try {
             var next = 0
-            val index = MusicBrainzCatalogIndex(db, idFactory = { "edition-test-${++next}" })
+            val index = MusicBrainzCatalogIndex(db, idFactory = { "edition-test-${++next}" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val groupMbid = "11111111-1111-4111-8111-111111111111"
             val editionMbid = "22222222-2222-4222-8222-222222222222"
             index.persistReleaseGroups(listOf(MusicBrainzReleaseGroupHit(

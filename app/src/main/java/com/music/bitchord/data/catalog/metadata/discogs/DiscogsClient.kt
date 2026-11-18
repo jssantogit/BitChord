@@ -1,6 +1,10 @@
 package com.music.bitchord.data.catalog.metadata.discogs
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderRequestDeniedException
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -162,6 +166,7 @@ internal class DiscogsClient(
     private val transport: DiscogsTransport = KtorDiscogsTransport(),
     private val enabled: Boolean = false,
     private val limiter: DiscogsRateLimiter = DiscogsRequestBudget.limiter,
+    private val admission: RateLimitedProviderTransport = RateLimitedProviderTransport(),
     private val userAgent: String =
         "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)",
 ) {
@@ -170,9 +175,16 @@ internal class DiscogsClient(
         if (!enabled) return DiscogsLookupResult.Disabled
         if (id !in 1..999_999_999_999L) return DiscogsLookupResult.InvalidId
         val response = try {
-            limiter.runHttpLimited { transport.get("masters/$id", userAgent) }
+            admission.execute(
+                capability = ProviderCapability.EDITION_METADATA,
+                provider = BuiltInProviderKeys.DISCOGS,
+                scheduleLimited = { block -> limiter.runHttpLimited { block() } },
+                networkCall = { transport.get("masters/$id", userAgent) },
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: ProviderRequestDeniedException) {
+            return DiscogsLookupResult.Disabled
         } catch (_: Exception) {
             return DiscogsLookupResult.Unavailable
         }
@@ -200,11 +212,16 @@ internal class DiscogsClient(
         if (!enabled) return DiscogsMasterVersionsResult.Disabled
         if (id !in 1..999_999_999_999L) return DiscogsMasterVersionsResult.Malformed
         val response = try {
-            limiter.runHttpLimited {
-                transport.get("masters/$id/versions?page=1&per_page=8", userAgent)
-            }
+            admission.execute(
+                capability = ProviderCapability.EDITION_METADATA,
+                provider = BuiltInProviderKeys.DISCOGS,
+                scheduleLimited = { block -> limiter.runHttpLimited { block() } },
+                networkCall = { transport.get("masters/$id/versions?page=1&per_page=8", userAgent) },
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: ProviderRequestDeniedException) {
+            return DiscogsMasterVersionsResult.Disabled
         } catch (_: Exception) {
             return DiscogsMasterVersionsResult.Unavailable
         }
@@ -245,9 +262,16 @@ internal class DiscogsClient(
         if (!enabled) return DiscogsLookupResult.Disabled
         if (id !in 1..999_999_999_999L) return DiscogsLookupResult.InvalidId
         val response = try {
-            limiter.runHttpLimited { transport.get("releases/$id", userAgent) }
+            admission.execute(
+                capability = ProviderCapability.EDITION_METADATA,
+                provider = BuiltInProviderKeys.DISCOGS,
+                scheduleLimited = { block -> limiter.runHttpLimited { block() } },
+                networkCall = { transport.get("releases/$id", userAgent) },
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: ProviderRequestDeniedException) {
+            return DiscogsLookupResult.Disabled
         } catch (_: Exception) {
             return DiscogsLookupResult.Unavailable
         }

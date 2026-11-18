@@ -1,5 +1,7 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.providers.ProviderCachedReadAccess
+
 import androidx.room.Room
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.metadata.BoundedMusicBrainzTransport
@@ -44,30 +46,30 @@ class CanonicalReleaseDetailFallbackTest {
                     .getValue(mbid)
 
             assertEquals("positional", storedId(
-                MusicBrainzCatalogIndex(db, { "positional" }),
+                MusicBrainzCatalogIndex(db, { "positional" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()),
                 "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             ))
             assertEquals("variable-factory", storedId(
-                MusicBrainzCatalogIndex(db, factoryVariable),
+                MusicBrainzCatalogIndex(db, factoryVariable, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()),
                 "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
             ))
             assertEquals("trailing", storedId(
-                MusicBrainzCatalogIndex(db) { "trailing" },
+                MusicBrainzCatalogIndex(db, idFactory = { "trailing" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()),
                 "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
             ))
             assertEquals("named", storedId(
-                MusicBrainzCatalogIndex(db, idFactory = { "named" }),
+                MusicBrainzCatalogIndex(db, idFactory = { "named" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()),
                 "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
             ))
             assertEquals("proof-trailing", storedId(
-                MusicBrainzCatalogIndex(db, proofClient = proofClient) { "proof-trailing" },
+                MusicBrainzCatalogIndex(db, proofClient = proofClient, idFactory = { "proof-trailing" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()),
                 "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
             ))
             assertEquals("proof-named", storedId(
-                MusicBrainzCatalogIndex(db, proofClient = proofClient, idFactory = { "proof-named" }),
+                MusicBrainzCatalogIndex(db, proofClient = proofClient, idFactory = { "proof-named" }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()),
                 "ffffffff-ffff-4fff-8fff-ffffffffffff",
             ))
-            assertEquals(1, MusicBrainzCatalogIndex(db).persistRecordings(listOf(
+            assertEquals(1, MusicBrainzCatalogIndex(db, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()).persistRecordings(listOf(
                 MusicBrainzRecordingHit("11111111-1111-4111-8111-111111111111", "Default", "Artist", null),
             )).size)
         } finally {
@@ -90,9 +92,9 @@ class CanonicalReleaseDetailFallbackTest {
                     maxResponseBytes: Long,
                 ) = "<metadata/>"
             })
-            val index = MusicBrainzCatalogIndex(db, proofClient = proofClient) {
+            val index = MusicBrainzCatalogIndex(db, proofClient = proofClient, idFactory = {
                 "compat-recording-${++generated}"
-            }
+            }, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             val hits = listOf(
                 MusicBrainzRecordingHit("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Track", "Artist", null),
             )
@@ -120,7 +122,7 @@ class CanonicalReleaseDetailFallbackTest {
                 override suspend fun getLimited(path: String, parameters: Map<String, String>, userAgent: String,
                     maxResponseBytes: Long) = "<metadata/>"
             }, rateLimiter = MusicBrainzRateLimiter(delayMillis = {}))
-            val index = MusicBrainzCatalogIndex(db, proofClient = incompleteClient)
+            val index = MusicBrainzCatalogIndex(db, proofClient = incompleteClient, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests())
             fun detail(rows: List<MusicBrainzCatalogTrack>) = MusicBrainzCatalogReleaseDetail(
                 release, null, "Edition", "Artist", null, null, rows,
                 completeness = MusicBrainzReleaseJsonCompleteness(true, true, true),
@@ -144,7 +146,7 @@ class CanonicalReleaseDetailFallbackTest {
             ).allowMainThreadQueries().build()
             try {
                 val emptyPage = canonicalPersistedReleaseDetailPage(
-                    emptyDb, MusicBrainzCatalogIndex(emptyDb, proofClient = incompleteClient),
+                    emptyDb, MusicBrainzCatalogIndex(emptyDb, proofClient = incompleteClient, cacheRead = ProviderCachedReadAccess.permissiveForUnitTests()),
                     detail(listOf(MusicBrainzCatalogTrack(trackA, recordingA, "A", 1, 1, null)))
                         .copy(musicBrainzId = "invalid"),
                     "Edition", null, null,

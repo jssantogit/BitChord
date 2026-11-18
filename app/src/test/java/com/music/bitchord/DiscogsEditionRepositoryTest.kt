@@ -3,6 +3,12 @@ package com.music.bitchord
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzTransport
 import com.music.bitchord.data.catalog.metadata.discogs.*
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -13,6 +19,32 @@ class DiscogsEditionRepositoryTest {
         musicBrainzReleaseId = mbid, title = "앨범", creditedArtist = "아티스트",
         status = "Official", barcodes = emptyList(), trackTitles = listOf("첫 곡"),
     )
+
+    @Test fun editionOptOutBlocksCachedAndRemoteEvidenceWithoutDeletingPersonalFacts() = runBlocking {
+        val discogs = BuiltInProviderKeys.DISCOGS
+        val descriptors = listOf(BuiltInProviderDescriptors.discogs(
+            tokenConfigured = true, implemented = true,
+        ))
+        val gate = ProviderPolicyGate(ProviderCapabilityPolicy(
+            descriptors, mapOf(ProviderCapability.EDITION_METADATA to listOf(
+                ProviderChoice(discogs, false, 0),
+            )),
+        ))
+        var calls = 0
+        val links = DiscogsMusicBrainzLinks(MusicBrainzClient(transport =
+            object : MusicBrainzTransport {
+                override suspend fun get(path: String, parameters: Map<String, String>,
+                    userAgent: String): String {
+                    calls++
+                    error("Disabled Discogs must not request canonical links")
+                }
+            }))
+        val repository = DiscogsEditionRepository(
+            links = links, enabled = true, gateProvider = { gate },
+        )
+        assertEquals(DiscogsEditionEnrichment.Disabled, repository.observe(canonical))
+        assertEquals(0, calls)
+    }
 
     @Test fun disabledRepositoryDoesNotEvenAskMusicBrainzForExternalLinks() = runBlocking {
         val links = DiscogsMusicBrainzLinks(MusicBrainzClient(transport = object : MusicBrainzTransport {

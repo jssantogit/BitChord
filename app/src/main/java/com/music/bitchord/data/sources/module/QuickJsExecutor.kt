@@ -11,6 +11,12 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import java.io.IOException
+import kotlin.coroutines.resume
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -389,7 +395,7 @@ internal object QuickJsExecutor {
                     val url = resolveUrl(rawUrl, fetchBase)
 
                     TrackLog.d(TAG, "  → fetch $method ${redactModuleUrl(url)}")
-                    val (statusCode, responseBody) = fetchUrlSync(url, method, headersJson, body)
+                    val (statusCode, responseBody) = fetchUrl(url, method, headersJson, body)
                     TrackLog.d(TAG, "    HTTP $statusCode (${responseBody.length} bytes)")
 
                     val respObj = JSONObject().apply {
@@ -473,7 +479,7 @@ internal object QuickJsExecutor {
         }
     }
 
-    private fun fetchUrlSync(
+    private suspend fun fetchUrl(
         url: String,
         method: String,
         headersJson: String,
@@ -508,10 +514,7 @@ internal object QuickJsExecutor {
             else -> builder.get()
         }
 
-        syncHttpClient.newCall(builder.build()).execute().use { response ->
-            val responseBody = response.body?.string() ?: ""
-            return response.code to responseBody
-        }
+        return awaitModuleHttp(syncHttpClient.newCall(builder.build()))
     }
 
     // ── Polyfills ────────────────────────────────────────────────────────
@@ -625,3 +628,23 @@ internal object QuickJsExecutor {
         }
     """
 }
+
+/** The host's asynchronous JS fetch must cancel the actual OkHttp call when
+ * its QuickJS coroutine is revoked, not just suppress the late result. */
+internal suspend fun awaitModuleHttp(call: Call): Pair<Int, String> =
+    suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive)
+                    continuation.resumeWith(Result.failure(e))
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val result = runCatching {
+                    response.use { it.code to (it.body?.string() ?: "") }
+                }
+                if (continuation.isActive) continuation.resumeWith(result)
+            }
+        })
+    }

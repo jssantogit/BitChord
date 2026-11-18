@@ -1441,13 +1441,14 @@ internal interface CanonicalCatalogDao {
             info.releaseDate AS releaseDate, info.status AS status,
              info.isVideoOnlyMedia AS isVideoOnlyMedia,
              info.isVideoOnlyContent AS isVideoOnlyContent,
-            COALESCE(art.thumbnailUri, art.artworkUri) AS artworkUri
+            -- An offline URL is not authorization to publish CAA images.
+            -- Keep Front-v3 in Room; image resolvers must apply provider policy,
+            -- cache freshness and host validation before projecting artwork.
+            NULL AS artworkUri
         FROM catalog_external_identity identity
         JOIN catalog_release edition ON edition.id = identity.entityId
         LEFT JOIN musicbrainz_release_enrichment info
             ON info.releaseId = edition.id AND info.mbid = identity.externalId
-        LEFT JOIN catalog_cover_art_cache art
-            ON art.entityType = 'release:front-v3' AND art.mbid = identity.externalId
         WHERE identity.provider = 'musicbrainz' AND identity.entityType = 'release'
             AND (instr(lower(edition.title), lower(:query)) > 0
                 OR instr(lower(edition.artistDisplay), lower(:query)) > 0
@@ -1527,6 +1528,50 @@ internal interface CanonicalCatalogDao {
     suspend fun searchKnownMusicBrainzRecordings(
         query: String, limit: Int,
     ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>
+    /**
+     * Filter to the listener's explicitly eligible personal providers BEFORE
+     * LIMIT. A shelf of editorial-only MBIDs cannot starve a valid local track
+     * from the cached fallback when MusicBrainz search is disabled.
+     */
+    @Query(
+        """
+        SELECT identity.externalId AS musicBrainzId,
+               COALESCE(NULLIF(TRIM(info.title), ''), recording.title) AS title,
+               COALESCE(NULLIF(TRIM(info.artistDisplay), ''), recording.artistDisplay) AS artistDisplay,
+               COALESCE(info.durationMs, recording.durationMs) AS durationMs,
+               info.hasOfficialAudioRelease AS hasOfficialAudioRelease,
+               info.isVideo AS isVideo
+        FROM catalog_external_identity AS identity
+        INNER JOIN catalog_recording AS recording ON recording.id = identity.entityId
+        LEFT JOIN musicbrainz_recording_enrichment info
+            ON info.recordingId = recording.id AND info.mbid = identity.externalId
+        WHERE identity.provider = 'musicbrainz'
+          AND identity.entityType = 'recording'
+          AND EXISTS (
+              SELECT 1 FROM catalog_media_asset owned
+              WHERE owned.recordingId = recording.id
+                AND owned.provider IN (:personalProviderKeys)
+          )
+          AND (
+            instr(lower(recording.title), lower(:query)) > 0
+            OR instr(lower(recording.artistDisplay), lower(:query)) > 0
+            OR instr(lower(info.title), lower(:query)) > 0
+            OR instr(lower(info.artistDisplay), lower(:query)) > 0
+          )
+        ORDER BY CASE WHEN EXISTS (
+                    SELECT 1 FROM catalog_media_asset playable
+                    WHERE playable.recordingId = recording.id
+                ) THEN 0 ELSE 1 END,
+                 COALESCE(NULLIF(TRIM(info.artistDisplay), ''), recording.artistDisplay)
+                    COLLATE NOCASE,
+                 COALESCE(NULLIF(TRIM(info.title), ''), recording.title)
+                    COLLATE NOCASE, identity.externalId
+        LIMIT :limit
+        """,
+    )
+    suspend fun searchKnownMusicBrainzPersonalRecordings(
+        query: String, limit: Int, personalProviderKeys: List<String>,
+    ): List<com.music.bitchord.data.catalog.metadata.MusicBrainzRecordingHit>
 
     /** Catalogued renditions are evidence, not a guarantee of account access. */
     @Query(
@@ -1540,6 +1585,28 @@ internal interface CanonicalCatalogDao {
         """,
     )
     suspend fun musicBrainzRecordingMbidsWithAssets(mbids: List<String>): List<String>
+
+    /**
+     * A MusicBrainz identity may have CDN/editorial candidate assets without
+     * being a personally owned recording. Require an explicit live allowlist
+     * of PERSONAL providers; never treat every catalog_media_asset row as
+     * proof of user ownership when editorial search is switched off.
+     */
+    @Query(
+        """
+        SELECT DISTINCT identity.externalId
+        FROM catalog_external_identity AS identity
+        INNER JOIN catalog_media_asset AS asset ON asset.recordingId = identity.entityId
+        WHERE identity.provider = 'musicbrainz'
+          AND identity.entityType = 'recording'
+          AND identity.externalId IN (:mbids)
+          AND asset.provider IN (:personalProviderKeys)
+        """,
+    )
+    suspend fun musicBrainzRecordingMbidsWithPersonalAssets(
+        mbids: List<String>,
+        personalProviderKeys: List<String>,
+    ): List<String>
 
     /**
      * Read-only evidence for a downloaded icon. Identity must be the *same*
@@ -1633,15 +1700,14 @@ internal interface CanonicalCatalogDao {
         INNER JOIN catalog_media_asset asset
             ON asset.recordingId = recording.id
         WHERE lower(trim(recording.title)) = lower(trim(:title))
-          AND (asset.provider = 'local-mediastore'
-            OR asset.provider LIKE 'opensubsonic:%'
-            OR asset.provider LIKE 'jellyfin:%')
+          AND asset.provider IN (:providerKeys)
         ORDER BY recording.id, asset.provider, asset.id
         LIMIT 50
         """,
     )
     suspend fun spotifyCanonicalAssetCandidates(
         title: String,
+        providerKeys: List<String>,
     ): List<SpotifyCanonicalAssetCandidate>
 
     /**
@@ -1721,7 +1787,7 @@ internal interface CanonicalCatalogDao {
             asset.artworkUri AS artworkUri
         FROM catalog_media_asset AS asset
         INNER JOIN catalog_recording AS recording ON recording.id = asset.recordingId
-        WHERE (asset.provider LIKE 'opensubsonic:%' OR asset.provider LIKE 'jellyfin:%')
+        WHERE asset.provider IN (:providerKeys)
           AND (instr(lower(recording.title), lower(:query)) > 0
                OR instr(lower(recording.artistDisplay), lower(:query)) > 0)
         ORDER BY recording.artistDisplay COLLATE NOCASE,
@@ -1733,6 +1799,7 @@ internal interface CanonicalCatalogDao {
     suspend fun searchCanonicalRemoteServerAssets(
         query: String,
         limit: Int,
+        providerKeys: List<String>,
     ): List<CanonicalBrowseAssetRow>
 
     /**

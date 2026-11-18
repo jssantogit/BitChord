@@ -2,6 +2,7 @@ package com.music.bitchord.data.catalog.metadata
 
 import java.text.Normalizer
 import java.util.Locale
+import com.music.bitchord.data.providers.ProviderCapability
 
 /**
  * MusicBrainz tag browse yields search hints, but cannot assign a category to
@@ -33,6 +34,14 @@ internal object AppleExploreGenrePolicy {
 
     fun supports(tag: String): Boolean = tag in known
 
+    /** Search term is only a discovery hint; the Apple genre claim is verified below. */
+    fun nativeSearchTerm(tag: String): String? = if (!supports(tag)) null else when (tag) {
+        "rnb" -> "R&B"
+        "hip-hop" -> "Hip-Hop"
+        "k-pop" -> "K-Pop"
+        else -> tag
+    }
+
     fun matches(tag: String, applePrimaryGenre: String?): Boolean {
         val allowed = known[tag] ?: return false
         if (applePrimaryGenre.isNullOrBlank()) return false
@@ -40,9 +49,66 @@ internal object AppleExploreGenrePolicy {
     }
 }
 
+internal fun interface AppleNativeGenreSearchSource {
+    suspend fun search(term: String, storefront: String): AppleEditorialLoad
+}
+
 internal class AppleExploreGenreDiscovery(
     private val catalog: AppleHomeEditorialDiscovery = AppleHomeEditorialDiscovery(),
+    private val nativeSource: AppleNativeGenreSearchSource =
+        AppleNativeGenreSearchSource { term, storefront ->
+            AppleEditorialCatalogRepository().searchAlbums(
+                query = term, storefront = storefront, limit = 100,
+                capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
+                attribute = ItunesCatalogSearchAttribute.GENRE_INDEX,
+            )
+        },
 ) {
+    /** Independent Apple search. No MusicBrainz call, seed, MBID or title crosswalk. */
+    suspend fun discoverNative(
+        tag: String,
+        storefront: String = "br",
+        onProgress: suspend (List<ItunesEditorialRelease>) -> Unit = {},
+    ): AppleEditorialLoad {
+        val term = AppleExploreGenrePolicy.nativeSearchTerm(tag)
+            ?: return AppleEditorialLoad.Failure(ItunesCatalogFailure.INVALID_QUERY)
+        if (!Regex("^[a-z]{2}$").matches(storefront)) {
+            return AppleEditorialLoad.Failure(ItunesCatalogFailure.INVALID_QUERY)
+        }
+        return when (val found = nativeSource.search(term, storefront)) {
+            is AppleEditorialLoad.Failure -> found
+            is AppleEditorialLoad.Success -> {
+                val matching = found.releases.asSequence().filter { row ->
+                    row.storefront == storefront &&
+                        row.appleCollectionId > 0L &&
+                        row.artistId?.let { it > 0L } == true &&
+                        row.appleScopedId ==
+                            "itunes:$storefront:album:${row.appleCollectionId}" &&
+                        row.title.isNotBlank() && row.artistName.isNotBlank() &&
+                        AppleExploreGenrePolicy.matches(tag, row.genre)
+                }.map { row ->
+                    row.copy(
+                        musicBrainzReleaseGroupId = null, musicBrainzReleaseId = null,
+                        musicBrainzArtistId = null, musicBrainzRecordingIds = emptyMap(),
+                    )
+                }.groupBy { it.appleScopedId }.values.mapNotNull { rows ->
+                    rows.firstOrNull()?.takeIf { first -> rows.all { it == first } }
+                }.take(24)
+                onProgress(matching)
+                AppleEditorialLoad.Success(
+                    matching,
+                    when {
+                        found.state == AppleEditorialReadState.POSSIBLY_TRUNCATED ->
+                            AppleEditorialReadState.POSSIBLY_TRUNCATED
+                        matching.isEmpty() -> AppleEditorialReadState.NOT_IN_STOREFRONT
+                        else -> found.state
+                    },
+                    found.probeReport,
+                )
+            }
+        }
+    }
+
     suspend fun discover(
         tag: String,
         seeds: List<AppleHomeEditorialSeed>,

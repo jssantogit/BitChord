@@ -619,12 +619,10 @@ class SourcesTest {
     }
 
     @Test
-    fun `fresh installs seed no Youtube source and preserve JioSaavn opt in policy`() {
+    fun `fresh installs never seed retired Youtube or JioSaavn`() {
         assertFalse(SourceConfig(kind = SourceKind.JIOSAAVN).enabled)
         val sources = SourceRegistry.sourcesForInit(emptyList(), forceJioSaavnOff = true)
-
-        assertFalse(sources.single { it.kind == SourceKind.JIOSAAVN }.enabled)
-        assertFalse(sources.any { it.kind == SourceKind.YOUTUBE })
+        assertTrue(sources.isEmpty())
     }
 
     @Test
@@ -635,7 +633,7 @@ class SourcesTest {
         val firstBoot = SourceRegistry.sourcesForInit(stored, forceJioSaavnOff = true)
         assertFalse(firstBoot.any { it.kind == SourceKind.YOUTUBE })
         assertEquals(addon, firstBoot.single { it.kind == SourceKind.ADDON })
-        assertFalse(firstBoot.single { it.kind == SourceKind.JIOSAAVN }.enabled)
+        assertFalse(firstBoot.any { it.kind == SourceKind.JIOSAAVN })
 
         val nextBoot = SourceRegistry.sourcesForInit(firstBoot, forceJioSaavnOff = false)
         assertEquals(firstBoot, nextBoot)
@@ -643,23 +641,13 @@ class SourcesTest {
     }
 
     @Test
-    fun `the opt-in migration disables JioSaavn once for existing installs`() {
+    fun `retired JioSaavn cannot reactivate on an old migration marker`() {
         val previouslyEnabled = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = true)
-
-        val migrated = SourceRegistry.sourcesForInit(
-            listOf(previouslyEnabled),
-            forceJioSaavnOff = true,
-        )
-        assertFalse(migrated.single { it.kind == SourceKind.JIOSAAVN }.enabled)
-
-        val userEnabledAgain = migrated.map {
-            if (it.kind == SourceKind.JIOSAAVN) it.copy(enabled = true) else it
+        for (marker in listOf(true, false)) {
+            assertTrue(SourceRegistry.sourcesForInit(
+                listOf(previouslyEnabled), forceJioSaavnOff = marker,
+            ).isEmpty())
         }
-        val nextLaunch = SourceRegistry.sourcesForInit(
-            userEnabledAgain,
-            forceJioSaavnOff = false,
-        )
-        assertTrue(nextLaunch.single { it.kind == SourceKind.JIOSAAVN }.enabled)
     }
 
     @Test
@@ -681,7 +669,9 @@ class SourcesTest {
             listOf(disabledJio, disabledAddon, enabledAddon, youtube),
         )
 
-        assertEquals(listOf(enabledAddon.id), enabled.map { it.id })
+        // A legacy enabled flag cannot authorize addon network calls before
+        // a canonical per-instance playback ticket is installed.
+        assertTrue(enabled.isEmpty())
     }
 
     @Test
@@ -1890,7 +1880,7 @@ class SourcesTest {
         val addon = SourceConfig(kind = SourceKind.ADDON, enabled = false)
         val jio = SourceConfig(kind = SourceKind.JIOSAAVN, enabled = false)
         val visible = SourceRegistry.displayConfigs(listOf(yt, addon, jio))
-        assertEquals(listOf(addon.id, jio.id), visible.map { it.id })
+        assertEquals(listOf(addon.id), visible.map { it.id })
     }
 
     @Test
@@ -1902,14 +1892,15 @@ class SourcesTest {
         val eligible = SourceRegistry.audioCandidateConfigs(listOf(yt, addon, incompleteAddon, jio))
         assertFalse(eligible.any { it.kind == SourceKind.YOUTUBE })
         assertFalse(eligible.any { it.id == incompleteAddon.id })
-        assertEquals(listOf(addon.id, jio.id), eligible.map { it.id })
+        // Addons are also fail-closed until an explicit instance ticket exists.
+        assertTrue(eligible.isEmpty())
     }
     @Test
     fun `retired Youtube source cannot be probed through the source registry`() = runBlocking {
         val legacy = SourceConfig(kind = SourceKind.YOUTUBE, enabled = true)
         val health = SourceRegistry.probeCandidate(legacy)
         assertEquals(
-            SourceHealth.Rejected("YouTube Music is retired as an audio source"),
+            SourceHealth.Rejected("This built-in audio source is retired"),
             health,
         )
     }

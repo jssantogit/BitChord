@@ -1,6 +1,15 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.catalog.CanonicalLocalLibrary
+import com.music.bitchord.data.catalog.OpenSubsonicLibraryProviderConfigurationReader
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderDescriptor
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountDraft
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRecord
@@ -25,6 +34,60 @@ import org.junit.Test
 class OpenSubsonicMediaAccessTest {
 
     @Test
+    fun `disabling Navidrome library does not disable its separately permitted audio`() = runTest {
+        val fixture = fixture()
+        val key = ProviderKey("opensubsonic", "home")
+        val reader = OpenSubsonicLibraryProviderConfigurationReader(
+            fixture.repository, gateProvider = { fixture.gate },
+        )
+        assertTrue(fixture.asset.provider in reader.configuredProviderKeys())
+        fixture.gate.replace(ProviderCapabilityPolicy(
+            listOf(ProviderDescriptor(key, setOf(
+                ProviderCapability.PERSONAL_LIBRARY,
+                ProviderCapability.AUDIO_PLAYBACK,
+            ), ProviderReadiness.READY)),
+            mapOf(
+                ProviderCapability.PERSONAL_LIBRARY to listOf(ProviderChoice(key, false, 0)),
+                ProviderCapability.AUDIO_PLAYBACK to listOf(ProviderChoice(key, true, 0)),
+            ),
+        ))
+        assertEquals(setOf(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER),
+            reader.configuredProviderKeys())
+        assertTrue(fixture.access.resolve("asset-canonical") is OpenSubsonicMediaAccessResult.Ready)
+
+        fixture.gate.replace(ProviderCapabilityPolicy(
+            listOf(ProviderDescriptor(key, setOf(
+                ProviderCapability.PERSONAL_LIBRARY,
+                ProviderCapability.AUDIO_PLAYBACK,
+            ), ProviderReadiness.READY)),
+            mapOf(
+                ProviderCapability.PERSONAL_LIBRARY to listOf(ProviderChoice(key, true, 0)),
+                ProviderCapability.AUDIO_PLAYBACK to listOf(ProviderChoice(key, false, 0)),
+            ),
+        ))
+        assertTrue(fixture.asset.provider in reader.configuredProviderKeys())
+        assertEquals(OpenSubsonicMediaAccessFailure.NOT_AUTHORIZED,
+            (fixture.access.resolve("asset-canonical")
+                as OpenSubsonicMediaAccessResult.Failure).reason)
+    }
+
+    @Test
+    fun `audio opt-out revokes existing runtime request without removing personal media`() = runTest {
+        val fixture = fixture()
+        val active = fixture.access.resolve("asset-canonical") as OpenSubsonicMediaAccessResult.Ready
+        val key = ProviderKey("opensubsonic", "home")
+        fixture.gate.replace(ProviderCapabilityPolicy(
+            listOf(ProviderDescriptor(key,
+                setOf(ProviderCapability.AUDIO_PLAYBACK), ProviderReadiness.READY)),
+            mapOf(ProviderCapability.AUDIO_PLAYBACK to listOf(ProviderChoice(key, false, 0))),
+        ))
+        assertFalse(active.request.accountRevisionIsCurrent())
+        val denied = fixture.access.resolve("asset-canonical") as OpenSubsonicMediaAccessResult.Failure
+        assertEquals(OpenSubsonicMediaAccessFailure.NOT_AUTHORIZED, denied.reason)
+        assertTrue(fixture.store.assets.containsKey("asset-canonical"))
+    }
+
+    @Test
     fun `known OpenSubsonic media asset resolves to ephemeral direct request`() = runTest {
         val fixture = fixture()
 
@@ -33,7 +96,7 @@ class OpenSubsonicMediaAccessTest {
         val ready = result as OpenSubsonicMediaAccessResult.Ready
         assertEquals("recording-canonical", ready.request.recordingId)
         assertEquals("asset-canonical", ready.request.mediaAssetId)
-        assertEquals("opensubsonic:home", ready.request.providerKey)
+        assertEquals(fixture.asset.provider, ready.request.providerKey)
         assertEquals("https://music.example.test/rest/stream.view", ready.request.endpointUrl)
         assertTrue(ready.request.directOriginal)
     }
@@ -178,11 +241,14 @@ class OpenSubsonicMediaAccessTest {
                 secretReplacement = "new-api-key",
             ),
         )
-        val moved = fixture.access.resolve("asset-canonical") as OpenSubsonicMediaAccessResult.Ready
-        val movedParameters = moved.request.materializeParameters()
-        assertEquals("https://new.example.test/rest/stream.view", moved.request.endpointUrl)
-        assertEquals("new-api-key", movedParameters["apiKey"])
-        assertFalse(movedParameters.values.contains("old-api-key"))
+        // The old MediaAsset is preserved in Room but cannot be played from
+        // the new server just because the local accountId stayed "home".
+        val stale = fixture.access.resolve("asset-canonical") as OpenSubsonicMediaAccessResult.Failure
+        assertEquals(OpenSubsonicMediaAccessFailure.ACCOUNT_MISMATCH, stale.reason)
+        assertTrue(fixture.store.assets.containsKey("asset-canonical"))
+        assertNotEquals(fixture.asset.provider,
+            com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey(
+                fixture.repository.savedConfig()!!))
     }
 
     @Test
@@ -271,11 +337,22 @@ class OpenSubsonicMediaAccessTest {
                 secretReplacement = secret,
             ),
         )
-        credentials.readCalls = 0
+        val permitted = ProviderKey("opensubsonic", "home")
+        val capabilities = setOf(
+            ProviderCapability.PERSONAL_LIBRARY, ProviderCapability.AUDIO_PLAYBACK,
+        )
+        val gate = ProviderPolicyGate(ProviderCapabilityPolicy(
+            descriptors = listOf(ProviderDescriptor(
+                permitted, capabilities, ProviderReadiness.READY,
+            )),
+            choices = capabilities.associateWith {
+                listOf(ProviderChoice(permitted, true, 0))
+            },
+        ))
         val asset = MediaAssetEntity(
             id = "asset-canonical",
             recordingId = "recording-canonical",
-            provider = "opensubsonic:home",
+            provider = com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey(repository.savedConfig()!!),
             sourceKey = "server-track-native",
             uri = "opensubsonic://asset/home/server-track-native",
             path = null,
@@ -286,16 +363,22 @@ class OpenSubsonicMediaAccessTest {
         val store = FakeMediaAssetStore(
             linkedMapOf(asset.id to asset),
         )
+        // Computing the opaque catalog providerKey for the fixture above
+        // reads the fake credential once; production resolve must still defer
+        // any subsequent credential access until the runtime request.
+        credentials.readCalls = 0
         return Fixture(
             persistence = persistence,
             credentials = credentials,
             repository = repository,
             asset = asset,
             store = store,
+            gate = gate,
             access = OpenSubsonicMediaAccess(
                 assets = store,
                 accounts = repository,
                 saltFactory = { salt },
+                gateProvider = { gate },
             ),
         )
     }
@@ -306,6 +389,7 @@ class OpenSubsonicMediaAccessTest {
         val repository: OpenSubsonicAccountRepository,
         val asset: MediaAssetEntity,
         val store: FakeMediaAssetStore,
+        val gate: ProviderPolicyGate,
         val access: OpenSubsonicMediaAccess,
     )
 

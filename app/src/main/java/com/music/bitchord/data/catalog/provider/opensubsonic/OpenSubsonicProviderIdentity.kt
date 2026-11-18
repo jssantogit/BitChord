@@ -5,6 +5,10 @@ package com.music.bitchord.data.catalog.provider.opensubsonic
  * its Ktor transport. This keeps availability/configuration reads network-free and
  * prevents a second provider-key definition from drifting from the real adapter.
  */
+/** Opaque catalog partition: account ID stays stable across realm changes. */
+internal fun openSubsonicCatalogProviderKey(accountId: String, realmId: String): String =
+    "opensubsonic:$accountId" + realmId.takeIf(String::isNotBlank)?.let { ":$it" }.orEmpty()
+
 internal fun openSubsonicProviderKey(config: OpenSubsonicAccountConfig): String =
     OpenSubsonicProvider(
         config = config,

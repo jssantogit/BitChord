@@ -1,6 +1,16 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogRateLimiter
+import com.music.bitchord.data.catalog.metadata.KtorItunesCatalogTransport
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
+import com.music.bitchord.data.providers.ProviderRequestDeniedException
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogClient
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogResult
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogTransport
@@ -11,6 +21,77 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ItunesCatalogRateLimiterTest {
+
+    @Test fun anEditorialSearchUsesOnlyEditorialPermission() = runBlocking {
+        val key = BuiltInProviderKeys.ITUNES
+        fun policy(search: Boolean, editorial: Boolean) = ProviderCapabilityPolicy(
+            listOf(BuiltInProviderDescriptors.itunes(ProviderReadiness.READY)),
+            mapOf(
+                ProviderCapability.CATALOG_SEARCH to listOf(ProviderChoice(key, search, 0)),
+                ProviderCapability.EDITORIAL_DISCOGRAPHY to
+                    listOf(ProviderChoice(key, editorial, 0)),
+            ),
+        )
+        val gate = ProviderPolicyGate(policy(search = false, editorial = true))
+        var contacts = 0
+        val transport = KtorItunesCatalogTransport(
+            limiter = ItunesCatalogRateLimiter(clockMs = { 1000L }, sleep = {}),
+            admission = RateLimitedProviderTransport { gate },
+            testExchange = { _, _ -> contacts++; """{"resultCount":0,"results":[]}""" },
+        )
+        assertTrue(transport.get("search", mapOf("term" to "jazz"),
+            ProviderCapability.EDITORIAL_DISCOGRAPHY).contains("resultCount"))
+        try {
+            transport.get("search", mapOf("term" to "jazz"))
+            throw AssertionError("General Search must still be denied")
+        } catch (_: ProviderRequestDeniedException) { }
+        assertEquals(1, contacts)
+        gate.replace(policy(search = true, editorial = false))
+        try {
+            transport.get("search", mapOf("term" to "jazz"),
+                ProviderCapability.EDITORIAL_DISCOGRAPHY)
+            throw AssertionError("Editorial Search must be denied")
+        } catch (_: ProviderRequestDeniedException) { }
+        assertTrue(transport.get("search", mapOf("term" to "jazz")).contains("resultCount"))
+        assertEquals(2, contacts)
+    }
+
+    @Test fun realItunesTransportSeparatesSearchAndDiscographyAdmission() = runBlocking {
+        val itunes = BuiltInProviderKeys.ITUNES
+        val gate = ProviderPolicyGate(ProviderCapabilityPolicy(
+            descriptors = listOf(BuiltInProviderDescriptors.itunes(ProviderReadiness.READY)),
+            choices = mapOf(
+                ProviderCapability.CATALOG_SEARCH to listOf(ProviderChoice(itunes, false, 0)),
+                ProviderCapability.EDITORIAL_DISCOGRAPHY to listOf(ProviderChoice(itunes, true, 0)),
+            ),
+        ))
+        var contacts = 0
+        val transport = KtorItunesCatalogTransport(
+            limiter = ItunesCatalogRateLimiter(clockMs = { 1000L }, sleep = { }),
+            admission = RateLimitedProviderTransport { gate },
+            testExchange = { _, _ -> contacts++; """{"resultCount":0,"results":[]}""" },
+        )
+        try {
+            transport.get("search", mapOf("term" to "not-authorized"))
+            throw AssertionError("search must be denied before HTTP")
+        } catch (_: ProviderRequestDeniedException) { }
+        assertEquals(0, contacts)
+        assertTrue(transport.get("lookup", mapOf("id" to "100")).contains("resultCount"))
+        assertEquals(1, contacts)
+        gate.replace(ProviderCapabilityPolicy(
+            descriptors = listOf(BuiltInProviderDescriptors.itunes(ProviderReadiness.READY)),
+            choices = mapOf(
+                ProviderCapability.CATALOG_SEARCH to listOf(ProviderChoice(itunes, false, 0)),
+                ProviderCapability.EDITORIAL_DISCOGRAPHY to listOf(ProviderChoice(itunes, false, 0)),
+            ),
+        ))
+        try {
+            transport.get("lookup", mapOf("id" to "100"))
+            throw AssertionError("lookup must respect independent opt-out")
+        } catch (_: ProviderRequestDeniedException) { }
+        assertEquals(1, contacts)
+    }
+
     @Test fun sharedRateBudgetSpacesDispatchStartsWithoutRealSleeping() = runBlocking {
         var now = 1_000L
         val starts = mutableListOf<Long>()

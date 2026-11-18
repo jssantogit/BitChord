@@ -1,5 +1,7 @@
 package com.music.bitchord.data.catalog.metadata
 
+import com.music.bitchord.data.providers.ProviderCapability
+
 import java.text.Normalizer
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -20,6 +22,7 @@ internal class AppleHomeEditorialDiscovery(
         AppleHomeAlbumSearchSource { title, storefront ->
             AppleEditorialCatalogRepository().searchAlbums(
                 query = title, storefront = storefront, limit = 100,
+                capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
             )
         },
 ) {

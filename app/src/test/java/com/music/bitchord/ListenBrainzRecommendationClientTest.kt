@@ -10,6 +10,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.withTimeout
+import com.music.bitchord.data.providers.*
 
 class ListenBrainzRecommendationClientTest {
     private val mbid = "526bd613-fddd-4bd6-9137-ab709ac74cab"
@@ -34,6 +40,74 @@ class ListenBrainzRecommendationClientTest {
             username = userName
             return ListenBrainzRecommendationHttpResponse(responseCode, body)
         }
+    }
+
+    @Test fun recommendationOptOutHidesCachedResultsWithoutRevokingScrobbling() = runBlocking {
+        val key = BuiltInProviderKeys.LISTENBRAINZ
+        val descriptors = listOf(ProviderDescriptor(key, setOf(
+            ProviderCapability.PERSONAL_RECOMMENDATIONS,
+            ProviderCapability.LISTENING_STATISTICS,
+        ), ProviderReadiness.READY))
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = descriptors,
+            choices = mapOf(
+                ProviderCapability.PERSONAL_RECOMMENDATIONS to listOf(
+                    ProviderChoice(key, enabled, 0)),
+                ProviderCapability.LISTENING_STATISTICS to listOf(
+                    ProviderChoice(key, true, 0)),
+            ),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        val transport = FakeTransport()
+        val client = ListenBrainzRecommendationClient(
+            transport = transport,
+            limiter = ListenBrainzRateLimiter(nowMillis = { now }, waitMillis = {}),
+            nowMillis = { now }, retryDelay = {},
+            gateProvider = { gate },
+        )
+        assertTrue(client.recordings("token", 10) is ListenBrainzRecommendationFetchResult.Success)
+        gate.replace(policy(false))
+        assertEquals(ListenBrainzRecommendationFetchResult.Unavailable,
+            client.recordings("token", 10))
+        assertEquals(1, transport.recommendations)
+        assertTrue(gate.open(ProviderCapability.LISTENING_STATISTICS, key) != null)
+        gate.replace(policy(true))
+        assertTrue(client.recordings("token", 10) is ListenBrainzRecommendationFetchResult.Success)
+        assertEquals(1, transport.recommendations)
+    }
+
+    @Test fun revokingRecommendationsCancelsInflightValidation() = runBlocking {
+        val key = BuiltInProviderKeys.LISTENBRAINZ
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(ProviderDescriptor(
+                key, setOf(ProviderCapability.PERSONAL_RECOMMENDATIONS),
+                ProviderReadiness.READY)),
+            choices = mapOf(ProviderCapability.PERSONAL_RECOMMENDATIONS to listOf(
+                ProviderChoice(key, enabled, 0))),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        val entered = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val transport = object : ListenBrainzRecommendationTransport {
+            override suspend fun validateToken(token: String): ListenBrainzRecommendationHttpResponse {
+                entered.complete(Unit)
+                try { awaitCancellation() }
+                finally { cancelled.complete(Unit) }
+            }
+            override suspend fun recommendations(userName: String, count: Int) =
+                ListenBrainzRecommendationHttpResponse(204, "")
+        }
+        val client = ListenBrainzRecommendationClient(
+            transport = transport,
+            limiter = ListenBrainzRateLimiter(waitMillis = {}),
+            gateProvider = { gate },
+        )
+        val pending = async(start = CoroutineStart.UNDISPATCHED) { client.recordings("token") }
+        withTimeout(5_000) { entered.await() }
+        gate.replace(policy(false))
+        withTimeout(5_000) { cancelled.await() }
+        assertEquals(ListenBrainzRecommendationFetchResult.Unavailable,
+            withTimeout(5_000) { pending.await() })
     }
 
     @Test fun realAccountValidationAndMatchingRecordingMbidsAreRequired() = runBlocking {

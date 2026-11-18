@@ -19,6 +19,39 @@ class AppleExploreGenreEditorialTest {
         musicBrainzRecordingIds = emptyMap(),
     )
 
+
+    @Test fun nativeAppleGenreSearchNeedsNoMusicBrainzSeedAndKeepsStorefrontIds() = runBlocking {
+        val requested = mutableListOf<String>()
+        val explorer = AppleExploreGenreDiscovery(
+            nativeSource = AppleNativeGenreSearchSource { term, storefront ->
+                requested += "$term:$storefront"
+                AppleEditorialLoad.Success(listOf(
+                    edition(10, "K-Pop").copy(
+                        musicBrainzReleaseGroupId =
+                            "529f87a1-1081-48a4-8ee1-3c08de229858"),
+                    edition(11, "Pop"), edition(12, "K-Pop").copy(storefront = "us"),
+                ), AppleEditorialReadState.COMPLETE)
+            },
+        )
+        val found = explorer.discoverNative("k-pop", "br") as AppleEditorialLoad.Success
+        assertEquals(listOf("K-Pop:br"), requested)
+        assertEquals(listOf("itunes:br:album:10"),
+            found.releases.map { it.appleScopedId })
+        assertNull(found.releases.single().musicBrainzReleaseGroupId)
+    }
+
+    @Test fun unsupportedNativeGenreDoesNotContactAnySource() = runBlocking {
+        var called = false
+        val explorer = AppleExploreGenreDiscovery(
+            nativeSource = AppleNativeGenreSearchSource { _, _ ->
+                called = true
+                AppleEditorialLoad.Success(emptyList(), AppleEditorialReadState.NOT_IN_STOREFRONT)
+            },
+        )
+        assertTrue(explorer.discoverNative("fabricated-tag") is AppleEditorialLoad.Failure)
+        assertFalse(called)
+    }
+
     @Test fun kpopMusicBrainzTagsAloneDoNotMakeAnApplePopAlbumIntoKpop() {
         val shelves = com.music.bitchord.ui.appleFirstGenreShelves(
             tag = "k-pop",

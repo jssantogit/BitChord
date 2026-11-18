@@ -350,7 +350,7 @@ class MusicBrainzTrustedEnrichmentContractTest {
             delayMillis = { millis -> virtualTime += millis },
         )
         return MusicBrainzMetadataEnrichmentProvider(
-            MusicBrainzClient(
+            authorizedMusicBrainzClient(
                 transport = transport,
                 rateLimiter = limiter,
                 userAgent = TEST_USER_AGENT,

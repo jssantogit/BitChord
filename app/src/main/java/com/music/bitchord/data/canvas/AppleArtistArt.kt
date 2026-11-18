@@ -1,5 +1,10 @@
 package com.music.bitchord.data.canvas
 
+import com.music.bitchord.data.providers.ArtworkProbePolicyGuard
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
 import com.music.bitchord.data.DebugLog as Log
 import com.music.bitchord.data.Http
 import android.content.Context
@@ -16,6 +21,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.CancellationException
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import java.io.IOException
+import kotlin.coroutines.resume
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
@@ -89,6 +101,23 @@ internal fun exactAppleArtistPageUrl(browseId: String, storeUrl: String?): Strin
  */
 object AppleArtistArtRepository {
 
+    @Volatile
+    private var gateProvider: () -> ProviderPolicyGate? = {
+        ProviderRuntime.gateForCacheReadOrNull()
+    }
+
+    internal fun setPolicyGateForTests(provider: (() -> ProviderPolicyGate?)?) {
+        gateProvider = provider ?: { ProviderRuntime.gateForCacheReadOrNull() }
+    }
+
+    private fun artistArtPermitted(): Boolean {
+        val gate = gateProvider() ?: return false
+        return gate.open(
+            ProviderCapability.ARTIST_ARTWORK,
+            BuiltInProviderKeys.APPLE_ARTIST_ART,
+        ) != null
+    }
+
     private const val TAG = "AppleArtistArt"
     private val offlineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var offlinePrefs: SharedPreferences? = null
@@ -131,13 +160,21 @@ object AppleArtistArtRepository {
     }
 
     private fun warmStills(key: String, art: AppleArtistArt) {
-        if (!AppSettings.saveVisualStillImages.value) return
+        if (!AppSettings.saveVisualStillImages.value || !artistArtPermitted()) return
         offlineScope.launch {
-            VisualStillMedia.save(VisualSurface.ARTIST, "apple-hero|$key", art.heroUrl)
-            art.logoUrl?.let { VisualStillMedia.save(
-                VisualSurface.ARTIST, "apple-logo|$key", it,
-            ) }
-            _updates.value++
+            // The independent offline warming scope outlives the portrait
+            // lookup. Give its image downloads their own revocable ticket.
+            ArtworkProbePolicyGuard(gateProvider).probe(
+                capability = ProviderCapability.ARTIST_ARTWORK,
+                provider = BuiltInProviderKeys.APPLE_ARTIST_ART,
+            ) {
+                VisualStillMedia.save(VisualSurface.ARTIST, "apple-hero|$key", art.heroUrl)
+                art.logoUrl?.let { VisualStillMedia.save(
+                    VisualSurface.ARTIST, "apple-logo|$key", it,
+                ) }
+                _updates.value++
+                Unit
+            }
         }
     }
 
@@ -176,6 +213,7 @@ object AppleArtistArtRepository {
      * same thing to a caller that is only deciding what to draw first.
      */
     fun cached(artistName: String): AppleArtistArt? {
+        if (!artistArtPermitted()) return null
         val key = artistName.normalized()
         if (key.isBlank()) return null
         val known = synchronized(cache) { cache[key] }
@@ -188,13 +226,20 @@ object AppleArtistArtRepository {
     /** A file from the app-managed verified still store, not a remote
      * file URL. Similar artists can safely reuse this after losing network. */
     fun savedHeroFile(artistName: String): java.io.File? {
+        if (!artistArtPermitted()) return null
         val key = artistName.normalized()
         if (key.isBlank()) return null
         return VisualStillMedia.cached(VisualSurface.ARTIST, "apple-hero|$key")
     }
 
     /** The header art for [artistName], or null when Apple has none. Never throws. */
-    suspend fun artFor(artistName: String): AppleArtistArt? {
+    suspend fun artFor(artistName: String): AppleArtistArt? =
+        ArtworkProbePolicyGuard(gateProvider).probe(
+            capability = ProviderCapability.ARTIST_ARTWORK,
+            provider = BuiltInProviderKeys.APPLE_ARTIST_ART,
+        ) { artForAuthorized(artistName) }
+
+    private suspend fun artForAuthorized(artistName: String): AppleArtistArt? {
         val key = artistName.normalized()
         if (key.isEmpty()) return null
         synchronized(cache) { cache[key] }?.let {
@@ -226,7 +271,15 @@ object AppleArtistArtRepository {
      * selects the first result by name (which confuses duplicate stage names).
      * Apple's public page hydration JSON is undocumented, so failure is null.
      */
-    suspend fun artForExactStoreArtist(browseId: String, storeUrl: String?): AppleArtistArt? {
+    suspend fun artForExactStoreArtist(browseId: String, storeUrl: String?): AppleArtistArt? =
+        ArtworkProbePolicyGuard(gateProvider).probe(
+            capability = ProviderCapability.ARTIST_ARTWORK,
+            provider = BuiltInProviderKeys.APPLE_ARTIST_ART,
+        ) { artForExactAuthorized(browseId, storeUrl) }
+
+    private suspend fun artForExactAuthorized(
+        browseId: String, storeUrl: String?,
+    ): AppleArtistArt? {
         val page = exactAppleArtistPageUrl(browseId, storeUrl) ?: return null
         val key = "exact|$browseId"
         synchronized(cache) { cache[key] }?.let { entry ->
@@ -251,7 +304,7 @@ object AppleArtistArtRepository {
         return entry.art?.let { offlineStills(key, it) }
     }
 
-    private fun lookup(artistName: String, key: String): Entry? {
+    private suspend fun lookup(artistName: String, key: String): Entry? {
         val search = get(
             "https://itunes.apple.com/search?term=${URLEncoder.encode(artistName, "UTF-8")}" +
                 "&entity=musicArtist&limit=5",
@@ -349,12 +402,9 @@ object AppleArtistArtRepository {
             .replace("{f}", format)
     }
 
-    private fun get(url: String): String? {
+    private suspend fun get(url: String): String? {
         val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
-        Http.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            return response.body?.string()
-        }
+        return awaitAppleArtistPage(Http.client.newCall(request))
     }
 
     /** Case, accents and punctuation are not what makes two names different. */
@@ -362,3 +412,27 @@ object AppleArtistArtRepository {
         java.text.Normalizer.normalize(lowercase(Locale.ROOT), java.text.Normalizer.Form.NFD)
             .filter { it.isLetterOrDigit() }
 }
+
+/**
+ * OkHttp's blocking execute() does not react to coroutine revocation.
+ * This bridge cancels the actual socket operation when the probe's Job
+ * is cancelled, without altering the existing Apple identity verification.
+ */
+internal suspend fun awaitAppleArtistPage(call: Call): String? =
+    suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resume(null)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val body = try {
+                    response.use { if (it.isSuccessful) it.body?.string() else null }
+                } catch (_: IOException) {
+                    null
+                }
+                if (continuation.isActive) continuation.resume(body)
+            }
+        })
+    }

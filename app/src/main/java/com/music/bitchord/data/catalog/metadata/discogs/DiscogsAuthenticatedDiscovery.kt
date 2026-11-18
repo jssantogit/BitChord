@@ -1,6 +1,10 @@
 package com.music.bitchord.data.catalog.metadata.discogs
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderRequestDeniedException
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -130,22 +134,32 @@ internal class DiscogsDatabaseSearchClient(
     private val tokenProvider: () -> String? = { null },
     private val enabled: Boolean = false,
     private val limiter: DiscogsRateLimiter = DiscogsRequestBudget.limiter,
+    private val admission: RateLimitedProviderTransport = RateLimitedProviderTransport(),
     private val userAgent: String =
         "BitChord/${BuildConfig.VERSION_NAME} (https://github.com/jssantogit/BitChord)",
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun search(query: DiscogsSearchRequest): DiscogsSearchResult {
-        if (!enabled) return DiscogsSearchResult.Disabled
+        if (!enabled || !admission.permitted(
+            ProviderCapability.EDITION_METADATA, BuiltInProviderKeys.DISCOGS,
+        )) return DiscogsSearchResult.Disabled
         if (!query.isValid()) return DiscogsSearchResult.InvalidQuery
         // Authentication is opt-in and fail-closed, including if Keystore is
         // unavailable. Never log or embed credentials in diagnostics/results.
         val token = tokenProvider()?.trim()?.takeIf(::isValidDiscogsSearchToken)
             ?: return DiscogsSearchResult.AuthRequired
         val response = try {
-            limiter.runHttpLimited { transport.search(query, token, userAgent) }
+            admission.execute(
+                capability = ProviderCapability.EDITION_METADATA,
+                provider = BuiltInProviderKeys.DISCOGS,
+                scheduleLimited = { block -> limiter.runHttpLimited { block() } },
+                networkCall = { transport.search(query, token, userAgent) },
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: ProviderRequestDeniedException) {
+            return DiscogsSearchResult.Disabled
         } catch (_: Exception) {
             return DiscogsSearchResult.Unavailable
         }

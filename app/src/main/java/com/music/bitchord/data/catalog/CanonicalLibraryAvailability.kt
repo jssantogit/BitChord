@@ -5,6 +5,12 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.AndroidKeystoreOpen
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountRepository
 import com.music.bitchord.data.catalog.provider.opensubsonic.SharedPrefsOpenSubsonicAccountPersistence
 import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey
+import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicCatalogProviderKey
+import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicCapabilityKey
+import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCapabilityAdmission
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
 import kotlinx.serialization.json.Json
 
 /**
@@ -88,13 +94,50 @@ internal fun interface CanonicalLibraryProviderConfigurationReader {
  */
 internal class OpenSubsonicLibraryProviderConfigurationReader(
     private val accountRepository: OpenSubsonicAccountRepository,
+    private val gateProvider: () -> ProviderPolicyGate? = ProviderRuntime::gateOrNull,
 ) : CanonicalLibraryProviderConfigurationReader {
     override fun configuredProviderKeys(): Set<String> = buildSet {
+        // MediaStore is wholly independent of remote login and editorial gates.
         add(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER)
-        accountRepository.savedConfig()?.let { config ->
+        val account = accountRepository.current() ?: return@buildSet
+        val admission = OpenSubsonicCapabilityAdmission.open(
+            ProviderCapability.PERSONAL_LIBRARY, account.accountId, gateProvider,
+        ) ?: return@buildSet
+        val config = accountRepository.savedConfig() ?: return@buildSet
+        if (config.accountId == account.accountId && admission.isCurrent()) {
             add(openSubsonicProviderKey(config))
         }
     }
+}
+
+/**
+ * One canonical provider allowlist for local, remote search, Spotify matching
+ * and Library Mode. Old server realms are never searched by broad SQL prefix.
+ */
+internal fun configuredCanonicalPersonalProviderKeys(context: Context): Set<String> {
+    val app = context.applicationContext
+    val accounts = OpenSubsonicAccountRepository(
+        SharedPrefsOpenSubsonicAccountPersistence(app),
+        AndroidKeystoreOpenSubsonicCredentialStore(app),
+    )
+    return OpenSubsonicLibraryProviderConfigurationReader(accounts).configuredProviderKeys()
+}
+
+/** Cheap post-query revalidation, without reading secret-bearing credentials. */
+internal fun isCanonicalPersonalProviderCurrentlyAuthorized(
+    context: Context,
+    providerKey: String,
+): Boolean {
+    if (providerKey == CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER) return true
+    val account = SharedPrefsOpenSubsonicAccountPersistence(context.applicationContext)
+        .read() ?: return false
+    if (providerKey != openSubsonicCatalogProviderKey(
+            account.accountId, account.catalogRealmId,
+        )
+    ) return false
+    return ProviderRuntime.gateOrNull()?.open(
+        ProviderCapability.PERSONAL_LIBRARY, openSubsonicCapabilityKey(account.accountId),
+    ) != null
 }
 
 /**
@@ -190,6 +233,11 @@ internal class CanonicalLibraryAvailabilityRepository(
                 }
             }
         }
+        // A remote permission/account can change while Room is suspended.
+        // Never publish evidence from the older provider set.
+        if (providerConfiguration.configuredProviderKeys() != configured.toSet()) {
+            return ids.map { CanonicalAvailableRecordingTags(recordingId = it) }
+        }
         return ids.map { id ->
             val value = byRecording.getValue(id)
             CanonicalAvailableRecordingTags(
@@ -234,6 +282,9 @@ internal class CanonicalLibraryAvailabilityRepository(
                 if (kind == null) unclassifiedRecordings += id else kinds.add(kind)
             }
         }
+        if (providerConfiguration.configuredProviderKeys() != configured.toSet()) {
+            return emptyList()
+        }
         return evidence.map { (id, kinds) ->
             // Preserve verified positive copies even if a future provider is
             // unclassified; incomplete coverage cannot prove a negative.
@@ -254,7 +305,15 @@ internal class CanonicalLibraryAvailabilityRepository(
             .toList()
         if (providerKeys.isEmpty()) return emptyList()
 
-        return store.recordingIdsForProviders(providerKeys)
+        val rows = store.recordingIdsForProviders(providerKeys)
+        // Retain local music even if a remote capability was revoked while
+        // collecting remote rows. Never leak stale remote account IDs.
+        val permittedNow = providerConfiguration.configuredProviderKeys()
+        val safeRows = if (permittedNow == providerKeys.toSet()) rows
+            else store.recordingIdsForProviders(
+                listOf(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER),
+            )
+        return safeRows
             .asSequence()
             .onEach { recordingId ->
                 require(recordingId.isNotBlank()) { "Canonical recordingId must not be blank" }

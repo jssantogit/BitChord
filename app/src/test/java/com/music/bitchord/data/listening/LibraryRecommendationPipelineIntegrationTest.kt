@@ -19,6 +19,13 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccount
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMode
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderDescriptor
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -63,7 +70,7 @@ class LibraryRecommendationPipelineIntegrationTest {
 
         val catalogDao = requireNotNull(catalogDatabase).catalogDao()
         val accountRepository = accountRepository().also(::configureAccount)
-        val activeRemoteProvider = openSubsonicProviderKey(ACTIVE_ACCOUNT_ID)
+        val activeRemoteProvider = openSubsonicProviderKey(accountRepository.savedConfig()!!)
         val forgottenRemoteProvider = openSubsonicProviderKey("forgotten-account")
 
         upsertRecording(catalogDao, FAVORITE_REMOTE)
@@ -115,7 +122,9 @@ class LibraryRecommendationPipelineIntegrationTest {
 
         val availability = CanonicalLibraryAvailabilityRepository(
             store = RoomCanonicalLibraryAvailabilityStore(catalogDao),
-            providerConfiguration = OpenSubsonicLibraryProviderConfigurationReader(accountRepository),
+            providerConfiguration = OpenSubsonicLibraryProviderConfigurationReader(
+                accountRepository, gateProvider = { currentLibraryGate() },
+            ),
         )
         val candidateSource = LibraryRecommendationCandidateSource(availability)
         val ranker = PersonalRanker(
@@ -174,7 +183,7 @@ class LibraryRecommendationPipelineIntegrationTest {
             .build()
         val catalogDao = requireNotNull(catalogDatabase).catalogDao()
         val accountRepository = accountRepository().also(::configureAccount)
-        val remoteProvider = openSubsonicProviderKey(ACTIVE_ACCOUNT_ID)
+        val remoteProvider = openSubsonicProviderKey(accountRepository.savedConfig()!!)
 
         upsertRecording(catalogDao, REMOTE_ONLY)
         upsertRecording(catalogDao, SHARED_LOCAL_REMOTE)
@@ -191,7 +200,9 @@ class LibraryRecommendationPipelineIntegrationTest {
 
         val availability = CanonicalLibraryAvailabilityRepository(
             store = RoomCanonicalLibraryAvailabilityStore(catalogDao),
-            providerConfiguration = OpenSubsonicLibraryProviderConfigurationReader(accountRepository),
+            providerConfiguration = OpenSubsonicLibraryProviderConfigurationReader(
+                accountRepository, gateProvider = { currentLibraryGate() },
+            ),
         )
         assertEquals(
             listOf(REMOTE_ONLY, SHARED_LOCAL_REMOTE).sorted(),
@@ -203,6 +214,17 @@ class LibraryRecommendationPipelineIntegrationTest {
         assertEquals(listOf(SHARED_LOCAL_REMOTE), availability.availableRecordingIds())
         assertNotNull(catalogDao.mediaAsset(remoteProvider, "remote-only"))
         assertNotNull(catalogDao.mediaAsset(remoteProvider, "shared-remote"))
+    }
+
+    private fun currentLibraryGate(): ProviderPolicyGate {
+        val key = ProviderKey("opensubsonic", ACTIVE_ACCOUNT_ID)
+        return ProviderPolicyGate(ProviderCapabilityPolicy(
+            descriptors = listOf(ProviderDescriptor(
+                key, setOf(ProviderCapability.PERSONAL_LIBRARY), ProviderReadiness.READY,
+            )),
+            choices = mapOf(ProviderCapability.PERSONAL_LIBRARY to
+                listOf(ProviderChoice(key, true, 0))),
+        ))
     }
 
     private fun accountRepository(): OpenSubsonicAccountRepository = OpenSubsonicAccountRepository(

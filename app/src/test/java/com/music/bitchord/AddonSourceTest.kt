@@ -2,6 +2,13 @@ package com.music.bitchord
 
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.AddonSource
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderDescriptor
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.sources.SourceConfig
 import com.music.bitchord.data.sources.SourceHealth
@@ -10,6 +17,13 @@ import com.music.bitchord.data.sources.StreamRequest
 import com.music.bitchord.data.sources.addon.AddonClient
 import com.music.bitchord.playback.StreamContainer
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeout
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import com.music.bitchord.data.sources.addon.awaitAddonHttp
+import java.util.concurrent.TimeUnit
 import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -65,6 +79,52 @@ class AddonSourceTest {
         server.shutdown()
         DeviceCodecs.forced = null
         AppSettings.dolbyAtmos.value = true
+    }
+
+    @Test
+    fun `cancelling a detached addon HTTP producer aborts the socket`() = runBlocking {
+        route("/cancelled", MockResponse()
+            .setHeadersDelay(30, TimeUnit.SECONDS)
+            .setBody("late manifest"))
+        val call = OkHttpClient().newCall(
+            Request.Builder().url(server.url("/cancelled")).build())
+        val pending = async(Dispatchers.IO) { awaitAddonHttp(call) }
+        assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+        pending.cancel()
+        withTimeout(5_000) { pending.join() }
+        assertTrue(call.isCanceled())
+    }
+
+    @Test fun playbackRevocationCancelsDetachedAddonSearchWithoutRevokingDownload() = runBlocking {
+        route("/manifest.json", manifest())
+        route("/search", MockResponse()
+            .setHeadersDelay(30, TimeUnit.SECONDS)
+            .setBody("""{"tracks":[{"id":"late","title":"Revoked","artist":"A"}]}"""))
+        val cfg = config()
+        val key = ProviderKey("addon", cfg.id)
+        fun policy(playback: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(ProviderDescriptor(key, setOf(
+                ProviderCapability.EXTENSION_PLAYBACK,
+                ProviderCapability.DOWNLOAD,
+            ), ProviderReadiness.READY)),
+            choices = mapOf(
+                ProviderCapability.EXTENSION_PLAYBACK to listOf(ProviderChoice(key, playback, 0)),
+                ProviderCapability.DOWNLOAD to listOf(ProviderChoice(key, true, 0)),
+            ),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        val playback = AddonSource(cfg, ProviderCapability.EXTENSION_PLAYBACK) { gate }
+        val download = AddonSource(cfg, ProviderCapability.DOWNLOAD) { gate }
+        val pending = async(Dispatchers.IO) { playback.search("revoked", 5) }
+        assertNotNull(server.takeRequest(5, TimeUnit.SECONDS)) // manifest
+        assertNotNull(server.takeRequest(5, TimeUnit.SECONDS)) // slow search
+        gate.replace(policy(false))
+        assertEquals(emptyList<com.music.bitchord.data.model.Song>(),
+            withTimeout(5_000) { pending.await() })
+        assertTrue(gate.open(ProviderCapability.DOWNLOAD, key) != null)
+        // Separately scoped download client is not cancelled or denied by playback.
+        route("/search", json("""{"tracks":[{"id":"good","title":"Download","artist":"A"}]}"""))
+        assertEquals(listOf("Download"), download.search("download", 5).map { it.title })
     }
 
     // ── URL handling ──────────────────────────────────────────────────────

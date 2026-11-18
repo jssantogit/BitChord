@@ -1,5 +1,16 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
+import com.music.bitchord.data.providers.ProviderRequestDeniedException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.withTimeout
 import com.music.bitchord.data.catalog.metadata.AppleArtworkDimensionSource
 import com.music.bitchord.data.catalog.metadata.AppleHighResolutionArtwork
 import com.music.bitchord.data.catalog.metadata.appleHighResolutionArtworkCandidate
@@ -14,6 +25,73 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class AppleHighResolutionArtworkTest {
+    @Test fun revokedAppleArtworkNeverProbesOrPublishesPersistedCdnProof() = runBlocking {
+        val key = BuiltInProviderKeys.ITUNES
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(BuiltInProviderDescriptors.itunes(ProviderReadiness.READY)),
+            choices = mapOf(ProviderCapability.RELEASE_ARTWORK to listOf(
+                ProviderChoice(key, enabled, 0),
+            )),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        val persisted = mutableMapOf<String, AppleArtworkProbeRecord>()
+        var probes = 0
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource {
+                probes++
+                1024 to 1024
+            },
+            persistence = object : AppleArtworkProbePersistence {
+                override fun load(candidate: String) = persisted[candidate]
+                override fun save(candidate: String, record: AppleArtworkProbeRecord) {
+                    persisted[candidate] = record
+                }
+            },
+            artworkGateProvider = { gate },
+        )
+        val hero = thumb.replace("100x100bb.jpg", "1024x1024bb.jpg")
+        assertEquals(hero, service.upgrade(thumb, 1024))
+        assertEquals(1, probes)
+        gate.replace(policy(false))
+        assertNull(service.upgrade(thumb, 1024))
+        assertEquals(1, probes)
+        val proof = AppleVerifiedEditionArtwork(
+            "541adf5a-48d4-4f7b-a7bb-afd3cea5af27",
+            "529f87a1-1081-48a4-8ee1-3c08de229858",
+            "itunes:br:album:101", thumb, "https://music.apple.com/br/album/101",
+        )
+        try {
+            service.upgrade(proof, 1024)
+            throw AssertionError("A revoked artwork capability must not return a proof with an image URL")
+        } catch (_: ProviderRequestDeniedException) { }
+    }
+
+    @Test fun revocationCancelsAppleCdnProbeWithoutReleasingOriginalUrl() = runBlocking {
+        val key = BuiltInProviderKeys.ITUNES
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(BuiltInProviderDescriptors.itunes(ProviderReadiness.READY)),
+            choices = mapOf(ProviderCapability.RELEASE_ARTWORK to listOf(
+                ProviderChoice(key, enabled, 0),
+            )),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        val entered = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val service = AppleHighResolutionArtwork(
+            dimensions = AppleArtworkDimensionSource {
+                entered.complete(Unit)
+                try { awaitCancellation() }
+                finally { cancelled.complete(Unit) }
+            },
+            artworkGateProvider = { gate },
+        )
+        val request = async { service.upgrade(thumb, 1024) }
+        withTimeout(2_000) { entered.await() }
+        gate.replace(policy(false))
+        withTimeout(2_000) { cancelled.await() }
+        assertNull(withTimeout(2_000) { request.await() })
+    }
+
     private val thumb =
         "https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/ab/cd/source.jpg/100x100bb.jpg"
     private val large =

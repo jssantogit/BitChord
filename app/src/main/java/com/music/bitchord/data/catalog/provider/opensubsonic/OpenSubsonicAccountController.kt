@@ -65,9 +65,12 @@ internal class OpenSubsonicAccountController(
     }
 
     suspend fun testSavedConnection(): Result<OpenSubsonicConnectionReport> {
+        // Capture before the credential read: even an A -> B -> A edit must
+        // invalidate results from a suspended connection test.
+        val revision = OpenSubsonicAccountRevisionClock.current()
         val provider = repository.savedProvider()
             ?: return Result.failure(IllegalStateException("OpenSubsonic account is not configured"))
-        return testProvider(provider, persistHealth = true)
+        return testProvider(provider, persistHealth = true, accountRevision = revision)
     }
 
     suspend fun syncNow(): ProviderSyncResult {
@@ -95,14 +98,39 @@ internal class OpenSubsonicAccountController(
     private suspend fun testProvider(
         provider: OpenSubsonicProvider,
         persistHealth: Boolean,
+        accountRevision: Long? = null,
     ): Result<OpenSubsonicConnectionReport> = try {
         val report = operations.test(provider)
-        if (persistHealth) repository.recordHealth(report.health, nowEpochSeconds())
-        Result.success(report)
+        when {
+            !persistHealth -> Result.success(report)
+            !savedAccountIsCurrent(provider, accountRevision) ->
+                Result.failure(IllegalStateException("OpenSubsonic account changed during connection test"))
+            else -> {
+                repository.recordHealth(report.health, nowEpochSeconds())
+                Result.success(report)
+            }
+        }
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: Throwable) {
-        if (persistHealth) repository.recordHealthFailure(nowEpochSeconds())
+        // A failed probe from an obsolete account must not mark the newly
+        // configured account unreachable. Never publish sensitive exception text.
+        if (persistHealth && savedAccountIsCurrent(provider, accountRevision)) {
+            repository.recordHealthFailure(nowEpochSeconds())
+        }
         Result.failure(IllegalStateException("OpenSubsonic connection failed"))
+    }
+
+    private fun savedAccountIsCurrent(
+        provider: OpenSubsonicProvider,
+        capturedRevision: Long?,
+    ): Boolean {
+        if (capturedRevision == null ||
+            OpenSubsonicAccountRevisionClock.current() != capturedRevision
+        ) return false
+        val matches = runCatching {
+            provider.matchesSavedConfig(repository.savedConfig())
+        }.getOrDefault(false)
+        return matches && OpenSubsonicAccountRevisionClock.current() == capturedRevision
     }
 }

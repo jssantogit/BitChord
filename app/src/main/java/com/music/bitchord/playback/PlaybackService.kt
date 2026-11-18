@@ -3,6 +3,8 @@ package com.music.bitchord.playback
 import com.music.bitchord.data.catalog.artistCreditFromSubtitle
 
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
+import com.music.bitchord.data.catalog.configuredCanonicalPersonalProviderKeys
+import com.music.bitchord.data.catalog.isCanonicalPersonalProviderCurrentlyAuthorized
 import com.music.bitchord.data.catalog.RecordingEntity
 import com.music.bitchord.data.catalog.MediaAssetEntity
 import com.music.bitchord.data.catalog.OpenSubsonicLibraryProviderConfigurationReader
@@ -65,6 +67,7 @@ import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import androidx.media3.exoplayer.mediacodec.MediaCodecUtil
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
@@ -119,6 +122,10 @@ import com.music.bitchord.data.model.ShelfItem
 import com.music.bitchord.data.model.artworkAt
 import com.music.bitchord.data.model.QueueTier
 import com.music.bitchord.data.sources.SourceRegistry
+import com.music.bitchord.data.sources.SourceKind
+import com.music.bitchord.data.providers.ProviderRuntime
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderKey
 import com.music.bitchord.data.catalog.allowedCanonicalLyricsSources
 import com.music.bitchord.download.Downloads
 import java.util.concurrent.ConcurrentHashMap
@@ -380,6 +387,26 @@ class PlaybackService : MediaLibraryService() {
     private val quickPicksMutex = Mutex()
     private val QUICK_PICKS_CACHE_TTL_MS = 60_000L
 
+    /**
+     * Android Auto must never expose historical server rows by scanning all
+     * opensubsonic:* assets. Use the same current-account canonical capability
+     * allowlist as Home, Server Search and Spotify import.
+     */
+    private suspend fun currentAuthorizedRemoteSongs(
+        query: String,
+        limit: Int,
+    ): List<Song> {
+        val allowed = configuredCanonicalPersonalProviderKeys(this)
+            .filter { it.startsWith("opensubsonic:") || it.startsWith("jellyfin:") }
+        if (allowed.isEmpty()) return emptyList()
+        val rows = CanonicalCatalogDatabase.get(this).catalogDao()
+            .searchCanonicalRemoteServerAssets(query, limit = limit, providerKeys = allowed)
+            .filter {
+                isCanonicalPersonalProviderCurrentlyAuthorized(this, it.providerKey)
+            }
+        return canonicalAutoSongs(rows)
+    }
+
     private suspend fun cachedQuickPicksSongs(): List<Song> = quickPicksMutex.withLock {
         cachedQuickPicks?.let { (at, songs) ->
             if (SystemClock.elapsedRealtime() - at < QUICK_PICKS_CACHE_TTL_MS && songs.isNotEmpty()) return songs
@@ -402,9 +429,7 @@ class PlaybackService : MediaLibraryService() {
             emptyList()
         }
         val remote = try {
-            CanonicalCatalogDatabase.get(this@PlaybackService)
-                .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
-                .let(::canonicalAutoSongs)
+            currentAuthorizedRemoteSongs("", limit = 200)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -557,7 +582,7 @@ class PlaybackService : MediaLibraryService() {
     private val trackAnalyzer = com.music.bitchord.playback.smart.TrackAnalyzer(this, AudioCache)
 
     /** Shared with the crossfade's tail player, so both read the same disk cache. */
-    private var mediaSourceFactory: DefaultMediaSourceFactory? = null
+    private var mediaSourceFactory: MediaSource.Factory? = null
 
     /** Last sampled position of the playing track, in seconds. */
     private var lastPositionSeconds = 0L
@@ -1389,7 +1414,7 @@ class PlaybackService : MediaLibraryService() {
             // [SourceResolver.resolve]. Handled ahead of the YouTube path
             // because these carry no `v` parameter and would otherwise fall
             // straight through unresolved.
-            if (dataSpec.uri.authority == "source") {
+            if (isLogicalSourcePlaybackUri(dataSpec.uri)) {
                 // Retired YouTube fallback markers must never re-enter a source
                 // resolution path. Source-backed playback still resolves through
                 // the user's configured providers without this legacy override.
@@ -1413,17 +1438,38 @@ class PlaybackService : MediaLibraryService() {
                 if (fullMediaId != null) {
                     NerdStats.recordSource(fullMediaId, sourceName)
                 }
+                // The winning source may differ from the queued/pinned
+                // source. Bind the HTTP byte lease to the actual winner,
+                // never to the original queue id or the CDN hostname.
+                val winningSource = stream.sourceConfigId?.let(SourceRegistry::config)
+                    ?: throw java.io.IOException("Resolved playback source no longer configured")
+                val byteLease = when (winningSource.kind) {
+                    SourceKind.ADDON, SourceKind.CUSTOM_MODULE -> {
+                        val gate = ProviderRuntime.gateOrNull()
+                            ?: throw java.io.IOException("Playback source policy unavailable")
+                        val key = ProviderKey(
+                            if (winningSource.kind == SourceKind.ADDON) "addon"
+                            else "custom_module",
+                            winningSource.id,
+                        )
+                        val ticket = gate.open(ProviderCapability.EXTENSION_PLAYBACK, key)
+                            ?: throw java.io.IOException("Playback source capability revoked")
+                        ProviderPlaybackByteLease(gate, ticket)
+                    }
+                    else -> null
+                }
                 NerdStats.recordSource(trackParam, sourceName)
                 return@Resolver dataSpec.buildUpon()
                     .setUri(Uri.parse(stream.url))
                     .setHttpRequestHeaders(stream.headers)
+                    .apply { if (byteLease != null) setCustomData(byteLease) }
                     .build()
             }
             // Historical watch/video IDs are archival identity only. They no
             // longer authorize any resolution through Innertube or the
             // retired YouTube stream pipeline. MediaStore and canonical
             // OpenSubsonic assets are handled by their own datasource paths.
-            if (dataSpec.uri.getQueryParameter("v") != null) {
+            if (isRetiredWatchCacheRequest(dataSpec.uri)) {
                 throw HistoricalMediaAssetUnavailable(
                     "Historical video ID has no authorized audio asset",
                 )
@@ -1442,7 +1488,7 @@ class PlaybackService : MediaLibraryService() {
             // Innermost, so it chunks the real googlevideo URL the resolver
             // above has already substituted in — see [ChunkedDataSource] for
             // why an open-ended read of one is worth avoiding.
-            ChunkedDataSource.Factory(OkHttpDataSource.Factory(Http.client), STREAM_CHUNK_BYTES),
+            ProviderPlaybackByteDataSource.Factory(Http.client, STREAM_CHUNK_BYTES),
         ) { dataSpec ->
             // Wrapped rather than folded into the resolver above so the record
             // is made in one place for every branch of it, and made from what
@@ -1456,7 +1502,11 @@ class PlaybackService : MediaLibraryService() {
                 // The same seam tells the cache whose file it is writing, which
                 // decides whether the entry outlives the track — see
                 // [AudioCache.Origin].
-                AudioCache.recordServed(dataSpec, resolved.uri.toString())
+                AudioCache.recordServed(
+                    dataSpec,
+                    resolved.uri.toString(),
+                    (resolved.customData as? ProviderPlaybackByteLease)?.providerKey,
+                )
             }
         }
         // Read-ahead resolves streams through the same chain the player does.
@@ -1489,11 +1539,122 @@ class PlaybackService : MediaLibraryService() {
         AudioCache.setUpstream(defaultDataSourceFactory)
         // DsdExtractorsFactory: the stock extractors plus DSF/DFF, which Media3
         // cannot open at all. A DSD file leaves the extractor as float PCM.
-        mediaSourceFactory = DefaultMediaSourceFactory(
-            AudioCache.playbackFactory(defaultDataSourceFactory),
-            DsdExtractorsFactory(),
-        )
-            .setLoadErrorHandlingPolicy(PermanentAwareLoadErrorPolicy())
+        // Each logical source must be resolved BEFORE Media3 selects its
+        // progressive/HLS/DASH parser. The preflight runs on an IO coroutine
+        // owned by a single deferred media source, never on ExoPlayer's
+        // playback looper. The winning ticket is then pinned for the complete
+        // manifest/segment lifetime. Relative segment URLs use the real
+        // manifest's HTTP base, not bitchord://source.
+        val buildSourceTransport: (PreparedSourceMediaSelection?) -> MediaSource.Factory =
+            { selected ->
+                val mediaSession = ProviderPlaybackMediaSession()
+                val selectedLease = selected?.playbackLease
+                if (selected != null && selectedLease != null) {
+                    if (selected.cachedOffline) {
+                        // Offline provenance is not a URL or a credential.
+                        mediaSession.bind(selectedLease)
+                    } else {
+                        mediaSession.bind(
+                            selectedLease,
+                            selected.resolved.uri.toString(),
+                            selected.resolved.httpRequestHeaders,
+                        )
+                    }
+                }
+                val scopedResolving = ResolvingDataSource.Factory(
+                    ProviderPlaybackByteDataSource.Factory(
+                        Http.client, STREAM_CHUNK_BYTES,
+                        fallbackLease = mediaSession::currentLease,
+                        requireLease = true,
+                    ),
+                ) { spec ->
+                    if (selected != null) {
+                        // If a legacy cache hit disappears after preflight,
+                        // fail closed rather than choose another source or
+                        // send a logical URI to a provider HTTP transport.
+                        if (selected.cachedOffline)
+                            throw java.io.IOException("Verified offline source cache no longer available")
+                        // No second provider decision: the physical manifest
+                        // and its segments belong to the preflight winner.
+                        // A source cannot silently change during a crossfade.
+                        mediaSession.withSegmentHeaders(spec)
+                    } else {
+                        // Compatibility fallback for older direct callers:
+                        // normal queue items take the typed preflight path.
+                        val resolved = streamResolver.resolveDataSpec(spec)
+                        if (isLogicalSourcePlaybackUri(spec.uri)) {
+                            val lease = resolved.customData as? ProviderPlaybackByteLease
+                                ?: throw java.io.IOException(
+                                    "Resolved source lacks a revocable media ticket",
+                                )
+                            mediaSession.bind(
+                                lease, resolved.uri.toString(),
+                                resolved.httpRequestHeaders,
+                            )
+                        }
+                        mediaIdIn(spec.uri)?.let {
+                            StreamContainer.served(it, resolved.uri.toString())
+                        }
+                        AudioCache.recordServed(
+                            spec, resolved.uri.toString(),
+                            (resolved.customData as? ProviderPlaybackByteLease)?.providerKey,
+                        )
+                        if (spec.uri.scheme == "http" || spec.uri.scheme == "https")
+                            mediaSession.withSegmentHeaders(resolved)
+                        else resolved
+                    }
+                }
+                val sourceDataFactory = DefaultDataSource.Factory(this, scopedResolving)
+                DefaultMediaSourceFactory(
+                    AudioCache.playbackFactory(
+                        sourceDataFactory,
+                        onSourceCacheLease = { lease -> mediaSession.bind(lease) },
+                        adaptiveSegmentLease = mediaSession::currentLease,
+                        adaptiveSegmentRequest = mediaSession::withSegmentHeaders,
+                        progressiveRoot = selected?.takeIf {
+                            !it.cachedOffline &&
+                                it.item.localConfiguration?.mimeType == null &&
+                                it.logicalMediaId != null
+                        }?.let { chosen ->
+                            AudioCache.SourcePhysicalProgressiveCacheRoot(
+                                requireNotNull(chosen.logicalMediaId),
+                                chosen.resolved.uri.toString(),
+                                AudioCache.logicalSourceCachePartition(
+                                    requireNotNull(chosen.logicalSourceUri),
+                                ),
+                            )
+                        },
+                    ),
+                    DsdExtractorsFactory(),
+                )
+            }
+        mediaSourceFactory = SourceScopedMediaSourceFactory(
+            defaultFactory = DefaultMediaSourceFactory(
+                AudioCache.playbackFactory(defaultDataSourceFactory),
+                DsdExtractorsFactory(),
+            ),
+            createSourceFactory = { buildSourceTransport(null) },
+            preflightSource = { item ->
+                val logical = item.localConfiguration?.uri
+                    ?: throw java.io.IOException("Source item lacks logical URI")
+                val request = DataSpec.Builder().setUri(logical).build()
+                // resolveDataSpec encapsulates the configured provider ladder,
+                // bounded source query and winning EXTENSION_PLAYBACK ticket.
+                // DeferredResolvedSourceMediaSource invokes this on IO.
+                val offline = AudioCache.cachedProgressiveSourceSelection(item)
+                if (offline != null) {
+                    offline
+                } else {
+                    val physical = streamResolver.resolveDataSpec(request)
+                    val selected = prepareSourceMediaSelection(item, physical)
+                    // Physical preflight selects a URL, NOT an owner for old
+                    // logical cached bytes. Never relabel those bytes.
+                    mediaIdIn(logical)?.let { StreamContainer.served(it, physical.uri.toString()) }
+                    selected
+                }
+            },
+            createPreparedFactory = buildSourceTransport,
+        ).setLoadErrorHandlingPolicy(PermanentAwareLoadErrorPolicy())
         // The watch, when it is the speaker, reads tracks through this same chain.
         WearBridge.attachStreams(AudioCache.playbackFactory(defaultDataSourceFactory))
 
@@ -1622,6 +1783,10 @@ class PlaybackService : MediaLibraryService() {
     private suspend fun resolveForCast(item: MediaItem): CastStream? = withContext(Dispatchers.IO) {
         if (item.isCanonicalRemotePlayback()) return@withContext null
         val uri = item.localConfiguration?.uri ?: return@withContext null
+        // A remote Cast receiver cannot cancel its own HTTP transfer when
+        // a source-backed addon/module is disabled in our canonical policy.
+        // Do not export any provider-owned logical URI as a naked CDN URL.
+        if (!canHandOffToCastReceiver(uri)) return@withContext null
         val resolver = streamResolver ?: return@withContext null
         val resolved = resolver.resolveDataSpec(DataSpec(uri)).uri
         if (resolved.scheme != "http" && resolved.scheme != "https") {
@@ -7846,9 +8011,7 @@ class PlaybackService : MediaLibraryService() {
             // 4. When there is no on-device audio, resume with verified
             // personal-server assets instead of contacting YouTube Home.
             val remoteSongs = try {
-                CanonicalCatalogDatabase.get(this@PlaybackService)
-                    .catalogDao().searchCanonicalRemoteServerAssets("", limit = 200)
-                    .let(::canonicalAutoSongs)
+                currentAuthorizedRemoteSongs("", limit = 200)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -8115,10 +8278,7 @@ class PlaybackService : MediaLibraryService() {
             emptyList()
         }
         val remote = try {
-            CanonicalCatalogDatabase.get(this).catalogDao()
-                .searchCanonicalRemoteServerAssets(safeQuery, limit = 200)
-                .let(::canonicalAutoSongs)
-                .let { canonicalAutoSearch(it, safeQuery) }
+            canonicalAutoSearch(currentAuthorizedRemoteSongs(safeQuery, limit = 200), safeQuery)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

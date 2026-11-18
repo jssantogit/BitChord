@@ -1,6 +1,11 @@
 package com.music.bitchord.data.sources
 
 import com.music.bitchord.data.TrackLog
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
+import kotlinx.coroutines.CancellationException
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.addon.AddonClient
@@ -32,6 +37,13 @@ import java.util.Locale
  */
 class AddonSource(
     override val config: SourceConfig,
+    /**
+     * Runtime-routed sources require an exact capability ticket. The null
+     * option is for explicit unsaved editor probes and isolated legacy tests.
+     * Playback and download must use separate instances/SharedCalls scopes.
+     */
+    private val requestCapability: ProviderCapability? = null,
+    private val gateProvider: () -> ProviderPolicyGate? = { ProviderRuntime.gateOrNull() },
 ) : MusicSource, SourceRegistry.ConfigBacked {
 
     override val configId: String get() = config.id
@@ -60,6 +72,31 @@ class AddonSource(
             override fun removeEldestEntry(eldest: Map.Entry<String, AddonTrack>) = size > MAX_ROWS
         },
     )
+
+    /**
+     * SharedCalls deliberately starts detached network producers so a caller
+     * being out-ranked does not abort the server's useful work. Provider
+     * revocation is different: it invalidates the whole capability-specific
+     * client and must terminate those detached producers immediately.
+     */
+    private suspend fun <T> withCapability(fallback: T, action: suspend () -> T): T {
+        val capability = requestCapability ?: return action()
+        val gate = gateProvider() ?: return fallback
+        val provider = ProviderKey("addon", config.id)
+        val ticket = gate.open(capability, provider) ?: return fallback
+        val unsubscribe = gate.onRevoke(ticket) { client.clear() }
+        return try {
+            val result = try {
+                action()
+            } catch (cancelled: CancellationException) {
+                if (gate.accept(ticket)) throw cancelled
+                else return fallback
+            }
+            if (gate.accept(ticket)) result else fallback
+        } finally {
+            unsubscribe()
+        }
+    }
 
     // ── Manifest policy ───────────────────────────────────────────────────
 
@@ -187,7 +224,7 @@ class AddonSource(
         limit: Int,
         waitForAll: Boolean,
         request: StreamRequest?,
-    ): List<Song> =
+    ): List<Song> = withCapability(emptyList()) {
         withContext(Dispatchers.IO) {
             if (query.isBlank()) return@withContext emptyList()
             if (!admitted("a search")) return@withContext emptyList()
@@ -226,6 +263,7 @@ class AddonSource(
                 }
                 .toList()
         }
+    }
 
     // ── Stream ────────────────────────────────────────────────────────────
 
@@ -242,7 +280,8 @@ class AddonSource(
      * addon thinks best.
      */
     suspend fun stream(trackId: String, request: StreamRequest, stereoOnly: Boolean): SourceStream? =
-        withContext(Dispatchers.IO) {
+        withCapability(null) {
+            withContext(Dispatchers.IO) {
             if (!admitted("a stream")) return@withContext null
             val tier = request.tier
             val result = client.stream(trackId, tier, stereoOnly)
@@ -284,6 +323,7 @@ class AddonSource(
                 }
             }
         }
+    }
 
     /**
      * The stream the search row carried, when the `/stream` call had nothing.

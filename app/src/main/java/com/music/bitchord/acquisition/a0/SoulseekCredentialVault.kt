@@ -68,7 +68,9 @@ internal class SoulseekCredentialVault(context: Context) {
     }.getOrNull()
 
     @Synchronized fun save(username: String, password: CharArray) {
-        SoulseekActiveSession.revoke()
+        // Invalidate the old account's P2P ticket before touching the vault.
+        // Even a failed write must never leave its transport reusable.
+        SoulseekActiveSession.bindDownloadPermission(null)
         require(username.isNotBlank() && username.toByteArray(Charsets.UTF_8).size <= 256)
         require(password.isNotEmpty() && password.size <= 256)
         val userBytes = username.toByteArray(Charsets.UTF_8)
@@ -103,15 +105,25 @@ internal class SoulseekCredentialVault(context: Context) {
                 ciphertext.fill(0)
             }
         } finally { plaintext.fill(0) }
+        // Only a completed atomic save can mark this provider READY.
+        // A newly configured account must not require an app restart.
+        SoulseekActiveSession.onCredentialsChanged(configured = true)
     }
 
     @Synchronized fun forget() {
-        SoulseekActiveSession.revoke()
-        file.delete()
-        // Rotate the vault key on logout so previous ciphertext is unrecoverable.
-        runCatching {
-            val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-            store.deleteEntry(ALIAS)
+        // First deny all new P2P registrations, before deleting credentials.
+        SoulseekActiveSession.bindDownloadPermission(null)
+        try {
+            file.delete()
+            // Rotate the vault key on logout so previous ciphertext is unrecoverable.
+            runCatching {
+                val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+                store.deleteEntry(ALIAS)
+            }
+        } finally {
+            // Even if filesystem deletion fails, never leave an old account
+            // descriptor READY or its transport ticket usable.
+            SoulseekActiveSession.onCredentialsChanged(configured = false)
         }
     }
 

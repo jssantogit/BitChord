@@ -88,7 +88,7 @@ class IsrcMusicBrainzIdentityIntegrationTest {
                 else -> error("unexpected MusicBrainz path $path")
             }
         }
-        val sharedClient = MusicBrainzClient(
+        val sharedClient = authorizedMusicBrainzClient(
             transport = transport,
             rateLimiter = MusicBrainzRateLimiter(
                 nowMillis = { virtualTime },
@@ -174,7 +174,7 @@ class IsrcMusicBrainzIdentityIntegrationTest {
                 assertEquals("isrc/$ISRC", path)
                 """{"isrc":"$ISRC","recordings":[{"id":"$MBID"}]}"""
             }
-            val client = MusicBrainzClient(
+            val client = authorizedMusicBrainzClient(
                 transport = transport,
                 rateLimiter = MusicBrainzRateLimiter(
                     nowMillis = { virtualTime },

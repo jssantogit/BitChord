@@ -1,5 +1,10 @@
 package com.music.bitchord.data.scrobbling
 
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ListeningSubmissionGate
+import com.music.bitchord.data.providers.ProviderCallResult
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderRequestDeniedException
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -265,6 +270,27 @@ object LastFM {
         )
 
     private suspend fun postAndRead(
+        method: String,
+        sessionKey: String? = null,
+        extra: Map<String, String> = emptyMap(),
+    ): String {
+        if (method != "track.updateNowPlaying" && method != "track.scrobble") {
+            return postAndReadDirect(method, sessionKey, extra)
+        }
+        // Authorization and active cancellation cover the entire request,
+        // including response parsing; authentication methods remain separate.
+        return when (val result = ListeningSubmissionGate.execute(BuiltInProviderKeys.LASTFM) {
+            postAndReadDirect(method, sessionKey, extra)
+        }) {
+            is ProviderCallResult.Success -> result.value
+            is ProviderCallResult.Failed -> throw result.cause
+            ProviderCallResult.Denied, ProviderCallResult.Stale ->
+                throw ProviderRequestDeniedException(
+                    ProviderCapability.LISTENING_STATISTICS, BuiltInProviderKeys.LASTFM)
+        }
+    }
+
+    private suspend fun postAndReadDirect(
         method: String,
         sessionKey: String? = null,
         extra: Map<String, String> = emptyMap(),

@@ -142,6 +142,9 @@ internal class ListenBrainzOutboxWorker(
                         store.remove(next.occurrenceId, accountKey)
                     }
                     ListenBrainzSubmissionResult.RETRYABLE -> return Result.retry()
+                    // User revoked this provider while the worker was active.
+                    // Keep local occurrences, but do not retry without consent.
+                    ListenBrainzSubmissionResult.REVOKED -> return Result.success()
                     // Keep data when credentials are temporarily invalid; resume
                     // after explicit reconfiguration rather than hammering 401.
                     ListenBrainzSubmissionResult.AUTH_ERROR -> return Result.failure()

@@ -1,6 +1,10 @@
 package com.music.bitchord.data.catalog.metadata
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCachedReadAccess
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -47,8 +51,20 @@ internal class KtorListenBrainzPopularityTransport(
             socketTimeoutMillis = 15_000L
         }
     },
+    private val admission: RateLimitedProviderTransport = RateLimitedProviderTransport(),
 ) : ListenBrainzPopularityTransport {
-    override suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
+    private suspend fun <T> authorized(block: suspend () -> T): T =
+        admission.execute(
+            capability = ProviderCapability.CHART_MOST_PLAYED,
+            provider = BuiltInProviderKeys.LISTENBRAINZ,
+            scheduleLimited = { task -> task() },
+            networkCall = block,
+        )
+
+    override suspend fun recordingPopularity(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse =
+        authorized { recordingPopularityUnchecked(recordingMbids) }
+
+    private suspend fun recordingPopularityUnchecked(recordingMbids: List<String>): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
         provider = "listenbrainz",
         endpoint = "recording_popularity",
         status = { http: ListenBrainzPopularityHttpResponse -> http.status },
@@ -68,7 +84,10 @@ internal class KtorListenBrainzPopularityTransport(
         )
     }
 
-    override suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
+    override suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzPopularityHttpResponse =
+        authorized { topRecordingsForArtistUnchecked(artistMbid) }
+
+    private suspend fun topRecordingsForArtistUnchecked(artistMbid: String): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
         provider = "listenbrainz",
         endpoint = "artist_top",
         status = { http: ListenBrainzPopularityHttpResponse -> http.status },
@@ -86,6 +105,10 @@ internal class KtorListenBrainzPopularityTransport(
         )
     }
     override suspend fun sitewideRecordings(
+        range: ListenBrainzSitewideRange, count: Int,
+    ): ListenBrainzPopularityHttpResponse = authorized { sitewideRecordingsUnchecked(range, count) }
+
+    private suspend fun sitewideRecordingsUnchecked(
         range: ListenBrainzSitewideRange, count: Int,
     ): ListenBrainzPopularityHttpResponse = measureMetadataHttp(
         provider = "listenbrainz",
@@ -198,6 +221,7 @@ internal class ListenBrainzPopularityClient(
     private val limiter: ListenBrainzRateLimiter = ListenBrainzRequestBudget.limiter,
     private val nowMillis: () -> Long = { System.currentTimeMillis() },
     private val retryDelay: suspend (Long) -> Unit = { delay(it) },
+    private val cacheRead: ProviderCachedReadAccess = ProviderCachedReadAccess(),
 ) {
     private data class CacheValue(
         val evidence: List<ListenBrainzPopularityEvidence>,
@@ -248,6 +272,15 @@ internal class ListenBrainzPopularityClient(
     suspend fun sitewideRecordings(
         range: ListenBrainzSitewideRange = ListenBrainzSitewideRange.WEEK,
         count: Int = 25,
+    ): ListenBrainzSitewideFetchResult =
+        cacheRead.read(ProviderCapability.CHART_MOST_PLAYED,
+            BuiltInProviderKeys.LISTENBRAINZ, ListenBrainzSitewideFetchResult.Unavailable) {
+            sitewideRecordingsUnchecked(range, count)
+        }
+
+    private suspend fun sitewideRecordingsUnchecked(
+        range: ListenBrainzSitewideRange,
+        count: Int,
     ): ListenBrainzSitewideFetchResult {
         if (count !in 1..100) return ListenBrainzSitewideFetchResult.InvalidRequest
         val key = range to count
@@ -309,7 +342,13 @@ internal class ListenBrainzPopularityClient(
         }
     }
 
-    suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzArtistTopFetchResult {
+    suspend fun topRecordingsForArtist(artistMbid: String): ListenBrainzArtistTopFetchResult =
+        cacheRead.read(ProviderCapability.CHART_MOST_PLAYED,
+            BuiltInProviderKeys.LISTENBRAINZ, ListenBrainzArtistTopFetchResult.Unavailable) {
+            topRecordingsForArtistUnchecked(artistMbid)
+        }
+
+    private suspend fun topRecordingsForArtistUnchecked(artistMbid: String): ListenBrainzArtistTopFetchResult {
         val id = artistMbid.lowercase(Locale.ROOT)
         if (!MBID.matches(id)) return ListenBrainzArtistTopFetchResult.InvalidRequest
         artistFetchMutex.lock()
@@ -371,7 +410,13 @@ internal class ListenBrainzPopularityClient(
         }
     }
 
-    suspend fun recordingPopularity(ids: List<String>): ListenBrainzPopularityFetchResult {
+    suspend fun recordingPopularity(ids: List<String>): ListenBrainzPopularityFetchResult =
+        cacheRead.read(ProviderCapability.CHART_MOST_PLAYED,
+            BuiltInProviderKeys.LISTENBRAINZ, ListenBrainzPopularityFetchResult.Unavailable) {
+            recordingPopularityUnchecked(ids)
+        }
+
+    private suspend fun recordingPopularityUnchecked(ids: List<String>): ListenBrainzPopularityFetchResult {
         // Conservative batch size. No title or artist-name matching allowed.
         val normalized = ids.map { it.lowercase(Locale.ROOT) }
         if (normalized.isEmpty() || normalized.size > 100 ||

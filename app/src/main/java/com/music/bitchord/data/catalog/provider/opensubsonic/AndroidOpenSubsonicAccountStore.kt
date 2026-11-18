@@ -5,8 +5,10 @@ import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.music.bitchord.data.catalog.provider.ProviderSyncResult
+import com.music.bitchord.data.providers.ProviderRuntime
 import java.security.KeyStore
 import java.util.Base64
+import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -32,12 +34,18 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
         val authMode = prefs.getString(KEY_AUTH_MODE, null)
             ?.let { saved -> OpenSubsonicAuthMode.entries.firstOrNull { it.name == saved } }
             ?: return null
+        // Pre-realm versions stored assets under opensubsonic:<accountId>.
+        // These historical rows cannot prove which authenticated server owned
+        // them. Migrate only the account metadata to a NEW, durable namespace;
+        // do not rewrite, delete or silently authorize old MediaAssets.
+        val catalogRealmId = verifiedCatalogRealmId() ?: return null
         return OpenSubsonicAccountRecord(
             accountId = accountId,
             serverUrl = serverUrl,
             authMode = authMode,
             username = prefs.getString(KEY_USERNAME, "").orEmpty(),
             ratingScopeId = prefs.getString(KEY_RATING_SCOPE, "").orEmpty(),
+            catalogRealmId = catalogRealmId,
             lastHealthAtEpochSeconds = prefs.longOrNull(KEY_LAST_HEALTH_AT),
             lastHealthReachable = prefs.booleanOrNull(KEY_LAST_HEALTH_REACHABLE),
             lastServerType = prefs.getString(KEY_LAST_SERVER_TYPE, null),
@@ -46,6 +54,13 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
             lastSyncSucceeded = prefs.booleanOrNull(KEY_LAST_SYNC_SUCCEEDED),
             lastSyncSummary = prefs.getString(KEY_LAST_SYNC_SUMMARY, null),
         )
+    }
+
+    private fun verifiedCatalogRealmId(): String? = synchronized(CATALOG_REALM_MIGRATION_LOCK) {
+        val stored = prefs.getString(KEY_CATALOG_REALM, null)
+        if (!stored.isNullOrBlank()) return@synchronized stored
+        val migrated = UUID.randomUUID().toString()
+        if (prefs.edit().putString(KEY_CATALOG_REALM, migrated).commit()) migrated else null
     }
 
     /**
@@ -69,6 +84,7 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
             .putString(KEY_AUTH_MODE, record.authMode.name)
             .putString(KEY_USERNAME, record.username)
             .putString(KEY_RATING_SCOPE, record.ratingScopeId)
+            .putString(KEY_CATALOG_REALM, record.catalogRealmId)
             .putNullableLong(KEY_LAST_HEALTH_AT, record.lastHealthAtEpochSeconds)
             .putNullableBoolean(KEY_LAST_HEALTH_REACHABLE, record.lastHealthReachable)
             .putNullableString(KEY_LAST_SERVER_TYPE, record.lastServerType)
@@ -76,11 +92,14 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
             .putNullableLong(KEY_LAST_SYNC_AT, record.lastSyncAtEpochSeconds)
             .putNullableBoolean(KEY_LAST_SYNC_SUCCEEDED, record.lastSyncSucceeded)
             .putNullableString(KEY_LAST_SYNC_SUMMARY, record.lastSyncSummary)
-            .apply()
+            .commit()
+            .also { if (!it) error("OpenSubsonic account metadata persistence unavailable") }
     }
 
     override fun clear() {
-        prefs.edit().clear().apply()
+        if (!prefs.edit().clear().commit()) {
+            error("OpenSubsonic account metadata removal unavailable")
+        }
     }
 
     private fun SharedPreferences.longOrNull(key: String): Long? =
@@ -99,12 +118,14 @@ internal class SharedPrefsOpenSubsonicAccountPersistence(
         if (value == null) remove(key) else putString(key, value)
 
     private companion object {
+        private val CATALOG_REALM_MIGRATION_LOCK = Any()
         const val PREFS_NAME = "bitchord_opensubsonic_account"
         const val KEY_ACCOUNT_ID = "account_id"
         const val KEY_SERVER_URL = "server_url"
         const val KEY_AUTH_MODE = "auth_mode"
         const val KEY_USERNAME = "username"
         const val KEY_RATING_SCOPE = "rating_scope_id"
+        const val KEY_CATALOG_REALM = "catalog_realm_id"
         const val KEY_LAST_HEALTH_AT = "last_health_at"
         const val KEY_LAST_HEALTH_REACHABLE = "last_health_reachable"
         const val KEY_LAST_SERVER_TYPE = "last_server_type"
@@ -163,10 +184,13 @@ internal class AndroidKeystoreOpenSubsonicCredentialStore(
     }
 
     override fun clear(accountId: String) {
-        prefs.edit()
-            .remove(ivKey(accountId))
-            .remove(ciphertextKey(accountId))
-            .apply()
+        if (!prefs.edit()
+                .remove(ivKey(accountId))
+                .remove(ciphertextKey(accountId))
+                .commit()
+        ) {
+            error("OpenSubsonic credential removal unavailable")
+        }
     }
 
     private fun encrypt(value: String): Pair<ByteArray, ByteArray> {
@@ -228,11 +252,24 @@ internal class AndroidOpenSubsonicAccountSession(
     val hasCredential: StateFlow<Boolean> = mutableHasCredential
 
     fun save(draft: OpenSubsonicAccountDraft): Result<OpenSubsonicAccountRecord> =
-        runCatching { repository.save(draft) }.also { refresh() }
+        runCatching {
+            val saved = repository.save(draft)
+            // ProviderRuntime is installed before the Android settings host.
+            // If durable canonical admission fails, do not advertise success.
+            if (ProviderRuntime.refreshOpenSubsonicAccountReadiness() == false) {
+                error("OpenSubsonic provider authorization persistence unavailable")
+            }
+            saved
+        }.also { refresh() }
 
     fun forget() {
-        repository.forget()
-        refresh()
+        try {
+            repository.forget()
+        } finally {
+            // No account/credential remains, so all remote descriptors close.
+            ProviderRuntime.refreshOpenSubsonicAccountReadiness()
+            refresh()
+        }
     }
 
     suspend fun testConnection(draft: OpenSubsonicAccountDraft): Result<OpenSubsonicConnectionReport> =

@@ -89,6 +89,15 @@ class ModuleManager {
 
     private fun logReuse(line: String) = TrackLog.d(TAG, line)
 
+    /** Cancel the detached producers of this capability-specific module
+     * instance. Never unload QuickJS's process-wide engine pool here: another
+     * authorized capability may use the same module ID. */
+    fun cancelPending() {
+        loads.clear()
+        searches.clear()
+        streams.clear()
+    }
+
     // ── Index ─────────────────────────────────────────────────────────────
 
     private class CachedIndex(val modules: List<SpineModule>, val fetchedAtMs: Long)
@@ -132,17 +141,15 @@ class ModuleManager {
                 TrackLog.d(TAG, "▶ fetchIndex(${redactModuleUrl(sourceUrl)})")
                 runCatching {
                     val request = Request.Builder().url(sourceUrl).build()
-                    Http.client.newCall(request).execute().use { resp ->
-                        if (!resp.isSuccessful) {
-                            throw Exception("HTTP ${resp.code} from ${redactModuleUrl(sourceUrl)}")
-                        }
-                        val body = resp.body?.string()
-                            ?: throw Exception("Empty body from ${redactModuleUrl(sourceUrl)}")
-                        val modules = ModuleIndex.parseModules(json, body)
-                        TrackLog.d(TAG, "  Parsed ${modules.size} modules")
-                        modules
-                    }
-                }.onSuccess {
+                    val (code, body) = awaitModuleHttp(Http.client.newCall(request))
+                    if (code !in 200..299)
+                        throw Exception("HTTP $code from ${redactModuleUrl(sourceUrl)}")
+                    if (body.isEmpty())
+                        throw Exception("Empty body from ${redactModuleUrl(sourceUrl)}")
+                    val modules = ModuleIndex.parseModules(json, body)
+                    TrackLog.d(TAG, "  Parsed ${modules.size} modules")
+                    modules
+                }.onCancellation().onSuccess {
                     indexCache[sourceUrl] = CachedIndex(it, System.currentTimeMillis())
                 }.onFailure {
                     TrackLog.e(TAG, "  ✗ fetchIndex FAILED for ${redactModuleUrl(sourceUrl)}: ${it.message}", it)
@@ -216,12 +223,11 @@ class ModuleManager {
 
             TrackLog.d(TAG, "  Resolved download URL: ${redactModuleUrl(downloadUrl)}")
             val request = Request.Builder().url(downloadUrl).build()
-            val jsCode = Http.client.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    throw Exception("HTTP ${resp.code} downloading module ${module.id}")
-                }
-                resp.body?.string() ?: throw Exception("Empty body for module ${module.id}")
-            }
+            val (code, jsCode) = awaitModuleHttp(Http.client.newCall(request))
+            if (code !in 200..299)
+                throw Exception("HTTP $code downloading module ${module.id}")
+            if (jsCode.isEmpty())
+                throw Exception("Empty body for module ${module.id}")
             val baseUrl = downloadUrl.substringBeforeLast("/")
 
             QuickJsExecutor.loadModule(module.id, jsCode, baseUrl).getOrThrow()
@@ -230,7 +236,7 @@ class ModuleManager {
             loadedModules[module.id] = loaded
             TrackLog.d(TAG, "  ✓ Loaded module ${module.id}: ${jsCode.length} chars, baseUrl=${redactModuleUrl(baseUrl)}")
             loaded
-        }.onFailure {
+        }.onCancellation().onFailure {
             TrackLog.e(TAG, "  ✗ loadModule FAILED for ${module.id}: ${it.message}", it)
         }
     }

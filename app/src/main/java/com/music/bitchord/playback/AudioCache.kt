@@ -7,6 +7,7 @@ import android.os.SystemClock
 import com.music.bitchord.data.TrackLog
 import com.music.bitchord.playback.smart.AutomixAnalysisSource
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
@@ -23,6 +24,8 @@ import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.DeviceCodecs
 import com.music.bitchord.data.sources.SourceKind
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderRuntime
 import com.music.bitchord.data.sources.SourceRegistry
 import com.music.bitchord.data.sources.SourceResolver
 import com.music.bitchord.data.sources.TrackMatcher
@@ -235,6 +238,100 @@ object AudioCache {
         }
     }
 
+    /**
+     * True only for a complete old-style logical source cache entry whose
+     * metadata proves its owner and whose first bytes are progressive audio.
+     * Never assign a new winner to existing bytes or accept unknown spans.
+     * No network operation occurs here.
+     */
+    private fun isCompleteRecognizedProgressiveCache(
+        key: String,
+        meta: ContentMetadata,
+        mediaId: String,
+    ): Boolean {
+        val owner = meta.get(META_SOURCE_PROVIDER, null as String?)
+        val instance = meta.get(META_SOURCE_INSTANCE, null as String?)
+        if ((owner != "addon" && owner != "custom_module") ||
+            instance.isNullOrBlank() || instance.length > 128 ||
+            meta.get(META_MEDIA_ID, null as String?) != mediaId) return false
+        val base = cacheKeyBaseOf(mediaId)
+        val legacyLogical = key == base || key.startsWith("${base}#")
+        val modernPhysical = scopedPhysicalKeyBelongsTo(
+            key, ProviderKey(owner, instance),
+        ) && meta.get(META_SOURCE_ROOT, null as String?) == "1" &&
+            !meta.get(META_SOURCE_PARTITION, null as String?).isNullOrBlank()
+        if (!legacyLogical && !modernPhysical) return false
+        val total = ContentMetadata.getContentLength(meta)
+        if (total <= 0L || !cache.isCached(key, 0L, total)) return false
+        val firstBytes = runCatching {
+            val file = cache.getCachedSpans(key)
+                .firstOrNull { it.isCached && it.position == 0L && it.length >= 16L }
+                ?.file ?: return@runCatching null
+            file.inputStream().use { input ->
+                val header = ByteArray(16)
+                val count = input.read(header)
+                if (count > 0) header.copyOf(count) else null
+            }
+        }.getOrNull() ?: return false
+        return hasProgressiveAudioSignature(firstBytes)
+    }
+
+    /** Require additional account/endpoint scope beyond legacy instance ID. */
+    private fun isVerifiedProgressiveSourceCache(
+        key: String,
+        meta: ContentMetadata,
+        mediaId: String,
+        logicalPartition: String,
+    ): Boolean {
+        if (!isCompleteRecognizedProgressiveCache(key, meta, mediaId)) return false
+        if (isScopedSourcePhysicalCacheKey(key) &&
+            meta.get(META_SOURCE_PARTITION, null as String?) != logicalPartition) return false
+        val owner = ProviderKey(
+            meta.get(META_SOURCE_PROVIDER, null as String?) ?: return false,
+            meta.get(META_SOURCE_INSTANCE, null as String?) ?: return false,
+        )
+        return sourceCacheScopeMatches(
+            meta.get(META_SOURCE_SCOPE, null as String?),
+            currentSourcePlaybackCacheScope(owner),
+        )
+    }
+
+    /**
+     * Called only on the deferred MediaSource's IO dispatcher. Restore a
+     * trusted complete progressive file without any source/network preflight.
+     * Open/read rechecks current admission, so a revoked provider cannot
+     * retain access across a queue change or an offline replay.
+     */
+    internal fun cachedProgressiveSourceSelection(
+        item: MediaItem,
+    ): PreparedSourceMediaSelection? {
+        if (!::cache.isInitialized) return null
+        val uri = item.localConfiguration?.uri ?: return null
+        if (!isLogicalSourcePlaybackUri(uri)) return null
+        val mediaId = mediaIdIn(uri) ?: return null
+        // Self-indexed resource metadata: a durable logical recording
+        // pointer lives on the physical cache bucket itself. Cache eviction
+        // removes the index and bytes atomically. Opaque keys hold no URLs.
+        val logical = keyFactory.buildCacheKey(DataSpec(uri))
+        val candidates = sequenceOf(logical) +
+            cache.keys.asSequence().filter(::isScopedSourcePhysicalCacheKey)
+        for (key in candidates) {
+            val meta = runCatching { cache.getContentMetadata(key) }.getOrNull() ?: continue
+            if (!isVerifiedProgressiveSourceCache(key, meta, mediaId, logical)) continue
+            val lease = sourceCacheReadLease(
+                meta.get(META_SOURCE_PROVIDER, null as String?),
+                meta.get(META_SOURCE_INSTANCE, null as String?),
+                completelyCached = true,
+                gate = ProviderRuntime.gateOrNull(),
+            ) ?: continue
+            if (!lease.allowed()) continue
+            return prepareCachedProgressiveSourceMediaSelection(
+                item, lease, if (isScopedSourcePhysicalCacheKey(key)) key else null,
+            )
+        }
+        return null
+    }
+
     /** Drops everything on disk. The listener asked; no grace period. */
     fun clear(onComplete: () -> Unit = {}) {
         cancel()
@@ -369,13 +466,28 @@ object AudioCache {
      */
     const val WATCH_READ_PARAM = "watch_read"
 
+    /** Identifies the complete logical playback variant, including mix and rendition. */
+    internal fun logicalSourceCachePartition(uri: Uri): String =
+        keyFactory.buildCacheKey(DataSpec(uri))
+
     private val keyFactory = CacheKeyFactory { spec ->
         val key = phoneKey(spec)
         if (spec.uri.getQueryParameter(WATCH_READ_PARAM) != null) "$key#watch" else key
     }
 
-    private fun phoneKey(spec: androidx.media3.datasource.DataSpec): String =
-        spec.uri.getQueryParameter("v")
+    private fun phoneKey(spec: androidx.media3.datasource.DataSpec): String {
+        // HTTP(S) HLS/DASH segments are not YouTube watch identities. A
+        // random CDN query `v=` must never collapse unrelated files onto the
+        // same cache span; use the scoped key when supplied, else exact URL.
+        if (spec.uri.scheme == "http" || spec.uri.scheme == "https")
+            return spec.key ?: spec.uri.toString()
+        // The verified offline physical byte cache is opened through the
+        // logical MediaItem using its opaque customCacheKey. Never restore a
+        // signed physical URL or any persisted HTTP authorization header.
+        scopedOfflineSourceCacheKey(
+            spec.uri.scheme, spec.uri.authority, spec.key,
+        )?.let { return it }
+        return spec.uri.getQueryParameter("v")
             // A YouTube id can name several different recordings on disk: the
             // Opus rendition YouTube serves, whatever a source ranked above it
             // hands over instead — see [SourceResolver.substituteForYouTube] —
@@ -426,6 +538,7 @@ object AudioCache {
             }
             ?: spec.key
             ?: spec.uri.toString()
+    }
 
     /**
      * Splits the `#alt` bucket in two along whatever this process currently
@@ -578,7 +691,7 @@ object AudioCache {
      * it is evicted, discarded and cleared together with the bytes it
      * describes, and there is nothing to keep in step.
      */
-    fun recordServed(spec: DataSpec, servedUrl: String) {
+    fun recordServed(spec: DataSpec, servedUrl: String, sourceOwner: ProviderKey? = null) {
         if (!::cache.isInitialized) return
         if (spec.uri.scheme != "bitchord") return
         val mediaId = mediaIdIn(spec.uri) ?: return
@@ -595,11 +708,23 @@ object AudioCache {
             fun has(name: String) = meta.get(name, null as String?) != null
             val usedByPlayback = has(META_PLAYBACK) || !analysis
             val played = has(META_PLAYED) || (!analysis && mediaId in playedIds)
+            val sourceBacked = spec.uri.authority == "source"
+            val currentScope = sourceOwner?.let(::currentSourcePlaybackCacheScope)
+            // Unknown old spans or a previous account must never acquire
+            // a new winning-provider stamp merely because resolution ran.
+            val safeScope = currentScope?.takeIf { candidate ->
+                cache.getCachedSpans(key).isEmpty() ||
+                    meta.get(META_SOURCE_SCOPE, null as String?) == candidate
+            }
             val tagged = meta.get(META_ORIGIN, null as String?) == origin.name &&
                 meta.get(META_MEDIA_ID, null as String?) == mediaId &&
                 has(META_PLAYBACK) == usedByPlayback &&
                 (usedByPlayback || has(META_ANALYSIS)) &&
-                has(META_PLAYED) == played
+                has(META_PLAYED) == played &&
+                (!sourceBacked || (sourceOwner != null && safeScope != null &&
+                    meta.get(META_SOURCE_PROVIDER, null as String?) == sourceOwner.providerId &&
+                    meta.get(META_SOURCE_INSTANCE, null as String?) == sourceOwner.instanceId &&
+                    meta.get(META_SOURCE_SCOPE, null as String?) == safeScope))
             // Every re-open — a seek, a continuation fetch — passes through
             // here. Only write when something would actually change.
             if (tagged && (song == null || has(META_TITLE))) return
@@ -608,6 +733,20 @@ object AudioCache {
                 ContentMetadataMutations().also { mutations ->
                     mutations.set(META_ORIGIN, origin.name)
                     mutations.set(META_MEDIA_ID, mediaId)
+                    if (sourceBacked) {
+                        // The logical source id names the queued row, not
+                        // necessarily the instance whose bytes actually won.
+                        // Persist only that verified winning provider identity.
+                        if (sourceOwner != null && safeScope != null) {
+                            mutations.set(META_SOURCE_PROVIDER, sourceOwner.providerId)
+                            mutations.set(META_SOURCE_INSTANCE, sourceOwner.instanceId)
+                            mutations.set(META_SOURCE_SCOPE, safeScope)
+                        } else {
+                            mutations.remove(META_SOURCE_PROVIDER)
+                            mutations.remove(META_SOURCE_INSTANCE)
+                            mutations.remove(META_SOURCE_SCOPE)
+                        }
+                    }
                     if (usedByPlayback) mutations.set(META_PLAYBACK, "1") else mutations.set(META_ANALYSIS, "1")
                     if (played) mutations.set(META_PLAYED, "1")
                     describe(mutations, song, spec.uri)
@@ -739,6 +878,11 @@ object AudioCache {
                 if (!foreign && !analysisOnly) return@forEach
                 val mediaId = meta.get(META_MEDIA_ID, null as String?)
                 if (mediaId != null && mediaId in keep) return@forEach
+                // Preserve only proven, complete progressive source bytes.
+                // Cache retention grants NO playback permission: every later
+                // open still needs a fresh per-instance canonical ticket.
+                if (!analysisOnly && mediaId != null &&
+                    isCompleteRecognizedProgressiveCache(key, meta, mediaId)) return@forEach
                 runCatching { cache.removeResource(key) }
                     .onSuccess {
                         dropped++
@@ -772,6 +916,11 @@ object AudioCache {
 
     private const val META_ORIGIN = "bc_origin"
     private const val META_MEDIA_ID = "bc_media_id"
+    private const val META_SOURCE_PROVIDER = "bc_source_provider"
+    private const val META_SOURCE_INSTANCE = "bc_source_instance"
+    private const val META_SOURCE_SCOPE = "bc_source_scope_v2"
+    private const val META_SOURCE_ROOT = "bc_source_physical_progressive_root_v1"
+    private const val META_SOURCE_PARTITION = "bc_source_logical_variant_v1"
     private const val META_TITLE = "bc_title"
     private const val META_ARTIST = "bc_artist"
     private const val META_ALBUM = "bc_album"
@@ -798,22 +947,194 @@ object AudioCache {
      * through, and anything already there is served without a request.
      * Local file and content URIs bypass disk caching to prevent redundant writes.
      */
-    fun playbackFactory(upstream: DataSource.Factory): DataSource.Factory = DataSource.Factory {
+    // Public compatibility API for other existing playback consumers.
+    fun playbackFactory(upstream: DataSource.Factory): DataSource.Factory =
+        playbackFactory(upstream, null, null, null)
+
+    /**
+     * The deferred factory captures the root audio request and original
+     * logical media ID. Multiple range opens within one prepared media item
+     * may reuse their own incomplete spans; a new media-item preparation
+     * cannot splice partial bytes from an earlier request.
+     */
+    internal class SourcePhysicalProgressiveCacheRoot(
+        val mediaId: String,
+        val physicalUrl: String,
+        val logicalPartition: String,
+    ) {
+        val admittedKeys: MutableSet<String> =
+            java.util.concurrent.ConcurrentHashMap.newKeySet()
+    }
+
+    // Scoped adaptive playback uses a per-MediaItem ticket; this overload is
+    // intentionally internal so no public API exposes a private policy lease.
+    internal fun playbackFactory(
+        upstream: DataSource.Factory,
+        onSourceCacheLease: ((ProviderPlaybackByteLease) -> Unit)?,
+        adaptiveSegmentLease: (() -> ProviderPlaybackByteLease?)?,
+        adaptiveSegmentRequest: ((DataSpec) -> DataSpec)?,
+        progressiveRoot: SourcePhysicalProgressiveCacheRoot? = null,
+    ): DataSource.Factory = DataSource.Factory {
         val cacheDs = cacheFactory(upstream).createDataSource()
         val upstreamDs = upstream.createDataSource()
         object : DataSource {
             private var activeDs: DataSource = cacheDs
+            private var cachedSourceLease: ProviderPlaybackByteLease? = null
+            private var cachedSourceScope: String? = null
+            private var unsubscribeCachedSource: (() -> Unit)? = null
+            @Volatile private var cachedSourceRevoked = false
 
             override fun addTransferListener(transferListener: androidx.media3.datasource.TransferListener) {
                 cacheDs.addTransferListener(transferListener)
                 upstreamDs.addTransferListener(transferListener)
             }
 
+            /**
+             * Complete cache hits never reach the HTTP guard or resolver. For
+             * provider-owned source rows, authorize the *actual provider that
+             * produced these bytes*, not the pinned row's source id.
+             *
+             * A cache entry with unknown provenance or incomplete bytes could
+             * combine two different recordings if a later resolution changes
+             * providers. Remove those spans before falling back to a new
+             * authorized resolve, or fail closed if another reader holds them.
+             */
+            /**
+             * Attach the canonical recording ID to a newly admitted physical
+             * HTTP cache key. Existing unknown spans are discarded rather than
+             * attributed to a new owner after stream resolution.
+             */
+            private fun indexPhysicalProgressiveRoot(
+                key: String,
+                root: SourcePhysicalProgressiveCacheRoot,
+                lease: ProviderPlaybackByteLease,
+                scope: String,
+            ) {
+                if (!scopedPhysicalKeyBelongsTo(key, lease.providerKey) || !lease.allowed())
+                    throw IOException("Source root requires active scoped provider")
+                val oldSpans = cache.getCachedSpans(key)
+                if (oldSpans.isNotEmpty()) {
+                    val meta = cache.getContentMetadata(key)
+                    val same = meta.get(META_MEDIA_ID, null as String?) == root.mediaId &&
+                        meta.get(META_SOURCE_PROVIDER, null as String?) == lease.providerKey.providerId &&
+                        meta.get(META_SOURCE_INSTANCE, null as String?) == lease.providerKey.instanceId &&
+                        sourceCacheScopeMatches(meta.get(META_SOURCE_SCOPE, null as String?), scope) &&
+                        meta.get(META_SOURCE_ROOT, null as String?) == "1" &&
+                        meta.get(META_SOURCE_PARTITION, null as String?) == root.logicalPartition
+                    val sameMediaItem = same && key in root.admittedKeys
+                    val complete = same && isCompleteRecognizedProgressiveCache(
+                        key, meta, root.mediaId,
+                    )
+                    if (!sameMediaItem && !complete) {
+                        // An incomplete earlier HTTP response may have
+                        // changed since the last provider preflight.
+                        cache.removeResource(key)
+                        if (cache.getCachedSpans(key).isNotEmpty())
+                            throw IOException("Old source bytes are still in use")
+                    }
+                }
+                if (!sourceCacheScopeMatches(
+                    scope, currentSourcePlaybackCacheScope(lease.providerKey),
+                )) throw IOException("Source account changed during preparation")
+                cache.applyContentMetadataMutations(key, ContentMetadataMutations().also {
+                    it.set(META_ORIGIN, Origin.OTHER.name)
+                    it.set(META_MEDIA_ID, root.mediaId)
+                    it.set(META_SOURCE_PROVIDER, lease.providerKey.providerId)
+                    it.set(META_SOURCE_INSTANCE, lease.providerKey.instanceId)
+                    it.set(META_SOURCE_SCOPE, scope)
+                    it.set(META_SOURCE_ROOT, "1")
+                    it.set(META_SOURCE_PARTITION, root.logicalPartition)
+                    it.set(META_PLAYBACK, "1")
+                })
+                root.admittedKeys.add(key)
+            }
+
+            private fun checkSourceCache(dataSpec: DataSpec) {
+                if (dataSpec.uri.scheme != "bitchord" ||
+                    dataSpec.uri.authority != "source") return
+                val key = keyFactory.buildCacheKey(dataSpec)
+                if (cache.getCachedSpans(key).isEmpty()) return
+                val meta = cache.getContentMetadata(key)
+                val length = ContentMetadata.getContentLength(meta)
+                val complete = length > 0L && cache.isCached(key, 0L, length)
+                val provider = meta.get(META_SOURCE_PROVIDER, null as String?)
+                val instance = meta.get(META_SOURCE_INSTANCE, null as String?)
+                val scope = meta.get(META_SOURCE_SCOPE, null as String?)
+                // Revalidate the complete physical entry at OPEN, not just
+                // at deferred preflight. Another Media3 request, cache eviction
+                // or a changed account may have replaced its bytes/metadata.
+                val sourceIdentity = mediaIdIn(dataSpec.uri)
+                val partition = logicalSourceCachePartition(dataSpec.uri)
+                val physicalValid = !isScopedSourcePhysicalCacheKey(key) ||
+                    (sourceIdentity != null &&
+                        isVerifiedProgressiveSourceCache(key, meta, sourceIdentity, partition))
+                val matched = physicalValid && provider != null && instance != null &&
+                    sourceCacheScopeMatches(
+                        scope,
+                        currentSourcePlaybackCacheScope(ProviderKey(provider, instance)),
+                    )
+                val lease = if (matched) sourceCacheReadLease(
+                    provider, instance, complete, ProviderRuntime.gateOrNull(),
+                ) else null
+                if (lease == null) {
+                    try {
+                        cache.removeResource(key)
+                        if (cache.getCachedSpans(key).isNotEmpty()) {
+                            throw IOException("Source cache still in use")
+                        }
+                    } catch (_: Exception) {
+                        throw IOException("Cannot safely reuse source-owned audio cache")
+                    }
+                    return
+                }
+                // A complete cached manifest also skips the resolver.
+                // Bind its independently admitted owner to the enclosing
+                // MediaSource before Media3 opens any HLS/DASH segment.
+                onSourceCacheLease?.invoke(lease)
+                cachedSourceLease = lease
+                cachedSourceScope = scope
+                unsubscribeCachedSource = lease.onRevoke {
+                    cachedSourceRevoked = true
+                    runCatching { cacheDs.close() }
+                }
+                checkCachedSourcePermission()
+            }
+
+            private fun checkCachedSourcePermission() {
+                if (cachedSourceRevoked || cachedSourceLease?.allowed() == false)
+                    throw IOException("Cached source playback capability revoked")
+                val leased = cachedSourceLease
+                val stamp = cachedSourceScope
+                if (leased != null && stamp != null &&
+                    !sourceCacheScopeMatches(
+                        stamp, currentSourcePlaybackCacheScope(leased.providerKey),
+                    )) throw IOException("Cached source endpoint or account changed")
+            }
+
+            private fun releaseCachedLease() {
+                unsubscribeCachedSource?.invoke()
+                unsubscribeCachedSource = null
+                cachedSourceLease = null
+                cachedSourceScope = null
+            }
+
             override fun open(dataSpec: DataSpec): Long {
+                releaseCachedLease()
+                cachedSourceRevoked = false
                 val scheme = dataSpec.uri.scheme
+                // Untrusted HLS/DASH playlists may reference file:// or
+                // content:// segments. Only the initial logical source route
+                // and HTTP(S) media are valid inside a provider media item.
+                // Ordinary local playback has no adaptiveSegmentLease and is
+                // unaffected by this boundary.
+                if (adaptiveSegmentLease != null)
+                    requireAdaptiveSourceResourceScheme(scheme, dataSpec.uri.authority)
                 activeDs = if (
                     scheme == "file" ||
                     scheme == "content" ||
+                    // Do not let a historical video-id cache hit bypass the
+                    // PlaybackService refusal of retired audio backends.
+                    isRetiredWatchCacheRequest(dataSpec.uri) ||
                     CanonicalRemotePlaybackUri.isCanonical(dataSpec.uri.toString())
                 ) {
                     // Canonical remote direct play deliberately has no offline/cache
@@ -822,15 +1143,84 @@ object AudioCache {
                 } else {
                     cacheDs
                 }
-                return activeDs.open(dataSpec)
+                return try {
+                    var openingSpec = dataSpec
+                    if (activeDs === cacheDs) {
+                        // HLS/DASH segment DataSpecs use their own HTTP URLs,
+                        // so they can hit CacheDataSource without touching
+                        // the provider-aware HTTP transport or its customData.
+                        // This per-MediaItem gate protects those cached bytes.
+                        if (adaptiveSegmentLease != null &&
+                            (scheme == "http" || scheme == "https")) {
+                            val lease = admitAdaptiveSegmentCacheRead(adaptiveSegmentLease())
+                            // Restore the manifest's request headers only for
+                            // the same trusted origin. Perform this *before*
+                            // cache keying: a static URL behind two account
+                            // headers must never reuse another account's bytes.
+                            val request = adaptiveSegmentRequest?.invoke(dataSpec) ?: dataSpec
+                            // Hash both the signed URL and effective headers.
+                            // Neither tokens nor secrets appear in plaintext
+                            // filenames, cache keys or cache metadata.
+                            val scope = currentSourcePlaybackCacheScope(lease.providerKey)
+                                ?: throw IOException("Source account scope not configured")
+                            // Reserve a distinct physical cache entry for
+                            // each logical recording + mix/rendition variant.
+                            // Otherwise two tracks served through a shared
+                            // server endpoint could evict each other's bytes.
+                            val root = progressiveRoot?.takeIf {
+                                dataSpec.uri.toString() == it.physicalUrl
+                            }
+                            val rootRequestKey = root?.let {
+                                scopedProgressiveRootRequestKey(
+                                    request.key, it.logicalPartition,
+                                )
+                            } ?: request.key
+                            openingSpec = request.buildUpon().setKey(
+                                providerAdaptiveSegmentCacheKey(
+                                    lease.providerKey, request.uri.toString(), rootRequestKey,
+                                    request.httpRequestHeaders, scope,
+                                ),
+                            ).build()
+                            cachedSourceScope = scope
+                            // Only the winning progressive root creates a
+                            // logical recording index. Adaptive manifests and
+                            // segments never masquerade as offline audio files.
+                            if (root != null) {
+                                indexPhysicalProgressiveRoot(
+                                    openingSpec.key
+                                        ?: throw IOException("Physical source key missing"),
+                                    root, lease, scope,
+                                )
+                            }
+                            cachedSourceLease = lease
+                            unsubscribeCachedSource = lease.onRevoke {
+                                cachedSourceRevoked = true
+                                runCatching { cacheDs.close() }
+                            }
+                        }
+                        checkSourceCache(dataSpec)
+                    }
+                    val available = activeDs.open(openingSpec)
+                    checkCachedSourcePermission()
+                    available
+                } catch (error: Exception) {
+                    releaseCachedLease()
+                    runCatching { activeDs.close() }
+                    throw error
+                }
             }
 
-            override fun read(buffer: ByteArray, offset: Int, length: Int): Int =
-                activeDs.read(buffer, offset, length)
+            override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                checkCachedSourcePermission()
+                val read = activeDs.read(buffer, offset, length)
+                checkCachedSourcePermission()
+                return read
+            }
 
             override fun getUri(): Uri? = activeDs.uri
 
             override fun close() {
+                releaseCachedLease()
                 activeDs.close()
             }
         }

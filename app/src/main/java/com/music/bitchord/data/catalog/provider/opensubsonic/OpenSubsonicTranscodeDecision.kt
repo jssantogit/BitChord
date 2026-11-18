@@ -131,6 +131,7 @@ internal class OpenSubsonicTranscodeStreamTicket internal constructor(
 ) {
     internal fun accountIsCurrent(): Boolean = runtime.accountIsCurrent()
     internal fun accountRevisionIsCurrent(): Boolean = runtime.accountRevisionIsCurrent()
+    internal fun onCapabilityRevoked(callback: () -> Unit): () -> Unit = runtime.onCapabilityRevoked(callback)
 
     internal fun materializeAuthenticatedDataSpec(logical: DataSpec): DataSpec {
         if (!runtime.accountIsCurrent()) {

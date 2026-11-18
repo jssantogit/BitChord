@@ -8,6 +8,9 @@ import com.music.bitchord.diagnostics.DiagnosticRecoveryOutcome
 import com.music.bitchord.data.Http
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URI
@@ -32,6 +35,7 @@ internal enum class OpenSubsonicArtworkAccessFailure {
     UNSUPPORTED_PROVIDER,
     ACCOUNT_NOT_CONFIGURED,
     ACCOUNT_MISMATCH,
+    NOT_AUTHORIZED,
 }
 
 internal sealed interface OpenSubsonicArtworkAccessResult {
@@ -47,8 +51,10 @@ internal class OpenSubsonicArtworkAccess(
     private val assets: OpenSubsonicArtworkAssetStore,
     private val accounts: OpenSubsonicAccountRepository,
     private val saltFactory: () -> String = ::defaultOpenSubsonicSalt,
+    private val gateProvider: () -> ProviderPolicyGate? = ProviderRuntime::gateOrNull,
 ) {
     suspend fun resolve(mediaAssetId: String): OpenSubsonicArtworkAccessResult {
+        val accountRevision = OpenSubsonicAccountRevisionClock.current()
         val asset = assets.mediaAsset(mediaAssetId)
             ?: return OpenSubsonicArtworkAccessResult.Failure(
                 OpenSubsonicArtworkAccessFailure.MEDIA_ASSET_NOT_FOUND,
@@ -76,12 +82,24 @@ internal class OpenSubsonicArtworkAccess(
             ?: return OpenSubsonicArtworkAccessResult.Failure(
                 OpenSubsonicArtworkAccessFailure.ACCOUNT_NOT_CONFIGURED,
             )
-        if (account.accountId != providerAccountId) {
+        if (account.accountId != providerAccountId ||
+            asset.provider != openSubsonicCatalogProviderKey(account.accountId, account.catalogRealmId)
+        ) {
             return OpenSubsonicArtworkAccessResult.Failure(
                 OpenSubsonicArtworkAccessFailure.ACCOUNT_MISMATCH,
             )
         }
 
+        val admission = OpenSubsonicCapabilityAdmission.open(
+            ProviderCapability.PERSONAL_LIBRARY, account.accountId, gateProvider,
+        ) ?: return OpenSubsonicArtworkAccessResult.Failure(
+            OpenSubsonicArtworkAccessFailure.NOT_AUTHORIZED,
+        )
+        if (OpenSubsonicAccountRevisionClock.current() != accountRevision ||
+            !admission.isCurrent()
+        ) return OpenSubsonicArtworkAccessResult.Failure(
+            OpenSubsonicArtworkAccessFailure.ACCOUNT_MISMATCH,
+        )
         return OpenSubsonicArtworkAccessResult.Ready(
             OpenSubsonicArtworkRequest(
                 recordingId = asset.recordingId,
@@ -92,13 +110,15 @@ internal class OpenSubsonicArtworkAccess(
                 coverArtId = locator.coverArtId,
                 accounts = accounts,
                 saltFactory = saltFactory,
+                capabilityAdmission = admission,
+                initialRevision = accountRevision,
             ),
         )
     }
 
     private fun accountIdFromProvider(providerKey: String): String? {
         if (!providerKey.startsWith(PROVIDER_PREFIX)) return null
-        return providerKey.removePrefix(PROVIDER_PREFIX).takeIf(String::isNotBlank)
+        return providerKey.removePrefix(PROVIDER_PREFIX).substringBefore(':').takeIf(String::isNotBlank)
     }
 
     private companion object {
@@ -116,12 +136,26 @@ internal class OpenSubsonicArtworkRequest internal constructor(
     private val coverArtId: String,
     private val accounts: OpenSubsonicAccountRepository,
     private val saltFactory: () -> String,
+    private val capabilityAdmission: OpenSubsonicCapabilityAdmission? = null,
+    private val initialRevision: Long = OpenSubsonicAccountRevisionClock.current(),
 ) {
+    internal fun isCurrent(): Boolean =
+        OpenSubsonicAccountRevisionClock.current() == initialRevision &&
+            (capabilityAdmission?.isCurrent() ?: true)
+
     suspend fun fetch(transport: OpenSubsonicArtworkTransport): OpenSubsonicArtworkFetchResult {
+        // Revoke results even when a credential is rotated while HTTP is in flight.
+        val revision = initialRevision
+        if (!isCurrent()) {
+            return OpenSubsonicArtworkFetchResult.AccountMismatch
+        }
         // First and only secure-store read in the artwork flow.
         val config = accounts.savedConfig()
             ?: return OpenSubsonicArtworkFetchResult.CredentialUnavailable
-        if (config.accountId != accountId) {
+        if (config.accountId != accountId || openSubsonicProviderKey(config) != providerKey ||
+            OpenSubsonicAccountRevisionClock.current() != revision ||
+            (capabilityAdmission != null && !capabilityAdmission.isCurrent())
+        ) {
             return OpenSubsonicArtworkFetchResult.AccountMismatch
         }
 
@@ -136,7 +170,13 @@ internal class OpenSubsonicArtworkRequest internal constructor(
         }
 
         return try {
-            when (val result = transport.fetch(endpointUrl, parameters)) {
+            val result = transport.fetch(endpointUrl, parameters)
+            if (OpenSubsonicAccountRevisionClock.current() != revision ||
+                (capabilityAdmission != null && !capabilityAdmission.isCurrent())
+            ) {
+                return OpenSubsonicArtworkFetchResult.AccountMismatch
+            }
+            when (result) {
                 is OpenSubsonicArtworkTransportResult.Success ->
                     OpenSubsonicArtworkFetchResult.Ready(
                         bytes = result.bytes,
@@ -253,12 +293,16 @@ internal class OpenSubsonicArtworkLoader(
             null
         }
         cached?.takeIf { it.isNotEmpty() }?.let {
-            return OpenSubsonicArtworkLoadResult.Ready(it, fromCache = true)
+            return if (request.isCurrent()) OpenSubsonicArtworkLoadResult.Ready(
+                it, fromCache = true,
+            ) else OpenSubsonicArtworkLoadResult.Placeholder("ACCOUNT_MISMATCH")
         }
 
         return when (val fetched = request.fetch(transport)) {
             is OpenSubsonicArtworkFetchResult.Ready -> {
-                if (fetched.bytes.isEmpty()) {
+                if (!request.isCurrent()) {
+                    OpenSubsonicArtworkLoadResult.Placeholder("ACCOUNT_MISMATCH")
+                } else if (fetched.bytes.isEmpty()) {
                     OpenSubsonicArtworkLoadResult.Placeholder("EMPTY_ARTWORK")
                 } else {
                     // Do not publish a stale image when composition/selection
@@ -275,7 +319,9 @@ internal class OpenSubsonicArtworkLoader(
                         )
                         // A valid fetched image must still display on ordinary disk failure.
                     }
-                    OpenSubsonicArtworkLoadResult.Ready(fetched.bytes, fromCache = false)
+                    if (request.isCurrent()) {
+                        OpenSubsonicArtworkLoadResult.Ready(fetched.bytes, fromCache = false)
+                    } else OpenSubsonicArtworkLoadResult.Placeholder("ACCOUNT_MISMATCH")
                 }
             }
             OpenSubsonicArtworkFetchResult.CredentialUnavailable ->

@@ -2,6 +2,13 @@ package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.*
 import com.music.bitchord.data.catalog.metadata.discogs.*
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -104,4 +111,56 @@ class AppleArtistTitleHintsTest {
         )
         assertEquals(listOf("SUPER REAL ME"), selected)
     }
+    @Test fun titleHintsUseEditorialDiscographyEvenWhenGeneralSearchIsOff() = runBlocking {
+        val mbKey = BuiltInProviderKeys.MUSICBRAINZ
+        val dgKey = BuiltInProviderKeys.DISCOGS
+        fun policy(editorial: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(
+                BuiltInProviderDescriptors.musicBrainz(ProviderReadiness.READY),
+                BuiltInProviderDescriptors.discogs(tokenConfigured = true, implemented = true),
+            ),
+            choices = mapOf(
+                ProviderCapability.CATALOG_SEARCH to listOf(
+                    ProviderChoice(mbKey, enabled = false, order = 0),
+                ),
+                ProviderCapability.EDITORIAL_DISCOGRAPHY to listOf(
+                    ProviderChoice(mbKey, enabled = editorial, order = 0),
+                ),
+                ProviderCapability.EDITION_METADATA to listOf(
+                    ProviderChoice(dgKey, enabled = false, order = 0),
+                ),
+            ),
+        )
+        val gate = ProviderPolicyGate(policy(editorial = true))
+        var networkCalls = 0
+        val client = MusicBrainzClient(
+            transport = object : MusicBrainzTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>, userAgent: String,
+                ): String {
+                    networkCalls++
+                    assertEquals("release-group", path)
+                    return """{"count":1,"offset":0,"release-groups":[{
+                        "id":"f2eaa98b-fef5-4327-9e7f-7d6500fdb973",
+                        "title":"SUPER REAL ME","primary-type":"EP",
+                        "first-release-date":"2024-03-25",
+                        "artist-credit":[{"name":"ILLIT","artist":{
+                            "id":"11111111-1111-4111-8111-111111111111"}}]}]}"""
+                }
+            },
+            admission = { gate },
+        )
+        val source = MusicBrainzDiscogsAppleTitleHintSource(
+            musicBrainz = MusicBrainzCatalogSearch(
+                client, capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
+            ),
+            policyGate = { gate },
+        )
+        assertEquals(listOf("SUPER REAL ME"), source.suggest("ILLIT", null))
+        assertEquals(1, networkCalls)
+        gate.replace(policy(editorial = false))
+        assertTrue(source.suggest("ILLIT", null).isEmpty())
+        assertEquals(1, networkCalls)
+    }
+
 }

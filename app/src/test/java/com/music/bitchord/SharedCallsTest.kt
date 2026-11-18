@@ -7,6 +7,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -30,6 +31,27 @@ class SharedCallsTest {
         now: () -> Long = System::currentTimeMillis,
         onReuse: () -> Unit = {},
     ) = SharedCalls<T>(ttlMs = ttlMs, scope = scope(), log = { onReuse() }, now = now)
+
+    @Test
+    fun `releasing a removed source cancels detached in-flight work`() = runBlocking {
+        val shared = shared<String>(ttlMs = 60_000)
+        val entered = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        val pending = async(Dispatchers.Default) {
+            runCatching {
+                shared.get("removed-source", { "" }) {
+                    entered.complete(Unit)
+                    try { awaitCancellation() }
+                    finally { cancelled.complete(Unit) }
+                }
+            }
+        }
+        withTimeout(5_000) { entered.await() }
+        shared.clear()
+        withTimeout(5_000) { cancelled.await() }
+        withTimeout(5_000) { pending.join() }
+        assertEquals(0, shared.size())
+    }
 
     @Test
     fun `a repeated question inside the window costs one call`() = runBlocking {

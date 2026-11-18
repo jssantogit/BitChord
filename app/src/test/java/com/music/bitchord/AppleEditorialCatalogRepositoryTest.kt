@@ -8,6 +8,7 @@ import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogResult
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogTransport
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogSearchAttribute
+import com.music.bitchord.data.providers.ProviderCapability
 import com.music.bitchord.data.catalog.metadata.ItunesPublicSearchSource
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -116,6 +117,39 @@ class AppleEditorialCatalogRepositoryTest {
                 attribute = ItunesCatalogSearchAttribute.ALBUM_TERM,
             )
             assertEquals("albumTerm", source.parameters["attribute"])
+        }
+
+    @Test fun artistSupplementalQueriesUseEditorialCapabilityEvenWithSearchDisabled() =
+        runBlocking {
+            val capabilities = mutableListOf<ProviderCapability>()
+            val transport = object : ItunesCatalogTransport {
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>,
+                ): String = error("Must use capability-aware dispatch")
+                override suspend fun get(
+                    path: String, parameters: Map<String, String>,
+                    capability: ProviderCapability,
+                ): String {
+                    assertEquals("search", path)
+                    capabilities += capability
+                    return """{"resultCount":0,"results":[]}"""
+                }
+            }
+            val catalog = AppleEditorialCatalogRepository(ItunesCatalogClient(transport))
+            for (attribute in listOf(
+                ItunesCatalogSearchAttribute.ARTIST_TERM,
+                ItunesCatalogSearchAttribute.ALBUM_TERM,
+            )) {
+                val result = catalog.searchArtistAlbumCandidates(
+                    query = "Artist", artistId = 77, storefront = "br",
+                    attribute = attribute,
+                )
+                assertTrue(result is AppleEditorialLoad.Success)
+            }
+            assertEquals(listOf(
+                ProviderCapability.EDITORIAL_DISCOGRAPHY,
+                ProviderCapability.EDITORIAL_DISCOGRAPHY,
+            ), capabilities)
         }
 
     @Test fun searchPaginationUsesDocumentedSongTermNotUndocumentedOffset() = runBlocking {

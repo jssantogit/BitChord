@@ -1,5 +1,16 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.PolicyGuardedCoverArtArchiveTransport
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.awaitCancellation
 import com.music.bitchord.data.catalog.metadata.CoverArtSize
 import com.music.bitchord.data.catalog.metadata.CoverArtArchive
 import com.music.bitchord.data.catalog.metadata.CoverArtArchiveResponse
@@ -14,6 +25,87 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CoverArtArchiveFallbackTest {
+    @Test fun revokedArchiveCannotPublishPreviouslyVerifiedCachedArtwork(): Unit = runBlocking {
+        val key = BuiltInProviderKeys.COVER_ART_ARCHIVE
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(BuiltInProviderDescriptors.coverArtArchive()),
+            choices = mapOf(ProviderCapability.RELEASE_ARTWORK to listOf(
+                ProviderChoice(key, enabled, 0),
+            )),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        var networkCalls = 0
+        var cacheReads = 0
+        val archive = CoverArtArchive(
+            transport = PolicyGuardedCoverArtArchiveTransport(
+                delegate = object : CoverArtArchiveTransport {
+                    override suspend fun get(path: String): CoverArtArchiveResponse {
+                        networkCalls++
+                        return CoverArtArchiveResponse(500, null)
+                    }
+                },
+                gateProvider = { gate },
+            ),
+            store = object : MusicBrainzCoverArtStore {
+                override suspend fun read(type: String, mbid: String): MusicBrainzCoverArtCacheEntry? {
+                    cacheReads++
+                    return MusicBrainzCoverArtCacheEntry(
+                        "verified-artist-group", mbid,
+                        "https://coverartarchive.org/release-group/$mbid/front-250",
+                        1_000L,
+                    )
+                }
+                override suspend fun readVerifiedGroupFronts(mbids: List<String>) =
+                    mbids.mapNotNull { read("verified-artist-group", it) }
+                override suspend fun write(value: MusicBrainzCoverArtCacheEntry) = Unit
+            },
+            nowEpochMs = { 1_001L },
+        )
+        assertEquals(
+            "https://coverartarchive.org/release-group/$group/front-250",
+            archive.cachedVerifiedGroupCover(group),
+        )
+        gate.replace(policy(false))
+        assertNull(archive.cachedVerifiedGroupCover(group))
+        assertEquals(emptyMap<String, String>(), archive.cachedVerifiedGroupCovers(listOf(group)))
+        assertNull(archive.findCover(release, group))
+        assertEquals(1, cacheReads)
+        assertEquals(0, networkCalls)
+    }
+
+    @Test fun revokedArchiveCancelsInFlightHttpWithoutGroupFallback(): Unit = runBlocking {
+        val key = BuiltInProviderKeys.COVER_ART_ARCHIVE
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(BuiltInProviderDescriptors.coverArtArchive()),
+            choices = mapOf(ProviderCapability.RELEASE_ARTWORK to listOf(
+                ProviderChoice(key, enabled, 0),
+            )),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        val started = CompletableDeferred<Unit>()
+        val cancelled = CompletableDeferred<Unit>()
+        var calls = 0
+        val archive = CoverArtArchive(
+            transport = PolicyGuardedCoverArtArchiveTransport(
+                delegate = object : CoverArtArchiveTransport {
+                    override suspend fun get(path: String): CoverArtArchiveResponse {
+                        calls++
+                        started.complete(Unit)
+                        try { awaitCancellation() }
+                        finally { cancelled.complete(Unit) }
+                    }
+                },
+                gateProvider = { gate },
+            ),
+        )
+        val request = async { archive.findCover(release, group) }
+        withTimeout(2_000) { started.await() }
+        gate.replace(policy(false))
+        withTimeout(2_000) { cancelled.await() }
+        assertNull(withTimeout(2_000) { request.await() })
+        assertEquals(1, calls)
+    }
+
     @Test fun stalledCoverApiRequestIsBoundedAndMayRecoverOnRetry() = runBlocking {
         var calls = 0
         val archive = CoverArtArchive(

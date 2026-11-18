@@ -27,8 +27,12 @@ class OpenSubsonicSyncRecoveryRoomTest {
         title: String,
         gate: CompletableDeferred<Unit>? = null,
         entered: CompletableDeferred<Unit>? = null,
+        realm: String = "",
     ): OpenSubsonicProvider = OpenSubsonicProvider(
-        config = OpenSubsonicAccountConfig("home", "https://music.example.test", OpenSubsonicAuth.ApiKey("secret")),
+        config = OpenSubsonicAccountConfig(
+            "home", "https://music.example.test", OpenSubsonicAuth.ApiKey("secret"),
+            catalogRealmId = realm,
+        ),
         transport = object : OpenSubsonicTransport {
             override suspend fun get(endpoint: String, parameters: Map<String, String>): String =
                 when (endpoint) {
@@ -47,6 +51,32 @@ class OpenSubsonicSyncRecoveryRoomTest {
     )
     private fun ids() = AtomicInteger().let { counter ->
         { "canonical-${counter.incrementAndGet()}" }
+    }
+
+    @Test fun searchAndSpotifyNeverMixOldAndCurrentAuthenticatedServerRealms() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        val freshIds = ids()
+        try {
+            assertTrue(OpenSubsonicCatalogSync.sync(
+                db, provider("OLD", realm = "legacy"), idFactory = freshIds,
+            ) is ProviderSyncResult.Success)
+            assertTrue(OpenSubsonicCatalogSync.sync(
+                db, provider("NEW", realm = "current"), idFactory = freshIds,
+            ) is ProviderSyncResult.Success)
+            val key = "opensubsonic:home:current"
+            val rows = db.catalogDao().searchCanonicalRemoteServerAssets(
+                query = "", limit = 250, providerKeys = listOf(key),
+            )
+            assertEquals(listOf(key), rows.map { it.providerKey }.distinct())
+            assertEquals(listOf("NEW"), rows.map { it.title }.distinct())
+            assertTrue(db.catalogDao().spotifyCanonicalAssetCandidates(
+                "OLD", providerKeys = listOf(key),
+            ).isEmpty())
+            assertTrue(db.catalogDao().searchCanonicalRemoteServerAssets(
+                query = "", limit = 250, providerKeys = emptyList(),
+            ).isEmpty())
+        } finally { db.close() }
     }
 
     @Test fun lateOldResponseCannotRewindNewerSuccessfulSnapshotOrPruneAssets() = runBlocking {
@@ -106,6 +136,30 @@ class OpenSubsonicSyncRecoveryRoomTest {
             assertTrue(old.await() is ProviderSyncResult.Failure)
             assertEquals(before, db.catalogDao().mediaAsset("opensubsonic:home", "song"))
             assertEquals("EXISTING", db.catalogDao().recordingById(before.recordingId)?.title)
+        } finally { db.close() }
+    }
+
+    @Test fun accountRevokedDuringRoomApplyRollsBackEveryRemoteAsset() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(RuntimeEnvironment.getApplication(),
+            CanonicalCatalogDatabase::class.java).allowMainThreadQueries().build()
+        try {
+            var accountIsCurrent = true
+            var allocated = 0
+            // The first new canonical ID is allocated INSIDE applySnapshot,
+            // after the initial account guard. Simulate an account revocation
+            // during that transaction, not just during the network read.
+            val result = OpenSubsonicCatalogSync.sync(
+                database = db,
+                provider = provider("REVOKED"),
+                idFactory = {
+                    accountIsCurrent = false
+                    "revoked-${++allocated}"
+                },
+                accountIsCurrent = { accountIsCurrent },
+            )
+            assertTrue("Revoked apply must fail closed: $result", result is ProviderSyncResult.Failure)
+            assertTrue("Fixture must enter the Room apply", allocated > 0)
+            assertEquals(null, db.catalogDao().mediaAsset("opensubsonic:home", "song"))
         } finally { db.close() }
     }
 

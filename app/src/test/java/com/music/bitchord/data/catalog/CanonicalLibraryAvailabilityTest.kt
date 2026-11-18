@@ -7,6 +7,13 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccount
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMode
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderDescriptor
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,7 +41,7 @@ class CanonicalLibraryAvailabilityTest {
     fun `OpenSubsonic asset is eligible while account and credential are configured`() = runTest {
         val fixture = fixture()
         fixture.configureOpenSubsonic()
-        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "recording-remote")
+        fixture.store.addAsset(openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!), "recording-remote")
 
         assertEquals(listOf("recording-remote"), fixture.availability.availableRecordingIds())
     }
@@ -43,7 +50,7 @@ class CanonicalLibraryAvailabilityTest {
     fun `forgotten OpenSubsonic connection makes remote-only recording ineligible without deleting history`() = runTest {
         val fixture = fixture()
         fixture.configureOpenSubsonic()
-        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "recording-remote")
+        fixture.store.addAsset(openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!), "recording-remote")
         assertEquals(listOf("recording-remote"), fixture.availability.availableRecordingIds())
 
         fixture.accountRepository.forget()
@@ -56,7 +63,7 @@ class CanonicalLibraryAvailabilityTest {
     fun `forgotten remote source does not remove recording that still has active local asset`() = runTest {
         val fixture = fixture()
         fixture.configureOpenSubsonic()
-        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "recording-shared")
+        fixture.store.addAsset(openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!), "recording-shared")
         fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "recording-shared")
 
         fixture.accountRepository.forget()
@@ -68,7 +75,7 @@ class CanonicalLibraryAvailabilityTest {
     fun `temporary remote health failure does not remove configured source and availability has no network dependency`() = runTest {
         val fixture = fixture()
         fixture.configureOpenSubsonic()
-        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "recording-offline-server")
+        fixture.store.addAsset(openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!), "recording-offline-server")
         fixture.accountRepository.recordHealthFailure(atEpochSeconds = 123L)
 
         assertEquals(listOf("recording-offline-server"), fixture.availability.availableRecordingIds())
@@ -95,7 +102,7 @@ class CanonicalLibraryAvailabilityTest {
         val fixture = fixture()
         fixture.configureOpenSubsonic()
         fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "recording-shared")
-        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "recording-shared")
+        fixture.store.addAsset(openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!), "recording-shared")
 
         assertEquals(listOf("recording-shared"), fixture.availability.availableRecordingIds())
     }
@@ -127,7 +134,7 @@ class CanonicalLibraryAvailabilityTest {
     fun `account metadata without readable credential is not an active remote source`() = runTest {
         val fixture = fixture()
         fixture.configureOpenSubsonic()
-        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "recording-remote")
+        fixture.store.addAsset(openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!), "recording-remote")
         fixture.credentials.clear(ACCOUNT_ID)
 
         assertTrue(fixture.availability.availableRecordingIds().isEmpty())
@@ -167,9 +174,19 @@ class CanonicalLibraryAvailabilityTest {
             idFactory = { ACCOUNT_ID },
         )
         val store = FakeAvailabilityStore()
+        val key = ProviderKey("opensubsonic", ACCOUNT_ID)
+        val gate = ProviderPolicyGate(ProviderCapabilityPolicy(
+            listOf(ProviderDescriptor(
+                key, setOf(ProviderCapability.PERSONAL_LIBRARY), ProviderReadiness.READY,
+            )),
+            mapOf(ProviderCapability.PERSONAL_LIBRARY to
+                listOf(ProviderChoice(key, true, 0))),
+        ))
         val availability = CanonicalLibraryAvailabilityRepository(
             store = store,
-            providerConfiguration = OpenSubsonicLibraryProviderConfigurationReader(accountRepository),
+            providerConfiguration = OpenSubsonicLibraryProviderConfigurationReader(
+                accountRepository, gateProvider = { gate },
+            ),
         )
         return Fixture(store, credentials, accountRepository, availability)
     }
@@ -242,8 +259,8 @@ class CanonicalLibraryAvailabilityTest {
     }
     @Test fun scopedSourceProjectionNeverIncludesForgottenRemoteAccount() = runTest {
         val fixture = fixture()
-        val remoteProvider = openSubsonicProviderKey(ACCOUNT_ID)
         fixture.configureOpenSubsonic()
+        val remoteProvider = openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!)
         fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "local")
         fixture.store.addAsset(CanonicalLocalLibrary.LOCAL_MEDIASTORE_PROVIDER, "both")
         fixture.store.addAsset(remoteProvider, "remote")
@@ -267,7 +284,7 @@ class CanonicalLibraryAvailabilityTest {
     @Test fun sourceProjectionExcludesRemoteWithoutReadableCredential() = runTest {
         val fixture = fixture()
         fixture.configureOpenSubsonic()
-        fixture.store.addAsset(openSubsonicProviderKey(ACCOUNT_ID), "remote")
+        fixture.store.addAsset(openSubsonicProviderKey(fixture.accountRepository.savedConfig()!!), "remote")
         fixture.credentials.clear(ACCOUNT_ID)
         assertTrue(fixture.availability.availableRecordingSources().isEmpty())
     }

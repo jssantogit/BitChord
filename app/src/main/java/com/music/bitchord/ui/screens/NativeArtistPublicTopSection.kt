@@ -1,18 +1,12 @@
 package com.music.bitchord.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -20,7 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import android.content.Intent
@@ -56,6 +50,18 @@ internal fun nativePublicTopVerifiedAppleArtwork(
     }
 }
 
+/** Only a confirmed Release MBID can supply the front for a recording.
+ * A title/artist match would risk showing the wrong edition's cover. */
+internal fun nativePublicTopCoverReleaseIds(
+    rows: List<CanonicalCatalogSearchRow>,
+): List<String> = rows.asSequence()
+    .filter { it.artworkUri.isNullOrBlank() }
+    .mapNotNull { it.coverReleaseMbid }
+    .filter(String::isNotBlank)
+    .distinct()
+    .take(10)
+    .toList()
+
 /**
  * Online rank and Library tracks share the native track row geometry. The
  * online adapter never promotes a Recording MBID into a playable asset or
@@ -68,6 +74,7 @@ internal fun NativeArtistPublicTopSection(
     palette: ArtworkPalette,
     sampled: Boolean = false,
     onRecordingOpen: (CanonicalCatalogSearchRow) -> Unit,
+    onRecordingHold: ((CanonicalCatalogSearchRow) -> Unit)? = null,
 ) {
     val exact = rows.filter {
         it.kind == CanonicalSearchKind.RECORDING &&
@@ -80,13 +87,14 @@ internal fun NativeArtistPublicTopSection(
         horizontalPadding = PAGE_GUTTER,
         itemKey = { it.musicBrainzId },
     ) { recording ->
-        val context = LocalContext.current
-        var menuExpanded by remember(recording.musicBrainzId) { mutableStateOf(false) }
         NativeDetailTrackRowLayout(
             // A public Recording MBID is not a playable RecordingId. Unlike
             // the old metadata-only navigation there is no tap destination.
             onClick = if (recording.hasCatalogedAsset || recording.hasVerifiedLocalAsset)
                 ({ onRecordingOpen(recording) }) else null,
+            onLongPress = onRecordingHold?.let { hold -> { hold(recording) } },
+            onMore = null,
+            modifier = Modifier.testTag("artist-top-row-${recording.musicBrainzId}"),
             horizontalInset = 0.dp,
             leading = {
                 val shape = RoundedCornerShape(8.dp)
@@ -125,55 +133,8 @@ internal fun NativeArtistPublicTopSection(
             },
             rating = {},
             showRatingSlot = false,
-            actions = {
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    val storeUrl = recording.appleStoreUrl
-                    val badgeUrl = recording.appleStoreBadgeUrl
-                    if (storeUrl != null && badgeUrl != null &&
-                        nativePublicTopVerifiedAppleArtwork(recording) != null
-                    ) {
-                        AsyncImage(
-                            model = badgeUrl,
-                            contentDescription = "Abrir edição na loja Apple",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.width(86.dp).height(28.dp)
-                                .clickable {
-                                    val intent = Intent(
-                                        Intent.ACTION_VIEW, Uri.parse(storeUrl),
-                                    )
-                                    runCatching { context.startActivity(intent) }
-                                },
-                        )
-                    }
-                    Box {
-                        RowMoreButton(
-                            onClick = { menuExpanded = true },
-                            modifier = Modifier.testTag(
-                                "artist-top-more-${recording.musicBrainzId}",
-                            ),
-                            tint = palette.onBackgroundVariant,
-                        )
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Ver no MusicBrainz") },
-                                onClick = {
-                                    menuExpanded = false
-                                    val intent = Intent(
-                                        Intent.ACTION_VIEW,
-                                        Uri.parse(
-                                            "https://musicbrainz.org/recording/${recording.musicBrainzId}",
-                                        ),
-                                    )
-                                    runCatching { context.startActivity(intent) }
-                                },
-                            )
-                        }
-                    }
-                }
-            },
+            actions = {},
+
         )
     }
 }

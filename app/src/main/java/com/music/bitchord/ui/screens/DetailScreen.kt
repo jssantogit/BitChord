@@ -314,6 +314,8 @@ fun DetailScreen(
      * wherever it is seen rather than only from its own page.
      */
     onSectionItemLongPress: ((ShelfItem) -> Unit)? = null,
+    /** Artist cards only: Group MBID -> exact promotional artwork and store URL. */
+    appleGroupCardPromotions: Map<String, Pair<String, String>> = emptyMap(),
     /**
      * Whether the filter box is open under the header. Owned by the caller
      * because the control that opens it sits in the top bar, beside the sort
@@ -364,6 +366,8 @@ fun DetailScreen(
     /** Source-specific supplemental content inside this single native list. */
     footerContent: LazyListScope.(ArtworkPalette) -> Unit = {},
     onCanonicalTrackPlay: ((String) -> Unit)? = null,
+    /** Same shared lifted metadata action as canonical album recordings. */
+    onCanonicalTrackHold: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** Verified ListenBrainz order plus independent MusicBrainz recording credits. */
     canonicalPublicTopTracks: List<CanonicalCatalogSearchRow> = emptyList(),
     canonicalPublicTopSampled: Boolean = false,
@@ -373,8 +377,6 @@ fun DetailScreen(
     onCanonicalFeaturedReleaseOpen: ((CanonicalCatalogSearchRow) -> Unit)? = null,
     /** MBID, title, creator and description only: no internal DTO in public API. */
     onCanonicalArtistPlaylistOpen: ((String, String, String, String?) -> Unit)? = null,
-    /** Artist cards only: Group MBID -> exact promotional artwork and store URL. */
-    appleGroupCardPromotions: Map<String, Pair<String, String>> = emptyMap(),
 ) {
     val rawSongs = (page.songs as? UiState.Success)?.data.orEmpty()
     // A folder keeps its own sort — the one its top bar menu sets — rather
@@ -562,11 +564,6 @@ fun DetailScreen(
             recordingId = recording, onDismiss = { editingMetadataRecording = null },
         )
     }
-    val metadataVisibleTrackIndices = remember(metadataTracks, query, songSort) {
-        canonicalMetadataAlbumVisibleIndices(
-            metadataTracks.map { it.title to it.credit }, query, songSort,
-        )
-    }
     val canonicalVisibleTrackIndices = remember(canonicalTracks, query, songSort) {
         canonicalMetadataAlbumVisibleIndices(
             canonicalTracks.map { it.title to it.subtitle }, query, songSort,
@@ -586,6 +583,11 @@ fun DetailScreen(
     // an album's track numbers stay the album's rather than becoming positions
     // in the filtered list.
     val matches = remember(songs, query) { songs.matching(query) }
+    val metadataVisibleTrackIndices = remember(metadataTracks, query, songSort) {
+        canonicalMetadataAlbumVisibleIndices(
+            metadataTracks.map { it.title to it.credit }, query, songSort,
+        )
+    }
     // What a tap plays: the filtered set of tracks currently standing in the
     // list. When no filter is active, matches contains the full running order
     // and plays the complete release/playlist from the tapped position.
@@ -1026,6 +1028,7 @@ fun DetailScreen(
                             palette = palette,
                             sampled = canonicalPublicTopSampled,
                             onRecordingOpen = onCanonicalPublicTopOpen,
+                            onRecordingHold = onCanonicalTrackHold,
                         )
                     }
                 } else if (isArtist && (

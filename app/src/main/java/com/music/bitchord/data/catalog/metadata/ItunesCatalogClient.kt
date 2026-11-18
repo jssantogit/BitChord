@@ -1,5 +1,10 @@
 package com.music.bitchord.data.catalog.metadata
 
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -40,6 +45,8 @@ internal enum class ItunesCatalogEntity(val apiValue: String) {
 
 /** Documented PUBLIC Search API attributes, not invented offset pagination. */
 internal enum class ItunesCatalogSearchAttribute(val apiValue: String) {
+    /** Apple-documented genre field; not a free-text album-title search. */
+    GENRE_INDEX("genreIndex"),
     ARTIST_TERM("artistTerm"),
     ALBUM_TERM("albumTerm"),
     SONG_TERM("songTerm"),
@@ -98,6 +105,13 @@ internal sealed interface ItunesCatalogResult {
 /** Injected boundary: fake transport tests never send requests or consume rate budget. */
 internal interface ItunesCatalogTransport {
     suspend fun get(path: String, parameters: Map<String, String>): String
+
+    /** An editorial Search API request is not automatically a General search. */
+    suspend fun get(
+        path: String,
+        parameters: Map<String, String>,
+        capability: ProviderCapability,
+    ): String = get(path, parameters)
 }
 
 /**
@@ -137,10 +151,27 @@ internal object ItunesCatalogRequestBudget {
 internal class KtorItunesCatalogTransport(
     private val client: HttpClient = defaultItunesHttpClient,
     private val limiter: ItunesCatalogRateLimiter = ItunesCatalogRequestBudget.limiter,
+    private val admission: RateLimitedProviderTransport = RateLimitedProviderTransport(),
+    private val testExchange: (suspend (String, Map<String, String>) -> String)? = null,
 ) : ItunesCatalogTransport {
-    override suspend fun get(path: String, parameters: Map<String, String>): String {
+    override suspend fun get(path: String, parameters: Map<String, String>): String =
+        get(path, parameters, if (path == "search") ProviderCapability.CATALOG_SEARCH
+            else ProviderCapability.EDITORIAL_DISCOGRAPHY)
+
+    override suspend fun get(
+        path: String,
+        parameters: Map<String, String>,
+        capability: ProviderCapability,
+    ): String {
         require(path == "search" || path == "lookup")
-        return limiter.run {
+        require(capability == ProviderCapability.CATALOG_SEARCH ||
+            capability == ProviderCapability.EDITORIAL_DISCOGRAPHY)
+        return admission.execute(
+            capability = capability,
+            provider = BuiltInProviderKeys.ITUNES,
+            scheduleLimited = { block -> limiter.run(block) },
+            networkCall = {
+                testExchange?.invoke(path, parameters) ?: run {
             // Measure the real HTTP exchange, not the 3.1s global-budget
             // queue wait. Endpoint is strictly "search" or "lookup"; never
             // emit a query, UPC, artist, album, URL or personal identifier.
@@ -185,7 +216,9 @@ internal class KtorItunesCatalogTransport(
                 .onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT)
                 .decode(ByteBuffer.wrap(output.toByteArray())).toString()
-        }
+                }
+            },
+        )
     }
 }
 
@@ -209,6 +242,9 @@ private val defaultItunesHttpClient: HttpClient by lazy {
  */
 internal class ItunesCatalogClient(
     private val transport: ItunesCatalogTransport = KtorItunesCatalogTransport(),
+    private val artworkGateProvider: () -> ProviderPolicyGate? = {
+        ProviderRuntime.gateForCacheReadOrNull()
+    },
 ) {
     suspend fun search(
         term: String,
@@ -216,7 +252,11 @@ internal class ItunesCatalogClient(
         country: String = "br",
         limit: Int = 20,
         attribute: ItunesCatalogSearchAttribute? = null,
+        capability: ProviderCapability = ProviderCapability.CATALOG_SEARCH,
     ): ItunesCatalogResult {
+        if (capability != ProviderCapability.CATALOG_SEARCH &&
+            capability != ProviderCapability.EDITORIAL_DISCOGRAPHY
+        ) return ItunesCatalogResult.Failure(ItunesCatalogFailure.INVALID_QUERY)
         val query = term.trim()
         val storefront = normalizedStorefront(country)
         if (query.isEmpty() || query.length > 120 || query.any(Char::isISOControl) ||
@@ -231,7 +271,7 @@ internal class ItunesCatalogClient(
             ItunesCatalogEntity.ARTIST -> ItunesCatalogItemType.ARTIST
             ItunesCatalogEntity.ALBUM -> ItunesCatalogItemType.ALBUM
             ItunesCatalogEntity.SONG -> ItunesCatalogItemType.TRACK
-        })
+        }, capability = capability)
     }
 
     suspend fun lookupAlbum(
@@ -281,9 +321,11 @@ internal class ItunesCatalogClient(
         expectedType: ItunesCatalogItemType? = null,
         collectionId: Long? = null,
         artistId: Long? = null,
+        capability: ProviderCapability = if (path == "search")
+            ProviderCapability.CATALOG_SEARCH else ProviderCapability.EDITORIAL_DISCOGRAPHY,
     ): ItunesCatalogResult {
         val json = try {
-            transport.get(path, params)
+            transport.get(path, params, capability)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -322,8 +364,18 @@ internal class ItunesCatalogClient(
             val items = filtered.filterNot { it.scopedId in disputed }
                 .distinctBy { it.scopedId }
             val requestedLimit = params["limit"]?.toIntOrNull()
+            // The editorial listing and Apple CDN imagery have separate opt-
+            // outs. Keep catalog metadata visible without publishing images
+            // (including low-res fallbacks) from a revoked artwork capability.
+            val artGate = artworkGateProvider()
+            val artTicket = artGate?.open(
+                ProviderCapability.RELEASE_ARTWORK, BuiltInProviderKeys.ITUNES,
+            )
+            val permittedArtwork = artTicket != null && artGate?.accept(artTicket) == true
             ItunesCatalogResult.Success(
-                items = items,
+                items = if (permittedArtwork) items else items.map {
+                    it.copy(artworkUrl = null)
+                },
                 possiblyTruncated = disputed.isNotEmpty() ||
                     (requestedLimit != null && rows.size >= requestedLimit) ||
                     count > rows.size,

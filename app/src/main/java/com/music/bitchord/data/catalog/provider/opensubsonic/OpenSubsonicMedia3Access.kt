@@ -133,6 +133,7 @@ internal class OpenSubsonicRuntimeTransport(
             OpenSubsonicMediaAccessFailure.ACCOUNT_NOT_CONFIGURED -> "Remote playback account unavailable"
             OpenSubsonicMediaAccessFailure.ACCOUNT_MISMATCH -> "Remote playback account mismatch"
             OpenSubsonicMediaAccessFailure.CREDENTIAL_UNAVAILABLE -> "Remote playback credential unavailable"
+            OpenSubsonicMediaAccessFailure.NOT_AUTHORIZED -> "Remote playback not authorized"
             OpenSubsonicMediaAccessFailure.INVALID_LOCATOR -> "Remote media locator unavailable"
         },
     )
@@ -165,6 +166,8 @@ internal class OpenSubsonicMediaDataSource(
     // reach the optional observer. Revision checks on reads avoid Keystore I/O.
     private var accountRevisionCurrent: () -> Boolean = { true }
     private var accountConfigCurrent: () -> Boolean = { true }
+    private var registerCapabilityCancellation: (((() -> Unit) -> (() -> Unit)))? = null
+    private var unregisterCapabilityCancellation: (() -> Unit)? = null
     private val truth = OpenSubsonicStreamTruthTracker()
     private var truthAttempt: Long? = null
 
@@ -186,6 +189,7 @@ internal class OpenSubsonicMediaDataSource(
 
     override fun open(dataSpec: DataSpec): Long {
         if (upstream != null) throw IOException("OpenSubsonic stream already open")
+        registerCapabilityCancellation = null
         logicalDataSpec = dataSpec
         val safeIntent = variant ?: (
             OpenSubsonicStreamVariantPlanner.original(recordingId, mediaAssetId, providerKey, 0)
@@ -210,6 +214,7 @@ internal class OpenSubsonicMediaDataSource(
                     }
                     accountRevisionCurrent = runtime::accountRevisionIsCurrent
                     accountConfigCurrent = runtime::accountIsCurrent
+                    registerCapabilityCancellation = runtime::onCapabilityRevoked
                     runtime.materializeAuthenticatedDataSpec(dataSpec)
                 }
                 OpenSubsonicStreamVariantMode.EXTENSION_TRANSCODE_REQUESTED -> {
@@ -231,6 +236,7 @@ internal class OpenSubsonicMediaDataSource(
                             }
                             accountRevisionCurrent = negotiated.ticket::accountRevisionIsCurrent
                             accountConfigCurrent = negotiated.ticket::accountIsCurrent
+                            registerCapabilityCancellation = negotiated.ticket::onCapabilityRevoked
                             negotiated.ticket.materializeAuthenticatedDataSpec(dataSpec)
                         }
                         is OpenSubsonicTranscodeDecisionOutcome.Rejected ->
@@ -250,6 +256,11 @@ internal class OpenSubsonicMediaDataSource(
         }
         val next = upstreamFactory.createDataSource()
         upstream = next
+        // Abort an actual in-flight OkHttp DataSource on capability revocation,
+        // rather than merely dropping bytes after its blocking read returns.
+        unregisterCapabilityCancellation = registerCapabilityCancellation?.invoke {
+            runCatching { next.close() }
+        }
         return try {
             if (!accountConfigCurrent()) {
                 throw IOException("OpenSubsonic account changed before authenticated transport")
@@ -274,6 +285,8 @@ internal class OpenSubsonicMediaDataSource(
         } catch (error: Exception) {
             recordTruth { truth.onFailure(it) }
             upstream = null
+            unregisterCapabilityCancellation?.invoke()
+            unregisterCapabilityCancellation = null
             runCatching { next.close() }
             throw sanitizeTransportFailure(error)
         }
@@ -325,6 +338,9 @@ internal class OpenSubsonicMediaDataSource(
         logicalDataSpec = null
         accountRevisionCurrent = { true }
         accountConfigCurrent = { true }
+        unregisterCapabilityCancellation?.invoke()
+        unregisterCapabilityCancellation = null
+        registerCapabilityCancellation = null
         val hadStarted = transferStarted
         transferStarted = false
 

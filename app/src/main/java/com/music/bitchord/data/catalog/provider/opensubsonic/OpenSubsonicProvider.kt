@@ -64,6 +64,8 @@ internal data class OpenSubsonicAccountConfig(
     val auth: OpenSubsonicAuth,
     /** Opaque persisted account-instance scope; rotated on every explicit save. */
     val ratingScopeId: String = "",
+    /** Stable opaque catalog partition. Blank only for pre-migration legacy accounts. */
+    val catalogRealmId: String = "",
 ) {
     init {
         require(accountId.matches(Regex("[A-Za-z0-9._-]+"))) {
@@ -130,7 +132,7 @@ internal class OpenSubsonicProvider(
         require(maxConcurrentAlbumFetches in 1..8) { "OpenSubsonic album concurrency must be between 1 and 8" }
     }
 
-    override val providerKey: String = "opensubsonic:${config.accountId}"
+    override val providerKey: String = openSubsonicCatalogProviderKey(config.accountId, config.catalogRealmId)
     internal val ratingScopeId: String get() = config.ratingScopeId
 
     /** No secrets/URLs escape this boolean guard or its callers. */
@@ -138,6 +140,7 @@ internal class OpenSubsonicProvider(
         saved != null &&
             saved.accountId == config.accountId &&
             saved.ratingScopeId == config.ratingScopeId &&
+            saved.catalogRealmId == config.catalogRealmId &&
             saved.normalizedServerUrl == config.normalizedServerUrl &&
             when {
                 config.auth is OpenSubsonicAuth.ApiKey && saved.auth is OpenSubsonicAuth.ApiKey ->

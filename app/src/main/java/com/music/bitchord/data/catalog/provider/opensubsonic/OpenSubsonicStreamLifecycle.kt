@@ -127,7 +127,7 @@ internal class OpenSubsonicStreamPolicyGateway(
             null
         }
         if (config == null || generation < 0 ||
-            providerKey != "opensubsonic:${config.accountId}"
+            providerKey != openSubsonicProviderKey(config)
         ) {
             publish(sequence, null)
             return unavailable()

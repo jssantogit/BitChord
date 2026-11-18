@@ -1,12 +1,55 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.discogs.*
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 
 class DiscogsClientContractTest {
+    @Test fun editionGateBlocksAllRealLookupEntryPointsBeforeHttp() = runBlocking {
+        val discogs = BuiltInProviderKeys.DISCOGS
+        val descriptors = listOf(BuiltInProviderDescriptors.discogs(
+            tokenConfigured = true, implemented = true,
+        ))
+        fun policy(enabled: Boolean) = ProviderCapabilityPolicy(
+            descriptors = descriptors,
+            choices = mapOf(ProviderCapability.EDITION_METADATA to listOf(
+                ProviderChoice(discogs, enabled, 0),
+            )),
+        )
+        val gate = ProviderPolicyGate(policy(false))
+        var contacts = 0
+        val client = DiscogsClient(
+            enabled = true,
+            transport = object : DiscogsTransport {
+                override suspend fun get(path: String, userAgent: String): DiscogsHttpResponse {
+                    contacts++
+                    return DiscogsHttpResponse(404, "")
+                }
+            },
+            limiter = DiscogsRateLimiter(minimumIntervalMs = 0),
+            admission = RateLimitedProviderTransport { gate },
+        )
+        assertEquals(DiscogsLookupResult.Disabled, client.fetchMaster(10))
+        assertEquals(DiscogsLookupResult.Disabled, client.fetchRelease(10))
+        assertEquals(DiscogsMasterVersionsResult.Disabled, client.fetchMasterVersions(10))
+        assertEquals(0, contacts)
+        gate.replace(policy(true))
+        assertEquals(DiscogsLookupResult.Missing, client.fetchRelease(10))
+        assertEquals(1, contacts)
+        gate.replace(policy(false))
+        assertEquals(DiscogsLookupResult.Disabled, client.fetchRelease(10))
+        assertEquals(1, contacts)
+    }
+
     @Test fun productionDisabledByDefaultNeverCallsTheNetwork() = runBlocking {
         var requests = 0
         val client = DiscogsClient(transport = object : DiscogsTransport {

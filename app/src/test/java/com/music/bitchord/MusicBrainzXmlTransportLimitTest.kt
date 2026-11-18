@@ -1,5 +1,6 @@
 package com.music.bitchord
 
+import com.music.bitchord.data.catalog.metadata.MusicBrainzBoundedResponseException
 import com.music.bitchord.data.catalog.metadata.KtorMusicBrainzTransport
 import com.music.bitchord.data.catalog.metadata.MusicBrainzClient
 import com.music.bitchord.data.catalog.metadata.MusicBrainzRateLimiter
@@ -48,7 +49,7 @@ class MusicBrainzXmlTransportLimitTest {
             val failure = runCatching {
                 client(server, http).getLimited("release/test", mapOf("fmt" to "xml"), maxResponseBytes = 64)
             }
-            assertTrue(failure.isFailure)
+            assertTrue(failure.exceptionOrNull() is MusicBrainzBoundedResponseException)
             assertEquals(1, server.requestCount)
         } finally {
             http.close()
@@ -65,7 +66,7 @@ class MusicBrainzXmlTransportLimitTest {
             val failure = runCatching {
                 client(server, http).getLimited("release/test", mapOf("fmt" to "xml"), maxResponseBytes = 64)
             }
-            assertTrue(failure.isFailure)
+            assertTrue(failure.exceptionOrNull() is MusicBrainzBoundedResponseException)
             assertEquals(1, server.requestCount)
         } finally {
             http.close()
@@ -83,6 +84,9 @@ class MusicBrainzXmlTransportLimitTest {
             val failure = runCatching {
                 client(server, http).getLimited("release/test", mapOf("fmt" to "xml"), maxResponseBytes = 64)
             }
+            // Invalid HTTP framing may be rejected by the underlying Ktor/
+            // OkHttp decoder before the XML byte-limit guard sees a body.
+            // Either way this response must fail without extra HTTP requests.
             assertTrue(failure.isFailure)
             assertEquals(1, server.requestCount)
         } finally {

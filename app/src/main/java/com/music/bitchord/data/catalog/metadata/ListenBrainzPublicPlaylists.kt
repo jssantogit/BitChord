@@ -1,6 +1,10 @@
 package com.music.bitchord.data.catalog.metadata
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCachedReadAccess
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import com.music.bitchord.diagnostics.DiagnosticCategory
 import com.music.bitchord.diagnostics.Diagnostics
 import io.ktor.client.HttpClient
@@ -81,12 +85,21 @@ internal class KtorListenBrainzPublicPlaylistTransport(
             socketTimeoutMillis = 90_000L
         }
     },
+    private val admission: RateLimitedProviderTransport = RateLimitedProviderTransport(),
 ) : ListenBrainzPublicPlaylistTransport {
+    private suspend fun <T> authorized(block: suspend () -> T): T =
+        admission.execute(
+            capability = ProviderCapability.PUBLIC_PLAYLISTS,
+            provider = BuiltInProviderKeys.LISTENBRAINZ,
+            scheduleLimited = { task -> task() },
+            networkCall = block,
+        )
+
     override suspend fun search(query: String): ListenBrainzPublicPlaylistHttp =
-        getPublicPlaylists(query, count = 25)
+        authorized { getPublicPlaylists(query, count = 25) }
 
     override suspend fun searchWide(query: String): ListenBrainzPublicPlaylistHttp =
-        getPublicPlaylists(query, count = 75)
+        authorized { getPublicPlaylists(query, count = 75) }
 
     private suspend fun getPublicPlaylists(
         query: String, count: Int,
@@ -106,6 +119,9 @@ internal class KtorListenBrainzPublicPlaylistTransport(
         }
 
     override suspend fun detail(mbid: String): ListenBrainzPublicPlaylistHttp =
+        authorized { detailUnchecked(mbid) }
+
+    private suspend fun detailUnchecked(mbid: String): ListenBrainzPublicPlaylistHttp =
         measureMetadataHttp(
             provider = "listenbrainz", endpoint = "public_playlist_detail",
             status = { r: ListenBrainzPublicPlaylistHttp -> r.status },
@@ -118,6 +134,9 @@ internal class KtorListenBrainzPublicPlaylistTransport(
         }
 
     override suspend fun recordingArtwork(recordingMbids: List<String>): ListenBrainzPublicPlaylistHttp =
+        authorized { recordingArtworkUnchecked(recordingMbids) }
+
+    private suspend fun recordingArtworkUnchecked(recordingMbids: List<String>): ListenBrainzPublicPlaylistHttp =
         measureMetadataHttp(
             provider = "listenbrainz", endpoint = "public_playlist_recording_art",
             status = { r: ListenBrainzPublicPlaylistHttp -> r.status },
@@ -344,6 +363,7 @@ internal class ListenBrainzPublicPlaylistClient(
         KtorListenBrainzPublicPlaylistTransport(),
     private val limiter: ListenBrainzRateLimiter = ListenBrainzRequestBudget.limiter,
     private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val cacheRead: ProviderCachedReadAccess = ProviderCachedReadAccess(),
 ) {
     /** Bounded cache; key includes exact verified Recording MBIDs, not titles alone. */
     private data class ArtistPlaylistCache(
@@ -456,7 +476,11 @@ internal class ListenBrainzPublicPlaylistClient(
         }
     }
 
-    suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? {
+    suspend fun searchGenre(tag: String): List<ListenBrainzPublicPlaylist>? =
+        cacheRead.read(ProviderCapability.PUBLIC_PLAYLISTS,
+            BuiltInProviderKeys.LISTENBRAINZ, null) { searchGenreUnchecked(tag) }
+
+    private suspend fun searchGenreUnchecked(tag: String): List<ListenBrainzPublicPlaylist>? {
         if (tag !in setOf("pop", "rock", "hip-hop", "electronic", "k-pop", "rnb",
                 "jazz", "metal", "classical", "folk", "ambient", "punk")) return null
         return cachedDiscovery("genre:$tag") {
@@ -467,7 +491,11 @@ internal class ListenBrainzPublicPlaylistClient(
      * Title/annotation must actually include the requested words; fuzzy
      * ListenBrainz results are not enough to claim a user-requested match.
      */
-    suspend fun searchPublicQuery(query: String): List<ListenBrainzPublicPlaylist> {
+    suspend fun searchPublicQuery(query: String): List<ListenBrainzPublicPlaylist> =
+        cacheRead.read(ProviderCapability.PUBLIC_PLAYLISTS,
+            BuiltInProviderKeys.LISTENBRAINZ, emptyList()) { searchPublicQueryUnchecked(query) }
+
+    private suspend fun searchPublicQueryUnchecked(query: String): List<ListenBrainzPublicPlaylist> {
         val trimmed = query.trim()
         if (trimmed.length !in 2..80 || trimmed.any(Char::isISOControl))
             return emptyList()
@@ -537,6 +565,10 @@ internal class ListenBrainzPublicPlaylistClient(
     }
 
     suspend fun searchHome(): List<ListenBrainzPublicPlaylist>? =
+        cacheRead.read(ProviderCapability.PUBLIC_PLAYLISTS,
+            BuiltInProviderKeys.LISTENBRAINZ, null) { searchHomeUnchecked() }
+
+    private suspend fun searchHomeUnchecked(): List<ListenBrainzPublicPlaylist>? =
         cachedDiscovery("home") {
             // Avoid repeated 15-90s upstream searches on Home re-entry.
             // Existing preference for descriptive candidates is unchanged.
@@ -552,6 +584,15 @@ internal class ListenBrainzPublicPlaylistClient(
      * confusing a same-name playlist with an artist's own collection.
      */
     suspend fun searchArtistVerified(
+        artistName: String,
+        verifiedRecordingMbids: Set<String>,
+    ): List<ListenBrainzPublicPlaylist> =
+        cacheRead.read(ProviderCapability.PUBLIC_PLAYLISTS,
+            BuiltInProviderKeys.LISTENBRAINZ, emptyList()) {
+            searchArtistVerifiedUnchecked(artistName, verifiedRecordingMbids)
+        }
+
+    private suspend fun searchArtistVerifiedUnchecked(
         artistName: String,
         verifiedRecordingMbids: Set<String>,
     ): List<ListenBrainzPublicPlaylist> {
@@ -704,7 +745,16 @@ internal class ListenBrainzPublicPlaylistClient(
     /** Up to 25 verified Recording MBIDs per request. Many playlists reuse
      * the same songs and may open concurrently: avoid paying repeated
      * ListenBrainz rate-limit slots for the exact same metadata batch. */
-    suspend fun artworkForRecordings(recordingMbids: List<String>): Map<String, String> {
+    suspend fun artworkForRecordings(recordingMbids: List<String>): Map<String, String> =
+        cacheRead.read(ProviderCapability.PUBLIC_PLAYLISTS,
+            BuiltInProviderKeys.LISTENBRAINZ, emptyMap()) {
+            cacheRead.read(ProviderCapability.RELEASE_ARTWORK,
+                BuiltInProviderKeys.COVER_ART_ARCHIVE, emptyMap()) {
+                artworkForRecordingsUnchecked(recordingMbids)
+            }
+        }
+
+    private suspend fun artworkForRecordingsUnchecked(recordingMbids: List<String>): Map<String, String> {
         val key = recordingMbids.mapNotNull(::checkedPlaylistId)
             .distinct().take(25).sorted()
         if (key.isEmpty()) return emptyMap()
@@ -776,7 +826,20 @@ internal class ListenBrainzPublicPlaylistClient(
         }
     }
 
-    suspend fun detail(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? {
+    suspend fun detail(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? =
+        cacheRead.read(ProviderCapability.PUBLIC_PLAYLISTS,
+            BuiltInProviderKeys.LISTENBRAINZ, null) {
+            val detail = detailUnchecked(selected) ?: return@read null
+            // CAA opt-out must not hide public JSPF track metadata: only
+            // strip release artwork URLs while keeping cached evidence.
+            val noArtwork = detail.copy(
+                tracks = detail.tracks.map { it.copy(artworkUrl = null) },
+            )
+            cacheRead.read(ProviderCapability.RELEASE_ARTWORK,
+                BuiltInProviderKeys.COVER_ART_ARCHIVE, noArtwork) { detail }
+        }
+
+    private suspend fun detailUnchecked(selected: ListenBrainzPublicPlaylist): ListenBrainzPublicPlaylistDetail? {
         val id = checkedPlaylistId(selected.mbid) ?: return null
         var cached: ListenBrainzPublicPlaylistDetail? = null
         var pending: CompletableDeferred<ListenBrainzPublicPlaylistDetail?>? = null

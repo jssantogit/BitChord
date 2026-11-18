@@ -1,9 +1,17 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogClient
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import com.music.bitchord.data.catalog.metadata.appleStoreLinkForExactProduct
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogEntity
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogFailure
+import com.music.bitchord.data.catalog.metadata.ItunesCatalogSearchAttribute
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogItemType
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogResult
 import com.music.bitchord.data.catalog.metadata.ItunesCatalogTransport
@@ -15,6 +23,53 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ItunesCatalogClientTest {
+    @Test fun nativeGenreQueriesUseTheDocumentedAppleFieldWithoutRewritingIds() = runBlocking {
+        val transport = FakeTransport("""{"resultCount":0,"results":[]}""")
+        val client = ItunesCatalogClient(transport)
+        val result = client.search(
+            "K-Pop", ItunesCatalogEntity.ALBUM,
+            country = "BR", limit = 100,
+            attribute = ItunesCatalogSearchAttribute.GENRE_INDEX,
+            capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
+        )
+        assertTrue(result is ItunesCatalogResult.Success)
+        assertEquals("genreIndex", transport.parameters["attribute"])
+        assertEquals("album", transport.parameters["entity"])
+        assertEquals("br", transport.parameters["country"])
+        assertEquals("music", transport.parameters["media"])
+    }
+
+    @Test fun independentArtworkOptOutSuppressesAppleCdnButPreservesCatalogRelease() = runBlocking {
+        val key = BuiltInProviderKeys.ITUNES
+        val descriptors = listOf(BuiltInProviderDescriptors.itunes(ProviderReadiness.READY))
+        fun policy(artwork: Boolean) = ProviderCapabilityPolicy(
+            descriptors = descriptors,
+            choices = mapOf(
+                ProviderCapability.CATALOG_SEARCH to listOf(ProviderChoice(key, true, 0)),
+                ProviderCapability.RELEASE_ARTWORK to listOf(ProviderChoice(key, artwork, 0)),
+            ),
+        )
+        val gate = ProviderPolicyGate(policy(false))
+        val response = FakeTransport(
+            """{"resultCount":1,"results":[{"wrapperType":"collection",
+               "collectionType":"Album","collectionId":77,"artistId":10,
+               "collectionName":"Test Release","artistName":"Test Artist",
+               "artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/Music123/test/100x100bb.jpg"}]}"""
+        )
+        val client = ItunesCatalogClient(response, artworkGateProvider = { gate })
+        val disabled = client.search("Test Release", ItunesCatalogEntity.ALBUM)
+            as ItunesCatalogResult.Success
+        assertEquals(77L, disabled.items.single().id)
+        assertNull(disabled.items.single().artworkUrl)
+        gate.replace(policy(true))
+        val enabled = client.search("Test Release", ItunesCatalogEntity.ALBUM)
+            as ItunesCatalogResult.Success
+        assertTrue(enabled.items.single().artworkUrl?.contains("mzstatic.com") == true)
+        gate.replace(policy(false))
+        assertNull((client.search("Test Release", ItunesCatalogEntity.ALBUM)
+            as ItunesCatalogResult.Success).items.single().artworkUrl)
+    }
+
     private class FakeTransport(
         private val response: String,
     ) : ItunesCatalogTransport {

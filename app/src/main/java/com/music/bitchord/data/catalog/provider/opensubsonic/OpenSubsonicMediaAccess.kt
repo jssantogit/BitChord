@@ -3,6 +3,9 @@ package com.music.bitchord.data.catalog.provider.opensubsonic
 import android.content.Context
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.MediaAssetEntity
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
 import kotlinx.coroutines.CancellationException
 
 /** Read-only canonical catalog seam used by provider-owned runtime media access. */
@@ -16,6 +19,7 @@ internal enum class OpenSubsonicMediaAccessFailure {
     ACCOUNT_NOT_CONFIGURED,
     ACCOUNT_MISMATCH,
     CREDENTIAL_UNAVAILABLE,
+    NOT_AUTHORIZED,
     INVALID_LOCATOR,
 }
 
@@ -32,6 +36,7 @@ internal class OpenSubsonicMediaAccess(
     private val assets: OpenSubsonicMediaAssetStore,
     private val accounts: OpenSubsonicAccountRepository,
     private val saltFactory: () -> String = ::defaultOpenSubsonicSalt,
+    private val gateProvider: () -> ProviderPolicyGate? = ProviderRuntime::gateOrNull,
 ) {
     suspend fun resolve(mediaAssetId: String): OpenSubsonicMediaAccessResult {
         val asset = assets.mediaAsset(mediaAssetId)
@@ -52,6 +57,11 @@ internal class OpenSubsonicMediaAccess(
                 OpenSubsonicMediaAccessFailure.ACCOUNT_MISMATCH,
             )
         }
+        val admission = OpenSubsonicCapabilityAdmission.open(
+            ProviderCapability.AUDIO_PLAYBACK, accountId, gateProvider,
+        ) ?: return OpenSubsonicMediaAccessResult.Failure(
+            OpenSubsonicMediaAccessFailure.NOT_AUTHORIZED,
+        )
 
         val sourceKey = asset.sourceKey.trim()
         if (sourceKey.isEmpty()) {
@@ -70,7 +80,9 @@ internal class OpenSubsonicMediaAccess(
             ?: return OpenSubsonicMediaAccessResult.Failure(
                 OpenSubsonicMediaAccessFailure.CREDENTIAL_UNAVAILABLE,
             )
-        if (config.accountId != accountId) {
+        // Stable accountId does not authorize assets indexed under an older
+        // server or credential realm. Require the exact persisted partition.
+        if (config.accountId != accountId || openSubsonicProviderKey(config) != asset.provider) {
             return OpenSubsonicMediaAccessResult.Failure(
                 OpenSubsonicMediaAccessFailure.ACCOUNT_MISMATCH,
             )
@@ -87,7 +99,7 @@ internal class OpenSubsonicMediaAccess(
         // A revision check is sufficient immediately after savedConfig():
         // avoid a second Keystore read during access resolution. The full
         // configuration check occurs at the authenticated DataSource.open gate.
-        if (!lease.revisionIsCurrent()) {
+        if (!lease.revisionIsCurrent() || !admission.isCurrent()) {
             return OpenSubsonicMediaAccessResult.Failure(
                 OpenSubsonicMediaAccessFailure.CREDENTIAL_UNAVAILABLE,
             )
@@ -103,13 +115,14 @@ internal class OpenSubsonicMediaAccess(
                 auth = config.auth,
                 saltFactory = saltFactory,
                 accountLease = lease,
+                capabilityAdmission = admission,
             ),
         )
     }
 
     private fun accountIdFromProvider(providerKey: String): String? {
         if (!providerKey.startsWith(PROVIDER_PREFIX)) return null
-        return providerKey.removePrefix(PROVIDER_PREFIX).takeIf(String::isNotBlank)
+        return providerKey.removePrefix(PROVIDER_PREFIX).substringBefore(':').takeIf(String::isNotBlank)
     }
 
     private companion object {
@@ -133,12 +146,19 @@ internal class OpenSubsonicRuntimeAudioRequest internal constructor(
     private val auth: OpenSubsonicAuth,
     private val saltFactory: () -> String,
     private val accountLease: OpenSubsonicStreamLifecycleLease? = null,
+    private val capabilityAdmission: OpenSubsonicCapabilityAdmission? = null,
 ) {
     val directOriginal: Boolean = true
 
     /** Private account freshness checks. Neither method exposes credentials. */
-    internal fun accountIsCurrent(): Boolean = accountLease?.isCurrent() ?: true
-    internal fun accountRevisionIsCurrent(): Boolean = accountLease?.revisionIsCurrent() ?: true
+    internal fun accountIsCurrent(): Boolean =
+        (accountLease?.isCurrent() ?: true) && (capabilityAdmission?.isCurrent() ?: true)
+
+    internal fun accountRevisionIsCurrent(): Boolean =
+        (accountLease?.revisionIsCurrent() ?: true) && (capabilityAdmission?.isCurrent() ?: true)
+
+    internal fun onCapabilityRevoked(callback: () -> Unit): () -> Unit =
+        capabilityAdmission?.onRevoke(callback) ?: {}
 
     internal fun materializeParameters(): Map<String, String> = linkedMapOf(
         "v" to OPEN_SUBSONIC_API_VERSION,
@@ -168,7 +188,11 @@ internal class OpenSubsonicRuntimeAudioRequest internal constructor(
     ).apply { putAll(openSubsonicAuthenticationParameters(auth, saltFactory)) }
 
     suspend fun probe(transport: OpenSubsonicRuntimeProbeTransport): OpenSubsonicRuntimeProbeResult = try {
-        transport.probe(endpointUrl, materializeParameters())
+        if (!accountIsCurrent()) OpenSubsonicRuntimeProbeResult.REQUEST_REJECTED
+        else {
+            val result = transport.probe(endpointUrl, materializeParameters())
+            if (accountIsCurrent()) result else OpenSubsonicRuntimeProbeResult.REQUEST_REJECTED
+        }
     } catch (cancelled: CancellationException) {
         throw cancelled
     } catch (_: Throwable) {

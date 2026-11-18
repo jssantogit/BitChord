@@ -40,6 +40,9 @@ import com.music.bitchord.playback.PlaybackListeningBridge
 import com.music.bitchord.data.AndroidDiagnosticsHooks
 import com.music.bitchord.data.listentogether.ListenTogether
 import com.music.bitchord.data.scrobbling.LastFM
+import com.music.bitchord.data.providers.ProviderRuntime
+import com.music.bitchord.data.catalog.metadata.discogs.DiscogsSearchTokenVault
+import com.music.bitchord.acquisition.a0.SoulseekCredentialVault
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.SearchHistory
 import com.music.bitchord.data.sources.SourceRegistry
@@ -62,6 +65,8 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         super.onCreate()
         val applicationStarted = SystemClock.elapsedRealtimeNanos()
         Diagnostics.install(this)
+        // Install a fail-closed policy gate before any metadata network access.
+        ProviderRuntime.install(this)
         if (BuildConfig.DEBUG) {
             com.music.bitchord.diagnostics.RuntimePerformanceMonitor.install(this)
             // Process-wide watchdog: no periodic work in non-debug builds.
@@ -226,13 +231,12 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         // increase was forcing re-downloads of unchanged 500px album sleeves
         // on the Galaxy A54. Keep the bounded disk LRU across updates:
         // Front-v5 verification is in versioned Room keys and different
-        // validated CAA URLs remain distinct Coil keys. Only AudioCache still
-        // requires its historical version-sensitive format invalidation.
+        // validated CAA URLs remain distinct Coil keys. Audio-cache entries
+        // are now subject to their own source/provenance/retired-backend gates.
+        // A blanket wipe on every APK version change destroyed offline files
+        // even when their bytes were complete and still compatible.
         if (AppSettings.consumeVersionUpdate(BuildConfig.VERSION_CODE)) {
             CatalogCoverTelemetry.process.recordImageDiskCachePreservedOnUpgrade()
-            Diagnostics.span(DiagnosticCategory.STARTUP, "version_update_audio_cache_clear") {
-                AudioCache.clear()
-            }
         }
         // Initialize LastFM with saved settings if available
         Diagnostics.span(DiagnosticCategory.STARTUP, "lastfm_init") {
@@ -244,6 +248,46 @@ class BitChordApplication : Application(), SingletonImageLoader.Factory {
         }
         Diagnostics.span(DiagnosticCategory.STARTUP, "background_join_wait") {
             backgroundInit.join()
+        }
+        // Restore BOTH legacy stores before granting provider capabilities.
+        // On this integration branch iTunes is implemented by #216; Discogs
+        // remains default-off, preserving its independent legal/account gate.
+        Diagnostics.span(DiagnosticCategory.STARTUP, "provider_capabilities_init") {
+            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+                val authority = ProviderRuntime.authorityOrNull()
+                val migrated = authority?.migrateOnce(
+                    lyricsOrder = AppSettings.lyricsSourceOrder.value,
+                    enabledLyrics = AppSettings.lyricsSources.value,
+                    sources = SourceRegistry.configs.value,
+                    itunesImplemented = true,
+                    discogsImplemented = true,
+                    discogsTokenConfigured = DiscogsSearchTokenVault(this@BitChordApplication).configured(),
+                    lastfmConfigured = AppSettings.lastfmSessionKey.value.isNotBlank() &&
+                        AppSettings.lastfmApiKey.value.isNotBlank(),
+                    listenBrainzConfigured = AppSettings.listenBrainzToken.value.isNotBlank(),
+                    lastfmEnabled = AppSettings.lastfmEnabled.value &&
+                        AppSettings.lastfmScrobbleEnabled.value,
+                    listenBrainzEnabled = AppSettings.listenBrainzEnabled.value,
+                    soulseekConfigured = BuildConfig.FLAVOR == "dev" && BuildConfig.DEBUG &&
+                        (SoulseekCredentialVault(this@BitChordApplication).read()?.let {
+                            it.erase()
+                            true
+                        } == true),
+                ) == true
+                if (migrated && authority != null) {
+                    val lyrics = authority.currentLyricsProjection(
+                        AppSettings.lyricsSourceOrder.value, AppSettings.lyricsSources.value,
+                    )
+                    AppSettings.lyricsSourceOrder.value = lyrics.order
+                    AppSettings.lyricsSources.value = lyrics.enabled
+                    val raw = SourceRegistry.configs.value
+                    val projected = authority.currentExtensionsProjection(raw)
+                    SourceRegistry.applyProviderProjection(projected + raw.filterNot {
+                        it.kind == com.music.bitchord.data.sources.SourceKind.ADDON ||
+                            it.kind == com.music.bitchord.data.sources.SourceKind.CUSTOM_MODULE
+                    })
+                }
+            }
         }
         Diagnostics.event(
             category = DiagnosticCategory.STARTUP,

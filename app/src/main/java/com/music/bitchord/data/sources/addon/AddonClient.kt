@@ -11,9 +11,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.OkHttpClient
+import okhttp3.Response
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
 
@@ -339,24 +346,18 @@ class AddonClient(rawBaseUrl: String) {
                 .header("User-Agent", USER_AGENT)
                 .build()
 
-            val wait = client.newCall(request).execute().use { response ->
-                when {
-                    response.isSuccessful ->
-                        return@withContext response.body?.string()?.takeIf { it.isNotBlank() }
-                            ?: throw AddonException("Empty response")
-                    response.code == 404 -> throw AddonNotFound()
-                    // A 5xx is a server having a bad minute and will be tried
-                    // again on the next track; a 4xx is this app asking for
-                    // something it will never be given — a wrong URL, a token
-                    // that has expired — and no amount of retrying fixes it.
-                    // The sources screen renders the two differently, and
-                    // painting a transient outage as a configuration error
-                    // sends people to re-paste a URL that was always correct.
-                    response.code >= 500 -> throw AddonUnavailable("HTTP ${response.code}")
-                    response.code != 429 -> throw AddonException("HTTP ${response.code}")
-                    attempt >= MAX_RETRIES -> throw AddonUnavailable("This addon is rate limiting BitChord")
-                    else -> retryAfterMs(response.header("Retry-After"), attempt)
-                }
+            val response = awaitAddonHttp(client.newCall(request))
+            val wait = when {
+                response.code in 200..299 ->
+                    return@withContext response.body?.takeIf { it.isNotBlank() }
+                        ?: throw AddonException("Empty response")
+                response.code == 404 -> throw AddonNotFound()
+                // Preserve the 429 backoff and the existing treatment of
+                // permanent 4xx versus transient 5xx responses.
+                response.code >= 500 -> throw AddonUnavailable("HTTP ${response.code}")
+                response.code != 429 -> throw AddonException("HTTP ${response.code}")
+                attempt >= MAX_RETRIES -> throw AddonUnavailable("This addon is rate limiting BitChord")
+                else -> retryAfterMs(response.retryAfter, attempt)
             }
             quietUntilMs = System.currentTimeMillis() + wait
             attempt++
@@ -544,3 +545,41 @@ class AddonUnavailable(message: String) : Exception(message)
 
 /** The addon answered, and does not have what was asked for. A miss, not a fault. */
 class AddonNotFound : Exception("Not held by this addon")
+
+/** A short-lived response snapshot; never retain OkHttp's open response body. */
+internal data class AddonHttpResult(
+    val code: Int,
+    val body: String?,
+    val retryAfter: String?,
+)
+
+/**
+ * Detached addon lookups may outlive a single playback caller, but they must
+ * never outlive their source when it is removed or replaced. SharedCalls.clear
+ * cancels the producer Job, and this bridge closes the actual network Call.
+ */
+internal suspend fun awaitAddonHttp(call: Call): AddonHttpResult =
+    suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (continuation.isActive) continuation.resumeWithException(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val result = try {
+                    response.use {
+                        AddonHttpResult(
+                            code = it.code,
+                            body = if (it.isSuccessful) it.body?.string() else null,
+                            retryAfter = it.header("Retry-After"),
+                        )
+                    }
+                } catch (failure: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(failure)
+                    return
+                }
+                if (continuation.isActive) continuation.resume(result)
+            }
+        })
+    }

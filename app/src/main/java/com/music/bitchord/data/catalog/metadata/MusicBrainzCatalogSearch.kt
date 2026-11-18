@@ -1,5 +1,7 @@
 package com.music.bitchord.data.catalog.metadata
 
+import com.music.bitchord.data.providers.ProviderCapability
+
 import androidx.room.Ignore
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
@@ -168,7 +170,15 @@ private val MEMBER_PRACTICE_VERSION = Regex(
 
 internal class MusicBrainzCatalogSearch(
     private val client: MusicBrainzClient = MusicBrainzClient(),
+    private val capability: ProviderCapability = ProviderCapability.CATALOG_SEARCH,
 ) {
+    init {
+        require(capability == ProviderCapability.CATALOG_SEARCH ||
+            capability == ProviderCapability.EDITORIAL_DISCOGRAPHY) {
+            "MusicBrainz search supports only catalog or editorial reads"
+        }
+    }
+
     private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun searchArtists(
@@ -503,7 +513,7 @@ internal class MusicBrainzCatalogSearch(
                 "dismax" to if (fieldedQuery) "false" else "true",
                 "limit" to limit.toString(),
                 "offset" to offset.toString(),
-            ))
+            ), capability = capability)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

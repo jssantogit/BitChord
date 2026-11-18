@@ -1,6 +1,12 @@
 package com.music.bitchord.data.catalog.metadata
 
 import android.content.Context
+import com.music.bitchord.data.providers.ArtworkProbePolicyGuard
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRequestDeniedException
+import com.music.bitchord.data.providers.ProviderRuntime
 import android.graphics.BitmapFactory
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
@@ -169,14 +175,27 @@ internal class AppleHighResolutionArtwork(
     private val clockMs: () -> Long = System::currentTimeMillis,
     private val persistence: AppleArtworkProbePersistence? = null,
     private val telemetry: AppleArtworkProbeTelemetry = AppleArtworkProbeTelemetry.process,
+    private val artworkGateProvider: () -> ProviderPolicyGate? = {
+        ProviderRuntime.gateForCacheReadOrNull()
+    },
 ) {
+    private val policyGuard = ArtworkProbePolicyGuard(artworkGateProvider)
     private val cache = ConcurrentHashMap<String, AppleArtworkProbeRecord>()
     // Striped single-flight locks: at most one network check per URL while
     // unrelated covers can load in parallel. A bounded stripe array avoids
     // an unbounded per-album Mutex map and survives cache eviction.
     private val probeLocks = Array(32) { Mutex() }
 
-    suspend fun upgrade(artworkUrl: String?, desiredPx: Int = 1024): String? {
+    suspend fun upgrade(artworkUrl: String?, desiredPx: Int = 1024): String? =
+        policyGuard.probe(
+            capability = ProviderCapability.RELEASE_ARTWORK,
+            provider = BuiltInProviderKeys.ITUNES,
+            deniedFallback = null,
+        ) {
+            upgradeAuthorized(artworkUrl, desiredPx)
+        }
+
+    private suspend fun upgradeAuthorized(artworkUrl: String?, desiredPx: Int): String? {
         val original = safeAppleArtwork(artworkUrl) ?: return artworkUrl
         // Hero: aim for 1024; fall back directly to 720 then 600.
         // Avoid 1000px as a redundant fourth network probe that would slow
@@ -237,7 +256,11 @@ internal class AppleHighResolutionArtwork(
         desiredPx: Int = 1024,
     ): AppleVerifiedEditionArtwork {
         val selected = upgrade(edition.artworkUrl, desiredPx)
-        return if (selected == edition.artworkUrl || selected == null) edition
+            ?: throw ProviderRequestDeniedException(
+                ProviderCapability.RELEASE_ARTWORK,
+                BuiltInProviderKeys.ITUNES,
+            )
+        return if (selected == edition.artworkUrl) edition
             else edition.copy(artworkUrl = selected)
     }
 }

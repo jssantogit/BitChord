@@ -11,6 +11,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import com.music.bitchord.data.providers.*
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -35,6 +36,36 @@ class ListenBrainzPopularityClientTest {
             artistCalls += 1
             return artistReplies.removeAt(0)
         }
+    }
+
+    @Test fun chartOptOutSuppressesCachedPopularityAndLeavesListeningSubmissionsIndependent() = runBlocking {
+        val provider = BuiltInProviderKeys.LISTENBRAINZ
+        val descriptor = ProviderDescriptor(provider,
+            setOf(ProviderCapability.CHART_MOST_PLAYED, ProviderCapability.LISTENING_STATISTICS),
+            ProviderReadiness.READY)
+        fun policy(chartsOn: Boolean) = ProviderCapabilityPolicy(
+            descriptors = listOf(descriptor),
+            choices = mapOf(
+                ProviderCapability.CHART_MOST_PLAYED to listOf(ProviderChoice(provider, chartsOn, 0)),
+                ProviderCapability.LISTENING_STATISTICS to listOf(ProviderChoice(provider, true, 0)),
+            ),
+        )
+        val gate = ProviderPolicyGate(policy(true))
+        val transport = FakeTransport(mutableListOf(ListenBrainzPopularityHttpResponse(
+            200, """[{"recording_mbid":"$a","total_listen_count":10,"total_user_count":3}]""")))
+        val client = ListenBrainzPopularityClient(
+            transport, ListenBrainzRateLimiter(waitMillis = {}),
+            cacheRead = ProviderCachedReadAccess { gate },
+        )
+        assertTrue(client.recordingPopularity(listOf(a)) is ListenBrainzPopularityFetchResult.Success)
+        gate.replace(policy(false))
+        assertEquals(ListenBrainzPopularityFetchResult.Unavailable,
+            client.recordingPopularity(listOf(a)))
+        assertEquals(1, transport.calls)
+        assertTrue(gate.open(ProviderCapability.LISTENING_STATISTICS, provider) != null)
+        gate.replace(policy(true))
+        assertTrue(client.recordingPopularity(listOf(a)) is ListenBrainzPopularityFetchResult.Success)
+        assertEquals(1, transport.calls)
     }
 
     @Test fun exactMbidsAreFetchedAndCachedWithoutTreatingUnknownAsZero() = runBlocking {

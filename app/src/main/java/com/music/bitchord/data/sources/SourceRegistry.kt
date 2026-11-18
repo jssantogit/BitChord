@@ -6,6 +6,11 @@ import android.net.Uri
 import android.util.Log
 import com.music.bitchord.auth.EncryptedPrefs
 import com.music.bitchord.data.TrackLog
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
+import com.music.bitchord.data.providers.ProviderSessionStatus
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.settings.permits
 import com.music.bitchord.data.sources.addon.AddonClient
@@ -19,7 +24,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import java.util.UUID
 
 /**
@@ -51,6 +61,8 @@ data class SourceConfig(
      * already break that. Refreshed whenever the manifest is next read.
      */
     val checkValidLossless: Boolean = false,
+    /** Stored cache generation; rotate when source endpoint/identity changes. */
+    val playbackCacheEpoch: String = UUID.randomUUID().toString(),
 ) {
     /** Whether this source is shut out right now because it needs an output that isn't connected. */
     val awaitsLosslessOutput: Boolean
@@ -99,26 +111,50 @@ object SourceRegistry {
      * tracks instead of re-probing on every resolve.
      */
     private var instances: Map<String, MusicSource> = emptyMap()
+    /** Independent download producer scopes: playback revocation must never
+     * cancel an otherwise authorized download from this same addon instance. */
+    private var addonDownloadInstances: Map<String, AddonSource> = emptyMap()
+    private var moduleDownloadInstances: Map<String, ModuleSource> = emptyMap()
 
     fun init(context: Context) {
         // Same repair and degradation as AuthStore; see EncryptedPrefs.
         prefs = EncryptedPrefs.open(context, "bitchord_sources", "bitchord_sources_plain")
 
-        val stored = prefs.getString(KEY_SOURCES, null)?.let(::decodeStored) ?: emptyList()
+        val rawSources = prefs.getString(KEY_SOURCES, null)
+        val stored = rawSources?.let(::decodeStored) ?: emptyList()
+        // Default constructor values cannot persist across restarts unless
+        // a historical preference without this field is migrated once.
+        val missingEpoch = rawSources?.let { raw ->
+            runCatching {
+                json.parseToJsonElement(raw).jsonArray.any { element ->
+                    (element as? JsonObject)?.let { known ->
+                        !known.containsKey("playbackCacheEpoch")
+                    } ?: false
+                }
+            }.getOrDefault(false)
+        } ?: false
         val jioOptInMigrationDone = prefs.getBoolean(KEY_JIOSAAVN_OPT_IN_V1, false)
         val after = sourcesForInit(stored, forceJioSaavnOff = !jioOptInMigrationDone)
 
-        // Publish state and the migration marker in one preferences edit. If a
-        // process dies after recording the marker but before recording the
-        // disabled source, the next launch would otherwise believe the forced
-        // opt-out had already happened and silently restore the old on state.
-        publish(after, persist = false)
-        if (after != stored || !jioOptInMigrationDone) {
-            prefs.edit()
-                .putString(KEY_SOURCES, json.encodeToString(ListSerializer(SourceConfig.serializer()), after))
-                .putBoolean(KEY_JIOSAAVN_OPT_IN_V1, true)
-                .apply()
+        // Commit source migration and the retired-source opt-out marker as
+        // ONE durable transaction before constructing runtime sources.
+        // Failed writes cannot advertise a configuration/epoch that will be
+        // different after the next process start.
+        if (after != stored || !jioOptInMigrationDone || missingEpoch) {
+            val preserved = sourcesDocumentPreservingUnknown(rawSources, after)
+            val committed = sourceDocumentCommitAllowed(preserved) { document ->
+                prefs.edit()
+                    .putString(KEY_SOURCES, document)
+                    .putBoolean(KEY_JIOSAAVN_OPT_IN_V1, true)
+                    .commit()
+            }
+            if (!committed) {
+                TrackLog.w(TAG, "source migration not durable; keeping sources closed")
+                publish(emptyList(), persist = false)
+                return
+            }
         }
+        publish(after, persist = false)
     }
 
     /**
@@ -133,23 +169,15 @@ object SourceRegistry {
         stored: List<SourceConfig>,
         forceJioSaavnOff: Boolean,
     ): List<SourceConfig> {
-        // Existing YouTube rows are removed from stored source configuration.
-        // Musical history and persisted track identities live elsewhere and
-        // are not touched by this migration. JioSaavn remains opt-in.
-        val seeded = stored + listOf(SourceKind.JIOSAAVN)
-            .filter { kind -> stored.none { it.kind == kind } }
-            .map { SourceConfig(kind = it) }
-
-        // The retired built-in module is removed, while a custom module entered
-        // by the user is preserved.
-        return seeded
-            .filterNot { it.kind == SourceKind.MODULE || it.kind == SourceKind.YOUTUBE }
-            .map { config ->
-                when {
-                    config.kind == SourceKind.JIOSAAVN && forceJioSaavnOff -> config.copy(enabled = false)
-                    else -> config
-                }
-            }
+        // JioSaavn, YouTube and the obsolete built-in module are retired
+        // network backends. Keep historical track identities elsewhere, but
+        // never seed or restore these source configurations as runnable
+        // providers. User-defined addons and custom modules remain untouched.
+        return stored.filterNot {
+            it.kind == SourceKind.JIOSAAVN ||
+                it.kind == SourceKind.MODULE ||
+                it.kind == SourceKind.YOUTUBE
+        }
     }
 
     /**
@@ -171,6 +199,85 @@ object SourceRegistry {
     }
 
     /**
+     * Return a lossless persisted source list with updated known entries and
+     * verbatim unknown/future source types. Unknown fields on known entries
+     * survive too. A corrupt top-level document is left untouched (null);
+     * we cannot safely repair it by replacing it with an empty list.
+     *
+     * A returned document never activates unknown kinds: runtime projection
+     * still decodes only supported [SourceConfig] entries.
+     */
+    internal fun sourcesDocumentPreservingUnknown(
+        raw: String?,
+        active: List<SourceConfig>,
+    ): String? {
+        if (raw == null)
+            return json.encodeToString(ListSerializer(SourceConfig.serializer()), active)
+        val elements = runCatching { json.parseToJsonElement(raw).jsonArray }
+            .getOrNull() ?: return null
+        // Duplicate decodable IDs cannot be losslessly merged: do not
+        // silently collapse distinct user rows under one shared ID.
+        val decodedIds = elements.mapNotNull { element ->
+            runCatching {
+                json.decodeFromJsonElement(SourceConfig.serializer(), element).id
+            }.getOrNull()
+        }
+        if (decodedIds.size != decodedIds.toSet().size ||
+            active.map(SourceConfig::id).distinct().size != active.size) return null
+        val activeById = active.associateBy(SourceConfig::id)
+        val serializedIds = mutableSetOf<String>()
+        // Future schema fields may use a non-primitive id. Those malformed
+        // rows must remain inert and preserved, not crash application start.
+        val reservedIds = elements.mapNotNull { element ->
+            runCatching {
+                (element as? JsonObject)?.get("id")?.jsonPrimitive?.contentOrNull
+            }.getOrNull()
+        }.toSet()
+        // A future/unknown row may reserve the SAME id that this build is
+        // trying to publish as a known source. Silently skipping that active
+        // config after a successful commit would create a non-durable runtime
+        // identity. Refuse the ambiguous write and retain the original bytes.
+        val unknownIds = elements.mapNotNull { element ->
+            val known = runCatching {
+                json.decodeFromJsonElement(SourceConfig.serializer(), element)
+            }.getOrNull()
+            if (known != null) return@mapNotNull null
+            runCatching {
+                (element as? JsonObject)?.get("id")?.jsonPrimitive?.contentOrNull
+            }.getOrNull()
+        }.toSet()
+        if (active.any { it.id in unknownIds }) return null
+        val preserved = elements.mapNotNull { element ->
+            val decoded = runCatching {
+                json.decodeFromJsonElement(SourceConfig.serializer(), element)
+            }.getOrNull() ?: return@mapNotNull element // Never discard future types.
+            val replacement = activeById[decoded.id] ?: return@mapNotNull null
+            if (!serializedIds.add(decoded.id)) return@mapNotNull null
+            val serialized = json.encodeToJsonElement(
+                SourceConfig.serializer(), replacement,
+            ).jsonObject
+            // Keep additional fields a future release may have introduced.
+            JsonObject((element as? JsonObject).orEmpty() + serialized)
+        }.toMutableList()
+        active.filterNot { it.id in serializedIds || it.id in reservedIds }
+            .forEach { config ->
+                preserved += json.encodeToJsonElement(SourceConfig.serializer(), config)
+            }
+        return JsonArray(preserved).toString()
+    }
+
+    /**
+     * A failed disk write must never permit publication of a new source
+     * endpoint or cache generation. This runs before the state/instance swap.
+     * Unknown documents and exceptions are fail-closed; their bytes are
+     * preserved for a later version or recovery.
+     */
+    internal fun sourceDocumentCommitAllowed(
+        document: String?,
+        write: (String) -> Boolean,
+    ): Boolean = document != null && runCatching { write(document) }.getOrDefault(false)
+
+    /**
      * The enabled sources, module first and YouTube last, however they're stored.
      *
      * The user's standing choice and nothing else. Both playback and downloads
@@ -179,20 +286,94 @@ object SourceRegistry {
      * apply no connection-quality ceiling — see [SourceResolver.forDownload].
      */
     fun active(): List<MusicSource> =
-        audioCandidateConfigs(configs.value)
-            // Not in the walk at all while it would be refused anyway: an addon
-            // that asked for a lossless output costs nothing — not even a timed
-            // out search — while there isn't one. See [SourceConfig.checkValidLossless].
-            .filterNot { it.awaitsLosslessOutput }
-            .sortedBy { it.kind.rank }
-            .mapNotNull { instances[it.id] }
+        orderCandidatesByCapability(
+            audioCandidateConfigs(configs.value)
+                // Never probe a lossless-only addon without a capable output.
+                .filterNot { it.awaitsLosslessOutput },
+            ProviderRuntime.gateOrNull(),
+            ProviderCapability.EXTENSION_PLAYBACK,
+        ).mapNotNull { instances[it.id] }
 
     /**
      * [active], minus the addons whose manifest said `allowDownloads: 0`. A
      * download walks this instead, so the next source in line serves it.
      */
-    fun activeForDownload(): List<MusicSource> =
-        active().filter { config(it.configId)?.allowDownloads != false }
+    fun activeForDownload(): List<MusicSource> {
+        val gate = ProviderRuntime.gateOrNull()
+        return orderCandidatesByCapability(
+            downloadCandidateConfigs(configs.value, gate), gate, ProviderCapability.DOWNLOAD,
+        ).mapNotNull { source ->
+            addonDownloadInstances[source.id] ?:
+                moduleDownloadInstances[source.id] ?: instances[source.id]
+        }
+    }
+
+    /**
+     * The canonical session owns priority independently for every capability.
+     * Never let the legacy SourceKind rank or stored playback order override a
+     * different (DOWNLOAD × instance) selection. Equal/unconfigured priorities
+     * preserve the existing stable kind + stored ordering.
+     */
+    internal fun orderCandidatesByCapability(
+        candidates: List<SourceConfig>,
+        gate: ProviderPolicyGate?,
+        capability: ProviderCapability,
+    ): List<SourceConfig> {
+        val priorities = gate?.ordered(capability)
+            ?.mapIndexed { index, descriptor -> descriptor.key to index }
+            ?.toMap().orEmpty()
+        return candidates.withIndex().sortedWith(
+            compareBy<IndexedValue<SourceConfig>> { indexed ->
+                val config = indexed.value
+                val key = ProviderKey(
+                    if (config.kind == SourceKind.ADDON) "addon" else "custom_module",
+                    config.id,
+                )
+                priorities[key] ?: Int.MAX_VALUE
+            }.thenBy { it.value.kind.rank }
+                .thenBy { it.index },
+        ).map { it.value }
+    }
+
+    /**
+     * Download consent is independent from playback consent. Do not start with
+     * active(), which already removes EXTENSION_PLAYBACK-disabled addons.
+     * Legacy enabled remains authoritative for ordinary (non-addon) sources,
+     * but only the canonical DOWNLOAD ticket admits addon/custom-module work.
+     */
+    internal fun downloadCandidateConfigs(
+        sources: List<SourceConfig>,
+        gate: ProviderPolicyGate?,
+    ): List<SourceConfig> = downloadEligibleConfigs(
+        sources.filter { source ->
+            source.isComplete && !source.awaitsLosslessOutput &&
+                source.kind != SourceKind.YOUTUBE &&
+                source.kind != SourceKind.JIOSAAVN &&
+                source.kind != SourceKind.MODULE &&
+                (source.enabled ||
+                    source.kind == SourceKind.ADDON ||
+                    source.kind == SourceKind.CUSTOM_MODULE)
+        },
+        gate,
+    )
+
+    /** DOWNLOAD and EXTENSION_PLAYBACK use independent per-instance tickets. */
+    internal fun downloadEligibleConfigs(
+        sources: List<SourceConfig>,
+        gate: ProviderPolicyGate?,
+    ): List<SourceConfig> = sources.filter { source ->
+        if (!source.allowDownloads) return@filter false
+        when (source.kind) {
+            SourceKind.ADDON, SourceKind.CUSTOM_MODULE -> {
+                val key = ProviderKey(
+                    if (source.kind == SourceKind.ADDON) "addon" else "custom_module",
+                    source.id,
+                )
+                gate?.open(ProviderCapability.DOWNLOAD, key) != null
+            }
+            else -> true
+        }
+    }
 
     /**
      * Records what an addon's manifest said about downloads and lossless
@@ -218,17 +399,53 @@ object SourceRegistry {
     }
 
     /** The common eligibility gate used by playback and download source walks. */
-    internal fun enabledConfigs(configs: List<SourceConfig>): List<SourceConfig> =
-        configs.filter { it.enabled && it.isComplete && it.kind != SourceKind.YOUTUBE }
+    internal fun enabledConfigs(configs: List<SourceConfig>): List<SourceConfig> {
+        val status = ProviderRuntime.state?.value?.status
+        val projected = if (status == ProviderSessionStatus.READY ||
+            status == ProviderSessionStatus.PERSISTING ||
+            status == ProviderSessionStatus.STORAGE_ERROR
+        ) {
+            val extensions = ProviderRuntime.authorityOrNull()?.currentExtensionsProjection(configs)
+            if (extensions == null) configs else extensions + configs.filterNot {
+                it.kind == SourceKind.ADDON || it.kind == SourceKind.CUSTOM_MODULE
+            }
+        } else configs
+        return extensionEligibleConfigs(
+            projected.filter { it.enabled && it.isComplete && it.kind != SourceKind.YOUTUBE &&
+                it.kind != SourceKind.JIOSAAVN },
+            ProviderRuntime.gateOrNull(),
+        )
+    }
+
+    /** A legacy enabled flag is never sufficient authorization to contact
+     * an addon. Enforce the exact instance's EXTENSION_PLAYBACK ticket at
+     * selection time, including during startup/storage failure. */
+    internal fun extensionEligibleConfigs(
+        sources: List<SourceConfig>,
+        gate: ProviderPolicyGate?,
+    ): List<SourceConfig> = sources.filter { source ->
+        when (source.kind) {
+            SourceKind.ADDON, SourceKind.CUSTOM_MODULE -> {
+                val key = ProviderKey(
+                    if (source.kind == SourceKind.ADDON) "addon" else "custom_module",
+                    source.id,
+                )
+                gate?.open(ProviderCapability.EXTENSION_PLAYBACK, key) != null
+            }
+            else -> true
+        }
+    }
 
     /** User-visible source selection is provider-neutral. Retired YouTube
      * settings stay decoded for migration but cannot appear as an option. */
     internal fun displayConfigs(configs: List<SourceConfig>): List<SourceConfig> =
-        configs.filterNot { it.kind == SourceKind.YOUTUBE }
+        configs.filterNot { it.kind == SourceKind.YOUTUBE || it.kind == SourceKind.JIOSAAVN }
 
     /** An additional safety gate for legacy configs passed in by older callers. */
     internal fun audioCandidateConfigs(configs: List<SourceConfig>): List<SourceConfig> =
-        enabledConfigs(configs).filterNot { it.kind == SourceKind.YOUTUBE }
+        enabledConfigs(configs).filterNot {
+            it.kind == SourceKind.YOUTUBE || it.kind == SourceKind.JIOSAAVN
+        }
 
     /**
      * [active], minus the sources the ceiling on the connection in hand does
@@ -303,8 +520,16 @@ object SourceRegistry {
 
     /** No retired source can be re-enabled through saved settings or callers. */
     fun setEnabled(configId: String, enabled: Boolean) {
-        if (config(configId)?.kind == SourceKind.YOUTUBE) return
-        publish(configs.value.map { if (it.id == configId) it.copy(enabled = enabled) else it })
+        val current = config(configId) ?: return
+        if (current.kind == SourceKind.YOUTUBE || current.kind == SourceKind.JIOSAAVN) return
+        if (current.kind == SourceKind.ADDON || current.kind == SourceKind.CUSTOM_MODULE) {
+            val committed = ProviderRuntime.updateExtensionFromLegacyUi(configId, enabled, configs.value)
+            if (committed == false) return
+            publish(configs.value.map { if (it.id == configId) it.copy(enabled = enabled) else it },
+                persist = committed != true)
+        } else {
+            publish(configs.value.map { if (it.id == configId) it.copy(enabled = enabled) else it })
+        }
     }
 
     /**
@@ -342,17 +567,66 @@ object SourceRegistry {
         val missed = addons.filterNot { config -> moved.any { it.id == config.id } }
         val reordered = moved + missed
         if (reordered.map { it.id } == addons.map { it.id }) return
-        publish(reordered + configs.value.filterNot { it.kind.isUserAdded })
+        val status = ProviderRuntime.state?.value?.status
+        val canonicalActive = status == ProviderSessionStatus.READY ||
+            status == ProviderSessionStatus.PERSISTING
+        if (canonicalActive) {
+            val committed = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                ProviderRuntime.authorityOrNull()?.reorderExtensions(
+                    reordered.map { it.id }, configs.value,
+                ) == true
+            }
+            if (!committed) return
+        }
+        publish(reordered + configs.value.filterNot { it.kind.isUserAdded },
+            persist = !canonicalActive)
     }
 
+    /** Read-only projection: never writes a second preference authority. */
+    internal fun applyProviderProjection(next: List<SourceConfig>) {
+        publish(next, persist = false)
+    }
+
+    /** Preserve across projections/toggles; rotate for endpoint edits, even edit-back. */
+    internal fun scopeAfterSourceUpdate(old: SourceConfig?, next: SourceConfig): SourceConfig =
+        when {
+            old == null -> next
+            old.kind == next.kind && old.baseUrl == next.baseUrl ->
+                next.copy(playbackCacheEpoch = old.playbackCacheEpoch)
+            else -> next.copy(playbackCacheEpoch = UUID.randomUUID().toString())
+        }
+
     private fun publish(next: List<SourceConfig>, persist: Boolean = true) {
-        configs.value = next
+        // The persisted migration is not the only entry point: a stale editor,
+        // legacy projection or restored snapshot can publish a source list.
+        // Never construct or persist a retired backend through this path.
+        val previousConfigs = configs.value.associateBy(SourceConfig::id)
+        val activeConfigs = next.filterNot {
+            it.kind == SourceKind.JIOSAAVN || it.kind == SourceKind.YOUTUBE ||
+                it.kind == SourceKind.MODULE
+        }.map { item -> scopeAfterSourceUpdate(previousConfigs[item.id], item) }
+        // Do not erase a corrupt preference document while trying to
+        // persist an unrelated edit. Avoid publishing an in-memory state
+        // that cannot be persisted across process death.
+        val storedDocument = if (persist && ::prefs.isInitialized)
+            sourcesDocumentPreservingUnknown(
+                prefs.getString(KEY_SOURCES, null), activeConfigs,
+            )
+        else null
+        if (persist && ::prefs.isInitialized &&
+            !sourceDocumentCommitAllowed(storedDocument) { document ->
+                prefs.edit().putString(KEY_SOURCES, document).commit()
+            }
+        ) {
+            TrackLog.w(TAG, "source update refused: preferences not durably committed")
+            return
+        }
+        configs.value = activeConfigs
         // Rebuilt against the previous map so that an untouched source keeps
         // the instance it already had, rather than being replaced by an
         // identical-but-cold one every time an unrelated row is toggled.
         val previous = instances
-        // Reject retired YouTube even if an old caller supplies a config.
-        instances = next.filterNot { it.kind == SourceKind.YOUTUBE }.associate { config ->
+        instances = activeConfigs.associate { config ->
             val existing = previous[config.id]?.takeIf { it.configuredBy(config) }
             config.id to (existing ?: build(config))
         }
@@ -364,12 +638,39 @@ object SourceRegistry {
         // would be answering a question about the old address with the new one
         // selected.
         previous.values.filterNot { it in instances.values }
-            .filterIsInstance<AddonSource>()
+            .forEach { source ->
+                when (source) {
+                    is AddonSource -> source.release()
+                    is ModuleSource -> source.release()
+                }
+            }
+        // The same addon can have DOWNLOAD enabled while EXTENSION_PLAYBACK is
+        // disabled. Separate client scopes ensure revoking playback cancels
+        // only playback HTTP and never the authorized download producer.
+        val previousDownload = addonDownloadInstances
+        addonDownloadInstances = activeConfigs
+            .filter { it.kind == SourceKind.ADDON }
+            .associate { config ->
+                val existing = previousDownload[config.id]
+                    ?.takeIf { it.config.withPolicyOf(config) == config }
+                config.id to (existing ?: AddonSource(config, ProviderCapability.DOWNLOAD))
+            }
+        previousDownload.values.filterNot { it in addonDownloadInstances.values }
             .forEach { it.release() }
-        if (persist && ::prefs.isInitialized) {
-            prefs.edit()
-                .putString(KEY_SOURCES, json.encodeToString(ListSerializer(SourceConfig.serializer()), next))
-                .apply()
+        val previousModules = moduleDownloadInstances
+        moduleDownloadInstances = activeConfigs
+            .filter { it.kind == SourceKind.CUSTOM_MODULE }
+            .associate { config ->
+                val existing = previousModules[config.id]
+                    ?.takeIf { it.config.withPolicyOf(config) == config }
+                config.id to (existing ?: ModuleSource(config, ProviderCapability.DOWNLOAD))
+            }
+        previousModules.values.filterNot { it in moduleDownloadInstances.values }
+            .forEach { it.release() }
+        if (persist && ProviderRuntime.state?.value?.status == ProviderSessionStatus.READY) {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                ProviderRuntime.authorityOrNull()?.onSourcesChanged(activeConfigs)
+            }
         }
     }
 
@@ -463,18 +764,18 @@ object SourceRegistry {
     suspend fun probeCandidate(config: SourceConfig): SourceHealth {
         // Historical source rows remain deserializable, but cannot become
         // live YouTube clients through the editor's health-check endpoint.
-        if (config.kind == SourceKind.YOUTUBE) {
-            return SourceHealth.Rejected("YouTube Music is retired as an audio source")
+        if (config.kind == SourceKind.YOUTUBE || config.kind == SourceKind.JIOSAAVN) {
+            return SourceHealth.Rejected("This built-in audio source is retired")
         }
         return build(config).health()
     }
 
     private fun build(config: SourceConfig): MusicSource = when (config.kind) {
-        SourceKind.ADDON -> AddonSource(config)
+        SourceKind.ADDON -> AddonSource(config, ProviderCapability.EXTENSION_PLAYBACK)
         // Same protocol, same implementation — the kinds differ only in rank.
-        SourceKind.CUSTOM_MODULE -> ModuleSource(config)
+        SourceKind.CUSTOM_MODULE -> ModuleSource(config, ProviderCapability.EXTENSION_PLAYBACK)
         SourceKind.MODULE -> ModuleSource(config)
-        SourceKind.JIOSAAVN -> JioSaavnSource(config)
+        SourceKind.JIOSAAVN -> error("Retired JioSaavn source cannot be constructed")
         // Stored legacy rows are deserialized but never turned into clients.
         SourceKind.YOUTUBE -> error("Retired YouTube source cannot be constructed")
     }

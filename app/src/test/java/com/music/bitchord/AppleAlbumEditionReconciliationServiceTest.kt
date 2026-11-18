@@ -1,6 +1,13 @@
 package com.music.bitchord
 
 import com.music.bitchord.data.catalog.metadata.*
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.BuiltInProviderDescriptors
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderCapabilityPolicy
+import com.music.bitchord.data.providers.ProviderChoice
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderReadiness
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -228,4 +235,93 @@ class AppleAlbumEditionReconciliationServiceTest {
         )))
         assertFalse(called)
     }
+    private fun authority(
+        appleEnabled: Boolean = true,
+        mbEditorialEnabled: Boolean = true,
+        discogsEnabled: Boolean = true,
+    ): ProviderCapabilityPolicy = ProviderCapabilityPolicy(
+        descriptors = listOf(
+            BuiltInProviderDescriptors.itunes(ProviderReadiness.READY),
+            BuiltInProviderDescriptors.musicBrainz(ProviderReadiness.READY),
+            BuiltInProviderDescriptors.discogs(tokenConfigured = true, implemented = true),
+        ),
+        choices = mapOf(
+            ProviderCapability.CATALOG_SEARCH to listOf(
+                ProviderChoice(BuiltInProviderKeys.MUSICBRAINZ, enabled = false, order = 0),
+            ),
+            ProviderCapability.EDITORIAL_DISCOGRAPHY to listOf(
+                ProviderChoice(BuiltInProviderKeys.ITUNES, appleEnabled, 0),
+                ProviderChoice(BuiltInProviderKeys.MUSICBRAINZ, mbEditorialEnabled, 1),
+            ),
+            ProviderCapability.EDITION_METADATA to listOf(
+                ProviderChoice(BuiltInProviderKeys.DISCOGS, discogsEnabled, 0),
+            ),
+        ),
+    )
+
+    @Test fun optionalEditionProofUsesEditorialPermissionAndDoesNotRequireCatalogSearch() =
+        runBlocking {
+            val gate = ProviderPolicyGate(authority())
+            var mbEvidenceCalls = 0
+            val service = AppleAlbumEditionReconciliationService(
+                source = AppleAlbumEditionEvidenceSource {
+                    mbEvidenceCalls++
+                    AppleAlbumEditionEvidence(listOf(mb()), listOf(group()))
+                },
+                discogs = AppleDiscogsEditionEvidenceSource {
+                    com.music.bitchord.data.catalog.metadata.discogs
+                        .DiscogsEditionEnrichment.Disabled
+                },
+                policyGate = { gate },
+            )
+            assertNotNull(service.resolve(apple()))
+            assertEquals(1, mbEvidenceCalls)
+
+            gate.replace(authority(mbEditorialEnabled = false))
+            assertNull(service.resolve(apple()))
+            assertEquals(1, mbEvidenceCalls)
+            gate.replace(authority(appleEnabled = false))
+            assertNull(service.resolve(apple()))
+            assertEquals(1, mbEvidenceCalls)
+        }
+
+    @Test fun midFlightRevocationDropsCrossProviderEditionProofBeforePublication() =
+        runBlocking {
+            val gate = ProviderPolicyGate(authority())
+            var discogsCalls = 0
+            val service = AppleAlbumEditionReconciliationService(
+                source = AppleAlbumEditionEvidenceSource {
+                    // Simulate an already-returned MB response after opt-out.
+                    gate.replace(authority(mbEditorialEnabled = false))
+                    AppleAlbumEditionEvidence(listOf(mb()), listOf(group()))
+                },
+                discogs = AppleDiscogsEditionEvidenceSource {
+                    discogsCalls++
+                    com.music.bitchord.data.catalog.metadata.discogs
+                        .DiscogsEditionEnrichment.Disabled
+                },
+                policyGate = { gate },
+            )
+            assertNull(service.resolve(apple()))
+            assertEquals(0, discogsCalls)
+        }
+
+    @Test fun disabledDiscogsDoesNotBlockExactMbEditionOrCallDiscogs() = runBlocking {
+        val gate = ProviderPolicyGate(authority(discogsEnabled = false))
+        var discogsCalls = 0
+        val service = AppleAlbumEditionReconciliationService(
+            source = AppleAlbumEditionEvidenceSource {
+                AppleAlbumEditionEvidence(listOf(mb()), listOf(group()))
+            },
+            discogs = AppleDiscogsEditionEvidenceSource {
+                discogsCalls++
+                com.music.bitchord.data.catalog.metadata.discogs
+                    .DiscogsEditionEnrichment.Disabled
+            },
+            policyGate = { gate },
+        )
+        assertNotNull(service.resolve(apple()))
+        assertEquals(0, discogsCalls)
+    }
+
 }

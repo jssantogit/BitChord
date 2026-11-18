@@ -1,6 +1,9 @@
 package com.music.bitchord.data.catalog.metadata
 
 import com.music.bitchord.BuildConfig
+import com.music.bitchord.data.providers.BuiltInProviderKeys
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.RateLimitedProviderTransport
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -39,8 +42,20 @@ internal class KtorListenBrainzRecommendationTransport(
             socketTimeoutMillis = 15_000L
         }
     },
+    private val admission: RateLimitedProviderTransport = RateLimitedProviderTransport(),
 ) : ListenBrainzRecommendationTransport {
+    private suspend fun <T> authorized(block: suspend () -> T): T =
+        admission.execute(
+            capability = ProviderCapability.PERSONAL_RECOMMENDATIONS,
+            provider = BuiltInProviderKeys.LISTENBRAINZ,
+            scheduleLimited = { task -> task() },
+            networkCall = block,
+        )
+
     override suspend fun validateToken(token: String): ListenBrainzRecommendationHttpResponse =
+        authorized { validateTokenUnchecked(token) }
+
+    private suspend fun validateTokenUnchecked(token: String): ListenBrainzRecommendationHttpResponse =
         measureMetadataHttp(
             provider = "listenbrainz", endpoint = "user_validation",
             status = { r: ListenBrainzRecommendationHttpResponse -> r.status },
@@ -59,6 +74,11 @@ internal class KtorListenBrainzRecommendationTransport(
         }
 
     override suspend fun recommendations(
+        userName: String, count: Int,
+    ): ListenBrainzRecommendationHttpResponse =
+        authorized { recommendationsUnchecked(userName, count) }
+
+    private suspend fun recommendationsUnchecked(
         userName: String, count: Int,
     ): ListenBrainzRecommendationHttpResponse = measureMetadataHttp(
         provider = "listenbrainz", endpoint = "recording_recommendations",

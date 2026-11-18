@@ -1,6 +1,9 @@
 package com.music.bitchord.data.catalog.metadata
 
 import androidx.room.withTransaction
+import com.music.bitchord.data.providers.ProviderCachedReadAccess
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.BuiltInProviderKeys
 import com.music.bitchord.data.catalog.CanonicalCatalogDatabase
 import com.music.bitchord.data.catalog.ArtistEntity
 import com.music.bitchord.data.catalog.MusicBrainzArtistEnrichmentEntity
@@ -33,10 +36,12 @@ internal class MusicBrainzCatalogIndex private constructor(
 ) {
     private val proofClient = configuration.proofClient
     private val idFactory = configuration.idFactory
+    private val cacheRead = configuration.cacheRead
 
     private data class Configuration(
         val idFactory: () -> String,
         val proofClient: MusicBrainzClient,
+        val cacheRead: ProviderCachedReadAccess = ProviderCachedReadAccess(),
     )
 
     /** Original constructor shape: keep positional, named, and trailing-lambda callers source-compatible. */
@@ -53,6 +58,31 @@ internal class MusicBrainzCatalogIndex private constructor(
 
     constructor(database: CanonicalCatalogDatabase, proofClient: MusicBrainzClient) :
         this(database, Configuration({ UUID.randomUUID().toString() }, proofClient))
+
+    constructor(database: CanonicalCatalogDatabase, cacheRead: ProviderCachedReadAccess) :
+        this(database, Configuration(
+            { UUID.randomUUID().toString() }, MusicBrainzClient(), cacheRead,
+        ))
+
+    /** Unit tests opt into editorial cache reads without weakening Android defaults. */
+    constructor(
+        database: CanonicalCatalogDatabase,
+        idFactory: () -> String,
+        cacheRead: ProviderCachedReadAccess,
+    ) : this(database, Configuration(idFactory, MusicBrainzClient(), cacheRead))
+
+    constructor(
+        database: CanonicalCatalogDatabase,
+        proofClient: MusicBrainzClient,
+        cacheRead: ProviderCachedReadAccess,
+    ) : this(database, Configuration({ UUID.randomUUID().toString() }, proofClient, cacheRead))
+
+    constructor(
+        database: CanonicalCatalogDatabase,
+        proofClient: MusicBrainzClient,
+        idFactory: () -> String,
+        cacheRead: ProviderCachedReadAccess,
+    ) : this(database, Configuration(idFactory, proofClient, cacheRead))
 
     /** Supports proof-client injection together with an existing trailing id factory. */
     constructor(
@@ -287,7 +317,12 @@ internal class MusicBrainzCatalogIndex private constructor(
     }
 
     suspend fun cachedArtistGroups(artistMbid: String): List<MusicBrainzReleaseGroupHit> =
-        database.withTransaction {
+        cacheRead.read(
+            ProviderCapability.EDITORIAL_DISCOGRAPHY,
+            BuiltInProviderKeys.MUSICBRAINZ,
+            emptyList<MusicBrainzReleaseGroupHit>(),
+        ) {
+            database.withTransaction {
             val normalized = artistMbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches)
                 ?: return@withTransaction emptyList()
             val dao = database.catalogDao()
@@ -300,21 +335,31 @@ internal class MusicBrainzCatalogIndex private constructor(
             // used by CoverArtArchive before any artwork reaches Compose.
             val rows = dao.verifiedArtistDiscographyRows(artistId)
             if (rows.isEmpty()) return@withTransaction rows
-            val now = System.currentTimeMillis()
-            val eligibleIds = rows.map { it.musicBrainzId }.toSet()
-            val verified = dao.verifiedGroupFronts(eligibleIds.toList())
-                .mapNotNull { record ->
-                    if (record.mbid !in eligibleIds) return@mapNotNull null
-                    val url = eligibleVerifiedGroupFrontUrl(
-                        MusicBrainzCoverArtCacheEntry(
-                            "verified-artist-group", record.mbid, record.artworkUri,
-                            record.fetchedAtEpochMs, record.thumbnailUri,
-                        ),
-                        now,
-                    ) ?: return@mapNotNull null
-                    record.mbid to url
-                }.toMap()
+            // MusicBrainz editorial permission does not grant CAA artwork
+            // permission. Preserve the group rows and persisted Front-v5
+            // evidence, but independently authorize the artwork projection.
+            val verified = cacheRead.read(
+                ProviderCapability.RELEASE_ARTWORK,
+                BuiltInProviderKeys.COVER_ART_ARCHIVE,
+                emptyMap<String, String>(),
+            ) {
+                val now = System.currentTimeMillis()
+                val eligibleIds = rows.map { it.musicBrainzId }.toSet()
+                dao.verifiedGroupFronts(eligibleIds.toList())
+                    .mapNotNull { record ->
+                        if (record.mbid !in eligibleIds) return@mapNotNull null
+                        val url = eligibleVerifiedGroupFrontUrl(
+                            MusicBrainzCoverArtCacheEntry(
+                                "verified-artist-group", record.mbid, record.artworkUri,
+                                record.fetchedAtEpochMs, record.thumbnailUri,
+                            ),
+                            now,
+                        ) ?: return@mapNotNull null
+                        record.mbid to url
+                    }.toMap()
+            }
             rows.map { it.copy(artworkUri = verified[it.musicBrainzId]) }
+            }
         }
 
     /** Edition search evidence uses the existing source-specific v3 cache. */
@@ -378,7 +423,12 @@ internal class MusicBrainzCatalogIndex private constructor(
     }
 
     suspend fun cachedGroupReleases(groupMbid: String): List<MusicBrainzReleaseHit> =
-        database.withTransaction {
+        cacheRead.read(
+            ProviderCapability.EDITORIAL_DISCOGRAPHY,
+            BuiltInProviderKeys.MUSICBRAINZ,
+            emptyList<MusicBrainzReleaseHit>(),
+        ) {
+            database.withTransaction {
             val dao = database.catalogDao()
             val normalized = groupMbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches)
                 ?: return@withTransaction emptyList()
@@ -399,10 +449,17 @@ internal class MusicBrainzCatalogIndex private constructor(
                     isVideoOnlyContent = edition.isVideoOnlyContent,
                 )
             }
+            }
         }
 
     /** A release seen in search alone does not prove a downloaded tracklist. */
-    suspend fun cachedRelease(mbid: String): MusicBrainzCatalogReleaseDetail? = database.withTransaction {
+    suspend fun cachedRelease(mbid: String): MusicBrainzCatalogReleaseDetail? =
+        cacheRead.read<MusicBrainzCatalogReleaseDetail?>(
+            ProviderCapability.EDITORIAL_DISCOGRAPHY,
+            BuiltInProviderKeys.MUSICBRAINZ,
+            null,
+        ) {
+            database.withTransaction {
         val dao = database.catalogDao()
         val normalized = mbid.trim().lowercase(Locale.ROOT).takeIf(MBID::matches)
             ?: return@withTransaction null
@@ -420,7 +477,8 @@ internal class MusicBrainzCatalogIndex private constructor(
             info?.artistDisplay?.takeIf(String::isNotBlank) ?: release.artistDisplay,
             info?.country, info?.releaseDate,
             tracks, isVideoOnlyContent = info?.isVideoOnlyContent)
-    }
+            }
+        }
 
     /**
      * Canonical ReleaseGroup/Release/Track graph is independent of audio
@@ -469,6 +527,7 @@ internal class MusicBrainzCatalogIndex private constructor(
                     "release/$releaseMbid",
                     mapOf("inc" to "recordings", "fmt" to "xml"),
                     maxResponseBytes = MUSICBRAINZ_BOUNDED_RESPONSE_MAX_BYTES,
+                    capability = ProviderCapability.EDITORIAL_DISCOGRAPHY,
                 )
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled

@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import com.music.bitchord.ui.theme.themeArtworkPalette
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -36,6 +38,7 @@ class NativeArtistPublicTopSectionTest {
             artistScopeMbid = "b7ffd2af-418f-4be2-bdd1-22f8b48613db",
         )
         val opened = mutableListOf<String>()
+        val held = mutableListOf<String>()
         compose.setContent {
             MaterialTheme {
                 NativeArtistPublicTopSection(
@@ -45,15 +48,23 @@ class NativeArtistPublicTopSectionTest {
                     rows = listOf(correct, unrelated),
                     palette = themeArtworkPalette(),
                     onRecordingOpen = { opened += it.musicBrainzId },
+                    onRecordingHold = { held += it.musicBrainzId },
                 )
             }
         }
         compose.onNodeWithText("Canonical recording").assertExists()
         compose.onNodeWithText("Other identity").assertDoesNotExist()
         compose.onNodeWithText("Canonical recording").assertHasNoClickAction()
-        compose.onNodeWithTag("artist-top-more-${correct.musicBrainzId}").performClick()
-        compose.onNodeWithText("Ver no MusicBrainz").assertExists()
-        compose.runOnIdle { assertEquals(emptyList<String>(), opened) }
+        compose.onNodeWithTag("artist-top-more-${correct.musicBrainzId}").assertDoesNotExist()
+        compose.onNodeWithTag("artist-top-row-${correct.musicBrainzId}")
+            .performTouchInput { longClick() }
+        // No metadata-only playback or per-row Popup. The global host owns it.
+        compose.onNodeWithText("Ver no MusicBrainz").assertDoesNotExist()
+        compose.onNodeWithTag("native-compact-overflow").assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(listOf(correct.musicBrainzId), held)
+            assertEquals(emptyList<String>(), opened)
+        }
     }
 
     @Test fun sampledPopularityUsesTopTracksTitleWithoutTechnicalCaption() {

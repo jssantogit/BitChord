@@ -2,6 +2,12 @@ package com.music.bitchord.data.sources
 
 import android.util.Log
 import com.music.bitchord.data.TrackLog
+import com.music.bitchord.data.providers.ProviderCapability
+import com.music.bitchord.data.providers.ProviderKey
+import com.music.bitchord.data.providers.ProviderPolicyGate
+import com.music.bitchord.data.providers.ProviderRuntime
+import com.music.bitchord.data.providers.ProviderQueryExecutor
+import com.music.bitchord.data.providers.ProviderCallResult
 import com.music.bitchord.data.model.Song
 import com.music.bitchord.data.settings.AppSettings
 import com.music.bitchord.data.sources.module.ModuleManager
@@ -31,6 +37,9 @@ import java.util.Locale
  */
 class ModuleSource(
     override val config: SourceConfig,
+    /** Null is reserved for explicit unsaved editor probes and isolated tests. */
+    private val requestCapability: ProviderCapability? = null,
+    private val gateProvider: () -> ProviderPolicyGate? = { ProviderRuntime.gateOrNull() },
 ) : MusicSource, SourceRegistry.ConfigBacked {
 
     override val configId: String get() = config.id
@@ -44,6 +53,28 @@ class ModuleSource(
      * call for a result it returned.
      */
     private val manager = ModuleManager()
+
+    private suspend fun <T> withCapability(fallback: T, action: suspend () -> T): T {
+        val capability = requestCapability ?: return action()
+        val gate = gateProvider() ?: return fallback
+        val provider = ProviderKey("custom_module", config.id)
+        val ticket = gate.open(capability, provider) ?: return fallback
+        // QuickJS can create detached SharedCalls. Revocation must cancel
+        // their producers as well as the request's own child coroutine.
+        val unregister = gate.onRevoke(ticket) { manager.cancelPending() }
+        return try {
+            when (val outcome = ProviderQueryExecutor(gate).execute(capability, provider, action)) {
+                is ProviderCallResult.Success -> outcome.value
+                is ProviderCallResult.Denied,
+                is ProviderCallResult.Stale,
+                is ProviderCallResult.Failed -> fallback
+            }
+        } finally {
+            unregister()
+        }
+    }
+
+    fun release() = manager.cancelPending()
 
     // ── Health ────────────────────────────────────────────────────────────
 
@@ -102,7 +133,7 @@ class ModuleSource(
         limit: Int,
         waitForAll: Boolean,
         request: StreamRequest?,
-    ): List<Song> =
+    ): List<Song> = withCapability(emptyList()) {
         withContext(Dispatchers.IO) {
             if (query.isBlank()) return@withContext emptyList()
             val indexUrl = config.baseUrl
@@ -153,6 +184,7 @@ class ModuleSource(
             }
             interleave(perModule).take(limit)
         }
+    }
 
     /** One module's answers, or an empty list if it couldn't give any. */
     private suspend fun searchOne(
@@ -217,7 +249,8 @@ class ModuleSource(
     // ── Stream ────────────────────────────────────────────────────────────
 
     override suspend fun stream(trackId: String, request: StreamRequest): SourceStream? =
-        withContext(Dispatchers.IO) {
+        withCapability(null) {
+            withContext(Dispatchers.IO) {
             // trackId is "<moduleId>::<upstreamId>"
             val cut = trackId.indexOf(MOD_SEPARATOR)
             if (cut < 0) {
@@ -289,6 +322,7 @@ class ModuleSource(
             }
             SourceStream(url = url, format = format)
         }
+    }
 
     /**
      * What is really on the other end of [url], as far as anything says it.

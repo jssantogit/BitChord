@@ -235,6 +235,8 @@ fun SearchScreen(
     searchingAddons: Boolean = false,
     /** Public MusicBrainz discovery shows metadata-only rows with no play actions. */
     searchingCanonical: Boolean = false,
+    /** Reuses the existing MusicBrainz/Apple row renderers according to source priority. */
+    catalogSearchMusicBrainzVisible: Boolean = false,
     canonicalResults: UiState<List<CanonicalCatalogSearchRow>>? = null,
     canonicalPublicPlaylists: UiState<List<CanonicalPublicPlaylistSearchRow>>? = null,
     onCanonicalPlaylistOpen: (CanonicalPublicPlaylistSearchRow) -> Unit = {},
@@ -401,6 +403,15 @@ fun SearchScreen(
                     filter == SearchFilter.PLAYLISTS && canonicalDetail == null ->
                         canonicalPublicPlaylistSearchResults(
                             canonicalPublicPlaylists, onCanonicalPlaylistOpen,
+                        )
+                    catalogSearchMusicBrainzVisible && canonicalDetail == null ->
+                        canonicalMusicBrainzResults(
+                            query, canonicalResults, canonicalDetail, filter,
+                            onCanonicalOpen, onCanonicalBack,
+                            onCanonicalLoadMore, canonicalLoadingMore,
+                            onCanonicalSearchLoadMore, canonicalSearchHasMore,
+                            canonicalSearchLoadingMore,
+                            onCanonicalPlay, onCanonicalAddToQueue,
                         )
                     filter == SearchFilter.ARTISTS && canonicalDetail == null ->
                         appleEditorialArtistRows(

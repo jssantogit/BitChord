@@ -14,6 +14,7 @@ import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAuthMod
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicConnectionReport
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicCredentialStore
 import com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicProvider
+import com.music.bitchord.data.catalog.provider.opensubsonic.openSubsonicProviderKey
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -256,6 +257,200 @@ class OpenSubsonicAccountControllerTest {
 
         assertNull(secrets.read(first.accountId))
         assertNotEquals(first.accountId, second.accountId)
+    }
+
+    @Test
+    fun `saved connection success after server rotation must not publish old health`() = runTest {
+        val repository = configuredRepository()
+        val operations = object : OpenSubsonicAccountOperations {
+            override suspend fun test(provider: OpenSubsonicProvider): OpenSubsonicConnectionReport {
+                repository.save(
+                    OpenSubsonicAccountDraft(
+                        serverUrl = "https://different.example.test",
+                        authMode = OpenSubsonicAuthMode.API_KEY,
+                        secretReplacement = "new-server-secret",
+                    ),
+                )
+                return OpenSubsonicConnectionReport(
+                    health = ProviderHealth(
+                        reachable = true,
+                        serverType = "navidrome",
+                        serverVersion = "1.0",
+                        protocolVersion = "1.16.1",
+                        openSubsonic = true,
+                    ),
+                    capabilities = null,
+                )
+            }
+
+            override suspend fun sync(provider: OpenSubsonicProvider): ProviderSyncResult =
+                error("Connection test must not sync")
+        }
+        val controller = OpenSubsonicAccountController(repository, operations) { 456L }
+
+        val result = controller.testSavedConnection()
+
+        assertTrue(result.isFailure)
+        assertEquals("https://different.example.test", repository.current()?.serverUrl)
+        assertNull(repository.current()?.lastHealthAtEpochSeconds)
+        assertNull(repository.current()?.lastHealthReachable)
+    }
+
+    @Test
+    fun `failed old connection after credential rotation must not mark new account offline`() = runTest {
+        val repository = configuredRepository()
+        val operations = object : OpenSubsonicAccountOperations {
+            override suspend fun test(provider: OpenSubsonicProvider): OpenSubsonicConnectionReport {
+                repository.save(
+                    OpenSubsonicAccountDraft(
+                        serverUrl = "https://music.example.test",
+                        authMode = OpenSubsonicAuthMode.API_KEY,
+                        secretReplacement = "rotated-secret",
+                    ),
+                )
+                error("https://music.example.test/rest/ping.view?apiKey=old-secret")
+            }
+
+            override suspend fun sync(provider: OpenSubsonicProvider): ProviderSyncResult =
+                error("Connection test must not sync")
+        }
+        val controller = OpenSubsonicAccountController(repository, operations) { 789L }
+
+        val result = controller.testSavedConnection()
+
+        assertTrue(result.isFailure)
+        assertEquals("OpenSubsonic connection failed", result.exceptionOrNull()?.message)
+        assertNull(repository.current()?.lastHealthAtEpochSeconds)
+        assertNull(repository.current()?.lastHealthReachable)
+        assertEquals("rotated-secret", (repository.savedConfig()?.auth as OpenSubsonicAuth.ApiKey).value)
+    }
+
+    @Test
+    fun `server or credential change clears stale account health and sync status`() {
+        val repository = configuredRepository()
+        repository.recordHealth(
+            ProviderHealth(
+                reachable = true,
+                serverType = "navidrome",
+                serverVersion = "1.0",
+                protocolVersion = "1.16.1",
+                openSubsonic = true,
+            ),
+            123L,
+        )
+        repository.recordSync(ProviderSyncResult.Success(42, 0, 0), 124L)
+
+        val rotated = repository.save(
+            OpenSubsonicAccountDraft(
+                serverUrl = "https://different.example.test",
+                authMode = OpenSubsonicAuthMode.API_KEY,
+                secretReplacement = "different-secret",
+            ),
+        )
+
+        assertEquals("home", rotated.accountId)
+        assertNull(rotated.lastHealthAtEpochSeconds)
+        assertNull(rotated.lastHealthReachable)
+        assertNull(rotated.lastServerType)
+        assertNull(rotated.lastServerVersion)
+        assertNull(rotated.lastSyncAtEpochSeconds)
+        assertNull(rotated.lastSyncSucceeded)
+        assertNull(rotated.lastSyncSummary)
+
+        repository.recordHealth(
+            ProviderHealth(
+                reachable = true,
+                serverType = "navidrome",
+                serverVersion = "2.0",
+                protocolVersion = "1.16.1",
+                openSubsonic = true,
+            ),
+            200L,
+        )
+        val credentialRotated = repository.save(
+            OpenSubsonicAccountDraft(
+                serverUrl = "https://different.example.test",
+                authMode = OpenSubsonicAuthMode.API_KEY,
+                secretReplacement = "third-secret",
+            ),
+        )
+        assertNull(credentialRotated.lastHealthAtEpochSeconds)
+        assertNull(credentialRotated.lastHealthReachable)
+    }
+
+    @Test
+    fun `authenticated catalog realm survives no-op edits but rotates on credential and server edits`() {
+        val accounts = configuredRepository()
+        val first = accounts.current()!!
+        val keyA = openSubsonicProviderKey(accounts.savedConfig()!!)
+        assertTrue(keyA.startsWith("opensubsonic:home"))
+        accounts.save(OpenSubsonicAccountDraft(
+            serverUrl = "https://music.example.test",
+            authMode = OpenSubsonicAuthMode.API_KEY,
+        ))
+        assertEquals(keyA, openSubsonicProviderKey(accounts.savedConfig()!!))
+
+        accounts.save(OpenSubsonicAccountDraft(
+            serverUrl = "https://music.example.test",
+            authMode = OpenSubsonicAuthMode.API_KEY,
+            secretReplacement = "new-auth-realm",
+        ))
+        val keyB = openSubsonicProviderKey(accounts.savedConfig()!!)
+        assertNotEquals(keyA, keyB)
+        accounts.save(OpenSubsonicAccountDraft(
+            serverUrl = "https://elsewhere.example.test",
+            authMode = OpenSubsonicAuthMode.API_KEY,
+            secretReplacement = "elsewhere",
+        ))
+        assertNotEquals(keyB, openSubsonicProviderKey(accounts.savedConfig()!!))
+        accounts.save(OpenSubsonicAccountDraft(
+            serverUrl = "https://music.example.test",
+            authMode = OpenSubsonicAuthMode.API_KEY,
+            secretReplacement = "new-auth-realm",
+        ))
+        // A -> B -> A cannot make stale remote assets from A current.
+        assertNotEquals(keyB, openSubsonicProviderKey(accounts.savedConfig()!!))
+        assertEquals(first.accountId, accounts.current()!!.accountId)
+    }
+
+    @Test
+    fun `failed realm metadata commit must not leave old catalog authorized with new credential`() {
+        var stored: OpenSubsonicAccountRecord? = null
+        var denyNext = false
+        val persistence = object : OpenSubsonicAccountPersistence {
+            override fun read(): OpenSubsonicAccountRecord? = stored
+            override fun write(record: OpenSubsonicAccountRecord) {
+                if (denyNext) error("encrypted preference disk unavailable")
+                stored = record
+            }
+            override fun clear() { stored = null }
+        }
+        val credentials = FakeCredentialStore()
+        val repository = OpenSubsonicAccountRepository(persistence, credentials) { "home" }
+        repository.save(OpenSubsonicAccountDraft(
+            "https://music.example.test", OpenSubsonicAuthMode.API_KEY,
+            secretReplacement = "old-secret",
+        ))
+        val oldProvider = openSubsonicProviderKey(repository.savedConfig()!!)
+        denyNext = true
+        val failed = runCatching {
+            repository.save(OpenSubsonicAccountDraft(
+                "https://another.example.test", OpenSubsonicAuthMode.API_KEY,
+                secretReplacement = "new-secret",
+            ))
+        }
+        assertTrue(failed.isFailure)
+        assertEquals("https://music.example.test", stored?.serverUrl)
+        assertEquals(oldProvider, openSubsonicProviderKey(
+            com.music.bitchord.data.catalog.provider.opensubsonic.OpenSubsonicAccountConfig(
+                "home", "https://music.example.test",
+                OpenSubsonicAuth.ApiKey("old-secret"),
+                catalogRealmId = stored?.catalogRealmId.orEmpty(),
+            )))
+        // If the old metadata survives, its credential must not become the new
+        // server's credential; require explicit reauthentication instead.
+        assertNull(repository.savedConfig())
+        assertNull(credentials.read("home"))
     }
 
     private fun configuredRepository(): OpenSubsonicAccountRepository =
