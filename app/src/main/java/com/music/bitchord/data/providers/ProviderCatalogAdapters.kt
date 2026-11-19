@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 internal object BuiltInProviderKeys {
     val MUSICBRAINZ = ProviderKey("musicbrainz")
     val ITUNES = ProviderKey("itunes")
+    val APPLE_MUSIC_WEB = ProviderKey("apple_music_web")
     val APPLE_ARTIST_ART = ProviderKey("apple_artist_art")
     val COVER_ART_ARCHIVE = ProviderKey("coverartarchive")
     val DISCOGS = ProviderKey("discogs")

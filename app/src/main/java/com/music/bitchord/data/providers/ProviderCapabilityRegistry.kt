@@ -118,6 +118,24 @@ internal object ProviderCapabilityRegistry {
                 notes = "Awaiting PR #216 reconciliation",
             ),
         )
+        // Separate native Web adapter; policy owns ordering and explicit opt-in.
+        // Until the canonical consumer is wired, readiness is deliberately BLOCKED.
+        for (capability in listOf(
+            ProviderCapability.CATALOG_SEARCH,
+            ProviderCapability.EDITORIAL_DISCOGRAPHY,
+        )) {
+            add(ProviderInventoryEntry(
+                key = BuiltInProviderKeys.APPLE_MUSIC_WEB,
+                capability = capability,
+                tab = ProviderSettingsTab.CATALOG,
+                displayName = if (capability == ProviderCapability.CATALOG_SEARCH)
+                    "Apple Music Web (Busca)" else "Apple Music Web (Discografia)",
+                readiness = ProviderReadiness.BLOCKED,
+                supportsReordering = true,
+                notes = "Kotlin-native Apple Web; blocked pending generic catalog consumer validation",
+            ))
+        }
+
         add(
             ProviderInventoryEntry(
                 key = BuiltInProviderKeys.DISCOGS,

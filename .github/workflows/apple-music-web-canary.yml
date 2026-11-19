@@ -1,0 +1,77 @@
+name: Apple Music Web — Live Canary
+
+# Only becomes scheduled once this workflow is present on the default branch.
+# Never runs public API scraping in the hermetic PR/merge test suite.
+on:
+  schedule:
+    - cron: '29 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-music-web-live-canary
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Apple Web · bounded catalog/artist probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      APPLE_MUSIC_WEB_LIVE: '1'
+      APPLE_MUSIC_WEB_CANARY_SEED: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test two rotating storefronts and artist contracts
+        run: |
+          chmod +x gradlew
+          ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest \
+            --tests 'com.music.bitchord.AppleMusicWebLiveCanaryTest'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apple-web-canary-results-${{ github.run_number }}
+          path: app/build/test-results/testDevDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  report:
+    needs: live
+    if: always() && github.event_name == 'schedule' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update one issue on a live contract break
+        if: needs.live.result == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing="$(gh issue list --repo "$REPO" --label apple-web-breakage --state open --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "Apple Web canary still failing: $RUN_URL"
+          else
+            gh label create apple-web-breakage --repo "$REPO" --color B60205 --description "Native Apple Web provider API contract changed" 2>/dev/null || true
+            gh issue create --repo "$REPO" --label apple-web-breakage --title "Apple Web live catalog contract is failing" --body "Rotating native Kotlin Apple Web canary failed. No credentials or payloads are attached. See the sanitized test report: $RUN_URL"
+          fi
+      - name: Record recovery and close tracked issue
+        if: needs.live.result == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          existing="$(gh issue list --repo "$REPO" --label apple-web-breakage --state open --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "Apple Web live canary recovered: $RUN_URL"
+            gh issue close "$existing" --repo "$REPO"
+          fi

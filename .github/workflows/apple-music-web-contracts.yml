@@ -1,0 +1,56 @@
+name: Apple Music Web Native Kotlin Contracts
+
+on:
+  pull_request:
+    paths:
+      - 'app/src/main/java/com/music/bitchord/data/catalog/provider/applemusicweb/**'
+      - 'app/src/main/java/com/music/bitchord/data/providers/ProviderCapabilityRegistry.kt'
+      - 'app/src/main/java/com/music/bitchord/data/providers/ProviderCatalogAdapters.kt'
+      - 'app/src/main/java/com/music/bitchord/data/providers/CatalogSearchAdapter.kt'
+      - 'app/src/main/java/com/music/bitchord/data/providers/CatalogSearchAdapterReader.kt'
+      - 'app/src/test/java/com/music/bitchord/AppleMusicWeb*'
+      - 'app/src/test/java/com/music/bitchord/CatalogSearchAdapterReaderTest.kt'
+      - '.github/workflows/apple-music-web-contracts.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: apple-music-web-contracts-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  native-contracts:
+    name: Android JVM · Apple Music Web contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Native Kotlin Apple-only hermetic tests (zero network)
+        run: |
+          chmod +x gradlew
+          ./gradlew -Pbitchord.bundleWear=false :app:testDevDebugUnitTest \
+            --tests 'com.music.bitchord.AppleMusicWebNativeProviderTest' \
+            --tests 'com.music.bitchord.AppleMusicWebTransportPolicyTest' \
+            --tests 'com.music.bitchord.AppleMusicWebDiscographyPagingTest' \
+            --tests 'com.music.bitchord.AppleMusicWebFoundationTest' \
+            --tests 'com.music.bitchord.AppleMusicWebCacheBridgeTest' \
+            --tests 'com.music.bitchord.AppleMusicWebResilienceTest' \
+            --tests 'com.music.bitchord.AppleMusicWebOperationsTest' \
+            --tests 'com.music.bitchord.AppleMusicWebEditorialGatewayTest' \
+            --tests 'com.music.bitchord.AppleMusicWebGenericRoutingTest' \
+            --tests 'com.music.bitchord.CatalogSearchAdapterReaderTest'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: apple-web-test-results-${{ github.sha }}
+          path: app/build/test-results/testDevDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 7
+
