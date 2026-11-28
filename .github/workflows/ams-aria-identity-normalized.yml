@@ -134,6 +134,32 @@ jobs:
               ("showWear",theirs),
               ("SettingsSection.ACCOUNT",theirs),
           ])
+          # MAIN retired Google account selection; extraction preserved the old
+          # block outside the conflict. Remove it and retain just one language overlay.
+          p=Path(APP+"MainActivity.kt")
+          s=p.read_text()
+          start=s.index("            if (showAccountSelector) {")
+          end=s.index("            LanguageSettingsOverlays(",start)
+          assert "AccountProfileSelector(" in s[start:end] and "viewModel.removeAccount" in s[start:end]
+          s=s[:start]+s[end:]
+          pat=re.compile(r"^            LanguageSettingsOverlays\(\n.*?^            \)\n",re.M|re.S)
+          calls=list(pat.finditer(s))
+          assert len(calls)==2 and calls[0].group()==calls[1].group(), "unexpected language overlay duplication"
+          s=s[:calls[0].start()]+s[calls[0].end():]
+          s,n=re.subn(r"^    (?:val (?:showWearOs|showAccountSelector): [^\n]+|(?:showWearOs|showAccountSelector) = remember[^\n]+)\n","",s,flags=re.M)
+          assert n==4,n
+          assert not re.search(r"\b(?:showWearOs|showAccountSelector|AccountProfileSelector)\b",s)
+          # Fix only reported whitespace, not unrelated formatting.
+          needle="enabled = detail != null && !showSettings && !showAccountScrobbling && !showSources && !showListenTogether && "
+          assert s.count(needle+"\n")==1
+          s=s.replace(needle+"\n",needle.rstrip()+"\n")
+          p.write_text(s)
+          readme=Path("README.md")
+          old=readme.read_text()
+          assert old.endswith("\n\n")
+          readme.write_text(old.rstrip("\n")+"\n")
+          subprocess.run(["git","add","--",str(p),str(readme)],check=True)
+          print("RESOLVED_RESIDUAL_NAVIGATION_AND_WHITESPACE")
           # Report remaining references for semantic review; a clean index is not a build.
           report=Path("/tmp/aria-normalized/navigation-review.txt")
           out=[]
