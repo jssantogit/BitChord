@@ -1,6 +1,8 @@
 name: AMS · namespace-normalized Aria reconciliation
 on:
   push:
+    branches: [audit/ams-aria-identity-resolved-navigation-20261128]
+  pull_request:
     branches: [audit/ams-aria-identity-resolved-core-20261128]
   workflow_dispatch:
 permissions:
@@ -8,11 +10,16 @@ permissions:
 jobs:
   reconcile:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
       - name: Normalize ancestor and AMS identically; retain exact MAIN tree
         shell: bash
         run: |
@@ -66,6 +73,108 @@ jobs:
           git rm -f -- "$desktop"
           echo "RESOLVED_REMOVED_PLATFORM|$desktop"
           python3 /tmp/ams-resolve-core.py
+          python3 - <<'PY'
+          # Reconcile final navigation hunks against the same frozen trees.
+          import re
+          from pathlib import Path
+          import subprocess
+          APP="app/src/main/java/com/music/aria/"
+          PAT=re.compile(r"^<<<<<<< HEAD\n(.*?)^=======\n(.*?)^>>>>>>> [^\n]+\n", re.M|re.S)
+          def resolve(path, decisions):
+              p=Path(path); raw=p.read_text()
+              assert len(list(PAT.finditer(raw)))==len(decisions),path
+              def select(m):
+                  left,right=m.groups()
+                  expected,fn=next(it)
+                  assert expected in left+right,(path,expected)
+                  return fn(left,right)
+              it=iter(decisions)
+              result=PAT.sub(select,raw)
+              assert "<<<<<<< HEAD" not in result,path
+              p.write_text(result)
+              subprocess.run(["git","add","--",path],check=True)
+              print("RESOLVED_NAVIGATION|"+path)
+          ours=lambda a,b:a
+          theirs=lambda a,b:b
+          def remove_wear(a,b):
+              return "".join(line for line in a.splitlines(keepends=True) if "var showWearOs " not in line)
+          def remove_selector(a,b):
+              return "".join(line for line in a.splitlines(keepends=True) if "var showAccountSelector " not in line)
+          def palette(a,b):
+              return a.replace(" && !showWearOs","")
+          def scrolled(a,b):
+              return a.replace(" || showWearOs","")
+          def welcome(a,b):
+              # Keep extracted composable to avoid the Android JVM method-size regression.
+              assert "fun LegacyFullWindowOverlays()" in a
+              prefix=a[:a.index("            WelcomeOnboardingOverlay(")]
+              return prefix+"            WelcomeOnboardingOverlay(visibleState = onboardingShown)\n"
+          def folder_and_language(a,b):
+              # Keep folder and recent-additions menus; take MAIN's language entry.
+              assert "UnifiedLibraryMenus(" in a and "LanguageSettingsOverlays(" in b
+              assert b.lstrip().startswith("}")
+              call=b[b.index("        LanguageSettingsOverlays("):]
+              return a+"".join("    "+line for line in call.splitlines(keepends=True))
+          resolve(APP+"MainActivity.kt",[
+              ("showAccountScrobbling",remove_wear),
+              ("librarySortMenuOpen",remove_selector),
+              ("onAccountScrobbling",theirs),
+              ("onSoulseek",theirs),
+              ("appleDetailPalette",palette),
+              ("amsAlbumChartChrome",scrolled),
+              ("LegacyFullWindowOverlays",welcome),
+              ("UnifiedLibraryMenus",folder_and_language),
+          ])
+          resolve(APP+"ui/screens/SettingsNavigation.kt",[
+              ("onListenTogether",theirs),
+          ])
+          resolve(APP+"ui/screens/SettingsSheet.kt",[
+              ("onAccountScrobbling",theirs),
+              ("onSoulseek",theirs),
+              ("showWear",theirs),
+              ("SettingsSection.ACCOUNT",theirs),
+          ])
+          # MAIN retired Google account selection; extraction preserved the old
+          # block outside the conflict. Remove it and retain just one language overlay.
+          p=Path(APP+"MainActivity.kt")
+          s=p.read_text()
+          start=s.index("            if (showAccountSelector) {")
+          end=s.index("            LanguageSettingsOverlays(",start)
+          assert "AccountProfileSelector(" in s[start:end] and "viewModel.removeAccount" in s[start:end]
+          s=s[:start]+s[end:]
+          pat=re.compile(r"^            LanguageSettingsOverlays\(\n.*?^            \)\n",re.M|re.S)
+          calls=list(pat.finditer(s))
+          assert len(calls)==2 and calls[0].group()==calls[1].group(), "unexpected language overlay duplication"
+          s=s[:calls[0].start()]+s[calls[0].end():]
+          s,n=re.subn(r"^    (?:val (?:showWearOs|showAccountSelector): [^\n]+|(?:showWearOs|showAccountSelector) = remember[^\n]+)\n","",s,flags=re.M)
+          assert n==4,n
+          assert not re.search(r"\b(?:showWearOs|showAccountSelector|AccountProfileSelector)\b",s)
+          # Fix only reported whitespace, not unrelated formatting.
+          needle="enabled = detail != null && !showSettings && !showAccountScrobbling && !showSources && !showListenTogether && "
+          assert s.count(needle+"\n")==1
+          s=s.replace(needle+"\n",needle.rstrip()+"\n")
+          p.write_text(s)
+          readme=Path("README.md")
+          old=readme.read_text()
+          assert old.endswith("\n\n")
+          readme.write_text(old.rstrip("\n")+"\n")
+          subprocess.run(["git","add","--",str(p),str(readme)],check=True)
+          print("RESOLVED_RESIDUAL_NAVIGATION_AND_WHITESPACE")
+          # Report remaining references for semantic review; a clean index is not a build.
+          report=Path("/tmp/aria-normalized/navigation-review.txt")
+          out=[]
+          for name in ["MainActivity.kt","ui/screens/SettingsNavigation.kt","ui/screens/SettingsSheet.kt"]:
+              lines=Path(APP+name).read_text().splitlines()
+              out.append("=== "+name+" ===")
+              pattern=re.compile(r"showWearOs|showAccountSelector|WearBridge|WatchInstaller|SettingsSection\.WEAR|onWearOs|AccountProfileSelector|LegacyFullWindowOverlays|LanguageSettingsOverlays|WelcomeOnboardingOverlay|onAccountScrobbling|onSoulseek|onListenTogether|appleDetailPalette")
+              selected=set()
+              for i,line in enumerate(lines):
+                  if pattern.search(line):
+                      selected.update(range(max(0,i-2),min(len(lines),i+3)))
+              out.extend(f"{i+1}: {lines[i]}" for i in sorted(selected))
+          report.write_text("\n".join(out)+"\n")
+          print(report.read_text())
+          PY
           git diff --name-only --diff-filter=U > /tmp/aria-normalized/conflicts.txt
           if [ ! -s /tmp/aria-normalized/conflicts.txt ]; then result=0; fi
           git ls-files -u > /tmp/aria-normalized/conflict-stages.tsv
@@ -109,6 +218,56 @@ jobs:
           PY
             echo "::notice::Remaining conflicts need semantic reconciliation; no production changes"
           fi
+      - name: Require conflict-free candidate and compile Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/aria-normalized/candidate-tree.txt
+          test ! -s /tmp/aria-normalized/conflicts.txt
+          test -z "$(git ls-files -u)"
+          git diff --cached --check
+          chmod +x gradlew
+          ./gradlew :app:compileDevDebugKotlin :app:compileDevDebugUnitTestKotlin --stacktrace
+      - name: AMS Android contracts on reconciled tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :app:testDevDebugUnitTest \
+            --tests 'com.music.aria.AppleMusicWebNativeCatalogSessionTest' \
+            --tests 'com.music.aria.AppleMusicWebSearchUiSessionTest' \
+            --tests 'com.music.aria.AmsDetailPreviewProjectionTest' \
+            --tests 'com.music.aria.playback.AmsPreviewResolverTest' \
+            --tests 'com.music.aria.AmsPhysicalSmokePolicyTest' \
+            --tests 'com.music.aria.NativeTopBarRouteOwnerTest' \
+            --tests 'com.music.aria.HomeSettingsOverflowAlignmentTest' \
+            --tests 'com.music.aria.ui.screens.AmsVisualParityPolicyTest'
+      - name: Full Android unit suite on the reconciled candidate
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :app:testDevDebugUnitTest --stacktrace
+      - name: Export verified candidate with original history
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tree=$(git write-tree)
+          test "$tree" = "$(cat /tmp/aria-normalized/candidate-tree.txt)"
+          test "$tree" = "0cc14e1060d8e41feb0ed80ba0c175a87ada04db"
+          ams=da8889af614ec28c9ffb0bd3e1b055657adb45b6
+          main=58d8d9143fa04302cb3356df510e77c76a2eae57
+          candidate=$(git commit-tree "$tree" -p "$ams" -p "$main" -m "Reconcile AMS with Aria Android identity")
+          git update-ref refs/heads/ams-reconciled-export "$candidate"
+          git bundle create /tmp/aria-normalized/candidate.bundle refs/heads/ams-reconciled-export "^$ams" "^$main"
+          printf '%s\n' "$candidate" > /tmp/aria-normalized/candidate-commit.txt
+      - name: Collect contract reports
+        if: always()
+        shell: bash
+        run: |
+          if [ -d app/build/test-results/testDevDebugUnitTest ]; then
+            cp -r app/build/test-results/testDevDebugUnitTest /tmp/aria-normalized/android-contracts
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -116,3 +275,36 @@ jobs:
           path: /tmp/aria-normalized/
           if-no-files-found: error
           retention-days: 7
+
+  publish-isolated-candidate:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/audit/ams-aria-identity-resolved-navigation-20261128' && github.repository == 'jssantogit/Aria'
+    needs: reconcile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: ams-aria-normalized-${{ github.sha }}
+          path: /tmp/aria-candidate
+      - name: Publish only the verified isolated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate=$(cat /tmp/aria-candidate/candidate-commit.txt)
+          git bundle verify /tmp/aria-candidate/candidate.bundle
+          git fetch /tmp/aria-candidate/candidate.bundle refs/heads/ams-reconciled-export
+          test "$(git rev-parse FETCH_HEAD)" = "$candidate"
+          test "$(git rev-parse "$candidate^{tree}")" = "0cc14e1060d8e41feb0ed80ba0c175a87ada04db"
+          test "$(git show -s --format=%P "$candidate")" = "da8889af614ec28c9ffb0bd3e1b055657adb45b6 58d8d9143fa04302cb3356df510e77c76a2eae57"
+          target=refs/heads/audit/ams-aria-reconciled-candidate-20261128
+          existing=$(git ls-remote origin "$target" | cut -f1)
+          if [ -n "$existing" ]; then
+            test "$existing" = "$candidate"
+          else
+            git push origin "$candidate:$target"
+          fi
+          echo "Published isolated candidate $candidate" >> "$GITHUB_STEP_SUMMARY"
