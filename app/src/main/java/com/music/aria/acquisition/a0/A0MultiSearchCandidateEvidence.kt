@@ -27,8 +27,11 @@ internal class A0MultiSearchCandidateEvidence(
     // truncated population still fails closed, never silently drops risk.
     private val limitPerSlot=if(valid)
         minOf(512,maxOf(128,8192/entries.size)) else 0
-    private val titleTokens=if(valid) entries.map {
-        A0ReleaseDiscoveryShadowAdapter.titleTokens(it.query)
+    // Preserve the same canonical title alternatives as the upstream
+    // collector and ranker. Otherwise an explicitly bilingual title can
+    // pass collection and then disappear before automatic selection.
+    private val titleOptions=if(valid) entries.map {
+        A0ReleaseDiscoveryShadowAdapter.titleOptions(it.query)
     } else emptyList()
     private val buckets=if(valid) entries.map {
         LinkedHashMap<Pair<String,String>,A0ObservedCandidateHandoff.Choice>()
@@ -63,8 +66,8 @@ internal class A0MultiSearchCandidateEvidence(
         for(choice in choices.take(1024)) {
             val tokens=A0ReleaseDiscoveryShadowAdapter.fileTokens(choice.claim.filename)
             for(index in entries.indices) {
-                if(titleTokens[index].isEmpty() ||
-                    !tokens.containsAll(titleTokens[index]))continue
+                if(!A0ReleaseDiscoveryShadowAdapter.matchesTitleOptions(
+                    tokens,titleOptions[index]))continue
                 val bucket=buckets[index]
                 val key=choice.peerUsername to choice.remotePath
                 val prior=bucket[key]

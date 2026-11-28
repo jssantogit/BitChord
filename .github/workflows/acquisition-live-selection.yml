@@ -26,6 +26,8 @@ on:
       - 'app/src/main/java/com/music/aria/acquisition/a0/A0SoulseekSearchResponseParser.kt'
       - 'app/src/main/java/com/music/aria/acquisition/a0/A0IndirectSearchWire.kt'
       - 'app/src/main/java/com/music/aria/acquisition/a0/A0SearchTicketRegistry.kt'
+      - 'app/src/main/java/com/music/aria/acquisition/a0/A0MultiSearchCandidateEvidence.kt'
+      - 'app/src/test/java/com/music/aria/acquisition/a0/A0MultiSearchCandidateEvidenceTest.kt'
       - 'app/src/test/java/com/music/aria/acquisition/a0/A0SearchTicketRegistryTest.kt'
       - 'app/src/main/java/com/music/aria/acquisition/a0/A0SearchRecoveryPlan.kt'
       - 'app/src/test/java/com/music/aria/acquisition/a0/A0SearchRecoveryPlanTest.kt'
@@ -54,7 +56,7 @@ jobs:
           chmod +x gradlew
           ./gradlew --no-daemon :app:assembleDevDebug :app:assembleDevDebugAndroidTest
       - name: Verify ranking regression contracts
-        run: ./gradlew --no-daemon :app:testDevDebugUnitTest --tests 'com.music.aria.acquisition.a0.A0CandidateRank*Test' --tests 'com.music.aria.acquisition.a0.A0AutoCandidateSelectionPolicyTest' --tests 'com.music.aria.acquisition.a0.A0SearchRecoveryPlanTest' --tests 'com.music.aria.acquisition.a0.A0SoulseekSearchResponseParserTest' --tests 'com.music.aria.acquisition.a0.A0IndirectSearchWireTest' --tests 'com.music.aria.acquisition.a0.A0SearchTicketRegistryTest'
+        run: ./gradlew --no-daemon :app:testDevDebugUnitTest --tests 'com.music.aria.acquisition.a0.A0CandidateRank*Test' --tests 'com.music.aria.acquisition.a0.A0AutoCandidateSelectionPolicyTest' --tests 'com.music.aria.acquisition.a0.A0SearchRecoveryPlanTest' --tests 'com.music.aria.acquisition.a0.A0SoulseekSearchResponseParserTest' --tests 'com.music.aria.acquisition.a0.A0IndirectSearchWireTest' --tests 'com.music.aria.acquisition.a0.A0SearchTicketRegistryTest' --tests 'com.music.aria.acquisition.a0.A0MultiSearchCandidateEvidenceTest'
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

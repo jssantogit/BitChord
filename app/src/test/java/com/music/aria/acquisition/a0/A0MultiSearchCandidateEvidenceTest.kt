@@ -201,4 +201,33 @@ class A0MultiSearchCandidateEvidenceTest {
         assertEquals(2,result.blockedSlots)
         assertFalse(result.canTransfer)
     }
+
+    @Test fun canonicalBilingualAliasSurvivesCollectorPortfolioAndSelection() {
+        val entry=SoulseekBatchPlan.Entry("bilingual",
+            "BTS - 상남자 (Boy In Luv)","Proof",220)
+        val handoff=A0ObservedCandidateHandoff(Socket(),"local",177,true,
+            searchPhrase=entry.query,requestedAlbum=entry.album,
+            expectedDurationSeconds=220,qualityProfile=quality,
+            collectReleaseShadow=true,releaseQueries=listOf(entry.query),
+            collectManualCandidates=false)
+        val files=listOf("BTS - Boy In Luv.mp3","BTS - Boy In Luv (Live).mp3",
+            "Other Artist - Boy In Luv.mp3","BTS - Unrelated.mp3").map { name ->
+            A0SoulseekSearchFile("Shared\\BTS\\Proof\\$name",8_800_000L,
+                "mp3",mapOf(0 to 320,1 to 220))
+        }
+        assertTrue(handoff.offerParsed(A0SoulseekSearchResponse("peer",177,
+            files,emptyList(),true,128_000,0),"peer"))
+        val shadow=handoff.releaseShadowSnapshot()
+        val evidence=A0MultiSearchCandidateEvidence(listOf(entry),quality)
+        evidence.add(shadow.choices,shadow.truncatedSlots)
+        val (retained,truncated)=checkNotNull(evidence.slotEvidence(0))
+        assertFalse(truncated)
+        assertTrue(retained.any { it.claim.filename=="BTS - Boy In Luv.mp3" })
+        assertFalse(retained.any { it.claim.filename=="BTS - Unrelated.mp3" })
+        val decision=evidence.selectionPreview().single()
+        assertEquals(A0AutoCandidateSelectionPolicy.Status.PROVISIONAL,decision.status)
+        assertEquals(1,decision.eligible)
+        assertFalse(decision.canTransfer)
+    }
+
 }
