@@ -2,17 +2,24 @@ name: AMS · namespace-normalized Aria reconciliation
 on:
   push:
     branches: [audit/ams-aria-identity-resolved-navigation-20261128]
+  pull_request:
+    branches: [audit/ams-aria-identity-resolved-core-20261128]
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   reconcile:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
       - name: Normalize ancestor and AMS identically; retain exact MAIN tree
         shell: bash
         run: |
@@ -184,6 +191,36 @@ jobs:
           print(payload)
           PY
             echo "::notice::Remaining conflicts need semantic reconciliation; no production changes"
+          fi
+      - name: Require conflict-free candidate and compile Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/aria-normalized/candidate-tree.txt
+          test ! -s /tmp/aria-normalized/conflicts.txt
+          test -z "$(git ls-files -u)"
+          git diff --cached --check
+          chmod +x gradlew
+          ./gradlew :app:compileDevDebugKotlin :app:compileDevDebugUnitTestKotlin --stacktrace
+      - name: AMS Android contracts on reconciled tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :app:testDevDebugUnitTest \
+            --tests 'com.music.aria.AppleMusicWebNativeCatalogSessionTest' \
+            --tests 'com.music.aria.AppleMusicWebSearchUiSessionTest' \
+            --tests 'com.music.aria.AmsDetailPreviewProjectionTest' \
+            --tests 'com.music.aria.playback.AmsPreviewResolverTest' \
+            --tests 'com.music.aria.AmsPhysicalSmokePolicyTest' \
+            --tests 'com.music.aria.NativeTopBarRouteOwnerTest' \
+            --tests 'com.music.aria.HomeSettingsOverflowAlignmentTest' \
+            --tests 'com.music.aria.ui.screens.AmsVisualParityPolicyTest'
+      - name: Collect contract reports
+        if: always()
+        shell: bash
+        run: |
+          if [ -d app/build/test-results/testDevDebugUnitTest ]; then
+            cp -r app/build/test-results/testDevDebugUnitTest /tmp/aria-normalized/android-contracts
           fi
       - uses: actions/upload-artifact@v4
         if: always()
