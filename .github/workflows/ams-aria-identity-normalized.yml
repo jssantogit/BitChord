@@ -1,7 +1,7 @@
 name: AMS · namespace-normalized Aria reconciliation
 on:
   push:
-    branches: [audit/ams-aria-identity-resolved-core-20261128]
+    branches: [audit/ams-aria-identity-resolved-navigation-20261128]
   workflow_dispatch:
 permissions:
   contents: read
@@ -66,6 +66,82 @@ jobs:
           git rm -f -- "$desktop"
           echo "RESOLVED_REMOVED_PLATFORM|$desktop"
           python3 /tmp/ams-resolve-core.py
+          python3 - <<'PY'
+          # Reconcile final navigation hunks against the same frozen trees.
+          import re
+          from pathlib import Path
+          import subprocess
+          APP="app/src/main/java/com/music/aria/"
+          PAT=re.compile(r"^<<<<<<< HEAD\n(.*?)^=======\n(.*?)^>>>>>>> [^\n]+\n", re.M|re.S)
+          def resolve(path, decisions):
+              p=Path(path); raw=p.read_text()
+              assert len(list(PAT.finditer(raw)))==len(decisions),path
+              def select(m):
+                  left,right=m.groups()
+                  expected,fn=next(it)
+                  assert expected in left+right,(path,expected)
+                  return fn(left,right)
+              it=iter(decisions)
+              result=PAT.sub(select,raw)
+              assert "<<<<<<< HEAD" not in result,path
+              p.write_text(result)
+              subprocess.run(["git","add","--",path],check=True)
+              print("RESOLVED_NAVIGATION|"+path)
+          ours=lambda a,b:a
+          theirs=lambda a,b:b
+          def remove_wear(a,b):
+              return "".join(line for line in a.splitlines(keepends=True) if "var showWearOs " not in line)
+          def remove_selector(a,b):
+              return "".join(line for line in a.splitlines(keepends=True) if "var showAccountSelector " not in line)
+          def palette(a,b):
+              return a.replace(" && !showWearOs","")
+          def scrolled(a,b):
+              return a.replace(" || showWearOs","")
+          def welcome(a,b):
+              # Keep extracted composable to avoid the Android JVM method-size regression.
+              assert "fun LegacyFullWindowOverlays()" in a
+              prefix=a[:a.index("            WelcomeOnboardingOverlay(")]
+              return prefix+"            WelcomeOnboardingOverlay(visibleState = onboardingShown)\n"
+          def folder_and_language(a,b):
+              # Keep folder and recent-additions menus; take MAIN's language entry.
+              assert "UnifiedLibraryMenus(" in a and "LanguageSettingsOverlays(" in b
+              assert b.lstrip().startswith("}")
+              call=b[b.index("        LanguageSettingsOverlays("):]
+              return a+"".join("    "+line for line in call.splitlines(keepends=True))
+          resolve(APP+"MainActivity.kt",[
+              ("showAccountScrobbling",remove_wear),
+              ("librarySortMenuOpen",remove_selector),
+              ("onAccountScrobbling",theirs),
+              ("onSoulseek",theirs),
+              ("appleDetailPalette",palette),
+              ("amsAlbumChartChrome",scrolled),
+              ("LegacyFullWindowOverlays",welcome),
+              ("UnifiedLibraryMenus",folder_and_language),
+          ])
+          resolve(APP+"ui/screens/SettingsNavigation.kt",[
+              ("onListenTogether",theirs),
+          ])
+          resolve(APP+"ui/screens/SettingsSheet.kt",[
+              ("onAccountScrobbling",theirs),
+              ("onSoulseek",theirs),
+              ("showWear",theirs),
+              ("SettingsSection.ACCOUNT",theirs),
+          ])
+          # Report remaining references for semantic review; a clean index is not a build.
+          report=Path("/tmp/aria-normalized/navigation-review.txt")
+          out=[]
+          for name in ["MainActivity.kt","ui/screens/SettingsNavigation.kt","ui/screens/SettingsSheet.kt"]:
+              lines=Path(APP+name).read_text().splitlines()
+              out.append("=== "+name+" ===")
+              pattern=re.compile(r"showWearOs|showAccountSelector|WearBridge|WatchInstaller|SettingsSection\.WEAR|onWearOs|AccountProfileSelector|LegacyFullWindowOverlays|LanguageSettingsOverlays|WelcomeOnboardingOverlay|onAccountScrobbling|onSoulseek|onListenTogether|appleDetailPalette")
+              selected=set()
+              for i,line in enumerate(lines):
+                  if pattern.search(line):
+                      selected.update(range(max(0,i-2),min(len(lines),i+3)))
+              out.extend(f"{i+1}: {lines[i]}" for i in sorted(selected))
+          report.write_text("\n".join(out)+"\n")
+          print(report.read_text())
+          PY
           git diff --name-only --diff-filter=U > /tmp/aria-normalized/conflicts.txt
           if [ ! -s /tmp/aria-normalized/conflicts.txt ]; then result=0; fi
           git ls-files -u > /tmp/aria-normalized/conflict-stages.tsv
