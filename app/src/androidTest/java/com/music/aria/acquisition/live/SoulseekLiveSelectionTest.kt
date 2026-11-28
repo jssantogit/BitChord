@@ -81,7 +81,9 @@ class SoulseekLiveSelectionTest {
         Target("redvelvet_psycho","Red Velvet - Psycho","The ReVe Festival 'Finale'",210),
         Target("redvelvet_feel_my_rhythm","Red Velvet - Feel My Rhythm","The ReVe Festival 2022 - Feel My Rhythm",210),
         Target("exo_love_shot","EXO - Love Shot","LOVE SHOT – The 5th Album Repackage",200),
-        Target("exo_growl","EXO - Growl","XOXO",207),
+        // Apple Music release 854908236: Growl, disc 1 track 1, 3:27.
+        // The original XOXO release is not the requested repackage.
+        Target("exo_growl","EXO - Growl","The 1st Album 'XOXO' (Repackage)",207),
         Target("snsd_gee","Girls' Generation - Gee","Gee",201),
         Target("shinee_ring_ding_dong","SHINee - Ring Ding Dong","2009, Year of Us",234),
         Target("iu_blueming","IU - Blueming","Love poem",217),
@@ -114,7 +116,8 @@ class SoulseekLiveSelectionTest {
         Target("mj_rock_with_you","Michael Jackson - Rock with You","Off the Wall",219),
         Target("mj_man_in_the_mirror","Michael Jackson - Man in the Mirror","Bad",319),
         Target("mj_remember_the_time","Michael Jackson - Remember the Time","Dangerous",240),
-        Target("whitney_i_will_always_love_you","Whitney Houston - I Will Always Love You","The Bodyguard",271),
+        // Apple Music release 388151892: original soundtrack, 4:31.
+        Target("whitney_i_will_always_love_you","Whitney Houston - I Will Always Love You","The Bodyguard (Original Soundtrack Album)",271),
         Target("prince_purple_rain","Prince - Purple Rain","Purple Rain",521),
         Target("beyonce_halo","Beyoncé - Halo","I AM... SASHA FIERCE",261),
         Target("rihanna_umbrella","Rihanna - Umbrella (feat. JAY-Z)","Good Girl Gone Bad",275),
