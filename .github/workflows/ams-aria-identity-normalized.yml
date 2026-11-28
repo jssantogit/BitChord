@@ -241,6 +241,26 @@ jobs:
             --tests 'com.music.aria.NativeTopBarRouteOwnerTest' \
             --tests 'com.music.aria.HomeSettingsOverflowAlignmentTest' \
             --tests 'com.music.aria.ui.screens.AmsVisualParityPolicyTest'
+      - name: Full Android unit suite on the reconciled candidate
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew :app:testDevDebugUnitTest --stacktrace
+      - name: Export verified candidate with original history
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tree=$(git write-tree)
+          test "$tree" = "$(cat /tmp/aria-normalized/candidate-tree.txt)"
+          test "$tree" = "0cc14e1060d8e41feb0ed80ba0c175a87ada04db"
+          ams=da8889af614ec28c9ffb0bd3e1b055657adb45b6
+          main=58d8d9143fa04302cb3356df510e77c76a2eae57
+          candidate=$(git commit-tree "$tree" -p "$ams" -p "$main" -m "Reconcile AMS with Aria Android identity")
+          git update-ref refs/heads/ams-reconciled-export "$candidate"
+          git bundle create /tmp/aria-normalized/candidate.bundle refs/heads/ams-reconciled-export "^$ams" "^$main"
+          printf '%s\n' "$candidate" > /tmp/aria-normalized/candidate-commit.txt
       - name: Collect contract reports
         if: always()
         shell: bash
@@ -255,3 +275,36 @@ jobs:
           path: /tmp/aria-normalized/
           if-no-files-found: error
           retention-days: 7
+
+  publish-isolated-candidate:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/audit/ams-aria-identity-resolved-navigation-20261128' && github.repository == 'jssantogit/Aria'
+    needs: reconcile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: ams-aria-normalized-${{ github.sha }}
+          path: /tmp/aria-candidate
+      - name: Publish only the verified isolated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate=$(cat /tmp/aria-candidate/candidate-commit.txt)
+          git bundle verify /tmp/aria-candidate/candidate.bundle
+          git fetch /tmp/aria-candidate/candidate.bundle refs/heads/ams-reconciled-export
+          test "$(git rev-parse FETCH_HEAD)" = "$candidate"
+          test "$(git rev-parse "$candidate^{tree}")" = "0cc14e1060d8e41feb0ed80ba0c175a87ada04db"
+          test "$(git show -s --format=%P "$candidate")" = "da8889af614ec28c9ffb0bd3e1b055657adb45b6 58d8d9143fa04302cb3356df510e77c76a2eae57"
+          target=refs/heads/audit/ams-aria-reconciled-candidate-20261128
+          existing=$(git ls-remote origin "$target" | cut -f1)
+          if [ -n "$existing" ]; then
+            test "$existing" = "$candidate"
+          else
+            git push origin "$candidate:$target"
+          fi
+          echo "Published isolated candidate $candidate" >> "$GITHUB_STEP_SUMMARY"
